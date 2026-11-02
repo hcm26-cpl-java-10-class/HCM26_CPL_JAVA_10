@@ -206,7 +206,7 @@ public class ExamSimilarityService {
             }
         } else if (!aiClient.isConfigured()) {
             report.setAiEvaluated(false);
-            report.setAiMessage("Lexical similarity analysis only (Google Gemini API key not configured or AI disabled).");
+            report.setAiMessage("Lexical similarity analysis only (Google Gemini API key not configured in backend/.env or system environment).");
         } else {
             report.setAiEvaluated(true);
             report.setAiMessage("No suspicious essay pairs detected above threshold (" + SUSPICIOUS_LEXICAL_THRESHOLD + "%).");

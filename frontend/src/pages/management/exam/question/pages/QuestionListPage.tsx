@@ -45,15 +45,6 @@ export default function QuestionListPage() {
     const [isNewTopicOpen, setIsNewTopicOpen] = useState(false);
     const [newTopicName, setNewTopicName] = useState("");
 
-    const table = useProTable(entityConfig.api, entityConfig.schema);
-
-    useEffect(() => {
-        if (initialTopic) {
-            table.setFilters((prev: any) => ({ ...prev, topic: initialTopic }));
-            setSelectedTopic(initialTopic);
-        }
-    }, []);
-
     const { data: allQuestionsData, isLoading: isLoadingTopics } = useQuery({
         queryKey: ["question", "topics-summary"],
         queryFn: () => questionApi.getPage({ page: 0, size: 2000, sort: "id,desc" }),
@@ -84,6 +75,52 @@ export default function QuestionListPage() {
             totalCount: allQuestionsData?.totalElements ?? list.length,
         };
     }, [allQuestionsData]);
+
+    const dynamicSchema = useMemo(() => {
+        const topicOptions = topics
+            .filter((t) => t && t !== "(No Topic)")
+            .map((t) => ({ label: t, value: t }));
+
+        return {
+            ...entityConfig.schema,
+            fields: entityConfig.schema.fields.map((f) => {
+                if (f.name === "topic") {
+                    return {
+                        ...f,
+                        options: topicOptions,
+                        filterOptions: topicOptions,
+                    };
+                }
+                return f;
+            }),
+        };
+    }, [topics]);
+
+    const table = useProTable(entityConfig.api, dynamicSchema);
+
+    useEffect(() => {
+        if (initialTopic) {
+            table.setFilters((prev: any) => ({ ...prev, topic: initialTopic }));
+            setSelectedTopic(initialTopic);
+        }
+    }, []);
+
+    useEffect(() => {
+        const filterTopic = table.filters?.topic;
+        const current = Array.isArray(filterTopic)
+            ? (filterTopic[0] || "")
+            : (filterTopic || "");
+        if (current !== selectedTopic) {
+            setSelectedTopic(current);
+            const newParams = new URLSearchParams(searchParams);
+            if (current) {
+                newParams.set("topic", current);
+            } else {
+                newParams.delete("topic");
+            }
+            setSearchParams(newParams, { replace: true });
+        }
+    }, [table.filters?.topic]);
 
     const filteredTopics = useMemo(() => {
         if (!topicSearch.trim()) return topics;

@@ -34,13 +34,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EXAM_CATEGORY_LABEL, EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type QuestionDTO, type QuestionDifficulty, type QuestionFilter, type QuestionType, type ResultVisibility } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Search, BookmarkPlus, Tags, Trash2, X } from "lucide-react";
-import { useState, useMemo } from "react";
+import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, Check, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Save, Search, BookmarkPlus, ShieldAlert, Tags, Trash2, X } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { EditExamQuestionDialog, isExamStarted, QuestionAnswers } from "./ExamQuestionParts";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 
 interface ExamConfigForm {
   startTime: string;
@@ -210,11 +211,13 @@ export default function ExamManagementPage() {
   const [newDuration, setNewDuration] = useState("60");
   const [cfg, setCfg] = useState<ExamConfigForm>(DEFAULT_CONFIG);
   const [questionSearch, setQuestionSearch] = useState("");
-  const [questionTopic, setQuestionTopic] = useState("");
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [questionType, setQuestionType] = useState("ALL");
   const [difficulty, setDifficulty] = useState("ALL");
   const [questionPage, setQuestionPage] = useState(0);
+  const [pageInput, setPageInput] = useState<string>("1");
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<number>>(new Set());
+  const [stagedQuestions, setStagedQuestions] = useState<QuestionDTO[]>([]);
   const [examToDelete, setExamToDelete] = useState<ExamDTO | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [editingQuestion, setEditingQuestion] = useState<QuestionDTO | null>(null);
@@ -252,11 +255,11 @@ export default function ExamManagementPage() {
     isActive: true,
     ...(effectiveQuestionType !== "ALL" ? { type: effectiveQuestionType as QuestionType } : {}),
     ...(difficulty !== "ALL" ? { difficulty: difficulty as QuestionDifficulty } : {}),
-    ...(questionTopic.trim() ? { topic: questionTopic.trim().toLowerCase() } : {}),
+    ...(selectedTopics.length === 1 ? { topic: selectedTopics[0].trim().toLowerCase() } : {}),
   };
 
   const questionsQuery = useQuery({
-    queryKey: ["exam-question-picker", questionPage, questionSearch, effectiveQuestionType, difficulty, questionTopic],
+    queryKey: ["exam-question-picker", questionPage, questionSearch, effectiveQuestionType, difficulty, selectedTopics],
     enabled: isPickerOpen && Boolean(activeExam?.id),
     queryFn: () =>
         questionApi.getPage(
@@ -426,11 +429,12 @@ export default function ExamManagementPage() {
   const openQuestionPicker = (exam: ExamDTO) => {
     setActiveExam(exam);
     setQuestionSearch("");
-    setQuestionTopic("");
+    setSelectedTopics([]);
     setQuestionType("ALL");
     setDifficulty("ALL");
     setQuestionPage(0);
     setSelectedQuestionIds(new Set());
+    setStagedQuestions([]);
     setPickerOpen(true);
   };
 
@@ -474,10 +478,76 @@ export default function ExamManagementPage() {
     return set;
   }, [activeExam?.questions]);
 
+  const stagedQuestionIds = useMemo(() => {
+    return new Set(stagedQuestions.map((q) => q.id));
+  }, [stagedQuestions]);
+
+  const stagedPoints = useMemo(() => {
+    return stagedQuestions.reduce((sum, q) => sum + (q.points || 0), 0);
+  }, [stagedQuestions]);
+
+  const totalPointsInExam = (activeExam?.totalPoints ?? 0) + stagedPoints;
+  const totalQuestionsInExamCount = (activeExam?.questions?.length ?? 0) + stagedQuestions.length;
+
+  const handleToggleStagedQuestion = (question: QuestionDTO) => {
+    if (activeExamStarted) return;
+    if (sourceIdsInExam.has(question.id)) return;
+
+    setStagedQuestions((prev) => {
+      const exists = prev.some((item) => item.id === question.id);
+      if (exists) {
+        return prev.filter((item) => item.id !== question.id);
+      } else {
+        return [...prev, question];
+      }
+    });
+  };
+
+  const handleRemoveStagedQuestion = (questionId: number) => {
+    if (activeExamStarted) return;
+    setStagedQuestions((prev) => prev.filter((item) => item.id !== questionId));
+  };
+
+  const handleMoveSelectedToRight = () => {
+    if (activeExamStarted || selectedQuestionIds.size === 0) return;
+    const toAdd = allBankQuestions.filter(
+      (q) => selectedQuestionIds.has(q.id) && !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id)
+    );
+    if (toAdd.length > 0) {
+      setStagedQuestions((prev) => {
+        const existing = new Set(prev.map((q) => q.id));
+        const newlyAdded = toAdd.filter((q) => !existing.has(q.id));
+        return [...prev, ...newlyAdded];
+      });
+    }
+    setSelectedQuestionIds(new Set());
+  };
+
+  const handleSaveStagedToExam = () => {
+    if (activeExamStarted) {
+      toast.error("Exam has started, questions cannot be added.");
+      return;
+    }
+    if (!activeExam?.id || stagedQuestions.length === 0) return;
+
+    const idsToAdd = stagedQuestions.map((q) => q.id);
+    addQuestionsMutation.mutate(idsToAdd, {
+      onSuccess: (updatedExam) => {
+        setActiveExam(updatedExam);
+        setStagedQuestions([]);
+        setSelectedQuestionIds(new Set());
+        toast.success(`Saved ${idsToAdd.length} question(s) to exam successfully!`);
+      },
+    });
+  };
+
   const filterQuestionItem = (q: QuestionDTO) => {
     if (effectiveQuestionType !== "ALL" && q.type !== effectiveQuestionType) return false;
     if (difficulty !== "ALL" && q.difficulty !== difficulty) return false;
-    if (questionTopic.trim() && (q.topic || "").trim().toLowerCase() !== questionTopic.trim().toLowerCase()) return false;
+    if (selectedTopics.length > 0) {
+      const qTopic = (q.topic || "").trim().toLowerCase();
+      if (!selectedTopics.some((t) => t.toLowerCase() === qTopic)) return false;
+    }
     if (questionSearch.trim()) {
       const s = questionSearch.trim().toLowerCase();
       const matchContent = (q.content || "").toLowerCase().includes(s);
@@ -488,23 +558,51 @@ export default function ExamManagementPage() {
   };
 
   const eligibleFilteredQuestions = useMemo(() => {
-    return allBankQuestions.filter((q) => !sourceIdsInExam.has(q.id) && filterQuestionItem(q));
-  }, [allBankQuestions, sourceIdsInExam, effectiveQuestionType, difficulty, questionTopic, questionSearch]);
+    return allBankQuestions.filter(
+      (q) => !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id) && filterQuestionItem(q)
+    );
+  }, [allBankQuestions, sourceIdsInExam, stagedQuestionIds, effectiveQuestionType, difficulty, selectedTopics, questionSearch]);
 
   const eligibleTopicQuestions = useMemo(() => {
-    if (!questionTopic.trim()) return [];
+    if (selectedTopics.length === 0) return [];
     return allBankQuestions.filter(
-        (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === questionTopic.trim().toLowerCase()
+        (q) => !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id) && selectedTopics.some((t) => (q.topic || "").trim().toLowerCase() === t.toLowerCase())
     );
-  }, [allBankQuestions, sourceIdsInExam, questionTopic]);
+  }, [allBankQuestions, sourceIdsInExam, stagedQuestionIds, selectedTopics]);
 
   const allAvailableBankQuestions = useMemo(() => {
-    return allBankQuestions.filter((q) => !sourceIdsInExam.has(q.id));
-  }, [allBankQuestions, sourceIdsInExam]);
+    return allBankQuestions.filter((q) => !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id));
+  }, [allBankQuestions, sourceIdsInExam, stagedQuestionIds]);
+
+  const filteredBankQuestions = useMemo(() => {
+    return allBankQuestions.filter(filterQuestionItem);
+  }, [allBankQuestions, effectiveQuestionType, difficulty, selectedTopics, questionSearch]);
+
+  const questionTotalPages = Math.max(1, Math.ceil(filteredBankQuestions.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setPageInput(String(questionPage + 1));
+  }, [questionPage]);
+
+  const handlePageInputSubmit = () => {
+    const parsed = parseInt(pageInput, 10);
+    if (isNaN(parsed) || parsed < 1) {
+      setPageInput(String(questionPage + 1));
+    } else if (parsed > questionTotalPages) {
+      setQuestionPage(Math.max(0, questionTotalPages - 1));
+      setPageInput(String(questionTotalPages));
+    } else {
+      setQuestionPage(parsed - 1);
+    }
+  };
+  const questionRows = useMemo(() => {
+    const start = questionPage * PAGE_SIZE;
+    return filteredBankQuestions.slice(start, start + PAGE_SIZE);
+  }, [filteredBankQuestions, questionPage]);
 
   const selectablePageQuestions = useMemo(() => {
-    return (questionsQuery.data?.content ?? []).filter((q) => !sourceIdsInExam.has(q.id));
-  }, [questionsQuery.data?.content, sourceIdsInExam]);
+    return questionRows.filter((q) => !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id));
+  }, [questionRows, sourceIdsInExam, stagedQuestionIds]);
 
   const isAllPageSelected =
       selectablePageQuestions.length > 0 &&
@@ -548,22 +646,22 @@ export default function ExamManagementPage() {
     });
   };
 
-  const handleToggleSelectAllInTopic = (topicName: string) => {
+  const handleToggleSelectAllInTopic = (topics: string[]) => {
     const list = allBankQuestions.filter(
-        (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === topicName.trim().toLowerCase()
+        (q) => !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id) && topics.some((t) => (q.topic || "").trim().toLowerCase() === t.toLowerCase())
     );
     if (list.length === 0) {
-      toast.info(`All questions in topic "${topicName}" are already in this exam.`);
+      toast.info("All questions in selected topics are already in this exam.");
       return;
     }
     setSelectedQuestionIds((prev) => {
       const next = new Set(prev);
       if (isAllTopicSelected) {
         list.forEach((q) => next.delete(q.id));
-        toast.info(`Deselected all questions in topic "${topicName}".`);
+        toast.info("Deselected all questions in selected topics.");
       } else {
         list.forEach((q) => next.add(q.id));
-        toast.success(`Selected ${list.length} questions from topic "${topicName}".`);
+        toast.success(`Selected ${list.length} questions from selected topics.`);
       }
       return next;
     });
@@ -575,7 +673,7 @@ export default function ExamManagementPage() {
   };
 
   const openRandomDialog = (preferredTopic?: string) => {
-    setRandomTopic(preferredTopic || questionTopic || "");
+    setRandomTopic(preferredTopic || (selectedTopics.length === 1 ? selectedTopics[0] : "ALL"));
     setRandomDifficulty(difficulty !== "ALL" ? difficulty : "ALL");
     setRandomQuestionType(lockedQuestionType ?? (questionType !== "ALL" ? questionType : "ALL"));
     setIsRandomOpen(true);
@@ -606,21 +704,21 @@ export default function ExamManagementPage() {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    const pickedIds = shuffled.slice(0, count).map((q) => q.id);
+    const pickedQuestions = shuffled.slice(0, count);
 
-    addQuestionsMutation.mutate(pickedIds, {
-      onSuccess: () => {
-        setIsRandomOpen(false);
-        toast.success(`Added ${pickedIds.length} random question(s) to exam!`);
-      },
+    setStagedQuestions((prev) => {
+      const existing = new Set(prev.map((q) => q.id));
+      const newlyPicked = pickedQuestions.filter((q) => !existing.has(q.id));
+      return [...prev, ...newlyPicked];
     });
+
+    setIsRandomOpen(false);
+    toast.success(`Added ${pickedQuestions.length} random question(s) to exam list! Click "Save to Exam" to persist.`);
   };
 
   const activeExamStarted = isExamStarted(activeExam);
   const examRows = examsQuery.data?.content ?? [];
-  const questionRows = questionsQuery.data?.content ?? [];
   const examTotalPages = examsQuery.data?.totalPages ?? 0;
-  const questionTotalPages = questionsQuery.data?.totalPages ?? 0;
 
   return (
       <MainLayout pathName={{ exams: "Exam Management" }}>
@@ -792,6 +890,13 @@ export default function ExamManagementPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                  className="cursor-pointer text-purple-700 dark:text-purple-300 focus:text-purple-800"
+                                  onClick={() => exam.id && navigate(`/exams/${exam.id}/grading/similarity`)}
+                              >
+                                <ShieldAlert className="mr-2 size-4 text-purple-600" />
+                                AI Similarity Check
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                   className="cursor-pointer"
                                   onClick={() => openSaveAsTemplate(exam)}
@@ -1126,7 +1231,7 @@ export default function ExamManagementPage() {
         </Dialog>
 
         <Dialog open={isPickerOpen} onOpenChange={setPickerOpen}>
-          <DialogContent className="flex max-h-[90vh] flex-col gap-4 overflow-hidden p-5 sm:max-w-6xl">
+          <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col gap-4 overflow-hidden p-5 sm:max-w-6xl">
             <DialogHeader className="shrink-0">
               <DialogTitle>{activeExam?.title ?? "Select Questions"}</DialogTitle>
               <DialogDescription>
@@ -1134,8 +1239,8 @@ export default function ExamManagementPage() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,0.8fr)] lg:overflow-hidden">
-              <section className="flex min-h-0 flex-1 flex-col gap-3">
+            <div className="grid min-h-0 flex-1 gap-5 overflow-hidden lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.85fr)] h-full">
+              <section className="flex min-h-0 flex-1 flex-col gap-3 rounded-md border bg-muted/20 p-4 h-full">
                 {activeExamStarted && (
                     <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
                       <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -1175,17 +1280,32 @@ export default function ExamManagementPage() {
                     </SelectContent>
                   </Select>
                   <Select
-                      value={questionTopic || "ALL"}
+                      value={selectedTopics.length === 1 ? selectedTopics[0] : selectedTopics.length > 1 ? "MULTIPLE" : "ALL"}
                       onValueChange={(value) => {
-                        setQuestionTopic(value === "ALL" ? "" : value);
                         setQuestionPage(0);
+                        if (value === "ALL") {
+                          setSelectedTopics([]);
+                        } else if (value !== "MULTIPLE") {
+                          setSelectedTopics([value]);
+                        }
                       }}
                   >
                     <SelectTrigger aria-label="Filter topic">
-                      <SelectValue placeholder="All Topics" />
+                      <SelectValue>
+                        {selectedTopics.length === 0
+                          ? `All Topics (${allBankQuestions.length})`
+                          : selectedTopics.length === 1
+                            ? `Topic: ${selectedTopics[0]}`
+                            : `Topics (${selectedTopics.length} selected)`}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ALL">All Topics ({allBankQuestions.length})</SelectItem>
+                      {selectedTopics.length > 1 && (
+                        <SelectItem value="MULTIPLE" disabled>
+                          {selectedTopics.join(", ")} ({selectedTopics.length} selected)
+                        </SelectItem>
+                      )}
                       {topicList.map((t) => (
                           <SelectItem key={t} value={t}>
                             {t} ({topicCounts[t] ?? 0})
@@ -1201,25 +1321,41 @@ export default function ExamManagementPage() {
                       <Tags className="size-3 text-indigo-500" /> Topics:
                     </span>
                       <Badge
-                          variant={questionTopic === "" ? "default" : "outline"}
+                          variant={selectedTopics.length === 0 ? "default" : "outline"}
                           className="cursor-pointer hover:opacity-80 transition-opacity"
-                          onClick={() => { setQuestionTopic(""); setQuestionPage(0); }}
+                          onClick={() => { setSelectedTopics([]); setQuestionPage(0); }}
                       >
                         All ({allBankQuestions.length})
                       </Badge>
-                      {topicList.map((t) => (
-                          <Badge
-                              key={t}
-                              variant={questionTopic.toLowerCase() === t.toLowerCase() ? "default" : "secondary"}
-                              className="cursor-pointer hover:opacity-80 whitespace-nowrap transition-opacity"
-                              onClick={() => {
-                                setQuestionTopic(questionTopic.toLowerCase() === t.toLowerCase() ? "" : t);
-                                setQuestionPage(0);
-                              }}
-                          >
-                            {t} ({topicCounts[t] ?? 0})
-                          </Badge>
-                      ))}
+                      {topicList.map((t) => {
+                        const isSelected = selectedTopics.some((st) => st.toLowerCase() === t.toLowerCase());
+                        const count = topicCounts[t] ?? 0;
+                        return (
+                            <Badge
+                                key={t}
+                                variant={isSelected ? "default" : "secondary"}
+                                className={`cursor-pointer whitespace-nowrap transition-all ${
+                                  isSelected
+                                    ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs"
+                                    : "hover:bg-muted/80"
+                                }`}
+                                onClick={() => {
+                                  setQuestionPage(0);
+                                  setSelectedTopics((prev) => {
+                                    const norm = t.toLowerCase();
+                                    if (prev.some((item) => item.toLowerCase() === norm)) {
+                                      return prev.filter((item) => item.toLowerCase() !== norm);
+                                    } else {
+                                      return [...prev, t];
+                                    }
+                                  });
+                                }}
+                            >
+                              {isSelected && <Check className="size-3 mr-1" />}
+                              {t} ({count})
+                            </Badge>
+                        );
+                      })}
                     </div>
                 )}
 
@@ -1238,21 +1374,21 @@ export default function ExamManagementPage() {
                       {isAllPageSelected ? "Deselect Page" : `Page (${selectablePageQuestions.length})`}
                     </Button>
 
-                    {questionTopic.trim() ? (
+                    {selectedTopics.length > 0 ? (
                         <>
                           <Button
                               type="button"
                               variant={isAllTopicSelected ? "secondary" : "outline"}
                               size="sm"
                               className="h-7 text-xs px-2"
-                              onClick={() => handleToggleSelectAllInTopic(questionTopic)}
+                              onClick={() => handleToggleSelectAllInTopic(selectedTopics)}
                               disabled={activeExamStarted || eligibleTopicQuestions.length === 0}
-                              title={`Toggle select all questions in topic "${questionTopic}"`}
+                              title="Toggle select all questions in selected topics"
                           >
                             <Layers className="mr-1 size-3.5" />
                             {isAllTopicSelected
-                                ? `Deselect Topic "${questionTopic}"`
-                                : `All Topic "${questionTopic}" (${eligibleTopicQuestions.length})`}
+                                ? `Deselect Topics (${selectedTopics.length})`
+                                : `All in Topics (${eligibleTopicQuestions.length})`}
                           </Button>
 
                           {eligibleFilteredQuestions.length !== eligibleTopicQuestions.length && (
@@ -1263,7 +1399,7 @@ export default function ExamManagementPage() {
                                   className="h-7 text-xs px-2"
                                   onClick={handleToggleSelectAllFiltered}
                                   disabled={activeExamStarted || eligibleFilteredQuestions.length === 0}
-                                  title="Select questions matching search/difficulty inside this topic"
+                                  title="Select questions matching search/difficulty inside selected topics"
                               >
                                 <CheckCheck className="mr-1 size-3.5" />
                                 {isAllFilteredSelected
@@ -1310,20 +1446,20 @@ export default function ExamManagementPage() {
                         variant="default"
                         size="sm"
                         className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm"
-                        onClick={() => openRandomDialog(questionTopic)}
+                        onClick={() => openRandomDialog(selectedTopics.length === 1 ? selectedTopics[0] : undefined)}
                         disabled={activeExamStarted || allAvailableBankQuestions.length === 0}
                     >
                       <Dices className="mr-1 size-3.5" />
-                      {questionTopic.trim() ? `Random from "${questionTopic}"...` : "Random Questions..."}
+                      {selectedTopics.length === 1 ? `Random from "${selectedTopics[0]}"...` : selectedTopics.length > 1 ? `Random (${selectedTopics.length} topics)...` : "Random Questions..."}
                     </Button>
                   </div>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-background">
-                  <Table>
+                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden rounded-md border bg-card/40">
+                  <Table className="w-full table-fixed">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-12 text-center">
+                        <TableHead className="w-9 text-center p-0">
                           <input
                               type="checkbox"
                               className="size-4 accent-primary"
@@ -1333,93 +1469,264 @@ export default function ExamManagementPage() {
                               onChange={handleToggleSelectAllPage}
                           />
                         </TableHead>
-                        <TableHead>Content</TableHead>
-                        <TableHead className="w-24">Type</TableHead>
-                        <TableHead className="w-24">Difficulty</TableHead>
-                        <TableHead className="w-20 text-right">Weight</TableHead>
+                        <TableHead className="w-auto">Content</TableHead>
+                        <TableHead className="w-24 text-center shrink-0">Type</TableHead>
+                        <TableHead className="w-20 text-center shrink-0">Difficulty</TableHead>
+                        <TableHead className="w-14 text-center shrink-0">Weight</TableHead>
+                        <TableHead className="w-20 text-center shrink-0">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {questionsQuery.isLoading && (
-                          <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Loading questions...</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Loading questions...</TableCell></TableRow>
                       )}
                       {questionsQuery.isError && (
-                          <TableRow><TableCell colSpan={5} className="h-24 text-center text-destructive">Failed to load questions list.</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={6} className="h-24 text-center text-destructive">Failed to load questions list.</TableCell></TableRow>
                       )}
                       {!questionsQuery.isLoading && !questionsQuery.isError && questionRows.length === 0 && (
-                          <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No matching questions found.</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">No matching questions found.</TableCell></TableRow>
                       )}
                       {questionRows.map((q) => {
                         const added = sourceIdsInExam.has(q.id);
+                        const isStaged = stagedQuestionIds.has(q.id);
                         const selected = selectedQuestionIds.has(q.id);
                         return (
-                            <TableRow key={q.id}>
-                              <TableCell className="text-center">
+                            <TableRow
+                                key={q.id}
+                                className={`group transition-all select-none ${
+                                    added
+                                        ? "bg-muted/20 opacity-60 cursor-not-allowed"
+                                        : isStaged
+                                            ? "bg-emerald-500/10 dark:bg-emerald-950/20 border-l-2 border-l-emerald-500 cursor-pointer"
+                                            : "cursor-pointer hover:bg-primary/5 hover:border-l-2 hover:border-l-primary"
+                                }`}
+                                onClick={() => {
+                                  if (!added && !activeExamStarted) {
+                                    handleToggleStagedQuestion(q);
+                                  }
+                                }}
+                            >
+                              <TableCell className="w-9 text-center p-0" onClick={(e) => e.stopPropagation()}>
                                 <input
                                     type="checkbox"
-                                    className="size-4 accent-primary"
+                                    className="size-4 accent-primary cursor-pointer"
                                     disabled={added || activeExamStarted}
-                                    checked={added || selected}
+                                    checked={added || isStaged || selected}
                                     onChange={(e) => toggleQuestion(q.id, e.target.checked)}
                                 />
                               </TableCell>
-                              <TableCell>
-                                <p className="line-clamp-2 text-sm">{q.content}</p>
-                                {q.topic && <p className="mt-0.5 text-xs text-muted-foreground">Topic: {q.topic}</p>}
+                              <TableCell className="min-w-0 pr-2">
+                                <HoverCard openDelay={150} closeDelay={100}>
+                                  <HoverCardTrigger asChild>
+                                    <div className="cursor-pointer group/title">
+                                      <p className="line-clamp-2 text-xs font-medium leading-snug group-hover:text-primary transition-colors">
+                                        {q.content}
+                                      </p>
+                                      {q.topic && (
+                                          <p className="mt-0.5 text-[11px] text-muted-foreground truncate">
+                                            Topic: <span className="font-medium text-foreground/80">{q.topic}</span>
+                                          </p>
+                                      )}
+                                    </div>
+                                  </HoverCardTrigger>
+                                  <HoverCardContent
+                                    side="right"
+                                    align="start"
+                                    sideOffset={14}
+                                    className="w-[420px] max-w-[90vw] p-4 shadow-2xl border bg-popover/98 backdrop-blur-md z-50 text-left"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="space-y-3">
+                                      <div className="flex items-center justify-between gap-2 border-b pb-2">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <Badge variant="outline" className="text-[11px] font-semibold">
+                                            {q.type === "ESSAY" ? "Essay" : q.type === "CODING" ? "Coding" : "Multiple Choice"}
+                                          </Badge>
+                                          <Badge variant="secondary" className="text-[11px]">
+                                            {q.difficulty === "EASY" ? "Easy" : q.difficulty === "MEDIUM" ? "Medium" : "Hard"}
+                                          </Badge>
+                                          {q.topic && (
+                                            <Badge variant="outline" className="text-[10px] bg-muted/50">
+                                              {q.topic}
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        <span className="text-xs font-medium text-muted-foreground shrink-0">
+                                          Weight: <strong className="text-foreground">{q.points ?? 1}</strong>
+                                        </span>
+                                      </div>
+
+                                      <div>
+                                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                                          Question Content:
+                                        </p>
+                                        <p className="text-xs font-medium leading-relaxed whitespace-pre-wrap break-words text-foreground">
+                                          {q.content}
+                                        </p>
+                                      </div>
+
+                                      <div className="border-t pt-2.5">
+                                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                                          <span>Answers & Options:</span>
+                                          {q.type === "MULTIPLE_CHOICE" && (
+                                            <span className="text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
+                                              (Highlighted = Correct)
+                                            </span>
+                                          )}
+                                        </p>
+                                        <QuestionAnswers question={q} />
+                                      </div>
+                                    </div>
+                                  </HoverCardContent>
+                                </HoverCard>
                               </TableCell>
-                              <TableCell>
-                                <Badge variant="outline">
-                                  {q.type === "ESSAY" ? "Essay" : q.type === "CODING" ? "Coding" : "Multiple Choice"}
+                              <TableCell className="w-24 text-center shrink-0 p-1">
+                                <Badge variant="outline" className="text-[11px] px-1.5 py-0 whitespace-nowrap">
+                                  {q.type === "ESSAY" ? "Essay" : q.type === "CODING" ? "Coding" : "Multiple"}
                                 </Badge>
                               </TableCell>
-                              <TableCell>
-                                <Badge variant="secondary">
+                              <TableCell className="w-20 text-center shrink-0 p-1">
+                                <Badge variant="secondary" className="text-[11px] px-1.5 py-0 whitespace-nowrap">
                                   {q.difficulty === "EASY" ? "Easy" : q.difficulty === "MEDIUM" ? "Medium" : "Hard"}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-right font-medium">{q.points}</TableCell>
+                              <TableCell className="w-14 text-center shrink-0 font-medium text-xs p-1">{q.points}</TableCell>
+                              <TableCell className="w-20 text-center shrink-0 p-1" onClick={(e) => e.stopPropagation()}>
+                                {added ? (
+                                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
+                                      <Check className="size-3.5 text-emerald-500" />
+                                      Saved
+                                    </span>
+                                ) : isStaged ? (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 px-2 text-xs text-emerald-600 hover:text-destructive hover:bg-destructive/10"
+                                        title="Click to remove from staged list"
+                                        onClick={() => handleToggleStagedQuestion(q)}
+                                    >
+                                      <Check className="size-3.5 mr-1" />
+                                      Added
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={activeExamStarted}
+                                        className="h-7 px-2 text-xs text-primary font-medium opacity-0 group-hover:opacity-100 transition-all bg-primary/10 hover:bg-primary/20 shadow-xs"
+                                        title="Move question to exam list"
+                                        onClick={() => handleToggleStagedQuestion(q)}
+                                    >
+                                      <span>Add</span>
+                                      <ArrowRight className="size-3.5 ml-1 transition-transform group-hover:translate-x-0.5" />
+                                    </Button>
+                                )}
+                              </TableCell>
                             </TableRow>
                         );
                       })}
+                      {questionRows.length > 0 && questionRows.length < PAGE_SIZE && (
+                        Array.from({ length: PAGE_SIZE - questionRows.length }).map((_, i) => (
+                          <TableRow key={`filler-${i}`} className="border-b border-border/40 hover:bg-transparent pointer-events-none select-none">
+                            <TableCell colSpan={6} className="h-12 py-2 text-transparent">
+                              &nbsp;
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </div>
 
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Button
-                        size="sm"
-                        onClick={() => addQuestionsMutation.mutate(undefined)}
-                        disabled={activeExamStarted || selectedQuestionIds.size === 0 || addQuestionsMutation.isPending}
-                    >
-                      <Plus className="mr-1 size-4" />
-                      {addQuestionsMutation.isPending ? "Adding..." : `Add ${selectedQuestionIds.size} Selected Question(s)`}
-                    </Button>
                     {selectedQuestionIds.size > 0 && (
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="text-xs text-muted-foreground hover:text-destructive"
-                            onClick={handleDeselectAll}
-                        >
-                          <X className="mr-1 size-3.5" />
-                          Clear selection
-                        </Button>
+                        <>
+                          <Button
+                              size="sm"
+                              variant="default"
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                              onClick={handleMoveSelectedToRight}
+                              disabled={activeExamStarted}
+                          >
+                            <ArrowRight className="mr-1 size-4" />
+                            Move {selectedQuestionIds.size} Selected to Right
+                          </Button>
+                          <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs text-muted-foreground hover:text-destructive"
+                              onClick={handleDeselectAll}
+                          >
+                            <X className="mr-1 size-3.5" />
+                            Clear selection
+                          </Button>
+                        </>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" disabled={questionPage === 0} onClick={() => setQuestionPage((p) => p - 1)}>Previous</Button>
-                    <span className="text-xs text-muted-foreground">{questionTotalPages === 0 ? 0 : questionPage + 1} / {questionTotalPages}</span>
-                    <Button variant="outline" size="sm" disabled={questionPage + 1 >= questionTotalPages} onClick={() => setQuestionPage((p) => p + 1)}>Next</Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2.5 text-xs"
+                        disabled={questionPage === 0}
+                        onClick={() => setQuestionPage((p) => p - 1)}
+                    >
+                      Previous
+                    </Button>
+
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium px-1">
+                      <span>Page</span>
+                      <Input
+                          type="number"
+                          min={1}
+                          max={questionTotalPages}
+                          className="h-8 w-13 px-1 text-center text-xs font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          value={pageInput}
+                          onChange={(e) => setPageInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.currentTarget.blur();
+                            }
+                          }}
+                          onBlur={handlePageInputSubmit}
+                          aria-label="Go to page"
+                          title="Type page number and press Enter"
+                      />
+                      <span>/ {questionTotalPages}</span>
+                    </div>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2.5 text-xs"
+                        disabled={questionPage + 1 >= questionTotalPages}
+                        onClick={() => setQuestionPage((p) => p + 1)}
+                    >
+                      Next
+                    </Button>
                   </div>
                 </div>
               </section>
 
               <section className="flex min-h-0 flex-col gap-3 rounded-md border bg-muted/20 p-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Questions in Exam ({activeExam?.questions?.length ?? 0})</h3>
-                  <span className="text-xs font-medium text-muted-foreground">Total weight: {activeExam?.totalPoints ?? 0} · Max score: {activeExam?.maxScore ?? 10}</span>
+                  <div>
+                    <h3 className="font-semibold text-sm">
+                      Questions in Exam ({totalQuestionsInExamCount})
+                      {stagedQuestions.length > 0 && (
+                          <Badge className="ml-2 bg-emerald-600 text-white text-[10px] px-1.5 py-0 font-normal">
+                            +{stagedQuestions.length} new
+                          </Badge>
+                      )}
+                    </h3>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Total weight: {totalPointsInExam} · Max score: {activeExam?.maxScore ?? 10}
+                    </span>
+                  </div>
                 </div>
 
                 {activeExamStarted && (
@@ -1429,41 +1736,178 @@ export default function ExamManagementPage() {
                 )}
 
                 <div className="min-h-0 flex-1 overflow-y-auto space-y-3 pr-1">
-                  {(activeExam?.questions ?? []).length === 0 && (
-                      <p className="p-4 text-center text-xs text-muted-foreground">No questions added to this exam yet.</p>
+                  {totalQuestionsInExamCount === 0 && (
+                      <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+                        <ArrowRight className="size-8 opacity-40 mb-2 rotate-180" />
+                        <p className="text-sm font-medium">No questions added yet</p>
+                        <p className="text-xs mt-1">Click any question or arrow on the left to move it here.</p>
+                      </div>
                   )}
+
+                  {/* Saved Questions */}
                   {(activeExam?.questions ?? []).map((q, idx) => (
-                      <div key={q.id} className="rounded-md border bg-background p-3 shadow-sm">
+                      <div
+                          key={q.id}
+                          className={`group relative rounded-md border bg-card p-3 shadow-xs transition-all select-none ${
+                              activeExamStarted
+                                  ? "cursor-default opacity-80"
+                                  : "cursor-pointer hover:border-destructive/70 hover:bg-destructive/10"
+                          } ${removeQuestionMutation.isPending ? "pointer-events-none opacity-60" : ""}`}
+                          onClick={() => {
+                            if (!activeExamStarted && activeExam?.id && !removeQuestionMutation.isPending) {
+                              removeQuestionMutation.mutate({ examId: activeExam.id, questionId: q.id });
+                            }
+                          }}
+                          title={activeExamStarted ? "Exam has started, questions cannot be removed" : "Click to remove from exam"}
+                      >
                         <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs font-semibold text-primary">Question {idx + 1} (weight {q.points})</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-semibold text-primary group-hover:text-destructive transition-colors">
+                              Question {idx + 1} (weight {q.points})
+                            </span>
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground group-hover:hidden">
+                              Saved
+                            </Badge>
+                            {!activeExamStarted && (
+                              <Badge variant="destructive" className="hidden group-hover:inline-flex text-[10px] px-1.5 py-0 font-normal">
+                                Click to remove
+                              </Badge>
+                            )}
+                          </div>
                           <div className="flex items-center gap-1">
+                            {!activeExamStarted && (
+                              <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px] gap-1 opacity-0 group-hover:opacity-100 transition-opacity font-medium shadow-xs"
+                                  title="Remove question from exam"
+                                  disabled={removeQuestionMutation.isPending}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    activeExam?.id && removeQuestionMutation.mutate({ examId: activeExam.id, questionId: q.id });
+                                  }}
+                              >
+                                <ArrowLeft className="size-3" />
+                                <span>Remove</span>
+                              </Button>
+                            )}
                             <Button
                                 variant="ghost"
                                 size="icon-sm"
                                 aria-label="Edit question points/content"
                                 title={activeExamStarted ? "Exam has started, questions cannot be edited" : "Edit question points/content"}
                                 disabled={activeExamStarted}
-                                onClick={() => setEditingQuestion(q)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingQuestion(q);
+                                }}
                             >
                               <Pencil className="size-3.5" />
                             </Button>
                             <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                className="text-destructive hover:text-destructive"
+                                className="text-muted-foreground group-hover:text-destructive group-hover:bg-destructive/20"
                                 disabled={activeExamStarted || removeQuestionMutation.isPending}
                                 aria-label="Remove question from exam"
                                 title={activeExamStarted ? "Exam has started, questions cannot be removed" : "Remove question from exam"}
-                                onClick={() => activeExam?.id && removeQuestionMutation.mutate({ examId: activeExam.id, questionId: q.id })}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  activeExam?.id && removeQuestionMutation.mutate({ examId: activeExam.id, questionId: q.id });
+                                }}
                             >
                               <Trash2 className="size-3.5" />
                             </Button>
                           </div>
                         </div>
-                        <p className="mt-1 line-clamp-2 text-xs">{q.content}</p>
+                        <p className="mt-1 line-clamp-2 text-xs group-hover:text-foreground">{q.content}</p>
                         <QuestionAnswers question={q} />
                       </div>
                   ))}
+
+                  {/* Staged Questions (Pending Save) */}
+                  {stagedQuestions.map((q, idx) => {
+                    const qNum = (activeExam?.questions?.length ?? 0) + idx + 1;
+                    return (
+                        <div
+                            key={q.id}
+                            className="group relative rounded-md border-2 border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20 p-3 shadow-xs transition-all animate-in fade-in-50 duration-200 cursor-pointer hover:border-destructive/70 hover:bg-destructive/10 select-none"
+                            onClick={() => handleRemoveStagedQuestion(q.id)}
+                            title="Click to remove from exam list"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 group-hover:text-destructive transition-colors">
+                                Question {qNum} (weight {q.points})
+                              </span>
+                              <Badge className="bg-emerald-600 text-white text-[10px] px-1.5 py-0 font-normal group-hover:hidden">
+                                New
+                              </Badge>
+                              <Badge variant="destructive" className="hidden group-hover:inline-flex text-[10px] px-1.5 py-0 font-normal">
+                                Click to remove
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-6 px-2 text-[11px] gap-1 opacity-0 group-hover:opacity-100 transition-opacity font-medium shadow-xs"
+                                  title="Remove from staged questions"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveStagedQuestion(q.id);
+                                  }}
+                              >
+                                <ArrowLeft className="size-3" />
+                                <span>Remove</span>
+                              </Button>
+                              <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="h-6 w-6 text-muted-foreground group-hover:text-destructive group-hover:bg-destructive/20"
+                                  title="Remove from staged questions"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveStagedQuestion(q.id);
+                                  }}
+                              >
+                                <X className="size-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-xs group-hover:text-foreground">{q.content}</p>
+                          <QuestionAnswers question={q} />
+                        </div>
+                    );
+                  })}
+                </div>
+
+                <div className="pt-2 border-t mt-auto space-y-1.5">
+                  <Button
+                      type="button"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm h-9"
+                      disabled={activeExamStarted || stagedQuestions.length === 0 || addQuestionsMutation.isPending}
+                      onClick={handleSaveStagedToExam}
+                  >
+                    <Save className="mr-1.5 size-4" />
+                    {addQuestionsMutation.isPending
+                        ? "Saving to exam..."
+                        : stagedQuestions.length > 0
+                            ? `Save ${stagedQuestions.length} Question(s) to Exam`
+                            : "Save to Exam"}
+                  </Button>
+                  {stagedQuestions.length > 0 ? (
+                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 text-center font-medium">
+                        {stagedQuestions.length} question(s) moved to the right. Click "Save to Exam" to save into exam.
+                      </p>
+                  ) : (
+                      <p className="text-[11px] text-muted-foreground text-center">
+                        All questions on the right are saved.
+                      </p>
+                  )}
                 </div>
               </section>
             </div>

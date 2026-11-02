@@ -4,17 +4,14 @@ import { QuestionDetailPage } from "./pages/QuestionDetailPage";
 import { QuestionEditPage } from "./pages/QuestionEditPage";
 import QuestionListPage from "./pages/QuestionListPage";
 import {
-  auditableFieldsSchema,
   type EntityConfig,
   type EntitySchema,
-  type FieldSchema,
 } from "@/types";
 
 const typeOptions = [
   { label: "Multiple choice", value: "MULTIPLE_CHOICE" },
-  { label: "Single choice", value: "SINGLE_CHOICE" },
-  { label: "Multi choice", value: "MULTI_CHOICE" },
   { label: "Essay", value: "ESSAY" },
+  { label: "Coding", value: "CODING" },
 ];
 
 const difficultyOptions = [
@@ -62,7 +59,8 @@ const questionSchema: EntitySchema = {
       type: "text",
       sortable: true,
       filterable: true,
-      filterType: "text",
+      filterType: "select",
+      filterOptions: [],
     },
     {
       name: "points",
@@ -70,7 +68,58 @@ const questionSchema: EntitySchema = {
       type: "number",
       sortable: true,
     },
-    ...(auditableFieldsSchema as FieldSchema[]),
+    {
+      name: "isActive",
+      label: "Status",
+      type: "boolean",
+      booleanLabels: {
+        true: "Active",
+        false: "Inactive",
+        trueColor: "bg-blue-500 text-white",
+        falseColor: "bg-red-500 text-white",
+      },
+      filterable: true,
+      filterType: "boolean",
+    },
+    {
+      name: "createdAt",
+      label: "Created At",
+      type: "date",
+      sortable: true,
+      editable: false,
+      filterable: true,
+      filterType: "dateRange",
+    },
+    {
+      name: "updatedAt",
+      label: "Updated At",
+      type: "date",
+      sortable: true,
+      editable: false,
+      filterable: true,
+      filterType: "dateRange",
+      visible: false,
+    },
+    {
+      name: "createdBy",
+      label: "Created By",
+      type: "number",
+      sortable: true,
+      editable: false,
+      filterable: true,
+      filterType: "text",
+      visible: false,
+    },
+    {
+      name: "updatedBy",
+      label: "Updated By",
+      type: "number",
+      sortable: true,
+      editable: false,
+      filterable: true,
+      filterType: "text",
+      visible: false,
+    },
   ],
 };
 

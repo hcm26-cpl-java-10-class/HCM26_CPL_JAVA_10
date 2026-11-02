@@ -23,6 +23,7 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,6 +38,9 @@ class ExamEssayGradingServiceTest {
     @Mock
     private AiEssayGradingClient aiClient;
 
+    @Mock
+    private ExamQuestionGradingConfigRepository gradingConfigRepository;
+
     @InjectMocks
     private ExamEssayGradingService gradingService;
 
@@ -47,6 +51,9 @@ class ExamEssayGradingServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(gradingConfigRepository.findByExamIdAndQuestionId(anyLong(), anyLong()))
+                .thenReturn(Optional.empty());
+
         exam = new Exam();
         exam.setId(10L);
         exam.setTitle("Midterm Java Exam");
@@ -200,8 +207,87 @@ class ExamEssayGradingServiceTest {
         EssayGradingDTO.Detail result = gradingService.submitOfficialGrade(10L, 100L, request);
 
         assertNotNull(result);
+        assertScore("9", essayAnswer.getScore());
+        assertEquals("Regraded with full credit on design patterns.", essayAnswer.getFeedback());
+        assertEquals(ExamAttemptStatus.SUBMITTED, attempt.getStatus());
         assertScore("29", attempt.getFinalScore());
         verify(attemptRepository).save(attempt);
+    }
+
+    @Test
+    void submitReferenceAnswerSavesAndReturnsDTO() {
+        when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
+        when(gradingConfigRepository.findByExamIdAndQuestionId(10L, 101L)).thenReturn(Optional.empty());
+        when(gradingConfigRepository.save(any(ExamQuestionGradingConfig.class))).thenAnswer(invocation -> {
+            ExamQuestionGradingConfig saved = invocation.getArgument(0);
+            saved.setId(1L);
+            return saved;
+        });
+
+        EssayGradingDTO.QuestionGuidelineDTO result = gradingService.submitReferenceAnswer(
+                10L, 101L, "Expected Model Answer for Question 101"
+        );
+
+        assertNotNull(result);
+        assertEquals(10L, result.getExamId());
+        assertEquals(101L, result.getQuestionId());
+        assertEquals("Expected Model Answer for Question 101", result.getReferenceAnswer());
+        assertNotNull(result.getReferenceSubmittedAt());
+        verify(gradingConfigRepository).save(any(ExamQuestionGradingConfig.class));
+    }
+
+    @Test
+    void submitRubricSavesAndReturnsDTO() {
+        when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
+        when(gradingConfigRepository.findByExamIdAndQuestionId(10L, 101L)).thenReturn(Optional.empty());
+        when(gradingConfigRepository.save(any(ExamQuestionGradingConfig.class))).thenAnswer(invocation -> {
+            ExamQuestionGradingConfig saved = invocation.getArgument(0);
+            saved.setId(2L);
+            return saved;
+        });
+
+        EssayGradingDTO.QuestionGuidelineDTO result = gradingService.submitRubric(
+                10L, 101L, "Step 1: 5 pts; Step 2: 5 pts"
+        );
+
+        assertNotNull(result);
+        assertEquals(10L, result.getExamId());
+        assertEquals(101L, result.getQuestionId());
+        assertEquals("Step 1: 5 pts; Step 2: 5 pts", result.getRubric());
+        assertNotNull(result.getRubricSubmittedAt());
+        verify(gradingConfigRepository).save(any(ExamQuestionGradingConfig.class));
+    }
+
+    @Test
+    void requestAiGradingPrefersDatabaseSubmittedGuidelines() {
+        when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
+        when(attemptRepository.findById(100L)).thenReturn(Optional.of(attempt));
+
+        ExamQuestionGradingConfig config = ExamQuestionGradingConfig.builder()
+                .examId(10L)
+                .questionId(101L)
+                .referenceAnswer("Database Submitted Model Answer")
+                .referenceSubmittedAt(Instant.now())
+                .rubric("Database Submitted Rubric: 10 pts")
+                .rubricSubmittedAt(Instant.now())
+                .build();
+        when(gradingConfigRepository.findByExamIdAndQuestionId(10L, 101L)).thenReturn(Optional.of(config));
+
+        EssayGradingDTO.AiGradingResponse mockResponse = new EssayGradingDTO.AiGradingResponse();
+        mockResponse.setModel("gemini-3.5-flash-lite");
+        mockResponse.setProposals(List.of());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AiEssayGradingClient.EssayQuestionPayload>> captor = ArgumentCaptor.forClass(List.class);
+        when(aiClient.requestProposal(captor.capture())).thenReturn(mockResponse);
+
+        // Caller sends nothing in request
+        gradingService.requestAiGrading(10L, 100L, null);
+
+        List<AiEssayGradingClient.EssayQuestionPayload> captured = captor.getValue();
+        assertEquals(1, captured.size());
+        assertEquals("Database Submitted Model Answer", captured.get(0).referenceAnswer());
+        assertTrue(captured.get(0).rubric().contains("Database Submitted Rubric: 10 pts"));
     }
 
     @Test

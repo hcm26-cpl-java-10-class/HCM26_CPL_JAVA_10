@@ -10,6 +10,8 @@ import com.example.starter_project_2025.system.exam.domain.ExamAttemptAnswer;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptQuestion;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.domain.ExamQuestionGradingConfig;
+import com.example.starter_project_2025.system.exam.domain.ExamQuestionGradingConfigRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
 import com.example.starter_project_2025.system.exam.dto.EssayGradingDTO;
 import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
@@ -22,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.*;
 
 @Service
@@ -41,6 +44,7 @@ public class ExamEssayGradingService {
     private final AiEssayGradingClient aiClient;
     private final AnonymousExamService anonymousExamService;
     private final CodeJudgeService codeJudgeService;
+    private final ExamQuestionGradingConfigRepository gradingConfigRepository;
 
     public List<EssayGradingDTO.Summary> listPending(Long examId) {
         requireExam(examId);
@@ -88,6 +92,60 @@ public class ExamEssayGradingService {
                 .map(question -> toCodingItem(attempt, question))
                 .toList());
         return detail;
+    }
+
+    /** Lay thong tin Reference va Rubric da luu cho mot cau hoi trong ky thi. */
+    public EssayGradingDTO.QuestionGuidelineDTO getQuestionGuidelines(Long examId, Long questionId) {
+        requireExam(examId);
+        ExamQuestionGradingConfig config = gradingConfigRepository
+                .findByExamIdAndQuestionId(examId, questionId)
+                .orElse(null);
+        return toGuidelineDTO(examId, questionId, config);
+    }
+
+    /** Luu Reference / Model Answer cho mot cau hoi trong ky thi. */
+    @Transactional
+    public EssayGradingDTO.QuestionGuidelineDTO submitReferenceAnswer(Long examId, Long questionId, String referenceAnswer) {
+        requireExam(examId);
+        ExamQuestionGradingConfig config = gradingConfigRepository
+                .findByExamIdAndQuestionId(examId, questionId)
+                .orElseGet(() -> ExamQuestionGradingConfig.builder()
+                        .examId(examId)
+                        .questionId(questionId)
+                        .build());
+        config.setReferenceAnswer(referenceAnswer != null ? referenceAnswer.trim() : "");
+        config.setReferenceSubmittedAt(Instant.now());
+        config = gradingConfigRepository.save(config);
+        return toGuidelineDTO(examId, questionId, config);
+    }
+
+    /** Luu Grading Rubric & Criteria cho mot cau hoi trong ky thi. */
+    @Transactional
+    public EssayGradingDTO.QuestionGuidelineDTO submitRubric(Long examId, Long questionId, String rubric) {
+        requireExam(examId);
+        ExamQuestionGradingConfig config = gradingConfigRepository
+                .findByExamIdAndQuestionId(examId, questionId)
+                .orElseGet(() -> ExamQuestionGradingConfig.builder()
+                        .examId(examId)
+                        .questionId(questionId)
+                        .build());
+        config.setRubric(rubric != null ? rubric.trim() : "");
+        config.setRubricSubmittedAt(Instant.now());
+        config = gradingConfigRepository.save(config);
+        return toGuidelineDTO(examId, questionId, config);
+    }
+
+    private EssayGradingDTO.QuestionGuidelineDTO toGuidelineDTO(Long examId, Long questionId, ExamQuestionGradingConfig config) {
+        EssayGradingDTO.QuestionGuidelineDTO dto = new EssayGradingDTO.QuestionGuidelineDTO();
+        dto.setExamId(examId);
+        dto.setQuestionId(questionId);
+        if (config != null) {
+            dto.setReferenceAnswer(config.getReferenceAnswer());
+            dto.setReferenceSubmittedAt(config.getReferenceSubmittedAt());
+            dto.setRubric(config.getRubric());
+            dto.setRubricSubmittedAt(config.getRubricSubmittedAt());
+        }
+        return dto;
     }
 
     /** Chay thu toan bo test (ca an) tren code sinh vien nop; khong luu gi. */
@@ -342,18 +400,36 @@ public class ExamEssayGradingService {
                 .filter(q -> q.getType() == QuestionType.ESSAY)
                 .sorted(Comparator.comparingInt(ExamAttemptQuestion::getDisplayOrder))
                 .map(q -> {
-                    String refAnswer = null;
+                    // Ưu tiên nạp phiên bản Reference & Rubric đã submit vào database theo cặp (examId, questionId)
+                    ExamQuestionGradingConfig config = gradingConfigRepository
+                            .findByExamIdAndQuestionId(examId, q.getSourceQuestionId())
+                            .orElse(null);
+
+                    String refAnswer = (config != null && config.getReferenceAnswer() != null && !config.getReferenceAnswer().isBlank())
+                            ? config.getReferenceAnswer().trim() : null;
+
                     String rubric = formatGradingCriteria(q.getGradingCriteria());
-                    if (request != null && request.getQuestions() != null) {
+                    if (config != null && config.getRubric() != null && !config.getRubric().isBlank()) {
+                        rubric = rubric == null ? config.getRubric().trim()
+                                : rubric + "\n\nAdditional teacher guidance:\n" + config.getRubric().trim();
+                    }
+
+                    // Tương thích ngược: nếu database chưa có nhưng request truyền vào
+                    if (refAnswer == null && request != null && request.getQuestions() != null) {
                         EssayGradingDTO.QuestionContext ctx = request.getQuestions().get(q.getSourceQuestionId());
-                        if (ctx != null) {
-                            refAnswer = ctx.getReferenceAnswer();
-                            if (ctx.getRubric() != null && !ctx.getRubric().isBlank()) {
-                                rubric = rubric == null ? ctx.getRubric().trim()
-                                        : rubric + "\n\nAdditional teacher guidance:\n" + ctx.getRubric().trim();
-                            }
+                        if (ctx != null && ctx.getReferenceAnswer() != null && !ctx.getReferenceAnswer().isBlank()) {
+                            refAnswer = ctx.getReferenceAnswer().trim();
                         }
                     }
+                    if ((config == null || config.getRubric() == null || config.getRubric().isBlank())
+                            && request != null && request.getQuestions() != null) {
+                        EssayGradingDTO.QuestionContext ctx = request.getQuestions().get(q.getSourceQuestionId());
+                        if (ctx != null && ctx.getRubric() != null && !ctx.getRubric().isBlank()) {
+                            rubric = rubric == null ? ctx.getRubric().trim()
+                                    : rubric + "\n\nAdditional teacher guidance:\n" + ctx.getRubric().trim();
+                        }
+                    }
+
                     BigDecimal maxPoints = ExamScoring.gradingCap(
                             ExamScoring.effectiveMax(attempt.getMaxScore()),
                             q.getPoints(),
@@ -382,7 +458,6 @@ public class ExamEssayGradingService {
                         ? "" : ": " + criterion.getDescription().trim()))
                 .collect(java.util.stream.Collectors.joining("\n"));
     }
-
 
     private Exam requireExam(Long examId) {
         return examRepository.findById(examId)
@@ -452,6 +527,16 @@ public class ExamEssayGradingService {
             dto.setWeightPercentage(criterion.getWeightPercentage());
             return dto;
         }).toList());
+
+        ExamQuestionGradingConfig config = gradingConfigRepository
+                .findByExamIdAndQuestionId(attempt.getExam().getId(), question.getSourceQuestionId())
+                .orElse(null);
+        if (config != null) {
+            item.setReferenceAnswer(config.getReferenceAnswer());
+            item.setReferenceSubmittedAt(config.getReferenceSubmittedAt());
+            item.setRubric(config.getRubric());
+            item.setRubricSubmittedAt(config.getRubricSubmittedAt());
+        }
 
         ExamAttemptAnswer answer = findAnswer(attempt, question);
         if (answer != null) {
