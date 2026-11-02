@@ -1,5 +1,5 @@
 import { examApi } from "@/api";
-import { formatScore } from '@/utils/examScore';
+import { formatScore } from "@/utils/examScore";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,57 +13,57 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { AiGradingRequest, AiQuestionProposal, GradeSubmissionRequest } from "@/types";
+import type { AiQuestionProposal, GradeSubmissionRequest } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     AlertTriangle,
     Bot,
     Check,
     CheckCheck,
-    ChevronDown,
     ChevronLeft,
-    ChevronUp,
-    Info,
+    Clock,
+    FileText,
+    HelpCircle,
     Loader2,
+    Pencil,
     Save,
     Sparkles,
+    User,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { CodingGradingPanel } from "./CodingGradingPanel";
 import { ESSAY_STATUS_LABEL, formatDateTime } from "./EssayAttemptListPage";
+import { QuestionGuidelinesEditor } from "./QuestionGuidelinesEditor";
 
 interface DraftGrade {
     score: string;
     feedback: string;
 }
 
-interface QuestionGuidelines {
-    referenceAnswer: string;
-    rubric: string;
-    isOpen: boolean;
-}
-
 const getErrorMessage = (error: unknown, fallback: string): string => {
     const err = error as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } };
     const data = err?.response?.data;
-    const fieldError = data?.errors ? (Object.values(data.errors).flat()[0]) : undefined;    return fieldError || data?.message || fallback;
+    const fieldError = data?.errors ? Object.values(data.errors).flat()[0] : undefined;
+    return fieldError || data?.message || fallback;
 };
 
 export default function EssayAttemptDetailPage() {
     const { examId, attemptId } = useParams<{ examId: string; attemptId: string }>();
     const numericExamId = Number(examId);
     const numericAttemptId = Number(attemptId);
-    const validIds = Number.isInteger(numericExamId) && numericExamId > 0
-        && Number.isInteger(numericAttemptId) && numericAttemptId > 0;
+    const validIds =
+        Number.isInteger(numericExamId) &&
+        numericExamId > 0 &&
+        Number.isInteger(numericAttemptId) &&
+        numericAttemptId > 0;
     const navigate = useNavigate();
     const queryClient = useQueryClient();
 
     const [draftGrades, setDraftGrades] = useState<Record<number, DraftGrade>>({});
     const [aiProposals, setAiProposals] = useState<Record<number, AiQuestionProposal>>({});
     const [aiModelUsed, setAiModelUsed] = useState<string | null>(null);
-    const [guidelines, setGuidelines] = useState<Record<number, QuestionGuidelines>>({});
     const [isOverwriteModalOpen, setIsOverwriteModalOpen] = useState(false);
     const [selectedTab, setSelectedTab] = useState<"essay" | "coding" | null>(null);
 
@@ -71,10 +71,9 @@ export default function EssayAttemptDetailPage() {
         queryKey: ["essay-attempt", numericExamId, numericAttemptId],
         queryFn: () => examApi.getEssayAttempt(numericExamId, numericAttemptId),
         enabled: validIds,
-        // Câu coding đang được chấm nền: tự làm mới để thấy điểm khi xong.
         refetchInterval: (query) =>
             query.state.data?.codings?.some(
-                (c) => c.autoGradeState === "PENDING" || c.autoGradeState === "RETRYING",
+                (c) => c.autoGradeState === "PENDING" || c.autoGradeState === "RETRYING"
             )
                 ? 10000
                 : false,
@@ -96,30 +95,7 @@ export default function EssayAttemptDetailPage() {
     const backToList = () => navigate(`/exams/${numericExamId}/grading`);
 
     const aiSuggestMutation = useMutation({
-        mutationFn: () => {
-            if (!detail?.essays) return examApi.requestAiEssayGrading(numericExamId, numericAttemptId);
-
-            const questionMap: Record<number, { referenceAnswer?: string; rubric?: string }> = {};
-            let hasCustomContext = false;
-            for (const essay of detail.essays) {
-                const guide = guidelines[essay.questionId];
-                const ref = guide?.referenceAnswer?.trim();
-                const rub = guide?.rubric?.trim();
-                if (ref || rub) {
-                    questionMap[essay.questionId] = {
-                        referenceAnswer: ref || undefined,
-                        rubric: rub || undefined,
-                    };
-                    hasCustomContext = true;
-                }
-            }
-
-            const payload: AiGradingRequest | undefined = hasCustomContext
-                ? { questions: questionMap }
-                : undefined;
-
-            return examApi.requestAiEssayGrading(numericExamId, numericAttemptId, payload);
-        },
+        mutationFn: () => examApi.requestAiEssayGrading(numericExamId, numericAttemptId),
         onSuccess: (data) => {
             const map: Record<number, AiQuestionProposal> = {};
             for (const proposal of data.proposals) {
@@ -132,7 +108,9 @@ export default function EssayAttemptDetailPage() {
             toast.success("AI score suggestions received. You can review and apply them below.");
         },
         onError: (error) => {
-            toast.error(getErrorMessage(error, "AI grading request failed. You can continue grading manually."));
+            toast.error(
+                getErrorMessage(error, "AI grading request failed. You can continue grading manually.")
+            );
         },
     });
 
@@ -183,28 +161,6 @@ export default function EssayAttemptDetailPage() {
         });
     };
 
-    const toggleGuidelines = (questionId: number) => {
-        setGuidelines((prev) => ({
-            ...prev,
-            [questionId]: {
-                referenceAnswer: prev[questionId]?.referenceAnswer || "",
-                rubric: prev[questionId]?.rubric || "",
-                isOpen: !prev[questionId]?.isOpen,
-            },
-        }));
-    };
-
-    const updateGuideline = (questionId: number, field: "referenceAnswer" | "rubric", value: string) => {
-        setGuidelines((prev) => ({
-            ...prev,
-            [questionId]: {
-                referenceAnswer: field === "referenceAnswer" ? value : (prev[questionId]?.referenceAnswer || ""),
-                rubric: field === "rubric" ? value : (prev[questionId]?.rubric || ""),
-                isOpen: prev[questionId]?.isOpen ?? true,
-            },
-        }));
-    };
-
     const validateGrades = (): GradeSubmissionRequest | null => {
         if (!detail?.essays?.length) return null;
 
@@ -221,7 +177,11 @@ export default function EssayAttemptDetailPage() {
                 return null;
             }
             if (scoreNum > (essay.maxScore ?? essay.points)) {
-                toast.error(`Score for Essay Question ${essay.displayOrder} cannot exceed maximum points (${formatScore(essay.maxScore ?? essay.points)}).`);
+                toast.error(
+                    `Score for Essay Question ${essay.displayOrder} cannot exceed maximum points (${formatScore(
+                        essay.maxScore ?? essay.points
+                    )}).`
+                );
                 return null;
             }
             gradesList.push({
@@ -260,8 +220,9 @@ export default function EssayAttemptDetailPage() {
     return (
         <MainLayout pathName={{ exams: "Exam Management", grading: "Essay Grading", detail: "Submission Review" }}>
             <section className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-12">
+                {/* Top Action & Navigation Bar */}
                 <div className="flex flex-wrap items-center justify-between gap-4">
-                    <Button variant="ghost" size="sm" className="-ml-2 w-fit" onClick={backToList}>
+                    <Button variant="ghost" size="sm" className="-ml-2 w-fit gap-1 text-muted-foreground hover:text-foreground" onClick={backToList}>
                         <ChevronLeft className="size-4" />
                         Back to submissions
                     </Button>
@@ -274,77 +235,124 @@ export default function EssayAttemptDetailPage() {
                                 onClick={handleApplyAllProposals}
                                 className="border border-purple-300 text-purple-900 hover:bg-purple-100 dark:border-purple-800 dark:text-purple-200"
                             >
-                                <CheckCheck className="mr-1.5 size-4" />
+                                <CheckCheck className="mr-1.5 size-4 text-purple-600" />
                                 Apply All AI Suggestions
                             </Button>
                         )}
                         <Button
                             variant="outline"
+                            className="border-purple-300 hover:border-purple-400 hover:bg-purple-50/50 dark:border-purple-800"
                             onClick={() => aiSuggestMutation.mutate()}
                             disabled={aiSuggestMutation.isPending || saveGradeMutation.isPending}
                         >
                             {aiSuggestMutation.isPending ? (
-                                <Loader2 className="mr-2 size-4 animate-spin" />
+                                <Loader2 className="mr-2 size-4 animate-spin text-purple-600" />
                             ) : (
                                 <Sparkles className="mr-2 size-4 text-purple-600" />
                             )}
                             {aiSuggestMutation.isPending ? "Generating Suggestions..." : "Request AI Suggestions"}
                         </Button>
+
                     </div>
                 </div>
 
-                {detailQuery.isLoading && <p className="text-muted-foreground">Loading submission...</p>}
+                {detailQuery.isLoading && (
+                    <div className="flex items-center justify-center p-12 text-muted-foreground">
+                        <Loader2 className="mr-2 size-5 animate-spin" />
+                        Loading submission details...
+                    </div>
+                )}
+
                 {(detailQuery.isError || !validIds) && (
-                    <p role="alert" className="rounded-md border border-destructive p-4 text-destructive">
-                        Failed to load submission. It may not have been submitted or does not belong to this exam.
-                    </p>
+                    <div role="alert" className="flex items-start gap-3 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">
+                        <AlertTriangle className="size-5 shrink-0 mt-0.5" />
+                        <div>
+                            <h4 className="font-semibold text-sm">Failed to load submission</h4>
+                            <p className="text-xs mt-1">It may not have been submitted or does not belong to this exam.</p>
+                        </div>
+                    </div>
                 )}
 
                 {detail && (
                     <>
+                        {/* Header Overview Card */}
                         <header className="rounded-xl border bg-card p-6 shadow-sm">
                             <div className="flex flex-wrap items-start justify-between gap-4">
                                 <div>
-                                    <h1 className="text-2xl font-semibold">{detail.examTitle}</h1>
-                                    <p className="mt-2 text-sm">
-                                        <span className="font-medium text-foreground">{detail.studentName || `Student #${detail.studentId}`}</span>
-                                        <span className="text-muted-foreground"> · {detail.studentEmail}</span>
-                                    </p>
+                                    <h1 className="text-2xl font-bold tracking-tight text-foreground">{detail.examTitle}</h1>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                                        <span className="flex items-center gap-1 font-semibold text-foreground">
+                                            <User className="size-4 text-muted-foreground" />
+                                            {detail.studentName || `Student #${detail.studentId}`}
+                                        </span>
+                                        <span>·</span>
+                                        <span>{detail.studentEmail}</span>
+                                    </div>
                                 </div>
-                                <Badge variant={detail.status === "EXPIRED" ? "destructive" : detail.status === "SUBMITTED" ? "default" : "secondary"}>
+                                <Badge
+                                    variant={
+                                        detail.status === "EXPIRED"
+                                            ? "destructive"
+                                            : detail.status === "SUBMITTED"
+                                            ? "default"
+                                            : "secondary"
+                                    }
+                                    className="text-xs px-2.5 py-1"
+                                >
                                     {ESSAY_STATUS_LABEL[detail.status] || detail.status}
                                 </Badge>
                             </div>
 
-                            <div className="mt-4 grid grid-cols-2 gap-4 border-t pt-4 sm:grid-cols-4 text-sm">
+                            <div className="mt-5 grid grid-cols-2 gap-4 border-t pt-4 sm:grid-cols-4 text-sm">
                                 <div>
-                                    <span className="block text-xs text-muted-foreground">Attempt</span>
-                                    <span className="font-medium">#{detail.attemptNumber}</span>
-                                </div>
-                                <div>
-                                    <span className="block text-xs text-muted-foreground">Objective Score</span>
-                                    <span className="font-medium">{formatScore(detail.objectiveScore ?? 0)} / {formatScore(detail.maxScore ?? 10)} pts</span>
-                                </div>
-                                <div>
-                                    <span className="block text-xs text-muted-foreground">Final Score</span>
-                                    <span className="font-medium">
-                                        {detail.finalScore != null ? `${formatScore(detail.finalScore)} / ${formatScore(detail.maxScore ?? 10)} pts` : "Pending Grading"}
+                                    <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Attempt
+                                    </span>
+                                    <span className="mt-1 font-semibold text-base text-foreground">
+                                        #{detail.attemptNumber}
                                     </span>
                                 </div>
                                 <div>
-                                    <span className="block text-xs text-muted-foreground">Submitted At</span>
-                                    <span className="font-medium">{formatDateTime(detail.submittedAt)}</span>
+                                    <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Objective Score
+                                    </span>
+                                    <span className="mt-1 font-semibold text-base text-foreground">
+                                        {formatScore(detail.objectiveScore ?? 0)} / {formatScore(detail.maxScore ?? 10)} pts
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Final Score
+                                    </span>
+                                    <span className={`mt-1 font-bold text-base ${detail.finalScore != null ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600"}`}>
+                                        {detail.finalScore != null
+                                            ? `${formatScore(detail.finalScore)} / ${formatScore(detail.maxScore ?? 10)} pts`
+                                            : "Pending Review"}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                                        <Clock className="size-3 text-muted-foreground" /> Submitted At
+                                    </span>
+                                    <span className="mt-1 font-medium text-sm text-foreground">
+                                        {formatDateTime(detail.submittedAt)}
+                                    </span>
                                 </div>
                             </div>
                         </header>
 
+                        {/* Tabs Bar */}
                         <div className="flex gap-1 rounded-lg border bg-muted/40 p-1" role="tablist">
                             <button
                                 type="button"
                                 role="tab"
                                 aria-selected={tab === "essay"}
                                 onClick={() => setSelectedTab("essay")}
-                                className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${tab === "essay" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                                className={`flex-1 rounded-md px-4 py-2 text-sm font-semibold transition ${
+                                    tab === "essay"
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                }`}
                             >
                                 Câu hỏi tự luận ({detail.essays.length})
                             </button>
@@ -353,7 +361,11 @@ export default function EssayAttemptDetailPage() {
                                 role="tab"
                                 aria-selected={tab === "coding"}
                                 onClick={() => setSelectedTab("coding")}
-                                className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${tab === "coding" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                                className={`flex-1 rounded-md px-4 py-2 text-sm font-semibold transition ${
+                                    tab === "coding"
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                }`}
                             >
                                 Câu hỏi coding ({codings.length})
                                 {codings.some((c) => c.score == null && c.autoGradeState) && (
@@ -422,275 +434,357 @@ export default function EssayAttemptDetailPage() {
                         })()}
 
                         {tab === "essay" && detail.essays.length === 0 && (
-                            <p className="rounded-md border p-6 text-center text-muted-foreground">
-                                This exam attempt contains no essay questions.
-                            </p>
+                            <div className="rounded-xl border bg-card p-12 text-center text-muted-foreground">
+                                <FileText className="mx-auto size-8 text-muted-foreground/50 mb-2" />
+                                <p className="font-medium text-sm">This exam attempt contains no essay questions.</p>
+                            </div>
                         )}
 
-                        {tab === "essay" && detail.essays.map((essay, index) => {
-                            const draft = draftGrades[essay.questionId] || { score: "", feedback: "" };
-                            const proposal = aiProposals[essay.questionId];
-                            const guide = guidelines[essay.questionId] || { referenceAnswer: "", rubric: "", isOpen: false };
+                        {tab === "essay" &&
+                            detail.essays.map((essay, index) => {
+                                const draft = draftGrades[essay.questionId] || { score: "", feedback: "" };
+                                const proposal = aiProposals[essay.questionId];
 
-                            return (
-                                <article
-                                    key={essay.questionId}
-                                    id={`essay-card-${essay.questionId}`}
-                                    className="flex scroll-mt-24 flex-col gap-4 rounded-xl border bg-card p-6 shadow-sm"
-                                >
-                                    <div className="flex items-center justify-between border-b pb-3">
-                                        <h2 className="font-semibold text-lg">
-                                            Question {index + 1}
-                                            <span className="ml-2 text-sm font-normal text-muted-foreground">
-                                                (Max: {formatScore(essay.maxScore ?? essay.points)} points · weight {essay.points})
+                                return (
+                                    <article
+                                        key={essay.questionId}
+                                        id={`essay-card-${essay.questionId}`}
+                                        className="flex scroll-mt-24 flex-col gap-5 rounded-xl border bg-card p-6 shadow-sm transition-all hover:shadow-md"
+                                    >
+                                        {/* Question Header */}
+                                        <div className="flex items-center justify-between border-b pb-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xs">
+                                                    {index + 1}
+                                                </span>
+                                                <h2 className="font-bold text-base text-foreground">
+                                                    Question {index + 1}
+                                                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                                        (Max: {formatScore(essay.maxScore ?? essay.points)} points · weight {essay.points})
+                                                    </span>
+                                                </h2>
+                                            </div>
+                                            <Badge variant="outline" className="text-xs">
+                                                Essay
+                                            </Badge>
+                                        </div>
+
+                                        {/* Question Prompt */}
+                                        <div>
+                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                                <HelpCircle className="size-3.5 text-muted-foreground" />
+                                                Question Prompt
                                             </span>
-                                        </h2>
-                                    </div>
-
-                                    <div>
-                                        <span className="text-xs font-medium uppercase text-muted-foreground">Question Prompt</span>
-                                        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                                            {essay.content}
-                                        </p>
-                                    </div>
-
-                                    <div className="rounded-lg border bg-muted/40 p-4">
-                                        <span className="text-xs font-medium uppercase text-muted-foreground">Student Answer</span>
-                                        {essay.answerText?.trim() ? (
-                                            <p className="mt-2 whitespace-pre-wrap break-words font-mono text-sm leading-relaxed text-foreground">
-                                                {essay.answerText}
-                                            </p>
-                                        ) : (
-                                            <p className="mt-2 text-sm italic text-muted-foreground">
-                                                [No answer submitted by student]
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    {essay.gradingCriteria && essay.gradingCriteria.length > 0 && (
-                                        <div className="rounded-lg border border-sky-200 bg-sky-50/50 p-4 dark:border-sky-900 dark:bg-sky-950/20">
-                                            <span className="text-xs font-medium uppercase text-sky-800 dark:text-sky-300">
-                                                Saved Grading Criteria
-                                            </span>
-                                            <ul className="mt-2 grid gap-2">
-                                                {essay.gradingCriteria.map((criterion, criterionIndex) => (
-                                                    <li key={`${criterion.name}-${criterionIndex}`} className="text-sm">
-                                                        <span className="font-medium">{criterion.name}</span>
-                                                        <span className="ml-2 text-muted-foreground">{criterion.weightPercentage}%</span>
-                                                        {criterion.description && (
-                                                            <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">
-                                                                {criterion.description}
-                                                            </p>
-                                                        )}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                            <p className="mt-2 text-xs text-muted-foreground">
-                                                These saved criteria are included as the default rubric when requesting AI suggestions.
+                                            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground font-normal">
+                                                {essay.content}
                                             </p>
                                         </div>
-                                    )}
 
-                                    <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/10 p-3">
-                                        <button
-                                            type="button"
-                                            className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground"
-                                            onClick={() => toggleGuidelines(essay.questionId)}
-                                        >
-                                            <span className="flex items-center gap-1.5">
-                                                <Info className="size-3.5" />
-                                                Optional Grading Guidelines & Rubric for AI
-                                                {(guide.referenceAnswer || guide.rubric) && (
-                                                    <Badge variant="outline" className="ml-1 text-[10px] py-0">Customized</Badge>
+                                        {/* Student Submitted Answer */}
+                                        <div className="rounded-lg border bg-muted/30 p-4">
+                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                                <FileText className="size-3.5 text-muted-foreground" />
+                                                Student Submitted Answer
+                                            </span>
+                                            {essay.answerText?.trim() ? (
+                                                <div className="mt-2 rounded bg-background/80 p-3 border font-mono text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words">
+                                                    {essay.answerText}
+                                                </div>
+                                            ) : (
+                                                <p className="mt-2 text-xs italic text-muted-foreground">
+                                                    [No answer submitted by student]
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Saved Criteria from Question Bank */}
+                                        {essay.gradingCriteria && essay.gradingCriteria.length > 0 && (
+                                            <div className="rounded-lg border border-sky-200 bg-sky-50/50 p-4 dark:border-sky-900/60 dark:bg-sky-950/20">
+                                                <span className="text-xs font-bold uppercase tracking-wider text-sky-900 dark:text-sky-300">
+                                                    Question Bank Grading Criteria
+                                                </span>
+                                                <ul className="mt-2 grid gap-2">
+                                                    {essay.gradingCriteria.map((criterion, criterionIndex) => (
+                                                        <li key={`${criterion.name}-${criterionIndex}`} className="text-xs">
+                                                            <span className="font-semibold text-foreground">{criterion.name}</span>
+                                                            <span className="ml-2 font-medium text-sky-800 dark:text-sky-400">
+                                                                {criterion.weightPercentage}%
+                                                            </span>
+                                                            {criterion.description && (
+                                                                <p className="mt-0.5 whitespace-pre-wrap text-muted-foreground">
+                                                                    {criterion.description}
+                                                                </p>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                                <p className="mt-2 text-[11px] text-muted-foreground">
+                                                    These bank criteria serve as the default rubric for AI grading if no custom guidelines are submitted below.
+                                                </p>
+                                            </div>
+                                        )}
+
+                                        {/* Redesigned Optional Guidelines & Rubric for AI */}
+                                        <QuestionGuidelinesEditor
+                                            examId={numericExamId}
+                                            questionId={essay.questionId}
+                                            displayOrder={index + 1}
+                                            initialReferenceAnswer={essay.referenceAnswer}
+                                            initialReferenceSubmittedAt={essay.referenceSubmittedAt}
+                                            initialRubric={essay.rubric}
+                                            initialRubricSubmittedAt={essay.rubricSubmittedAt}
+                                            onGuidelineUpdated={() => {
+                                                void queryClient.invalidateQueries({
+                                                    queryKey: ["essay-attempt", numericExamId, numericAttemptId],
+                                                });
+                                            }}
+                                        />
+
+                                        {/* Redesigned AI Evaluation Proposal */}
+                                        {proposal && (
+                                            <div className="rounded-xl border border-purple-200 bg-gradient-to-b from-purple-50/50 to-background p-5 shadow-sm dark:border-purple-900/60 dark:from-purple-950/20">
+                                                {/* Header bar */}
+                                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-200/60 pb-3 dark:border-purple-900/60">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="flex size-7 items-center justify-center rounded-lg bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300">
+                                                            <Bot className="size-4" />
+                                                        </span>
+                                                        <span className="text-sm font-bold text-purple-950 dark:text-purple-200">
+                                                            AI Evaluation Proposal
+                                                        </span>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="border-purple-300 bg-purple-100/70 text-purple-800 text-[11px] dark:border-purple-800 dark:bg-purple-900/40 dark:text-purple-300 font-medium"
+                                                        >
+                                                            Google Gemini ({aiModelUsed || "gemini-3.5-flash-lite"})
+                                                        </Badge>
+                                                    </div>
+
+                                                    <Button
+                                                        size="sm"
+                                                        className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white shadow-xs"
+                                                        onClick={() => handleApplyAiProposal(essay.questionId)}
+                                                    >
+                                                        <Check className="size-3.5" />
+                                                        Apply to Draft Grade
+                                                    </Button>
+                                                </div>
+
+                                                {/* Ambiguity Alert (if any) */}
+                                                {proposal.flagAmbiguous && (
+                                                    <div className="mt-3.5 flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50/90 p-3 text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-200 text-xs leading-relaxed">
+                                                        <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                                        <div>
+                                                            <span className="font-bold">Teacher Review Recommended: </span>
+                                                            {proposal.flagReason ||
+                                                                "The submission contains ambiguous reasoning or an alternative solution path. Teacher verification advised."}
+                                                        </div>
+                                                    </div>
                                                 )}
-                                            </span>
-                                            {guide.isOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-                                        </button>
-                                        {guide.isOpen && (
-                                            <div className="mt-3 grid gap-3 border-t pt-3 sm:grid-cols-2 text-xs">
-                                                <div>
-                                                    <label className="font-medium text-muted-foreground">
-                                                        Reference / Model Answer (Optional)
-                                                    </label>
-                                                    <Textarea
-                                                        rows={3}
-                                                        className="mt-1 text-xs"
-                                                        placeholder="Provide the expected solution, formula steps, or standard answer..."
-                                                        value={guide.referenceAnswer}
-                                                        onChange={(e) => updateGuideline(essay.questionId, "referenceAnswer", e.target.value)}
-                                                    />
+
+                                                {/* Score Summary & Comparison Grid */}
+                                                <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-purple-200/80 bg-background/80 p-4 dark:border-purple-900/40">
+                                                    <div>
+                                                        <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300">
+                                                            Suggested Score
+                                                        </span>
+                                                        <div className="mt-1 flex items-baseline gap-2">
+                                                            <span className="text-2xl font-extrabold tracking-tight text-purple-950 dark:text-purple-50">
+                                                                {formatScore(proposal.proposedScore)}
+                                                            </span>
+                                                            <span className="text-xs font-semibold text-muted-foreground">
+                                                                / {formatScore(essay.maxScore ?? essay.points)} pts
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                                                        <div className="flex flex-col items-center rounded border bg-purple-50/60 px-2.5 py-1 dark:bg-purple-950/30">
+                                                            <span className="text-[10px] uppercase text-muted-foreground">AI Suggestion</span>
+                                                            <span className="font-bold text-purple-800 dark:text-purple-300">
+                                                                {formatScore(proposal.proposedScore)} pts
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex flex-col items-center rounded border bg-card px-2.5 py-1">
+                                                            <span className="text-[10px] uppercase text-muted-foreground">Teacher Draft</span>
+                                                            <span className="font-bold text-foreground">
+                                                                {draft.score ? `${draft.score} pts` : "—"}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex flex-col items-center rounded border bg-card px-2.5 py-1">
+                                                            <span className="text-[10px] uppercase text-muted-foreground">Confirmed Grade</span>
+                                                            <span className={`font-bold ${essay.score != null ? "text-emerald-700 dark:text-emerald-400" : "text-amber-600"}`}>
+                                                                {essay.score != null ? `${formatScore(essay.score)} pts` : "Pending"}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <label className="font-medium text-muted-foreground">
-                                                        Grading Rubric & Criteria (Optional)
-                                                    </label>
-                                                    <Textarea
-                                                        rows={3}
-                                                        className="mt-1 text-xs"
-                                                        placeholder="e.g. Method: 2 pts, Correct calculations: 2 pts, Final conclusion: 1 pt..."
-                                                        value={guide.rubric}
-                                                        onChange={(e) => updateGuideline(essay.questionId, "rubric", e.target.value)}
-                                                    />
-                                                </div>
+
+                                                {/* Solution Analysis & Reasoning */}
+                                                {(proposal.analysis || proposal.reasoning) && (
+                                                    <div className="mt-4 text-xs text-foreground">
+                                                        <span className="block font-bold uppercase tracking-wider text-purple-900 dark:text-purple-300 mb-1.5">
+                                                            AI Solution Analysis & Reasoning:
+                                                        </span>
+                                                        <div className="rounded-lg border bg-background/70 p-3 leading-relaxed whitespace-pre-wrap">
+                                                            {proposal.analysis || proposal.reasoning}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Rubric Criterion Breakdown Table */}
+                                                {proposal.criterionScores && proposal.criterionScores.length > 0 && (
+                                                    <div className="mt-4 space-y-2">
+                                                        <span className="text-xs font-bold uppercase tracking-wider text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                                                            <CheckCheck className="size-4 text-purple-600" />
+                                                            Rubric Criterion Breakdown:
+                                                        </span>
+                                                        <div className="overflow-x-auto rounded-lg border border-purple-200 bg-card shadow-xs dark:border-purple-800">
+                                                            <table className="w-full text-xs text-left">
+                                                                <thead className="bg-purple-100/70 text-purple-950 font-semibold border-b border-purple-200 dark:bg-purple-950/50 dark:text-purple-200 dark:border-purple-800">
+                                                                    <tr>
+                                                                        <th className="py-2.5 px-3">Criterion</th>
+                                                                        <th className="py-2.5 px-3 w-28 text-center">Score Awarded</th>
+                                                                        <th className="py-2.5 px-3 w-24 text-center">Percentage</th>
+                                                                        <th className="py-2.5 px-3">Evaluation / Justification</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-purple-100 dark:divide-purple-900/40">
+                                                                    {proposal.criterionScores.map((c, i) => {
+                                                                        const pct =
+                                                                            c.maxPoints && c.maxPoints > 0
+                                                                                ? Math.round((c.awardedPoints / c.maxPoints) * 100)
+                                                                                : null;
+                                                                        return (
+                                                                            <tr key={i} className="hover:bg-purple-50/40 dark:hover:bg-purple-950/20">
+                                                                                <td className="py-2.5 px-3 font-semibold text-foreground">
+                                                                                    {c.criterion}
+                                                                                </td>
+                                                                                <td className="py-2.5 px-3 text-center font-bold text-purple-900 dark:text-purple-300">
+                                                                                    {c.awardedPoints} / {c.maxPoints ?? "—"}
+                                                                                </td>
+                                                                                <td className="py-2.5 px-3 text-center">
+                                                                                    {pct !== null ? (
+                                                                                        <Badge
+                                                                                            variant={
+                                                                                                pct >= 80
+                                                                                                    ? "default"
+                                                                                                    : pct >= 50
+                                                                                                    ? "secondary"
+                                                                                                    : "destructive"
+                                                                                            }
+                                                                                            className="text-[10px] py-0"
+                                                                                        >
+                                                                                            {pct}%
+                                                                                        </Badge>
+                                                                                    ) : (
+                                                                                        "—"
+                                                                                    )}
+                                                                                </td>
+                                                                                <td className="py-2.5 px-3 text-muted-foreground leading-relaxed">
+                                                                                    {c.explanation || c.comment || "—"}
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Constructive Student Feedback */}
+                                                {proposal.feedback && (
+                                                    <div className="mt-4 rounded-lg border border-purple-200/70 bg-background/70 p-3.5 dark:border-purple-900/40">
+                                                        <span className="text-xs font-bold uppercase tracking-wider text-purple-900 dark:text-purple-300">
+                                                            Constructive Student Feedback:
+                                                        </span>
+                                                        <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed text-foreground italic border-l-2 border-purple-400 pl-3">
+                                                            "{proposal.feedback}"
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
-                                    </div>
 
-                                    {}                                    {proposal && (
-                                        <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-4 dark:border-purple-900/50 dark:bg-purple-950/20">
-                                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-200/60 pb-3 dark:border-purple-900/60">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <Bot className="size-4 text-purple-600 dark:text-purple-400" />
-                                                    <span className="text-sm font-semibold text-purple-900 dark:text-purple-300">
-                                                        AI Evaluation Proposal
-                                                    </span>
-                                                    <Badge variant="outline" className="border-purple-300 bg-purple-100/60 text-purple-800 text-[11px] dark:border-purple-800 dark:bg-purple-900/40 dark:text-purple-300">
-                                                        Google Gemini ({aiModelUsed || "gemini-3.5-flash-lite"})
-                                                    </Badge>
-                                                </div>
-                                                <Button
-                                                    size="sm"
-                                                    variant="secondary"
-                                                    className="h-8 gap-1 border border-purple-300 text-purple-900 hover:bg-purple-100 dark:border-purple-800 dark:text-purple-200"
-                                                    onClick={() => handleApplyAiProposal(essay.questionId)}
-                                                >
-                                                    <Check className="size-3.5" />
-                                                    Apply to Draft Grade
-                                                </Button>
-                                            </div>
-
-                                            {proposal.flagAmbiguous && (
-                                                <div className="mt-3 flex items-start gap-2.5 rounded-md border border-amber-300 bg-amber-50/90 p-3 text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/40 dark:text-amber-200 text-xs leading-relaxed">
-                                                    <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                                                    <div>
-                                                        <span className="font-semibold">Teacher Review Recommended: </span>
-                                                        {proposal.flagReason || "The submission has ambiguous reasoning or missing grading criteria. Teacher verification advised."}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="mt-3 flex items-baseline gap-2">
-                                                <span className="text-xs font-medium uppercase text-purple-800 dark:text-purple-400">
-                                                    Suggested Score:
+                                        {/* Teacher Official Grading Section */}
+                                        <div className="rounded-xl border bg-card p-4 shadow-sm">
+                                            <div className="flex items-center justify-between pb-3 border-b mb-3">
+                                                <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                                                    <Pencil className="size-4 text-primary" />
+                                                    Teacher Official Grade & Feedback
+                                                </h3>
+                                                <span className="text-xs text-muted-foreground">
+                                                    Max Points: {formatScore(essay.maxScore ?? essay.points)}
                                                 </span>
-                                                <span className="text-lg font-bold text-purple-950 dark:text-purple-100">
-                                                    {formatScore(proposal.proposedScore)} / {formatScore(essay.maxScore ?? essay.points)} pts                                                </span>
                                             </div>
-
-                                            {(proposal.analysis || proposal.reasoning) && (
-                                                <div className="mt-3 text-xs text-purple-950 dark:text-purple-200">
-                                                    <span className="block font-semibold uppercase text-purple-800 dark:text-purple-400">
-                                                        AI Solution Analysis & Reasoning:
-                                                    </span>
-                                                    <p className="mt-1 whitespace-pre-wrap leading-relaxed">
-                                                        {proposal.analysis || proposal.reasoning}
-                                                    </p>
+                                            <div className="grid gap-4 sm:grid-cols-4">
+                                                <div className="sm:col-span-1">
+                                                    <label className="text-xs font-semibold uppercase text-muted-foreground">
+                                                        Official Score (0 - {formatScore(essay.maxScore ?? essay.points)})
+                                                    </label>
+                                                    <Input
+                                                        type="number"
+                                                        min={0}
+                                                        max={essay.maxScore ?? essay.points}
+                                                        step="0.01"
+                                                        className="mt-1 font-bold text-base"
+                                                        placeholder={`0 - ${formatScore(essay.maxScore ?? essay.points)}`}
+                                                        value={draft.score}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setDraftGrades((prev) => ({
+                                                                ...prev,
+                                                                [essay.questionId]: { ...draft, score: val },
+                                                            }));
+                                                        }}
+                                                    />
                                                 </div>
-                                            )}
-
-                                            {proposal.criterionScores && proposal.criterionScores.length > 0 && (
-                                                <div className="mt-3">
-                                                    <span className="block text-xs font-semibold uppercase text-purple-800 dark:text-purple-400 mb-1.5">
-                                                        Rubric Criterion Breakdown:
-                                                    </span>
-                                                    <div className="overflow-x-auto rounded-md border border-purple-200 bg-white dark:border-purple-800 dark:bg-card">
-                                                        <table className="w-full text-xs text-left">
-                                                            <thead className="bg-purple-100/70 text-purple-900 font-semibold border-b border-purple-200 dark:bg-purple-950/50 dark:text-purple-200 dark:border-purple-800">
-                                                                <tr>
-                                                                    <th className="py-2 px-3">Criterion</th>
-                                                                    <th className="py-2 px-3 w-28 text-center">Score</th>
-                                                                    <th className="py-2 px-3">Evaluation / Justification</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y divide-purple-100 dark:divide-purple-900/40">
-                                                                {proposal.criterionScores.map((c, i) => (
-                                                                    <tr key={i} className="hover:bg-purple-50/50 dark:hover:bg-purple-950/30">
-                                                                        <td className="py-2 px-3 font-medium text-foreground">{c.criterion}</td>
-                                                                        <td className="py-2 px-3 text-center font-semibold text-purple-900 dark:text-purple-300">
-                                                                            {c.awardedPoints} / {c.maxPoints}
-                                                                        </td>
-<td className="py-2 px-3 text-muted-foreground">{c.explanation || c.comment}</td>
-                                                                    </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
+                                                <div className="sm:col-span-3">
+                                                    <label className="text-xs font-semibold uppercase text-muted-foreground">
+                                                        Grader Feedback & Comments
+                                                    </label>
+                                                    <Textarea
+                                                        rows={2}
+                                                        className="mt-1 resize-y text-xs leading-relaxed"
+                                                        placeholder="Enter feedback for the student..."
+                                                        value={draft.feedback}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setDraftGrades((prev) => ({
+                                                                ...prev,
+                                                                [essay.questionId]: { ...draft, feedback: val },
+                                                            }));
+                                                        }}
+                                                    />
                                                 </div>
-                                            )}
-
-                                            <div className="mt-3 text-xs text-purple-950 dark:text-purple-200">
-                                                <span className="block font-semibold uppercase text-purple-800 dark:text-purple-400">
-                                                    Constructive Student Feedback:
-                                                </span>
-                                                <p className="mt-1 whitespace-pre-wrap leading-relaxed">{proposal.feedback}</p>
                                             </div>
                                         </div>
-                                    )}
-
-                                    {}                                    <div className="grid gap-4 rounded-lg border bg-background p-4 sm:grid-cols-4">
-                                        <div className="sm:col-span-1">
-                                            <label className="text-xs font-medium uppercase text-muted-foreground">
-                                                Official Score (0 - {formatScore(essay.maxScore ?? essay.points)})
-                                            </label>
-                                            <Input
-                                                type="number"
-                                                min={0}
-                                                max={essay.maxScore ?? essay.points}
-                                                step="0.01"
-                                                className="mt-1 font-semibold"
-                                                placeholder={`0 - ${formatScore(essay.maxScore ?? essay.points)}`}
-                                                value={draft.score}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    setDraftGrades((prev) => ({
-                                                        ...prev,
-                                                        [essay.questionId]: { ...draft, score: val },
-                                                    }));
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="sm:col-span-3">
-                                            <label className="text-xs font-medium uppercase text-muted-foreground">
-                                                Grader Feedback & Comments
-                                            </label>
-                                            <Textarea
-                                                rows={2}
-                                                className="mt-1 resize-y text-sm"
-                                                placeholder="Enter feedback for the student..."
-                                                value={draft.feedback}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    setDraftGrades((prev) => ({
-                                                        ...prev,
-                                                        [essay.questionId]: { ...draft, feedback: val },
-                                                    }));
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
-                                </article>
-                            );
-                        })}
+                                    </article>
+                                );
+                            })}
                     </>
                 )}
 
                 {detail && tab === "essay" && detail.essays.length > 0 && (
                     <div className="flex justify-end border-t pt-4">
                         <Button
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
                             onClick={handleInitiateSave}
                             disabled={saveGradeMutation.isPending || aiSuggestMutation.isPending}
                         >
                             {saveGradeMutation.isPending ? (
-                                <Loader2 className="mr-2 size-4 animate-spin" />
+                                <Loader2 className="mr-1.5 size-4 animate-spin" />
                             ) : (
-                                <Save className="mr-2 size-4" />
+                                <Save className="mr-1.5 size-4" />
                             )}
-                            {saveGradeMutation.isPending ? "Saving..." : "Save Grades"}
+                            {saveGradeMutation.isPending ? "Saving..." : "Confirm & Save Official Grade"}
                         </Button>
                     </div>
                 )}
 
-                {}                <Dialog open={isOverwriteModalOpen} onOpenChange={setIsOverwriteModalOpen}>
+                {/* Confirm Overwrite Dialog */}
+                <Dialog open={isOverwriteModalOpen} onOpenChange={setIsOverwriteModalOpen}>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2 text-destructive">

@@ -10,6 +10,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -45,6 +46,43 @@ public class ExamGradingController {
             @RequestBody EssayGradingDTO.GradeSubmissionRequest request
     ) {
         return ResponseEntity.ok(service.submitOfficialGrade(examId, attemptId, request));
+    }
+
+    /** Lay Reference Answer va Rubric da submit cho mot cau hoi trong de thi. */
+    @GetMapping("/questions/{questionId}/guidelines")
+    public ResponseEntity<EssayGradingDTO.QuestionGuidelineDTO> getQuestionGuidelines(
+            @PathVariable Long examId,
+            @PathVariable Long questionId
+    ) {
+        return ResponseEntity.ok(service.getQuestionGuidelines(examId, questionId));
+    }
+
+    /** Submit Reference Answer (Model Answer) cho cau hoi trong de thi. */
+    @PutMapping("/questions/{questionId}/reference")
+    public ResponseEntity<EssayGradingDTO.QuestionGuidelineDTO> submitReferenceAnswer(
+            @PathVariable Long examId,
+            @PathVariable Long questionId,
+            @RequestBody(required = false) EssayGradingDTO.SubmitReferenceRequest request
+    ) {
+        return ResponseEntity.ok(service.submitReferenceAnswer(
+                examId,
+                questionId,
+                request != null ? request.getReferenceAnswer() : ""
+        ));
+    }
+
+    /** Submit Grading Rubric & Criteria cho cau hoi trong de thi. */
+    @PutMapping("/questions/{questionId}/rubric")
+    public ResponseEntity<EssayGradingDTO.QuestionGuidelineDTO> submitRubric(
+            @PathVariable Long examId,
+            @PathVariable Long questionId,
+            @RequestBody(required = false) EssayGradingDTO.SubmitRubricRequest request
+    ) {
+        return ResponseEntity.ok(service.submitRubric(
+                examId,
+                questionId,
+                request != null ? request.getRubric() : ""
+        ));
     }
 
     /** Chay thu toan bo test cua mot cau lap trinh tren code sinh vien (khong luu gi). */

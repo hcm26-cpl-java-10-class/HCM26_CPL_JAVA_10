@@ -69,7 +69,7 @@ public class AiEssayGradingClient {
         if (!properties.isEnabled() || properties.getApiKey() == null || properties.getApiKey().isBlank()) {
             throw new BadRequestException(
                     "Google Gemini API key is not configured. " +
-                    "Please set the GEMINI_API_KEY environment variable (e.g. $env:GEMINI_API_KEY=\"...\") before requesting AI essay grading."
+                    "Please create a backend/.env file with GEMINI_API_KEY=YOUR_KEY (see backend/.env.example) or set the GEMINI_API_KEY environment variable before requesting AI essay grading."
             );
         }
 
@@ -94,7 +94,7 @@ public class AiEssayGradingClient {
 
         } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden e) {
             log.warn("Gemini API key authentication failed: HTTP {}", e.getStatusCode());
-            throw new BadRequestException("Google Gemini API key is invalid or unauthorized. Please verify your GEMINI_API_KEY environment variable.");
+            throw new BadRequestException("Google Gemini API key is invalid or unauthorized. Please verify your GEMINI_API_KEY in backend/.env or system environment.");
         } catch (HttpClientErrorException.TooManyRequests e) {
             log.warn("Gemini API rate limit or quota exceeded");
             throw new BadRequestException("Google Gemini API rate limit or quota exceeded. Please wait a moment or continue grading manually.");

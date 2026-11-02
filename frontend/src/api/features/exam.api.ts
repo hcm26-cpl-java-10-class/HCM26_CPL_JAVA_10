@@ -11,6 +11,7 @@ import type {
   GradeSubmissionRequest,
   QuestionDTO,
   QuestionFilter,
+  QuestionGuidelineDTO,
   SimilarityReport
 } from "@/types";
 
@@ -69,6 +70,34 @@ export const examApi = {
     const response = await axiosInstance.post<AiGradingResponse>(
         `/exams/${examId}/grading/attempts/${attemptId}/ai-suggest`,
         payload || {}
+    );
+    return response.data;
+  },
+  getQuestionGuidelines: async (examId: number, questionId: number): Promise<QuestionGuidelineDTO> => {
+    const response = await axiosInstance.get<QuestionGuidelineDTO>(
+        `/exams/${examId}/grading/questions/${questionId}/guidelines`
+    );
+    return response.data;
+  },
+  submitReferenceAnswer: async (
+      examId: number,
+      questionId: number,
+      referenceAnswer: string
+  ): Promise<QuestionGuidelineDTO> => {
+    const response = await axiosInstance.put<QuestionGuidelineDTO>(
+        `/exams/${examId}/grading/questions/${questionId}/reference`,
+        { referenceAnswer }
+    );
+    return response.data;
+  },
+  submitRubric: async (
+      examId: number,
+      questionId: number,
+      rubric: string
+  ): Promise<QuestionGuidelineDTO> => {
+    const response = await axiosInstance.put<QuestionGuidelineDTO>(
+        `/exams/${examId}/grading/questions/${questionId}/rubric`,
+        { rubric }
     );
     return response.data;
   },

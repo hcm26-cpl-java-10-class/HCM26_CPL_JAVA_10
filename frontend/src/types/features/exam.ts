@@ -150,7 +150,20 @@ export interface EssayGradingItem {
   answerText: string;
   score?: number | null;
   feedback?: string | null;
+  referenceAnswer?: string | null;
+  referenceSubmittedAt?: string | null;
+  rubric?: string | null;
+  rubricSubmittedAt?: string | null;
   gradingCriteria?: EssayGradingCriterion[];
+}
+
+export interface QuestionGuidelineDTO {
+  examId: number;
+  questionId: number;
+  referenceAnswer?: string | null;
+  referenceSubmittedAt?: string | null;
+  rubric?: string | null;
+  rubricSubmittedAt?: string | null;
 }
 
 export interface EssayGradingDetail {
