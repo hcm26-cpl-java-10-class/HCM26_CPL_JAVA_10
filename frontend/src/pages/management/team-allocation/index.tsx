@@ -330,6 +330,9 @@ export default function TeamAllocationPage() {
     team: AllocationTeam; memberId: number; memberName: string; oldName: string;
   } | null>(null);
   const [autoPreview, setAutoPreview] = useState<AutoAllocationPreview | null>(null);
+  const [expandedPreviewTeams, setExpandedPreviewTeams] = useState<Set<number>>(
+    () => new Set(),
+  );
   const [autoPreviewError, setAutoPreviewError] = useState("");
   const [autoConfirmKey, setAutoConfirmKey] = useState<string | null>(null);
   const [collapsedDraftTeamIds, setCollapsedDraftTeamIds] = useState<Set<string>>(
@@ -492,6 +495,9 @@ export default function TeamAllocationPage() {
   const autoPreviewMutation = useMutation({
     mutationFn: () => teamAllocationApi.previewAutoAllocation(classId, sessionId!),
     onSuccess: (preview) => {
+      setExpandedPreviewTeams((current) => autoPreview === null
+        ? new Set(preview.teams.map((_, index) => index))
+        : new Set([...current].filter((index) => index < preview.teams.length)));
       setAutoPreview(preview);
       setAutoConfirmKey(crypto.randomUUID());
       setAutoPreviewError("");
@@ -1687,22 +1693,39 @@ export default function TeamAllocationPage() {
                           </Button>
                         </div>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {autoPreview.teams.map((team, index) => (
-                          <details key={`${index}-${team.teamName}`} className="rounded-lg border bg-background p-3">
-                            <summary className="cursor-pointer text-sm font-medium">
-                              {team.teamName} · {team.members.length} học viên
-                              {team.members.length > autoPreview.standardMax && (
-                                <Badge variant="secondary" className="ml-2">Thêm 1 do số dư</Badge>
+                      <div className="grid items-start gap-2 sm:grid-cols-2">
+                        {autoPreview.teams.map((team, index) => {
+                          const expanded = expandedPreviewTeams.has(index);
+                          const panelId = `auto-preview-team-${sessionId}-${index}`;
+                          return (
+                            <article key={`${index}-${team.teamName}`}
+                              className="min-w-0 self-start overflow-hidden rounded-lg border bg-background">
+                              <button type="button" aria-expanded={expanded} aria-controls={panelId}
+                                className="flex w-full min-w-0 items-center gap-2 px-3 py-3 text-left text-sm font-medium hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                                onClick={() => setExpandedPreviewTeams((current) => {
+                                  const next = new Set(current);
+                                  if (next.has(index)) next.delete(index);
+                                  else next.add(index);
+                                  return next;
+                                })}>
+                                <ChevronDown className={`size-4 shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`} />
+                                <span className="min-w-0 flex-1 truncate">{team.teamName} · {team.members.length} học viên</span>
+                                {team.members.length > autoPreview.standardMax && (
+                                  <Badge variant="secondary" className="shrink-0">Thêm 1 do số dư</Badge>
+                                )}
+                              </button>
+                              {expanded && (
+                                <ul id={panelId} className="space-y-1 border-t px-4 py-3 text-sm text-muted-foreground">
+                                  {team.members.map((member) => (
+                                    <li key={member.memberId} className="break-words">
+                                      • {member.fullName}{member.userCode ? ` (${member.userCode})` : ""}
+                                    </li>
+                                  ))}
+                                </ul>
                               )}
-                            </summary>
-                            <ul className="mt-2 space-y-1 pl-5 text-sm text-muted-foreground list-disc">
-                              {team.members.map((member) => (
-                                <li key={member.memberId}>{member.fullName}{member.userCode ? ` (${member.userCode})` : ""}</li>
-                              ))}
-                            </ul>
-                          </details>
-                        ))}
+                            </article>
+                          );
+                        })}
                       </div>
                     </section>
                   )}
