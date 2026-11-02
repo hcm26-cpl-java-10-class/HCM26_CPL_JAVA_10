@@ -18,6 +18,9 @@ public class CodeSpecDTO {
     private List<Param> params = new ArrayList<>();
     private List<TestCase> tests = new ArrayList<>();
 
+    /** Gioi han thoi gian chay moi test (giay, 1-10). null = mac dinh (5 giay). Luu chung trong JSON cua codeSpec. */
+    private Integer timeLimitSeconds;
+
     /** Chi de tra ve (sinh tu dong tu khai bao ham). */
     private String starterCode;
 

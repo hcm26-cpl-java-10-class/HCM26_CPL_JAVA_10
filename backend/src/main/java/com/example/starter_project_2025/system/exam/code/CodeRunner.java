@@ -5,6 +5,11 @@ public interface CodeRunner {
 
     RunOutcome run(String javaSource, String stdin);
 
+    /** Chay voi gioi han thoi gian rieng (giay); null = dung gia tri mac dinh cua may cham. */
+    default RunOutcome run(String javaSource, String stdin, Double cpuTimeLimitSeconds) {
+        return run(javaSource, stdin);
+    }
+
     /**
      * @param infraError true neu khong goi duoc may cham (khong phai loi cua thi sinh)
      * @param statusId   ma trang thai Judge0 (3 = chay xong, 6 = loi bien dich, 5 = qua thoi gian, ...)

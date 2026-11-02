@@ -38,7 +38,7 @@ import React, {
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ImageUrlField } from "./ImageUrlField";
-import { CodeSpecEditor, emptyCodeSpec, validateCodeSpec } from "./CodeSpecEditor";
+import { CodeSpecEditor, emptyCodeSpec, normalizeSpecForSave, validateCodeSpec } from "./CodeSpecEditor";
 import type { CodeSpec } from "@/types/features/exam";
 
 export interface QuestionFormValues {
@@ -191,6 +191,7 @@ export function QuestionForm({
     const navigate = useNavigate();
     const contentRef = useRef<HTMLTextAreaElement>(null);
     const [isPreview, setIsPreview] = useState(false);
+    const [showCodeErrors, setShowCodeErrors] = useState(false);
 
     const [isAddingNewTopic, setIsAddingNewTopic] = useState(false);
     const [newTopicText, setNewTopicText] = useState("");
@@ -306,10 +307,13 @@ export function QuestionForm({
         if (form.type === "CODING") {
             const problems = validateCodeSpec(form.code);
             if (problems.length > 0) {
-                toast.error(problems[0]);
+                setShowCodeErrors(true);
+                window.setTimeout(
+                    () => document.getElementById("code-spec-errors")?.scrollIntoView({ behavior: "smooth", block: "center" }),
+                    50,
+                );
                 return;
             }
-            const spec = form.code as CodeSpec;
             onSubmit({
                 ...form,
                 content,
@@ -317,16 +321,7 @@ export function QuestionForm({
                 topic: form.topic.trim(),
                 options: [],
                 gradingCriteria: [],
-                code: {
-                    functionName: spec.functionName.trim(),
-                    returnType: spec.returnType,
-                    params: spec.params.map((p) => ({ name: p.name.trim(), type: p.type })),
-                    tests: spec.tests.map((t) => ({
-                        inputs: t.inputs.map((v) => v.trim()),
-                        expected: t.expected.trim(),
-                        visible: t.visible,
-                    })),
-                },
+                code: normalizeSpecForSave(form.code as CodeSpec),
             });
             return;
         }
@@ -620,6 +615,7 @@ export function QuestionForm({
                 <CodeSpecEditor
                     value={form.code ?? emptyCodeSpec()}
                     onChange={(code) => setForm((prev) => ({ ...prev, code }))}
+                    showErrors={showCodeErrors}
                 />
             ) : form.type === "ESSAY" ? (
                 <section className="grid gap-3 rounded-md border p-4">

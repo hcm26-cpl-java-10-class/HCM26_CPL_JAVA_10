@@ -3,7 +3,10 @@ package com.example.starter_project_2025.system.exam.controller;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.exam.dto.CodeRunRequest;
 import com.example.starter_project_2025.system.exam.dto.CodeRunResponse;
+import com.example.starter_project_2025.system.exam.dto.CodeVerifyRequest;
+import com.example.starter_project_2025.system.exam.dto.CodeVerifyResponse;
 import com.example.starter_project_2025.system.exam.service.AnonymousExamService;
+import com.example.starter_project_2025.system.exam.service.CodeVerifyService;
 import com.example.starter_project_2025.system.exam.service.ExamCodeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +22,7 @@ public class ExamCodeController {
 
     private final ExamCodeService service;
     private final AnonymousExamService anonymousExamService;
+    private final CodeVerifyService verifyService;
 
     /** Sinh vien co tai khoan chay thu code. */
     @PostMapping("/attempts/{attemptId}/code/run")
@@ -29,6 +33,16 @@ public class ExamCodeController {
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(service.run(attemptId, principal.getUser().getId(), request));
+    }
+
+    /** Giao vien doi chieu loi giai mau voi bo test (chua luu cau hoi). */
+    @PostMapping("/code/verify")
+    @PreAuthorize("hasAnyAuthority('QUESTION_CREATE','QUESTION_UPDATE','EXAM_UPDATE')")
+    public ResponseEntity<CodeVerifyResponse> verify(
+            @RequestBody CodeVerifyRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(verifyService.verify(principal.getUser().getId(), request));
     }
 
     /** Thi an danh. */

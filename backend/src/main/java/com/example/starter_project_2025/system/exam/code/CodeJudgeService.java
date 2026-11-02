@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.exam.code;
 
 import com.example.starter_project_2025.system.exam.code.CodeRunner.RunOutcome;
 import com.example.starter_project_2025.system.question.dto.CodeSpecDTO;
+import com.example.starter_project_2025.system.question.service.CodeSpecSupport;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -87,6 +88,34 @@ public class CodeJudgeService {
         return futures.stream().map(CompletableFuture::join).toList();
     }
 
+    /**
+     * Cho giao vien doi chieu loi giai mau: chay tat ca test, test co dau vao khong hop le tra ve SKIPPED
+     * (khong goi may cham). Ket qua mong doi rong van chay duoc de giao vien lay dau ra thuc te.
+     */
+    public List<TestResult> verify(CodeSpecDTO spec, String code) {
+        List<CompletableFuture<TestResult>> futures = new ArrayList<>();
+        for (CodeSpecDTO.TestCase t : spec.getTests()) {
+            String bad = invalidInputs(spec, t);
+            if (bad != null) {
+                futures.add(CompletableFuture.completedFuture(new TestResult(false, false, "SKIPPED", "", bad)));
+                continue;
+            }
+            String expected = t.getExpected() == null ? "" : t.getExpected();
+            futures.add(CompletableFuture.supplyAsync(() -> runOne(spec, code, t.getInputs(), expected), pool));
+        }
+        return futures.stream().map(CompletableFuture::join).toList();
+    }
+
+    private static String invalidInputs(CodeSpecDTO spec, CodeSpecDTO.TestCase t) {
+        List<String> inputs = t.getInputs() == null ? List.of() : t.getInputs();
+        if (inputs.size() != spec.getParams().size()) return "Thiếu giá trị đầu vào";
+        for (int i = 0; i < inputs.size(); i++) {
+            String problem = CodeSpecSupport.checkValue(spec.getParams().get(i).getType().trim(), inputs.get(i));
+            if (problem != null) return "Tham số '" + spec.getParams().get(i).getName() + "': " + problem;
+        }
+        return null;
+    }
+
     /** Chay voi dau vao tuy y; khong co ket qua mong doi nen khong tinh dung/sai. */
     public TestResult runCustom(CodeSpecDTO spec, String code, List<String> inputs) {
         return runOne(spec, code, inputs, null);
@@ -94,7 +123,8 @@ public class CodeJudgeService {
 
     private TestResult runOne(CodeSpecDTO spec, String code, List<String> inputs, String expected) {
         String program = JavaHarness.buildProgram(code, spec);
-        RunOutcome out = runner.run(program, JavaHarness.buildStdin(inputs));
+        Double timeLimit = spec.getTimeLimitSeconds() == null ? null : (double) CodeSpecSupport.effectiveTimeLimit(spec);
+        RunOutcome out = runner.run(program, JavaHarness.buildStdin(inputs), timeLimit);
         if (out.infraError()) {
             return new TestResult(false, true, "INFRA_ERROR", "", out.statusText());
         }
@@ -106,11 +136,12 @@ public class CodeJudgeService {
             String status = out.statusId() == 5 ? "TIME_LIMIT" : "RUNTIME_ERROR";
             return new TestResult(false, false, status, clip(out.stdout()), clip(detail));
         }
-        String actual = out.stdout() == null ? "" : out.stdout().strip();
+        String actualRaw = out.stdout() == null ? "" : out.stdout();
+        String actual = actualRaw.strip();
         if (expected == null) {
             return new TestResult(true, false, "OK", clip(actual), null);
         }
-        boolean same = JavaHarness.outputsEqual(spec.getReturnType(), actual, expected);
+        boolean same = JavaHarness.outputsEqual(spec.getReturnType(), actualRaw, expected);
         return new TestResult(same, false, same ? "OK" : "WRONG_ANSWER", clip(actual), null);
     }
 

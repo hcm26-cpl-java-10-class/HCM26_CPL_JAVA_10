@@ -243,6 +243,30 @@ export const runAnonymousCode = async (
     return response.data;
 };
 
+export interface CodeVerifyItem {
+    index: number;
+    visible: boolean;
+    /** OK (matches), WRONG_ANSWER (ran but differs), COMPILE_ERROR, RUNTIME_ERROR, TIME_LIMIT, INFRA_ERROR, SKIPPED */
+    status: string;
+    actual: string | null;
+    error: string | null;
+    matches: boolean;
+}
+
+export interface CodeVerifyResponse {
+    tests: CodeVerifyItem[];
+    matched: number;
+    total: number;
+    infraError: boolean;
+    compileError: string | null;
+}
+
+/** Teacher: run a reference solution on every test of an unsaved coding question. */
+export const verifyCodeSpec = async (spec: CodeSpec, code: string) => {
+    const response = await api.post<CodeVerifyResponse>('/exams/code/verify', { spec, code });
+    return response.data;
+};
+
 export const SESSION_TOKEN_KEY = 'anonymous_session_token';
 export const SESSION_EMAIL_KEY = 'anonymous_student_email';
 export const SESSION_NAME_KEY = 'anonymous_student_name';

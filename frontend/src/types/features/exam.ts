@@ -5,8 +5,10 @@ export const CODE_TYPES = [
   "long",
   "double",
   "boolean",
+  "char",
   "String",
   "int[]",
+  "boolean[]",
   "String[]",
 ] as const;
 export type CodeType = (typeof CODE_TYPES)[number];
@@ -26,6 +28,8 @@ export interface CodeSpec {
   params: CodeParam[];
   tests: CodeTestCase[];
   starterCode?: string | null;
+  /** Time limit per test in seconds (1-10); null/undefined = default 5. */
+  timeLimitSeconds?: number | null;
 }
 export type QuestionDifficulty = "EASY" | "MEDIUM" | "HARD";
 
