@@ -137,6 +137,7 @@ class WorkspaceGitIntegrationTest {
     @Autowired ProjectGitConfigRepository configs;
     @org.springframework.boot.test.mock.mockito.SpyBean WorkspaceAuditRepository audits;
     @Autowired EntityManager entities;
+    @Autowired ClassStaffAssignmentRepository staffAssignments;
     void teacher() { tx.executeWithoutResult(status -> roles.findById(roleId).orElseThrow().setPermissions(new HashSet<>(permissions.findAll()))); }
     void grant(String... names) {
         tx.executeWithoutResult(status -> roles.findById(roleId).orElseThrow().setPermissions(
@@ -340,6 +341,59 @@ class WorkspaceGitIntegrationTest {
         mvc.perform(get(path()).header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
         save(1, "https://github.com/team/other", "main", 403);
         assertThat(gitAudits()).hasSize(1);
+    }
+
+    void administrativeReader() {
+        regularMember();
+        tx.executeWithoutResult(status -> {
+            memberships.findById(membershipId).orElseThrow().setIsActive(false);
+            users.findById(actorId).orElseThrow().setRoles(new HashSet<>(Set.of(roles.findByName("ADMIN").orElseThrow())));
+            var principal = userDetails.loadUserByUsername(users.findById(actorId).orElseThrow().getEmail());
+            token = tokens.generateAccessToken(new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+        });
+    }
+
+    @Test void scopedAdminCanReadRepositoryWithoutMembershipButCannotEditOrUnlink() throws Exception {
+        save(0, "https://github.com/team/repo", "main", 200);
+        administrativeReader();
+        mvc.perform(get("/api/workspaces/{id}", workspaceId).header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+        var config = getConfig();
+        assertThat(config.get("repositoryUrl").asText()).isEqualTo("https://github.com/team/repo");
+        assertThat(config.get("canEdit").asBoolean()).isFalse();
+        assertThat(config.get("canUnlink").asBoolean()).isFalse();
+        save(1, "https://github.com/team/other", "dev", 403);
+        mvc.perform(delete(path()).param("version", "1").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+        assertThat(gitAudits()).hasSize(1);
+    }
+
+    @Test void adminSeesEmptyStateButCannotAddAndCannotReadAcrossTenants() throws Exception {
+        administrativeReader();
+        var config = getConfig();
+        assertThat(config.get("configured").asBoolean()).isFalse();
+        assertThat(config.get("canEdit").asBoolean()).isFalse();
+        save(0, "https://github.com/team/repo", "main", 403);
+        tx.executeWithoutResult(status -> {
+            var other = tenants.saveAndFlush(Tenant.builder().code("ADMIN-GIT-" + UUID.randomUUID()).name("Other tenant").build());
+            users.findById(actorId).orElseThrow().setTenant(other);
+        });
+        mvc.perform(get(path()).header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+        assertThat(configs.findById(workspaceId)).isEmpty();
+    }
+
+    @Test void assignedClassManagerCanReadButCannotEditAndLosesAccessAfterUnassignment() throws Exception {
+        regularMember();
+        Long assignment = tx.execute(status -> {
+            memberships.findById(membershipId).orElseThrow().setIsActive(false);
+            var staff = new ClassStaffAssignment();
+            staff.setUser(users.findById(actorId).orElseThrow());
+            staff.setTrainingClass(teams.findById(teamId).orElseThrow().getTrainingClass());
+            staff.setRoleType(ClassStaffRoleType.CLASS_ADMIN);
+            return staffAssignments.saveAndFlush(staff).getId();
+        });
+        assertThat(getConfig().get("canEdit").asBoolean()).isFalse();
+        save(0, "https://github.com/team/repo", "main", 403);
+        tx.executeWithoutResult(status -> staffAssignments.findById(assignment).orElseThrow().setIsActive(false));
+        mvc.perform(get(path()).header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
     }
 
 }

@@ -28,7 +28,7 @@ function errorDetails(error: unknown): { message: string; fields: Record<string,
       for (const [key, value] of Object.entries(body.errors)) if (typeof value === "string") fields[key] = value;
     }
     return {
-      message: status === 403 ? "You no longer have permission to access or change this repository."
+      message: status === 403 ? "You do not have permission to access this repository or perform this action."
         : status === 409 ? "Another user changed the repository. Reload the latest configuration before saving."
         : status === 422 ? "Please check the highlighted fields."
         : "Could not load or save the repository. Check your connection and retry.",

@@ -44,7 +44,8 @@ public class WorkspaceGitService {
         var membership = roster.current(workspace.getTeam()).stream()
                 .filter(m -> Objects.equals(m.getClassMember().getUser().getId(), actor.getId())).findFirst();
         boolean mentor = Objects.equals(workspace.getTeam().getAssignedMentorId(), actor.getId());
-        if (membership.isEmpty() && !mentor) throw new AccessDeniedException("Git repository is outside your team scope");
+        // Reading follows the existing Workspace authorization above (including
+        // scoped administrators/class managers). It does not grant edit rights.
         boolean canEdit = mentor || membership.map(m -> ProjectMemberRole.hasRole(m.getRole(), "PM")
                 || access.permitted(actor, "WORKSPACE_UPDATE")).orElse(false);
         return new Scope(actor, workspace, canEdit);

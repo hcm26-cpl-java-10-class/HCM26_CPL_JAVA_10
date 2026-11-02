@@ -11,7 +11,7 @@
 
 ## Access and storage
 
-Existing WORKSPACE_READ / VIEW_PROJECT_WORKSPACE and current tenant/team scope are required. Active team members may read. Active PM (including multi-role PM,BA), active team members with WORKSPACE_UPDATE, and the currently assigned mentor may write. Broad class/admin access alone does not grant access to an unrelated team's Git configuration.
+Existing WORKSPACE_READ / VIEW_PROJECT_WORKSPACE and the current Workspace authorization are required for reading. This includes active team members, the assigned mentor, and administrators/class managers already permitted to access that Workspace. Tenant isolation, active accounts and current assignments remain enforced by the existing Workspace policy. Active PM (including multi-role PM,BA), active team members with WORKSPACE_UPDATE, and the currently assigned mentor may write. Administrative read access alone does not grant link/update/unlink rights.
 
 `project_git_configs.workspace_id` is the primary key and a foreign key to `workspaces.id`. Each row stores tenant/team ownership, sanitized clone/web URLs, provider, branch, revision and actors/timestamps. A write locks the parent Workspace so concurrent first saves cannot create conflicting configurations. Each successful change increments the revision; stale writes/unlinks return 409. Unlink clears the current link and retains the revision. Identical saves do not create extra audit events.
 
@@ -55,7 +55,7 @@ Schema tests execute it in H2 default and MySQL compatibility modes, testing its
 1. Log in as the assigned Mentor or an active team PM; open Workspace → Overview. An unconfigured card shows the requested empty-state text and **Thêm Git Repository**.
 2. Save a supported clone URL and branch. Verify success, provider, branch and **Open repository / Copy clone URL**; refresh and verify persistence. Open the link in a new tab.
 3. Try blank/non-repository URLs, credentials in the URL, and an invalid branch. Expect an inline error and no configuration/audit change.
-4. Open the same Workspace as an ordinary active Member: the link remains usable, but Edit/Unlink/Add are absent. Direct PUT/DELETE requests must also be rejected.
+4. Open the same Workspace as an ordinary active Member, or as an Admin/class manager permitted to read the Workspace but not assigned as its member/mentor: the link remains usable, but Edit/Unlink/Add are absent. Direct PUT/DELETE requests must also be rejected.
 5. Grant an active member WORKSPACE_UPDATE, or change membership to PM,BA; edit becomes permitted. Revoke it and repeat the API request using the same token: it must fail.
 6. With two editors, load revision N in both sessions; save in one and attempt save/unlink from the other. Expect 409, entered values retained, and **Reload latest** before retry.
 7. Submit an artifact with repo A, then update current config to B and unlink. Old submission URL/content/version must remain A; the card changes independently.
@@ -69,10 +69,10 @@ Automated tests cover validators, authorization, owner isolation, database const
 | Check | Result |
 |---|---|
 | Git repository/branch validation and request-log redaction | 52 tests passed |
-| Git configuration API, RBAC/scope, concurrent saves, audit rollback and immutable submission snapshot | 15 tests passed |
+| Git configuration API, RBAC/scope, concurrent saves, audit rollback and immutable submission snapshot | 18 tests passed |
 | Additive DDL: H2 native and MySQL compatibility mode, repeat application, uniqueness and FK | 2 tests passed |
 | Existing Workspace, Board, workflow, milestone/submission, release notes and task alert regression suites | 116 tests passed |
-| Total selected backend tests | 185 passed, 0 failures/errors |
+| Total selected backend tests | 188 passed, 0 failures/errors |
 | Frontend | TypeScript/Vite production build passed |
 | ESLint on the three changed/new frontend files | Passed with the repository config; its declared missing typescript-eslint 8.54.0 was resolved from an isolated temporary installation; no project package/lockfile changes |
 | Real React Overview/component browser fixtures | Leader/member empty states, save and safe links, retained input on 409, forbidden state, unlink confirmation and empty state passed |
