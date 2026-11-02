@@ -488,108 +488,7 @@ export default function WeeklyCalendarPage() {
     toast.success(`Đã xuất ${sessions.length} buổi học ra file CSV thành công!`);
   }
 
-  // Tải dữ liệu mẫu minh họa cho tuần hiện tại (khi backend chưa seed data hoặc offline)
-  function loadSampleSessions() {
-    const monday = weekStart;
-    const sampleData: CalendarSessionResponse[] = [
-      {
-        id: 101,
-        title: "[L2_JA_JS] Java SE / OOP Fundamentals (Lecture)",
-        startTime: monday.hour(8).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        endTime: monday.hour(10).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        status: "SCHEDULED",
-        classId: 1,
-        topicId: 1,
-        trainerId: 45,
-        location: "Room 302 (F-Town 1)",
-        isActive: true,
-      },
-      {
-        id: 102,
-        title: "[L2_JA_JS] Java OOP Practice Lab & Exercises",
-        startTime: monday.hour(10).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        endTime: monday.hour(12).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        status: "SCHEDULED",
-        classId: 1,
-        topicId: 1,
-        trainerId: 45,
-        location: "Lab 4 (F-Town 1)",
-        isActive: true,
-      },
-      {
-        id: 103,
-        title: "[L2_JA_JS] Java Collection Framework & Generics",
-        startTime: monday.hour(13).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        endTime: monday.hour(17).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        status: "SCHEDULED",
-        classId: 1,
-        topicId: 1,
-        trainerId: 45,
-        location: "Lab 4 (F-Town 1)",
-        isActive: true,
-      },
-      {
-        id: 104,
-        title: "[L2_JA_JS] Exception Handling & Clean Code Principles",
-        startTime: monday.add(1, "day").hour(8).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        endTime: monday.add(1, "day").hour(10).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        status: "SCHEDULED",
-        classId: 1,
-        topicId: 1,
-        trainerId: 45,
-        location: "Room 302 (F-Town 1)",
-        isActive: true,
-      },
-      {
-        id: 105,
-        title: "[L2_JA_JS] Hands-on Coding Assignment #1",
-        startTime: monday.add(1, "day").hour(10).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        endTime: monday.add(1, "day").hour(12).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        status: "SCHEDULED",
-        classId: 1,
-        topicId: 1,
-        trainerId: 45,
-        location: "Lab 4 (F-Town 1)",
-        isActive: true,
-      },
-      {
-        id: 106,
-        title: "[L2_JA_JS] Progress Assessment & Code Review",
-        startTime: monday.add(2, "day").hour(13).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        endTime: monday.add(2, "day").hour(17).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        status: "SCHEDULED",
-        classId: 1,
-        topicId: 1,
-        trainerId: 45,
-        location: "Room 302 (F-Town 1)",
-        isActive: true,
-      },
-      {
-        id: 107,
-        title: "[L2_JA_JS] JDBC Database Connectivity & DAO Pattern",
-        startTime: monday.add(3, "day").hour(8).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        endTime: monday.add(3, "day").hour(12).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
-        status: "SCHEDULED",
-        classId: 1,
-        topicId: 1,
-        trainerId: 45,
-        location: "Room 302 (F-Town 1)",
-        isActive: true,
-      },
-    ];
 
-    setResult({
-      content: sampleData,
-      totalElements: sampleData.length,
-      totalPages: 1,
-      size: sampleData.length,
-      number: 0,
-      first: true,
-      last: true,
-    });
-    setError(null);
-    toast.success("Đã nạp 7 buổi học mẫu minh họa cho tuần này!");
-  }
 
   const weekDays = [
     "Thứ Hai",
@@ -925,15 +824,7 @@ export default function WeeklyCalendarPage() {
               >
                 Thử lại
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={loadSampleSessions}
-                className="h-8 text-xs bg-primary text-primary-foreground gap-1.5 shadow-sm"
-              >
-                <CalendarDays className="h-3.5 w-3.5" />
-                Xem dữ liệu mẫu minh họa (Demo Sessions)
-              </Button>
+
             </div>
           </div>
         )}
