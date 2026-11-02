@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -61,7 +62,28 @@ public class StudentScoreDataInitializer implements CommandLineRunner {
                 entry("final", 8.8)
         ));
 
+        markStatus("STU001", "student@example.com", StudentScore.Status.RELEASED);
+        markStatus("STU002", null, StudentScore.Status.REVIEWED);
+        markStatus("STU004", null, StudentScore.Status.ADJUSTED);
+
         log.info("Ensured sample student score data.");
+    }
+
+    private void markStatus(String studentCode, String email, StudentScore.Status status) {
+        StudentScore entity = studentScoreRepository.findByStudentCode(studentCode).orElseThrow();
+
+        entity.setStudentEmail(email);
+        entity.setStatus(status);
+
+        if (entity.isPublished()) {
+            entity.setApprovedBy("admin@example.com");
+            entity.setReleasedAt(LocalDateTime.now());
+        }
+        if (status == StudentScore.Status.ADJUSTED) {
+            entity.setAdjustmentLog(LocalDateTime.now() + " | admin@example.com | Re-graded after appeal | sample data");
+        }
+
+        studentScoreRepository.save(entity);
     }
 
     private void upsertScore(String studentCode, String studentName, String className, Map<String, BigDecimal> scores) {

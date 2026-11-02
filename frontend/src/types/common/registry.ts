@@ -39,6 +39,8 @@ export interface EntityConfig {
     schema: EntitySchema;
     actionPages?: EntityActionPagesConfig;
     cardRenderer?: (props: EntityCardRendererProps) => ReactNode;
+
+    headerActions?: (props: { table: any }) => ReactNode;
 }
 
 const registry: EntityConfig[] = [];

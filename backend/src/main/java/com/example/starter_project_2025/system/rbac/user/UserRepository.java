@@ -18,6 +18,10 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     boolean existsByEmail(String email);
 
+    Optional<User> findByUsernameIgnoreCase(String username);
+
+    Optional<User> findByEmployeeCodeIgnoreCase(String employeeCode);
+
     Long countByIsActive(Boolean isActive);
 
     List<User> findAllByDepartments_Id(Long departmentId);
@@ -132,7 +136,14 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
             + "where u.isActive = true and role.name = 'STUDENT' group by department.id")
     List<Object[]> countActiveStudentsPerDepartment();
 
-    boolean existsByRoles_Id(Long roleId);
+    long countByRolesId(Long roleId);
 
-    long countByRoles_Id(Long roleId);
+    @Query("""
+            select distinct u from User u
+            join u.roles r
+            where r.name = :roleName
+              and u.isActive = true
+            order by u.email asc
+            """)
+    List<User> findActiveUsersByRoleName(@Param("roleName") String roleName);
 }

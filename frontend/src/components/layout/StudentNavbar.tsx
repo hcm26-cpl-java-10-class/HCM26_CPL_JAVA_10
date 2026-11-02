@@ -1,4 +1,3 @@
-
 import HeaderRight from "@/components/layout/HeaderRight";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
+import { usePendingInvitations } from "@/hooks/usePendingInvitations";
+import { InvitationBell } from "@/components/features/invitation/InvitationBell";
 import { cn } from "@/lib/utils";
 import { authApi } from "@/api/features/auth.api";
 import { iconMap } from "@/components/datatable/iconMap";
@@ -51,6 +52,8 @@ export function StudentNavbar() {
   const { data: moduleGroups = [] } =
       useActiveModuleGroups();
 
+  const { count: pendingInvitationCount } = usePendingInvitations();
+
   const pathname = normalizePath(location.pathname);
 
   const canBrowseSyllabuses =
@@ -60,11 +63,26 @@ export function StudentNavbar() {
       pathname === SYLLABUS_PATH ||
       pathname.startsWith(`${SYLLABUS_PATH}/`);
 
+  const renderPendingBadge = (url: string) => {
+    if (normalizePath(url) !== "/invitations" || pendingInvitationCount <= 0) {
+      return null;
+    }
+
+    return (
+        <span
+            aria-hidden="true"
+            className="ml-auto flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white"
+        >
+          {pendingInvitationCount > 9 ? "9+" : pendingInvitationCount}
+        </span>
+    );
+  };
+
   // Use the existing module groups from LMS.
-  const resolveIcon = (iconName?: string) => {
+  const resolveIcon = (moduleIcon?: string) => {
     const key: keyof typeof iconMap =
-        iconName && iconName in iconMap
-            ? (iconName as keyof typeof iconMap)
+        moduleIcon && moduleIcon in iconMap
+            ? (moduleIcon as keyof typeof iconMap)
             : "menu";
 
     return iconMap[key];
@@ -74,8 +92,14 @@ export function StudentNavbar() {
       .map((group) => ({
         id: group.id ?? group.name ?? "group",
         name: group.name ?? "Menu",
+        hiddenInMenu: group.hiddenInMenu,
         items: group.modules
-            .filter((module) => !!module.url && !ADMIN_ONLY_STUDENT_PREVIEW_PATHS.has(normalizePath(module.url)))
+            .filter(
+                (module) =>
+                    !!module.url &&
+                    !module.hiddenInMenu &&
+                    !ADMIN_ONLY_STUDENT_PREVIEW_PATHS.has(normalizePath(module.url))
+            )
             .map((module) => ({
               id:
                   module.id ??
@@ -93,7 +117,7 @@ export function StudentNavbar() {
                   ),
             })),
       }))
-      .filter((group) => group.items.length > 0);
+      .filter((group) => !group.hiddenInMenu && group.items.length > 0);
 
   type NavigationEntry =
       | {
@@ -245,6 +269,7 @@ export function StudentNavbar() {
                           >
                             <item.icon className="h-4 w-4" />
                             <span>{item.title}</span>
+                            {renderPendingBadge(item.url)}
                           </DropdownMenuItem>
                       ))}
                     </DropdownMenuContent>
@@ -297,7 +322,6 @@ export function StudentNavbar() {
                         {index > 0 && (
                             <DropdownMenuSeparator />
                         )}
-
                         <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
                           {group.name}
                         </DropdownMenuLabel>
@@ -316,6 +340,7 @@ export function StudentNavbar() {
                             >
                               <item.icon className="h-4 w-4" />
                               <span>{item.title}</span>
+                              {renderPendingBadge(item.url)}
                             </DropdownMenuItem>
                         ))}
                       </div>
@@ -323,6 +348,9 @@ export function StudentNavbar() {
                 })}
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* INVITATION BELL */}
+            <InvitationBell />
 
             {/* EXISTING ROLE SWITCHER */}
             <HeaderRight />

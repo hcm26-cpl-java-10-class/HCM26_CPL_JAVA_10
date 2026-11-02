@@ -389,7 +389,7 @@ function EmbeddedCourseDetailSheet({
   onOpenChange: (open: boolean) => void;
   canEnroll: boolean;
   enrollMutation: ReturnType<typeof useCourseEnrollment>["enrollMutation"];
-  enrollmentByCourseId: Map<number, { id: number; courseId: number; [key: string]: unknown }>;
+  enrollmentByCourseId: Map<number, { id: number; courseId: number }>;
 }) {
   if (!course) return null;
 

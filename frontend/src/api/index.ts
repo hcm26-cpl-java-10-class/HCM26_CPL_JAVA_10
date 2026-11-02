@@ -9,6 +9,7 @@ export * from "./features/demo/progress.api";
 export * from "./features/demo/student_score.api";
 export * from "./features/demo/topic_mark_gradebook.api";
 export * from "./features/exam.api";
+export * from "./features/exam-template.api";
 export * from "./features/invitation.api";
 export * from "./features/menu/module.api";
 export * from "./features/menu/module_group.api";
@@ -19,5 +20,6 @@ export * from "./features/student.api";
 export * from "./features/demo/certificate.api";
 export * from "./features/notification.api";
 export * from "./features/demo/qna.api";
+export * from "./features/score-appeal.api";
 
 export * from "./features/demo/lesson-report.api";

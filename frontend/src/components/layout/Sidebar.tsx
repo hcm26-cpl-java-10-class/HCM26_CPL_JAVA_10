@@ -1,13 +1,10 @@
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
-
 import { NavMain } from "@/components/layout/NavMain";
-
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
 import { LogOutIcon } from "lucide-react";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { authApi } from "@/api/features/auth.api";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
 
@@ -29,10 +26,16 @@ export function SidebarMenu() {
             .map((group) => ({
                 id: group.id ?? group.name ?? "group",
                 name: group.name ?? "Menu",
+                hiddenInMenu: group.hiddenInMenu,
                 items: group.modules
                     .filter((module) => {
                         const url = module.url?.replace(/\/+$/, "") ?? "";
-                        return !!module.url && url !== "/enrollments" && url !== "/departments";
+                        return (
+                            !!module.url &&
+                            !module.hiddenInMenu &&
+                            url !== "/enrollments" &&
+                            url !== "/departments"
+                        );
                     })
                     .map((module) => ({
                         title: module.title ?? "Untitled",
@@ -43,12 +46,11 @@ export function SidebarMenu() {
                             (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
                     })),
             }))
-            .filter((group) => group.items.length > 0);
+            .filter((group) => !group.hiddenInMenu && group.items.length > 0);
     }, [location.pathname, moduleGroups]);
 
     return (
         <Sidebar variant="inset" collapsible="icon">
-            {/* Header */}
             <SidebarHeader className="py-3 px-0">
                 <Button
                     type="button"
@@ -70,7 +72,6 @@ export function SidebarMenu() {
                 </Button>
             </SidebarHeader>
 
-            {/* Content */}
             <SidebarContent>
                 {navGroups.map((group) =>
                     group ? (
@@ -79,7 +80,6 @@ export function SidebarMenu() {
                 )}
             </SidebarContent>
 
-            {/* Footer */}
             <SidebarFooter className="p-4 text-xs flex flex-row items-center gap-2 text-muted-foreground group-data-[collapsible=icon]:justify-center">
                 {state === "expanded" && <span className="flex-1 truncate">RBAC System v1.0</span>}
 
@@ -87,10 +87,7 @@ export function SidebarMenu() {
                     <Button
                         size="icon"
                         variant="ghost"
-                        onClick={async () => {
-                            await authApi.logout();
-                            navigate("/login");
-                        }}
+                        onClick={() => navigate("/logout")}
                     >
                         <LogOutIcon className="size-4" />
                     </Button>

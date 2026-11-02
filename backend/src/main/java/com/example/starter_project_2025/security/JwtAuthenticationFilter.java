@@ -48,8 +48,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 Jwt jwt = refreshTokenService.decodeAccessToken(token);
 
-
-
                 UserDetails userDetails = userDetailsService.loadUserByUsername(jwt.getSubject());
 
                 if (!userDetails.isAccountNonLocked()

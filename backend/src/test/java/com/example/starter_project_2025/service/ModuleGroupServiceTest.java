@@ -1,6 +1,8 @@
 package com.example.starter_project_2025.service;
 
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.system.menu.module.ModuleRepository;
 import com.example.starter_project_2025.system.menu.module_groups.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +24,9 @@ class ModuleGroupServiceTest {
     @Mock
     private ModuleGroupMapper moduleMapper;
 
+    @Mock
+    private ModuleRepository moduleRepository;
+
     @InjectMocks
     private ModuleGroupServiceImpl moduleGroupService;
 
@@ -39,8 +44,6 @@ class ModuleGroupServiceTest {
         mockDto = new ModuleGroupDTO();
         mockDto.setName("System Module");
     }
-
-    // --- 1. TEST CÁC PHƯƠNG THỨC CẤU HÌNH (GETTER) ---
 
     @Test
     @DisplayName("Should return the correct repository instance")
@@ -61,22 +64,16 @@ class ModuleGroupServiceTest {
         assertArrayEquals(new String[]{"name", "description"}, fields);
     }
 
-    // --- 2. TEST LOGIC TRƯỚC KHI TẠO (beforeCreate) ---
-
     @Test
     @DisplayName("beforeCreate - Should fail when name already exists")
     void beforeCreate_NameExists_AddsError() {
-        // Given
         ValidationContext ctx = new ValidationContext();
         when(moduleRepo.existsByNameIgnoreCase(mockDto.getName())).thenReturn(true);
 
-        // When
         moduleGroupService.beforeCreate(mockEntity, mockDto, ctx);
 
-        // Then
         assertTrue(ctx.hasErrors());
 
-        // SỬA TẠI ĐÂY: Lấy lỗi theo key "name" (là một List) và kiểm tra phần tử đầu tiên
         var errors = (java.util.List<String>) ctx.getErrors().get("name");
         assertNotNull(errors);
         assertTrue(errors.contains("Module group name already exists"));
@@ -93,23 +90,17 @@ class ModuleGroupServiceTest {
         assertFalse(ctx.hasErrors());
     }
 
-    // --- 3. TEST LOGIC TRƯỚC KHI CẬP NHẬT (beforeUpdate) ---
-
     @Test
     @DisplayName("beforeUpdate - Should fail when updating to another existing name")
     void beforeUpdate_NewNameExists_AddsError() {
-        // Given
         ValidationContext ctx = new ValidationContext();
         mockDto.setName("New Unique Name");
         when(moduleRepo.existsByNameIgnoreCase("New Unique Name")).thenReturn(true);
 
-        // When
         moduleGroupService.beforeUpdate(mockEntity, mockDto, ctx);
 
-        // Then
         assertTrue(ctx.hasErrors());
 
-        // SỬA TẠI ĐÂY: Kiểm tra tương tự cho trường hợp Update
         var errors = (java.util.List<String>) ctx.getErrors().get("name");
         assertNotNull(errors);
         assertTrue(errors.contains("Module group name already exists"));
@@ -119,13 +110,11 @@ class ModuleGroupServiceTest {
     @DisplayName("beforeUpdate - Should pass when name is unchanged")
     void beforeUpdate_SameName_NoErrors() {
         ValidationContext ctx = new ValidationContext();
-        // DTO và Entity có cùng tên "System Module"
         mockDto.setName(mockEntity.getName());
 
         moduleGroupService.beforeUpdate(mockEntity, mockDto, ctx);
 
         assertFalse(ctx.hasErrors());
-        // Đảm bảo không gọi database vô ích
         verify(moduleRepo, never()).existsByNameIgnoreCase(anyString());
     }
 
@@ -151,5 +140,26 @@ class ModuleGroupServiceTest {
 
         assertFalse(ctx.hasErrors());
         verify(moduleRepo, never()).existsByNameIgnoreCase(anyString());
+    }
+
+    @Test
+    @DisplayName("beforeDelete - Should throw BadRequestException when group contains modules")
+    void beforeDelete_HasModules_ThrowsBadRequestException() {
+        when(moduleRepository.existsByModuleGroupId(1L)).thenReturn(true);
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                moduleGroupService.beforeDelete(mockEntity));
+
+        assertTrue(ex.getMessage().contains("Cannot delete module group"));
+        verify(moduleRepository, times(1)).existsByModuleGroupId(1L);
+    }
+
+    @Test
+    @DisplayName("beforeDelete - Should pass when group does not contain modules")
+    void beforeDelete_NoModules_Success() {
+        when(moduleRepository.existsByModuleGroupId(1L)).thenReturn(false);
+
+        assertDoesNotThrow(() -> moduleGroupService.beforeDelete(mockEntity));
+        verify(moduleRepository, times(1)).existsByModuleGroupId(1L);
     }
 }

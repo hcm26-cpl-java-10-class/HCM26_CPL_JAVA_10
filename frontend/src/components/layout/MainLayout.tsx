@@ -1,6 +1,6 @@
-import {SidebarInset, SidebarProvider} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import HeaderRight from "@/components/layout/HeaderRight";
-import {SidebarMenu} from "@/components/layout/Sidebar.tsx";
+import { SidebarMenu } from "@/components/layout/Sidebar.tsx";
 import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
 import { StudentNavbar } from "@/components/layout/StudentNavbar";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -38,7 +38,7 @@ export function MainLayout({
     return (
         <SidebarProvider>
             <SidebarMenu />
-            <SidebarInset  className="h-screen flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
+            <SidebarInset className="h-screen flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
                 <header className="flex h-16 shrink-0 items-center gap-2">
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
                         <div className="flex items-center gap-2">

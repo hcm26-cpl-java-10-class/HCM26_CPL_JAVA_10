@@ -10,11 +10,27 @@ import { Dashboard } from "@/pages/management/dashboard";
 import CurriculumManagementPage from "@/pages/management/demo/curriculum";
 import RolePermissionMatrixPage from "@/pages/management/rbac/permission/RolePermissionMatrixPage";
 import ExamManagementPage from "@/pages/management/exam";
-import InvitationManagementPage from "@/pages/management/invitation";
+import ExamTemplatesPage from "@/pages/management/exam/templates";
+import ResultStatisticsPage from "@/pages/management/exam/ResultStatisticsPage";
+import EssayAttemptListPage from "@/pages/management/exam/grading/EssayAttemptListPage";
+import EssayAttemptDetailPage from "@/pages/management/exam/grading/EssayAttemptDetailPage";
+import ExamSimilarityPage from "@/pages/management/exam/similarity/ExamSimilarityPage";
+import ScoreAppealsPage from "@/pages/management/exam/appeals";
+import InvitationsPage from "@/pages/management/exam/invitation";
+import UnifiedInvitationsPage, {
+  StudentInvitationsRedirect,
+} from "@/pages/invitations/InvitationsPage";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import StudentExamList from "@/pages/student/StudentExamList";
+import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
+import MyScoresPage from "@/pages/student/MyScoresPage";
+import MyAppealsPage from "@/pages/student/MyAppealsPage";
+import ExamReviewPage from "@/pages/student/ExamReviewPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
+import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
+import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -33,7 +49,7 @@ import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogP
 
 export interface RouteConfig {
   path: string;
-  component: ComponentType;
+  component: ComponentType<any>;
   requiredPermission?: string;
   isPublic?: boolean;
   isModuleDriven?: boolean;
@@ -46,6 +62,18 @@ export const ROLE_HOME_PATHS = [
 ] as const;
 
 export const routes: RouteConfig[] = [
+  // FAMS MODULE GROUP MODULE
+  {
+    path: "/fams/module-group-module",
+    component: ModuleGroupModulePage,
+    isPublic: true,
+  },
+  {
+    path: "/module-group-module",
+    component: ModuleGroupModulePage,
+    isPublic: true,
+  },
+
   // ROLE HOME
   {
     path: "/dashboard",
@@ -81,12 +109,80 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
 
+  {
+    path: "/management/exam/templates",
+    component: ExamTemplatesPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
   // INVITATIONS
   {
     path: "/invitations",
-    component: InvitationManagementPage,
+    component: UnifiedInvitationsPage,
     requiredPermission: "INVITATION_READ",
-    isModuleDriven: true,
+  },
+
+  {
+    path: "/exams/:examId/invitations",
+    component: InvitationsPage,
+    requiredPermission: "INVITATION_READ",
+  },
+
+  // EXAM GRADING / SIMILARITY / STATISTICS
+  {
+    path: "/exams/:examId/grading",
+    component: EssayAttemptListPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
+  {
+    path: "/exams/:examId/grading/similarity",
+    component: ExamSimilarityPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
+  {
+    path: "/exams/:examId/similarity",
+    component: ExamSimilarityPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
+  {
+    path: "/exams/:examId/grading/:attemptId",
+    component: EssayAttemptDetailPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
+  {
+    path: "/exams/:examId/result-statistics",
+    component: ResultStatisticsPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
+  // SCORE APPEALS
+  {
+    path: "/exams/appeals",
+    component: ScoreAppealsPage,
+    requiredPermission: "SCORE_APPEAL_READ",
+  },
+
+  // ANONYMOUS EXAM ACCESS
+  {
+    path: "/anonymous-exam",
+    component: AnonymousAccessPage,
+    isPublic: true,
+  },
+  {
+    path: "/anonymous-exam/take",
+    component: AnonymousExamTakingPage,
+    isPublic: true,
+  },
+
+  // STUDENT INVITATIONS
+  {
+    path: "/student/invitations",
+    component: StudentInvitationsRedirect,
+    requiredPermission: "INVITATION_READ",
   },
 
   // TOPIC MARKS
@@ -149,6 +245,32 @@ export const routes: RouteConfig[] = [
     component: StudentExamList,
     requiredPermission: "EXAM_READ",
     isModuleDriven: true,
+  },
+
+  {
+    path: "/student/exams/:examId/take",
+    component: StudentExamTakingPage,
+    requiredPermission: "EXAM_TAKE",
+  },
+
+  {
+    path: "/student/exams/attempts/:attemptId/review",
+    component: ExamReviewPage,
+    requiredPermission: "EXAM_TAKE",
+  },
+
+  // MY SCORES / MY APPEALS
+  {
+    path: "/my-scores",
+    component: MyScoresPage,
+    requiredPermission: "STUDENT_SCORE_VIEW_OWN",
+    isModuleDriven: true,
+  },
+
+  {
+    path: "/my-appeals",
+    component: MyAppealsPage,
+    requiredPermission: "SCORE_APPEAL_VIEW_OWN",
   },
 
   // TEACHER

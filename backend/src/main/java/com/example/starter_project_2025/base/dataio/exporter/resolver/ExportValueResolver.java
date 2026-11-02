@@ -7,7 +7,6 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
 @Component
@@ -31,12 +30,9 @@ public class ExportValueResolver {
         if (value instanceof Enum<?> e)
             return e.name();
 
-        if (!meta.dateFormat().isBlank()) {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(meta.dateFormat());
-            if (value instanceof LocalDateTime dt)
-                return dt.format(formatter);
-            if (value instanceof LocalDate date)
-                return date.format(formatter);
+        if (value instanceof LocalDateTime dt &&
+                !meta.dateFormat().isBlank()) {
+            return dt.format(DateTimeFormatter.ofPattern(meta.dateFormat()));
         }
 
         if (!meta.path().isBlank()) {
