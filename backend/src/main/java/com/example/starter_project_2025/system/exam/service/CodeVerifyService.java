@@ -66,6 +66,19 @@ public class CodeVerifyService {
         return response;
     }
 
+    /** Lop Main he thong tu sinh cho khai bao ham (khong chay gi, khong goi may cham). */
+    public String mainPreview(CodeSpecDTO spec) {
+        if (spec == null) {
+            throw new BadRequestException("Thiếu khai báo hàm");
+        }
+        spec.setCustomMain(false);
+        List<String> problems = CodeSpecSupport.validateSignature(spec);
+        if (!problems.isEmpty()) {
+            throw new BadRequestException(problems.get(0));
+        }
+        return com.example.starter_project_2025.system.exam.code.JavaHarness.generatedMain(spec);
+    }
+
     private void throttle(Long userId) {
         long now = System.currentTimeMillis();
         Long previous = lastRun.put(userId, now);

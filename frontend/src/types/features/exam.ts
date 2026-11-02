@@ -30,6 +30,10 @@ export interface CodeSpec {
   starterCode?: string | null;
   /** Time limit per test in seconds (1-10); null/undefined = default 5. */
   timeLimitSeconds?: number | null;
+  /** true = teacher wrote the Main class; false = auto-generated. */
+  customMain?: boolean;
+  /** Main class (custom or auto-generated). Only saved when customMain is true. */
+  mainCode?: string | null;
 }
 export type QuestionDifficulty = "EASY" | "MEDIUM" | "HARD";
 

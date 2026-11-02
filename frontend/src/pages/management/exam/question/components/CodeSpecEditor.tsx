@@ -1,4 +1,4 @@
-import { verifyCodeSpec, type CodeVerifyResponse } from "@/api/exam.api";
+import { previewMain, verifyCodeSpec, type CodeVerifyResponse } from "@/api/exam.api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/select";
 import { CODE_TYPES, type CodeSpec, type CodeTestCase } from "@/types/features/exam";
 import axios from "axios";
-import { CheckCircle2, ChevronDown, ChevronRight, Loader2, Play, Plus, Trash2, XCircle } from "lucide-react";
-import { useState } from "react";
+import { CheckCircle2, Loader2, Play, Plus, Trash2, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export const VISIBLE_TESTS = 2;
 export const HIDDEN_TESTS = 8;
@@ -20,6 +20,9 @@ export const DEFAULT_TIME_LIMIT = 5;
 export const MIN_TIME_LIMIT = 1;
 export const MAX_TIME_LIMIT = 10;
 const MAX_PARAMS = 6;
+const MAIN_CLASS = /\bclass\s+Main\b/;
+const MAIN_METHOD = /\bstatic\s+void\s+main\s*\(/;
+const MAX_MAIN_LENGTH = 20000;
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]{0,49}$/;
 const KEYWORDS = new Set([
     "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const",
@@ -54,6 +57,8 @@ export function emptyCodeSpec(): CodeSpec {
         params: [{ name: "a", type: "int" }],
         tests: emptyTests(1),
         timeLimitSeconds: DEFAULT_TIME_LIMIT,
+        customMain: false,
+        mainCode: null,
     };
 }
 
@@ -65,6 +70,8 @@ export function normalizeSpecForSave(spec: CodeSpec): CodeSpec {
         returnType: spec.returnType,
         params,
         timeLimitSeconds: spec.timeLimitSeconds ?? DEFAULT_TIME_LIMIT,
+        customMain: !!spec.customMain,
+        mainCode: spec.customMain ? spec.mainCode ?? "" : null,
         tests: spec.tests.map((t) => ({
             inputs: params.map((p, k) => normalizeValue(p.type, t.inputs[k] ?? "")),
             expected: normalizeValue(spec.returnType, t.expected),
@@ -125,6 +132,17 @@ export function codeSpecIssues(spec: CodeSpec | null | undefined): CodeSpecIssue
         });
     if (spec.params.length > MAX_PARAMS)
         issues.push({ message: `At most ${MAX_PARAMS} parameters.`, field: "params" });
+    if (spec.customMain) {
+        const main = spec.mainCode ?? "";
+        if (main.trim() === "") issues.push({ message: "The custom main function is empty.", field: "main" });
+        else if (main.length > MAX_MAIN_LENGTH)
+            issues.push({ message: `The custom main function is too long (max ${MAX_MAIN_LENGTH} characters).`, field: "main" });
+        else if (!MAIN_CLASS.test(main) || !MAIN_METHOD.test(main))
+            issues.push({
+                message: "The custom main must be inside class Main and declare public static void main(String[] args).",
+                field: "main",
+            });
+    }
     const names = new Set<string>();
     spec.params.forEach((p, i) => {
         const n = p.name.trim();
@@ -201,7 +219,15 @@ interface Props {
 }
 
 export function CodeSpecEditor({ value, onChange, disabled, showErrors }: Props) {
-    const [refOpen, setRefOpen] = useState(false);
+    const declSig = JSON.stringify([
+        value.functionName.trim(),
+        value.returnType,
+        value.params.map((p) => [p.name.trim(), p.type]),
+    ]);
+    const [generatedMain, setGeneratedMain] = useState<string | null>(null);
+    const [mainError, setMainError] = useState<string | null>(null);
+    /** Declaration the custom main was written for (to warn when it changes afterwards). */
+    const [mainBase, setMainBase] = useState<string | null>(() => (value.customMain ? declSig : null));
     const [refCode, setRefCode] = useState("");
     const [running, setRunning] = useState(false);
     const [refError, setRefError] = useState<string | null>(null);
@@ -230,6 +256,52 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors }: Props)
     const signature = `public static ${value.returnType} ${value.functionName || "..."}(${value.params
         .map((p) => `${p.type} ${p.name}`)
         .join(", ")})`;
+
+    const declarationBad = issues.some((i) => i.field === "fn" || i.field === "ret" || i.field.startsWith("param"));
+
+    // Keep the auto-generated main in sync with the declaration (debounced server call).
+    useEffect(() => {
+        if (declarationBad) {
+            setGeneratedMain(null);
+            setMainError("Fix the function declaration above to see the generated main.");
+            return;
+        }
+        let cancelled = false;
+        const timer = window.setTimeout(async () => {
+            try {
+                const main = await previewMain(normalizeSpecForSave(value));
+                if (!cancelled) {
+                    setGeneratedMain(main);
+                    setMainError(null);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    setGeneratedMain(null);
+                    setMainError(requestError(error));
+                }
+            }
+        }, 500);
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [declSig, declarationBad]);
+
+    const enableCustomMain = () => {
+        onChange({ ...value, customMain: true, mainCode: generatedMain ?? value.mainCode ?? "" });
+        setMainBase(declSig);
+    };
+    const disableCustomMain = () => {
+        onChange({ ...value, customMain: false, mainCode: null });
+        setMainBase(null);
+    };
+    const resetMain = () => {
+        if (!generatedMain) return;
+        onChange({ ...value, mainCode: generatedMain });
+        setMainBase(declSig);
+    };
+    const mainOutdated = !!value.customMain && mainBase != null && mainBase !== declSig;
 
     const stale = result != null && ranWith !== JSON.stringify(value);
     const fillable = result ? result.tests.filter((t) => t.status === "WRONG_ANSWER" && t.actual != null).map((t) => t.index) : [];
@@ -500,18 +572,65 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors }: Props)
                 </div>
             </div>
 
+            <div className="grid gap-3 rounded-md border p-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="grid gap-1">
+                        <Label>Main function</Label>
+                        <p className="text-xs text-muted-foreground">
+                            The system runs the student&apos;s <code>Solution</code> class with this <code>Main</code>: it reads one
+                            parameter per line from stdin, calls your function and prints the result. Students and graders see it
+                            read-only.{" "}
+                            {value.customMain ? "You are using a custom main." : "It is generated from the declaration above."}
+                        </p>
+                    </div>
+                    <label className="flex shrink-0 items-center gap-2 text-sm">
+                        <input
+                            type="checkbox"
+                            checked={!!value.customMain}
+                            disabled={disabled || (!value.customMain && !generatedMain)}
+                            onChange={(e) => (e.target.checked ? enableCustomMain() : disableCustomMain())}
+                        />
+                        Customize main
+                    </label>
+                </div>
+                {!value.customMain && mainError && <p className="text-xs text-muted-foreground">{mainError}</p>}
+                <textarea
+                    aria-label="Main function"
+                    aria-invalid={bad.has("main")}
+                    spellCheck={false}
+                    wrap="off"
+                    rows={12}
+                    readOnly={!value.customMain || disabled}
+                    className={`w-full resize-y overflow-auto whitespace-pre rounded-md border p-3 font-mono text-xs leading-5 outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        value.customMain ? "bg-background" : "bg-muted/40 text-muted-foreground"
+                    } ${invalid("main")}`}
+                    value={value.customMain ? value.mainCode ?? "" : generatedMain ?? ""}
+                    onChange={(e) => onChange({ ...value, mainCode: e.target.value })}
+                />
+                {value.customMain && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <Button type="button" size="sm" variant="outline" disabled={disabled || !generatedMain} onClick={resetMain}>
+                            Reset to generated
+                        </Button>
+                        <span className="text-muted-foreground">
+                            Keep reading one parameter per line from stdin and print only the result. The result is still compared
+                            with the expected value by the return type.
+                        </span>
+                    </div>
+                )}
+                {mainOutdated && (
+                    <p role="alert" className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                        The function declaration changed after you customized main. Check that main still matches it, or reset it.
+                    </p>
+                )}
+            </div>
+
             <div className="grid gap-3 rounded-md border border-dashed p-3">
-                <button
-                    type="button"
-                    className="flex w-full items-center gap-2 text-left text-sm font-medium"
-                    aria-expanded={refOpen}
-                    onClick={() => setRefOpen((v) => !v)}
-                >
-                    {refOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
                     Check the tests with a reference solution
                     <span className="text-xs font-normal text-muted-foreground">(not saved, students never see it)</span>
-                </button>
-                {refOpen && (
+                </div>
+                {(
                     <div className="grid gap-3">
                         <p className="text-xs text-muted-foreground">
                             Paste your own Java solution (class <code>Solution</code> with the function above). It runs on all{" "}
@@ -562,6 +681,12 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors }: Props)
                             <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-destructive bg-destructive/10 p-2 font-mono text-xs text-destructive">
                                 {result.compileError}
                             </pre>
+                        )}
+                        {result?.compileError && (
+                            <p className="text-xs text-muted-foreground">
+                                If the error mentions <code>Main.java</code>, the function declaration above (name, return type and
+                                parameters) does not match your solution. Current declaration: <code>{signature}</code>
+                            </p>
                         )}
                         {result && (
                             <p className="text-xs">

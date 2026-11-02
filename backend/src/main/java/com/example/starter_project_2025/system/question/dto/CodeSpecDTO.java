@@ -21,6 +21,12 @@ public class CodeSpecDTO {
     /** Gioi han thoi gian chay moi test (giay, 1-10). null = mac dinh (5 giay). Luu chung trong JSON cua codeSpec. */
     private Integer timeLimitSeconds;
 
+    /** true = giao vien tu viet lop Main (mainCode); false = he thong tu sinh. */
+    private boolean customMain;
+
+    /** Lop Main. Khi luu chi dung neu customMain; khi doc luon co gia tri (tu viet hoac ban tu sinh) de hien thi. */
+    private String mainCode;
+
     /** Chi de tra ve (sinh tu dong tu khai bao ham). */
     private String starterCode;
 

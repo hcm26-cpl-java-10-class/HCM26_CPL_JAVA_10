@@ -126,6 +126,14 @@ function CodingCard({
                 {spec && (
                     <p className="mt-1 text-xs text-muted-foreground">Time limit: {spec.timeLimitSeconds ?? 5} s per test</p>
                 )}
+                {spec?.mainCode && (
+                    <details className="mt-2 rounded-md border p-2">
+                        <summary className="cursor-pointer text-xs font-medium">
+                            Main used for grading ({spec.customMain ? "custom" : "auto-generated"})
+                        </summary>
+                        <pre className="mt-2 max-h-72 overflow-auto rounded bg-muted p-3 text-xs">{spec.mainCode}</pre>
+                    </details>
+                )}
             </div>
 
             <div>
