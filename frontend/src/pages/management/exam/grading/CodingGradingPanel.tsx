@@ -123,6 +123,9 @@ function CodingCard({
                 {signature && (
                     <code className="mt-2 block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{signature}</code>
                 )}
+                {spec && (
+                    <p className="mt-1 text-xs text-muted-foreground">Time limit: {spec.timeLimitSeconds ?? 5} s per test</p>
+                )}
             </div>
 
             <div>

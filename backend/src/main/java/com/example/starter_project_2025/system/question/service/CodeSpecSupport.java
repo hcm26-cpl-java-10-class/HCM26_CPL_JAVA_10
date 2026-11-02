@@ -17,9 +17,12 @@ public final class CodeSpecSupport {
     public static final int TOTAL_TESTS = VISIBLE_TESTS + HIDDEN_TESTS;
     public static final int MAX_PARAMS = 6;
     public static final int MAX_VALUE_LENGTH = 1000;
+    public static final int DEFAULT_TIME_LIMIT_SECONDS = 5;
+    public static final int MIN_TIME_LIMIT_SECONDS = 1;
+    public static final int MAX_TIME_LIMIT_SECONDS = 10;
 
     public static final Set<String> TYPES =
-            Set.of("int", "long", "double", "boolean", "String", "int[]", "String[]");
+            Set.of("int", "long", "double", "boolean", "char", "String", "int[]", "boolean[]", "String[]");
 
     private static final Pattern IDENT = Pattern.compile("[A-Za-z_][A-Za-z0-9_]{0,49}");
     private static final Set<String> KEYWORDS = Set.of(
@@ -43,6 +46,7 @@ public final class CodeSpecSupport {
             CodeSpecDTO copy = new CodeSpecDTO();
             copy.setFunctionName(spec.getFunctionName() == null ? null : spec.getFunctionName().trim());
             copy.setReturnType(spec.getReturnType() == null ? null : spec.getReturnType().trim());
+            copy.setTimeLimitSeconds(spec.getTimeLimitSeconds());
             for (CodeSpecDTO.Param p : spec.getParams() == null ? List.<CodeSpecDTO.Param>of() : spec.getParams()) {
                 CodeSpecDTO.Param c = new CodeSpecDTO.Param();
                 c.setName(p.getName() == null ? null : p.getName().trim());
@@ -74,7 +78,10 @@ public final class CodeSpecSupport {
     /** Ban day du (co code khung) danh cho giao vien. */
     public static CodeSpecDTO forTeacher(String json) {
         CodeSpecDTO spec = fromJson(json);
-        if (spec != null) spec.setStarterCode(starterCode(spec));
+        if (spec != null) {
+            spec.setStarterCode(starterCode(spec));
+            spec.setTimeLimitSeconds(effectiveTimeLimit(spec));
+        }
         return spec;
     }
 
@@ -86,11 +93,19 @@ public final class CodeSpecSupport {
         out.setFunctionName(spec.getFunctionName());
         out.setReturnType(spec.getReturnType());
         out.setParams(spec.getParams());
+        out.setTimeLimitSeconds(effectiveTimeLimit(spec));
         out.setStarterCode(starterCode(spec));
         for (CodeSpecDTO.TestCase t : spec.getTests()) {
             if (t.isVisible()) out.getTests().add(t);
         }
         return out;
+    }
+
+    /** Gioi han thoi gian (giay) dang ap dung, luon nam trong [1, 10]. */
+    public static int effectiveTimeLimit(CodeSpecDTO spec) {
+        Integer v = spec == null ? null : spec.getTimeLimitSeconds();
+        if (v == null) return DEFAULT_TIME_LIMIT_SECONDS;
+        return Math.max(MIN_TIME_LIMIT_SECONDS, Math.min(MAX_TIME_LIMIT_SECONDS, v));
     }
 
     // ------------------------------------------------------------------ code khung
@@ -117,8 +132,10 @@ public final class CodeSpecSupport {
             case "long" -> "0L";
             case "double" -> "0.0";
             case "boolean" -> "false";
+            case "char" -> "' '";
             case "String" -> "\"\"";
             case "int[]" -> "new int[0]";
+            case "boolean[]" -> "new boolean[0]";
             case "String[]" -> "new String[0]";
             default -> "null";
         };
@@ -126,8 +143,8 @@ public final class CodeSpecSupport {
 
     // ------------------------------------------------------------------ kiem tra
 
-    /** Tra ve danh sach loi (rong neu hop le). */
-    public static List<String> validate(CodeSpecDTO spec) {
+    /** Kiem tra phan khai bao ham (ten, kieu, tham so, gioi han thoi gian); khong kiem tra test case. */
+    public static List<String> validateSignature(CodeSpecDTO spec) {
         List<String> errors = new ArrayList<>();
         if (spec == null) {
             errors.add("Cần khai báo hàm và test case cho câu hỏi lập trình");
@@ -140,6 +157,10 @@ public final class CodeSpecSupport {
         String ret = spec.getReturnType() == null ? "" : spec.getReturnType().trim();
         if (!TYPES.contains(ret)) {
             errors.add("Kiểu trả về phải là một trong: " + String.join(", ", TYPES.stream().sorted().toList()));
+        }
+        Integer timeLimit = spec.getTimeLimitSeconds();
+        if (timeLimit != null && (timeLimit < MIN_TIME_LIMIT_SECONDS || timeLimit > MAX_TIME_LIMIT_SECONDS)) {
+            errors.add("Giới hạn thời gian phải từ " + MIN_TIME_LIMIT_SECONDS + " đến " + MAX_TIME_LIMIT_SECONDS + " giây");
         }
 
         List<CodeSpecDTO.Param> params = spec.getParams() == null ? List.of() : spec.getParams();
@@ -159,6 +180,19 @@ public final class CodeSpecSupport {
                 errors.add("Kiểu tham số '" + name + "' không được hỗ trợ");
             }
         }
+        return errors;
+    }
+
+    /** Tra ve danh sach loi (rong neu hop le). */
+    public static List<String> validate(CodeSpecDTO spec) {
+        List<String> errors = new ArrayList<>();
+        if (spec == null) {
+            errors.add("Cần khai báo hàm và test case cho câu hỏi lập trình");
+            return errors;
+        }
+        errors.addAll(validateSignature(spec));
+        String ret = spec.getReturnType() == null ? "" : spec.getReturnType().trim();
+        List<CodeSpecDTO.Param> params = spec.getParams() == null ? List.of() : spec.getParams();
 
         List<CodeSpecDTO.TestCase> tests = spec.getTests() == null ? List.of() : spec.getTests();
         long visible = tests.stream().filter(CodeSpecDTO.TestCase::isVisible).count();
@@ -202,7 +236,7 @@ public final class CodeSpecSupport {
     }
 
     /** null neu gia tri hop le voi kieu. */
-    private static String checkValue(String type, String value) {
+    public static String checkValue(String type, String value) {
         if (value == null) return "không được để trống";
         if (value.length() > MAX_VALUE_LENGTH) return "quá dài (tối đa " + MAX_VALUE_LENGTH + " ký tự)";
         if (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0) return "không được chứa xuống dòng";
@@ -217,6 +251,18 @@ public final class CodeSpecSupport {
                 case "boolean" -> {
                     String v = value.trim().toLowerCase(Locale.ROOT);
                     if (!v.equals("true") && !v.equals("false")) return "phải là true hoặc false";
+                }
+                case "char" -> {
+                    if (value.length() != 1) return "phải đúng 1 ký tự";
+                }
+                case "boolean[]" -> {
+                    String v = value.trim();
+                    if (!v.isEmpty()) {
+                        for (String part : v.split(",", -1)) {
+                            String b = part.trim().toLowerCase(Locale.ROOT);
+                            if (!b.equals("true") && !b.equals("false")) return "mảng boolean cách nhau bởi dấu phẩy (true/false)";
+                        }
+                    }
                 }
                 case "int[]" -> {
                     String v = value.trim();

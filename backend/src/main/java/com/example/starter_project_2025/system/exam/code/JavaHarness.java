@@ -53,6 +53,11 @@ public final class JavaHarness {
           .append(" for (int i = 0; i < a.length; i++) { if (i > 0) b.append(','); b.append(a[i]); } return b.toString(); }\n");
         sb.append("    static String f(String[] a) { StringBuilder b = new StringBuilder();")
           .append(" for (int i = 0; i < a.length; i++) { if (i > 0) b.append(','); b.append(a[i]); } return b.toString(); }\n");
+        sb.append("    static boolean[] ba(String s) { s = s.trim(); if (s.isEmpty()) return new boolean[0];")
+          .append(" String[] t = s.split(\",\", -1); boolean[] r = new boolean[t.length];")
+          .append(" for (int i = 0; i < t.length; i++) r[i] = Boolean.parseBoolean(t[i].trim()); return r; }\n");
+        sb.append("    static String f(boolean[] a) { StringBuilder b = new StringBuilder();")
+          .append(" for (int i = 0; i < a.length; i++) { if (i > 0) b.append(','); b.append(a[i]); } return b.toString(); }\n");
         sb.append("    public static void main(String[] args) throws Exception {\n");
         sb.append("        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n");
         int n = spec.getParams().size();
@@ -84,7 +89,9 @@ public final class JavaHarness {
             case "long" -> "Long.parseLong(" + expr + ".trim())";
             case "double" -> "Double.parseDouble(" + expr + ".trim())";
             case "boolean" -> "Boolean.parseBoolean(" + expr + ".trim())";
+            case "char" -> "(" + expr + ".isEmpty() ? ' ' : " + expr + ".charAt(0))";
             case "int[]" -> "ia(" + expr + ")";
+            case "boolean[]" -> "ba(" + expr + ")";
             case "String[]" -> "sa(" + expr + ")";
             default -> expr;
         };
@@ -92,6 +99,13 @@ public final class JavaHarness {
 
     /** So sanh ket qua that voi ket qua mong doi theo kieu tra ve. */
     public static boolean outputsEqual(String returnType, String actual, String expected) {
+        if ("String".equals(returnType == null ? "" : returnType.trim())) {
+            // Chuoi: giu nguyen khoang trang, chi bo dau xuong dong do println them vao cuoi.
+            String out = actual == null ? "" : actual;
+            if (out.endsWith("\r\n")) out = out.substring(0, out.length() - 2);
+            else if (out.endsWith("\n")) out = out.substring(0, out.length() - 1);
+            return out.equals(expected == null ? "" : expected);
+        }
         String a = actual == null ? "" : actual.strip();
         String e = expected == null ? "" : expected.strip();
         String type = returnType == null ? "" : returnType.trim();
@@ -103,6 +117,9 @@ public final class JavaHarness {
             }
             if (type.equals("boolean")) {
                 return a.toLowerCase(Locale.ROOT).equals(e.toLowerCase(Locale.ROOT));
+            }
+            if (type.equals("boolean[]")) {
+                return normalizeList(a).toLowerCase(Locale.ROOT).equals(normalizeList(e).toLowerCase(Locale.ROOT));
             }
             if (type.equals("int[]") || type.equals("String[]")) {
                 return normalizeList(a).equals(normalizeList(e));

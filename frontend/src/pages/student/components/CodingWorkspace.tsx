@@ -211,6 +211,7 @@ export function CodingWorkspace({
                         <>
                             <h3 className="mt-5 text-sm font-semibold">Hàm cần viết (Java)</h3>
                             <code className="mt-1 block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{signature}</code>
+                            <p className="mt-2 text-xs text-muted-foreground">Time limit: {spec.timeLimitSeconds ?? 5} s per test</p>
                             <h3 className="mt-5 text-sm font-semibold">Ví dụ</h3>
                             <div className="mt-1 grid gap-2">
                                 {spec.tests.map((t, i) => (

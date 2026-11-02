@@ -54,12 +54,19 @@ public class Judge0CodeRunner implements CodeRunner {
 
     @Override
     public RunOutcome run(String javaSource, String stdin) {
+        return run(javaSource, stdin, null);
+    }
+
+    @Override
+    public RunOutcome run(String javaSource, String stdin, Double cpuTimeLimitSeconds) {
+        double cpu = cpuTimeLimitSeconds != null ? cpuTimeLimitSeconds : cpuTimeLimit;
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("source_code", b64(javaSource));
         body.put("language_id", languageId);
         body.put("stdin", b64(stdin == null ? "" : stdin));
-        body.put("cpu_time_limit", cpuTimeLimit);
-        body.put("wall_time_limit", cpuTimeLimit * 3);
+        body.put("cpu_time_limit", cpu);
+        // Judge0 mac dinh chi cho wall_time_limit toi da 20 giay.
+        body.put("wall_time_limit", Math.min(cpu * 3, 20.0));
         body.put("memory_limit", memoryLimitKb);
         body.put("enable_network", false);
 
