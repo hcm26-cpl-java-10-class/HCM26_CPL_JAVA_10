@@ -635,11 +635,11 @@ export default function StudentExamTakingPage() {
                             {codingQuestions.length > 0 && (
                                 <section className="rounded-xl border p-4">
                                     <h2 className="mb-3 font-semibold">Coding Questions</h2>
-                                    <div className="grid gap-2">
+                                    <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
                                         {codingQuestions.map((question) => {
                                             const saved = Boolean(answers[question.id]?.saved);
                                             return (
-                                                <div key={question.id} className="flex items-center justify-between gap-3 rounded-md border p-3">
+                                                <div key={question.id} className="flex min-w-0 items-center justify-between gap-3 rounded-md border p-3">
                                                     <div className="min-w-0">
                                                         <p className="text-sm font-medium">
                                                             Question {attempt.questions.indexOf(question) + 1}
@@ -724,27 +724,28 @@ export default function StudentExamTakingPage() {
                                         )}
 
                                         {question.type === 'ESSAY' ? (
-                                            <div className="mt-4 flex items-center justify-between rounded-lg border bg-muted/30 p-3">
-                                                <span className="text-sm text-muted-foreground">
-                                                    {hasText(question.id)
-                                                        ? 'Essay content available'
-                                                        : 'No answer provided yet'}
-                                                </span>
-                                                <Button
-                                                    size="sm"
-                                                    className={
-                                                        answer.saved
-                                                            ? 'bg-green-600 text-white hover:bg-green-700'
-                                                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                                            <div
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={() => openEssay(question.id)}
+                                                onKeyDown={(event) => {
+                                                    if (event.key === 'Enter' || event.key === ' ') {
+                                                        event.preventDefault();
+                                                        openEssay(question.id);
                                                     }
-                                                    onClick={() => openEssay(question.id)}
-                                                >
-                                                    {answer.saved
-                                                        ? 'Edit Essay Answer'
-                                                        : hasText(question.id)
-                                                            ? 'Continue Answer'
-                                                            : 'Open Essay Answer'}
-                                                </Button>
+                                                }}
+                                                className={`mt-4 flex min-h-[3.5rem] cursor-pointer items-center justify-between gap-3 rounded-lg border p-3 transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                                                    answer.saved ? 'border-green-600/60 bg-green-600/5' : 'bg-muted/30'
+                                                }`}
+                                            >
+                                                <span className="min-w-0 truncate text-sm text-muted-foreground">
+                                                    {hasText(question.id)
+                                                        ? (answer.textAnswer ?? '').trim()
+                                                        : 'Click here to write your answer'}
+                                                </span>
+                                                <span className={`shrink-0 text-xs font-medium ${answer.saved ? 'text-green-600' : 'text-muted-foreground'}`}>
+                                                    {answer.saved ? 'Saved' : hasText(question.id) ? 'Draft' : ''}
+                                                </span>
                                             </div>
                                         ) : (
                                             <div className="mt-4 grid gap-3">

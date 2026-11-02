@@ -290,17 +290,6 @@ export default function EssayAttemptDetailPage() {
                             )}
                             {aiSuggestMutation.isPending ? "Generating Suggestions..." : "Request AI Suggestions"}
                         </Button>
-                        <Button
-                            onClick={handleInitiateSave}
-                            disabled={saveGradeMutation.isPending || aiSuggestMutation.isPending}
-                        >
-                            {saveGradeMutation.isPending ? (
-                                <Loader2 className="mr-2 size-4 animate-spin" />
-                            ) : (
-                                <Save className="mr-2 size-4" />
-                            )}
-                            {saveGradeMutation.isPending ? "Saving..." : "Confirm & Save Official Grade"}
-                        </Button>
                     </div>
                 </div>
 
@@ -683,6 +672,22 @@ export default function EssayAttemptDetailPage() {
                             );
                         })}
                     </>
+                )}
+
+                {detail && tab === "essay" && detail.essays.length > 0 && (
+                    <div className="flex justify-end border-t pt-4">
+                        <Button
+                            onClick={handleInitiateSave}
+                            disabled={saveGradeMutation.isPending || aiSuggestMutation.isPending}
+                        >
+                            {saveGradeMutation.isPending ? (
+                                <Loader2 className="mr-2 size-4 animate-spin" />
+                            ) : (
+                                <Save className="mr-2 size-4" />
+                            )}
+                            {saveGradeMutation.isPending ? "Saving..." : "Save Grades"}
+                        </Button>
+                    </div>
                 )}
 
                 {}                <Dialog open={isOverwriteModalOpen} onOpenChange={setIsOverwriteModalOpen}>
