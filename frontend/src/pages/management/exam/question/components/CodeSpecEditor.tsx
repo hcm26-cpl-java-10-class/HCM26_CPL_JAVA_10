@@ -42,6 +42,46 @@ const normalizeValue = (type: string, raw: string) => (keepsSpaces(type) ? raw ?
 /** Return types whose expected value may legitimately be empty (empty string / empty array). */
 const MAY_BE_EMPTY = new Set(["int[]", "boolean[]", "String", "String[]"]);
 
+export interface DetectedDeclaration {
+    fn: string;
+    ret: string;
+    params: { name: string; type: string }[];
+}
+
+/**
+ * Reads the function declaration from a reference solution: the first `static <type> name(<params>)`
+ * whose types are all supported. If a method with `preferredName` exists, that one wins.
+ */
+export function detectDeclaration(code: string, preferredName?: string): DetectedDeclaration | null {
+    const clean = code.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+    const re = /\bstatic\s+(?:final\s+)?([A-Za-z]+(?:\s*\[\s*\])?)\s+([A-Za-z_]\w*)\s*\(([^)]*)\)/g;
+    const supported = (t: string) => (CODE_TYPES as readonly string[]).includes(t);
+    const found: DetectedDeclaration[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(clean))) {
+        const ret = m[1].replace(/\s+/g, "");
+        const fn = m[2];
+        if (!supported(ret) || !isIdent(fn)) continue;
+        const raw = m[3].trim();
+        const params: DetectedDeclaration["params"] = [];
+        let ok = raw === "" || raw.split(",").length <= MAX_PARAMS;
+        if (raw !== "" && ok) {
+            for (const part of raw.split(",")) {
+                const tokens = part.replace(/\bfinal\b/g, " ").replace(/\s*\[\s*\]/g, "[]").trim().split(/\s+/);
+                const type = tokens.slice(0, -1).join("");
+                const name = tokens[tokens.length - 1];
+                if (tokens.length < 2 || !supported(type) || !isIdent(name)) {
+                    ok = false;
+                    break;
+                }
+                params.push({ type, name });
+            }
+        }
+        if (ok) found.push({ fn, ret, params });
+    }
+    return found.find((d) => d.fn === preferredName) ?? found[0] ?? null;
+}
+
 export function emptyTests(paramCount: number): CodeTestCase[] {
     return Array.from({ length: VISIBLE_TESTS + HIDDEN_TESTS }, (_, i) => ({
         inputs: Array.from({ length: paramCount }, () => ""),
@@ -192,13 +232,76 @@ const STATUS_LABEL: Record<string, string> = {
     SKIPPED: "Skipped (fix the inputs first)",
 };
 
+/** Small beginner-style example solutions, keyed by "<return type>|<type of the first parameter>". */
+const EXAMPLE_BODIES: Record<string, (x: string) => string> = {
+    "boolean|int": (n) =>
+        `        // Prime check: true when ${n} has no divisor from 2 up to its square root.\n` +
+        `        if (${n} < 2) return false;\n` +
+        `        for (int i = 2; i * i <= ${n}; i++) {\n` +
+        `            if (${n} % i == 0) return false;\n` +
+        `        }\n` +
+        `        return true;`,
+    "boolean|String": (s) =>
+        `        // Palindrome check.\n` +
+        `        return new StringBuilder(${s}).reverse().toString().equals(${s});`,
+    "int|int": (n) => `        // Square of the number.\n        return ${n} * ${n};`,
+    "int|int[]": (a) =>
+        `        // Sum of all elements.\n` +
+        `        int sum = 0;\n` +
+        `        for (int v : ${a}) sum += v;\n` +
+        `        return sum;`,
+    "int|String": (s) => `        // Length of the text.\n        return ${s}.length();`,
+    "long|int": (n) =>
+        `        // Factorial of the number.\n` +
+        `        long result = 1;\n` +
+        `        for (int i = 2; i <= ${n}; i++) result *= i;\n` +
+        `        return result;`,
+    "long|int[]": (a) =>
+        `        // Sum of all elements (as long).\n` +
+        `        long sum = 0;\n` +
+        `        for (int v : ${a}) sum += v;\n` +
+        `        return sum;`,
+    "double|int[]": (a) =>
+        `        // Average of the elements (0 for an empty array).\n` +
+        `        if (${a}.length == 0) return 0;\n` +
+        `        double sum = 0;\n` +
+        `        for (int v : ${a}) sum += v;\n` +
+        `        return sum / ${a}.length;`,
+    "double|int": (n) => `        // Half of the number.\n        return ${n} / 2.0;`,
+    "char|String": (s) =>
+        `        // First character (a space for an empty text).\n` +
+        `        return ${s}.isEmpty() ? ' ' : ${s}.charAt(0);`,
+    "String|String": (s) =>
+        `        // Reverse the text.\n` +
+        `        return new StringBuilder(${s}).reverse().toString();`,
+    "String|int": (n) => `        // The number as text.\n        return String.valueOf(${n});`,
+    "int[]|int[]": (a) =>
+        `        // Sort ascending.\n` +
+        `        int[] result = ${a}.clone();\n` +
+        `        Arrays.sort(result);\n` +
+        `        return result;`,
+    "boolean[]|int[]": (a) =>
+        `        // true for every even element.\n` +
+        `        boolean[] result = new boolean[${a}.length];\n` +
+        `        for (int i = 0; i < ${a}.length; i++) result[i] = ${a}[i] % 2 == 0;\n` +
+        `        return result;`,
+    "String[]|String": (s) =>
+        `        // Split the text into words.\n` +
+        `        return ${s}.trim().isEmpty() ? new String[0] : ${s}.trim().split("\\\\s+");`,
+};
+
 function starterTemplate(spec: CodeSpec): string {
     const dflt: Record<string, string> = {
         int: "0", long: "0L", double: "0.0", boolean: "false", char: "' '", String: '""',
         "int[]": "new int[0]", "boolean[]": "new boolean[0]", "String[]": "new String[0]",
     };
     const params = spec.params.map((p) => `${p.type} ${p.name}`).join(", ");
-    return `class Solution {\n    public static ${spec.returnType} ${spec.functionName || "solve"}(${params}) {\n        return ${dflt[spec.returnType] ?? "null"};\n    }\n}\n`;
+    const first = spec.params[0];
+    const example = first ? EXAMPLE_BODIES[`${spec.returnType}|${first.type}`] : undefined;
+    const body = example
+        ? example(first.name)
+        : `        // TODO: write your solution here.\n        return ${dflt[spec.returnType] ?? "null"};`;
+    return `class Solution {\n    public static ${spec.returnType} ${spec.functionName || "solve"}(${params}) {\n${body}\n    }\n}\n`;
 }
 
 const requestError = (error: unknown): string => {
@@ -229,6 +332,8 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors }: Props)
     /** Declaration the custom main was written for (to warn when it changes afterwards). */
     const [mainBase, setMainBase] = useState<string | null>(() => (value.customMain ? declSig : null));
     const [refCode, setRefCode] = useState("");
+    const [resetting, setResetting] = useState(false);
+    const [resetNote, setResetNote] = useState<string | null>(null);
     const [running, setRunning] = useState(false);
     const [refError, setRefError] = useState<string | null>(null);
     const [result, setResult] = useState<CodeVerifyResponse | null>(null);
@@ -296,10 +401,53 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors }: Props)
         onChange({ ...value, customMain: false, mainCode: null });
         setMainBase(null);
     };
-    const resetMain = () => {
-        if (!generatedMain) return;
-        onChange({ ...value, mainCode: generatedMain });
-        setMainBase(declSig);
+    const declSigOf = (spec: CodeSpec) =>
+        JSON.stringify([spec.functionName.trim(), spec.returnType, spec.params.map((p) => [p.name.trim(), p.type])]);
+
+    /**
+     * "Reset to generated": if a reference solution is pasted below, first read the function declaration
+     * from it (name, return type, parameters), then rebuild main for that declaration.
+     */
+    const resetMain = async () => {
+        if (resetting) return;
+        setResetNote(null);
+        let next = value;
+        if (refCode.trim() !== "") {
+            const found = detectDeclaration(refCode, value.functionName);
+            if (!found) {
+                setResetNote(
+                    "No function with supported types found in the reference solution, so the declaration was left unchanged.",
+                );
+            } else {
+                next = {
+                    ...value,
+                    functionName: found.fn,
+                    returnType: found.ret,
+                    params: found.params,
+                    tests: value.tests.map((t) => ({ ...t, inputs: found.params.map((_, i) => t.inputs[i] ?? "") })),
+                };
+                setResetNote(
+                    `Declaration read from the reference solution: public static ${found.ret} ${found.fn}(${found.params
+                        .map((p) => `${p.type} ${p.name}`)
+                        .join(", ")})`,
+                );
+            }
+        }
+        if (!next.customMain) {
+            onChange(next);
+            return;
+        }
+        setResetting(true);
+        try {
+            const main = await previewMain(normalizeSpecForSave(next));
+            onChange({ ...next, mainCode: main });
+            setMainBase(declSigOf(next));
+        } catch (error) {
+            onChange(next);
+            setResetNote(requestError(error));
+        } finally {
+            setResetting(false);
+        }
     };
     const mainOutdated = !!value.customMain && mainBase != null && mainBase !== declSig;
 
@@ -607,17 +755,26 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors }: Props)
                     value={value.customMain ? value.mainCode ?? "" : generatedMain ?? ""}
                     onChange={(e) => onChange({ ...value, mainCode: e.target.value })}
                 />
-                {value.customMain && (
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <Button type="button" size="sm" variant="outline" disabled={disabled || !generatedMain} onClick={resetMain}>
-                            Reset to generated
-                        </Button>
-                        <span className="text-muted-foreground">
-                            Keep reading one parameter per line from stdin and print only the result. The result is still compared
-                            with the expected value by the return type.
-                        </span>
-                    </div>
-                )}
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={disabled || resetting || (!value.customMain && refCode.trim() === "")}
+                        onClick={() => void resetMain()}
+                    >
+                        {resetting && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                        Reset to generated
+                    </Button>
+                    <span className="text-muted-foreground">
+                        {refCode.trim() !== ""
+                            ? "Reads the function declaration from the reference solution below, then rebuilds main."
+                            : "Paste a reference solution below to read the declaration from it automatically."}
+                        {value.customMain &&
+                            " Keep reading one parameter per line from stdin and print only the result; it is still compared with the expected value by the return type."}
+                    </span>
+                </div>
+                {resetNote && <p className="text-xs text-muted-foreground">{resetNote}</p>}
                 {mainOutdated && (
                     <p role="alert" className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
                         The function declaration changed after you customized main. Check that main still matches it, or reset it.
