@@ -192,6 +192,7 @@ export function QuestionForm({
     const contentRef = useRef<HTMLTextAreaElement>(null);
     const [isPreview, setIsPreview] = useState(false);
     const [showCodeErrors, setShowCodeErrors] = useState(false);
+    const codeSaveCheckRef = useRef<(() => string[]) | null>(null);
 
     const [isAddingNewTopic, setIsAddingNewTopic] = useState(false);
     const [newTopicText, setNewTopicText] = useState("");
@@ -313,6 +314,14 @@ export function QuestionForm({
                     50,
                 );
                 return;
+            }
+            // Warn (without blocking and without touching main) if the declaration and the code disagree.
+            const notes = codeSaveCheckRef.current?.() ?? [];
+            if (notes.length > 0) {
+                toast.warning("Saved, but the coding declaration needs a check", {
+                    description: notes.join("\n"),
+                    duration: 12000,
+                });
             }
             onSubmit({
                 ...form,
@@ -616,6 +625,9 @@ export function QuestionForm({
                     value={form.code ?? emptyCodeSpec()}
                     onChange={(code) => setForm((prev) => ({ ...prev, code }))}
                     showErrors={showCodeErrors}
+                    onRegisterSaveCheck={(check) => {
+                        codeSaveCheckRef.current = check;
+                    }}
                 />
             ) : form.type === "ESSAY" ? (
                 <section className="grid gap-3 rounded-md border p-4">

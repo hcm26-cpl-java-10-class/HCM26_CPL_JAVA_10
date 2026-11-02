@@ -319,9 +319,14 @@ interface Props {
     disabled?: boolean;
     /** Show the list of problems and highlight invalid cells (turn on after the first failed save). */
     showErrors?: boolean;
+    /**
+     * Gives the parent a function to call when Save is pressed. It compares the declaration in the form with the
+     * reference solution and the custom main, returns warnings (never changes anything, main is never reset).
+     */
+    onRegisterSaveCheck?: (check: () => string[]) => void;
 }
 
-export function CodeSpecEditor({ value, onChange, disabled, showErrors }: Props) {
+export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegisterSaveCheck }: Props) {
     const declSig = JSON.stringify([
         value.functionName.trim(),
         value.returnType,
@@ -450,6 +455,41 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors }: Props)
         }
     };
     const mainOutdated = !!value.customMain && mainBase != null && mainBase !== declSig;
+
+    const [saveNotes, setSaveNotes] = useState<string[]>([]);
+    useEffect(() => setSaveNotes([]), [declSig, refCode, value.mainCode, value.customMain]);
+
+    /** Warnings shown when saving. Read-only: it never edits the declaration, tests or main. */
+    const saveWarnings = (): string[] => {
+        const notes: string[] = [];
+        const fn = value.functionName.trim();
+        const sigOf = (ret: string, name: string, params: { type: string; name: string }[]) =>
+            `public static ${ret} ${name}(${params.map((p) => `${p.type} ${p.name}`).join(", ")})`;
+        if (refCode.trim() !== "") {
+            const found = detectDeclaration(refCode, fn);
+            if (!found) {
+                notes.push("The reference solution has no function with supported types, so its declaration could not be compared with the form.");
+            } else {
+                const formSig = sigOf(value.returnType, fn, value.params.map((p) => ({ type: p.type, name: p.name.trim() })));
+                const codeSig = sigOf(found.ret, found.fn, found.params);
+                if (formSig !== codeSig) {
+                    notes.push(`The declaration in the form does not match the reference solution. Form: ${formSig}. Reference solution: ${codeSig}.`);
+                }
+            }
+        }
+        if (value.customMain) {
+            if (mainOutdated) {
+                notes.push("The function declaration changed after your custom main was written. Check that main still matches it. Main was not changed.");
+            } else if (fn && !new RegExp(`\\bSolution\\s*\\.\\s*${fn}\\s*\\(`).test(value.mainCode ?? "")) {
+                notes.push(`Your custom main does not call Solution.${fn}(...). Main was not changed.`);
+            }
+        }
+        setSaveNotes(notes);
+        return notes;
+    };
+    useEffect(() => {
+        onRegisterSaveCheck?.(saveWarnings);
+    });
 
     const stale = result != null && ranWith !== JSON.stringify(value);
     const fillable = result ? result.tests.filter((t) => t.status === "WRONG_ANSWER" && t.actual != null).map((t) => t.index) : [];
@@ -775,6 +815,14 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors }: Props)
                     </span>
                 </div>
                 {resetNote && <p className="text-xs text-muted-foreground">{resetNote}</p>}
+                {saveNotes.length > 0 && (
+                    <div id="code-save-notes" role="alert" className="grid gap-1 rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                        <p className="font-medium">Saved, but please check:</p>
+                        {saveNotes.map((n) => (
+                            <p key={n}>{n}</p>
+                        ))}
+                    </div>
+                )}
                 {mainOutdated && (
                     <p role="alert" className="rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
                         The function declaration changed after you customized main. Check that main still matches it, or reset it.
