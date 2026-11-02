@@ -742,6 +742,7 @@ export default function WeeklyCalendarPage() {
             <Input
               type="text"
               placeholder="Tìm theo tiêu đề, phòng, GV..."
+              maxLength={100}
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               className="h-8 pl-8 text-xs"
