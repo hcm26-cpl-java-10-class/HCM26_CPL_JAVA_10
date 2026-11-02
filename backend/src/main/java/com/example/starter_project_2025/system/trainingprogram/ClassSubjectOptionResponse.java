@@ -7,7 +7,7 @@ public record ClassSubjectOptionResponse(
         String subjectName,
         String subjectVersion,
         Integer orderIndex,
-        Integer durationHours,
+        java.math.BigDecimal durationHours,
         Long courseId,
         String courseCode,
         String courseName

@@ -17,7 +17,7 @@ class SubjectIdentityPersistenceTest {
 
     private Subject subject(String code, String version) {
         return Subject.builder().code(code).version(version).name("Java lesson")
-                .durationHours(40).build();
+                .durationHours(java.math.BigDecimal.valueOf(40)).build();
     }
 
     @Test

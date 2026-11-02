@@ -2,7 +2,9 @@ package com.example.starter_project_2025.system.subject;
 
 import com.example.starter_project_2025.base.crud.dto.BaseDTO;
 import com.example.starter_project_2025.base.crud.dto.OnCreate;
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -31,13 +33,30 @@ public class SubjectDTO extends BaseDTO {
     @Size(max = 20, message = "Version must not exceed 20 characters")
     String version;
 
-    @Size(max = 1000, message = "Description must not exceed 1000 characters")
     String description;
+
+    @Size(max = 4000, message = "Objectives must not exceed 4000 characters")
+    String objectives;
+
+    @Size(max = 4000, message = "Skills must not exceed 4000 characters")
+    String skills;
+
+    SubjectDeliveryMode deliveryMode;
+
+    @Size(max = 12000, message = "Outline must not exceed 12000 characters")
+    String outline;
 
     @Size(max = 100, message = "Technical group must not exceed 100 characters")
     String technicalGroup;
 
-    @NotNull(groups = OnCreate.class, message = "Duration is required")
-    @Min(value = 1, message = "Duration must be greater than 0")
-    Integer durationHours;
+    @NotNull(groups = OnCreate.class, message = "Hours is required")
+    @DecimalMin(value = "0", inclusive = false, message = "Hours must be greater than 0")
+    @DecimalMax(value = "2147483647", message = "Hours exceeds the supported range")
+    @Digits(integer = 10, fraction = 9, message = "Hours supports up to 9 decimal places")
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = SubjectHoursDeserializer.class)
+    java.math.BigDecimal durationHours;
+
+    public java.math.BigDecimal getDurationHours() {
+        return SubjectDuration.normalize(durationHours);
+    }
 }

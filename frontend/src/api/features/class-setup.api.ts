@@ -1,7 +1,14 @@
 import axiosInstance from "../axios";
-import type { ImportResult } from "@/types";
+import type { FileFormat, ImportResult } from "@/types";
+import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util/dataio.utils";
 
 export type AssignmentRole = "MAIN" | "ASSISTANT";
+
+export interface AssignmentTeachingSlot {
+  date: string;
+  startTime: string;
+  endTime: string;
+}
 
 export interface SharedClass {
   id: number;
@@ -60,7 +67,11 @@ export interface TeachingAssignmentRequest {
   role: AssignmentRole;
   effectiveFrom: string;
   effectiveTo: string | null;
+  revision?: number;
+  teachingSlots?: AssignmentTeachingSlot[];
 }
+
+export type TeachingAssignmentUpdateRequest = TeachingAssignmentRequest & { revision: number };
 
 export interface TeachingAssignment {
   id: number;
@@ -75,6 +86,67 @@ export interface TeachingAssignment {
   role: AssignmentRole;
   effectiveFrom: string;
   effectiveTo: string | null;
+  className?: string | null;
+  subjectVersion?: string;
+  trainerEmail?: string | null;
+  programId?: number;
+  programCode?: string;
+  programName?: string;
+  programVersion?: string;
+  revision: number;
+  teachingSlots?: AssignmentTeachingSlot[];
+}
+
+export interface AssignmentEditContext {
+  assignment: TeachingAssignment;
+  classProfile: SharedClass;
+  trainers: SharedTrainer[];
+  linkedSessionCount: number;
+  trainerLocked: boolean;
+}
+
+export interface AssignmentImpact {
+  canSave: boolean;
+  revision: number;
+  linkedSessionCount: number;
+  affectedSessionCount: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  affectedSessions: AssignmentPage<{ session: AssignmentSession; reasons: string[] }>;
+}
+
+export interface AssignmentEndRequest {
+  effectiveTo: string;
+  revision: number;
+}
+
+export interface AssignmentLifecycleContext {
+  assignment: TeachingAssignment;
+  linkedSessionCount: number;
+  canDelete: boolean;
+  previouslyUsed: boolean;
+}
+
+export type AssignmentSessionStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
+
+export interface AssignmentSession {
+  source: "DEMO_SESSION" | "STUDY_SESSION";
+  id: number;
+  title: string;
+  startTime: string;
+  endTime: string;
+  location: string | null;
+  roomId: number | null;
+  meetingUrl: string | null;
+  status: AssignmentSessionStatus;
+  active: boolean;
+}
+
+export interface AssignmentSessionParams {
+  page?: number;
+  size?: number;
+  sort?: string;
+  status?: AssignmentSessionStatus;
 }
 
 export interface ClassCourseItem {
@@ -225,7 +297,7 @@ export interface ClassSubjectOption {
   courseName: string | null;
 }
 
-interface AssignmentPage<T> {
+export interface AssignmentPage<T> {
   content: T[];
   number: number;
   size: number;
@@ -233,9 +305,99 @@ interface AssignmentPage<T> {
   totalElements: number;
 }
 
+export interface AssignmentSearchParams {
+  search?: string;
+  classId?: number;
+  subjectId?: number;
+  programSubjectId?: number;
+  trainerId?: number;
+  role?: AssignmentRole;
+  effectiveOn?: string;
+  page?: number;
+  size?: number;
+  sort?: string;
+}
+
+export interface AssignmentOptions {
+  classes: SharedClass[];
+  trainers: SharedTrainer[];
+  subjects: Array<{ id: number; code: string; name: string; version: string }>;
+  sampleData: boolean;
+}
+
+export interface AssignmentCreateOptions {
+  classes: SharedClass[];
+  trainers: SharedTrainer[];
+  sampleData: boolean;
+}
+
+export interface AssignmentNewClassRequest {
+  name: string;
+  programId?: number;
+  newProgram?: { name: string; version: string; subjectIds: number[] };
+  startDate: string;
+  endDate: string;
+  plannedSize: number;
+}
+
+export interface AssignmentClassProgram {
+  id: number; code: string; name: string; version: string;
+}
+
+export interface AssignmentCreationRequest {
+  classDetails: AssignmentNewClassRequest;
+  trainer: { name: string; email: string };
+  subjectId?: number;
+  newSubject?: { name: string; durationHours?: number };
+  role: AssignmentRole;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  teachingSlots: AssignmentTeachingSlot[];
+}
+
+export interface AssignmentClassContext {
+  classProfile: SharedClass;
+  program: NonNullable<ClassProgramSubjects["program"]>;
+  subjects: Array<{ programSubjectId: number; subjectId: number; code: string; name: string; version: string }>;
+}
+
 export const classSetupApi = {
+  createAssignmentWithDetails: async (request: AssignmentCreationRequest) =>
+    (await axiosInstance.post<TeachingAssignment>("/teaching-assignments/create-with-details", request)).data,
+  getNewProgramSubjects: async (signal?: AbortSignal) =>
+    (await axiosInstance.get<Array<{ id: number; code: string; name: string; version: string; durationHours: number }>>("/teaching-assignments/class-subject-options", { signal })).data,
+  saveAssignmentTrainer: async (request: { name: string; email: string }) =>
+    (await axiosInstance.post<SharedTrainer>("/teaching-assignments/trainers", request)).data,
+  getNewClassPrograms: async (signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentClassProgram[]>("/teaching-assignments/class-program-options", { signal })).data,
+  createAssignmentClass: async (request: AssignmentNewClassRequest) =>
+    (await axiosInstance.post<SharedClass>("/teaching-assignments/classes", request)).data,
+  downloadAssignmentTemplate: async () => {
+    const response = await axiosInstance.get<Blob>("/teaching-assignments/import-template", { responseType: "blob" });
+    downloadBlob(response.data, "teaching-assignments-template.xlsx");
+  },
+  importAssignments: async (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return (await axiosInstance.post<ImportResult>("/teaching-assignments/import", body, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })).data;
+  },
+  exportAssignments: async (format: FileFormat, filters: AssignmentSearchParams) => {
+    const response = await axiosInstance.get<Blob>("/teaching-assignments/export", {
+      params: { ...filters, page: undefined, size: undefined, format }, responseType: "blob",
+    });
+    downloadBlob(response.data, getFilenameFromHeader(response.headers["content-disposition"]) ?? `teaching-assignments.${format === "EXCEL" ? "xlsx" : format.toLowerCase()}`);
+  },
+  getRooms: async () => (await axiosInstance.get<Array<{ id: number; name: string }>>("/external/rooms")).data,
+  getAssignmentCreateOptions: async (signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentCreateOptions>("/teaching-assignments/create-options", { signal })).data,
+  getAssignmentCreateContext: async (classId: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentClassContext>("/teaching-assignments/create-context", { params: { classId }, signal })).data,
   getDataSource: async () =>
     (await axiosInstance.get<{ sampleData: boolean }>("/external/data-source")).data,
+  getActiveClasses: async () =>
+    (await axiosInstance.get<SharedClass[]>("/external/classes", { params: { status: "active" } })).data,
   getClasses: async () =>
     (await axiosInstance.get<SharedClass[]>("/external/classes", { params: { status: "all" } })).data,
   getSetupOverview: async () =>
@@ -273,25 +435,30 @@ export const classSetupApi = {
     (await axiosInstance.get<ClassSubjectOption[]>(`/classes/${classId}/subject-options`)).data,
   getAssignments: async (classId: number) =>
     (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments`)).data,
-  getAvailableAssignments: async (classId: number, date: string) =>
-    (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments/available`, { params: { date } })).data,
-  searchAssignments: async (params: {
-    classId?: number;
-    programSubjectId?: number;
-    trainerId?: number;
-    role?: AssignmentRole;
-    effectiveOn?: string;
-    page?: number;
-    size?: number;
-    sort?: string;
-  }) =>
-    (await axiosInstance.get<AssignmentPage<TeachingAssignment>>("/teaching-assignments", { params })).data,
-  getAssignment: async (id: number) =>
-    (await axiosInstance.get<TeachingAssignment>(`/teaching-assignments/${id}`)).data,
+  getAvailableAssignments: async (classId: number, query: string | { date?: string; programSubjectId?: number; from?: string; to?: string }, signal?: AbortSignal) =>
+    (await axiosInstance.get<TeachingAssignment[]>(`/classes/${classId}/teaching-assignments/available`, { params: typeof query === "string" ? { date: query } : query, signal })).data,
+  getAssignmentOptions: async (signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentOptions>("/teaching-assignments/options", { signal })).data,
+  searchAssignments: async (params: AssignmentSearchParams, signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentPage<TeachingAssignment>>("/teaching-assignments", { params, signal })).data,
+  getAssignment: async (id: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<TeachingAssignment>(`/teaching-assignments/${id}`, { signal })).data,
+  getAssignmentSessions: async (id: number, params: AssignmentSessionParams, signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentPage<AssignmentSession>>(`/teaching-assignments/${id}/sessions`, { params, signal })).data,
   createAssignment: async (request: TeachingAssignmentRequest) =>
     (await axiosInstance.post<TeachingAssignment>("/teaching-assignments", request)).data,
-  updateAssignment: async (id: number, request: TeachingAssignmentRequest) =>
+  getAssignmentEditContext: async (id: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentEditContext>(`/teaching-assignments/${id}/edit-context`, { signal })).data,
+  previewAssignmentImpact: async (id: number, request: TeachingAssignmentUpdateRequest, page: number, signal?: AbortSignal) =>
+    (await axiosInstance.post<AssignmentImpact>(`/teaching-assignments/${id}/impact-preview`, request, { params: { page, size: 10 }, signal })).data,
+  updateAssignment: async (id: number, request: TeachingAssignmentUpdateRequest) =>
     (await axiosInstance.put<TeachingAssignment>(`/teaching-assignments/${id}`, request)).data,
-  deleteAssignment: async (id: number) =>
-    axiosInstance.delete(`/teaching-assignments/${id}`),
+  getAssignmentLifecycleContext: async (id: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<AssignmentLifecycleContext>(`/teaching-assignments/${id}/lifecycle-context`, { signal })).data,
+  previewAssignmentEnd: async (id: number, request: AssignmentEndRequest, page: number, signal?: AbortSignal) =>
+    (await axiosInstance.post<AssignmentImpact>(`/teaching-assignments/${id}/end-preview`, request, { params: { page, size: 10 }, signal })).data,
+  endAssignment: async (id: number, request: AssignmentEndRequest) =>
+    (await axiosInstance.patch<TeachingAssignment>(`/teaching-assignments/${id}/end`, request)).data,
+  deleteAssignment: async (id: number, revision: number) =>
+    axiosInstance.delete(`/teaching-assignments/${id}`, { params: { revision } }),
 };

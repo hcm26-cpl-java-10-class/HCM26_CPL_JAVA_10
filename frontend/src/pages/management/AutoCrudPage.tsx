@@ -15,15 +15,16 @@ import {
     STUDENT_ROLE,
 } from "@/utils/rbac.utils";
 import { Plus } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 interface AutoCrudPageProps {
     entity: EntityConfig;
+    renderBreadcrumb?: (table: ReturnType<typeof useProTable>) => ReactNode;
 }
 
-export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
+export const AutoCrudPage = ({ entity, renderBreadcrumb }: AutoCrudPageProps) => {
     const navigate = useNavigate();
     const { activeRole } = usePermissions();
     const breadcrumbKey = entity.path.replace(/^\/+/, "");
@@ -165,6 +166,9 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
 
     return (
         <MainLayout pathName={{ [breadcrumbKey]: entity.name }}>
+            {renderBreadcrumb && !isStudentRole && (
+                <div className="mb-4 shrink-0">{renderBreadcrumb(table)}</div>
+            )}
             <ProTable
                 table={table}
                 mode={browseMode ? "browse" : "default"}

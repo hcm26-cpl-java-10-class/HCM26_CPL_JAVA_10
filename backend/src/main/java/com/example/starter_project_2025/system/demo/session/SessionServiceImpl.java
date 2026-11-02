@@ -4,6 +4,8 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.ConflictException;
+import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.demo.session.SessionService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ public class SessionServiceImpl
     SessionMapper sessionMapper;
     SessionRepository sessionRepository;
     ScheduleValidationEngine conflicts;
+    com.example.starter_project_2025.system.trainingprogram.TeachingAssignmentSessionGuard assignmentGuard;
 
     @Override
     public SessionDTO create(SessionDTO request) {
@@ -53,6 +56,35 @@ public class SessionServiceImpl
         conflicts.lockForWrite();
         conflicts.requireValid(requests.stream().map(r -> candidate(null, r)).toList());
         return requests.stream().map(this::create).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ScheduleValidationResult previewValidatedBatch(List<SessionDTO> requests) {
+        checkPermission(CrudAction.CREATE);
+        checkPermission(CrudAction.READ);
+        var candidates = requests.stream().map(request -> candidate(null, request)).toList();
+        var validation = conflicts.validate(candidates);
+        var issues = new java.util.ArrayList<>(validation.issues());
+        for (int index = 0; index < candidates.size(); index++) {
+            try {
+                assignmentGuard.checkCompatible(candidates.get(index));
+            } catch (com.example.starter_project_2025.exception.BusinessValidationException error) {
+                int rowIndex = index;
+                error.getErrors().forEach((field, messages) -> messages.forEach(message ->
+                        issues.add(new ScheduleIssue("ASSIGNMENT_INVALID", field, message, rowIndex,
+                                null, null, null, null, null))));
+            }
+        }
+        return new ScheduleValidationResult(issues.isEmpty(), validation.timezone(), List.copyOf(issues));
+    }
+
+    @Override
+    public void delete(Long id) {
+        checkPermission(CrudAction.DELETE);
+        conflicts.lockForWrite();
+        sessionRepository.findById(id).ifPresent(session -> assignmentGuard.rememberUse(session.getTeachingAssignmentId()));
+        super.delete(id);
     }
 
     private ScheduleCandidate candidate(Session current, SessionDTO r) {
@@ -87,6 +119,7 @@ public class SessionServiceImpl
 
     @Override
     protected void beforeCreate(Session session, SessionDTO request, ValidationContext ctx) {
+        assignmentGuard.requireCompatible(candidate(null, request));
         conflicts.requireValid(List.of(candidate(null, request)));
         // 1. Kiểm tra thời gian: end_time phải sau start_time (BR-02, FR-CAL-01)
         validateSessionTime(request.getStartTime(), request.getEndTime(), ctx);
@@ -113,6 +146,8 @@ public class SessionServiceImpl
         LocalDateTime newEnd = request.getEndTime() != null ? request.getEndTime() : session.getEndTime();
 
         validateSessionTime(newStart, newEnd, ctx);
+        assignmentGuard.rememberUse(session.getTeachingAssignmentId());
+        assignmentGuard.requireCompatible(candidate(session, request));
         conflicts.requireValid(List.of(candidate(session, request)));
         // An explicit empty location clears a previously selected physical room.
         if (request.getRoomId() == null && request.getLocation() != null && request.getLocation().isBlank()) {
@@ -144,6 +179,25 @@ public class SessionServiceImpl
 
         Session updatedSession = sessionRepository.save(session);
         return sessionMapper.toDto(updatedSession);
+    }
+
+    @Override
+    public SessionDTO completeSession(Long id, SessionCompleteDTO completeDTO) {
+        checkPermission(CrudAction.UPDATE);
+        // Serialize with cancel/edit/import before reading the current status.
+        conflicts.lockForWrite();
+        Session session = sessionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found. Session ID: " + id));
+
+        if (session.getStatus() != Session.SessionStatus.SCHEDULED) {
+            throw new ConflictException("Only scheduled sessions can be completed.");
+        }
+
+        if (completeDTO != null && completeDTO.getNote() != null) {
+            session.setNote(completeDTO.getNote());
+        }
+        session.setStatus(Session.SessionStatus.COMPLETED);
+        return sessionMapper.toDto(sessionRepository.save(session));
     }
 
     /**

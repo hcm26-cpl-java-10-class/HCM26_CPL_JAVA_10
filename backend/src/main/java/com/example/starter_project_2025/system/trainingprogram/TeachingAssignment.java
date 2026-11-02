@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.trainingprogram;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
+import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -11,6 +12,10 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.OrderColumn;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,6 +23,8 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "teaching_assignments", indexes = {
@@ -29,7 +36,16 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("ASSIGNMENT")
+@ResourceMenu(title = "Teaching Assignments", group = "Subjects & Scheduling", icon = "users",
+        url = "/teaching-assignments", order = 4, permission = "ASSIGNMENT_READ")
 public class TeachingAssignment extends BaseEntity {
+    @Version
+    Long revision;
+
+    /** Sticky usage marker, retained even after linked sessions are moved or removed. */
+    @Column(nullable = false)
+    Boolean everUsed = false;
+
     /** ID of the class in the shared system; class profile data stays there. */
     @Column(name = "class_id", nullable = false)
     Long classId;
@@ -51,4 +67,9 @@ public class TeachingAssignment extends BaseEntity {
 
     @Column(name = "effective_to")
     LocalDate effectiveTo;
+
+    @ElementCollection
+    @CollectionTable(name = "teaching_assignment_slots", joinColumns = @JoinColumn(name = "assignment_id"))
+    @OrderColumn(name = "slot_order")
+    List<AssignmentTeachingSlot> teachingSlots = new ArrayList<>();
 }

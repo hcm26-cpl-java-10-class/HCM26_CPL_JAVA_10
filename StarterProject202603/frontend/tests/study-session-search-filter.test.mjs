@@ -31,7 +31,7 @@ test('StudySession forwards combined filters, search, pagination and sorting; re
 });
 test('StudySession filter and status schema preserves lifecycle restrictions', () => {
   const { entityConfig } = load('src/pages/management/academic/study_session/index.tsx', {
-    '@/api': {}, './StudySessionDetailPage': {}, './validation': {}, '@/types': { auditableFieldsSchema: [] },
+    '@/api': {}, './StudySessionDetailPage': {}, './StudySessionStatisticsPanel': {}, './validation': {}, '@/types': { auditableFieldsSchema: [] },
   });
   const fields = entityConfig.schema.fields;
   for (const name of ['subjectId', 'title', 'sessionDate', 'lecturer', 'room', 'status', 'type']) {

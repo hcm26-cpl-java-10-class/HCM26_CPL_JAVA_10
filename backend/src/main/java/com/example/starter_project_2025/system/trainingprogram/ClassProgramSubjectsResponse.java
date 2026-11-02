@@ -13,6 +13,10 @@ public record ClassProgramSubjectsResponse(
         boolean courseChangeLockedByEnrollment,
         List<ProgramSubjectItem> subjects
 ) {
+    public ClassProgramSubjectsResponse(Long classId, String classCode, String className,
+            ProgramSummary program, List<ProgramSubjectItem> subjects) {
+        this(classId, classCode, className, null, program, false, List.of(), false, subjects);
+    }
     public record ClassContext(
             String status,
             String startDate,
@@ -31,8 +35,19 @@ public record ClassProgramSubjectsResponse(
             String version,
             String region,
             ProgramStatus status,
-            int totalDurationHours
-    ) {}
+            java.math.BigDecimal totalDurationHours
+    ) {
+        public ProgramSummary(Long id, String code, String name, String version, ProgramStatus status) {
+            this(id, code, name, version, null, status, java.math.BigDecimal.ZERO);
+        }
+        public static ProgramSummary from(TrainingProgram program) {
+            java.math.BigDecimal hours = program.getSubjects().stream()
+                    .map(item -> item.getSubject().getDurationHours()).filter(java.util.Objects::nonNull)
+                    .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+            return new ProgramSummary(program.getId(), program.getCode(), program.getName(), program.getVersion(),
+                    program.getRegion(), program.getStatus(), hours);
+        }
+    }
 
     public record CourseItem(
             Long courseId,
@@ -50,7 +65,7 @@ public record ClassProgramSubjectsResponse(
             String subjectName,
             String subjectVersion,
             String technicalGroup,
-            Integer durationHours,
+            java.math.BigDecimal durationHours,
             Integer orderIndex,
             CourseItem course,
             boolean courseChangeLocked,
@@ -58,5 +73,11 @@ public record ClassProgramSubjectsResponse(
             List<TeachingAssignmentResponse> assignments,
             int scheduledSessionCount,
             int completedSessionCount
-    ) {}
+    ) {
+        public ProgramSubjectItem(Long programSubjectId, Long subjectId, String subjectCode, String subjectName,
+                java.math.BigDecimal durationHours, Integer orderIndex, List<TeachingAssignmentResponse> assignments) {
+            this(programSubjectId, subjectId, subjectCode, subjectName, null, null, durationHours,
+                    orderIndex, null, false, List.of(), assignments, 0, 0);
+        }
+    }
 }

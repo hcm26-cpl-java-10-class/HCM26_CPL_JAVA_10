@@ -1,9 +1,12 @@
-import { Eye, Pen, Trash2 } from "lucide-react";
+import { Copy, Eye, Pen, Trash2 } from "lucide-react";
 import ActionButton from "../common/ActionButton";
 import { PermissionGate } from "@/components/PermissionGate";
 
 interface RowActionsProps {
   row: any;
+  onDuplicate?: (row: any) => void;
+  duplicatePermission?: string;
+  duplicateDisabled?: boolean;
   onView: (row: any) => void;
   onEdit: (row: any) => void;
   onDelete: (row: any) => void;
@@ -14,6 +17,9 @@ interface RowActionsProps {
 
 export function RowActions({
   row,
+  onDuplicate,
+  duplicatePermission,
+  duplicateDisabled,
   onView,
   onEdit,
   onDelete,
@@ -37,6 +43,12 @@ export function RowActions({
           icon={<Pen size={10} className="text-gray-500" />}
         />
       </PermissionGate>
+      {onDuplicate && (
+        <PermissionGate permission={duplicatePermission}>
+          <ActionButton onClick={() => onDuplicate(row)} tooltip="Duplicate"
+            disabled={duplicateDisabled} icon={<Copy size={10} className="text-gray-500" />} />
+        </PermissionGate>
+      )}
       <PermissionGate permission={deletePermission}>
         <ActionButton
           onClick={() => onDelete(row)}

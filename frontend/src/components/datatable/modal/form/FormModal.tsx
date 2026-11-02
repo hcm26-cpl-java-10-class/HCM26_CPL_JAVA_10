@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import type { FieldSchema } from "@/types";
 import { FormFieldRenderer } from "./FormFieldRenderer";
+import { wordLimitError } from "@/components/datatable/util/word-count";
 
 type SectionField = {
   name: string;
@@ -153,12 +154,21 @@ export function FormModal({
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const wordLimitErrors: Record<string, string[]> = {};
+  editableFields.forEach((field) => {
+    const error = wordLimitError(form[field.name], field.maxWords, field.label);
+    if (error) wordLimitErrors[field.name] = [error];
+  });
+  const allFieldErrors = { ...fieldErrors, ...wordLimitErrors };
+  const hasWordLimitErrors = Object.keys(wordLimitErrors).length > 0;
+
   const handleSubmit = () => {
+    if (hasWordLimitErrors) return;
     onSubmit(form);
   };
 
   const hasError = (fieldName: string) =>
-    fieldErrors[fieldName] && fieldErrors[fieldName].length > 0;
+    allFieldErrors[fieldName] && allFieldErrors[fieldName].length > 0;
 
   const renderField = (field: FieldSchema) => (
     <FormFieldRenderer
@@ -170,7 +180,7 @@ export function FormModal({
           ? "border-destructive focus-visible:ring-destructive"
           : ""
       }
-      fieldErrors={fieldErrors[field.name]}
+      fieldErrors={allFieldErrors[field.name]}
       relationOptions={relationOptions}
       onChange={updateField}
     />
@@ -278,7 +288,7 @@ export function FormModal({
           >
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
+          <Button onClick={handleSubmit} disabled={isSubmitting || hasWordLimitErrors}>
             {isSubmitting ? "Saving..." : "Save"}
           </Button>
         </SheetFooter>

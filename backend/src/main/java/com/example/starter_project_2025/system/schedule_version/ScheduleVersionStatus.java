@@ -11,7 +11,8 @@ package com.example.starter_project_2025.system.schedule_version;
  *            Không được ghi thêm hoặc sửa đổi bất kỳ nội dung nào.
  */
 public enum ScheduleVersionStatus {
-    DRAFT,
     ACTIVE,
+    INACTIVE,
+    DRAFT,
     ARCHIVED
 }

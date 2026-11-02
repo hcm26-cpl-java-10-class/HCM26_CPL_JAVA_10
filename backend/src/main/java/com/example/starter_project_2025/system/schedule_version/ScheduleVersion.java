@@ -46,14 +46,6 @@ import java.time.LocalDateTime;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ExportEntity(fileName = "schedule_versions", sheetName = "ScheduleVersions")
 @ResourcePermission("SCHEDULE_VERSION")
-@ResourceMenu(
-        title = "Schedule Versions",
-        group = "Schedule Management",
-        icon = "calendar-clock",
-        url = "/schedule-versions",
-        order = 3,
-        permission = "SCHEDULE_VERSION_READ"
-)
 public class ScheduleVersion extends BaseEntity {
 
     /**

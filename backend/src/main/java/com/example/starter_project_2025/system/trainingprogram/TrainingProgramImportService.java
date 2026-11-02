@@ -127,7 +127,7 @@ public class TrainingProgramImportService {
                         }
 
                         if (subject.getDurationHours() == null
-            || subject.getDurationHours() <= 0) {
+            || subject.getDurationHours().signum() <= 0) {
                             throw new IllegalArgumentException(
                                     "Thời lượng môn "
                                             + row.subjectCode()
@@ -299,7 +299,7 @@ public class TrainingProgramImportService {
                         add(errors, row.number(),
                                 "Môn học đang INACTIVE.");
                     } else if (subject.get().getDurationHours() == null
-            || subject.get().getDurationHours() <= 0) {
+            || subject.get().getDurationHours().signum() <= 0) {
                         add(errors, row.number(),
                                 "Thời lượng môn học phải lớn hơn 0.");
                     }

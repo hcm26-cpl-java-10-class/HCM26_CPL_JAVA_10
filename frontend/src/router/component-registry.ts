@@ -8,17 +8,20 @@ import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import WeeklyCalendarPage from "@/pages/management/calendar/WeeklyCalendarPage";
 import ClassSetupPage from "@/pages/management/class-setup";
+import TeachingAssignmentPage from "@/pages/management/teaching-assignment";
+import StudySessionPage from "@/pages/management/study-session";
+import BulkScheduleGenerationPage from "@/pages/management/schedule-generation";
 import { Dashboard } from "@/pages/management/dashboard";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import ExamManagementPage from "@/pages/management/exam";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import InvitationManagementPage from "@/pages/management/invitation";
 import ScheduleValidationPage from "@/pages/management/schedule-validation";
-import TeachingAssignmentPage from "@/pages/management/teaching-assignment";
 import TrainingProgramDetailPage from "@/pages/management/program/TrainingProgramDetail";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import ScheduleVersionListPage from "@/pages/management/demo/schedule_version";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -31,6 +34,13 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+  { path: "/study-sessions", component: StudySessionPage, requiredPermission: "STUDY_SESSION_READ", isModuleDriven: true },
+  {
+    path: "/teaching-assignments",
+    component: TeachingAssignmentPage,
+    requiredPermission: "ASSIGNMENT_READ",
+    isModuleDriven: true,
+  },
   {
     path: "/programs/:id/detail",
     component: TrainingProgramDetailPage,
@@ -42,15 +52,29 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   {
-    path: "/teaching-assignments",
-    component: TeachingAssignmentPage,
-    requiredPermission: "ASSIGNMENT_READ",
+    path: "/schedule-generation",
+    component: BulkScheduleGenerationPage,
+    isModuleDriven: true,
+  },
+  {
+    path: "/class-schedule/generation",
+    component: BulkScheduleGenerationPage,
   },
   {
     path: "/calendar/preview",
     component: WeeklyCalendarPage,
     requiredPermission: "SESSION_READ",
+  },
+  {
+    path: "/schedule-versions",
+    component: ScheduleVersionListPage,
+    requiredPermission: "SESSION_READ",
     isModuleDriven: true,
+  },
+  {
+    path: "/calendar/adjust",
+    component: ScheduleVersionListPage,
+    requiredPermission: "SESSION_READ",
   },
   {
     path: "/fams/module-group-module",

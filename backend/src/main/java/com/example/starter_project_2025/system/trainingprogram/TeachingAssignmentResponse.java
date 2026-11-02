@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.trainingprogram;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public record TeachingAssignmentResponse(
         Long id,
@@ -14,5 +15,14 @@ public record TeachingAssignmentResponse(
         String trainerName,
         AssignmentRole role,
         LocalDate effectiveFrom,
-        LocalDate effectiveTo
+        LocalDate effectiveTo,
+        String className,
+        String subjectVersion,
+        String trainerEmail,
+        Long programId,
+        String programCode,
+        String programName,
+        String programVersion,
+        Long revision,
+        List<AssignmentTeachingSlot> teachingSlots
 ) {}

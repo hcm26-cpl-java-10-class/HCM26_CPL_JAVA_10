@@ -35,6 +35,8 @@ class SchedulePersistenceTest {
     static class Config {}
 
     @MockBean AutoSpecBuilder autoSpecBuilder;
+    // This repository slice tests schedule-resource conflicts; local assignment rules have full integration coverage.
+    @MockBean com.example.starter_project_2025.system.trainingprogram.TeachingAssignmentSessionGuard assignmentGuard;
     @Autowired SessionRepository repository;
     @Autowired ScheduleWriteLockRepository locks;
     @Autowired SessionService service;
@@ -75,6 +77,25 @@ class SchedulePersistenceTest {
         assertThrows(ScheduleValidationException.class, () -> service.createValidatedBatch(List.of(request("09:00","10:00"),request("09:30","10:30"))));
         assertEquals(0, repository.count());
         assertEquals(2, service.createValidatedBatch(List.of(request("09:00","10:00"),request("10:00","11:00"))).size());
+    }
+    @Test void previewDoesNotWriteAndSeesCurrentDatabaseBookings() {
+        assertTrue(service.previewValidatedBatch(List.of(request("09:00", "10:00"))).valid());
+        assertEquals(0, repository.count());
+        org.mockito.Mockito.verify(assignmentGuard).checkCompatible(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.verify(assignmentGuard, org.mockito.Mockito.never()).requireCompatible(org.mockito.ArgumentMatchers.any());
+        service.create(request("09:00", "10:00"));
+        var preview = service.previewValidatedBatch(List.of(request("09:30", "10:30")));
+        assertFalse(preview.valid());
+        assertTrue(preview.issues().stream().anyMatch(issue -> issue.code().equals("CLASS_CONFLICT")));
+        assertEquals(1, repository.count());
+    }
+    @Test void previewRequiresBothReadAndCreatePermissions() {
+        authenticate("SESSION_READ");
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> service.previewValidatedBatch(List.of(request("09:00", "10:00"))));
+        authenticate("SESSION_CREATE");
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                () -> service.previewValidatedBatch(List.of(request("09:00", "10:00"))));
     }
     @Test void partialUpdateUsesUnchangedFieldsAndOnlineSwitchClearsRoom() {
         var first = service.create(request("09:00","10:00"));

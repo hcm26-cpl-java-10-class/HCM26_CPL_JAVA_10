@@ -15,7 +15,7 @@ public record ClassPlanSummaryResponse(
         String programName,
         String programVersion,
         int totalSubjects,
-        int totalDurationHours,
+        java.math.BigDecimal totalDurationHours,
         int coursesAssignedCount,
         int subjectsWithTrainerCount,
         int subjectsWithScheduleCount,
@@ -33,7 +33,7 @@ public record ClassPlanSummaryResponse(
             String subjectName,
             String subjectVersion,
             Integer orderIndex,
-            Integer durationHours
+            java.math.BigDecimal durationHours
     ) {}
 }
 

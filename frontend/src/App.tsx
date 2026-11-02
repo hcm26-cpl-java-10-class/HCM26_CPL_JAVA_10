@@ -18,9 +18,9 @@ function AppRoutes() {
 
     const homePath = isAuthenticated ? getHomePathByRole(activeRole) : "/login";
 
-    // Create component lookup map from module-driven routes
+    // Create component lookup map from registered routes
     const componentRegistry = Object.fromEntries(
-        routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
+        routes.map((r) => [r.path, r.component]),
     );
 
     // Get non-module routes (frontend-controlled)

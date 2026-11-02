@@ -24,7 +24,12 @@ public class LocalExternalApiService implements ExternalApiService {
     private final ConcurrentHashMap<Long, ExternalClassDTO> classes = new ConcurrentHashMap<>();
     private final AtomicLong classIds = new AtomicLong(3);
 
-    public LocalExternalApiService() {
+    private final ManagedClassDirectory managedClasses;
+    private final ManagedTrainerDirectory managedTrainers;
+
+    public LocalExternalApiService(ManagedClassDirectory managedClasses, ManagedTrainerDirectory managedTrainers) {
+        this.managedClasses = managedClasses;
+        this.managedTrainers = managedTrainers;
         classes.put(1L, ExternalClassDTO.builder().id(1L).code("LOCAL_JAVA_01").name("Lớp Java mẫu 01")
                 .startDate("2026-10-01").endDate("2027-01-31").status("active")
                 .plannedSize(25).enrolledCount(18)
@@ -52,13 +57,14 @@ public class LocalExternalApiService implements ExternalApiService {
 
     @Override
     public List<ExternalClassDTO> fetchClasses(String status) {
-        return new ArrayList<>(classes.values()).stream().sorted(Comparator.comparing(ExternalClassDTO::getId))
-                .filter(item -> matchesStatus(status, item.getStatus())).toList();
+        return managedClasses.merge(new ArrayList<>(classes.values()).stream()
+                .sorted(Comparator.comparing(ExternalClassDTO::getId))
+                .filter(item -> matchesStatus(status, item.getStatus())).toList(), status);
     }
 
     @Override
     public ExternalClassDTO fetchClassById(Long id) {
-        ExternalClassDTO classData = classes.get(id);
+        ExternalClassDTO classData = fetchClasses(null).stream().filter(item -> Objects.equals(item.getId(), id)).findFirst().orElse(null);
         if (classData == null) throw new ExternalApiException("Sample class not found: " + id, 404, null);
         return classData;
     }
@@ -89,11 +95,11 @@ public class LocalExternalApiService implements ExternalApiService {
 
     @Override
     public List<ExternalTrainerDTO> fetchTrainers(String status) {
-        return List.of(
+        return managedTrainers.merge(List.of(
                 new ExternalTrainerDTO(1L, "Giảng viên mẫu An", "trainer.an@example.com", "active"),
                 new ExternalTrainerDTO(2L, "Giảng viên mẫu Bình", "trainer.binh@example.com", "active"),
                 new ExternalTrainerDTO(3L, "Giảng viên mẫu đã nghỉ", "trainer.old@example.com", "inactive")
-        ).stream().filter(item -> matchesStatus(status, item.getStatus())).toList();
+        ).stream().filter(item -> matchesStatus(status, item.getStatus())).toList(), status);
     }
 
     @Override
@@ -115,7 +121,7 @@ public class LocalExternalApiService implements ExternalApiService {
     }
 
     private void ensureUniqueCode(String code, Long ignoredId) {
-        boolean duplicate = classes.values().stream().anyMatch(item -> !Objects.equals(item.getId(), ignoredId)
+        boolean duplicate = fetchClasses(null).stream().anyMatch(item -> !Objects.equals(item.getId(), ignoredId)
                 && item.getCode().equalsIgnoreCase(code.trim()));
         if (duplicate) throw new ConflictException("Mã lớp đã tồn tại: " + code.trim());
     }

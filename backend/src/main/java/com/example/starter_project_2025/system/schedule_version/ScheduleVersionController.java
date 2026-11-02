@@ -122,6 +122,21 @@ public class ScheduleVersionController
     }
 
     /**
+     * Cập nhật trạng thái lịch lớp (ACTIVE / INACTIVE) theo phân công mới.
+     * Ngừng sử dụng không xóa session.
+     */
+    @PatchMapping("/classes/{classId}/status")
+    @Operation(
+            summary = "Đổi trạng thái lịch của lớp (ACTIVE / INACTIVE)",
+            description = "Chuyển trạng thái lịch giữa ACTIVE và INACTIVE. Ngừng sử dụng không xóa buổi học."
+    )
+    public ResponseEntity<ScheduleVersionDTO> updateClassScheduleStatus(
+            @PathVariable String classId,
+            @RequestParam ScheduleVersionStatus status) {
+        return ResponseEntity.ok(scheduleVersionService.updateStatus(classId, status));
+    }
+
+    /**
      * Guard kiểm tra phiên bản có cho phép chỉnh sửa buổi học không.
      * Danh gọi trước khi thêm/sửa/hủy StudySession.
      * isEditable = true CHỈ KHI status == DRAFT.

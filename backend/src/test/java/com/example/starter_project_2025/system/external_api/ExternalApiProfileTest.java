@@ -14,8 +14,10 @@ import static org.mockito.Mockito.*;
 class ExternalApiProfileTest {
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withBean(RestTemplate.class, () -> mock(RestTemplate.class))
+            .withBean(ManagedTeachingClassRepository.class, () -> mock(ManagedTeachingClassRepository.class))
+            .withBean(ManagedTeachingTrainerRepository.class, () -> mock(ManagedTeachingTrainerRepository.class))
             .withPropertyValues("external.api.base-url=http://localhost:9090")
-            .withUserConfiguration(ExternalApiServiceImpl.class, LocalExternalApiService.class);
+            .withUserConfiguration(ExternalApiServiceImpl.class, LocalExternalApiService.class, ManagedClassDirectory.class, ManagedTrainerDirectory.class);
 
     @Test
     void defaultProfileKeepsRemoteServiceAndDoesNotSubstituteSampleDataOnFailure() {

@@ -11,6 +11,9 @@ import java.util.Optional;
 @Repository
 public interface SubjectRepository extends BaseCrudRepository<Subject, Long> {
 
+    @Query("select distinct s.technicalGroup from Subject s where s.technicalGroup is not null")
+    List<String> findDistinctTechnicalGroups();
+
     @Query("""
             select (count(s) > 0) from Subject s
             where upper(trim(s.code)) = :code

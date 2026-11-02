@@ -1,3 +1,6 @@
+import { toDuplicateInitial } from "./duplicate";
+import { toast } from "sonner";
+import axios from "axios";
 import { subjectApi, studySessionApi } from "@/api";
 import { StudySessionDetailPage } from "./StudySessionDetailPage";
 import { validateStudySession } from "./validation";
@@ -11,7 +14,19 @@ import {
 const studySessionSchema: EntitySchema = {
   entityName: "study-session",
   idField: "id",
+  exportFormats: ["EXCEL", "CSV", "PDF"],
   validateForm: validateStudySession,
+  duplicateInitial: async (row) => {
+    const initial = toDuplicateInitial(row);
+    try {
+      await subjectApi.getById(String(initial.subjectId));
+    } catch (error) {
+      if (!axios.isAxiosError(error) || error.response?.status !== 404) throw error;
+      initial.subjectId = undefined;
+      toast.error("The original Subject is no longer valid. Select another Subject before saving.");
+    }
+    return { ...initial };
+  },
   fields: [
     {
       name: "subjectId",
@@ -110,11 +125,14 @@ const studySessionSchema: EntitySchema = {
   ],
 };
 
+import { StudySessionStatisticsPanel } from "./StudySessionStatisticsPanel";
+
 export const entityConfig: EntityConfig = {
   name: "Study Session",
   path: "/study-sessions",
   api: studySessionApi,
   schema: studySessionSchema,
+  listHeader: StudySessionStatisticsPanel,
   actionPages: {
     detail: {
       path: "/study-sessions/:id/detail",

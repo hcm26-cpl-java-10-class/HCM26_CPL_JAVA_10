@@ -5,7 +5,7 @@ export interface ScheduleCandidate {
     classId?: number;
     topicId?: number;
     trainerId?: number;
-    teachingAssignmentId?: number;
+    teachingAssignmentId?: number | null;
     roomId?: number;
     location?: string;
     meetingUrl?: string;

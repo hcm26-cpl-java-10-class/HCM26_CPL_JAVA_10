@@ -51,8 +51,11 @@ public class GenericImportMapper {
                     continue;
                 }
 
-                field.set(entity,
-                        converter.convert(field.getType(), raw));
+                try {
+                    field.set(entity, converter.convert(field.getType(), raw));
+                } catch (IllegalArgumentException error) {
+                    throw new IllegalArgumentException(meta.name() + ": " + error.getMessage(), error);
+                }
             }
 
             // ⭐ NEW: run PostImport lifecycle

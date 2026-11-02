@@ -43,13 +43,13 @@ public class ValueConverter {
         }
 
         if (type == java.time.LocalDateTime.class)
-            return java.time.LocalDateTime.parse(val);
+            return val.contains("T") ? java.time.LocalDateTime.parse(val) : java.time.LocalDate.parse(val).atStartOfDay();
 
         if (type == java.time.LocalDate.class)
-            return java.time.LocalDate.parse(val);
+            return val.contains("T") ? java.time.LocalDateTime.parse(val).toLocalDate() : java.time.LocalDate.parse(val);
 
         if (type == java.time.LocalTime.class)
-            return java.time.LocalTime.parse(val);
+            return val.contains("T") ? java.time.LocalDateTime.parse(val).toLocalTime() : java.time.LocalTime.parse(val);
 
         return raw;
     }

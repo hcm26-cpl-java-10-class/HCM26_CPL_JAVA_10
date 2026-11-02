@@ -11,4 +11,8 @@ public interface SubjectService extends BaseCrudService<Long, SubjectDTO, Subjec
     SubjectDTO changeStatus(Long id, Boolean isActive);
 
     boolean isSubjectReferenced(Long id);
+
+    SubjectDTO cloneVersion(Long id, SubjectCloneRequest request);
+
+    SubjectDTO validateForCreate(SubjectDTO request);
 }
