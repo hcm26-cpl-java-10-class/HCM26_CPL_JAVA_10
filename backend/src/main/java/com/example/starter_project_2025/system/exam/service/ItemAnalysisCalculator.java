@@ -20,7 +20,9 @@ import java.util.Set;
  */
 public final class ItemAnalysisCalculator {
 
-    public static final int MIN_ATTEMPTS_FOR_DISCRIMINATION = 6;
+    public static final int MIN_ATTEMPTS_FOR_DISCRIMINATION = 10;
+    /** Do lech chuan toi thieu cua diem tong (ty le 0..1) de D co y nghia. */
+    private static final double MIN_SCORE_STDDEV = 0.05;
     private static final double GROUP_FRACTION = 0.27;
     private static final double FULL = 0.9999;
 
@@ -77,10 +79,8 @@ public final class ItemAnalysisCalculator {
         int runtimeErrors;
     }
 
-    public static List<ItemDTO> analyze(List<AttemptResponses> attempts) {
-        List<AttemptResponses> sorted = new ArrayList<>(attempts);
-        sorted.sort(Comparator.comparingLong(AttemptResponses::attemptId));
-
+    /** Diem tong (ty le 0..1, co trong so) cua tung luot thi. */
+    private static Map<Long, Double> rawScores(List<AttemptResponses> sorted) {
         Map<Long, Double> raw = new LinkedHashMap<>();
         for (AttemptResponses a : sorted) {
             double num = 0;
@@ -96,10 +96,46 @@ public final class ItemAnalysisCalculator {
                 raw.put(a.attemptId(), num / den);
             }
         }
+        return raw;
+    }
+
+    /**
+     * Ly do khong nen tin vao do phan biet D, hoac null neu dang tin cay:
+     * TOO_FEW_ATTEMPTS (it bai), SCORES_TOO_CLOSE (diem gan nhu bang nhau),
+     * GROUPS_OVERLAP (nhom gioi va nhom yeu bi trung/cham diem nhau).
+     */
+    public static String discriminationProblem(List<AttemptResponses> attempts) {
+        List<AttemptResponses> sorted = new ArrayList<>(attempts);
+        sorted.sort(Comparator.comparingLong(AttemptResponses::attemptId));
+        return discriminationProblem(rawScores(sorted));
+    }
+
+    static String discriminationProblem(Map<Long, Double> raw) {
+        if (raw.size() < MIN_ATTEMPTS_FOR_DISCRIMINATION) {
+            return "TOO_FEW_ATTEMPTS";
+        }
+        double mean = raw.values().stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        double variance = raw.values().stream().mapToDouble(v -> (v - mean) * (v - mean)).sum() / raw.size();
+        if (Math.sqrt(variance) < MIN_SCORE_STDDEV) {
+            return "SCORES_TOO_CLOSE";
+        }
+        List<Double> ranked = new ArrayList<>(raw.values());
+        ranked.sort(Comparator.reverseOrder());
+        int k = Math.max(1, (int) Math.round(ranked.size() * GROUP_FRACTION));
+        double upperMin = ranked.get(k - 1);
+        double lowerMax = ranked.get(ranked.size() - k);
+        return upperMin <= lowerMax + 1e-9 ? "GROUPS_OVERLAP" : null;
+    }
+
+    public static List<ItemDTO> analyze(List<AttemptResponses> attempts) {
+        List<AttemptResponses> sorted = new ArrayList<>(attempts);
+        sorted.sort(Comparator.comparingLong(AttemptResponses::attemptId));
+
+        Map<Long, Double> raw = rawScores(sorted);
 
         Set<Long> upper = new HashSet<>();
         Set<Long> lower = new HashSet<>();
-        boolean canDiscriminate = raw.size() >= MIN_ATTEMPTS_FOR_DISCRIMINATION;
+        boolean canDiscriminate = discriminationProblem(raw) == null;
         if (canDiscriminate) {
             List<Map.Entry<Long, Double>> ranked = new ArrayList<>(raw.entrySet());
             ranked.sort((x, y) -> {

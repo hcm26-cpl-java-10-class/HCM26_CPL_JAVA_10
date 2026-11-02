@@ -68,6 +68,7 @@ type ItemAnalysis = {
     analyzedAttempts: number;
     discriminationAvailable: boolean;
     minAttemptsForDiscrimination: number;
+  discriminationProblem: "TOO_FEW_ATTEMPTS" | "SCORES_TOO_CLOSE" | "GROUPS_OVERLAP" | null;
     averageDifficultyIndex: number | null;
     flaggedItems: number;
     items: ItemStat[];
@@ -237,8 +238,12 @@ export function ItemAnalysisSection({ examId }: { examId: number }) {
 
                     {!data.discriminationAvailable && (
                         <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                            Discrimination needs at least {data.minAttemptsForDiscrimination} graded attempts
-                            (currently {data.analyzedAttempts}).
+                            <strong>Discrimination (D) is not shown: data not reliable enough.</strong>{" "}
+                            {data.discriminationProblem === "SCORES_TOO_CLOSE"
+                                ? "Total scores are almost identical across the class, so strong and weak students cannot be told apart."
+                                : data.discriminationProblem === "GROUPS_OVERLAP"
+                                  ? "Too many students share the same total score, so the top and bottom groups overlap."
+                                  : `It needs at least ${data.minAttemptsForDiscrimination} fully graded attempts (currently ${data.analyzedAttempts}).`}
                         </p>
                     )}
 
@@ -340,9 +345,11 @@ export function ItemAnalysisSection({ examId }: { examId: number }) {
                                                     </td>
                                                     <td className="py-2 pr-3">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="w-10">
+                                                            <span className={data.discriminationAvailable ? "w-10" : "text-xs text-muted-foreground"}>
                                                                 {item.discrimination == null
-                                                                    ? "—"
+                                                                    ? data.discriminationAvailable
+                                                                        ? "—"
+                                                                        : "Not reliable"
                                                                     : item.discrimination.toFixed(2)}
                                                             </span>
                                                             {item.discriminationLevel && (

@@ -14,7 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Star } from 'lucide-react';
+import { Loader2, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { CodingWorkspace } from './components/CodingWorkspace';
 import { EssayPopup } from './components/EssayPopup';
@@ -36,6 +36,39 @@ function toAnswerRequests(answers: Record<number, ExtendedAnswer>): SaveExamAnsw
         selectedOptionIds: answer.selectedOptionIds,
         textAnswer: answer.textAnswer,
     }));
+}
+
+// ----- Local copy of unsent work (survives network loss / closing the tab) -----
+const draftKey = (attemptId: number) => `exam-drafts-${attemptId}`;
+
+function sameAnswer(
+    a: { selectedOptionIds?: number[]; textAnswer?: string | null } | undefined,
+    b: { selectedOptionIds?: number[]; textAnswer?: string | null } | undefined,
+): boolean {
+    const norm = (x: typeof a) =>
+        JSON.stringify({
+            o: [...(x?.selectedOptionIds ?? [])].sort((p, q) => p - q),
+            t: x?.textAnswer ?? '',
+        });
+    return norm(a) === norm(b);
+}
+
+function readDrafts(attemptId: number): Record<number, SaveExamAnswerRequest> {
+    try {
+        const raw = localStorage.getItem(draftKey(attemptId));
+        return raw ? (JSON.parse(raw) as Record<number, SaveExamAnswerRequest>) : {};
+    } catch {
+        return {};
+    }
+}
+
+function writeDrafts(attemptId: number, drafts: Record<number, SaveExamAnswerRequest>) {
+    try {
+        if (Object.keys(drafts).length === 0) localStorage.removeItem(draftKey(attemptId));
+        else localStorage.setItem(draftKey(attemptId), JSON.stringify(drafts));
+    } catch {
+        // storage unavailable: the server copy still works
+    }
 }
 
 function getStartErrorMessage(error: unknown): string {
@@ -76,6 +109,9 @@ export default function StudentExamTakingPage() {
         new Map<number, ExtendedSaveRequest>(),
     );
     const savingRef = useRef(false);
+    const draftsRef = useRef<Record<number, SaveExamAnswerRequest>>({});
+    const warnedRef = useRef(new Set<number>());
+    const timeUpRef = useRef(false);
     const [isSaving, setIsSaving] = useState(false);
     const [hasSaveError, setHasSaveError] = useState(false);
 
@@ -100,6 +136,8 @@ export default function StudentExamTakingPage() {
             submitExamAttempt(attemptId, submittedAnswers),
         onSuccess: (attempt) => {
             queryClient.setQueryData(attemptQueryKey(examId), attempt);
+            draftsRef.current = {};
+            writeDrafts(attempt.id, {});
             clearAllPendingSaves();
             queryClient.invalidateQueries({ queryKey: ["my-exam-scores"] });
             if (attempt.status === 'EXPIRED') {
@@ -108,7 +146,10 @@ export default function StudentExamTakingPage() {
                 toast.success(attempt.status === 'PENDING_REVIEW' ? 'Submitted successfully! Essay questions are pending review.' : 'Submitted successfully!');
             }
         },
-        onError: () => toast.error('Failed to submit exam. Please try again.'),
+        onError: () => {
+            // While the time-up dialog is retrying automatically, do not spam toasts.
+            if (!timeUpRef.current) toast.error('Failed to submit exam. Please try again.');
+        },
     });
 
     const attempt = attemptQuery.data;
@@ -197,6 +238,11 @@ export default function StudentExamTakingPage() {
                         setHasSaveError(false);
                         return true;
                     }
+                    const draft = draftsRef.current[questionId];
+                    if (draft && sameAnswer(draft, request)) {
+                        delete draftsRef.current[questionId];
+                        writeDrafts(attemptId, draftsRef.current);
+                    }
                 } catch {
                     if (!pendingAnswersRef.current.has(questionId)) {
                         pendingAnswersRef.current.set(questionId, request);
@@ -217,9 +263,36 @@ export default function StudentExamTakingPage() {
 
     useEffect(() => {
         if (!attempt) return;
-        setAnswers(Object.fromEntries(
+        let merged: Record<number, ExtendedAnswer> = Object.fromEntries(
             attempt.answers.map((answer) => [answer.questionId, answer]),
-        ));
+        );
+        draftsRef.current = {};
+        if (attempt.status === 'IN_PROGRESS') {
+            // Restore work that never reached the server (lost connection, closed tab...)
+            const stored = readDrafts(attempt.id);
+            let restored = 0;
+            for (const draft of Object.values(stored)) {
+                const server = merged[draft.questionId];
+                if (sameAnswer(server, draft)) continue;
+                draftsRef.current[draft.questionId] = draft;
+                merged = {
+                    ...merged,
+                    [draft.questionId]: {
+                        ...(server ?? { questionId: draft.questionId, selectedOptionIds: [], textAnswer: null }),
+                        selectedOptionIds: draft.selectedOptionIds ?? [],
+                        textAnswer: draft.textAnswer ?? null,
+                    },
+                };
+                pendingAnswersRef.current.set(draft.questionId, draft);
+                restored += 1;
+            }
+            writeDrafts(attempt.id, draftsRef.current);
+            if (restored > 0) {
+                toast.info(`Restored ${restored} answer(s) that had not been sent to the server. Sending them now.`);
+                void flushPendingAnswers(attempt.id);
+            }
+        }
+        setAnswers(merged);
         autoSubmitStarted.current = false;
     }, [attempt?.id]);
 
@@ -242,6 +315,14 @@ export default function StudentExamTakingPage() {
             window.removeEventListener('online', retryPendingAnswers);
         };
     }, [attempt?.id, attempt?.status]);
+
+    useEffect(() => {
+        if (!hasSaveError || !attempt || attempt.status !== 'IN_PROGRESS') return;
+        const id = window.setInterval(() => {
+            void flushPendingAnswers(attempt.id);
+        }, 15000);
+        return () => window.clearInterval(id);
+    }, [hasSaveError, attempt?.id, attempt?.status]);
 
     useEffect(() => () => {
         timerRefs.current.forEach((timer) => window.clearTimeout(timer));
@@ -328,6 +409,31 @@ export default function StudentExamTakingPage() {
         }
     }, [attempt?.status, secondsRemaining, submitMutation.isPending]);
 
+    const isTimeUp = attempt?.status === 'IN_PROGRESS' && secondsRemaining === 0;
+    timeUpRef.current = isTimeUp;
+
+    // Time-up: keep trying to submit (every 5 s) until the server accepts it.
+    useEffect(() => {
+        if (!isTimeUp) return;
+        const id = window.setInterval(() => {
+            void submitCurrentAnswers();
+        }, 5000);
+        return () => window.clearInterval(id);
+    }, [isTimeUp]);
+
+    // Warn at 5 minutes and 1 minute left
+    useEffect(() => {
+        if (attempt?.status !== 'IN_PROGRESS' || secondsRemaining <= 0) return;
+        if (secondsRemaining <= 60 && !warnedRef.current.has(60)) {
+            warnedRef.current.add(60);
+            warnedRef.current.add(300);
+            toast.warning('1 minute left. Your answers are saved automatically; submit when you are ready.');
+        } else if (secondsRemaining <= 300 && secondsRemaining > 60 && !warnedRef.current.has(300)) {
+            warnedRef.current.add(300);
+            toast.warning('5 minutes left.');
+        }
+    }, [secondsRemaining, attempt?.status]);
+
     const scheduleAnswerSave = (
         questionId: number,
         answer: ExtendedAnswer,
@@ -363,6 +469,14 @@ export default function StudentExamTakingPage() {
         const next = { ...current, ...update };
         if (update.textAnswer !== undefined && (update.textAnswer ?? '') !== (current.textAnswer ?? '')) {
             next.saved = false;
+        }
+        if (attempt && attempt.status === 'IN_PROGRESS') {
+            draftsRef.current[questionId] = {
+                questionId,
+                selectedOptionIds: next.selectedOptionIds,
+                textAnswer: next.textAnswer,
+            };
+            writeDrafts(attempt.id, draftsRef.current);
         }
         setAnswers((currentAnswers) => ({ ...currentAnswers, [questionId]: next }));
         scheduleAnswerSave(questionId, next);
@@ -459,10 +573,33 @@ export default function StudentExamTakingPage() {
     const activeId = currentCode ? currentCode.id : currentEssay ? currentEssay.id : activeQuestionId;
 
     const timerBox = (
-        <div role="timer" aria-live="polite" className={`pointer-events-auto shrink-0 rounded-lg border bg-card px-4 py-2 font-mono text-xl ${secondsRemaining <= 60 ? 'border-red-500 text-red-500' : ''}`}>
+        <div role="timer" aria-live="polite" className={`pointer-events-auto shrink-0 rounded-lg border bg-card px-4 py-2 font-mono text-xl ${secondsRemaining <= 60 ? 'border-red-500 text-red-500' : ''} ${secondsRemaining > 0 && secondsRemaining <= 60 ? 'animate-pulse' : ''}`}>
             {formatCountdown(secondsRemaining)}
         </div>
     );
+
+    const timeUpOverlay = isTimeUp ? (
+        <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="time-up-title"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+        >
+            <div className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-lg">
+                <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+                <h2 id="time-up-title" className="mt-4 text-lg font-semibold">Time is up: submitting your exam</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                    Everything you have typed so far, including code and essay text you did not save, is being submitted.
+                    Please do not close this page.
+                </p>
+                {submitMutation.isError && (
+                    <p role="alert" className="mt-3 text-sm text-destructive">
+                        Could not reach the server. Retrying automatically; your answers are kept on this device.
+                    </p>
+                )}
+            </div>
+        </div>
+    ) : null;
 
     const starButton = (questionId: number, number: number) => {
         const isFlagged = flagged.has(questionId);
@@ -527,6 +664,7 @@ export default function StudentExamTakingPage() {
     if (!isFinished && currentCode) {
         return (
             <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }}>
+                {timeUpOverlay}
                 <CodingWorkspace
                     key={currentCode.id}
                     question={currentCode}
@@ -549,6 +687,7 @@ export default function StudentExamTakingPage() {
 
     return (
         <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }}>
+            {timeUpOverlay}
             <main className="flex w-full flex-col gap-5">
                 {!isFinished && pinnedBar}
                 {!isFinished && <ExamIntegrityNotice config={attempt.integrity} state={integrity} />}
@@ -673,7 +812,7 @@ export default function StudentExamTakingPage() {
 
                                 {hasSaveError && (
                                     <span role="alert" className="text-destructive">
-                                        Some answers were not saved.
+                                        Connection problem: some answers have not reached the server. A copy is kept on this device and is sent automatically when the connection returns.
                                         <Button
                                             variant="outline"
                                             size="sm"

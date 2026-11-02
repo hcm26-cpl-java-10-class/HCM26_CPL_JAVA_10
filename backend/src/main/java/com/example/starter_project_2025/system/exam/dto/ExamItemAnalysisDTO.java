@@ -15,6 +15,8 @@ public record ExamItemAnalysisDTO(
         /** Co du mau de tinh do phan biet hay khong. */
         boolean discriminationAvailable,
         int minAttemptsForDiscrimination,
+        /** null = D dang tin cay; TOO_FEW_ATTEMPTS | SCORES_TOO_CLOSE | GROUPS_OVERLAP = khong nen tin D. */
+        String discriminationProblem,
         Double averageDifficultyIndex,
         int flaggedItems,
         List<ItemDTO> items

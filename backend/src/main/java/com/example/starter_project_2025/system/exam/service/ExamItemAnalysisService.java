@@ -74,8 +74,11 @@ public class ExamItemAnalysisService {
                 .collect(Collectors.toMap(ExamAttempt::getId, a -> a));
 
         List<ItemDTO> items = List.of();
+        String discriminationProblem = "TOO_FEW_ATTEMPTS";
         if (!graded.isEmpty()) {
-            items = ItemAnalysisCalculator.analyze(buildResponses(examId, graded));
+            List<AttemptResponses> responses = buildResponses(examId, graded);
+            items = ItemAnalysisCalculator.analyze(responses);
+            discriminationProblem = ItemAnalysisCalculator.discriminationProblem(responses);
         }
 
         Double avgDifficulty = items.stream()
@@ -90,8 +93,9 @@ public class ExamItemAnalysisService {
                 exam.getTitle(),
                 completion,
                 graded.size(),
-                graded.size() >= ItemAnalysisCalculator.MIN_ATTEMPTS_FOR_DISCRIMINATION,
+                discriminationProblem == null,
                 ItemAnalysisCalculator.MIN_ATTEMPTS_FOR_DISCRIMINATION,
+                discriminationProblem,
                 avgDifficulty,
                 (int) items.stream().filter(i -> !i.flags().isEmpty()).count(),
                 items);

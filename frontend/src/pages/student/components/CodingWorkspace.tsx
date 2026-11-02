@@ -71,6 +71,10 @@ export function CodingWorkspace({
     const [useCustom, setUseCustom] = useState(false);
     const [running, setRunning] = useState(false);
     const [result, setResult] = useState<CodeRunResponse | null>(null);
+    const [runError, setRunError] = useState<string | null>(null);
+    const runs = result ? [...result.tests, ...(result.custom ? [result.custom] : [])] : [];
+    const allInfra = runs.length > 0 && runs.every((t) => t.status === 'INFRA_ERROR');
+    const infraFailed = runs.some((t) => t.status === 'INFRA_ERROR');
 
     const signature = spec
         ? `public static ${spec.returnType} ${spec.functionName}(${params.map((p) => `${p.type} ${p.name}`).join(', ')})`
@@ -147,6 +151,7 @@ export function CodingWorkspace({
             return;
         }
         setRunning(true);
+        setRunError(null);
         try {
             const response = await onRun({
                 questionId: question.id,
@@ -155,7 +160,8 @@ export function CodingWorkspace({
             });
             setResult(response);
         } catch (error) {
-            toast.error(runErrorMessage(error));
+            setResult(null);
+            setRunError(runErrorMessage(error));
         } finally {
             setRunning(false);
         }
@@ -185,7 +191,7 @@ export function CodingWorkspace({
 
             {hasSaveError && (
                 <p role="alert" className="shrink-0 text-sm text-destructive">
-                    Some changes have not been saved to the server.{' '}
+                    Connection problem: your latest changes have not reached the server. A copy is kept on this device and is sent automatically when the connection returns.{' '}
                     <Button variant="outline" size="sm" onClick={onRetry}>Retry Saving</Button>
                 </p>
             )}
@@ -273,7 +279,21 @@ export function CodingWorkspace({
                                 ))}
                             </div>
                         )}
-                        {result && (
+                        {(runError || infraFailed) && (
+                            <div
+                                role="alert"
+                                className="flex flex-wrap items-center gap-3 rounded-md border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+                            >
+                                <span className="min-w-0 flex-1">
+                                    <strong>{runError ? 'Could not run your code.' : 'The code judge is busy or not responding.'}</strong>{' '}
+                                    {runError ?? 'This is not a problem with your code.'} Your code is still saved. Please try again in a few seconds.
+                                </span>
+                                <Button type="button" size="sm" variant="outline" onClick={() => void run()} disabled={running}>
+                                    Try again
+                                </Button>
+                            </div>
+                        )}
+                        {result && !allInfra && (
                             <div className="grid max-h-48 gap-2 overflow-auto">
                                 <p className="text-xs font-medium">Ví dụ đạt: {result.passed}/{result.total}</p>
                                 {result.tests.map((t) => (
