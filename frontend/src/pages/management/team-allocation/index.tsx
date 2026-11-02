@@ -1101,6 +1101,14 @@ export default function TeamAllocationPage() {
     ? membersQuery.data ?? []
     : [];
   const savedTeams = teamsQuery.data?.teams ?? [];
+  const assignedInCurrentSession = new Set(
+    savedTeams
+      .filter((team) => team.status === "DRAFT" || team.status === "ACTIVE")
+      .flatMap((team) => team.memberIds),
+  );
+  const autoAvailableCount = rosterQuery.data && teamsQuery.data
+    ? rosterQuery.data.filter((member) => !assignedInCurrentSession.has(member.memberId)).length
+    : null;
   const memberPickerTeam = draftTeams.find(
     (team) => team.localId === memberPickerTeamId,
   );
@@ -1640,6 +1648,7 @@ export default function TeamAllocationPage() {
                       disabled={
                         !hasPermission("PEO_TEAM_ALLOCATE") || session.status !== "OPEN" ||
                         draftTeams.length > 0 || Number(capacityInput) !== session.maxMembers ||
+                        autoAvailableCount === 0 ||
                         autoPreviewMutation.isPending || autoConfirmMutation.isPending
                       }
                     >
@@ -1648,6 +1657,13 @@ export default function TeamAllocationPage() {
                         : <Shuffle className="size-4" />}
                       Xem trước chia tự động
                     </Button>
+                    {session.status === "OPEN" && (
+                      <p className="w-full text-xs text-muted-foreground" aria-live="polite">
+                        {autoAvailableCount === null
+                          ? "Đang tính số học viên có thể chia trong phiên này…"
+                          : `Còn ${autoAvailableCount} học viên hợp lệ chưa có nhóm Draft/Active trong phiên này.`}
+                      </p>
+                    )}
                   </div>
                   {(draftTeams.length > 0 || Number(capacityInput) !== session.maxMembers) && (
                     <p className="text-xs text-muted-foreground">

@@ -46,7 +46,7 @@ public class AutoAllocationService {
         validateCapacity(session, eligible);
         if (eligible.isEmpty()) {
             throw new AutoAllocationException(HttpStatus.CONFLICT, "ERR_NO_ELIGIBLE_MEMBERS",
-                    "Không còn học viên hợp lệ chưa có nhóm.");
+                    "Không còn học viên hợp lệ chưa có nhóm trong phiên này.");
         }
         Collections.shuffle(eligible, new SecureRandom());
         int max = session.getMaxMembers();
@@ -168,8 +168,8 @@ public class AutoAllocationService {
 
     private List<ClassMember> eligible(TeamAllocationSession session) {
         Long classId = session.getTrainingClass().getId();
-        Set<Long> assigned = new HashSet<>(projectMembers.findAssignedMemberIdsByClassAndTeamStatuses(
-                classId, List.of(ProjectTeamStatus.DRAFT, ProjectTeamStatus.ACTIVE)));
+        Set<Long> assigned = new HashSet<>(projectMembers.findAssignedMemberIdsBySessionAndTeamStatuses(
+                session.getId(), List.of(ProjectTeamStatus.DRAFT, ProjectTeamStatus.ACTIVE)));
         return classMembers.findAllByTrainingClass_IdAndStatusOrderByIdAsc(classId, ClassMemberStatus.ACTIVE)
                 .stream().filter(AllocationStudentEligibility::isEligible)
                 .filter(member -> !assigned.contains(member.getId()))
