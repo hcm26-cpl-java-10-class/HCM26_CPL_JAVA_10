@@ -65,6 +65,26 @@ function CodingCard({
 
     const spec = item.spec;
     const params = spec?.params ?? [];
+    // Kết quả chấm tự động đã lưu: hiện ngay khi mở trang, không cần bấm "Chạy thử".
+    const stored: CodingRunResult | null =
+        spec && item.testStatuses && item.testStatuses.length === spec.tests.length
+            ? {
+                  passed: item.testStatuses.filter((s) => s === "OK").length,
+                  total: spec.tests.length,
+                  infraError: false,
+                  tests: spec.tests.map((t, i) => ({
+                      index: i,
+                      visible: t.visible !== false,
+                      passed: item.testStatuses![i] === "OK",
+                      status: item.testStatuses![i],
+                      inputs: t.inputs,
+                      expected: t.expected,
+                      actual: null,
+                      error: null,
+                  })),
+              }
+            : null;
+    const shown = result ?? stored;
     const signature = spec
         ? `public static ${spec.returnType} ${spec.functionName}(${params.map((p) => `${p.type} ${p.name}`).join(", ")})`
         : "";
@@ -134,12 +154,12 @@ function CodingCard({
                 </span>
             </div>
 
-            {result && (
+            {shown && (
                 <div className="grid gap-2">
                     <p className="text-sm font-medium">
-                        Kết quả: {result.passed}/{result.total} test đạt
+                        {result ? "Kết quả chạy thử" : "Kết quả chấm tự động đã lưu"}: {shown.passed}/{shown.total} test đạt
                     </p>
-                    {result.tests.map((t) => (
+                    {shown.tests.map((t) => (
                         <div
                             key={t.index}
                             className={`rounded-md border p-3 text-xs ${

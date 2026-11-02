@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import axios from 'axios';
 import { ArrowLeft, CheckCircle2, Play, Save, XCircle } from 'lucide-react';
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { toast } from 'sonner';
 
 interface CodingWorkspaceProps {
@@ -76,14 +76,64 @@ export function CodingWorkspace({
         ? `public static ${spec.returnType} ${spec.functionName}(${params.map((p) => `${p.type} ${p.name}`).join(', ')})`
         : '';
 
+    const gutterRef = useRef<HTMLDivElement>(null);
+    const lineCount = code.split('\n').length;
+
     const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-        if (event.key !== 'Tab') return;
-        event.preventDefault();
         const el = event.currentTarget;
         const start = el.selectionStart;
         const end = el.selectionEnd;
-        onChange(code.slice(0, start) + '    ' + code.slice(end));
-        window.requestAnimationFrame(() => el.setSelectionRange(start + 4, start + 4));
+        const select = (from: number, to: number) =>
+            window.requestAnimationFrame(() => el.setSelectionRange(from, to));
+        const lineStartOf = (pos: number) => (pos === 0 ? 0 : code.lastIndexOf('\n', pos - 1) + 1);
+
+        // Ctrl/Cmd + Enter: run the examples
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            void run();
+            return;
+        }
+
+        if (event.key === 'Tab') {
+            event.preventDefault();
+            const lineStart = lineStartOf(start);
+            if (event.shiftKey) {
+                // Outdent every selected line by up to 4 spaces
+                const lines = code.slice(lineStart, end).split('\n');
+                let removedFirst = 0;
+                let removedTotal = 0;
+                const outdented = lines.map((line, i) => {
+                    const removed = line.match(/^ {1,4}/)?.[0].length ?? 0;
+                    if (i === 0) removedFirst = removed;
+                    removedTotal += removed;
+                    return line.slice(removed);
+                });
+                onChange(code.slice(0, lineStart) + outdented.join('\n') + code.slice(end));
+                select(Math.max(lineStart, start - removedFirst), Math.max(lineStart, end - removedTotal));
+                return;
+            }
+            if (start !== end && code.slice(start, end).includes('\n')) {
+                // Indent every selected line
+                const lines = code.slice(lineStart, end).split('\n');
+                onChange(code.slice(0, lineStart) + lines.map((line) => '    ' + line).join('\n') + code.slice(end));
+                select(start + 4, end + 4 * lines.length);
+                return;
+            }
+            onChange(code.slice(0, start) + '    ' + code.slice(end));
+            select(start + 4, start + 4);
+            return;
+        }
+
+        if (event.key === 'Enter' && !event.shiftKey && !event.altKey) {
+            // Keep the previous line's indentation, add one level after an opening brace
+            event.preventDefault();
+            const before = code.slice(lineStartOf(start), start);
+            const indent = before.match(/^[ \t]*/)?.[0] ?? '';
+            const extra = before.trimEnd().endsWith('{') ? '    ' : '';
+            const insert = '\n' + indent + extra;
+            onChange(code.slice(0, start) + insert + code.slice(end));
+            select(start + insert.length, start + insert.length);
+        }
     };
 
     const run = async () => {
@@ -172,19 +222,34 @@ export function CodingWorkspace({
 
                 <section className="flex min-h-0 flex-col gap-3 rounded-xl border p-4 md:col-span-3">
                     <h2 className="shrink-0 font-semibold">Your Code</h2>
-                    <textarea
-                        aria-label={`Code for question ${index + 1}`}
-                        spellCheck={false}
-                        className="min-h-[8rem] w-full flex-1 resize-none overflow-auto whitespace-pre rounded-md border bg-background p-3 font-mono text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        value={code}
-                        onChange={(event) => onChange(event.target.value)}
-                        onKeyDown={handleKeyDown}
-                    />
+                    <div className="flex min-h-[8rem] flex-1 overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-ring">
+                        <div
+                            ref={gutterRef}
+                            aria-hidden="true"
+                            className="select-none overflow-hidden border-r bg-muted/40 py-3 pl-2 pr-2 text-right font-mono text-sm leading-5 text-muted-foreground"
+                        >
+                            {Array.from({ length: lineCount }, (_, i) => (
+                                <div key={i}>{i + 1}</div>
+                            ))}
+                        </div>
+                        <textarea
+                            aria-label={`Code for question ${index + 1}`}
+                            spellCheck={false}
+                            wrap="off"
+                            className="h-full min-w-0 flex-1 resize-none overflow-auto whitespace-pre bg-transparent px-3 py-3 font-mono text-sm leading-5 outline-none"
+                            value={code}
+                            onChange={(event) => onChange(event.target.value)}
+                            onKeyDown={handleKeyDown}
+                            onScroll={(event) => {
+                                if (gutterRef.current) gutterRef.current.scrollTop = event.currentTarget.scrollTop;
+                            }}
+                        />
+                    </div>
 
                     <div className="flex shrink-0 flex-col gap-2">
                         <div className="flex flex-wrap items-center gap-3">
                             <Button type="button" onClick={() => void run()} disabled={running}>
-                                <Play className="mr-1 h-4 w-4" /> {running ? 'Đang chạy...' : 'Run'}
+                                <Play className="mr-1 h-4 w-4" /> {running ? 'Đang chạy...' : 'Run (Ctrl+Enter)'}
                             </Button>
                             <label className="flex items-center gap-2 text-sm">
                                 <input type="checkbox" checked={useCustom} onChange={(e) => setUseCustom(e.target.checked)} />

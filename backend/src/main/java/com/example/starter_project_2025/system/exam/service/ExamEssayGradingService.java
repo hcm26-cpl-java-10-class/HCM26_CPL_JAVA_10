@@ -426,6 +426,8 @@ public class ExamEssayGradingService {
         if (answer != null) {
             item.setScore(answer.getScore());
             item.setFeedback(answer.getFeedback());
+            List<String> stored = CodingScoring.statuses(answer.getCodeResult());
+            if (!stored.isEmpty()) item.setTestStatuses(stored);
             if (answer.getScore() == null) {
                 item.setAutoGradeState(answer.getGradeAttempts() >= CodingGradingService.MAX_AUTO_ATTEMPTS
                         ? "FAILED"

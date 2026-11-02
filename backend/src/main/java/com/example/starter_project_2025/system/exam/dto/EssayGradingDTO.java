@@ -69,6 +69,8 @@ public class EssayGradingDTO {
         private com.example.starter_project_2025.system.question.dto.CodeSpecDTO spec;
         /** null = da co diem; PENDING = dang cham nen; RETRYING = may cham loi, se tu thu lai; FAILED = het luot, can cham tay. */
         private String autoGradeState;
+        /** Trang thai tung test (OK, WRONG_ANSWER, ...) cua lan cham tu dong da luu; null neu chua co. */
+        private List<String> testStatuses;
     }
 
     @Getter

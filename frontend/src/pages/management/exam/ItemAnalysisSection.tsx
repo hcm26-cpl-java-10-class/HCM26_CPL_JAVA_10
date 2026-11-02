@@ -1,7 +1,7 @@
 import axiosInstance from "@/api/axios";
 import { useQuery } from "@tanstack/react-query";
-import { Fragment, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Info } from "lucide-react";
 
 type Completion = {
     started: number;
@@ -123,6 +123,8 @@ function Card({ label, value, detail }: { label: string; value: string; detail?:
     );
 }
 
+type SortKey = "order" | "correctRate" | "difficultyIndex" | "discrimination";
+
 function Pill({ text, style }: { text: string; style?: string }) {
     return (
         <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${style ?? "bg-muted text-muted-foreground"}`}>
@@ -133,6 +135,9 @@ function Pill({ text, style }: { text: string; style?: string }) {
 
 export function ItemAnalysisSection({ examId }: { examId: number }) {
     const [expanded, setExpanded] = useState<number | null>(null);
+    const [sortKey, setSortKey] = useState<SortKey>("order");
+    const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+    const [onlyFlagged, setOnlyFlagged] = useState(false);
 
     const query = useQuery({
         queryKey: ["exam-item-analysis", examId],
@@ -146,6 +151,47 @@ export function ItemAnalysisSection({ examId }: { examId: number }) {
     });
 
     const data = query.data;
+
+    const rows = useMemo(() => {
+        const items = (data?.items ?? []).filter((item) => !onlyFlagged || item.flags.length > 0);
+        const sign = sortDir === "asc" ? 1 : -1;
+        // Questions without a value (null) always go to the bottom.
+        return [...items].sort((a, b) => {
+            const av = a[sortKey];
+            const bv = b[sortKey];
+            if (av == null && bv == null) return 0;
+            if (av == null) return 1;
+            if (bv == null) return -1;
+            return (av - bv) * sign;
+        });
+    }, [data, onlyFlagged, sortKey, sortDir]);
+
+    const toggleSort = (key: SortKey) => {
+        if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        else {
+            setSortKey(key);
+            setSortDir("asc");
+        }
+    };
+
+    const sortHeader = (key: SortKey, label: string, hint?: string) => (
+        <th className="py-2 pr-3" aria-sort={sortKey === key ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+            <button
+                type="button"
+                onClick={() => toggleSort(key)}
+                title={hint}
+                className="inline-flex items-center gap-1 hover:text-foreground"
+            >
+                {label}
+                {hint && <Info className="h-3 w-3" aria-hidden="true" />}
+                {sortKey === key ? (
+                    sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                ) : (
+                    <ArrowUpDown className="h-3 w-3 opacity-50" />
+                )}
+            </button>
+        </th>
+    );
 
     return (
         <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
@@ -196,6 +242,17 @@ export function ItemAnalysisSection({ examId }: { examId: number }) {
                         </p>
                     )}
 
+                    {data.items.length > 0 && (
+                        <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+                            <input
+                                type="checkbox"
+                                checked={onlyFlagged}
+                                onChange={(e) => setOnlyFlagged(e.target.checked)}
+                            />
+                            Show only questions with warnings ({data.flaggedItems})
+                        </label>
+                    )}
+
                     {data.items.length === 0 ? (
                         <p className="py-6 text-center text-sm text-muted-foreground">
                             No fully graded attempts yet.
@@ -206,17 +263,32 @@ export function ItemAnalysisSection({ examId }: { examId: number }) {
                                 <thead>
                                     <tr className="border-b border-border text-left text-xs text-muted-foreground">
                                         <th className="w-8 py-2" />
-                                        <th className="py-2 pr-3">#</th>
+                                        {sortHeader("order", "#")}
                                         <th className="py-2 pr-3">Question</th>
                                         <th className="py-2 pr-3">Type</th>
                                         <th className="py-2 pr-3">Answered</th>
-                                        <th className="py-2 pr-3">Fully correct</th>
-                                        <th className="py-2 pr-3">Difficulty (p)</th>
-                                        <th className="py-2 pr-3">Discrimination (D)</th>
+                                        {sortHeader("correctRate", "Fully correct")}
+                                        {sortHeader(
+                                            "difficultyIndex",
+                                            "Difficulty (p)",
+                                            "p = average score / max score. Higher means easier: p >= 0.8 easy, p < 0.3 hard.",
+                                        )}
+                                        {sortHeader(
+                                            "discrimination",
+                                            "Discrimination (D)",
+                                            "D = p of the top 27% minus p of the bottom 27%. >= 0.3 good, < 0 means weak students did better than strong ones.",
+                                        )}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {data.items.map((item) => {
+                                    {rows.length === 0 && (
+                                        <tr>
+                                            <td colSpan={8} className="py-6 text-center text-sm text-muted-foreground">
+                                                No questions match the filter.
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {rows.map((item) => {
                                         const isOpen = expanded === item.sourceQuestionId;
                                         const canExpand = item.options.length > 0 || item.flags.length > 0 || item.code != null;
                                         return (

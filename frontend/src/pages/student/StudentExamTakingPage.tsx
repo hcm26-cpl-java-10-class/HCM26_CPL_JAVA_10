@@ -594,7 +594,7 @@ export default function StudentExamTakingPage() {
                                 <>
                                     <p className="mt-3 text-lg">
                                         {attempt.finalScore == null
-                                            ? `Provisional Score: ${formatScore(attempt.provisionalScore ?? attempt.objectiveScore ?? 0)}/${formatScore(attempt.maxScore ?? 10)} (ungraded essays count as 0)`
+                                            ? `Provisional Score: ${formatScore(attempt.provisionalScore ?? attempt.objectiveScore ?? 0)}/${formatScore(attempt.maxScore ?? 10)} (essay and coding answers that are still being graded count as 0)`
                                             : `Score: ${formatScore(attempt.finalScore)}/${formatScore(attempt.maxScore ?? 10)}`}
                                     </p>
                                     {attempt.status === 'EXPIRED' && (
@@ -623,7 +623,7 @@ export default function StudentExamTakingPage() {
                             )}
                             {isResultPublished && attempt.finalScore === null && attempt.status !== 'SUBMITTED' && (
                                 <p className="mt-2 text-sm text-muted-foreground">
-                                    Final score will be updated once your teacher finishes grading the essay questions.
+                                    Final score will be updated once grading is finished: coding answers are graded automatically within a few minutes, and essay answers are graded by your teacher.
                                 </p>
                             )}
                             <Button className="mt-5" variant="outline" onClick={() => navigate('/invitations')}>

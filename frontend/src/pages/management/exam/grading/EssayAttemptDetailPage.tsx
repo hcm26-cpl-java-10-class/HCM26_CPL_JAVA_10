@@ -367,6 +367,11 @@ export default function EssayAttemptDetailPage() {
                                 className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${tab === "coding" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                             >
                                 Câu hỏi coding ({codings.length})
+                                {codings.some((c) => c.score == null && c.autoGradeState) && (
+                                    <span className="ml-1 text-xs text-amber-600">
+                                        · {codings.filter((c) => c.score == null && c.autoGradeState).length} grading
+                                    </span>
+                                )}
                             </button>
                         </div>
 
@@ -378,6 +383,54 @@ export default function EssayAttemptDetailPage() {
                                 scoreAdjusted={detail?.scoreAdjusted === true}
                             />
                         )}
+
+                        {tab === "essay" && detail.essays.length > 0 && (() => {
+                            const total = detail.essays.length;
+                            const scored = detail.essays.filter(
+                                (e) => String(draftGrades[e.questionId]?.score ?? "").trim() !== "",
+                            ).length;
+                            return (
+                                <nav
+                                    aria-label="Question navigation"
+                                    className="sticky top-0 z-20 flex flex-col gap-2 rounded-xl border bg-card/95 p-3 shadow-sm backdrop-blur"
+                                >
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="font-medium">Scored {scored}/{total} questions</span>
+                                        <span className="text-xs text-muted-foreground">Based on the scores entered below</span>
+                                    </div>
+                                    <div className="h-2 overflow-hidden rounded-full bg-muted">
+                                        <div
+                                            className="h-full bg-green-600 transition-all"
+                                            style={{ width: `${(scored / total) * 100}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {detail.essays.map((e, i) => {
+                                            const done = String(draftGrades[e.questionId]?.score ?? "").trim() !== "";
+                                            return (
+                                                <button
+                                                    key={e.questionId}
+                                                    type="button"
+                                                    title={`Question ${i + 1}${done ? " (scored)" : " (not scored)"}`}
+                                                    onClick={() =>
+                                                        document
+                                                            .getElementById(`essay-card-${e.questionId}`)
+                                                            ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                                                    }
+                                                    className={`flex h-8 w-8 items-center justify-center rounded-md border text-xs font-medium transition ${
+                                                        done
+                                                            ? "border-green-600 bg-green-600 text-white"
+                                                            : "bg-background text-muted-foreground hover:text-foreground"
+                                                    }`}
+                                                >
+                                                    {i + 1}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </nav>
+                            );
+                        })()}
 
                         {tab === "essay" && detail.essays.length === 0 && (
                             <p className="rounded-md border p-6 text-center text-muted-foreground">
@@ -393,7 +446,8 @@ export default function EssayAttemptDetailPage() {
                             return (
                                 <article
                                     key={essay.questionId}
-                                    className="flex flex-col gap-4 rounded-xl border bg-card p-6 shadow-sm"
+                                    id={`essay-card-${essay.questionId}`}
+                                    className="flex scroll-mt-24 flex-col gap-4 rounded-xl border bg-card p-6 shadow-sm"
                                 >
                                     <div className="flex items-center justify-between border-b pb-3">
                                         <h2 className="font-semibold text-lg">

@@ -334,6 +334,7 @@ export default function ResultStatisticsPage() {
     const queryClient = useQueryClient();
     const [releasePolicy, setReleasePolicy] =
         useState<ReleasePolicy>("MY_SCORES_ONLY");
+    const [tab, setTab] = useState<"overview" | "questions" | "attempts" | "integrity">("overview");
 
     const [exportingFormat, setExportingFormat] =
         useState<"xlsx" | "csv" | "pdf" | null>(null);
@@ -580,8 +581,31 @@ export default function ResultStatisticsPage() {
                         {getErrorMessage(statisticsQuery.error)}
                     </div>
                 )}
+                {validExamId && (
+                    <div className="flex flex-wrap gap-1 rounded-lg border bg-muted/40 p-1" role="tablist" aria-label="Statistics sections">
+                        {([
+                            ["overview", "Overview"],
+                            ["questions", "Questions"],
+                            ["attempts", "Attempts"],
+                            ["integrity", "Integrity"],
+                        ] as const).map(([key, label]) => (
+                            <button
+                                key={key}
+                                type="button"
+                                role="tab"
+                                aria-selected={tab === key}
+                                onClick={() => setTab(key)}
+                                className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
+                                    tab === key ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                )}
 
-                {statistics && (
+                {tab === "overview" && statistics && (
                     <>
                         <div>
                             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -688,6 +712,7 @@ export default function ResultStatisticsPage() {
                     </>
                 )}
 
+                {tab === "attempts" && (
                 <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div>
@@ -860,6 +885,7 @@ export default function ResultStatisticsPage() {
                         </>
                     )}
                 </section>
+                )}
 
                 {editDialogOpen && (
                     <div
@@ -1101,6 +1127,7 @@ export default function ResultStatisticsPage() {
                     </div>
                 )}
 
+                {tab === "overview" && (
                 <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
                     <h2 className="text-lg font-semibold">
                         Result Publication
@@ -1210,11 +1237,12 @@ export default function ResultStatisticsPage() {
                         </div>
                     </div>
                 </section>
+                )}
 
-                {validExamId && <ItemAnalysisSection examId={examId} />}
+                {validExamId && tab === "questions" && <ItemAnalysisSection examId={examId} />}
 
                 {/* NEW (anti-cheat): bao cao vi pham tung luot thi */}
-                {validExamId && <IntegrityReportSection examId={examId} />}
+                {validExamId && tab === "integrity" && <IntegrityReportSection examId={examId} />}
             </div>
         </MainLayout>
     );

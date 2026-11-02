@@ -183,6 +183,8 @@ export interface CodingGradingItem {
   spec?: CodeSpec | null;
   /** null = đã có điểm; PENDING = đang chấm nền; RETRYING = máy chấm lỗi, tự thử lại; FAILED = hết lượt, cần chấm tay. */
   autoGradeState?: "PENDING" | "RETRYING" | "FAILED" | null;
+  /** Trạng thái từng test của lần chấm tự động đã lưu (theo thứ tự test). */
+  testStatuses?: string[] | null;
 }
 
 export interface CodingTestResult {
