@@ -1,13 +1,17 @@
 package com.example.starter_project_2025.system.rbac.user;
 
+import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
 import com.example.starter_project_2025.base.dataio.importer.hook.ImportHandler;
 import com.example.starter_project_2025.base.dataio.importer.parser.FileParser;
 import com.example.starter_project_2025.base.dataio.importer.result.GeneratedCredential;
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
+import com.example.starter_project_2025.base.dataio.importer.resolver.RelationLookupEngine;
 import com.example.starter_project_2025.base.dataio.importer.result.RowError;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.auth.util.PasswordPolicy;
 import com.example.starter_project_2025.system.auth.util.TemporaryPassword;
+import com.example.starter_project_2025.system.rbac.department.Department;
+import com.example.starter_project_2025.system.rbac.role.Role;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -16,14 +20,22 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.lang.reflect.Field;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 /**
@@ -37,8 +49,11 @@ import java.util.regex.Pattern;
  *       must choose its own password at the first sign-in. The temporary passwords are returned once to
  *       the person who ran the import</td></tr>
  *   <tr><td>existing</td><td>filled</td><td>caller needs USER_UPDATE; password checked, hashed and updated, sessions
- *       revoked; "password changed" notice to the owner (can be switched off, no password in it)</td></tr>
- *   <tr><td>existing</td><td>empty</td><td>skipped; the current password is kept, no email</td></tr>
+ *       revoked; "password changed" notice to the owner (can be switched off, no password in it). Roles,
+ *       Departments, names, phone and description in the file are applied too when they differ</td></tr>
+ *   <tr><td>existing</td><td>empty</td><td>caller needs USER_UPDATE only if something differs: Roles, Departments,
+ *       First Name, Last Name, Phone or Description in the file are applied (a blank cell keeps the current
+ *       value), counted as updated, no email. Nothing differs: skipped (unchanged)</td></tr>
  * </table>
  *
  * Also rejected, per Excel row: invalid data, an email that appears twice in the same file.
@@ -52,6 +67,11 @@ public class UserImportHandler implements ImportHandler<User> {
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$");
     private static final Pattern PHONE_PATTERN = Pattern.compile("^\\+?\\d{8,15}$");
 
+    /** Year, then month and day with one or two digits: 2000-01-05 and 2000-1-5 are the same date. */
+    private static final Pattern DATE_SHAPE = Pattern.compile("\\d{4}-\\d{1,2}-\\d{1,2}");
+    private static final DateTimeFormatter DATE_FORMAT =
+            DateTimeFormatter.ofPattern("uuuu-M-d").withResolverStyle(ResolverStyle.STRICT);
+
     private static final String PERMISSION_CREATE = "USER_CREATE";
     private static final String PERMISSION_UPDATE = "USER_UPDATE";
 
@@ -59,6 +79,7 @@ public class UserImportHandler implements ImportHandler<User> {
     private final PasswordEncoder passwordEncoder;
     private final AccountMailService accountMailService;
     private final RefreshTokenService refreshTokenService;
+    private final RelationLookupEngine relationEngine;
 
     /** Tell the owner by email when an import changes their password. Set to false to send no email at all. */
     @Value("${app.import.notify-password-change:true}")
@@ -76,6 +97,8 @@ public class UserImportHandler implements ImportHandler<User> {
         final Map<String, Integer> firstRowByEmail = new HashMap<>();
         /** Entities that already existed in the database and are updated in place. */
         final Set<User> existing = Collections.newSetFromMap(new IdentityHashMap<>());
+        /** Existing entities whose password the import changed (only these get sessions revoked and a notice). */
+        final Set<User> passwordChanged = Collections.newSetFromMap(new IdentityHashMap<>());
         /** Temporary passwords generated in this run, by entity. */
         final Map<User, String> temporaryPasswords = new IdentityHashMap<>();
         /** Emails sent or attempted so far in this run. */
@@ -119,8 +142,23 @@ public class UserImportHandler implements ImportHandler<User> {
 
         rejectDuplicateInFile(row, email);
 
-        // An existing account without a password keeps its current password: nothing to do.
-        return value(row, "Password") == null && userRepository.findByEmailIgnoreCase(email).isPresent();
+        // Reject a bad Date of Birth / Gender with a clear message, and hand the mapper the canonical form.
+        normalizeProfileColumns(row);
+
+        Optional<User> existing = userRepository.findByEmailIgnoreCase(email);
+        if (existing.isEmpty()) {
+            // A new account needs both. An existing account keeps its stored value when the cell is blank.
+            requireColumn(row, "Date of Birth");
+            requireColumn(row, "Gender");
+            return false;
+        }
+        if (value(row, "Password") != null) {
+            return false;
+        }
+
+        // An existing account without a password keeps its current password. It is skipped only when
+        // nothing else in the row differs from what is stored (roles, departments, name, phone...).
+        return !detectChanges(existing.get(), row).any();
     }
 
     @Override
@@ -151,7 +189,22 @@ public class UserImportHandler implements ImportHandler<User> {
         String rawPassword = value(row, "Password");
 
         if (isExisting(user)) {
-            updateExistingPassword(user, rawPassword);
+            Changes changes = detectChanges(user, row);
+            if (rawPassword == null && !changes.any()) {
+                // shouldSkip() normally filters this case out.
+                throw new IllegalArgumentException("Nothing to update");
+            }
+
+            requirePermission(PERMISSION_UPDATE, "update an existing account");
+
+            if (rawPassword != null) {
+                updateExistingPassword(user, rawPassword);
+                Run state = run.get();
+                if (state != null) {
+                    state.passwordChanged.add(user);
+                }
+            }
+            applyChanges(user, changes);
             return;
         }
 
@@ -203,18 +256,24 @@ public class UserImportHandler implements ImportHandler<User> {
 
         boolean existing = isExisting(user);
 
+        Run state = run.get();
+        boolean passwordChanged = existing && state != null && state.passwordChanged.remove(user);
+
+        if (existing) {
+            // Every existing account the import changed counts as updated, whatever was changed.
+            result.setUpdatedCount(result.getUpdatedCount() + 1);
+        }
+
         try {
-            if (existing) {
+            if (passwordChanged) {
                 // The password changed: every signed-in session of this account must sign in again.
                 refreshTokenService.revokeAllRefreshTokens(user.getId());
-                result.setUpdatedCount(result.getUpdatedCount() + 1);
             }
         } catch (Exception e) {
             log.warn("Could not revoke sessions of {}: {}", user.getEmail(), e.getMessage());
         }
 
         // A temporary password was generated: hand it to the person who ran the import, send no email.
-        Run state = run.get();
         String temporary = state == null ? null : state.temporaryPasswords.remove(user);
         if (temporary != null) {
             result.getCredentials().add(new GeneratedCredential(rowNumber, user.getEmail(), temporary));
@@ -222,7 +281,7 @@ public class UserImportHandler implements ImportHandler<User> {
         }
 
         // Creating an account sends no email. Only an existing owner whose password was changed is told.
-        if (!existing || !notifyPasswordChange) {
+        if (!passwordChanged || !notifyPasswordChange) {
             return;
         }
 
@@ -251,8 +310,6 @@ public class UserImportHandler implements ImportHandler<User> {
 
     /** Existing account + a password in the file: check the caller's right, then change the password. */
     private void updateExistingPassword(User user, String rawPassword) {
-        requirePermission(PERMISSION_UPDATE, "change the password of an existing account");
-
         if (rawPassword == null) {
             // shouldSkip() normally filters this case out; never change anything without a password.
             throw new IllegalArgumentException("Password is empty, nothing to update");
@@ -261,6 +318,182 @@ public class UserImportHandler implements ImportHandler<User> {
         requireStrongPassword(rawPassword);
         user.setPasswordHash(passwordEncoder.encode(rawPassword));
         user.setMustChangePassword(false);
+    }
+
+    /** What a row would change on an existing account. A field is null when the row leaves it as it is. */
+    private static final class Changes {
+        String firstName;
+        String lastName;
+        String phone;
+        String description;
+        LocalDate dateOfBirth;
+        Gender gender;
+        Set<Role> roles;
+        Set<Department> departments;
+
+        boolean any() {
+            return firstName != null || lastName != null || phone != null || description != null
+                    || dateOfBirth != null || gender != null
+                    || roles != null || departments != null;
+        }
+    }
+
+    /**
+     * Compares the row with the stored account. A blank cell means "keep the current value". Roles and
+     * Departments in the file are the full list (they replace the current ones). A role or department
+     * that does not exist rejects the row.
+     */
+    private Changes detectChanges(User user, Map<String, String> row) {
+        Changes changes = new Changes();
+
+        changes.firstName = changedText(value(row, "First Name"), user.getFirstName());
+        changes.lastName = changedText(value(row, "Last Name"), user.getLastName());
+        changes.description = changedText(value(row, "Description"), user.getDescription());
+
+        String phone = value(row, "Phone");
+        if (phone != null) {
+            phone = phone.replaceAll("[\\s.\\-]", "");
+            if (!PHONE_PATTERN.matcher(phone).matches()) {
+                throw new IllegalArgumentException("Phone number is invalid");
+            }
+            changes.phone = changedText(phone, user.getPhone());
+        }
+
+        LocalDate dateOfBirth = parseDateOfBirth(value(row, "Date of Birth"));
+        if (dateOfBirth != null && !dateOfBirth.equals(user.getDateOfBirth())) {
+            changes.dateOfBirth = dateOfBirth;
+        }
+
+        Gender gender = parseGender(value(row, "Gender"));
+        if (gender != null && gender != user.getGender()) {
+            changes.gender = gender;
+        }
+
+        String rawRoles = value(row, "Roles");
+        if (rawRoles != null) {
+            Set<Role> wanted = resolveRelation("roles", rawRoles);
+            if (!ids(wanted, Role::getId).equals(ids(user.getRoles(), Role::getId))) {
+                changes.roles = wanted;
+            }
+        }
+
+        String rawDepartments = value(row, "Departments");
+        if (rawDepartments != null) {
+            Set<Department> wanted = resolveRelation("departments", rawDepartments);
+            if (!ids(wanted, Department::getId).equals(ids(user.getDepartments(), Department::getId))) {
+                changes.departments = wanted;
+            }
+        }
+
+        return changes;
+    }
+
+    private static void applyChanges(User user, Changes changes) {
+        if (changes.firstName != null) user.setFirstName(changes.firstName);
+        if (changes.lastName != null) user.setLastName(changes.lastName);
+        if (changes.phone != null) user.setPhone(changes.phone);
+        if (changes.description != null) user.setDescription(changes.description);
+        if (changes.dateOfBirth != null) user.setDateOfBirth(changes.dateOfBirth);
+        if (changes.gender != null) user.setGender(changes.gender);
+
+        if (changes.roles != null) {
+            user.getRoles().clear();
+            user.getRoles().addAll(changes.roles);
+        }
+        if (changes.departments != null) {
+            user.getDepartments().clear();
+            user.getDepartments().addAll(changes.departments);
+        }
+    }
+
+    /** Looks the names/codes of a column up with the same rules as a normal import (see the User fields). */
+    @SuppressWarnings("unchecked")
+    private <E> Set<E> resolveRelation(String fieldName, String raw) {
+        try {
+            Field field = User.class.getDeclaredField(fieldName);
+            ImportField meta = field.getAnnotation(ImportField.class);
+            return (Set<E>) relationEngine.resolve(raw, field, meta);
+        } catch (NoSuchFieldException e) {
+            throw new IllegalStateException("User has no field " + fieldName, e);
+        }
+    }
+
+    private static <E> Set<Long> ids(Collection<E> items, Function<E, Long> id) {
+        Set<Long> result = new HashSet<>();
+        if (items != null) {
+            for (E item : items) {
+                result.add(id.apply(item));
+            }
+        }
+        return result;
+    }
+
+    private static void requireColumn(Map<String, String> row, String column) {
+        if (value(row, column) == null) {
+            throw new IllegalArgumentException(column + " is required");
+        }
+    }
+
+    /** Validates Date of Birth and Gender and rewrites them to the form the generic mapper understands. */
+    private void normalizeProfileColumns(Map<String, String> row) {
+        LocalDate dateOfBirth = parseDateOfBirth(value(row, "Date of Birth"));
+        if (dateOfBirth != null) {
+            row.put("Date of Birth", dateOfBirth.toString());
+        }
+
+        Gender gender = parseGender(value(row, "Gender"));
+        if (gender != null) {
+            row.put("Gender", gender.name());
+        }
+    }
+
+    /**
+     * Accepts yyyy-MM-dd, with or without the leading zero of the month and day (an Excel date cell may
+     * also bring a time part). The date must exist (no 32nd, no 29 February in a common year).
+     * Null for an empty cell.
+     */
+    private static LocalDate parseDateOfBirth(String raw) {
+        if (raw == null) {
+            return null;
+        }
+
+        String text = raw.trim();
+        if (text.length() > 10 && text.charAt(10) == 'T') {
+            text = text.substring(0, 10);
+        }
+
+        LocalDate date;
+        try {
+            if (!DATE_SHAPE.matcher(text).matches()) {
+                throw new DateTimeParseException("Not a yyyy-M-d date", text, 0);
+            }
+            date = LocalDate.parse(text, DATE_FORMAT);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Date of Birth must be in the format yyyy-MM-dd, for example 2000-01-31");
+        }
+
+        if (date.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("Date of Birth cannot be in the future");
+        }
+        return date;
+    }
+
+    /** Accepts Male, Female or Other, in any letter case. Null for an empty cell. */
+    private static Gender parseGender(String raw) {
+        if (raw == null) {
+            return null;
+        }
+
+        return switch (raw.trim().toLowerCase(Locale.ROOT)) {
+            case "male" -> Gender.MALE;
+            case "female" -> Gender.FEMALE;
+            case "other" -> Gender.OTHER;
+            default -> throw new IllegalArgumentException("Gender must be Male, Female or Other");
+        };
+    }
+
+    private static String changedText(String wanted, String current) {
+        return wanted == null || wanted.equals(current) ? null : wanted;
     }
 
     private void requireStrongPassword(String rawPassword) {
