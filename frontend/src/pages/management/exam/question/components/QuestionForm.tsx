@@ -315,13 +315,18 @@ export function QuestionForm({
                 );
                 return;
             }
-            // Warn (without blocking and without touching main) if the declaration and the code disagree.
+            // Do not save while the declaration and the code disagree (main is never touched here).
             const notes = codeSaveCheckRef.current?.() ?? [];
             if (notes.length > 0) {
-                toast.warning("Saved, but the coding declaration needs a check", {
+                toast.error("Not saved: the coding declaration does not match", {
                     description: notes.join("\n"),
                     duration: 12000,
                 });
+                window.setTimeout(
+                    () => document.getElementById("code-save-notes")?.scrollIntoView({ behavior: "smooth", block: "center" }),
+                    50,
+                );
+                return;
             }
             onSubmit({
                 ...form,

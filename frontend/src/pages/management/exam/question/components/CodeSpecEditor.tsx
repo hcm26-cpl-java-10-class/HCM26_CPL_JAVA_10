@@ -321,7 +321,8 @@ interface Props {
     showErrors?: boolean;
     /**
      * Gives the parent a function to call when Save is pressed. It compares the declaration in the form with the
-     * reference solution and the custom main, returns warnings (never changes anything, main is never reset).
+     * reference solution and the custom main and returns the problems (the parent blocks saving; nothing is changed,
+     * main is never reset).
      */
     onRegisterSaveCheck?: (check: () => string[]) => void;
 }
@@ -347,6 +348,23 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
     const issues = codeSpecIssues(value);
     const bad = new Set(showErrors ? issues.map((i) => i.field) : []);
     const invalid = (field: string) => (bad.has(field) ? "border-destructive focus-visible:ring-destructive" : "");
+
+    // Tests with exactly the same inputs: their input cells get a red border (visual hint only, nothing blocks saving).
+    const duplicateRows = new Set<number>();
+    if (value.params.length > 0) {
+        const seen = new Map<string, number>();
+        value.tests.forEach((t, i) => {
+            const raw = value.params.map((_, k) => t.inputs[k] ?? "");
+            if (raw.every((v) => v === "")) return; // rows that are still blank
+            const key = JSON.stringify(value.params.map((p, k) => normalizeValue(p.type, raw[k])));
+            const first = seen.get(key);
+            if (first === undefined) seen.set(key, i);
+            else {
+                duplicateRows.add(first);
+                duplicateRows.add(i);
+            }
+        });
+    }
 
     const setParams = (params: CodeSpec["params"]) =>
         onChange({
@@ -692,8 +710,10 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
                                             <td key={k} className="px-2 py-1.5">
                                                 <Input
                                                     aria-label={`Test ${i + 1} ${p.name}`}
-                                                    aria-invalid={bad.has(`in-${i}-${k}`)}
-                                                    className={`h-8 min-w-[7rem] font-mono text-xs ${invalid(`in-${i}-${k}`)}`}
+                                                    aria-invalid={bad.has(`in-${i}-${k}`) || duplicateRows.has(i)}
+                                                    className={`h-8 min-w-[7rem] font-mono text-xs ${invalid(`in-${i}-${k}`)} ${
+                                                        duplicateRows.has(i) ? "border-destructive focus-visible:ring-destructive" : ""
+                                                    }`}
                                                     value={t.inputs[k] ?? ""}
                                                     disabled={disabled}
                                                     onChange={(e) =>
@@ -817,10 +837,14 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
                 {resetNote && <p className="text-xs text-muted-foreground">{resetNote}</p>}
                 {saveNotes.length > 0 && (
                     <div id="code-save-notes" role="alert" className="grid gap-1 rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                        <p className="font-medium">Saved, but please check:</p>
+                        <p className="font-medium">Not saved. Please fix this first:</p>
                         {saveNotes.map((n) => (
                             <p key={n}>{n}</p>
                         ))}
+                        <p className="text-muted-foreground">
+                            Edit the form or the reference solution so they match, or press &quot;Reset to generated&quot; to copy the
+                            declaration from the reference solution. Your main is never changed by saving.
+                        </p>
                     </div>
                 )}
                 {mainOutdated && (
