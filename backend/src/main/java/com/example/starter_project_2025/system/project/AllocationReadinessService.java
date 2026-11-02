@@ -91,7 +91,8 @@ public class AllocationReadinessService {
 
         List<ClassMember> activeMembers = classMemberRepository
                 .findAllByTrainingClass_IdAndStatusOrderByIdAsc(
-                        classId, ClassMemberStatus.ACTIVE);
+                        classId, ClassMemberStatus.ACTIVE).stream()
+                .filter(AllocationStudentEligibility::isEligible).toList();
 
         Set<Long> assignedMemberIds = new HashSet<>(memberRepository
                 .findAssignedMemberIdsBySessionAndTeamStatuses(

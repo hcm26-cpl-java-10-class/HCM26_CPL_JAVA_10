@@ -246,7 +246,12 @@ public class TeamAllocationSessionService {
                 teamRepository.findAllByAllocationSession_IdAndStatus(
                         sessionId, ProjectTeamStatus.DRAFT);
         for (ProjectTeam team : draftTeams) {
-            if (projectMemberRepository.countByTeam_Id(team.getId()) > requestedCapacity) {
+            if (team.getProjectTemplateId() != null) {
+                continue;
+            }
+            int allowed = team.getAllocationSource() == TeamAllocationSource.AUTO
+                    ? Math.addExact(requestedCapacity, 1) : requestedCapacity;
+            if (projectMemberRepository.countByTeam_Id(team.getId()) > allowed) {
                 throw new TeamCapacityExceededException(requestedCapacity);
             }
         }
@@ -256,7 +261,9 @@ public class TeamAllocationSessionService {
         // window of that template; only untemplated drafts follow the session.
         draftTeams.stream()
                 .filter(team -> team.getProjectTemplateId() == null)
-                .forEach(team -> team.setMaxMembers(requestedCapacity));
+                .forEach(team -> team.setMaxMembers(
+                        team.getAllocationSource() == TeamAllocationSource.AUTO
+                                ? Math.addExact(requestedCapacity, 1) : requestedCapacity));
         teamRepository.saveAllAndFlush(draftTeams);
         TeamAllocationSession saved = sessionRepository.saveAndFlush(session);
         return responseFor(saved);

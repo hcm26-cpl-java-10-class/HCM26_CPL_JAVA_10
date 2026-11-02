@@ -11,6 +11,17 @@ export interface AllocationSession {
   version: number;
 }
 
+export interface AutoAllocationPreview {
+  sessionId: number;
+  standardMax: number;
+  eligibleCount: number;
+  fingerprint: string;
+  teams: Array<{
+    teamName: string;
+    members: Array<{ memberId: number; fullName: string; userCode: string | null }>;
+  }>;
+}
+
 export interface MentorOption {
   mentorId: number;
   fullName: string;

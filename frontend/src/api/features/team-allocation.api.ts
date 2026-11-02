@@ -1,6 +1,7 @@
 import axiosInstance from "@/api/axios";
 import type {
   AllocationReadiness,
+  AutoAllocationPreview,
   AllocationSession,
   ClassMember,
   ClassRosterMember,
@@ -18,6 +19,28 @@ import type {
 const classPath = (classId: number) => `/v1/classes/${classId}`;
 
 export const teamAllocationApi = {
+  async previewAutoAllocation(classId: number, sessionId: number): Promise<AutoAllocationPreview> {
+    const response = await axiosInstance.post<AutoAllocationPreview>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/auto-allocation/preview`,
+    );
+    return response.data;
+  },
+
+  async confirmAutoAllocation(classId: number, sessionId: number,
+    preview: AutoAllocationPreview, key: string): Promise<TeamListResponse> {
+    const response = await axiosInstance.post<TeamListResponse>(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/auto-allocation/confirm`,
+      {
+        fingerprint: preview.fingerprint,
+        teams: preview.teams.map((team) => ({
+          teamName: team.teamName,
+          memberIds: team.members.map((member) => member.memberId),
+        })),
+      },
+      { headers: { "X-Idempotency-Key": key } },
+    );
+    return response.data;
+  },
   async getSessions(classId: number): Promise<AllocationSession[]> {
     const response = await axiosInstance.get<AllocationSession[]>(
       `${classPath(classId)}/allocation-sessions`,

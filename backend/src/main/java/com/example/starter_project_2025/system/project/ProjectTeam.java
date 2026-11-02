@@ -86,6 +86,11 @@ public class ProjectTeam extends BaseEntity {
     @Column(name = "max_members", nullable = false)
     Integer maxMembers;
 
+    /** Null on legacy rows, which are treated as manually created teams. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "allocation_source", length = 10)
+    TeamAllocationSource allocationSource;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     ProjectTeamStatus status;

@@ -22,6 +22,7 @@ import type { TrainingClassDTO } from "@/types/features/training-class";
 import type {
   AllocationApiError,
   AllocationReadiness,
+  AutoAllocationPreview,
   AllocationSession,
   AllocationTeam,
   ClassMember,
@@ -51,6 +52,7 @@ import {
   Ban,
   Save,
   Search,
+  Shuffle,
   Send,
   ShieldCheck,
   Trash2,
@@ -70,6 +72,7 @@ interface LocalDraftTeam {
   assignedMentorId: number | null;
   memberIds: number[];
   memberRoles: Record<number, string | null>;
+  effectiveMaxMembers?: number;
 }
 
 /** Everything the saved-team dialog can change in one save (no publish). */
@@ -338,6 +341,9 @@ export default function TeamAllocationPage() {
   const [roleAssignmentFailures, setRoleAssignmentFailures] =
     useState<Record<number, ApiFailure>>({});
   const [draftTeams, setDraftTeams] = useState<LocalDraftTeam[]>([]);
+  const [autoPreview, setAutoPreview] = useState<AutoAllocationPreview | null>(null);
+  const [autoPreviewError, setAutoPreviewError] = useState("");
+  const [autoConfirmKey, setAutoConfirmKey] = useState<string | null>(null);
   const [collapsedDraftTeamIds, setCollapsedDraftTeamIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -487,6 +493,50 @@ export default function TeamAllocationPage() {
       toast.success(`Đã cập nhật sức chứa tối đa thành ${updatedSession.maxMembers} học viên/nhóm.`);
     },
     onError: (error) => toast.error(getApiFailure(error).message),
+  });
+
+  useEffect(() => {
+    setAutoPreview(null);
+    setAutoPreviewError("");
+    setAutoConfirmKey(null);
+  }, [sessionId, session?.maxMembers]);
+
+  const autoPreviewMutation = useMutation({
+    mutationFn: () => teamAllocationApi.previewAutoAllocation(classId, sessionId!),
+    onSuccess: (preview) => {
+      setAutoPreview(preview);
+      setAutoConfirmKey(crypto.randomUUID());
+      setAutoPreviewError("");
+    },
+    onError: (error) => {
+      setAutoPreview(null);
+      setAutoConfirmKey(null);
+      setAutoPreviewError(getApiFailure(error).message);
+    },
+  });
+
+  const autoConfirmMutation = useMutation({
+    mutationFn: () => teamAllocationApi.confirmAutoAllocation(
+      classId, sessionId!, autoPreview!, autoConfirmKey!),
+    onSuccess: async (result) => {
+      setAutoPreview(null);
+      setAutoConfirmKey(null);
+      setAutoPreviewError("");
+      setReadiness(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["team-allocation", "teams", classId, sessionId] }),
+        queryClient.invalidateQueries({ queryKey: ["team-allocation", "unassigned-members", classId, sessionId] }),
+        queryClient.invalidateQueries({ queryKey: ["team-allocation", "class-roster", classId, sessionId] }),
+      ]);
+      toast.success(`Đã tạo ${result.teams.length} nhóm Draft từ bản xem trước.`);
+    },
+    onError: (error) => {
+      const failure = getApiFailure(error);
+      setAutoPreviewError(failure.status === 409
+        ? "Dữ liệu lớp đã thay đổi. Hãy tạo lại bản xem trước."
+        : failure.message);
+      if (failure.status === 409) setAutoConfirmKey(null);
+    },
   });
 
   const saveDraftMutation = useMutation({
@@ -1062,6 +1112,8 @@ export default function TeamAllocationPage() {
       return;
     }
     const localId = crypto.randomUUID();
+    setAutoPreview(null);
+    setAutoConfirmKey(null);
     setCollapsedDraftTeamIds(new Set(draftTeams.map((team) => team.localId)));
     setDraftTeams((current) => [
       ...current,
@@ -1150,6 +1202,7 @@ export default function TeamAllocationPage() {
       memberRoles: Object.fromEntries(
         (team.members ?? []).map((member) => [member.memberId, member.role ?? "DEV"]),
       ),
+      effectiveMaxMembers: team.maxMembers ?? session?.maxMembers,
     }]);
     setEditingSavedTeamId(team.teamId);
     setMemberPickerTeamId(localId);
@@ -1536,7 +1589,11 @@ export default function TeamAllocationPage() {
                         min={1}
                         type="number"
                         value={capacityInput}
-                        onChange={(event) => setCapacityInput(event.target.value)}
+                        onChange={(event) => {
+                          setCapacityInput(event.target.value);
+                          setAutoPreview(null);
+                          setAutoConfirmKey(null);
+                        }}
                         disabled={session.status !== "OPEN" || !hasPermission("PEO_TEAM_ALLOCATE")}
                       />
                     </label>
@@ -1558,9 +1615,85 @@ export default function TeamAllocationPage() {
                         ? "Cập nhật & thêm nhóm"
                         : "Thêm nhóm"}
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => autoPreviewMutation.mutate()}
+                      disabled={
+                        !hasPermission("PEO_TEAM_ALLOCATE") || session.status !== "OPEN" ||
+                        draftTeams.length > 0 || Number(capacityInput) !== session.maxMembers ||
+                        autoPreviewMutation.isPending || autoConfirmMutation.isPending
+                      }
+                    >
+                      {autoPreviewMutation.isPending
+                        ? <LoaderCircle className="size-4 animate-spin" />
+                        : <Shuffle className="size-4" />}
+                      Xem trước chia tự động
+                    </Button>
                   </div>
+                  {(draftTeams.length > 0 || Number(capacityInput) !== session.maxMembers) && (
+                    <p className="text-xs text-muted-foreground">
+                      Lưu hoặc hủy chỉnh sửa nhóm, và lưu sức chứa của phiên trước khi xem trước.
+                    </p>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {autoPreviewError && (
+                    <div role="alert" className="rounded-lg border border-destructive/30 p-3 text-sm text-destructive">
+                      {autoPreviewError}
+                    </div>
+                  )}
+                  {autoPreview && (
+                    <section className="space-y-3 rounded-xl border bg-muted/20 p-4" aria-label="Bản xem trước chia nhóm tự động">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold">Xem trước chia tự động</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {autoPreview.eligibleCount} học viên · {autoPreview.teams.length} nhóm ·
+                            sức chứa chuẩn {autoPreview.standardMax} ·
+                            {autoPreview.teams.filter((team) => team.members.length > autoPreview.standardMax).length} nhóm thêm 1 học viên do số dư.
+                            Các nhóm Draft đã lưu được giữ nguyên.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" size="sm" variant="outline"
+                            disabled={autoPreviewMutation.isPending || autoConfirmMutation.isPending}
+                            onClick={() => autoPreviewMutation.mutate()}>
+                            <Shuffle className="size-4" /> Xáo trộn lại
+                          </Button>
+                          <Button type="button" size="sm" variant="outline"
+                            disabled={autoConfirmMutation.isPending}
+                            onClick={() => { setAutoPreview(null); setAutoPreviewError(""); setAutoConfirmKey(null); }}>
+                            Hủy xem trước
+                          </Button>
+                          <Button type="button" size="sm"
+                            disabled={!autoConfirmKey || autoConfirmMutation.isPending || autoPreviewMutation.isPending ||
+                              draftTeams.length > 0 || Number(capacityInput) !== session.maxMembers}
+                            onClick={() => autoConfirmMutation.mutate()}>
+                            {autoConfirmMutation.isPending && <LoaderCircle className="size-4 animate-spin" />}
+                            Xác nhận tạo nhóm Draft
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {autoPreview.teams.map((team, index) => (
+                          <details key={`${index}-${team.teamName}`} className="rounded-lg border bg-background p-3">
+                            <summary className="cursor-pointer text-sm font-medium">
+                              {team.teamName} · {team.members.length} học viên
+                              {team.members.length > autoPreview.standardMax && (
+                                <Badge variant="secondary" className="ml-2">Thêm 1 do số dư</Badge>
+                              )}
+                            </summary>
+                            <ul className="mt-2 space-y-1 pl-5 text-sm text-muted-foreground list-disc">
+                              {team.members.map((member) => (
+                                <li key={member.memberId}>{member.fullName}{member.userCode ? ` (${member.userCode})` : ""}</li>
+                              ))}
+                            </ul>
+                          </details>
+                        ))}
+                      </div>
+                    </section>
+                  )}
                   {saveFailure && (
                     <div role="alert" className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
                       <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
@@ -1633,7 +1766,7 @@ export default function TeamAllocationPage() {
                                       {team.teamName || `Nhóm ${teamIndex + 1}`}
                                     </span>
                                     <span className="block truncate text-xs text-muted-foreground">
-                                      {team.memberIds.length}/{session.maxMembers} thành viên
+                                      {team.memberIds.length}/{team.effectiveMaxMembers ?? session.maxMembers} thành viên
                                       {mentorName ? ` · ${mentorName}` : ""}
                                     </span>
                                   </span>
@@ -1661,12 +1794,12 @@ export default function TeamAllocationPage() {
                                       />
                                     </label>
                                     <span className={`flex items-center gap-2 pb-2 text-sm ${
-                                      team.memberIds.length > session.maxMembers
+                                      team.memberIds.length > (team.effectiveMaxMembers ?? session.maxMembers)
                                         ? "font-semibold text-destructive"
                                         : "text-muted-foreground"
                                     }`}>
                                       <Users className="size-4" />
-                                      {team.memberIds.length}/{session.maxMembers}
+                                      {team.memberIds.length}/{team.effectiveMaxMembers ?? session.maxMembers}
                                     </span>
                                   </div>
                                   <label className="block space-y-1.5 text-sm font-medium">
@@ -1752,9 +1885,9 @@ export default function TeamAllocationPage() {
                                       </Button>
                                     )}
                                   </div>
-                                  {team.memberIds.length > session.maxMembers && (
+                                  {team.memberIds.length > (team.effectiveMaxMembers ?? session.maxMembers) && (
                                     <p className="text-xs text-destructive">
-                                      Vượt sức chứa tối đa {session.maxMembers}; danh sách chọn vẫn được giữ để bạn điều chỉnh.
+                                      Vượt sức chứa tối đa {team.effectiveMaxMembers ?? session.maxMembers}; danh sách chọn vẫn được giữ để bạn điều chỉnh.
                                     </p>
                                   )}
                                   <div className="max-h-24 overflow-y-auto rounded-md border p-2">
@@ -1797,7 +1930,7 @@ export default function TeamAllocationPage() {
                                 Chọn học viên cho {memberPickerTeam.teamName || "nhóm chưa đặt tên"}
                               </h3>
                               <p className="text-xs text-muted-foreground">
-                                Đã chọn {memberPickerTeam.memberIds.length}/{session.maxMembers} học viên.
+                                Đã chọn {memberPickerTeam.memberIds.length}/{memberPickerTeam.effectiveMaxMembers ?? session.maxMembers} học viên.
                                 Một học viên có thể ở nhiều nhóm DRAFT; hệ thống sẽ cảnh báo khi lưu.
                               </p>
                             </div>

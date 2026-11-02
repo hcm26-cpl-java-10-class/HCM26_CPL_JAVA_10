@@ -103,6 +103,7 @@ public class ProjectTeamDraftService {
                     .teamName(teamRequest.teamName().trim())
                     .assignedMentorId(teamRequest.assignedMentorId())
                     .maxMembers(session.getMaxMembers())
+                    .allocationSource(TeamAllocationSource.MANUAL)
                     .status(ProjectTeamStatus.DRAFT)
                     .build());
         }
@@ -222,8 +223,12 @@ public class ProjectTeamDraftService {
 
         List<UpdateDraftTeamRequest.MemberRequest> assignments =
                 request.members() == null ? List.of() : request.members();
-        if (assignments.size() > session.getMaxMembers()) {
-            throw new TeamCapacityExceededException(session.getMaxMembers());
+        int effectiveMax = team.getProjectTemplateId() == null
+                ? (team.getAllocationSource() == TeamAllocationSource.AUTO
+                        ? Math.addExact(session.getMaxMembers(), 1) : session.getMaxMembers())
+                : team.getMaxMembers();
+        if (assignments.size() > effectiveMax) {
+            throw new TeamCapacityExceededException(effectiveMax);
         }
         Set<Long> memberIds = new HashSet<>();
         for (UpdateDraftTeamRequest.MemberRequest assignment : assignments) {
@@ -410,7 +415,7 @@ public class ProjectTeamDraftService {
                         team.getProjectTemplateId(),
                         team.getProjectTemplateName(),
                         null,
-                        null,
+                        team.getMaxMembers(),
                         memberIdsByTeam.getOrDefault(team.getId(), List.of()).size(),
                         policy.allowMultiRole(),
                         policy.quotas()

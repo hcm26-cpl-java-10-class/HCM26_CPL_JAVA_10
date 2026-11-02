@@ -38,6 +38,23 @@ public class TeamAllocationSessionController {
     private final ProjectTeamTemplateService teamTemplateService;
     private final TemplateCandidateService templateCandidateService;
     private final AllocationReadinessService readinessService;
+    private final AutoAllocationService autoAllocationService;
+    private final AutoAllocationCoordinator autoAllocationCoordinator;
+
+    @PostMapping("/{sessionId}/auto-allocation/preview")
+    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    public AutoAllocationPreview previewAutoAllocation(@PathVariable Long classId,
+            @PathVariable Long sessionId, Authentication authentication) {
+        return autoAllocationService.preview(classId, sessionId, authentication);
+    }
+
+    @PostMapping("/{sessionId}/auto-allocation/confirm")
+    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    public ResponseEntity<String> confirmAutoAllocation(@PathVariable Long classId,
+            @PathVariable Long sessionId, @RequestHeader("X-Idempotency-Key") String key,
+            @RequestBody AutoAllocationConfirmRequest request, Authentication authentication) {
+        return autoAllocationCoordinator.confirm(classId, sessionId, key, request, authentication);
+    }
 
     @GetMapping("/mentors")
     @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")

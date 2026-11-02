@@ -79,7 +79,7 @@ public class ProjectTeamQueryService {
                         team.getProjectTemplateId(),
                         team.getProjectTemplateName(),
                         capacity == null ? null : capacity.minMembers(),
-                        capacity == null ? null : capacity.maxMembers(),
+                        capacity == null ? team.getMaxMembers() : capacity.maxMembers(),
                         memberIds.size(),
                         policy.allowMultiRole(),
                         policy.quotas()

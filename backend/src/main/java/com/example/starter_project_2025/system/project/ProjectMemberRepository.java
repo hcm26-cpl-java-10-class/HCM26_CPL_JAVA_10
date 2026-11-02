@@ -34,6 +34,15 @@ public interface ProjectMemberRepository
 
     long countByTeam_Id(Long teamId);
 
+    @Query("""
+        select distinct pm.classMember.id from ProjectMember pm
+        where pm.team.trainingClass.id = :classId
+          and pm.team.status in :statuses
+        """)
+    List<Long> findAssignedMemberIdsByClassAndTeamStatuses(
+            @Param("classId") Long classId,
+            @Param("statuses") Collection<ProjectTeamStatus> statuses);
+
     void deleteAllByTeam_Id(Long teamId);
 
     boolean existsByTeam_IdAndClassMember_Id(Long teamId, Long memberId);
