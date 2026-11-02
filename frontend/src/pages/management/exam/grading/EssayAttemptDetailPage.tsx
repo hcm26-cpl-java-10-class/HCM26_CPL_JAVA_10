@@ -778,7 +778,7 @@ export default function EssayAttemptDetailPage() {
                             ) : (
                                 <Save className="mr-1.5 size-4" />
                             )}
-                            {saveGradeMutation.isPending ? "Saving..." : "Confirm & Save Official Grade"}
+                            {saveGradeMutation.isPending ? "Saving..." : "Confirm & Save"}
                         </Button>
                     </div>
                 )}
