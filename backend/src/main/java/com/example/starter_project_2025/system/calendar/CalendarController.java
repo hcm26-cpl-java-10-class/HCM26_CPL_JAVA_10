@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.calendar;
 
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.demo.session.Session;
+import com.example.starter_project_2025.system.demo.session.Session.SessionStatus;
 import com.example.starter_project_2025.system.demo.session.SessionDTO;
 import com.example.starter_project_2025.system.demo.session.SessionFilter;
 import com.example.starter_project_2025.system.demo.session.SessionService;
@@ -22,6 +23,7 @@ import com.example.starter_project_2025.init.annotation.ResourceMenu;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.*;
 
 @RestController
 @RequiredArgsConstructor
@@ -37,6 +39,7 @@ import java.time.LocalDateTime;
 public class CalendarController {
 
     private final SessionService sessionService;
+    private final com.example.starter_project_2025.system.study_session.StudySessionRepository studySessionRepository;
 
     private void validateDateRange(LocalDateTime from, LocalDateTime to, int page, int size) {
         if (!from.isBefore(to)) {
@@ -83,7 +86,7 @@ public class CalendarController {
             LocalDateTime to,
 
             @RequestParam(value = "status", required = false)
-            Session.SessionStatus status,
+            SessionStatus status,
 
             @RequestParam(value = "classId", required = false)
             Long classId,
@@ -137,7 +140,7 @@ public class CalendarController {
             LocalDateTime to,
 
             @RequestParam(value = "status", required = false)
-            Session.SessionStatus status,
+            SessionStatus status,
 
             @RequestParam(value = "classId", required = false)
             Long classId,
@@ -174,6 +177,55 @@ public class CalendarController {
                 )
         );
 
-        return sessionService.getAll(pageable, null, filter);
+        Page<SessionDTO> demoPage = sessionService.getAll(pageable, null, filter);
+        List<SessionDTO> allSessions = new java.util.ArrayList<>(demoPage.getContent());
+
+        // Include study sessions from the enterprise module
+        List<com.example.starter_project_2025.system.study_session.StudySession> studyList =
+                studySessionRepository.findPotentialScheduleEntries(from.toLocalDate(), to.toLocalDate());
+        for (var s : studyList) {
+            if (s.getSessionDate() == null || s.getStartTime() == null || s.getEndTime() == null) continue;
+            LocalDateTime sStart = s.getSessionDate().atTime(s.getStartTime());
+            LocalDateTime sEnd = s.getSessionDate().atTime(s.getEndTime());
+            if (sStart.isAfter(to) || sEnd.isBefore(from)) continue;
+
+            Session.SessionStatus sStatus = Session.SessionStatus.SCHEDULED;
+            if (s.getStatus() != null) {
+                try {
+                    sStatus = Session.SessionStatus.valueOf(s.getStatus().name());
+                } catch (Exception ignored) {}
+            }
+            if (status != null && status != sStatus) continue;
+
+            SessionDTO dto = SessionDTO.builder()
+                    .classId(s.getClassId())
+                    .topicId(s.getSubjectId())
+                    .trainerId(s.getTrainerId())
+                    .teachingAssignmentId(s.getTeachingAssignmentId())
+                    .roomId(s.getRoomId())
+                    .location(s.getRoom() != null ? s.getRoom() : (s.getMeetingUrl() != null ? "Online" : null))
+                    .meetingUrl(s.getMeetingUrl())
+                    .title(s.getTitle())
+                    .startTime(sStart)
+                    .endTime(sEnd)
+                    .status(sStatus)
+                    .note(s.getNotes())
+                    .build();
+            dto.setId(s.getId());
+            allSessions.add(dto);
+        }
+
+        allSessions.sort((a, b) -> {
+            int cmp = a.getStartTime().compareTo(b.getStartTime());
+            if (cmp != 0) return cmp;
+            return Long.compare(a.getId() != null ? a.getId() : 0, b.getId() != null ? b.getId() : 0);
+        });
+
+        int total = allSessions.size();
+        int startIndex = Math.min((int) pageable.getOffset(), total);
+        int endIndex = Math.min(startIndex + pageable.getPageSize(), total);
+        List<SessionDTO> pagedList = allSessions.subList(startIndex, endIndex);
+
+        return new org.springframework.data.domain.PageImpl<>(pagedList, pageable, total);
     }
 }

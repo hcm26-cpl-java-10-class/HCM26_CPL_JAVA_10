@@ -27,6 +27,7 @@ public class SessionServiceImpl
     SessionMapper sessionMapper;
     SessionRepository sessionRepository;
     ScheduleValidationEngine conflicts;
+    com.example.starter_project_2025.system.trainingprogram.TeachingAssignmentSessionGuard assignmentGuard;
 
     @Override
     public SessionDTO create(SessionDTO request) {
@@ -53,6 +54,14 @@ public class SessionServiceImpl
         conflicts.lockForWrite();
         conflicts.requireValid(requests.stream().map(r -> candidate(null, r)).toList());
         return requests.stream().map(this::create).toList();
+    }
+
+    @Override
+    public void delete(Long id) {
+        checkPermission(CrudAction.DELETE);
+        conflicts.lockForWrite();
+        sessionRepository.findById(id).ifPresent(session -> assignmentGuard.rememberUse(session.getTeachingAssignmentId()));
+        super.delete(id);
     }
 
     private ScheduleCandidate candidate(Session current, SessionDTO r) {
@@ -87,6 +96,7 @@ public class SessionServiceImpl
 
     @Override
     protected void beforeCreate(Session session, SessionDTO request, ValidationContext ctx) {
+        assignmentGuard.requireCompatible(candidate(null, request));
         conflicts.requireValid(List.of(candidate(null, request)));
         // 1. Kiểm tra thời gian: end_time phải sau start_time (BR-02, FR-CAL-01)
         validateSessionTime(request.getStartTime(), request.getEndTime(), ctx);
@@ -113,6 +123,8 @@ public class SessionServiceImpl
         LocalDateTime newEnd = request.getEndTime() != null ? request.getEndTime() : session.getEndTime();
 
         validateSessionTime(newStart, newEnd, ctx);
+        assignmentGuard.rememberUse(session.getTeachingAssignmentId());
+        assignmentGuard.requireCompatible(candidate(session, request));
         conflicts.requireValid(List.of(candidate(session, request)));
         // An explicit empty location clears a previously selected physical room.
         if (request.getRoomId() == null && request.getLocation() != null && request.getLocation().isBlank()) {

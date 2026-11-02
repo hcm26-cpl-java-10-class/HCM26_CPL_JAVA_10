@@ -18,7 +18,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import {
   Calendar as CalendarIcon,
   CalendarDays,
@@ -35,6 +35,7 @@ import {
   Users,
   GraduationCap,
   Eye,
+  FileEdit,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,13 +46,8 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 const TIME_ZONE = "Asia/Ho_Chi_Minh";
-const STUDY_SLOTS = [
-  { id: 1, label: "Slot 1", start: "07:00", end: "09:15" },
-  { id: 2, label: "Slot 2", start: "09:30", end: "11:45" },
-  { id: 3, label: "Slot 3", start: "12:30", end: "14:45" },
-  { id: 4, label: "Slot 4", start: "15:00", end: "17:15" },
-];
 const PAGE_SIZE = 100;
+
 
 const statusLabels: Record<CalendarSessionStatus, string> = {
   SCHEDULED: "Đã lên lịch",
@@ -187,14 +183,28 @@ function SessionDetailModal({
   );
 }
 
-// Thẻ hiển thị buổi học trong lưới tuần
-function SessionCard({ session }: { session: CalendarSessionResponse }) {
+// Thẻ hiển thị buổi học trong lưới tuần (Dynamic Session Card)
+function SessionCard({
+  session,
+  sessionIndex,
+}: {
+  session: CalendarSessionResponse;
+  sessionIndex?: number;
+}) {
   const start = dayjs.tz(session.startTime, TIME_ZONE);
   const end = dayjs.tz(session.endTime, TIME_ZONE);
   const sameDay = start.format("YYYY-MM-DD") === end.format("YYYY-MM-DD");
   const timeLabel = sameDay
-    ? `${start.format("HH:mm")}–${end.format("HH:mm")}`
-    : `${start.format("DD/MM HH:mm")}–${end.format("DD/MM HH:mm")}`;
+    ? `${start.format("HH:mm")} – ${end.format("HH:mm")}`
+    : `${start.format("DD/MM HH:mm")} – ${end.format("DD/MM HH:mm")}`;
+
+  const durationHours = end.diff(start, "minute") / 60;
+  const durationText =
+    durationHours > 0
+      ? durationHours % 1 === 0
+        ? `${durationHours}h`
+        : `${durationHours.toFixed(1)}h`
+      : "";
 
   const statusClass = statusClasses[session.status] || "bg-muted text-muted-foreground";
 
@@ -202,29 +212,57 @@ function SessionCard({ session }: { session: CalendarSessionResponse }) {
     <SessionDetailModal
       session={session}
       trigger={
-        <article className="group cursor-pointer overflow-hidden rounded-lg border bg-card transition-all hover:border-primary/50 hover:shadow-md text-left">
-          <div className="flex items-center justify-between gap-1 border-b bg-muted/50 px-2 py-1">
-            <span className="truncate text-[11px] font-semibold text-foreground">
-              {session.location || "TBA"}
-            </span>
-            <span className={`rounded px-1.5 py-0.2 text-[9px] font-bold ${statusClass}`}>
-              {statusLabels[session.status] ?? session.status}
-            </span>
+        <article className="group relative cursor-pointer overflow-hidden rounded-xl border border-border/80 bg-card p-2.5 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md text-left">
+          {/* Top header: Session index & Time Badge */}
+          <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-border/60">
+            <div className="inline-flex items-center gap-1 text-[11px] font-bold text-primary">
+              <Clock className="h-3 w-3 shrink-0" />
+              <span>{timeLabel}</span>
+              {durationText && (
+                <span className="text-[10px] font-normal text-muted-foreground">({durationText})</span>
+              )}
+            </div>
+            {typeof sessionIndex === "number" && (
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary">
+                Ca {sessionIndex}
+              </span>
+            )}
           </div>
 
-          <div className="space-y-0.5 p-2 text-[11px] leading-4">
-            <p className="font-bold text-foreground line-clamp-1 group-hover:text-primary">
-              {session.title || "Buổi học"}
-            </p>
-            <p className="text-muted-foreground">
-              Lớp: <strong>#{session.classId}</strong> · Topic: <strong>#{session.topicId}</strong>
-            </p>
-            <p className="text-muted-foreground">
-              GV: <strong>{session.trainerId ? `#${session.trainerId}` : "TBA"}</strong>
-            </p>
-            <p className="font-medium text-primary text-[10px] pt-0.5 flex items-center gap-1">
-              <Clock className="h-3 w-3" /> {timeLabel}
-            </p>
+          {/* Main content */}
+          <div className="pt-2 space-y-1.5 text-xs">
+            <h4 className="font-bold text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+              {session.title || "Buổi học đào tạo"}
+            </h4>
+
+            <div className="space-y-0.5 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-1.5 truncate">
+                <GraduationCap className="h-3 w-3 shrink-0 text-muted-foreground/70" />
+                <span className="truncate">
+                  Lớp #{session.classId} {session.topicId ? `· Topic #${session.topicId}` : ""}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 truncate">
+                <User className="h-3 w-3 shrink-0 text-muted-foreground/70" />
+                <span className="truncate font-medium text-foreground/80">
+                  {session.trainerId ? `Trainer #${session.trainerId}` : "Chưa gán Trainer"}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 truncate">
+                <MapPin className="h-3 w-3 shrink-0 text-muted-foreground/70" />
+                <span className="truncate">{session.location || "Chưa xếp phòng"}</span>
+              </div>
+            </div>
+
+            {/* Bottom status */}
+            <div className="pt-1 flex items-center justify-between border-t border-border/40">
+              <span className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-semibold border ${statusClass}`}>
+                {statusLabels[session.status] ?? session.status}
+              </span>
+              <span className="text-[10px] text-primary/80 opacity-0 group-hover:opacity-100 transition-opacity font-medium flex items-center gap-0.5">
+                Chi tiết <ChevronRight className="h-3 w-3" />
+              </span>
+            </div>
           </div>
         </article>
       }
@@ -450,39 +488,109 @@ export default function WeeklyCalendarPage() {
     toast.success(`Đã xuất ${sessions.length} buổi học ra file CSV thành công!`);
   }
 
-  function getSessionsInRange(start: string, end: string) {
-    const rangeStart = dayjs.tz(start, TIME_ZONE).valueOf();
-    const rangeEnd = dayjs.tz(end, TIME_ZONE).valueOf();
-    return sessions.filter((session) => {
-      const sessionStart = dayjs.tz(session.startTime, TIME_ZONE).valueOf();
-      const sessionEnd = dayjs.tz(session.endTime, TIME_ZONE).valueOf();
-      return sessionStart < rangeEnd && sessionEnd > rangeStart;
+  // Tải dữ liệu mẫu minh họa cho tuần hiện tại (khi backend chưa seed data hoặc offline)
+  function loadSampleSessions() {
+    const monday = weekStart;
+    const sampleData: CalendarSessionResponse[] = [
+      {
+        id: 101,
+        title: "[L2_JA_JS] Java SE / OOP Fundamentals (Lecture)",
+        startTime: monday.hour(8).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        endTime: monday.hour(10).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        status: "SCHEDULED",
+        classId: 1,
+        topicId: 1,
+        trainerId: 45,
+        location: "Room 302 (F-Town 1)",
+        isActive: true,
+      },
+      {
+        id: 102,
+        title: "[L2_JA_JS] Java OOP Practice Lab & Exercises",
+        startTime: monday.hour(10).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        endTime: monday.hour(12).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        status: "SCHEDULED",
+        classId: 1,
+        topicId: 1,
+        trainerId: 45,
+        location: "Lab 4 (F-Town 1)",
+        isActive: true,
+      },
+      {
+        id: 103,
+        title: "[L2_JA_JS] Java Collection Framework & Generics",
+        startTime: monday.hour(13).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        endTime: monday.hour(17).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        status: "SCHEDULED",
+        classId: 1,
+        topicId: 1,
+        trainerId: 45,
+        location: "Lab 4 (F-Town 1)",
+        isActive: true,
+      },
+      {
+        id: 104,
+        title: "[L2_JA_JS] Exception Handling & Clean Code Principles",
+        startTime: monday.add(1, "day").hour(8).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        endTime: monday.add(1, "day").hour(10).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        status: "SCHEDULED",
+        classId: 1,
+        topicId: 1,
+        trainerId: 45,
+        location: "Room 302 (F-Town 1)",
+        isActive: true,
+      },
+      {
+        id: 105,
+        title: "[L2_JA_JS] Hands-on Coding Assignment #1",
+        startTime: monday.add(1, "day").hour(10).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        endTime: monday.add(1, "day").hour(12).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        status: "SCHEDULED",
+        classId: 1,
+        topicId: 1,
+        trainerId: 45,
+        location: "Lab 4 (F-Town 1)",
+        isActive: true,
+      },
+      {
+        id: 106,
+        title: "[L2_JA_JS] Progress Assessment & Code Review",
+        startTime: monday.add(2, "day").hour(13).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        endTime: monday.add(2, "day").hour(17).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        status: "SCHEDULED",
+        classId: 1,
+        topicId: 1,
+        trainerId: 45,
+        location: "Room 302 (F-Town 1)",
+        isActive: true,
+      },
+      {
+        id: 107,
+        title: "[L2_JA_JS] JDBC Database Connectivity & DAO Pattern",
+        startTime: monday.add(3, "day").hour(8).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        endTime: monday.add(3, "day").hour(12).minute(0).second(0).format("YYYY-MM-DDTHH:mm:ss"),
+        status: "SCHEDULED",
+        classId: 1,
+        topicId: 1,
+        trainerId: 45,
+        location: "Room 302 (F-Town 1)",
+        isActive: true,
+      },
+    ];
+
+    setResult({
+      content: sampleData,
+      totalElements: sampleData.length,
+      totalPages: 1,
+      size: sampleData.length,
+      number: 0,
+      first: true,
+      last: true,
     });
+    setError(null);
+    toast.success("Đã nạp 7 buổi học mẫu minh họa cho tuần này!");
   }
 
-  function getOutsideSlotSessions(dateKey: string) {
-    const nextDateKey = dayjs
-      .tz(`${dateKey}T00:00:00`, TIME_ZONE)
-      .add(1, "day")
-      .format("YYYY-MM-DD");
-
-    const daySessions = getSessionsInRange(
-      `${dateKey}T00:00:00`,
-      `${nextDateKey}T00:00:00`,
-    );
-
-    return daySessions.filter((session) => {
-      return !STUDY_SLOTS.some((slot) => {
-        const slotStart = dayjs.tz(`${dateKey}T${slot.start}:00`, TIME_ZONE).valueOf();
-        const slotEnd = dayjs.tz(`${dateKey}T${slot.end}:00`, TIME_ZONE).valueOf();
-        const sessionStart = dayjs.tz(session.startTime, TIME_ZONE).valueOf();
-        const sessionEnd = dayjs.tz(session.endTime, TIME_ZONE).valueOf();
-        return sessionStart < slotEnd && sessionEnd > slotStart;
-      });
-    });
-  }
-
-  // Danh sách các ngày trong tuần (Mon - Sun)
   const weekDays = [
     "Thứ Hai",
     "Thứ Ba",
@@ -575,6 +683,17 @@ export default function WeeklyCalendarPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Link to="/calendar/adjust">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs font-medium"
+              >
+                <FileEdit className="h-4 w-4 text-primary" />
+                Điều chỉnh lịch (Adjust Calendar)
+              </Button>
+            </Link>
             <Button
               type="button"
               variant="outline"
@@ -796,15 +915,26 @@ export default function WeeklyCalendarPage() {
         {!loading && error && (
           <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center space-y-3">
             <p className="text-sm font-semibold text-destructive">{error}</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setReloadKey((p) => p + 1)}
-              className="h-8 text-xs"
-            >
-              Thử lại
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setReloadKey((p) => p + 1)}
+                className="h-8 text-xs"
+              >
+                Thử lại
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={loadSampleSessions}
+                className="h-8 text-xs bg-primary text-primary-foreground gap-1.5 shadow-sm"
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+                Xem dữ liệu mẫu minh họa (Demo Sessions)
+              </Button>
+            </div>
           </div>
         )}
 
@@ -819,93 +949,84 @@ export default function WeeklyCalendarPage() {
               <span>Múi giờ chuẩn: <strong>Asia/Ho_Chi_Minh (UTC+7)</strong></span>
             </div>
 
-            {/* 1. CHẾ ĐỘ XEM TUẦN (WEEK VIEW) */}
+            {/* 1. CHẾ ĐỘ XEM TUẦN (WEEK VIEW - DYNAMIC SESSIONS FLOW) */}
             {viewMode === "week" && (
               <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
-                <table className="w-full min-w-[1200px] table-fixed border-collapse">
-                  <thead>
-                    <tr className="bg-muted/40">
-                      <th scope="col" className="w-28 border-b border-r p-3 text-center text-xs font-semibold text-muted-foreground">
-                        Khung giờ (Slot)
-                      </th>
-                      {weekDays.map((day) => (
-                        <th
+                <div className="min-w-[1100px]">
+                  {/* Header 7 ngày trong tuần */}
+                  <div className="grid grid-cols-7 border-b bg-muted/40 divide-x divide-border">
+                    {weekDays.map((day) => {
+                      const daySessionsCount = sessions.filter(
+                        (s) => s.startTime && s.startTime.substring(0, 10) === day.dateKey,
+                      ).length;
+
+                      return (
+                        <div
                           key={day.dateKey}
-                          scope="col"
-                          className={`border-b border-r p-3 text-center last:border-r-0 ${
+                          className={`p-3 text-center transition-colors ${
                             day.isToday ? "bg-primary/10" : ""
                           }`}
                         >
                           <p className="text-xs font-semibold text-muted-foreground">{day.label}</p>
-                          <p className={`mt-0.5 text-base font-bold ${day.isToday ? "text-primary" : "text-foreground"}`}>
+                          <p
+                            className={`mt-0.5 text-base font-bold ${
+                              day.isToday ? "text-primary" : "text-foreground"
+                            }`}
+                          >
                             {day.dateLabel}
                           </p>
-                          <p className="min-h-3 text-[10px] font-bold text-primary">
-                            {day.isToday ? "● Hôm nay" : "\u00A0"}
-                          </p>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
+                          <div className="mt-1 flex items-center justify-center gap-1.5">
+                            {day.isToday && (
+                              <span className="text-[10px] font-bold text-primary">● Hôm nay</span>
+                            )}
+                            <span className="rounded-full bg-muted/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground border">
+                              {daySessionsCount} buổi
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                  <tbody>
-                    {STUDY_SLOTS.map((slot) => (
-                      <tr key={slot.id} className="border-b last:border-b-0">
-                        <th scope="row" className="border-r bg-muted/20 px-2 py-4 text-center align-top">
-                          <p className="text-xs font-bold text-foreground">{slot.label}</p>
-                          <p className="mt-1 text-[11px] font-normal text-muted-foreground">
-                            {slot.start}–{slot.end}
-                          </p>
-                        </th>
+                  {/* Lưới 7 cột ngày - hiển thị các Sessions động theo thời gian thực */}
+                  <div className="grid grid-cols-7 divide-x divide-border min-h-[480px] bg-background">
+                    {weekDays.map((day) => {
+                      const daySessions = sessions
+                        .filter(
+                          (s) => s.startTime && s.startTime.substring(0, 10) === day.dateKey,
+                        )
+                        .sort(
+                          (a, b) =>
+                            dayjs.tz(a.startTime, TIME_ZONE).valueOf() -
+                            dayjs.tz(b.startTime, TIME_ZONE).valueOf(),
+                        );
 
-                        {weekDays.map((day) => {
-                          const slotSessions = getSessionsInRange(
-                            `${day.dateKey}T${slot.start}:00`,
-                            `${day.dateKey}T${slot.end}:00`,
-                          );
-
-                          return (
-                            <td
-                              key={day.dateKey}
-                              className={`border-r p-1.5 align-top last:border-r-0 ${
-                                day.isToday ? "bg-primary/[0.02]" : ""
-                              }`}
-                            >
-                              <div className="min-h-20 space-y-1.5">
-                                {slotSessions.length === 0 ? (
-                                  <p className="py-6 text-center text-xs text-muted-foreground/30">—</p>
-                                ) : (
-                                  slotSessions.map((session) => (
-                                    <SessionCard key={String(session.id)} session={session} />
-                                  ))
-                                )}
-                              </div>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-
-                    {/* Dòng ngoài slot */}
-                    {weekDays.some((day) => getOutsideSlotSessions(day.dateKey).length > 0) && (
-                      <tr className="border-t bg-muted/5">
-                        <th scope="row" className="border-r bg-muted/30 px-2 py-4 text-center align-top">
-                          <p className="text-xs font-bold text-foreground">Ngoài slot</p>
-                          <p className="mt-1 text-[10px] text-muted-foreground">Khung giờ khác</p>
-                        </th>
-                        {weekDays.map((day) => (
-                          <td key={day.dateKey} className="border-r p-1.5 align-top last:border-r-0">
-                            <div className="space-y-1.5">
-                              {getOutsideSlotSessions(day.dateKey).map((session) => (
-                                <SessionCard key={String(session.id)} session={session} />
-                              ))}
+                      return (
+                        <div
+                          key={day.dateKey}
+                          className={`p-2 space-y-2 flex flex-col transition-colors ${
+                            day.isToday ? "bg-primary/[0.02]" : ""
+                          }`}
+                        >
+                          {daySessions.length === 0 ? (
+                            <div className="flex flex-1 flex-col items-center justify-center py-16 text-center text-muted-foreground/40">
+                              <CalendarIcon className="h-6 w-6 stroke-1 mb-1.5 opacity-40" />
+                              <span className="text-xs">Không có buổi học</span>
                             </div>
-                          </td>
-                        ))}
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                          ) : (
+                            daySessions.map((session, index) => (
+                              <SessionCard
+                                key={String(session.id || index)}
+                                session={session}
+                                sessionIndex={index + 1}
+                              />
+                            ))
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
 
