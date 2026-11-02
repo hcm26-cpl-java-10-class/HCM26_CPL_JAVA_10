@@ -28,18 +28,35 @@ export function QuestionAnswers({ question }: { question: QuestionDTO }) {
   if (question.type === "ESSAY") {
     return <span className="mt-2 block text-xs italic text-muted-foreground">Tự luận - chấm tay, không có đáp án.</span>;
   }
+  if (question.type === "CODING") {
+    return <span className="mt-2 block text-xs italic text-muted-foreground">Lập trình - chấm theo test cases tự động.</span>;
+  }
   return (
-    <ul className="mt-2 grid gap-1">
-      {(question.options ?? []).map((option, index) => (
-        <li
-          key={option.id ?? index}
-          className={`flex items-start gap-1.5 text-xs ${option.correct ? "font-medium text-green-700" : "text-muted-foreground"}`}
-        >
-          {option.correct ? <Check className="mt-0.5 size-3.5 shrink-0" /> : <span className="size-3.5 shrink-0" />}
-          <span className="min-w-0 break-words">{option.content}</span>
-          {option.correct && <Badge variant="outline" className="h-4 px-1 text-[10px] text-green-700">Đúng</Badge>}
-        </li>
-      ))}
+    <ul className="mt-2 grid gap-1.5">
+      {(question.options ?? []).map((option, index) => {
+        const optionLetter = String.fromCharCode(65 + index);
+        const isCorrect = Boolean(option.correct);
+        return (
+          <li
+            key={option.id ?? index}
+            className={`flex items-start gap-2 rounded px-2 py-1 text-xs transition-colors ${
+              isCorrect
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium border border-emerald-500/30"
+                : "text-muted-foreground hover:bg-muted/40"
+            }`}
+          >
+            <span className={`font-semibold shrink-0 ${isCorrect ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/70"}`}>
+              {optionLetter}.
+            </span>
+            <span className="min-w-0 flex-1 break-words">{option.content}</span>
+            {isCorrect && (
+              <Badge variant="outline" className="h-4 px-1 text-[10px] text-emerald-600 border-emerald-500/40 dark:text-emerald-400 bg-emerald-500/15 shrink-0 flex items-center gap-0.5">
+                <Check className="size-2.5" /> Đúng
+              </Badge>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
