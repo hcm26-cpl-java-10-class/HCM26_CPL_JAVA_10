@@ -137,6 +137,7 @@ public class ProjectTemplateSnapshotServiceImpl
     com.example.starter_project_2025.system.project.template.version.TemplateVersionConfigurationService versionConfigurations;
     ProjectTemplateAccessService templateAccess;
     TemplateVersionLifecycleService lifecycle;
+    com.example.starter_project_2025.system.project.resources.template_resources.TemplateResourceCopyService templateResourceCopies;
 
     @Override
     protected BaseCrudRepository<ProjectTemplateSnapshot, Long> getRepository() {
@@ -225,6 +226,9 @@ public class ProjectTemplateSnapshotServiceImpl
 
         syncTemplateVersion(saved.getTemplateId(), nextVersion);
         versionConfigurations.synchronizeDraft(saved);
+        // US-RES-001: a new version starts with the same resource list as the
+        // version it was created from; the draft can then diverge freely.
+        templateResourceCopies.copy(source.getId(), saved.getId(), saved.getTemplateId());
 
         // AC01: the audit trail records that this row was derived from another
         // version (not just "created"), so the lineage can be reviewed later.
@@ -435,6 +439,9 @@ public class ProjectTemplateSnapshotServiceImpl
                 .build();
 
         ProjectTemplateSnapshot saved = snapshotRepository.save(created);
+        // US-RES-001: the duplicated template starts with a copy of the source
+        // resources; file bytes are shared through the same storage keys.
+        templateResourceCopies.copy(source.getId(), saved.getId(), saved.getTemplateId());
 
         Map<String, Object> before = snapshot(source);
         Map<String, Object> after = snapshot(saved);

@@ -16,6 +16,12 @@ import com.example.starter_project_2025.system.project.cohort.CohortStatus;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.domain.ProjectStatus;
 import com.example.starter_project_2025.system.project.domain.ProjectTopicSnapshot;
+import com.example.starter_project_2025.system.project.resources.ResourceKind;
+import com.example.starter_project_2025.system.project.resources.TemplateResourceFileStorage;
+import com.example.starter_project_2025.system.project.resources.project_resource_files.ProjectResourceFile;
+import com.example.starter_project_2025.system.project.resources.project_resource_files.ProjectResourceFileRepository;
+import com.example.starter_project_2025.system.project.resources.project_resources.ProjectResource;
+import com.example.starter_project_2025.system.project.resources.project_resources.ProjectResourceRepository;
 import com.example.starter_project_2025.system.project.team.ParticipationStatus;
 import com.example.starter_project_2025.system.project.team.Team;
 import com.example.starter_project_2025.system.project.team.TeamMember;
@@ -48,6 +54,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 
 /** Local Workspace fixtures are built from the same ProjectTeam records as team allocation. */
 @Service
@@ -66,6 +73,9 @@ public class WorkspaceDemoDataService {
     private final TrainingClassRepository trainingClasses;
     private final WorkspaceRepository workspaces;
     private final ProjectTopicSnapshotRepository snapshots;
+    private final ProjectResourceRepository projectResources;
+    private final ProjectResourceFileRepository projectResourceFiles;
+    private final TemplateResourceFileStorage resourceStorage;
     private final WorkspaceCreationTransaction creation;
     private final WorkspaceDemoResetService reset;
     @Value("${app.seed.admin.email:admin@example.com}") private String adminEmail;
@@ -97,6 +107,9 @@ public class WorkspaceDemoDataService {
         Project completed = project("WS-DEMO-COMPLETED", "Completed Project", ProjectStatus.COMPLETED, tenant, cohort);
         snapshot(active);
         snapshot(existing);
+        seedResources(planning);
+        seedResources(active);
+        seedResources(existing);
 
         ensureTeam(session, trainingClass, "Team Atlas", null, teacher.getId(), List.of(studentMember));
         ensureTeam(session, trainingClass, "Team Nova", active, teacher.getId(), List.of(adminMember));
@@ -115,6 +128,81 @@ public class WorkspaceDemoDataService {
             throw new IllegalStateException("The existing student/teacher account belongs to another tenant.");
         }
         return user;
+    }
+
+    /**
+     * US-RES-004 fixtures: every demo project gets Git/Docs links plus two
+     * downloadable documents so the Resources tab has a success state.
+     */
+    private void seedResources(Project project) {
+
+        if (projectResources.countByProjectId(project.getId()) > 0) {
+            return;
+        }
+
+        String slug = project.getCode().toLowerCase(Locale.ROOT);
+
+        linkResource(project, "Git Repository",
+                "Source code repository for the team.", "https://github.com/example/" + slug, "GIT", 0);
+        linkResource(project, "Google Docs - Project Brief",
+                "Shared brief, meeting notes and the requirement checklist.",
+                "https://docs.google.com/document/d/" + slug, "DOCS", 1);
+
+        ProjectResource dataset = fileResource(project, "Sample Dataset",
+                "Sample CSV data the team can use for the first sprint.", "DOCUMENT", 2);
+        attachDocument(dataset, "sample-dataset.csv",
+                "id,name,score\n1,Nguyen Van A,8.5\n2,Tran Thi B,9.0\n");
+
+        ProjectResource guide = fileResource(project, "Project Guide",
+                "Starter guide for the project workspace.", "DOCUMENT", 3);
+        attachDocument(guide, "project-guide.md",
+                "# Project guide\n\nUse this workspace to plan milestones, sprints and deliverables.\n");
+    }
+
+    private void linkResource(Project project, String title, String description,
+                              String url, String category, int orderIndex) {
+
+        ProjectResource resource = new ProjectResource();
+        resource.setProjectId(project.getId());
+        resource.setTenantId(project.getTenantId());
+        resource.setTitle(title);
+        resource.setDescription(description);
+        resource.setKind(ResourceKind.LINK);
+        resource.setUrl(url);
+        resource.setCategory(category);
+        resource.setOrderIndex(orderIndex);
+        resource.setIsActive(true);
+        projectResources.save(resource);
+    }
+
+    private ProjectResource fileResource(Project project, String title, String description,
+                                         String category, int orderIndex) {
+
+        ProjectResource resource = new ProjectResource();
+        resource.setProjectId(project.getId());
+        resource.setTenantId(project.getTenantId());
+        resource.setTitle(title);
+        resource.setDescription(description);
+        resource.setKind(ResourceKind.FILE);
+        resource.setCategory(category);
+        resource.setOrderIndex(orderIndex);
+        resource.setIsActive(true);
+        return projectResources.save(resource);
+    }
+
+    private void attachDocument(ProjectResource resource, String fileName, String content) {
+
+        TemplateResourceFileStorage.StoredTemplateFile stored =
+                resourceStorage.storeBytes(content.getBytes(java.nio.charset.StandardCharsets.UTF_8), fileName);
+
+        ProjectResourceFile file = new ProjectResourceFile();
+        file.setResourceId(resource.getId());
+        file.setStorageKey(stored.storageKey());
+        file.setOriginalName(stored.originalName());
+        file.setContentType(stored.contentType());
+        file.setSizeBytes(stored.sizeBytes());
+        file.setIsActive(true);
+        projectResourceFiles.save(file);
     }
 
     private Cohort cohort(Tenant tenant) {
