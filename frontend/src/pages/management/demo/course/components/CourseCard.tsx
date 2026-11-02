@@ -16,6 +16,8 @@ interface CourseCardProps {
   onEnroll: (courseId: number) => void;
   disableNavigation?: boolean;
   onSelect?: (course: CatalogCourse) => void;
+  /** Đường dẫn tới trang chi tiết (mặc định /courses/:id). */
+  detailPath?: string;
 }
 
 export function CourseCard({
@@ -27,8 +29,9 @@ export function CourseCard({
   onEnroll,
   disableNavigation = false,
   onSelect,
+  detailPath: detailPathProp,
 }: CourseCardProps) {
-  const detailPath = `/courses/${course.id}`;
+  const detailPath = detailPathProp ?? `/courses/${course.id}`;
 
   const handleSelect = () => {
     if (disableNavigation && onSelect) {
