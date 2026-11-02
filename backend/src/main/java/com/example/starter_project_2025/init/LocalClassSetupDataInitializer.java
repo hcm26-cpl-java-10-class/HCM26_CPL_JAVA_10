@@ -115,12 +115,12 @@ public class LocalClassSetupDataInitializer implements CommandLineRunner {
                         .trainerId(1L)
                         .teachingAssignmentId(assignment.getId())
                         .roomId(1L)
-                        .location("Phòng mẫu A101")
+                        .location("Phòng Lab 201 (F-Town 2)")
                         .title("Java Core - Buổi 01: OOP & Collections")
                         .startTime(LocalDateTime.of(2026, 11, 2, 8, 30))
                         .endTime(LocalDateTime.of(2026, 11, 2, 11, 30))
                         .status(Session.SessionStatus.SCHEDULED)
-                        .note("Buổi học mẫu khởi tạo cho kế hoạch môn học lớp LOCAL_JAVA_01")
+                        .note("Kế hoạch môn học lớp LOCAL_JAVA_01")
                         .isActive(true)
                         .build());
             }

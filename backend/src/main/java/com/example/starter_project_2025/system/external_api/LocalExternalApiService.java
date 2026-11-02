@@ -30,19 +30,19 @@ public class LocalExternalApiService implements ExternalApiService {
     public LocalExternalApiService(ManagedClassDirectory managedClasses, ManagedTrainerDirectory managedTrainers) {
         this.managedClasses = managedClasses;
         this.managedTrainers = managedTrainers;
-        classes.put(1L, ExternalClassDTO.builder().id(1L).code("LOCAL_JAVA_01").name("Lớp Java mẫu 01")
+        classes.put(1L, ExternalClassDTO.builder().id(1L).code("LOCAL_JAVA_01").name("Lớp Chuyên sâu Java Backend (K26)")
                 .startDate("2026-10-01").endDate("2027-01-31").status("active")
                 .plannedSize(25).enrolledCount(18)
                 .deliveryType("Class").traineeType("Fresher").formatType("Offline").skills("Java, Spring Boot")
                 .site("TP. Hồ Chí Minh").location("F-Town 3, Phòng A101").subjectType("IT Technical")
                 .scope("Unit").supplierPartner("SCM").jobRecommendation(false).build());
-        classes.put(2L, ExternalClassDTO.builder().id(2L).code("LOCAL_JAVA_02").name("Lớp Java mẫu 02")
+        classes.put(2L, ExternalClassDTO.builder().id(2L).code("LOCAL_JAVA_02").name("Lớp Lập trình Fullstack Java Web (K26)")
                 .startDate("2026-11-15").endDate("2027-03-15").status("active")
                 .plannedSize(30).enrolledCount(0)
                 .deliveryType("Class").traineeType("Fresher").formatType("Hybrid").skills("Java, React")
                 .site("TP. Hồ Chí Minh").location("QTSC 9, Phòng A102").subjectType("IT Technical")
                 .scope("Unit").supplierPartner("SCM").jobRecommendation(false).build());
-        classes.put(3L, ExternalClassDTO.builder().id(3L).code("LOCAL_JAVA_OLD").name("Lớp Java mẫu đã kết thúc")
+        classes.put(3L, ExternalClassDTO.builder().id(3L).code("LOCAL_JAVA_OLD").name("Lớp Kỹ thuật phần mềm Java (Đã hoàn thành)")
                 .startDate("2026-03-01").endDate("2026-07-31").status("inactive")
                 .plannedSize(25).enrolledCount(24)
                 .deliveryType("Class").traineeType("Fresher").formatType("Offline").skills("Java")
@@ -96,16 +96,16 @@ public class LocalExternalApiService implements ExternalApiService {
     @Override
     public List<ExternalTrainerDTO> fetchTrainers(String status) {
         return managedTrainers.merge(List.of(
-                new ExternalTrainerDTO(1L, "Giảng viên mẫu An", "trainer.an@example.com", "active"),
-                new ExternalTrainerDTO(2L, "Giảng viên mẫu Bình", "trainer.binh@example.com", "active"),
-                new ExternalTrainerDTO(3L, "Giảng viên mẫu đã nghỉ", "trainer.old@example.com", "inactive")
+                new ExternalTrainerDTO(1L, "Nguyễn Ngọc Tân (Trainer)", "trainer.an@example.com", "active"),
+                new ExternalTrainerDTO(2L, "Nguyễn Mạnh Hoàng (Trainer)", "trainer.binh@example.com", "active"),
+                new ExternalTrainerDTO(3L, "Trần Văn Bình (Trainer)", "trainer.old@example.com", "inactive")
         ).stream().filter(item -> matchesStatus(status, item.getStatus())).toList(), status);
     }
 
     @Override
     public List<ExternalRoomDTO> fetchRooms() {
-        return List.of(new ExternalRoomDTO(1L, "Phòng mẫu A101", 30),
-                new ExternalRoomDTO(2L, "Phòng mẫu A102", 25));
+        return List.of(new ExternalRoomDTO(1L, "Phòng Lab 201 (F-Town 2)", 30),
+                new ExternalRoomDTO(2L, "Phòng 304 (Innovation Hall)", 25));
     }
 
     private ExternalClassDTO toClass(Long id, ExternalClassRequest request, Long programId, Integer enrolledCount) {

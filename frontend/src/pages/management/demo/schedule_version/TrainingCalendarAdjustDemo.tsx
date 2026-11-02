@@ -75,20 +75,16 @@ export type TrainingTopic = {
 };
 
 export const PRESET_CLASSES = [
-  { id: "HCM26_FR_FU_KS_JAVA_01", name: "HCM26_FR_FU_KS_JAVA_01 (FAMS Reference Class)" },
-  { id: "CLASS-01", name: "CLASS-01 (Kỳ 1 Chuyên sâu SE)" },
-  { id: "CLASS-02", name: "CLASS-02 (Java 10 OJT Web)" },
-  { id: "CLASS-03", name: "CLASS-03 (Mobile App)" },
-  { id: "SE-01", name: "SE-01 (Kỹ thuật phần mềm)" },
-  { id: "Java-10", name: "Java-10 (Lập trình Java core)" },
+  { id: "LOCAL_JAVA_01", name: "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)" },
+  { id: "LOCAL_JAVA_02", name: "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)" },
+  { id: "HCM26_FR_FU_KS_JAVA_01", name: "[HCM26_FR_FU_KS_JAVA_01] Lớp Java SE & Spring Boot" },
 ];
 
 export const LOCATION_OPTIONS = [
-  "[HCM] [FTOWN-1] Full Time 2026",
-  "[HCM] [FTOWN-2] Part Time 2026",
-  "[HCM] [FTOWN-3] Full Time 2026",
-  "[HN] [F-VILLE 1] Full Time 2026",
-  "[DN] [F-COMPLEX] Full Time 2026",
+  "Phòng Lab 201 (F-Town 2)",
+  "Phòng 304 (Innovation Hall)",
+  "Phòng Lab 405 (F-Town 1)",
+  "Phòng Online Zoom A",
 ];
 
 export const TOPIC_SECTION_OPTIONS = [
@@ -99,14 +95,11 @@ export const TOPIC_SECTION_OPTIONS = [
 ];
 
 export const PIC_OPTIONS = [
-  "NgaTTT45",
-  "TanNT295",
-  "HoangNM12",
-  "ThangNV8",
-  "DanhNT15",
-  "PhatHT2",
-  "Nguyen Van A",
-  "Le Van C",
+  "Nguyễn Ngọc Tân (Trainer)",
+  "Nguyễn Mạnh Hoàng (Trainer)",
+  "Nguyễn Văn Thắng (Trainer)",
+  "Nguyễn Tuấn Danh (Trainer)",
+  "Huỳnh Tấn Phát (Trainer)",
 ];
 
 export const CONTRIBUTION_OPTIONS = [
@@ -1411,7 +1404,7 @@ export default function TrainingCalendarAdjustDemo({
                     {cls.name}
                   </option>
                 ))}
-                {!PRESET_CLASSES.some((cls) => cls.id === selectedClassId) && (
+                {!classOptions.some((cls) => cls.id === selectedClassId) && (
                   <option value={selectedClassId}>{selectedClassId}</option>
                 )}
               </select>
