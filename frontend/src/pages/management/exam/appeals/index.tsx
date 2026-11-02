@@ -27,6 +27,7 @@ import {
   type ScoreAppealStatus,
 } from "@/types/features/score-appeal";
 import { formatScore } from "@/utils/examScore";
+import { FileText } from "lucide-react";
 import AppealReviewDialog from "./AppealReviewDialog";
 
 const STATUS_OPTIONS: { value: ScoreAppealStatus | "ALL"; label: string }[] = [
@@ -216,6 +217,7 @@ export default function ScoreAppealsPage() {
                             setDialogOpen(true);
                           }}
                         >
+                          <FileText className="size-4" />
                           {appeal.status === "PENDING" ? "Review" : "View"}
                         </Button>
                       </TableCell>

@@ -1,5 +1,5 @@
 import api from './axios';
-import type { ExamCategory } from '@/types';
+import type { ExamCategory, ResultVisibility } from '@/types';
 import type { CodeSpec } from '@/types/features/exam';
 
 export interface Exam {
@@ -16,6 +16,8 @@ export interface Exam {
     latePolicy?: 'NOT_ALLOWED' | 'ALLOWED' | 'ALLOWED_WITH_PENALTY';
     hasPassword?: boolean;
     showAnswersAfterExam?: boolean;
+    /** When students can review their scores. */
+    resultVisibility?: ResultVisibility;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -141,7 +143,40 @@ export interface ExamAttemptReview {
     objectiveScore: number | null;
     finalScore: number | null;
     submittedAt: string | null;
+    /** Results and correct/wrong answers are released (scores published). */
+    revealAnswers: boolean;
     questions: ExamReviewQuestion[];
+}
+
+export interface AttemptIntegritySummary {
+    /** Attempt has at least one anti-cheat violation. */
+    flagged: boolean;
+    totalViolations: number;
+    tabSwitchCount: number;
+    copyPasteCount: number;
+    fullscreenExitCount: number;
+    shortcutCount: number;
+    multiSessionCount: number;
+    windowBlurCount: number;
+    contextMenuCount: number;
+    totalAwaySeconds: number;
+    lastViolationAt: string | null;
+    antiCheatEnabled: boolean;
+}
+
+export interface AttemptSubmission {
+    review: ExamAttemptReview;
+    integrity: AttemptIntegritySummary;
+}
+
+export interface IntegrityEventDTO {
+    id: number;
+    type: string;
+    occurredAt: string;
+    durationSeconds?: number | null;
+    detail?: string | null;
+    userAgent?: string | null;
+    ipAddress?: string | null;
 }
 
 export interface SaveExamAnswerRequest {

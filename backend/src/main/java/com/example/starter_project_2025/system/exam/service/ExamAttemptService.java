@@ -222,10 +222,38 @@ public class ExamAttemptService {
                 attempt.getAttemptNumber(),
                 attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(exam.getId(), studentId).size());
         int attemptsRemaining = Math.max(0, maxAttempts(exam) - attemptsUsed);
-        if (!resultAccessService.canStudentViewAnswers(exam, attempt.getStatus(), attemptsRemaining)) {
-            throw new AccessDeniedException("Chưa thể xem đáp án của bài thi này");
+
+        // Diem + dap an dung/sai chi lo ra khi giao vien da cong bo ket qua.
+        boolean revealAnswers = resultAccessService.canStudentViewScore(exam)
+                && resultAccessService.canStudentViewAnswers(exam, attempt.getStatus(), attemptsRemaining);
+        // Bai lam cua chinh minh: xem duoc ngay sau khi nop voi de thi "Manually released".
+        boolean canViewOwn = resultAccessService.canStudentViewOwnSubmission(exam, attempt.getStatus());
+
+        if (!revealAnswers && !canViewOwn) {
+            throw new AccessDeniedException("Chưa thể xem bài làm của bài thi này");
         }
 
+        return toReviewDTO(attempt, revealAnswers);
+    }
+
+    /**
+     * Giao vien / admin xem bai lam cua sinh vien de kiem tra khi xu ly khieng nai.
+     * Luon hien thi dap an dung/sai vi giao vien can dung de cham.
+     */
+    @Transactional(readOnly = true)
+    public ExamAttemptReviewDTO reviewAttemptForTeacher(Long attemptId) {
+        ExamAttempt attempt = findAttemptForReview(attemptId);
+        return toReviewDTO(attempt, true);
+    }
+
+    @Transactional(readOnly = true)
+    public ExamAttempt findAttemptForReview(Long attemptId) {
+        return attemptRepository.findById(attemptId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam attempt not found"));
+    }
+
+    private ExamAttemptReviewDTO toReviewDTO(ExamAttempt attempt, boolean revealAnswers) {
+        Exam exam = attempt.getExam();
         Map<Long, ExamAttemptAnswer> answerByQuestion = new HashMap<>();
         for (ExamAttemptAnswer answer : attempt.getAnswers()) {
             answerByQuestion.put(answer.getQuestion().getId(), answer);
@@ -239,17 +267,24 @@ public class ExamAttemptService {
         response.setStatus(attempt.getStatus());
         response.setTotalPoints(attempt.getTotalPoints());
         response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
-        response.setObjectiveScore(attempt.getObjectiveScore());
-        response.setFinalScore(attempt.getFinalScore());
+        // Chua cong bo ket qua: an diem va dap an dung/sai, chi con cau da lam.
+        response.setObjectiveScore(revealAnswers ? attempt.getObjectiveScore() : null);
+        response.setFinalScore(revealAnswers ? attempt.getFinalScore() : null);
         response.setSubmittedAt(attempt.getSubmittedAt());
+        response.setRevealAnswers(revealAnswers);
         response.setQuestions(attempt.getQuestions().stream()
                 .sorted(Comparator.comparingInt(ExamAttemptQuestion::getDisplayOrder))
-                .map(question -> toQuestionReview(question, answerByQuestion.get(question.getId()), response.getMaxScore(), attempt.getTotalPoints()))
+                .map(question -> toQuestionReview(
+                        question,
+                        answerByQuestion.get(question.getId()),
+                        response.getMaxScore(),
+                        attempt.getTotalPoints(),
+                        revealAnswers))
                 .toList());
         return response;
     }
 
-    private ExamAttemptReviewDTO.QuestionReviewDTO toQuestionReview(ExamAttemptQuestion question, ExamAttemptAnswer answer, BigDecimal maxScore, int totalWeight) {
+    private ExamAttemptReviewDTO.QuestionReviewDTO toQuestionReview(ExamAttemptQuestion question, ExamAttemptAnswer answer, BigDecimal maxScore, int totalWeight, boolean revealAnswers) {
         Set<Long> selectedIds = answer == null
                 ? Set.of()
                 : answer.getSelectedOptions().stream()
@@ -268,8 +303,9 @@ public class ExamAttemptService {
             dto.setOptions(List.of());
             if (answer != null) {
                 dto.setTextAnswer(answer.getTextAnswer());
-                dto.setScore(answer.getScore());
-                dto.setFeedback(answer.getFeedback());
+                // Chua cong bo: an diem va nhan xet cua giao vien.
+                dto.setScore(revealAnswers ? answer.getScore() : null);
+                dto.setFeedback(revealAnswers ? answer.getFeedback() : null);
             }
             return dto;
         }
@@ -278,7 +314,8 @@ public class ExamAttemptService {
                 .filter(ExamAttemptOption::isCorrect)
                 .map(ExamAttemptOption::getSourceOptionId)
                 .collect(Collectors.toSet());
-        dto.setCorrect(correctIds.equals(selectedIds));
+        // Chua cong bo: khong cho hoc sinh biet cau nao dung/sai.
+        dto.setCorrect(revealAnswers ? correctIds.equals(selectedIds) : null);
         dto.setOptions(question.getOptions().stream()
                 .sorted(Comparator.comparingInt(ExamAttemptOption::getDisplayOrder))
                 .map(option -> {
@@ -286,7 +323,7 @@ public class ExamAttemptService {
                     o.setId(option.getSourceOptionId());
                     o.setContent(option.getContent());
                     o.setImageUrl(option.getImageUrl());
-                    o.setCorrect(option.isCorrect());
+                    o.setCorrect(revealAnswers && option.isCorrect());
                     o.setSelected(selectedIds.contains(option.getSourceOptionId()));
                     return o;
                 })

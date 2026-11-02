@@ -1,5 +1,9 @@
 import axiosInstance from "@/api/axios";
 import type {
+  AttemptSubmission,
+  IntegrityEventDTO,
+} from "@/api/exam.api";
+import type {
   ScoreAppealAdjustmentDTO,
   ScoreAppealCreateRequest,
   ScoreAppealDTO,
@@ -44,6 +48,18 @@ export const scoreAppealApi = {
   getHistory: async (attemptId: number): Promise<ScoreAppealAdjustmentDTO[]> => {
     const response = await axiosInstance.get<ScoreAppealAdjustmentDTO[]>(
       `/exams/attempts/${attemptId}/appeal-history`
+    );
+    return response.data;
+  },
+  getSubmission: async (attemptId: number): Promise<AttemptSubmission> => {
+    const response = await axiosInstance.get<AttemptSubmission>(
+      `/exams/attempts/${attemptId}/submission`
+    );
+    return response.data;
+  },
+  getIntegrityEvents: async (attemptId: number): Promise<IntegrityEventDTO[]> => {
+    const response = await axiosInstance.get<IntegrityEventDTO[]>(
+      `/exams/attempts/${attemptId}/integrity-events`
     );
     return response.data;
   },

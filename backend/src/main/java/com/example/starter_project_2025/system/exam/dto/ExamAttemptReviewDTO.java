@@ -22,6 +22,8 @@ public class ExamAttemptReviewDTO {
     private BigDecimal objectiveScore;
     private BigDecimal finalScore;
     private Instant submittedAt;
+    /** Da duoc cong bo diem va dap an dung/sai hay chua. */
+    private boolean revealAnswers;
     private List<QuestionReviewDTO> questions;
 
     @Getter

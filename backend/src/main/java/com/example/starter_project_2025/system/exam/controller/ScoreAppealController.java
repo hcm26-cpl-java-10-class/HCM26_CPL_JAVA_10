@@ -2,10 +2,15 @@ package com.example.starter_project_2025.system.exam.controller;
 
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.dto.AttemptSubmissionDTO;
+import com.example.starter_project_2025.system.exam.dto.ExamIntegrityReportDTO;
 import com.example.starter_project_2025.system.exam.dto.ScoreAppealAdjustmentDTO;
 import com.example.starter_project_2025.system.exam.dto.ScoreAppealCreateRequest;
 import com.example.starter_project_2025.system.exam.dto.ScoreAppealDTO;
 import com.example.starter_project_2025.system.exam.dto.ScoreAppealReviewRequest;
+import com.example.starter_project_2025.system.exam.service.ExamAttemptService;
+import com.example.starter_project_2025.system.exam.service.ExamIntegrityService;
 import com.example.starter_project_2025.system.exam.service.ScoreAppealService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +41,8 @@ import java.util.List;
 public class ScoreAppealController {
 
     private final ScoreAppealService scoreAppealService;
+    private final ExamAttemptService examAttemptService;
+    private final ExamIntegrityService examIntegrityService;
 
     /** Hoc sinh tao khieng nai ve diem cua mot lan lam bai da duoc cham. */
     @PostMapping("/attempts/{attemptId}/appeals")
@@ -101,5 +108,28 @@ public class ScoreAppealController {
     @PreAuthorize("hasAuthority('SCORE_APPEAL_REVIEW')")
     public ResponseEntity<List<ScoreAppealAdjustmentDTO>> getHistory(@PathVariable Long attemptId) {
         return ResponseEntity.ok(scoreAppealService.getHistory(attemptId));
+    }
+
+    /**
+     * Giao vien / admin xem bai lam cua sinh vien de kiem tra khi xu ly khieng nai.
+     * Bai lam luon kem dap an dung/sai vi giao vien can dung de cham.
+     */
+    @GetMapping("/attempts/{attemptId}/submission")
+    @PreAuthorize("hasAuthority('SCORE_APPEAL_REVIEW')")
+    public ResponseEntity<AttemptSubmissionDTO> getSubmission(@PathVariable Long attemptId) {
+        AttemptSubmissionDTO dto = new AttemptSubmissionDTO();
+        dto.setReview(examAttemptService.reviewAttemptForTeacher(attemptId));
+        dto.setIntegrity(examIntegrityService.summarize(attemptId));
+        return ResponseEntity.ok(dto);
+    }
+
+    /** Giao vien / admin xem chi tiet cac su co gian lan cua 1 luot thi. */
+    @GetMapping("/attempts/{attemptId}/integrity-events")
+    @PreAuthorize("hasAuthority('SCORE_APPEAL_REVIEW')")
+    public ResponseEntity<List<ExamIntegrityReportDTO.EventDTO>> getIntegrityEvents(
+            @PathVariable Long attemptId) {
+        ExamAttempt attempt = examAttemptService.findAttemptForReview(attemptId);
+        return ResponseEntity.ok(
+                examIntegrityService.getEvents(attempt.getExam().getId(), attemptId));
     }
 }

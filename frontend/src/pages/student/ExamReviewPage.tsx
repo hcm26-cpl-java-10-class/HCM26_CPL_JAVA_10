@@ -1,74 +1,14 @@
-import { getAttemptReview, type ExamReviewQuestion } from '@/api/exam.api';
+import { getAttemptReview } from '@/api/exam.api';
 import { scoreAppealApi } from '@/api/features/score-appeal.api';
+import StudentSubmissionView from '@/components/features/exam/StudentSubmissionView';
 import { formatScore } from '@/utils/examScore';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { ArrowLeft, Lock, MessageSquareWarning } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-
-function optionClass(correct: boolean, selected: boolean) {
-    if (correct) return 'border-emerald-400 bg-emerald-50 text-emerald-900';
-    if (selected) return 'border-red-400 bg-red-50 text-red-900';
-    return 'border-slate-200 bg-white text-slate-700';
-}
-
-function QuestionReview({ question, index }: { question: ExamReviewQuestion; index: number }) {
-    const isCoding = question.type === 'CODING';
-    const isEssay = question.type === 'ESSAY' || isCoding;
-    return (
-        <Card className="border-slate-200 bg-white">
-            <CardHeader className="flex flex-row items-start justify-between gap-3">
-                <CardTitle className="text-base">
-                    Question {index + 1}: {question.content}
-                </CardTitle>
-                {isEssay ? (
-                    <Badge variant="outline">{isCoding ? 'Coding' : 'Essay'}</Badge>
-                ) : question.correct ? (
-                    <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Correct</Badge>
-                ) : (
-                    <Badge variant="destructive">Incorrect</Badge>
-                )}
-            </CardHeader>
-            <CardContent className="space-y-2">
-                {question.imageUrl && (
-                    <img src={question.imageUrl} alt="" className="max-h-60 rounded border" />
-                )}
-                {isEssay ? (
-                    <div className="space-y-2 text-sm">
-                        <p className={`whitespace-pre-wrap rounded border bg-slate-50 p-3 ${isCoding ? 'font-mono text-xs' : ''}`}>
-                            {question.textAnswer || 'No answer'}
-                        </p>
-                        <p className="text-slate-600">
-                            Score: {question.score != null ? formatScore(question.score) : 'Not graded yet (counts as 0)'}/{formatScore(question.maxScore ?? question.points)}
-                        </p>
-                        {question.feedback && <p className="text-slate-600">Feedback: {question.feedback}</p>}
-                    </div>
-                ) : (
-                    <>
-                        {question.options.map((option) => (
-                            <div
-                                key={option.id}
-                                className={`flex items-center justify-between gap-3 rounded border px-3 py-2 text-sm ${optionClass(option.correct, option.selected)}`}
-                            >
-                                <span>{option.content}</span>
-                                <span className="shrink-0 text-xs font-medium">
-                                    {option.selected && 'Your answer'}
-                                    {option.selected && option.correct && ' · '}
-                                    {option.correct && 'Correct answer'}
-                                </span>
-                            </div>
-                        ))}
-                        <p className="text-xs text-slate-500">{formatScore(question.maxScore ?? question.points)} point(s)</p>
-                    </>
-                )}
-            </CardContent>
-        </Card>
-    );
-}
 
 export default function ExamReviewPage() {
     const { attemptId } = useParams();
@@ -90,6 +30,10 @@ export default function ExamReviewPage() {
     });
 
     const alreadyAppealed = (myAppealsQuery.data ?? []).some((a) => a.attemptId === id);
+
+    // Diem + dap an dung/sai chi duoc cong bo khi giao vien da Publish Results.
+    const revealAnswers = data?.revealAnswers ?? false;
+    const score = data ? (data.finalScore ?? data.objectiveScore) : null;
 
     return (
         <MainLayout pathName={{ exams: 'Exam Schedule', review: 'Review Answers' }}>
@@ -127,10 +71,12 @@ export default function ExamReviewPage() {
                         <header className="space-y-1">
                             <h1 className="text-2xl font-bold text-slate-900">{data.title}</h1>
                             <p className="text-sm text-slate-600">
-                                Attempt #{data.attemptNumber} · Score: {formatScore(data.finalScore ?? data.objectiveScore)}/
-                                {formatScore(data.maxScore ?? 10)}
+                                Attempt #{data.attemptNumber} · Score:{' '}
+                                {revealAnswers
+                                    ? `${formatScore(score ?? 0)}/${formatScore(data.maxScore ?? 10)}`
+                                    : 'Awaiting publication'}
                             </p>
-                            {data.finalScore != null && (
+                            {revealAnswers && data.finalScore != null && (
                                 <Button
                                     variant="outline"
                                     size="sm"
@@ -143,9 +89,15 @@ export default function ExamReviewPage() {
                                 </Button>
                             )}
                         </header>
-                        {data.questions.map((question, index) => (
-                            <QuestionReview key={question.questionId} question={question} index={index} />
-                        ))}
+
+                        {!revealAnswers && (
+                            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                                Your answers are shown for review. Scores and correct answers will be available once
+                                your teacher publishes the results.
+                            </div>
+                        )}
+
+                        <StudentSubmissionView review={data} revealAnswers={revealAnswers} />
                     </>
                 )}
             </div>

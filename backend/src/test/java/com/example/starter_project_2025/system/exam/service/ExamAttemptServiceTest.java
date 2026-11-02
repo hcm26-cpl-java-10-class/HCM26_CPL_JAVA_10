@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -298,8 +299,9 @@ class ExamAttemptServiceTest {
         snapshotOption(12L, question, false);
         attempt.setAnswers(new HashSet<>(List.of(answer(question, correct))));
         when(attemptRepository.findByIdAndStudent_Id(30L, 40L)).thenReturn(Optional.of(attempt));
-        when(resultAccessService.canStudentViewAnswers(attempt.getExam(), ExamAttemptStatus.SUBMITTED, 0))
-                .thenReturn(true);
+        when(resultAccessService.canStudentViewScore(any())).thenReturn(true);
+        when(resultAccessService.canStudentViewAnswers(any(), any(), anyInt())).thenReturn(true);
+        when(resultAccessService.canStudentViewOwnSubmission(any(), any())).thenReturn(false);
 
         var review = service.reviewAttempt(30L, 40L);
 
@@ -309,6 +311,7 @@ class ExamAttemptServiceTest {
         assertTrue(q.getOptions().get(0).isCorrect());
         assertTrue(q.getOptions().get(0).isSelected());
         assertEquals(false, q.getOptions().get(1).isSelected());
+        assertTrue(review.isRevealAnswers());
     }
 
     @Test
@@ -319,7 +322,9 @@ class ExamAttemptServiceTest {
         ExamAttemptOption wrong = snapshotOption(12L, question, false);
         attempt.setAnswers(new HashSet<>(List.of(answer(question, wrong))));
         when(attemptRepository.findByIdAndStudent_Id(30L, 40L)).thenReturn(Optional.of(attempt));
+        when(resultAccessService.canStudentViewScore(any())).thenReturn(true);
         when(resultAccessService.canStudentViewAnswers(any(), any(), anyInt())).thenReturn(true);
+        when(resultAccessService.canStudentViewOwnSubmission(any(), any())).thenReturn(false);
 
         assertEquals(false, service.reviewAttempt(30L, 40L).getQuestions().get(0).getCorrect());
     }
@@ -328,7 +333,8 @@ class ExamAttemptServiceTest {
     void reviewAttemptIsForbiddenWhenNotAllowed() {
         attempt.setStatus(ExamAttemptStatus.SUBMITTED);
         when(attemptRepository.findByIdAndStudent_Id(30L, 40L)).thenReturn(Optional.of(attempt));
-        when(resultAccessService.canStudentViewAnswers(any(), any(), anyInt())).thenReturn(false);
+        when(resultAccessService.canStudentViewScore(any())).thenReturn(false);
+        when(resultAccessService.canStudentViewOwnSubmission(any(), any())).thenReturn(false);
 
         assertThrows(org.springframework.security.access.AccessDeniedException.class,
                 () -> service.reviewAttempt(30L, 40L));
@@ -340,6 +346,68 @@ class ExamAttemptServiceTest {
 
         assertThrows(com.example.starter_project_2025.exception.ResourceNotFoundException.class,
                 () -> service.reviewAttempt(30L, 99L));
+    }
+
+    // --- Teacher xem bai lam ---
+
+    @Test
+    void reviewAttemptForTeacherRevealsCorrectAndSelectedOptions() {
+        attempt.setStatus(ExamAttemptStatus.SUBMITTED);
+        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTIPLE_CHOICE, 5);
+        ExamAttemptOption correct = snapshotOption(11L, question, true);
+        snapshotOption(12L, question, false);
+        attempt.setAnswers(new HashSet<>(List.of(answer(question, correct))));
+        when(attemptRepository.findById(30L)).thenReturn(Optional.of(attempt));
+
+        var review = service.reviewAttemptForTeacher(30L);
+
+        var q = review.getQuestions().get(0);
+        assertTrue(review.isRevealAnswers());
+        assertEquals(true, q.getCorrect());
+        assertTrue(q.getOptions().get(0).isCorrect());
+        assertTrue(q.getOptions().get(0).isSelected());
+    }
+
+    @Test
+    void reviewAttemptForTeacherRevealsAnswersEvenBeforePublication() {
+        attempt.setStatus(ExamAttemptStatus.SUBMITTED);
+        snapshotQuestion(1L, QuestionType.MULTIPLE_CHOICE, 5);
+        when(attemptRepository.findById(30L)).thenReturn(Optional.of(attempt));
+
+        assertTrue(service.reviewAttemptForTeacher(30L).isRevealAnswers());
+    }
+
+    @Test
+    void reviewAttemptForTeacherIsNotFoundForMissingAttempt() {
+        when(attemptRepository.findById(404L)).thenReturn(Optional.empty());
+
+        assertThrows(com.example.starter_project_2025.exception.ResourceNotFoundException.class,
+                () -> service.reviewAttemptForTeacher(404L));
+    }
+
+    // --- Mask diem + dap an khi chua cong bo ---
+
+    @Test
+    void reviewAttemptHidesScoresAndAnswersBeforePublication() {
+        attempt.setStatus(ExamAttemptStatus.SUBMITTED);
+        ExamAttemptQuestion question = snapshotQuestion(1L, QuestionType.MULTIPLE_CHOICE, 5);
+        ExamAttemptOption correct = snapshotOption(11L, question, true);
+        snapshotOption(12L, question, false);
+        attempt.setAnswers(new HashSet<>(List.of(answer(question, correct))));
+        attempt.setObjectiveScore(new java.math.BigDecimal("8"));
+        attempt.setFinalScore(new java.math.BigDecimal("9"));
+        when(attemptRepository.findByIdAndStudent_Id(30L, 40L)).thenReturn(Optional.of(attempt));
+        when(resultAccessService.canStudentViewScore(any())).thenReturn(false);
+        when(resultAccessService.canStudentViewOwnSubmission(any(), any())).thenReturn(true);
+
+        var review = service.reviewAttempt(30L, 40L);
+
+        assertNull(review.getFinalScore());
+        assertNull(review.getObjectiveScore());
+        assertNull(review.getQuestions().get(0).getCorrect());
+        assertFalse(review.getQuestions().get(0).getOptions().get(0).isCorrect());
+        // Cau da lam cua hoc sinh van duoc tra ve.
+        assertTrue(review.getQuestions().get(0).getOptions().get(0).isSelected());
     }
 
     private static void assertScore(String expected, java.math.BigDecimal actual) {
