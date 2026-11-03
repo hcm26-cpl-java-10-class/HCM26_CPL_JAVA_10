@@ -2,6 +2,7 @@ import type { WorkspaceDetail } from "@/types/features/workspace";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkspaceStatusBadge } from "./workspace.shared";
+import { WorkspaceGitRepositoryPanel } from "./WorkspaceGitRepositoryPanel";
 
 function information(value?: string | null) {
   return value?.trim() || "No information available";
@@ -28,6 +29,7 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
               <div className="min-w-0"><p className="text-muted-foreground">Class</p><p className="break-words">{information(workspace.projectClassName)}</p></div>
               <div className="min-w-0"><p className="text-muted-foreground">Cohort</p><p className="break-words">{information(workspace.projectCohortName)}</p></div>
             </div>}
+          <div className="mt-6 border-t pt-5"><WorkspaceGitRepositoryPanel key={workspace.id} workspaceId={workspace.id} /></div>
         </CardContent>
       </Card>
     </div>
