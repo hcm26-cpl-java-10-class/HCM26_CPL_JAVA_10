@@ -39,6 +39,14 @@ public class ResourceAccessInitializer implements CommandLineRunner {
     private static final String TEACHER_ROLE = "TEACHER";
     private static final String STUDENT_ROLE = "STUDENT";
 
+    /**
+     * Roles that may manage a team workspace (US-RES-003 business rule 1).
+     * The service still limits a mentor to the teams they are assigned to.
+     */
+    private static final List<String> RESOURCE_MANAGER_ROLES = List.of(
+            "MENTOR", "PROGRAM_MANAGER", "PM", "PO"
+    );
+
     private static final List<String> RESOURCE_PERMISSIONS = List.of(
             "PROJECT_RESOURCE_CREATE",
             "PROJECT_RESOURCE_READ",
@@ -78,6 +86,10 @@ public class ResourceAccessInitializer implements CommandLineRunner {
 
         grant(TEACHER_ROLE, teacherPermissions);
         grant(STUDENT_ROLE, STUDENT_PERMISSIONS);
+
+        for (String roleName : RESOURCE_MANAGER_ROLES) {
+            grant(roleName, RESOURCE_PERMISSIONS);
+        }
     }
 
     private void grant(String roleName, List<String> permissionNames) {

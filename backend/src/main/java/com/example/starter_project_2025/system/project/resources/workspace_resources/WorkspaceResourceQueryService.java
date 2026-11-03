@@ -45,16 +45,20 @@ public class WorkspaceResourceQueryService {
     ProjectResourceFileRepository files;
     TemplateResourceFileStorage storage;
     WorkspaceResourceDownloadTokenService tokens;
+    WorkspaceResourceEditorPolicy editorPolicy;
 
     /** Resources of the workspace project, grouped as returned by the backend. */
     public WorkspaceResourceDtos.ResourceCollection list(Long workspaceId) {
 
-        Workspace workspace = requireWorkspace(workspaceId);
+        User user = access.requireUser(false);
+        Workspace workspace = contexts.require(user, workspaceId);
         Project project = workspace.getProject();
+        boolean canManage = editorPolicy.canManage(user, workspace);
 
         if (project == null) {
             return new WorkspaceResourceDtos.ResourceCollection(workspaceId, null,
-                    workspace.getTeam().getId(), 0, List.of());
+                    workspace.getTeam().getId(), 0, canManage, storage.maxBytes(),
+                    storage.allowedExtensions(), List.of());
         }
 
         List<WorkspaceResourceDtos.ResourceItem> items = resources
@@ -64,7 +68,8 @@ public class WorkspaceResourceQueryService {
                 .toList();
 
         return new WorkspaceResourceDtos.ResourceCollection(workspaceId, project.getId(),
-                workspace.getTeam().getId(), items.size(), items);
+                workspace.getTeam().getId(), items.size(), canManage, storage.maxBytes(),
+                storage.allowedExtensions(), items);
     }
 
     /** Creates a short-lived signed URL after re-checking the team data scope. */
@@ -150,7 +155,7 @@ public class WorkspaceResourceQueryService {
         return new WorkspaceResourceDtos.ResourceItem(resource.getId(), resource.getTitle(),
                 resource.getDescription(), resource.getKind() == null ? null : resource.getKind().name(),
                 resource.getUrl(), resource.getCategory(), resource.getOrderIndex(),
-                resource.getUpdatedAt(), attached);
+                resource.getUpdatedAt(), resource.getUpdatedBy(), attached);
     }
 
     private WorkspaceResourceDtos.Download read(ProjectResourceFile file) {
