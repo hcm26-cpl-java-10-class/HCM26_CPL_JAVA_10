@@ -28,6 +28,10 @@ import static com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY;
 @Getter @Setter
 public class ExamDTO extends BaseDTO {
 
+    /** Ten nguoi tao (chi de hien thi, he thong tu dien). */
+    @JsonProperty(access = READ_ONLY)
+    private String createdByName;
+
     @NotBlank(groups = OnCreate.class)
     @Size(max = 200, groups = {OnCreate.class, OnUpdate.class})
     private String title;

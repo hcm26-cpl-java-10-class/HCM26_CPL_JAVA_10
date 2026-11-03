@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.exam.service.ExamTypePolicy;
 import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.mapper.QuestionMapper;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,6 +22,7 @@ import java.util.List;
 public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
 
     private final QuestionMapper questionMapper;
+    private final UserRepository userRepository;
 
     @Override
     public Exam toEntity(ExamDTO dto) {
@@ -38,6 +40,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setCreatedAt(e.getCreatedAt());
         d.setUpdatedAt(e.getUpdatedAt());
         d.setCreatedBy(e.getCreatedBy());
+        d.setCreatedByName(creatorName(e.getCreatedBy()));
         d.setUpdatedBy(e.getUpdatedBy());
         d.setTitle(e.getTitle());
         d.setDurationMinutes(e.getDurationMinutes());
@@ -78,6 +81,21 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
     public void update(Exam e, ExamDTO dto) {
         if (dto.getIsActive() != null) e.setIsActive(dto.getIsActive());
         apply(e, dto);
+    }
+
+    /** Ten day du cua nguoi tao; null neu khong tim thay (du lieu cu). */
+    private String creatorName(Long userId) {
+        if (userId == null) return null;
+        try {
+            return userRepository.findById(userId)
+                    .map(u -> {
+                        String name = u.getFullName();
+                        return name == null || name.isBlank() ? u.getEmail() : name.trim();
+                    })
+                    .orElse(null);
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     // NEW: kiem tra nguoi dang goi co quyen sua de thi khong

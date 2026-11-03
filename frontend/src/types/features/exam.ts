@@ -94,6 +94,10 @@ export const EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT: Record<ExamCategory, boolean> =
 export interface ExamDTO {
   id?: number;
   isActive?: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  /** Full name of the creator (empty for old data). */
+  createdByName?: string | null;
   title: string;
   durationMinutes: number;
   startTime?: string | null;

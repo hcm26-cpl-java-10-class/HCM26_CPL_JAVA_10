@@ -7,16 +7,12 @@ import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
 import ExamManagementPage from "@/pages/management/exam";
+import ExamDetailPage from "@/pages/management/exam/ExamDetailPage";
 import ExamTemplatesPage from "@/pages/management/exam/templates";
-import ResultStatisticsPage from "@/pages/management/exam/ResultStatisticsPage";
-import EssayAttemptListPage from "@/pages/management/exam/grading/EssayAttemptListPage";
 import EssayAttemptDetailPage from "@/pages/management/exam/grading/EssayAttemptDetailPage";
 import ExamSimilarityPage from "@/pages/management/exam/similarity/ExamSimilarityPage";
 import ScoreAppealsPage from "@/pages/management/exam/appeals";
-import InvitationsPage from "@/pages/management/exam/invitation";
-import UnifiedInvitationsPage, {
-  StudentInvitationsRedirect,
-} from "@/pages/invitations/InvitationsPage";
+import UnifiedInvitationsPage, { StudentInvitationsRedirect } from "@/pages/invitations/InvitationsPage";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
@@ -55,17 +51,11 @@ export const routes: RouteConfig[] = [
 
   { path: "/invitations", component: UnifiedInvitationsPage, requiredPermission: "INVITATION_READ" },
 
-  {
-    path: "/exams/:examId/invitations",
-    component: InvitationsPage,
-    requiredPermission: "INVITATION_READ",
-  },
-
-  {
-    path: "/exams/:examId/grading",
-    component: EssayAttemptListPage,
-    requiredPermission: "EXAM_UPDATE",
-  },
+  // One page per exam with 5 tabs: Edit, Questions, Grading, Invitations, Statistics.
+  { path: "/exams/:examId", component: ExamDetailPage, requiredPermission: "EXAM_UPDATE" },
+  { path: "/exams/:examId/questions", component: ExamDetailPage, requiredPermission: "EXAM_UPDATE" },
+  { path: "/exams/:examId/grading", component: ExamDetailPage, requiredPermission: "EXAM_UPDATE" },
+  { path: "/exams/:examId/invitations", component: ExamDetailPage, requiredPermission: "INVITATION_READ" },
 
   {
     path: "/exams/:examId/grading/similarity",
@@ -96,7 +86,7 @@ export const routes: RouteConfig[] = [
 
   {
     path: "/exams/:examId/result-statistics",
-    component: ResultStatisticsPage,
+    component: ExamDetailPage,
     requiredPermission: "EXAM_UPDATE",
   },
 

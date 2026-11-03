@@ -1,4 +1,6 @@
+import { useContext } from "react";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import HeaderRight from "@/components/layout/HeaderRight";
 import { SidebarMenu } from "@/components/layout/Sidebar.tsx";
 import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
@@ -14,7 +16,12 @@ export function MainLayout({
     pathName?: Record<string, string>;
 }) {
     const { activeRole } = usePermissions();
+    const embedded = useContext(EmbeddedLayoutContext);
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
+
+    if (embedded) {
+        return <>{children}</>;
+    }
 
     if (isStudentView) {
         return (
