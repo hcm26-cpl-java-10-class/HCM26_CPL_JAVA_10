@@ -25,7 +25,7 @@ import lombok.experimental.SuperBuilder;
 @ExportEntity(fileName = "class_sessions", sheetName = "Class Sessions")
 @ResourcePermission("SESSION")
 @ResourceMenu(
-        title = "Class Schedules",
+        title = "Class List",
         group = "Training Operations",
         icon = "calendar",
         url = "/sessions",

@@ -1,6 +1,6 @@
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
 
-import { NavMain } from "@/components/layout/NavMain";
+import { NavMain, type NavItem } from "@/components/layout/NavMain";
 
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,35 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { authApi } from "@/api/features/auth.api";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
+
+function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
+    const schedules = items.filter((item) => item.url === "/sessions")
+        .map((item) => ({ ...item, title: "Class List" }));
+    const remaining = items.filter((item) => item.url !== "/sessions");
+    const sections = [
+        { title: "Class", url: "", icon: iconMap["graduation-cap"], children: schedules },
+        { title: "Audit", url: "/training/audit", icon: iconMap["clipboard-check"] },
+        { title: "Trainee", url: "/training/trainee", icon: iconMap.users },
+        { title: "Log Work", url: "/training/log-work", icon: iconMap.briefcase },
+        { title: "Content", url: "/training/content", icon: iconMap["book-open"] },
+        { title: "Reports", url: "/training/reports", icon: iconMap["bar-chart"] },
+    ];
+
+    const navigation = sections.map((section): NavItem => {
+        const existing = remaining.find((item) => item.title.toLowerCase() === section.title.toLowerCase());
+        if (existing) return existing;
+        return {
+            ...section,
+            disabled: !section.url && !section.children?.length,
+            isActive: section.children?.some((child) => child.isActive) ||
+                (!!section.url && (pathname === section.url || pathname.startsWith(`${section.url}/`))),
+        };
+    });
+
+    return [...navigation, ...remaining.filter((item) =>
+        !sections.some((section) => section.title.toLowerCase() === item.title.toLowerCase()),
+    )];
+}
 
 export function SidebarMenu() {
     const location = useLocation();
@@ -40,7 +69,10 @@ export function SidebarMenu() {
                             (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
                     })),
             }))
-            .filter((group) => group.items.length > 0);
+            .filter((group) => group.items.length > 0)
+            .map((group) => group.name.trim().toLowerCase() === "training operations"
+                ? { ...group, items: organizeTrainingItems(group.items, location.pathname) }
+                : group);
     }, [location.pathname, moduleGroups]);
 
     return (

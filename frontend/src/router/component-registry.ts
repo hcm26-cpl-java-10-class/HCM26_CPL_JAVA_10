@@ -14,6 +14,11 @@ import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+import AuditPage from "@/pages/management/training/audit";
+import TraineePage from "@/pages/management/training/trainee";
+import LogWorkPage from "@/pages/management/training/log-work";
+import ContentPage from "@/pages/management/training/content";
+import ReportsPage from "@/pages/management/training/reports";
 
 
 export interface RouteConfig {
@@ -25,6 +30,11 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+  { path: "/training/audit", component: AuditPage },
+  { path: "/training/trainee", component: TraineePage },
+  { path: "/training/log-work", component: LogWorkPage },
+  { path: "/training/content", component: ContentPage },
+  { path: "/training/reports", component: ReportsPage },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   {

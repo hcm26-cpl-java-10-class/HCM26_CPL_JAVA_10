@@ -1,4 +1,5 @@
 import { sessionApi } from "@/api/features/demo/session.api";
+export { default } from "./ClassListPage";
 import {
     auditableFieldsSchema,
     type EntityConfig,
@@ -98,7 +99,7 @@ const sessionSchema: EntitySchema = {
 };
 
 export const entityConfig: EntityConfig = {
-    name: "Class Schedules",
+    name: "Class List",
     path: "/sessions",
     api: sessionApi,
     schema: sessionSchema,
