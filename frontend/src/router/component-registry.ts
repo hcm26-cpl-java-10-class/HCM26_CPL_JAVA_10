@@ -41,6 +41,7 @@ import StudentSyllabusListPage from "@/pages/student/StudentSyllabusListPage";
 import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
 
 import CourseReportPage from "@/pages/management/demo/report";
+import { CourseDetailPage } from "@/pages/management/demo/course/pages/CourseDetailPage";
 import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-questions";
 import LessonReportsPage from "@/pages/management/demo/lesson-reports";
 import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
@@ -334,6 +335,13 @@ export const routes: RouteConfig[] = [
     component: CourseReportPage,
     requiredPermission: "COURSE_REPORT_READ",
     isModuleDriven: true,
+  },
+  {
+    // Chi tiết khóa học nhưng vẫn nằm trong Enrollments (giữ menu Enrollments active)
+    path: "/course-enrollments/:id",
+    component: CourseDetailPage,
+    requiredPermission: "COURSE_REPORT_READ",
+    isModuleDriven: false,
   },
 
   // Q&A
