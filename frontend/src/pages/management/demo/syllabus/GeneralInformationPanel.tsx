@@ -127,6 +127,8 @@ export default function GeneralInformationPanel({
         useState<SyllabusInformationInput>(empty);
 
     const [scoreText, setScoreText] = useState("");
+    const [fieldErrors, setFieldErrors] =
+        useState<Record<string, string>>({});
 
     const query = useQuery({
         queryKey: ["syllabus-information", syllabusId],
@@ -138,6 +140,7 @@ export default function GeneralInformationPanel({
 
     function openEdit() {
         if (!info || !canEdit) return;
+        setFieldErrors({});
 
         setForm({
             code: info.code,
@@ -165,6 +168,7 @@ export default function GeneralInformationPanel({
         key: FieldName,
         value: string
     ) {
+        setFieldErrors(p => ({ ...p, [key]: "" }));
         setForm((previous) => ({
             ...previous,
             [key]: value,
@@ -180,7 +184,9 @@ export default function GeneralInformationPanel({
         const name = form.name.trim().replace(/\s+/g, " ");
 
         if (!/^[A-Z0-9][A-Z0-9_-]{2,29}$/.test(code)) {
-            toast.error("Invalid syllabus code (3-30 characters).");
+            setFieldErrors({
+                code: "Invalid syllabus code (3-30 characters)."
+            });
             return;
         }
 
@@ -189,13 +195,15 @@ export default function GeneralInformationPanel({
             name.length > 150 ||
             !/\p{L}/u.test(name)
         ) {
-            toast.error("Syllabus name must contain letters (3-150 characters).");
+            setFieldErrors({
+                name: "Syllabus name must contain letters (3-150 characters)."
+            });
             return;
         }
 
         for (const field of fields) {
             if (form[field.key].trim().length > field.max) {
-                toast.error(`${field.label} is too long.`);
+                setFieldErrors({ [field.key]: `${field.label} is too long.` });
                 return;
             }
         }
@@ -204,7 +212,9 @@ export default function GeneralInformationPanel({
 
         if (scoreText.trim() !== "") {
             if (!/^\d+$/.test(scoreText.trim())) {
-                toast.error("Scoring Scale must be an integer.");
+                setFieldErrors({
+                    scoringScale: "Scoring Scale must be an integer."
+                });
                 return;
             }
 
@@ -215,7 +225,9 @@ export default function GeneralInformationPanel({
                 scoringScale < 1 ||
                 scoringScale > 100
             ) {
-                toast.error("Scoring Scale must be between 1 and 100.");
+                setFieldErrors({
+                    scoringScale: "Scoring Scale must be between 1 and 100."
+                });
                 return;
             }
         }
@@ -256,6 +268,20 @@ export default function GeneralInformationPanel({
             setOpen(false);
             toast.success("General Information saved successfully.");
         } catch (error) {
+            const data = axios.isAxiosError(error)
+                ? error.response?.data as {
+                    errors?: Record<string, string[]>;
+                } | undefined
+                : undefined;
+
+            if (data?.errors) {
+                setFieldErrors(Object.fromEntries(
+                    Object.entries(data.errors).map(
+                        ([key, messages]) => [key, messages.join(" ")]
+                    )
+                ));
+            }
+
             toast.error(getErrorMessage(error));
         } finally {
             setSaving(false);
@@ -354,6 +380,7 @@ export default function GeneralInformationPanel({
             >
                 <form
                     className="max-h-[70vh] space-y-4 overflow-y-auto pr-2"
+                    noValidate
                     onSubmit={(event) => void handleSave(event)}
                 >
                     <div className="space-y-1">
@@ -366,13 +393,20 @@ export default function GeneralInformationPanel({
                             value={form.code}
                             maxLength={30}
                             required
-                            onChange={(event) =>
+                            aria-invalid={Boolean(fieldErrors.code)}
+                            onChange={(event) => {
+                                setFieldErrors(p => ({ ...p, code: "" }));
                                 setForm((previous) => ({
                                     ...previous,
                                     code: event.target.value,
-                                }))
-                            }
+                                }));
+                            }}
                         />
+                        {fieldErrors.code && (
+                            <p role="alert" className="text-xs text-destructive">
+                                {fieldErrors.code}
+                            </p>
+                        )}
                     </div>
 
                     <div className="space-y-1">
@@ -385,13 +419,20 @@ export default function GeneralInformationPanel({
                             value={form.name}
                             maxLength={150}
                             required
-                            onChange={(event) =>
+                            aria-invalid={Boolean(fieldErrors.name)}
+                            onChange={(event) => {
+                                setFieldErrors(p => ({ ...p, name: "" }));
                                 setForm((previous) => ({
                                     ...previous,
                                     name: event.target.value,
-                                }))
-                            }
+                                }));
+                            }}
                         />
+                        {fieldErrors.name && (
+                            <p role="alert" className="text-xs text-destructive">
+                                {fieldErrors.name}
+                            </p>
+                        )}
                     </div>
 
                     {fields.map((field) => (
@@ -413,6 +454,7 @@ export default function GeneralInformationPanel({
                                     onChange={(event) =>
                                         updateField(field.key, event.target.value)
                                     }
+                                    aria-invalid={Boolean(fieldErrors[field.key])}
                                 />
                             ) : (
                                 <Input
@@ -422,8 +464,17 @@ export default function GeneralInformationPanel({
                                     onChange={(event) =>
                                         updateField(field.key, event.target.value)
                                     }
+                                    aria-invalid={Boolean(fieldErrors[field.key])}
                                 />
                             )}
+                            {fieldErrors[field.key] && (
+                                <p role="alert" className="text-xs text-destructive">
+                                    {fieldErrors[field.key]}
+                                </p>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                                {form[field.key].length}/{field.max} characters
+                            </p>
                         </div>
                     ))}
 
@@ -442,10 +493,19 @@ export default function GeneralInformationPanel({
                             max={100}
                             step={1}
                             value={scoreText}
-                            onChange={(event) =>
-                                setScoreText(event.target.value)
-                            }
+                            aria-invalid={Boolean(fieldErrors.scoringScale)}
+                            onChange={(event) => {
+                                setScoreText(event.target.value);
+                                setFieldErrors(p => ({
+                                    ...p, scoringScale: ""
+                                }));
+                            }}
                         />
+                        {fieldErrors.scoringScale && (
+                            <p role="alert" className="text-xs text-destructive">
+                                {fieldErrors.scoringScale}
+                            </p>
+                        )}
                     </div>
 
                     <div className="flex justify-end gap-2 pt-3">

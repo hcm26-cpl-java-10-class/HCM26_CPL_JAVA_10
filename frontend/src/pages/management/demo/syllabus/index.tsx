@@ -1,5 +1,5 @@
 
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
     useQuery,
@@ -28,7 +28,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Modal } from "@/components/ui/modal";
+import { FormModal } from "@/components/datatable/modal/form/FormModal";
+import type { EntitySchema } from "@/types";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import {
     Select,
@@ -42,15 +43,64 @@ import { useDebouncedValue } from "@/pages/management/demo/course/hooks/useDebou
 import { usePermissions } from "@/hooks/usePermissions";
 import { SyllabusImportAction } from "./SyllabusImportAction";
 
-const BLANK: SyllabusInput = {
-    code: "",
-    name: "",
-    description: "",
-};
-
 const PAGE_SIZE = 10;
+
 const normalize = (value: string) =>
     value.trim().replace(/\s+/g, " ");
+
+const syllabusSchema: EntitySchema = {
+    entityName: "syllabus",
+    idField: "id",
+    fields: [
+        {
+            name: "code",
+            label: "Syllabus Code",
+            type: "text",
+            hint: "Unique syllabus code, e.g. DEMO-JAV201",
+            validation: {
+                required: true,
+                requiredMessage: "Syllabus code is required",
+                minLength: 3,
+                maxLength: 30,
+                pattern: {
+                    regex: /^[A-Za-z0-9][A-Za-z0-9_-]{2,29}$/,
+                    message:
+                        "Use 3-30 characters: letters, numbers, _ or -. Start with a letter or number.",
+                },
+            },
+        },
+        {
+            name: "name",
+            label: "Syllabus Name",
+            type: "text",
+            hint: "Unique name, e.g. Java Fundamentals",
+            validation: {
+                required: true,
+                requiredMessage: "Syllabus name is required",
+                minLength: 3,
+                maxLength: 150,
+                custom: (value) => {
+                    const name = normalize(String(value ?? ""));
+
+                    if (!name) return null;
+
+                    return /\p{L}/u.test(name)
+                        ? null
+                        : "Syllabus name must contain at least one letter";
+                },
+            },
+        },
+        {
+            name: "description",
+            label: "Description",
+            type: "textarea",
+            hint: "Brief overview of the syllabus",
+            validation: {
+                maxLength: 1500,
+            },
+        },
+    ],
+};
 
 function errorMessage(error: unknown) {
     if (axios.isAxiosError(error)) {
@@ -98,9 +148,8 @@ export default function SyllabusesPage() {
     const [sortBy, setSortBy] = useState("name");
     const [page, setPage] = useState(0);
 
-    const [form, setForm] = useState<SyllabusInput>({
-        ...BLANK,
-    });
+    const [serverErrors, setServerErrors] =
+        useState<Record<string, string[]>>({});
 
     const [editing, setEditing] =
         useState<SyllabusSummary | null>(null);
@@ -156,7 +205,7 @@ const query = useQuery({
 
     function openCreate() {
         setEditing(null);
-        setForm({ ...BLANK });
+        setServerErrors({});
         setFormOpen(true);
     }
 
@@ -169,13 +218,7 @@ const query = useQuery({
         }
 
         setEditing(item);
-
-        setForm({
-            code: item.code,
-            name: item.name,
-            description: item.description ?? "",
-        });
-
+        setServerErrors({});
         setFormOpen(true);
     }
 
@@ -185,79 +228,28 @@ const query = useQuery({
         });
     }
 
-    async function save(
-        event: FormEvent<HTMLFormElement>
-    ) {
-        event.preventDefault();
-
+    async function save(values: Record<string, unknown>) {
         if (busy) return;
 
         if (editing?.status === "PUBLISHED") {
-            toast.error(
-                "Published Syllabus is read-only."
-            );
+            toast.error("Published Syllabus is read-only.");
             return;
         }
 
         const clean: SyllabusInput = {
-            code: form.code.trim().toUpperCase(),
-            name: normalize(form.name),
-            description: form.description.trim(),
+            code: String(values.code ?? "").trim().toUpperCase(),
+            name: normalize(String(values.name ?? "")),
+            description: normalize(
+                String(values.description ?? "")
+            ),
         };
 
-        if (
-            !/^[A-Z0-9][A-Z0-9_-]{2,29}$/.test(
-                clean.code
-            )
-        ) {
-            toast.error(
-                "Code must contain 3–30 valid characters."
-            );
-            return;
-        }
-
-        if (
-            clean.name.length < 3 ||
-            clean.name.length > 150 ||
-            !/\p{L}/u.test(clean.name)
-        ) {
-            toast.error(
-                "Name must contain letters and have 3–150 characters."
-            );
-            return;
-        }
-
-        if (clean.description.length > 1500) {
-            toast.error("Description is too long.");
-            return;
-        }
-
-        const duplicate = all.some(
-            (item) =>
-                item.id !== editing?.id &&
-                (
-                    item.code.toLowerCase() ===
-                    clean.code.toLowerCase() ||
-                    normalize(item.name).toLowerCase() ===
-                    clean.name.toLowerCase()
-                )
-        );
-
-        if (duplicate) {
-            toast.error(
-                "Syllabus code or name already exists."
-            );
-            return;
-        }
-
+        setServerErrors({});
         setBusy(true);
 
         try {
             if (editing) {
-                await syllabusApi.update(
-                    editing.id,
-                    clean
-                );
+                await syllabusApi.update(editing.id, clean);
             } else {
                 await syllabusApi.create(clean);
             }
@@ -266,10 +258,35 @@ const query = useQuery({
             setFormOpen(false);
 
             toast.success(
-                "Syllabus saved successfully."
+                editing
+                    ? "Syllabus updated successfully."
+                    : "Syllabus created successfully."
             );
         } catch (error) {
-            toast.error(errorMessage(error));
+            const errors = axios.isAxiosError(error)
+                ? (
+                    error.response?.data as {
+                        errors?: Record<string, string[]>;
+                    } | undefined
+                )?.errors
+                : undefined;
+
+            if (
+                errors &&
+                Object.values(errors).some(
+                    (messages) =>
+                        Array.isArray(messages) &&
+                        messages.length > 0
+                )
+            ) {
+                setServerErrors(errors);
+
+                toast.error(
+                    "Please correct the highlighted fields."
+                );
+            } else {
+                toast.error(errorMessage(error));
+            }
         } finally {
             setBusy(false);
         }
@@ -650,113 +667,31 @@ const query = useQuery({
                     onPageChange={setPage}
                 />
 
-                {/* CREATE / EDIT */}
-                <Modal
+                {/* CREATE / EDIT: shared Base validation */}
+                <FormModal
+                    open={formOpen}
+                    onClose={(open) => {
+                        if (busy) return;
+
+                        setFormOpen(open);
+
+                        if (!open) {
+                            setServerErrors({});
+                        }
+                    }}
+                    schema={syllabusSchema}
                     title={
                         editing
                             ? "Edit Syllabus"
                             : "Create Syllabus"
                     }
-                    open={formOpen}
-                    onClose={() => {
-                        if (!busy) setFormOpen(false);
-                    }}
-                >
-                    <form
-                        className="space-y-4"
-                        onSubmit={(event) =>
-                            void save(event)
-                        }
-                    >
-                        <div>
-                            <label
-                                htmlFor="syllabus-code"
-                                className="mb-1 block text-sm font-medium"
-                            >
-                                Syllabus Code
-                            </label>
-
-                            <Input
-                                id="syllabus-code"
-                                required
-                                maxLength={30}
-                                value={form.code}
-                                onChange={(event) =>
-                                    setForm((previous) => ({
-                                        ...previous,
-                                        code: event.target.value,
-                                    }))
-                                }
-                            />
-                        </div>
-
-                        <div>
-                            <label
-                                htmlFor="syllabus-name"
-                                className="mb-1 block text-sm font-medium"
-                            >
-                                Syllabus Name
-                            </label>
-
-                            <Input
-                                id="syllabus-name"
-                                required
-                                maxLength={150}
-                                value={form.name}
-                                onChange={(event) =>
-                                    setForm((previous) => ({
-                                        ...previous,
-                                        name: event.target.value,
-                                    }))
-                                }
-                            />
-                        </div>
-
-                        <div>
-                            <label
-                                htmlFor="syllabus-description"
-                                className="mb-1 block text-sm font-medium"
-                            >
-                                Description
-                            </label>
-
-                            <textarea
-                                id="syllabus-description"
-                                rows={4}
-                                maxLength={1500}
-                                className="w-full rounded-md border bg-background p-2"
-                                value={form.description}
-                                onChange={(event) =>
-                                    setForm((previous) => ({
-                                        ...previous,
-                                        description:
-                                        event.target.value,
-                                    }))
-                                }
-                            />
-                        </div>
-
-                        <div className="flex justify-end gap-2">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                disabled={busy}
-                                onClick={() =>
-                                    setFormOpen(false)
-                                }
-                            >
-                                Cancel
-                            </Button>
-
-                            <Button
-                                type="submit"
-                                disabled={busy}
-                            >
-                                Save
-                            </Button>
-                        </div>
-                    </form>
-                </Modal>
+                    initial={editing ?? undefined}
+                    isSubmitting={busy}
+                    fieldErrors={serverErrors}
+                    onSubmit={(values: Record<string, unknown>) =>
+                        void save(values)
+                    }
+                />
 
                 {/* DELETE CONFIRMATION */}
                 <ConfirmDialog
