@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { CatalogCourse } from "@/types";
-import { CheckCircle2, Clock, GraduationCap, PlayCircle, BookOpen } from "lucide-react";
+import { CheckCircle2, Clock, GraduationCap, PlayCircle, BookOpen, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CourseEnrollmentAssignmentDialog } from "./CourseEnrollmentAssignmentDialog";
 import { LEVEL_BADGE_CLASS, LEVEL_LABEL, formatTotalDuration } from "../utils/course.utils.ts";
@@ -13,6 +13,8 @@ interface CourseCardProps {
   canEnroll: boolean;
   isEnrolling: boolean;
   canAssign: boolean;
+  showEnrollmentAction?: boolean;
+  showDetailAction?: boolean;
   onEnroll: (courseId: number) => void;
   disableNavigation?: boolean;
   onSelect?: (course: CatalogCourse) => void;
@@ -24,6 +26,8 @@ export function CourseCard({
   canEnroll,
   isEnrolling,
   canAssign,
+  showEnrollmentAction = true,
+  showDetailAction = false,
   onEnroll,
   disableNavigation = false,
   onSelect,
@@ -138,7 +142,12 @@ export function CourseCard({
         </div>
 
         <div className="mt-auto flex gap-2 pt-2">
-          {course.enrolled && enrollmentId !== undefined ? (
+          {showDetailAction && (
+            <Button type="button" variant="outline" className="flex-1" onClick={handleSelect}>
+              <Eye className="size-4" /> View detail
+            </Button>
+          )}
+          {showEnrollmentAction && (course.enrolled && enrollmentId !== undefined ? (
             <Button asChild className="flex-1">
               <Link to={`/enrollments/${enrollmentId}/learn`}>
                 <PlayCircle className="size-4" /> Continue learning
@@ -152,7 +161,7 @@ export function CourseCard({
                 </Button>
               )}
             </>
-          )}
+          ))}
         </div>
         {canAssign && (
           <CourseEnrollmentAssignmentDialog course={course} />
