@@ -95,7 +95,7 @@ class LessonServiceImplNotificationTest {
         service.update(30L, textUpdate("New text"));
 
         verify(notificationService).createOnce(
-                eq(1L), anyString(), eq("Lesson updated"), anyString(), eq("/enrollments/100/learn"));
+                eq(1L), anyString(), eq("Lesson updated"), anyString(), eq("/enroll/100/learn"));
         verify(notificationService, never()).createOnce(
                 eq(2L), anyString(), anyString(), anyString(), anyString());
     }
@@ -132,7 +132,7 @@ class LessonServiceImplNotificationTest {
         service.delete(30L);
 
         verify(notificationService).createOnce(
-                eq(1L), anyString(), eq("Lesson removed"), anyString(), eq("/enrollments/100/learn"));
+                eq(1L), anyString(), eq("Lesson removed"), anyString(), eq("/enroll/100/learn"));
         verify(notificationService, never()).createOnce(
                 eq(2L), anyString(), anyString(), anyString(), anyString());
     }

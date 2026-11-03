@@ -7,7 +7,6 @@ import type { FieldSchema } from "@/types";
 import { OverflowBadges } from "./OverflowBadges";
 import { formatDateValue } from "./dateFormat";
 
-// Re-export for backward compatibility
 export type { DateFormatKey } from "./dateFormat";
 export { DATE_FORMAT_CYCLE, DATE_FORMAT_LABELS, formatDateValue } from "./dateFormat";
 export { OverflowBadges } from "./OverflowBadges";
@@ -124,7 +123,6 @@ export function CellRenderer({
     );
   }
 
-  // Handle arrays (like question options)
   if (Array.isArray(value)) {
     if (value.length === 0) {
       return (
@@ -134,10 +132,8 @@ export function CellRenderer({
       );
     }
 
-    // Check if it's an array of objects (like question options)
     const firstItem = value[0];
     if (typeof firstItem === "object" && firstItem !== null) {
-      // For question options, show count with tooltip of contents
       if ("content" in firstItem) {
         const optionsText = value
           .map((opt: any, idx: number) =>
@@ -157,7 +153,6 @@ export function CellRenderer({
       }
     }
 
-    // Array of primitives
     return (
       <TableCell>
         <TruncatedText content={value.join(", ")} bold={field.bold} />

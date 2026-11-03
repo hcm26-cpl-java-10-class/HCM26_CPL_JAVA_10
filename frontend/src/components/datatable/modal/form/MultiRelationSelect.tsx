@@ -149,7 +149,6 @@ export function MultiRelationSelect({
           className="w-[--radix-popover-trigger-width] p-0"
           align="start"
         >
-          {/* Search */}
           <div className="p-2 border-b">
             <div className="relative">
               <Search
@@ -165,7 +164,6 @@ export function MultiRelationSelect({
             </div>
           </div>
 
-          {/* Select all / Clear */}
           {filteredItems.length > 0 && (
             <div className="px-2 py-1.5 border-b flex items-center justify-between">
               <span className="text-xs text-muted-foreground">
@@ -198,7 +196,6 @@ export function MultiRelationSelect({
             </div>
           )}
 
-          {/* Options */}
           <ScrollArea className="h-[220px]">
             <div className="p-1">
               {filteredItems.map((item) => {

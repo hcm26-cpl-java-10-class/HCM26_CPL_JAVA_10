@@ -1,12 +1,14 @@
 import { PermissionGate } from "@/components/PermissionGate";
 
 import { courseApi, departmentApi, enrollmentApi, progressApi } from "@/api";
+import { courseReportApi } from "@/api/features/demo/course-report.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { DepartmentMemberPicker } from "@/pages/student/DepartmentMemberPicker";
 import { StudentCheckboxList } from "@/pages/student/StudentCheckboxList";
 import {
@@ -23,6 +25,8 @@ import {
   BookOpen,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Eye,
   FileText,
@@ -33,6 +37,8 @@ import {
   LoaderCircle,
   Music2,
   PlayCircle,
+  Search,
+  Users,
   Video,
   type LucideIcon,
 } from "lucide-react";
@@ -108,111 +114,212 @@ export function CourseDetailPage() {
   );
 }
 
-function CourseDetailContent({ course }: { course: CourseDetail }) {
+export function CourseDetailContent({
+  course,
+  enrollmentManagement = false,
+}: {
+  course: CourseDetail;
+  enrollmentManagement?: boolean;
+}) {
+  const hero = (
+    <section className="overflow-hidden rounded-2xl border bg-card">
+      <div className="relative h-56 bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100 sm:h-72">
+        {course.thumbnailUrl ? (
+          <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <GraduationCap className="size-20 text-blue-900/25" />
+          </div>
+        )}
+      </div>
+      <div className="space-y-4 p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          {(course.categoryNames?.length
+            ? course.categoryNames
+            : course.categoryName
+              ? [course.categoryName]
+              : []
+          ).map((name) => (
+            <Badge key={name} variant="outline">{name}</Badge>
+          ))}
+          {course.level && (
+            <Badge variant="secondary" className={LEVEL_BADGE_CLASS[course.level]}>
+              {LEVEL_LABEL[course.level]}
+            </Badge>
+          )}
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{course.name}</h1>
+        <p className="text-sm text-muted-foreground">
+          Instructor: <span className="font-medium text-foreground">{course.instructor || "—"}</span>
+        </p>
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5"><Layers className="size-4" /> {course.sections.length} sections</span>
+          <span className="inline-flex items-center gap-1.5"><BookOpen className="size-4" /> {course.lessonCount} lessons</span>
+          <span className="inline-flex items-center gap-1.5"><Clock className="size-4" /> {formatTotalDuration(course.totalDuration)}</span>
+        </div>
+      </div>
+    </section>
+  );
+
+  const information = (
+    <>
+      <section className="rounded-2xl border bg-card p-6">
+        <h2 className="text-lg font-semibold">About this course</h2>
+        <p className="mt-2 whitespace-pre-line text-sm leading-6 text-muted-foreground">
+          {course.description || "The instructor has not added a description yet."}
+        </p>
+      </section>
+
+      {course.syllabus && (
+        <section className="rounded-2xl border bg-card p-6">
+          <h2 className="text-lg font-semibold">Course Syllabus</h2>
+
+          <p className="mt-2 text-sm font-medium">
+            {course.syllabus.name}
+          </p>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            {course.syllabus.code}
+          </p>
+
+          <Button asChild variant="outline" size="sm" className="mt-4">
+            <Link
+              to={`/student/syllabuses/${course.syllabus.id}?fromCourse=${course.id}`}
+            >
+              View Syllabus
+            </Link>
+          </Button>
+        </section>
+      )}
+      <section className="rounded-2xl border bg-card p-6">
+        <h2 className="text-lg font-semibold">Skills you will achieve</h2>
+        {(() => {
+          const skills = course.categoryNames?.length
+            ? course.categoryNames
+            : course.categoryName
+              ? [course.categoryName]
+              : [];
+          return skills.length === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">The instructor has not added any skills yet.</p>
+          ) : (
+            <div className="mt-4 flex flex-wrap gap-3">
+              {skills.map((skill) => (
+                <span key={skill} className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-[0_2px_8px_rgba(15,23,42,0.08)]">
+                  {skill}
+                </span>
+              ))}
+            </div>
+          );
+        })()}
+      </section>
+      <CourseContent course={course} />
+    </>
+  );
+
+  if (enrollmentManagement) {
+    return (
+      <div className="space-y-6">
+        {hero}
+        <CourseInformationPanel>{information}</CourseInformationPanel>
+        <CourseLearnersPanel courseId={course.id} />
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="space-y-6">
-        <section className="overflow-hidden rounded-2xl border bg-card">
-          <div className="relative h-56 bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100 sm:h-72">
-            {course.thumbnailUrl ? (
-              <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <GraduationCap className="size-20 text-blue-900/25" />
-              </div>
-            )}
-          </div>
-          <div className="space-y-4 p-6">
-            <div className="flex flex-wrap items-center gap-2">
-              {(course.categoryNames?.length
-                ? course.categoryNames
-                : course.categoryName
-                  ? [course.categoryName]
-                  : []
-              ).map((name) => (
-                <Badge key={name} variant="outline">
-                  {name}
-                </Badge>
-              ))}
-              {course.level && (
-                <Badge variant="secondary" className={LEVEL_BADGE_CLASS[course.level]}>
-                  {LEVEL_LABEL[course.level]}
-                </Badge>
-              )}
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{course.name}</h1>
-            <p className="text-sm text-muted-foreground">
-              Instructor: <span className="font-medium text-foreground">{course.instructor || "—"}</span>
-            </p>
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <Layers className="size-4" /> {course.sections.length} sections
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <BookOpen className="size-4" /> {course.lessonCount} lessons
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Clock className="size-4" /> {formatTotalDuration(course.totalDuration)}
-              </span>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border bg-card p-6">
-          <h2 className="text-lg font-semibold">About this course</h2>
-          <p className="mt-2 whitespace-pre-line text-sm leading-6 text-muted-foreground">
-            {course.description || "The instructor has not added a description yet."}
-          </p>
-        </section>
-
-        {course.syllabus && (
-          <section className="rounded-2xl border bg-card p-6">
-            <h2 className="text-lg font-semibold">Course Syllabus</h2>
-            <p className="mt-2 text-sm font-medium">{course.syllabus.name}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{course.syllabus.code}</p>
-            <Button asChild variant="outline" size="sm" className="mt-4">
-              <Link to={`/student/syllabuses/${course.syllabus.id}?fromCourse=${course.id}`}>
-                View Syllabus
-              </Link>
-            </Button>
-          </section>
-        )}
-
-        <section className="rounded-2xl border bg-card p-6">
-          <h2 className="text-lg font-semibold">Skills you will achieve</h2>
-          {(() => {
-            const skills =
-              course.categoryNames && course.categoryNames.length > 0
-                ? course.categoryNames
-                : course.categoryName
-                  ? [course.categoryName]
-                  : [];
-
-            return skills.length === 0 ? (
-                <p className="mt-3 text-sm text-muted-foreground">
-                  The instructor has not added any skills yet.
-                </p>
-            ) : (
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {skills.map((skill) => (
-                      <span
-                          key={skill}
-                          className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-[0_2px_8px_rgba(15,23,42,0.08)]"
-                      >
-                        {skill}
-                      </span>
-                  ))}
-                </div>
-            );
-          })()}
-        </section>
-        <CourseContent course={course} />
+        {hero}
+        {information}
       </div>
 
       <aside className="lg:sticky lg:top-4 lg:self-start">
         <CourseActionCard course={course} />
       </aside>
     </div>
+  );
+}
+
+function CourseInformationPanel({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <section className="rounded-2xl border bg-card p-6">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center justify-between gap-4 text-left">
+            <div><h2 className="text-lg font-semibold">Course information</h2><p className="mt-1 text-sm text-muted-foreground">About, skills, and course content</p></div>
+            <ChevronDown className={`size-5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-6"><div className="space-y-6">{children}</div></CollapsibleContent>
+      </section>
+    </Collapsible>
+  );
+}
+
+const LEARNERS_PER_PAGE = 6;
+
+function CourseLearnersPanel({ courseId }: { courseId: number }) {
+  const [open, setOpen] = useState(true);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("ALL");
+  const [page, setPage] = useState(0);
+  const reportQuery = useQuery({ queryKey: ["course-report"], queryFn: courseReportApi.getCourseEnrollmentReport });
+  const courseReport = reportQuery.data?.find((item) => item.courseId === courseId);
+  const learners = useMemo(() => courseReport?.learners ?? [], [courseReport]);
+  const filteredLearners = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    return learners.filter((learner) => {
+      const matchesSearch = !keyword || learner.studentName?.toLowerCase().includes(keyword) || learner.studentEmail?.toLowerCase().includes(keyword);
+      const matchesStatus = status === "ALL" || (status === "COMPLETED" && learner.completed) || (status === "ACTIVE" && !learner.completed);
+      return matchesSearch && matchesStatus;
+    });
+  }, [learners, query, status]);
+  const pageCount = Math.max(1, Math.ceil(filteredLearners.length / LEARNERS_PER_PAGE));
+  const safePage = Math.min(page, pageCount - 1);
+  const visibleLearners = filteredLearners.slice(safePage * LEARNERS_PER_PAGE, (safePage + 1) * LEARNERS_PER_PAGE);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <section className="rounded-2xl border bg-card p-6">
+        <CollapsibleTrigger asChild>
+          <button type="button" className="flex w-full items-center justify-between gap-4 text-left">
+            <div className="flex items-start gap-3"><Users className="mt-0.5 size-5 text-muted-foreground" /><div><h2 className="text-lg font-semibold">Assigned & enrolled students</h2><p className="mt-1 text-sm text-muted-foreground">{learners.length} {learners.length === 1 ? "student" : "students"} in this course</p></div></div>
+            <ChevronDown className={`size-5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-6">
+          <div className="grid gap-3 border-y py-4 md:grid-cols-[minmax(0,1fr)_220px]">
+            <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Search students by name or email..." className="pl-9" /></div>
+            <Select value={status} onValueChange={(value) => { setStatus(value); setPage(0); }}>
+              <SelectTrigger aria-label="Filter students by progress status"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="ALL">All progress statuses</SelectItem><SelectItem value="ACTIVE">In progress</SelectItem><SelectItem value="COMPLETED">Completed</SelectItem></SelectContent>
+            </Select>
+          </div>
+          {reportQuery.isLoading ? (
+            <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground"><LoaderCircle className="mr-2 size-4 animate-spin" /> Loading students...</div>
+          ) : reportQuery.isError ? (
+            <div className="py-10 text-center text-sm text-destructive">Could not load assigned students.</div>
+          ) : visibleLearners.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">{learners.length === 0 ? "No students are assigned or enrolled in this course." : "No students match the selected filters."}</div>
+          ) : (
+            <div className="grid gap-3 py-4 md:grid-cols-2">
+              {visibleLearners.map((learner) => (
+                <article key={learner.enrollmentId} className="rounded-xl border bg-background p-4">
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{learner.studentName || learner.studentEmail || "Student"}</p><p className="truncate text-xs text-muted-foreground">{learner.studentEmail || "No email"}</p></div><Badge variant={learner.completed ? "default" : "secondary"}>{learner.completed ? "Completed" : "In progress"}</Badge></div>
+                  <div className="mt-4 flex items-center gap-3"><Progress value={learner.progressPercentage} className="flex-1" /><span className="text-sm font-semibold">{learner.progressPercentage}%</span></div>
+                  <p className="mt-3 text-xs text-muted-foreground">Enrolled {learner.enrolledAt ? new Date(learner.enrolledAt).toLocaleDateString() : "—"}</p>
+                </article>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm text-muted-foreground">
+            <span>Showing {filteredLearners.length === 0 ? 0 : safePage * LEARNERS_PER_PAGE + 1}–{Math.min((safePage + 1) * LEARNERS_PER_PAGE, filteredLearners.length)} of {filteredLearners.length}</span>
+            <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={safePage === 0}><ChevronLeft className="size-4" /> Previous</Button><span>Page {safePage + 1} of {pageCount}</span><Button variant="outline" size="sm" onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))} disabled={safePage >= pageCount - 1}>Next <ChevronRight className="size-4" /></Button></div>
+          </div>
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
   );
 }
 

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { LessonAnswer, LessonQuestion } from "@/types";
+import type { LessonAnswer, LessonQuestion, QuestionSort } from "@/types";
 import { useDebouncedValue } from "@/pages/management/demo/course/hooks/useDebouncedValue";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,7 +13,19 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { GraduationCap, MessageSquare, Pencil, Reply, Search, Trash2, X } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronUp,
+  GraduationCap,
+  MessageSquare,
+  Pencil,
+  Pin,
+  PinOff,
+  Reply,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -118,6 +130,7 @@ export function LessonQnA({ lessonId, className, focusQuestionId }: LessonQnAPro
   const baseKey = ["lesson-qna", lessonId];
 
   const [searchInput, setSearchInput] = useState("");
+  const [sort, setSort] = useState<QuestionSort>("newest");
   const search = useDebouncedValue(searchInput.trim(), 350);
   const [askDraft, setAskDraft] = useState("");
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -125,8 +138,8 @@ export function LessonQnA({ lessonId, className, focusQuestionId }: LessonQnAPro
   const [deleting, setDeleting] = useState<Deleting | null>(null);
 
   const questionsQuery = useInfiniteQuery({
-    queryKey: [...baseKey, search],
-    queryFn: ({ pageParam }) => qnaApi.list(lessonId, pageParam, PAGE_SIZE, search),
+    queryKey: [...baseKey, search, sort],
+    queryFn: ({ pageParam }) => qnaApi.list(lessonId, pageParam, PAGE_SIZE, search, sort),
     initialPageParam: 0,
     placeholderData: keepPreviousData,
     getNextPageParam: (last) => (last.number + 1 < last.totalPages ? last.number + 1 : undefined),
@@ -212,6 +225,43 @@ export function LessonQnA({ lessonId, className, focusQuestionId }: LessonQnAPro
       toast.success("Answer deleted.");
     },
     onError: onError("Could not delete the answer."),
+  });
+
+  const upvoteMutation = useMutation({
+    mutationFn: ({ questionId, upvoted }: { questionId: number; upvoted: boolean }) =>
+      upvoted ? qnaApi.removeUpvote(lessonId, questionId) : qnaApi.upvote(lessonId, questionId),
+    onSuccess: () => refresh(),
+    onError: onError("Could not update your upvote."),
+  });
+
+  const pinMutation = useMutation({
+    mutationFn: ({ questionId, pinned }: { questionId: number; pinned: boolean }) =>
+      pinned ? qnaApi.unpin(lessonId, questionId) : qnaApi.pin(lessonId, questionId),
+    onSuccess: async (_data, variables) => {
+      await refresh();
+      toast.success(variables.pinned ? "Question unpinned." : "Question pinned.");
+    },
+    onError: onError("Could not update the pin."),
+  });
+
+  const acceptMutation = useMutation({
+    mutationFn: ({
+      questionId,
+      answerId,
+      accepted,
+    }: {
+      questionId: number;
+      answerId: number;
+      accepted: boolean;
+    }) =>
+      accepted
+        ? qnaApi.unacceptAnswer(lessonId, questionId)
+        : qnaApi.acceptAnswer(lessonId, questionId, answerId),
+    onSuccess: async (_data, variables) => {
+      await refresh();
+      toast.success(variables.accepted ? "Accepted answer removed." : "Marked as accepted answer.");
+    },
+    onError: onError("Could not update the accepted answer."),
   });
 
   // Jump to a specific question (deep link from the instructor inbox / notification email).
@@ -312,6 +362,28 @@ export function LessonQnA({ lessonId, className, focusQuestionId }: LessonQnAPro
         </p>
       )}
 
+      <div className="mt-3 flex items-center gap-2" role="group" aria-label="Sort questions">
+        <span className="text-xs text-muted-foreground">Sort by</span>
+        <Button
+          type="button"
+          size="xs"
+          variant={sort === "newest" ? "secondary" : "ghost"}
+          aria-pressed={sort === "newest"}
+          onClick={() => setSort("newest")}
+        >
+          Newest
+        </Button>
+        <Button
+          type="button"
+          size="xs"
+          variant={sort === "votes" ? "secondary" : "ghost"}
+          aria-pressed={sort === "votes"}
+          onClick={() => setSort("votes")}
+        >
+          Most upvoted
+        </Button>
+      </div>
+
       {canAsk && (
         <div className="mt-4 rounded-xl border bg-muted/20 p-4">
           <label htmlFor={`qna-ask-${lessonId}`} className="mb-2 block text-sm font-medium">
@@ -373,10 +445,37 @@ export function LessonQnA({ lessonId, className, focusQuestionId }: LessonQnAPro
               id={`qna-question-${question.id}`}
               className={`min-w-0 space-y-3 rounded-xl border p-4 transition-shadow ${
                 highlightId === question.id ? "ring-2 ring-primary/60" : ""
-              }`}
+              } ${question.pinned ? "border-primary/40 bg-primary/5" : ""}`}
             >
               <header className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
+                  {question.canUpvote ? (
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant={question.upvotedByMe ? "default" : "outline"}
+                      aria-pressed={question.upvotedByMe}
+                      aria-label={question.upvotedByMe ? "Remove upvote" : "Upvote question"}
+                      disabled={upvoteMutation.isPending}
+                      onClick={() =>
+                        upvoteMutation.mutate({
+                          questionId: question.id,
+                          upvoted: question.upvotedByMe,
+                        })
+                      }
+                    >
+                      <ChevronUp /> {question.upvoteCount}
+                    </Button>
+                  ) : (
+                    <Badge variant="outline" aria-label={`${question.upvoteCount} upvotes`}>
+                      <ChevronUp /> {question.upvoteCount}
+                    </Badge>
+                  )}
+                  {question.pinned && (
+                    <Badge variant="secondary">
+                      <Pin /> Pinned
+                    </Badge>
+                  )}
                   <span className="text-sm font-medium">{question.authorName}</span>
                   <span className="text-xs text-muted-foreground">
                     {formatWhen(question.createdAt)}
@@ -386,6 +485,19 @@ export function LessonQnA({ lessonId, className, focusQuestionId }: LessonQnAPro
                   </Badge>
                 </div>
                 <div className="flex gap-1">
+                  {question.canPin && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={question.pinned ? "Unpin question" : "Pin question"}
+                      disabled={pinMutation.isPending}
+                      onClick={() =>
+                        pinMutation.mutate({ questionId: question.id, pinned: question.pinned })
+                      }
+                    >
+                      {question.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                    </Button>
+                  )}
                   {question.canEdit && (
                     <Button
                       variant="ghost"
@@ -438,7 +550,14 @@ export function LessonQnA({ lessonId, className, focusQuestionId }: LessonQnAPro
               {question.answers.length > 0 && (
                 <div className="min-w-0 space-y-3 border-l-2 pl-4">
                   {question.answers.map((answer) => (
-                    <div key={answer.id} className="min-w-0 space-y-1.5">
+                    <div
+                      key={answer.id}
+                      className={`min-w-0 space-y-1.5 ${
+                        answer.accepted
+                          ? "rounded-md border border-green-600/40 bg-green-600/5 p-2"
+                          : ""
+                      }`}
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-medium">{answer.authorName}</span>
@@ -447,11 +566,38 @@ export function LessonQnA({ lessonId, className, focusQuestionId }: LessonQnAPro
                               <GraduationCap /> Instructor
                             </Badge>
                           )}
+                          {answer.accepted && (
+                            <Badge className="bg-green-600 text-white">
+                              <CheckCircle2 /> Accepted answer
+                            </Badge>
+                          )}
                           <span className="text-xs text-muted-foreground">
                             {formatWhen(answer.createdAt)}
                           </span>
                         </div>
                         <div className="flex gap-1">
+                          {question.canAccept && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={
+                                answer.accepted ? "Unmark accepted answer" : "Mark as accepted answer"
+                              }
+                              aria-pressed={answer.accepted}
+                              disabled={acceptMutation.isPending}
+                              onClick={() =>
+                                acceptMutation.mutate({
+                                  questionId: question.id,
+                                  answerId: answer.id,
+                                  accepted: answer.accepted,
+                                })
+                              }
+                            >
+                              <CheckCircle2
+                                className={`size-4 ${answer.accepted ? "text-green-600" : ""}`}
+                              />
+                            </Button>
+                          )}
                           {answer.canEdit && (
                             <Button
                               variant="ghost"

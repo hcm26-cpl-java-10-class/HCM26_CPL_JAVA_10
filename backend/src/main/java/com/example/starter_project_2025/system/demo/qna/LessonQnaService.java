@@ -21,8 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -35,6 +38,9 @@ import java.util.stream.Collectors;
  *   <li>Xóa câu hỏi: tác giả, giảng viên sở hữu khóa học hoặc admin.</li>
  *   <li>Sửa câu trả lời: chỉ tác giả. Xóa câu trả lời: tác giả hoặc admin.</li>
  *   <li>Tìm kiếm: lọc câu hỏi của bài học theo từ khóa (khớp nội dung câu hỏi hoặc câu trả lời).</li>
+ *   <li>Upvote: bất kỳ ai có quyền xem Q&amp;A, trừ tác giả câu hỏi; mỗi người một lượt / câu hỏi.</li>
+ *   <li>Câu trả lời đúng (accepted): tác giả câu hỏi, giảng viên hoặc admin đánh dấu; mỗi câu hỏi tối đa một.</li>
+ *   <li>Ghim: chỉ giảng viên sở hữu khóa học hoặc admin. Câu hỏi được ghim luôn nằm đầu danh sách.</li>
  *   <li>Thông báo email (bất đồng bộ, sau khi commit): giảng viên khi có câu hỏi mới,
  *       người hỏi khi được trả lời. Xem {@link QnaNotificationListener}.</li>
  * </ul>
@@ -46,8 +52,13 @@ public class LessonQnaService {
     static final int MAX_PAGE_SIZE = 50;
     static final int MAX_CONTENT_LENGTH = QnaContentPolicy.MAX_LENGTH;
 
+    /** Giá trị {@code sort} cho phép: mới nhất (mặc định) hoặc nhiều upvote nhất. */
+    static final String SORT_NEWEST = "newest";
+    static final String SORT_VOTES = "votes";
+
     private final LessonQuestionRepository questionRepository;
     private final LessonAnswerRepository answerRepository;
+    private final LessonQuestionVoteRepository voteRepository;
     private final LessonRepository lessonRepository;
     private final UserRepository userRepository;
     private final CourseEnrollmentRepository enrollmentRepository;
@@ -67,10 +78,16 @@ public class LessonQnaService {
 
     // ------------------------------------------------------------------ questions
 
+    /**
+     * Danh sách câu hỏi của bài học. Câu hỏi được ghim luôn đứng đầu; sau đó sắp xếp theo
+     * {@code sort}: {@code newest} (mặc định) hoặc {@code votes} (nhiều upvote nhất, rồi mới nhất).
+     */
     @Transactional(readOnly = true)
-    public Page<LessonQuestionDTO> getQuestions(Viewer viewer, Long lessonId, String keyword, Pageable pageable) {
+    public Page<LessonQuestionDTO> getQuestions(
+            Viewer viewer, Long lessonId, String keyword, String sort, Pageable pageable
+    ) {
         Access access = requireAccess(viewer, lessonId);
-        Pageable safePageable = sanitize(pageable);
+        Pageable safePageable = sanitize(pageable, sort);
 
         List<String> patterns = QnaSearchTerms.toLikePatterns(keyword);
         Page<LessonQuestion> page = patterns.isEmpty()
@@ -85,12 +102,14 @@ public class LessonQnaService {
                 .findByQuestion_IdInOrderByCreatedAtAscIdAsc(questionIds)
                 .stream()
                 .collect(Collectors.groupingBy(answer -> answer.getQuestion().getId()));
+        Set<Long> upvoted = new HashSet<>(voteRepository.findVotedQuestionIds(viewer.userId(), questionIds));
 
         return page.map(question -> toDto(
                 question,
                 answersByQuestion.getOrDefault(question.getId(), List.of()),
                 viewer,
-                access
+                access,
+                upvoted.contains(question.getId())
         ));
     }
 
@@ -109,7 +128,7 @@ public class LessonQnaService {
                 .build());
 
         publishQuestionPosted(access, author, question);
-        return toDto(question, List.of(), viewer, access);
+        return toDto(question, List.of(), viewer, access, false);
     }
 
     @Transactional
@@ -126,8 +145,8 @@ public class LessonQnaService {
         }
 
         question.setContent(QnaContentPolicy.normalize(content));
-        LessonQuestion saved = questionRepository.save(question);
-        return toDto(saved, List.of(), viewer, access);
+        questionRepository.save(question);
+        return reload(question, viewer, access);
     }
 
     @Transactional
@@ -139,6 +158,104 @@ public class LessonQnaService {
             throw forbidden("You are not allowed to delete this question");
         }
         questionRepository.delete(question);
+    }
+
+    // --------------------------------------------------------------------- upvote
+
+    /** Upvote câu hỏi (idempotent: upvote lần nữa không làm gì). Không được upvote câu hỏi của chính mình. */
+    @Transactional
+    public LessonQuestionDTO upvote(Viewer viewer, Long lessonId, Long questionId) {
+        Access access = requireAccess(viewer, lessonId);
+        LessonQuestion question = requireQuestion(lessonId, questionId);
+        User user = requireUser(viewer);
+
+        if (isAuthor(question.getAuthor(), viewer)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "You cannot upvote your own question");
+        }
+        if (!voteRepository.existsByQuestion_IdAndUser_Id(questionId, user.getId())) {
+            voteRepository.save(LessonQuestionVote.builder().question(question).user(user).build());
+            syncUpvoteCount(question);
+        }
+        return reload(question, viewer, access);
+    }
+
+    /** Bỏ upvote (idempotent). */
+    @Transactional
+    public LessonQuestionDTO removeUpvote(Viewer viewer, Long lessonId, Long questionId) {
+        Access access = requireAccess(viewer, lessonId);
+        LessonQuestion question = requireQuestion(lessonId, questionId);
+
+        voteRepository.findByQuestion_IdAndUser_Id(questionId, viewer.userId()).ifPresent(vote -> {
+            voteRepository.delete(vote);
+            syncUpvoteCount(question);
+        });
+        return reload(question, viewer, access);
+    }
+
+    // ------------------------------------------------------------ accepted answer
+
+    /**
+     * Đánh dấu một câu trả lời là đúng. Người được phép: tác giả câu hỏi, giảng viên của khóa học,
+     * admin. Mỗi câu hỏi chỉ có một câu trả lời đúng (đánh dấu câu khác sẽ thay thế).
+     */
+    @Transactional
+    public LessonQuestionDTO acceptAnswer(Viewer viewer, Long lessonId, Long questionId, Long answerId) {
+        Access access = requireAccess(viewer, lessonId);
+        LessonQuestion question = requireQuestion(lessonId, questionId);
+        requireAnswer(questionId, answerId);
+        requireCanAccept(viewer, access, question);
+
+        if (!answerId.equals(question.getAcceptedAnswerId())) {
+            question.setAcceptedAnswerId(answerId);
+            questionRepository.save(question);
+        }
+        return reload(question, viewer, access);
+    }
+
+    /** Bỏ đánh dấu câu trả lời đúng (idempotent). */
+    @Transactional
+    public LessonQuestionDTO unacceptAnswer(Viewer viewer, Long lessonId, Long questionId) {
+        Access access = requireAccess(viewer, lessonId);
+        LessonQuestion question = requireQuestion(lessonId, questionId);
+        requireCanAccept(viewer, access, question);
+
+        if (question.getAcceptedAnswerId() != null) {
+            question.setAcceptedAnswerId(null);
+            questionRepository.save(question);
+        }
+        return reload(question, viewer, access);
+    }
+
+    // ------------------------------------------------------------------------ pin
+
+    /** Ghim câu hỏi lên đầu danh sách (chỉ giảng viên của khóa học / admin). */
+    @Transactional
+    public LessonQuestionDTO pin(Viewer viewer, Long lessonId, Long questionId) {
+        Access access = requireAccess(viewer, lessonId);
+        requireCanPin(access);
+        LessonQuestion question = requireQuestion(lessonId, questionId);
+
+        if (!question.isPinned()) {
+            question.setPinned(true);
+            question.setPinnedAt(LocalDateTime.now());
+            questionRepository.save(question);
+        }
+        return reload(question, viewer, access);
+    }
+
+    /** Bỏ ghim (idempotent). */
+    @Transactional
+    public LessonQuestionDTO unpin(Viewer viewer, Long lessonId, Long questionId) {
+        Access access = requireAccess(viewer, lessonId);
+        requireCanPin(access);
+        LessonQuestion question = requireQuestion(lessonId, questionId);
+
+        if (question.isPinned()) {
+            question.setPinned(false);
+            question.setPinnedAt(null);
+            questionRepository.save(question);
+        }
+        return reload(question, viewer, access);
     }
 
     // -------------------------------------------------------------------- answers
@@ -189,6 +306,10 @@ public class LessonQnaService {
             throw forbidden("You are not allowed to delete this answer");
         }
 
+        if (answerId.equals(question.getAcceptedAnswerId())) {
+            question.setAcceptedAnswerId(null);
+            questionRepository.save(question);
+        }
         answerRepository.delete(answer);
         return reload(question, viewer, access);
     }
@@ -209,6 +330,24 @@ public class LessonQnaService {
             throw forbidden("Enroll in this course to join the lesson Q&A");
         }
         return new Access(lesson, course, viewer.administrator(), instructor);
+    }
+
+    private static void requireCanPin(Access access) {
+        if (!access.canModerate()) {
+            throw forbidden("Only the course instructor can pin questions");
+        }
+    }
+
+    private static void requireCanAccept(Viewer viewer, Access access, LessonQuestion question) {
+        if (!isAuthor(question.getAuthor(), viewer) && !access.canModerate()) {
+            throw forbidden("Only the asker or the course instructor can mark an accepted answer");
+        }
+    }
+
+    /** Đồng bộ số upvote phi chuẩn hóa từ bảng vote (đếm lại để không lệch khi có xử lý song song). */
+    private void syncUpvoteCount(LessonQuestion question) {
+        question.setUpvoteCount((int) voteRepository.countByQuestion_Id(question.getId()));
+        questionRepository.save(question);
     }
 
     /** Báo cho giảng viên của khóa học (trừ khi chính họ là người đặt câu hỏi). */
@@ -281,20 +420,25 @@ public class LessonQnaService {
 
     private LessonQuestionDTO reload(LessonQuestion question, Viewer viewer, Access access) {
         List<LessonAnswer> answers = answerRepository.findByQuestion_IdOrderByCreatedAtAscIdAsc(question.getId());
-        return toDto(question, answers, viewer, access);
+        boolean upvoted = voteRepository.existsByQuestion_IdAndUser_Id(question.getId(), viewer.userId());
+        return toDto(question, answers, viewer, access, upvoted);
     }
 
     private LessonQuestionDTO toDto(
             LessonQuestion question,
             List<LessonAnswer> answers,
             Viewer viewer,
-            Access access
+            Access access,
+            boolean upvotedByMe
     ) {
         boolean answered = !answers.isEmpty();
         boolean own = isAuthor(question.getAuthor(), viewer);
+        Long acceptedId = question.getAcceptedAnswerId();
 
+        // Câu trả lời đúng lên đầu, còn lại giữ thứ tự thời gian (sort ổn định).
         List<LessonQuestionDTO.AnswerDTO> answerDtos = answers.stream()
-                .map(answer -> toAnswerDto(answer, viewer, access))
+                .map(answer -> toAnswerDto(answer, viewer, access, acceptedId))
+                .sorted(Comparator.comparing(LessonQuestionDTO.AnswerDTO::accepted).reversed())
                 .toList();
 
         return new LessonQuestionDTO(
@@ -309,11 +453,21 @@ public class LessonQnaService {
                 own && !answered,
                 own || access.canModerate(),
                 access.canModerate(),
+                question.isPinned(),
+                question.getPinnedAt(),
+                question.getUpvoteCount(),
+                upvotedByMe,
+                !own,
+                access.canModerate(),
+                answered && (own || access.canModerate()),
+                acceptedId,
                 answerDtos
         );
     }
 
-    private LessonQuestionDTO.AnswerDTO toAnswerDto(LessonAnswer answer, Viewer viewer, Access access) {
+    private LessonQuestionDTO.AnswerDTO toAnswerDto(
+            LessonAnswer answer, Viewer viewer, Access access, Long acceptedAnswerId
+    ) {
         User author = answer.getAuthor();
         boolean own = isAuthor(author, viewer);
         boolean byInstructor = access.course().getInstructorUser() != null
@@ -326,6 +480,7 @@ public class LessonQnaService {
                 author.getId(),
                 author.getFullName(),
                 byInstructor,
+                answer.getId().equals(acceptedAnswerId),
                 answer.getCreatedAt(),
                 answer.getUpdatedAt(),
                 own,
@@ -337,9 +492,14 @@ public class LessonQnaService {
         return author != null && author.getId() != null && author.getId().equals(viewer.userId());
     }
 
-    private static Pageable sanitize(Pageable pageable) {
+    /** Ghim luôn lên đầu; sau đó theo upvote (nếu {@code sort=votes}) rồi mới nhất. */
+    private static Pageable sanitize(Pageable pageable, String sortMode) {
         int size = Math.min(Math.max(pageable.getPageSize(), 1), MAX_PAGE_SIZE);
-        Sort sort = Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"));
+        Sort sort = Sort.by(Sort.Direction.DESC, "pinned");
+        if (SORT_VOTES.equalsIgnoreCase(sortMode == null ? "" : sortMode.strip())) {
+            sort = sort.and(Sort.by(Sort.Direction.DESC, "upvoteCount"));
+        }
+        sort = sort.and(Sort.by(Sort.Direction.DESC, "createdAt")).and(Sort.by(Sort.Direction.DESC, "id"));
         return PageRequest.of(Math.max(pageable.getPageNumber(), 0), size, sort);
     }
 

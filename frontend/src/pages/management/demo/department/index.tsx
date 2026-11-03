@@ -15,8 +15,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { auditableFieldsSchema, type DepartmentDTO, type EntityConfig, type EntitySchema, type FieldSchema } from "@/types";
 import axios from "axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, LoaderCircle, Pencil, Plus, Power, Search, Trash2, Users } from "lucide-react";
+import { Building2, LoaderCircle, Pencil, Plus, Power, Search, Trash2, Users, ArrowLeft } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { DepartmentEnrollmentDialog } from "./DepartmentEnrollmentDialog";
 import { DepartmentMembersDialog } from "./DepartmentMembersDialog";
@@ -206,11 +207,18 @@ export default function DepartmentManagementPage() {
                             Manage department members and enroll all students in a course at once.
                         </p>
                     </div>
-                    <PermissionGate permission="DEPARTMENT_CREATE">
-                        <Button onClick={openCreateDialog}>
-                            <Plus className="size-4" /> Create Department
+                    <div className="flex items-center gap-2">
+                        <Button asChild variant="outline">
+                            <Link to="/course-enrollments">
+                                <ArrowLeft className="size-4" /> Back to Enrollments
+                            </Link>
                         </Button>
-                    </PermissionGate>
+                        <PermissionGate permission="DEPARTMENT_CREATE">
+                            <Button onClick={openCreateDialog}>
+                                <Plus className="size-4" /> Create Department
+                            </Button>
+                        </PermissionGate>
+                    </div>
                 </div>
 
                 <div className="relative max-w-md">

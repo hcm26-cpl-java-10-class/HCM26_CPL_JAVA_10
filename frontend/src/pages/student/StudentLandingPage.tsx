@@ -3,6 +3,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
+import { usePendingInvitations } from "@/hooks/usePendingInvitations";
 import { EnrollmentProgressBar } from "@/pages/management/demo/progress/EnrollmentProgressBar";
 import { formatRoleLabel } from "@/utils/rbac.utils";
 import { useQuery } from "@tanstack/react-query";
@@ -30,6 +31,7 @@ const formatEnrollmentDate = (value: string) => {
 
 export default function StudentLandingPage() {
   const { user, activeRole, hasPermission } = usePermissions();
+  const { count: pendingInvitationCount } = usePendingInvitations();
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
   const canReadBooks = hasPermission("BOOK_READ");
   const canReadEnrollments = hasPermission("ENROLLMENT_READ");
@@ -71,6 +73,20 @@ export default function StudentLandingPage() {
               <Link to="/student/exams">
                 <CalendarDays className="mr-2 size-4" />
                 Xem lich thi
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="border-slate-300 bg-white/80">
+              <Link to="/invitations">
+                <CalendarDays className="mr-2 size-4" />
+                Loi moi thi
+                {pendingInvitationCount > 0 && (
+                    <span
+                        aria-hidden="true"
+                        className="ml-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-none text-white"
+                    >
+                      {pendingInvitationCount > 9 ? "9+" : pendingInvitationCount}
+                    </span>
+                )}
               </Link>
             </Button>
             {canReadBooks ? (

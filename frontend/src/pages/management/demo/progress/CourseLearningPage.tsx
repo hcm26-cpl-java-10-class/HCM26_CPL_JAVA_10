@@ -1,16 +1,18 @@
-import { progressApi } from "@/api";
+import { certificateApi, progressApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { EnrollmentProgress, LessonProgressItem } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, BookOpen, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Award, BookOpen, CheckCircle2, ChevronLeft, ChevronRight, Flag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { LessonPreview } from "../lesson/components/LessonPreview";
 import { LessonQnA } from "../lesson/components/LessonQnA";
+import { LessonReportDialog } from "../lesson/components/LessonReportDialog";
+import { usePermissions } from "@/hooks/usePermissions";
 import { LessonProgressSidebar } from "./LessonProgressSidebar";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 
@@ -27,12 +29,27 @@ export function CourseLearningPage() {
   const coursesLabel = isAdminStudentPreview ? "Courses" : "My courses";
   const [activeLessonId, setActiveLessonId] = useState<number>();
   const [answerDraft, setAnswerDraft] = useState("");
+  const [reportOpen, setReportOpen] = useState(false);
+  const { hasPermission } = usePermissions();
+  const canReport = hasPermission("LESSON_REPORT_CREATE");
 
   const progressQuery = useQuery({
     queryKey: ["lesson-progress", enrollmentId],
     queryFn: () => progressApi.getByEnrollment(enrollmentId),
     enabled: Number.isInteger(enrollmentId) && enrollmentId > 0,
   });
+
+  const certificateQuery = useQuery({
+    queryKey: ["course-certificate", enrollmentId, isAdminStudentPreview],
+    queryFn: async () => {
+      if (isAdminStudentPreview) return certificateApi.getByEnrollment(enrollmentId);
+      const certificates = await certificateApi.getMyCertificates();
+      return certificates.find((certificate) => certificate.courseId === progressQuery.data?.courseId);
+    },
+    enabled: progressQuery.data?.progressPercentage === 100,
+    retry: false,
+  });
+  const courseCertificate = certificateQuery.data;
 
   const { mutate: recordAccess } = useMutation({
     mutationFn: (lessonId: number) => progressApi.recordAccess(enrollmentId, lessonId),
@@ -140,9 +157,42 @@ export function CourseLearningPage() {
             />
             <main className="min-w-0 rounded-2xl border bg-card p-5 sm:p-7">
               <p className="text-sm text-muted-foreground">{progressQuery.data.courseName}</p>
+              {progressQuery.data.progressPercentage === 100 && courseCertificate?.verificationToken && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
+                  <div>
+                    <p className="font-semibold">Course completed</p>
+                    <p className="text-sm opacity-80">Your certificate is ready.</p>
+                  </div>
+                  <Button asChild>
+                    <Link to={`/my-certificates/${encodeURIComponent(courseCertificate.verificationToken)}`}>
+                      <Award className="size-4" /> View certificate
+                    </Link>
+                  </Button>
+                </div>
+              )}
               {currentLesson && (
                 <div className="mt-3">
                   <LessonPreview lesson={currentLesson} />
+                  {canReport && (
+                    <div className="mt-3 flex justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground"
+                        onClick={() => setReportOpen(true)}
+                      >
+                        <Flag className="size-4" /> Report a problem
+                      </Button>
+                      <LessonReportDialog
+                        key={currentLesson.lessonId}
+                        lessonId={currentLesson.lessonId}
+                        lessonTitle={currentLesson.title}
+                        open={reportOpen}
+                        onOpenChange={setReportOpen}
+                      />
+                    </div>
+                  )}
                   {currentLesson.contentType === "TEXT" && (
                     <section className="mt-5 space-y-2 rounded-xl border bg-muted/20 p-4">
                       <Label htmlFor="student-answer">Your answer</Label>

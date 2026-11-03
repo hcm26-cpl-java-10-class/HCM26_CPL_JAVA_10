@@ -47,7 +47,8 @@ public class ModuleGroup extends BaseEntity {
     @Column(nullable = false)
     Integer displayOrder = 0;
 
-    @OneToMany(mappedBy = "moduleGroup", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @OneToMany(mappedBy = "moduleGroup")
     @Fetch(FetchMode.SUBSELECT)
     List<Module> modules = new ArrayList<>();
 }

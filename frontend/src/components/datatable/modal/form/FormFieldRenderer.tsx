@@ -32,9 +32,6 @@ interface FormFieldRendererProps {
   onChange: (name: string, value: any) => void;
 }
 
-/**
- * Render input phù hợp cho từng loại field trong form.
- */
 export function FormFieldRenderer({
   field,
   value,
@@ -137,7 +134,6 @@ export function FormFieldRenderer({
         ? rel.filterItems(allItems, { initial, isEdit: initial?.id != null })
         : allItems;
 
-      // Multiple select with checkboxes
       if (rel.multiple) {
         return (
           <MultiRelationSelect
@@ -334,7 +330,6 @@ export function FormFieldRenderer({
           <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
           <Input
             id={field.name}
-            type={field.name === "email" ? "email" : "text"}
             className={errorClass}
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}

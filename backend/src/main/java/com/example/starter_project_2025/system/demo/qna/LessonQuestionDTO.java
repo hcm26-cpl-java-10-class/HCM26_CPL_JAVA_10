@@ -18,6 +18,14 @@ public record LessonQuestionDTO(
         boolean canEdit,
         boolean canDelete,
         boolean canAnswer,
+        boolean pinned,
+        LocalDateTime pinnedAt,
+        int upvoteCount,
+        boolean upvotedByMe,
+        boolean canUpvote,
+        boolean canPin,
+        boolean canAccept,
+        Long acceptedAnswerId,
         List<AnswerDTO> answers
 ) {
 
@@ -28,6 +36,7 @@ public record LessonQuestionDTO(
             Long authorId,
             String authorName,
             boolean byInstructor,
+            boolean accepted,
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
             boolean canEdit,
