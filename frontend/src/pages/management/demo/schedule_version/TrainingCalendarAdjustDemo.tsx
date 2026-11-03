@@ -75,9 +75,9 @@ export type TrainingTopic = {
 };
 
 export const PRESET_CLASSES = [
-  { id: "LOCAL_JAVA_01", name: "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)" },
-  { id: "LOCAL_JAVA_02", name: "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)" },
-  { id: "HCM26_FR_FU_KS_JAVA_01", name: "[HCM26_FR_FU_KS_JAVA_01] Lớp Java SE & Spring Boot" },
+  { id: "LOCAL_JAVA_01", name: "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)", startDate: "2026-10-01" },
+  { id: "LOCAL_JAVA_02", name: "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)", startDate: "2026-11-15" },
+  { id: "HCM26_FR_FU_KS_JAVA_01", name: "[HCM26_FR_FU_KS_JAVA_01] Lớp Java SE & Spring Boot", startDate: "2026-05-14" },
 ];
 
 export const LOCATION_OPTIONS = [
@@ -516,6 +516,30 @@ export default function TrainingCalendarAdjustDemo({
   const [realTrainers, setRealTrainers] = useState<SharedTrainer[]>([]);
   const [realRooms, setRealRooms] = useState<Array<{ id: number; name: string }>>([]);
 
+  const earliestTopicDate = useMemo(() => {
+    let minD: string | null = null;
+    for (const t of topics) {
+      for (const d of t.days) {
+        if (d.date && (!minD || d.date < minD)) {
+          minD = d.date;
+        }
+      }
+    }
+    return minD;
+  }, [topics]);
+
+  // Tự động đồng bộ ngày bắt đầu khi chuyển lớp
+  useEffect(() => {
+    const selectedClass = realClasses.find(
+      (c) => (c.code || String(c.id)) === selectedClassId
+    ) || PRESET_CLASSES.find((c) => c.id === selectedClassId);
+
+    if (selectedClass && "startDate" in selectedClass && selectedClass.startDate) {
+      setClassStart(selectedClass.startDate);
+      setLearningStart(selectedClass.startDate);
+    }
+  }, [selectedClassId, realClasses]);
+
   useEffect(() => {
     let isMounted = true;
     Promise.allSettled([
@@ -760,7 +784,9 @@ export default function TrainingCalendarAdjustDemo({
     setSplitTotalHours(topic.durationHours || (topic.days.length > 0 ? topic.days.length * 2.5 : 20));
     setSplitSessionHours(topic.sessionHours || 2.5);
     setSplitDailyStart(topic.days[0]?.activities[0]?.start || "08:00");
-    setSplitStartDate(topic.days[0]?.date || learningStart);
+    const firstDayDate = topic.days[0]?.date;
+    const defaultSplitStart = firstDayDate && firstDayDate >= learningStart ? firstDayDate : (firstDayDate || learningStart);
+    setSplitStartDate(defaultSplitStart);
     setSplitSkipWeekends(true);
     setSplitModalOpen(true);
   }
@@ -896,7 +922,20 @@ export default function TrainingCalendarAdjustDemo({
           }
 
           if (topicMap.size > 0) {
-            setTopics(Array.from(topicMap.values()));
+            const loadedList = Array.from(topicMap.values());
+            setTopics(loadedList);
+            let minDate: string | null = null;
+            for (const t of loadedList) {
+              for (const d of t.days) {
+                if (d.date && (!minDate || d.date < minDate)) {
+                  minDate = d.date;
+                }
+              }
+            }
+            if (minDate) {
+              setLearningStart((prev) => (minDate < prev ? minDate : prev));
+              setClassStart((prev) => (minDate < prev ? minDate : prev));
+            }
           } else {
             setTopics([]);
           }
@@ -1199,10 +1238,11 @@ export default function TrainingCalendarAdjustDemo({
     setRemoval(null);
   }
 
-  function validateScheduleLogic(): string | null {
-    if (!classStart || !learningStart)
+  function validateScheduleLogic(customLearningStart?: string): string | null {
+    const effectiveStart = customLearningStart || learningStart;
+    if (!classStart || !effectiveStart)
       return "Enter both class start and actual learning start dates.";
-    if (learningStart < classStart)
+    if (effectiveStart < classStart)
       return "Actual learning start date cannot be before class start date.";
     if (!topics.length) return "Curriculum must have at least one topic.";
 
@@ -1215,8 +1255,8 @@ export default function TrainingCalendarAdjustDemo({
       for (const day of topic.days) {
         if (!day.name.trim() || !day.date)
           return `Please complete the date and day title in [${topic.code}].`;
-        if (day.date < learningStart)
-          return `[${topic.code}]: Training date (${day.date}) cannot be before actual learning start (${learningStart}).`;
+        if (day.date < effectiveStart)
+          return `[${topic.code}]: Training date (${day.date}) cannot be before actual learning start (${effectiveStart}).`;
         if (!day.activities.length)
           return `[${topic.code} - ${day.name}]: Each training day requires at least one scheduled activity.`;
 
@@ -1291,7 +1331,15 @@ export default function TrainingCalendarAdjustDemo({
   }
 
   async function handleSaveVersion() {
-    const errorMsg = validateScheduleLogic();
+    // Tự động đồng bộ ngày bắt đầu học nếu có buổi học diễn ra sớm hơn
+    if (earliestTopicDate && earliestTopicDate < learningStart) {
+      setLearningStart(earliestTopicDate);
+      if (classStart > earliestTopicDate) {
+        setClassStart(earliestTopicDate);
+      }
+    }
+
+    const errorMsg = validateScheduleLogic(earliestTopicDate && earliestTopicDate < learningStart ? earliestTopicDate : learningStart);
     if (errorMsg) {
       setError(errorMsg);
       return;
@@ -1560,12 +1608,32 @@ export default function TrainingCalendarAdjustDemo({
         </div>
 
         {error && (
-          <p
+          <div
             role="alert"
-            className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-300 bg-red-50 p-3.5 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300 shadow-xs"
           >
-            {error}
-          </p>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-red-800 dark:text-red-200">Xung đột ngày học:</span>
+              <span>{error}</span>
+            </div>
+            {earliestTopicDate && earliestTopicDate < learningStart && (
+              <Button
+                type="button"
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white shadow-xs text-xs h-7 px-3 cursor-pointer shrink-0"
+                onClick={() => {
+                  setLearningStart(earliestTopicDate);
+                  if (classStart > earliestTopicDate) {
+                    setClassStart(earliestTopicDate);
+                  }
+                  setError(null);
+                  toast.success(`Đã tự động đồng bộ ngày bắt đầu học thành ${earliestTopicDate}!`);
+                }}
+              >
+                Đồng bộ ngày bắt đầu học ({earliestTopicDate})
+              </Button>
+            )}
+          </div>
         )}
 
         {topics.length === 0 && (

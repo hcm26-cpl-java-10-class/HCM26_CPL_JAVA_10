@@ -40,9 +40,10 @@ export function useActiveModuleGroups(enabled = true) {
                     moduleApi.getPage(modulePagination, undefined, { ids: [], isActive: true }),
                 ]);
 
+                const isAdmin = activeRole === "ADMIN";
                 groups = groupPage.content ?? groupPage.items ?? [];
                 modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
-                    canAccessByPermission(module.requiredPermission, hasPermission),
+                    isAdmin || canAccessByPermission(module.requiredPermission, hasPermission),
                 );
             } catch (err) {
                 console.warn("Failed to load sidebar modules from backend, loading fallback navigation:", err);
@@ -130,7 +131,7 @@ export function useActiveModuleGroups(enabled = true) {
                         displayOrder: 2,
                         isActive: true,
                     },
-                ].filter((m) => canAccessByPermission(m.requiredPermission, hasPermission));
+                ].filter((m) => activeRole === "ADMIN" || canAccessByPermission(m.requiredPermission, hasPermission));
             }
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {
@@ -184,19 +185,34 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
-            // Ensure Adjust Calendar menu under Training Operations if permitted
-            const hasAdjustInDb = modules.some((m) => m.url === "/calendar/adjust" || m.url === "/schedule-versions");
-            if (!hasAdjustInDb && canAccessByPermission("SESSION_READ", hasPermission)) {
-                let trainingGroup = groups.find(
-                    (g) => (g.name || "").toLowerCase() === "training operations",
-                );
+            // Ensure Training Operations group and its critical menus (Adjust Calendar & Timetable) always exist
+            const isAdmin = activeRole === "ADMIN";
+            const canViewSessions = isAdmin || canAccessByPermission("SESSION_READ", hasPermission);
 
-                if (trainingGroup) {
-                    const groupId = String(trainingGroup.id ?? "");
-                    if (!groupedModules[groupId]) {
-                        groupedModules[groupId] = [];
-                    }
+            let trainingGroup = groups.find(
+                (g) => (g.name || "").toLowerCase() === "training operations",
+            );
 
+            if (!trainingGroup && canViewSessions) {
+                const fallbackGroup: ModuleGroupDTO = {
+                    id: 9998,
+                    name: "Training Operations",
+                    description: "Academic & Training Operations",
+                    displayOrder: 1,
+                    isActive: true,
+                };
+                groups.push(fallbackGroup);
+                trainingGroup = fallbackGroup;
+            }
+
+            if (trainingGroup && canViewSessions) {
+                const groupId = String(trainingGroup.id ?? 9998);
+                if (!groupedModules[groupId]) {
+                    groupedModules[groupId] = [];
+                }
+
+                const hasAdjust = modules.some((m) => m.url === "/calendar/adjust" || m.url === "/schedule-versions");
+                if (!hasAdjust) {
                     groupedModules[groupId].push({
                         id: 99998,
                         moduleGroupId: groupId,
@@ -204,7 +220,22 @@ export function useActiveModuleGroups(enabled = true) {
                         name: "Adjust Calendar",
                         url: "/calendar/adjust",
                         icon: "calendar",
-                        displayOrder: 5,
+                        displayOrder: 1,
+                        requiredPermission: "SESSION_READ",
+                        isActive: true,
+                    });
+                }
+
+                const hasTimetable = modules.some((m) => m.url === "/calendar/preview" || m.url === "/calendar/timetable");
+                if (!hasTimetable) {
+                    groupedModules[groupId].push({
+                        id: 99997,
+                        moduleGroupId: groupId,
+                        title: "Timetable",
+                        name: "Timetable",
+                        url: "/calendar/preview",
+                        icon: "calendar",
+                        displayOrder: 2,
                         requiredPermission: "SESSION_READ",
                         isActive: true,
                     });
