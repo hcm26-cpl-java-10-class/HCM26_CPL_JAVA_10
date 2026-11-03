@@ -4,7 +4,15 @@ export type UserRole = "ADMIN" | "TRAINER" | "TRAINEE";
 export type UserStatus = "ACTIVE" | "INACTIVE";
 export type UserAccountStatus = UserStatus | "LOCKED";
 
-export interface User extends BaseDTO {
+export type Gender = "MALE" | "FEMALE" | "OTHER";
+
+export const GENDER_OPTIONS: { label: string; value: Gender }[] = [
+  { label: "Male", value: "MALE" },
+  { label: "Female", value: "FEMALE" },
+  { label: "Other", value: "OTHER" },
+];
+
+export interface UserDTO extends BaseDTO {
   email?: string;
   password?: string;
   firstName?: string;
@@ -16,13 +24,16 @@ export interface User extends BaseDTO {
   skills?: string[];
   status?: UserAccountStatus;
   lastLoginAt?: string;
+  /** Date in the format yyyy-MM-dd, for example 2000-01-31. Optional. */
+  dateOfBirth?: string;
+  gender?: Gender;
   /** user_roles (N-N): at least one role. */
   roleIds?: Array<string | number>;
   /** user_departments (N-N): optional. */
   departmentIds?: Array<string | number>;
 }
 
-export type UserDTO = User;
+export type User = UserDTO;
 
 export interface UserFilter extends BaseFilter {
   roleIds?: string[];

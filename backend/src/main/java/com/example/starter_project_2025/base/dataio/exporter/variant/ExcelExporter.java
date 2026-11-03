@@ -2,9 +2,12 @@ package com.example.starter_project_2025.base.dataio.exporter.variant;
 
 import com.example.starter_project_2025.base.dataio.common.FileFormat;
 import com.example.starter_project_2025.base.dataio.exporter.component.ExportSheetConfig;
+import org.apache.poi.ss.usermodel.DataValidation;
+import org.apache.poi.ss.usermodel.DataValidationHelper;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Component;
 
@@ -35,6 +38,11 @@ public class ExcelExporter implements Exporter {
         for (int i = 0; i < config.columns().size(); i++) {
             headerRow.createCell(i)
                     .setCellValue(config.columns().get(i).header());
+
+            String hint = config.columns().get(i).hint();
+            if (hint != null && !hint.isBlank()) {
+                addHint(sheet, i, config.columns().get(i).header(), hint);
+            }
         }
 
         // Data
@@ -55,6 +63,18 @@ public class ExcelExporter implements Exporter {
 
         workbook.write(os);
         workbook.close();
+    }
+
+    /** Shows a note when a cell of the column is selected. It only informs: any value can still be typed. */
+    private static void addHint(Sheet sheet, int column, String title, String text) {
+        DataValidationHelper helper = sheet.getDataValidationHelper();
+        DataValidation validation = helper.createValidation(
+                helper.createCustomConstraint("TRUE"),
+                new CellRangeAddressList(1, 10_000, column, column));
+        validation.setShowErrorBox(false);
+        validation.setShowPromptBox(true);
+        validation.createPromptBox(title.length() <= 32 ? title : title.substring(0, 32), text);
+        sheet.addValidationData(validation);
     }
 }
 

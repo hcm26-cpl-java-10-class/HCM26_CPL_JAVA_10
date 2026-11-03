@@ -1,4 +1,4 @@
-import { roleApi } from "@/api";
+import { permissionApi, roleApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -185,13 +185,70 @@ function parseImportRows(rows: ImportedRolePermissionRow[]): {
   return { roles: [...roleMap.values()], permissionMatrix };
 }
 
+// Role page fields are intentionally limited to the columns shown in the UI:
+// Name, Description, Permissions, Status, and Created At.
 const roleSchema: EntitySchema = {
   entityName: "role",
   idField: "id",
   fields: [
-    { name: "name", label: "Role Name", type: "text", sortable: true },
-    { name: "description", label: "Description", type: "textarea", sortable: true },
-    { name: "isActive", label: "Status", type: "boolean", sortable: true },
+    {
+      name: "name",
+      label: "Name",
+      type: "text",
+      sortable: true,
+      filterable: true,
+      filterType: "text",
+      bold: true,
+      width: "18%",
+      minWidth: 140,
+    },
+    {
+      name: "description",
+      label: "Description",
+      type: "textarea",
+      sortable: true,
+      filterable: true,
+      filterType: "text",
+      width: "27%",
+      minWidth: 180,
+    },
+    {
+      name: "permissionIds",
+      label: "Permissions",
+      type: "relation",
+      editable: true,
+      width: "38%",
+      minWidth: 220,
+      relation: {
+        api: permissionApi,
+        valueField: "id",
+        labelField: "name",
+        multiple: true,
+      },
+      filterable: true,
+      filterType: "select",
+    },
+    {
+      name: "isActive",
+      label: "Status",
+      type: "boolean",
+       width: 110,
+      booleanLabels: {
+        true: "Active",
+        false: "Inactive",
+        trueColor: "bg-blue-500 text-white",
+        falseColor: "bg-red-500 text-white",
+      },
+      filterable: true,
+      filterType: "boolean",
+    },
+    {
+      name: "createdAt",
+      label: "Created At",
+      type: "date",
+      sortable: true,
+      editable: false,
+    },
   ],
 };
 
