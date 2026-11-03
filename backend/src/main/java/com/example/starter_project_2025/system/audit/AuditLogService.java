@@ -12,6 +12,32 @@ public interface AuditLogService {
             String result
     );
 
+    /**
+     * Records a successful business event; the actor is the current user.
+     * oldValue/newValue must be JSON (see AuditSupport.json) or null.
+     */
+    void logEvent(
+            String action,
+            String entityType,
+            String entityId,
+            String oldValue,
+            String newValue
+    );
+
+    /**
+     * Same as logEvent but with an explicit actor, for events that happen
+     * before the user is authenticated (register, reset password...).
+     */
+    void logEventAs(
+            Long actorId,
+            String actorEmail,
+            String action,
+            String entityType,
+            String entityId,
+            String oldValue,
+            String newValue
+    );
+
     void logLogout(
             Long actorId,
             String actorEmail,

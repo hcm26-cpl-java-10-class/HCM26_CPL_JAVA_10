@@ -9,9 +9,9 @@ import { Pagination } from "@/components/datatable/table/Pagination";
 import { EntityHistoryDialog } from "@/components/audit/EntityHistoryDialog";
 import type { FieldSchema } from "@/types";
 import {
-    auditLogApi,
-    type AuditLogDTO,
-    type AuditLogFilter,
+  auditLogApi,
+  type AuditLogDTO,
+  type AuditLogFilter,
 } from "@/api";
 
 
@@ -21,93 +21,119 @@ const PAGE_SIZE = 20;
 type Period = "7days" | "30days" | "thisMonth" | "all";
 
 function getDateRange(period: Period) {
-    if (period === "all") {
-        return { fromDate: undefined, toDate: undefined };
-    }
+  if (period === "all") {
+    return { fromDate: undefined, toDate: undefined };
+  }
 
-    const now = new Date();
-    const end = new Date(now);
-    const start = new Date(now);
+  const now = new Date();
+  const end = new Date(now);
+  const start = new Date(now);
 
-    if (period === "7days") {
-        start.setDate(start.getDate() - 6);
-    } else if (period === "30days") {
-        start.setDate(start.getDate() - 29);
-    } else {
-        start.setDate(1);
-    }
+  if (period === "7days") {
+    start.setDate(start.getDate() - 6);
+  } else if (period === "30days") {
+    start.setDate(start.getDate() - 29);
+  } else {
+    start.setDate(1);
+  }
 
-    const format = (date: Date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, "0");
-        const day = String(date.getDate()).padStart(2, "0");
-        return `${year}-${month}-${day}`;
-    };
+  const format = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
-    return {
-        fromDate: format(start),
-        toDate: format(end),
-    };
+  return {
+    fromDate: format(start),
+    toDate: format(end),
+  };
 }
 
 function formatDate(value: string) {
-    if (!value) return "-";
+  if (!value) return "-";
 
-    const date = new Date(value);
+  const date = new Date(value);
 
-    if (Number.isNaN(date.getTime())) return value;
+  if (Number.isNaN(date.getTime())) return value;
 
-    return date.toLocaleString("vi-VN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
+  return date.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatValue(value: string | null) {
-    if (!value) return "Không có dữ liệu";
+  if (!value) return "Không có dữ liệu";
 
-    try {
-        return JSON.stringify(JSON.parse(value), null, 2);
-    } catch {
-        return value;
-    }
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
 }
 
 function getActionLabel(action: string) {
-    const labels: Record<string, string> = {
-        CREATE: "Create",
-        UPDATE: "Update",
-        DELETE: "Delete",
-        LOGIN: "Login",
-        LOGOUT: "Logout",
-    };
+  const labels: Record<string, string> = {
+    CREATE: "Create",
+    UPDATE: "Update",
+    DELETE: "Delete",
+    LOGIN: "Login",
+    LOGOUT: "Logout",
+    REGISTER: "Register",
+    VERIFY_EMAIL: "Verify email",
+    FORGOT_PASSWORD: "Forgot password",
+    RESET_PASSWORD: "Reset password",
+    IMPORT: "Import",
+    EXPORT: "Export",
+    ADD_QUESTION: "Add question",
+    REMOVE_QUESTION: "Remove question",
+    CANCEL: "Cancel",
+    INVITE: "Invite",
+    BATCH_INVITE: "Batch invite",
+    RESEND: "Resend",
+    REVOKE: "Revoke",
+  };
 
-    return labels[action?.toUpperCase()] ?? action ?? "Unknown";
+  return labels[action?.toUpperCase()] ?? action ?? "Unknown";
 }
 
 function ActionBadge({ action }: { action: string }) {
-    const normalized = action?.toUpperCase();
+  const normalized = action?.toUpperCase();
 
-    const classes: Record<string, string> = {
-        CREATE: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
-        UPDATE: "bg-blue-50 text-blue-700 ring-blue-600/20",
-        DELETE: "bg-red-50 text-red-700 ring-red-600/20",
-        LOGIN: "bg-violet-50 text-violet-700 ring-violet-600/20",
-        LOGOUT: "bg-slate-100 text-slate-700 ring-slate-500/20",
-    };
+  const classes: Record<string, string> = {
+    CREATE: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+    UPDATE: "bg-blue-50 text-blue-700 ring-blue-600/20",
+    DELETE: "bg-red-50 text-red-700 ring-red-600/20",
+    LOGIN: "bg-violet-50 text-violet-700 ring-violet-600/20",
+    LOGOUT: "bg-slate-100 text-slate-700 ring-slate-500/20",
+    REGISTER: "bg-teal-50 text-teal-700 ring-teal-600/20",
+    VERIFY_EMAIL: "bg-teal-50 text-teal-700 ring-teal-600/20",
+    FORGOT_PASSWORD: "bg-amber-50 text-amber-700 ring-amber-600/20",
+    RESET_PASSWORD: "bg-amber-50 text-amber-700 ring-amber-600/20",
+    IMPORT: "bg-indigo-50 text-indigo-700 ring-indigo-600/20",
+    EXPORT: "bg-indigo-50 text-indigo-700 ring-indigo-600/20",
+    ADD_QUESTION: "bg-sky-50 text-sky-700 ring-sky-600/20",
+    REMOVE_QUESTION: "bg-orange-50 text-orange-700 ring-orange-600/20",
+    CANCEL: "bg-orange-50 text-orange-700 ring-orange-600/20",
+    INVITE: "bg-sky-50 text-sky-700 ring-sky-600/20",
+    BATCH_INVITE: "bg-sky-50 text-sky-700 ring-sky-600/20",
+    RESEND: "bg-sky-50 text-sky-700 ring-sky-600/20",
+    REVOKE: "bg-red-50 text-red-700 ring-red-600/20",
+  };
 
-    return (
-        <span
-            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
-                classes[normalized] ?? "bg-gray-100 text-gray-700 ring-gray-500/20"
-            }`}
-        >
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
+    classes[normalized] ?? "bg-gray-100 text-gray-700 ring-gray-500/20"
+}`}
+    >
       {getActionLabel(action)}
     </span>
-    );
+  );
 }
 
 function ResultBadge({ result }: { result: string | null }) {
@@ -194,56 +220,56 @@ function AuditLogDetails({ log }: { log: AuditLogDTO }) {
 
 
 function downloadCsv(logs: AuditLogDTO[]) {
-    if (logs.length === 0) return;
+  if (logs.length === 0) return;
 
-    const headers = [
-        "Time",
-        "Actor",
-        "Actor ID",
-        "Action",
-        "Object",
-        "Object ID",
-        "Result",
-        "Old Value",
-        "New Value",
-        "Correlation ID",
-    ];
+  const headers = [
+    "Time",
+    "Actor",
+    "Actor ID",
+    "Action",
+    "Object",
+    "Object ID",
+    "Result",
+    "Old Value",
+    "New Value",
+    "Correlation ID",
+  ];
 
-    const escapeCsv = (value: unknown): string =>
-        `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const escapeCsv = (value: unknown): string =>
+    `"${String(value ?? "").replace(/"/g, '""')}"`;
 
-    const rows = logs.map((log: AuditLogDTO) => [
-        log.createdAt,
-        log.actorEmail || "Unknown",
-        log.actorId ?? "",
-        log.action,
-        log.entityType || "",
-        log.entityId || "",
-        log.result || "Unknown",
-        log.oldValue || "",
-        log.newValue || "",
-        log.correlationId || "",
-    ]);
+const rows = logs.map((log: AuditLogDTO) => [
+    log.createdAt,
+    log.actorEmail || "Unknown",
+    log.actorId ?? "",
+    log.action,
+    log.entityType || "",
+    log.entityId || "",
+    log.result || "Unknown",
+    log.oldValue || "",
+    log.newValue || "",
+    log.correlationId || "",
+]);
 
-    const csv = [headers, ...rows]
-        .map((row) => row.map(escapeCsv).join(","))
-        .join("\r\n");
+const csv = [headers, ...rows]
+    .map((row) => row.map(escapeCsv).join(","))
+    .join("\r\n");
 
-    const blob = new Blob(["\uFEFF", csv], {
-        type: "text/csv;charset=utf-8;",
-    });
+const blob = new Blob(["\uFEFF", csv], {
+    type: "text/csv;charset=utf-8;",
+});
 
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
+const url = URL.createObjectURL(blob);
+const link = document.createElement("a");
 
-    link.href = url;
-    link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+link.href = url;
+link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
 
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+document.body.appendChild(link);
+link.click();
+link.remove();
 
-    URL.revokeObjectURL(url);
+URL.revokeObjectURL(url);
 }
 
 async function downloadExcel(logs: AuditLogDTO[]) {
@@ -345,35 +371,35 @@ async function downloadExcel(logs: AuditLogDTO[]) {
     // Header của bảng ở dòng 5
 
 // Header của bảng ở dòng 5
-    const headerRow = worksheet.getRow(5);
-    headerRow.values = headers;
-    headerRow.height = 30;
+const headerRow = worksheet.getRow(5);
+headerRow.values = headers;
+headerRow.height = 30;
 
-    headerRow.font = {
-        name: "Arial",
-        size: 10,
-        bold: true,
-        color: { argb: "FFFFFFFF" },
-    };
+headerRow.font = {
+    name: "Arial",
+    size: 10,
+    bold: true,
+    color: { argb: "FFFFFFFF" },
+};
 
-    headerRow.alignment = {
-        horizontal: "center",
-        vertical: "middle",
-        wrapText: true,
-    };
+headerRow.alignment = {
+    horizontal: "center",
+    vertical: "middle",
+    wrapText: true,
+};
 
 // Chỉ định dạng đúng 10 cột A:J, không tô màu cả hàng
-    for (let columnNumber = 1; columnNumber <= 10; columnNumber++) {
-        const cell = headerRow.getCell(columnNumber);
+for (let columnNumber = 1; columnNumber <= 10; columnNumber++) {
+    const cell = headerRow.getCell(columnNumber);
 
-        cell.fill = {
-            type: "pattern",
-            pattern: "solid",
-            fgColor: { argb: "FF1E293B" },
-        };
+    cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF1E293B" },
+    };
 
-        cell.border = borderStyle;
-    }
+    cell.border = borderStyle;
+}
 
 
     // Dữ liệu bắt đầu từ dòng 6
@@ -588,9 +614,23 @@ export default function AuditLogPage() {
                     filterable: true,
                     filterOptions: [
                         { label: "Login", value: "LOGIN" },
+                        { label: "Logout", value: "LOGOUT" },
+                        { label: "Register", value: "REGISTER" },
+                        { label: "Verify email", value: "VERIFY_EMAIL" },
+                        { label: "Forgot password", value: "FORGOT_PASSWORD" },
+                        { label: "Reset password", value: "RESET_PASSWORD" },
                         { label: "Create", value: "CREATE" },
                         { label: "Update", value: "UPDATE" },
                         { label: "Delete", value: "DELETE" },
+                        { label: "Import", value: "IMPORT" },
+                        { label: "Export", value: "EXPORT" },
+                        { label: "Add question", value: "ADD_QUESTION" },
+                        { label: "Remove question", value: "REMOVE_QUESTION" },
+                        { label: "Cancel", value: "CANCEL" },
+                        { label: "Invite", value: "INVITE" },
+                        { label: "Batch invite", value: "BATCH_INVITE" },
+                        { label: "Resend", value: "RESEND" },
+                        { label: "Revoke", value: "REVOKE" },
                     ],
                 },
                 {
@@ -915,12 +955,12 @@ export default function AuditLogPage() {
                                                     key={log.id}
                                                     log={log}
                                                     onViewDetails={() => setSelectedLog(log)}
-                                                    onViewHistory={() =>
-                                                        setHistoryTarget({
-                                                            entityType: log.entityType,
-                                                            entityId: String(log.entityId),
-                                                        })
-                                                    }
+                    onViewHistory={() =>
+                        setHistoryTarget({
+                            entityType: log.entityType,
+                            entityId: String(log.entityId),
+                        })
+                    }
                                                 />
                                             ))}
                                             </tbody>

@@ -22,6 +22,9 @@ import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionRepository;
 
+import com.example.starter_project_2025.system.audit.AuditAction;
+import com.example.starter_project_2025.system.audit.AuditLogService;
+import com.example.starter_project_2025.system.audit.AuditSupport;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -32,6 +35,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	private final ExamRepository examRepository;
 	private final QuestionRepository questionRepository;
 	private final ExamMapper examMapper;
+	private final AuditLogService auditLogService;
 
 	@Override
 	protected BaseCrudRepository<Exam, Long> getRepository() {
@@ -72,16 +76,45 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		Set<Question> questions = resolveQuestions(questionIds, context);
 		context.throwIfErrors();
 
+		List<Long> before = questionIdsOf(exam);
 		exam.getQuestions().addAll(questions);
-		return examMapper.toResponse(examRepository.save(exam));
+		ExamDTO response = examMapper.toResponse(examRepository.save(exam));
+
+		auditLogService.logEvent(
+				AuditAction.ADD_QUESTION,
+				"EXAM",
+				String.valueOf(examId),
+				AuditSupport.json("questionIds", before),
+				AuditSupport.json("questionIds", questionIdsOf(exam))
+		);
+
+		return response;
 	}
 
 	// ===== DELETE /api/exams/{id}/questions/{questionId} =====
 	public ExamDTO removeQuestion(Long examId, Long questionId) {
 		checkPermission(CrudAction.UPDATE);
 		Exam exam = findExam(examId);
+		List<Long> before = questionIdsOf(exam);
 		exam.getQuestions().removeIf(question -> question.getId().equals(questionId));
-		return examMapper.toResponse(examRepository.save(exam));
+		ExamDTO response = examMapper.toResponse(examRepository.save(exam));
+
+		auditLogService.logEvent(
+				AuditAction.REMOVE_QUESTION,
+				"EXAM",
+				String.valueOf(examId),
+				AuditSupport.json("questionIds", before),
+				AuditSupport.json("questionIds", questionIdsOf(exam))
+		);
+
+		return response;
+	}
+
+	private List<Long> questionIdsOf(Exam exam) {
+		return exam.getQuestions().stream()
+				.map(Question::getId)
+				.sorted()
+				.toList();
 	}
 
 	private Exam findExam(Long examId) {

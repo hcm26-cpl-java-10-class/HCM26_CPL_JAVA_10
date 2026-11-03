@@ -4,6 +4,9 @@ import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.audit.AuditAction;
+import com.example.starter_project_2025.system.audit.AuditLogService;
+import com.example.starter_project_2025.system.audit.AuditSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +20,7 @@ public class CourseEnrollmentService {
     private final CourseEnrollmentRepository enrollmentRepository;
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public CourseEnrollment enroll(Long userId, Long courseId) {
@@ -39,7 +43,17 @@ public class CourseEnrollmentService {
                 .course(course)
                 .build();
 
-        return enrollmentRepository.save(enrollment);
+        CourseEnrollment saved = enrollmentRepository.save(enrollment);
+
+        auditLogService.logEvent(
+                AuditAction.CREATE,
+                "ENROLLMENT",
+                String.valueOf(saved.getId()),
+                null,
+                AuditSupport.json("userId", userId, "courseId", courseId)
+        );
+
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -57,5 +71,16 @@ public class CourseEnrollmentService {
                                 "Enrollment not found"));
 
         enrollmentRepository.delete(enrollment);
+
+        auditLogService.logEvent(
+                AuditAction.DELETE,
+                "ENROLLMENT",
+                String.valueOf(enrollmentId),
+                AuditSupport.json(
+                        "userId", userId,
+                        "courseId", enrollment.getCourse().getId()
+                ),
+                null
+        );
     }
 }

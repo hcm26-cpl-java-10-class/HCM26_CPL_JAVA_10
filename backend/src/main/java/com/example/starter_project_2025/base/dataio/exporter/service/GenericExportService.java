@@ -1,5 +1,8 @@
 package com.example.starter_project_2025.base.dataio.exporter.service;
 
+import com.example.starter_project_2025.system.audit.AuditAction;
+import com.example.starter_project_2025.system.audit.AuditLogService;
+import com.example.starter_project_2025.system.audit.AuditSupport;
 import com.example.starter_project_2025.base.dataio.common.FileFormat;
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEntity;
 import com.example.starter_project_2025.base.dataio.exporter.builder.ExportConfigBuilder;
@@ -22,14 +25,17 @@ public class GenericExportService implements ExportService {
 
     Map<FileFormat, Exporter> exporters;
     ExportConfigBuilder configBuilder;
+    AuditLogService auditLogService;
 
     public GenericExportService(
             List<Exporter> exporterList,
-            ExportConfigBuilder configBuilder
+            ExportConfigBuilder configBuilder,
+            AuditLogService auditLogService
     ) {
         this.exporters = exporterList.stream()
                 .collect(Collectors.toMap(Exporter::format, e -> e));
         this.configBuilder = configBuilder;
+        this.auditLogService = auditLogService;
     }
 
     @Override
@@ -66,6 +72,17 @@ public class GenericExportService implements ExportService {
             e.printStackTrace();
             throw e;
         }
+
+        auditLogService.logEvent(
+                AuditAction.EXPORT,
+                AuditSupport.resourceOf(clazz),
+                null,
+                null,
+                AuditSupport.json(
+                        "format", String.valueOf(format),
+                        "rowCount", data.size()
+                )
+        );
     }
 
     private Exporter getExporter(FileFormat format) {

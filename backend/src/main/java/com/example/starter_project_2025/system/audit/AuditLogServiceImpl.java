@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class AuditLogServiceImpl implements AuditLogService {
@@ -87,6 +89,48 @@ public class AuditLogServiceImpl implements AuditLogService {
             }
         }
 
+        save(actorId, actorEmail, action, entityType, entityId,
+                oldValue, newValue, correlationId, result);
+    }
+
+    @Override
+    public void logEvent(
+            String action,
+            String entityType,
+            String entityId,
+            String oldValue,
+            String newValue
+    ) {
+        log(action, entityType, entityId, oldValue, newValue,
+                UUID.randomUUID().toString(), "SUCCESS");
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logEventAs(
+            Long actorId,
+            String actorEmail,
+            String action,
+            String entityType,
+            String entityId,
+            String oldValue,
+            String newValue
+    ) {
+        save(actorId, actorEmail, action, entityType, entityId,
+                oldValue, newValue, UUID.randomUUID().toString(), "SUCCESS");
+    }
+
+    private void save(
+            Long actorId,
+            String actorEmail,
+            String action,
+            String entityType,
+            String entityId,
+            String oldValue,
+            String newValue,
+            String correlationId,
+            String result
+    ) {
         AuditLog auditLog = AuditLog.builder()
                 .actorId(actorId)
                 .actorEmail(actorEmail)

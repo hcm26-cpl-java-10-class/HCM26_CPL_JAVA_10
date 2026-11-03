@@ -35,7 +35,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.example.starter_project_2025.system.audit.AuditAction;
 import com.example.starter_project_2025.system.audit.AuditLogService;
+import com.example.starter_project_2025.system.audit.AuditSupport;
 import org.springframework.security.core.AuthenticationException;
 
 
@@ -135,6 +137,16 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = refreshTokenService.generateAccessToken(authentication);
         String refreshToken = refreshTokenService.createRefreshToken(user);
 
+        auditLogService.logEventAs(
+                user.getId(),
+                user.getEmail(),
+                AuditAction.LOGIN,
+                "AUTH",
+                String.valueOf(user.getId()),
+                null,
+                AuditSupport.json("provider", "GOOGLE")
+        );
+
         return buildAuthResponse(principal, accessToken, refreshToken);
     }
 
@@ -154,7 +166,17 @@ public class AuthServiceImpl implements AuthService {
 
         user.getRoles().add(getDefaultStudentRole());
 
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+
+        auditLogService.logEventAs(
+                savedUser.getId(),
+                savedUser.getEmail(),
+                AuditAction.REGISTER,
+                "USER",
+                String.valueOf(savedUser.getId()),
+                null,
+                AuditSupport.json("email", savedUser.getEmail())
+        );
 
         verificationService.sendEmailVerification(user.getEmail());
     }
@@ -252,6 +274,16 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenService.revokeAllRefreshTokens(user.getId());
 
         oneTimeTokenService.markUsed(resetToken);
+
+        auditLogService.logEventAs(
+                user.getId(),
+                user.getEmail(),
+                AuditAction.RESET_PASSWORD,
+                "USER",
+                String.valueOf(user.getId()),
+                null,
+                null
+        );
     }
 
     private User createGoogleUser(String email, String firstName, String lastName) {

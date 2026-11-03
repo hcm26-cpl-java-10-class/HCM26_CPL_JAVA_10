@@ -1,5 +1,8 @@
 package com.example.starter_project_2025.base.dataio.importer.service;
 
+import com.example.starter_project_2025.system.audit.AuditAction;
+import com.example.starter_project_2025.system.audit.AuditLogService;
+import com.example.starter_project_2025.system.audit.AuditSupport;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportHash;
 import com.example.starter_project_2025.base.dataio.importer.mapper.GenericImportMapper;
 import com.example.starter_project_2025.base.dataio.importer.parser.FileParser;
@@ -23,6 +26,7 @@ public class GenericImportService implements ImportService {
     private final ParserFactory parserFactory;
     private final GenericImportMapper mapper;
     private final PasswordEncoder passwordEncoder;
+    private final AuditLogService auditLogService;
 
     @Override
     public <T, ID> ImportResult importFile(
@@ -66,6 +70,25 @@ public class GenericImportService implements ImportService {
         } catch (Exception e) {
             throw new RuntimeException("Import failed", e);
         }
+
+        String importResult =
+                result.getSuccessCount() == 0 && result.getFailureCount() > 0
+                        ? "FAILURE"
+                        : "SUCCESS";
+
+        auditLogService.log(
+                AuditAction.IMPORT,
+                AuditSupport.resourceOf(entityClass),
+                null,
+                null,
+                AuditSupport.json(
+                        "fileName", file.getOriginalFilename(),
+                        "successCount", result.getSuccessCount(),
+                        "failureCount", result.getFailureCount()
+                ),
+                java.util.UUID.randomUUID().toString(),
+                importResult
+        );
 
         return result;
     }

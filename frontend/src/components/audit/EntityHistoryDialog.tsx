@@ -132,7 +132,7 @@ export function EntityHistoryDialog({
             {logs.map((log) => {
               const action = (log.action ?? "").toUpperCase();
               const style = ACTION_STYLE[action];
-              const changes = action === "UPDATE" ? getChanges(log) : [];
+              const changes = getChanges(log);
 
               return (
                 <li key={log.id} className="relative pb-6 last:pb-0">

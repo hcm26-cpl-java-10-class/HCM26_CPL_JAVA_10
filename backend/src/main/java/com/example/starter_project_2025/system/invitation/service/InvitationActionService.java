@@ -6,6 +6,9 @@ import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
+import com.example.starter_project_2025.system.audit.AuditAction;
+import com.example.starter_project_2025.system.audit.AuditLogService;
+import com.example.starter_project_2025.system.audit.AuditSupport;
 import com.example.starter_project_2025.system.invitation.audit.InvitationAuditService;
 import com.example.starter_project_2025.system.invitation.domain.Invitation;
 import com.example.starter_project_2025.system.invitation.domain.InvitationRepository;
@@ -37,6 +40,7 @@ public class InvitationActionService {
     private final InvitationMapper invitationMapper;
     private final InvitationValidator invitationValidator;
     private final InvitationAuditService auditService;
+    private final AuditLogService auditLogService;
     private final InvitationBatchItemProcessor batchItemProcessor;
 
     @Transactional
@@ -74,6 +78,13 @@ public class InvitationActionService {
 
         batchItemProcessor.sendEmailNotificationSafely(user, exam);
         auditService.log(saved.getId(), exam.getId(), user.getId(), "CREATE", "Mời một người dùng tham gia kỳ thi");
+        auditLogService.logEvent(
+                AuditAction.INVITE,
+                "INVITATION",
+                String.valueOf(saved.getId()),
+                null,
+                AuditSupport.json("examId", exam.getId(), "userId", user.getId())
+        );
 
         return invitationMapper.toResponse(saved);
     }
@@ -154,6 +165,20 @@ public class InvitationActionService {
                         totalRequested, successCount, skippedCount, failedCount)
         );
 
+        auditLogService.logEvent(
+                AuditAction.BATCH_INVITE,
+                "INVITATION",
+                null,
+                null,
+                AuditSupport.json(
+                        "examId", exam.getId(),
+                        "total", totalRequested,
+                        "success", successCount,
+                        "skipped", skippedCount,
+                        "failed", failedCount
+                )
+        );
+
         return BatchInvitationResponse.builder()
                 .examId(exam.getId())
                 .totalRequested(totalRequested)
@@ -184,6 +209,13 @@ public class InvitationActionService {
         batchItemProcessor.sendEmailNotificationSafely(saved.getUser(), saved.getExam());
         auditService.log(saved.getId(), saved.getExam().getId(), saved.getUser().getId(), "RESEND",
                 "Gửi lại lời mời lần thứ " + saved.getResendCount());
+        auditLogService.logEvent(
+                AuditAction.RESEND,
+                "INVITATION",
+                String.valueOf(saved.getId()),
+                null,
+                AuditSupport.json("resendCount", saved.getResendCount())
+        );
 
         return invitationMapper.toResponse(saved);
     }
@@ -217,6 +249,13 @@ public class InvitationActionService {
 
         auditService.log(saved.getId(), saved.getExam().getId(), saved.getUser().getId(), "REVOKE",
                 "Thu hồi lời mời. Lý do: " + reason);
+        auditLogService.logEvent(
+                AuditAction.REVOKE,
+                "INVITATION",
+                String.valueOf(saved.getId()),
+                null,
+                AuditSupport.json("reason", reason)
+        );
 
         return invitationMapper.toResponse(saved);
     }

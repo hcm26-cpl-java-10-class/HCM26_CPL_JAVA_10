@@ -5,6 +5,9 @@ import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.system.demo.session.SessionService;
+import com.example.starter_project_2025.system.audit.AuditAction;
+import com.example.starter_project_2025.system.audit.AuditLogService;
+import com.example.starter_project_2025.system.audit.AuditSupport;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -23,6 +26,7 @@ public class SessionServiceImpl
 
     SessionMapper sessionMapper;
     SessionRepository sessionRepository;
+    AuditLogService auditLogService;
 
     @Override
     protected BaseCrudRepository<Session, Long> getRepository() {
@@ -85,10 +89,23 @@ public class SessionServiceImpl
         }
 
         // Cập nhật trạng thái và lý do hủy (Soft cancel theo BR-03)
+        String previousStatus = String.valueOf(session.getStatus());
+
         session.setStatus(Session.SessionStatus.CANCELLED);
         session.setCancelReason(cancelDTO.getCancelReason());
 
         Session updatedSession = sessionRepository.save(session);
+
+        auditLogService.logEvent(
+                AuditAction.CANCEL,
+                "SESSION",
+                String.valueOf(id),
+                AuditSupport.json("status", previousStatus),
+                AuditSupport.json(
+                        "status", "CANCELLED",
+                        "cancelReason", cancelDTO.getCancelReason()
+                )
+        );
         return sessionMapper.toDto(updatedSession);
     }
 
