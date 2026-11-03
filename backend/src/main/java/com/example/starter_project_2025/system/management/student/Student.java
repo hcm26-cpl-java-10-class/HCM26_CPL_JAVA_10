@@ -49,8 +49,9 @@ public class Student extends BaseEntity {
     @ExportField(name = "Last Name")
     String lastName;
 
-    @Column(unique = true, length = 100)
-
+    @Column( length = 100)
+    @ImportField(name = "Email", required = true)
+    @ExportField(name = "Email")
     String email;
 
     @Column(length = 30)
@@ -70,7 +71,7 @@ public class Student extends BaseEntity {
     @Column(length = 50)
     String className;
 
-    @Column(length = 500)
+    @Column(length = 1000)
     @ImportField(name = "Address")
     @ExportField(name = "Address")
     String address;
