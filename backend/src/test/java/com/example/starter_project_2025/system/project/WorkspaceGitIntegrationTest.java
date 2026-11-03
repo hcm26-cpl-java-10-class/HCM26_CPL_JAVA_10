@@ -353,31 +353,48 @@ class WorkspaceGitIntegrationTest {
         });
     }
 
-    @Test void scopedAdminCanReadRepositoryWithoutMembershipButCannotEditOrUnlink() throws Exception {
+    @Test void scopedAdminCanReadUpdateAndUnlinkRepositoryWithoutMembership() throws Exception {
         save(0, "https://github.com/team/repo", "main", 200);
         administrativeReader();
         mvc.perform(get("/api/workspaces/{id}", workspaceId).header("Authorization", "Bearer " + token)).andExpect(status().isOk());
         var config = getConfig();
         assertThat(config.get("repositoryUrl").asText()).isEqualTo("https://github.com/team/repo");
-        assertThat(config.get("canEdit").asBoolean()).isFalse();
-        assertThat(config.get("canUnlink").asBoolean()).isFalse();
-        save(1, "https://github.com/team/other", "dev", 403);
-        mvc.perform(delete(path()).param("version", "1").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
-        assertThat(gitAudits()).hasSize(1);
+        assertThat(config.get("canEdit").asBoolean()).isTrue();
+        assertThat(config.get("canUnlink").asBoolean()).isTrue();
+        save(1, "https://github.com/team/other", "dev", 200);
+        mvc.perform(delete(path()).param("version", "2").header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+        assertThat(getConfig().get("configured").asBoolean()).isFalse();
+        assertThat(gitAudits()).hasSize(3).allSatisfy(audit -> {
+            assertThat(audit.getActorId()).isEqualTo(actorId);
+            assertThat(audit.getWorkspaceId()).isEqualTo(workspaceId);
+        });
     }
 
-    @Test void adminSeesEmptyStateButCannotAddAndCannotReadAcrossTenants() throws Exception {
+    @Test void adminCanAddFromEmptyStateButCannotReadOrWriteAcrossTenants() throws Exception {
         administrativeReader();
         var config = getConfig();
         assertThat(config.get("configured").asBoolean()).isFalse();
-        assertThat(config.get("canEdit").asBoolean()).isFalse();
-        save(0, "https://github.com/team/repo", "main", 403);
+        assertThat(config.get("canEdit").asBoolean()).isTrue();
+        save(0, "https://github.com/team/repo", "main", 200);
         tx.executeWithoutResult(status -> {
             var other = tenants.saveAndFlush(Tenant.builder().code("ADMIN-GIT-" + UUID.randomUUID()).name("Other tenant").build());
             users.findById(actorId).orElseThrow().setTenant(other);
         });
         mvc.perform(get(path()).header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
-        assertThat(configs.findById(workspaceId)).isEmpty();
+        save(1, "https://github.com/team/foreign", "main", 403);
+        mvc.perform(delete(path()).param("version", "1").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+        assertThat(configs.findById(workspaceId).orElseThrow().getRepositoryUrl()).isEqualTo("https://github.com/team/repo");
+        assertThat(gitAudits()).hasSize(1);
+    }
+
+    @Test void adminEditRightsAreRevokedWithoutIssuingANewToken() throws Exception {
+        administrativeReader();
+        save(0, "https://github.com/team/repo", "main", 200);
+        tx.executeWithoutResult(status -> users.findById(actorId).orElseThrow()
+                .setRoles(new HashSet<>(Set.of(roles.findById(roleId).orElseThrow()))));
+        save(1, "https://github.com/team/other", "main", 403);
+        assertThat(configs.findById(workspaceId).orElseThrow().getRepositoryUrl()).isEqualTo("https://github.com/team/repo");
+        assertThat(gitAudits()).hasSize(1);
     }
 
     @Test void assignedClassManagerCanReadButCannotEditAndLosesAccessAfterUnassignment() throws Exception {

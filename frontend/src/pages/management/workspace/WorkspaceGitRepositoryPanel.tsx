@@ -37,7 +37,7 @@ function errorDetails(error: unknown): { message: string; fields: Record<string,
   }
   return { message: "Could not complete the repository request. Please retry.", fields: {}, conflict: false };
 }
-const EDIT_REASON = "Chỉ Team Leader, thành viên có quyền Edit Workspace hoặc Mentor phụ trách mới có quyền thay đổi thông tin Git Repository.";
+const EDIT_REASON = "Chỉ Admin có quyền truy cập Workspace, Team Leader, thành viên có quyền Edit Workspace hoặc Mentor phụ trách mới có quyền thay đổi thông tin Git Repository.";
 
 export function WorkspaceGitRepositoryPanel({ workspaceId }: { workspaceId: number }) {
   const client = useQueryClient();
@@ -101,7 +101,7 @@ export function WorkspaceGitRepositoryPanel({ workspaceId }: { workspaceId: numb
       </> : config ? <div className="space-y-3 rounded-lg border border-dashed bg-muted/20 p-4">
         <p className="text-sm text-muted-foreground">Chưa có Git Repository nào được liên kết. Vui lòng liên kết Git Repo để tiến hành làm bài và nộp sản phẩm.</p>
         {config.canEdit ? <Button type="button" size="sm" variant="outline" onClick={() => loadForm(config)}><Link2 className="size-4" /> Thêm Git Repository</Button>
-          : <p className="text-xs text-muted-foreground" title={EDIT_REASON}>Liên hệ Team Leader hoặc Mentor để liên kết repository của nhóm.</p>}
+          : <p className="text-xs text-muted-foreground" title={EDIT_REASON}>Liên hệ Admin, Team Leader hoặc Mentor để liên kết repository của nhóm.</p>}
       </div> : null}
 
     <Dialog open={editing} onOpenChange={open => { if (!pending) setEditing(open); }}>

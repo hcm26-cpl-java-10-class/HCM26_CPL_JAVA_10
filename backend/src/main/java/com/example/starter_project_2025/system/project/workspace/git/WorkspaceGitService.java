@@ -44,9 +44,11 @@ public class WorkspaceGitService {
         var membership = roster.current(workspace.getTeam()).stream()
                 .filter(m -> Objects.equals(m.getClassMember().getUser().getId(), actor.getId())).findFirst();
         boolean mentor = Objects.equals(workspace.getTeam().getAssignedMentorId(), actor.getId());
-        // Reading follows the existing Workspace authorization above (including
-        // scoped administrators/class managers). It does not grant edit rights.
-        boolean canEdit = mentor || membership.map(m -> ProjectMemberRole.hasRole(m.getRole(), "PM")
+        // Administrators may manage repositories only after the same Workspace
+        // and tenant checks as other readers. Class managers remain read-only.
+        boolean admin = actor.getRoles().stream().anyMatch(role -> Boolean.TRUE.equals(role.getIsActive())
+                && ("ADMIN".equals(role.getName()) || "SUPER_ADMIN".equals(role.getName())));
+        boolean canEdit = admin || mentor || membership.map(m -> ProjectMemberRole.hasRole(m.getRole(), "PM")
                 || access.permitted(actor, "WORKSPACE_UPDATE")).orElse(false);
         return new Scope(actor, workspace, canEdit);
     }
@@ -97,7 +99,7 @@ public class WorkspaceGitService {
 
     private Scope writable(Long id) {
         Scope scope = scope(id);
-        if (!scope.canEdit()) throw new AccessDeniedException("Only the team leader, an authorized workspace editor or assigned mentor can change the repository");
+        if (!scope.canEdit()) throw new AccessDeniedException("Only an authorized administrator, team leader, workspace editor or assigned mentor can change the repository");
         // Lock the parent even when no config exists yet: concurrent first saves cannot both succeed.
         entities.lock(scope.workspace(), LockModeType.PESSIMISTIC_WRITE);
         return scope;
