@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
@@ -11,7 +11,6 @@ import {
     ChevronDown,
     Copy,
     ExternalLink,
-    FileText,
     Layers3,
     ListChecks,
     Search,
@@ -139,6 +138,10 @@ function MaterialList({
                                 {material.type}
                             </Badge>
 
+                            {material.topicId == null && (
+                                <Badge variant="outline">Shared reference</Badge>
+                            )}
+
                             {material.mainMaterial && (
                                 <Badge variant="outline">
                                     Main material
@@ -211,6 +214,10 @@ function DetailLoading() {
 
 export default function StudentSyllabusPage() {
     const { id } = useParams();
+    const [searchParams] = useSearchParams();
+    const fromCourse = Number(searchParams.get("fromCourse"));
+    const validSource = Number.isSafeInteger(fromCourse) && fromCourse > 0;
+    const backPath = validSource ? `/courses/${fromCourse}` : "/student/syllabuses";
 
     const syllabusId = Number(id);
     const validId =
@@ -261,6 +268,9 @@ export default function StudentSyllabusPage() {
         (m) => m.topicId == null
     );
 
+    const firstSectionId = sections[0]?.id;
+    const firstTopicId = sections[0]?.topics[0]?.id;
+
     const searchText = search.trim().toLocaleLowerCase();
 
     const filteredSections = sections.filter(
@@ -272,6 +282,10 @@ export default function StudentSyllabusPage() {
             (section.mission ?? "")
                 .toLocaleLowerCase()
                 .includes(searchText) ||
+            (section.id === firstSectionId &&
+             generalMaterials.some((material) =>
+                 material.title.toLocaleLowerCase().includes(searchText)
+             )) ||
             section.topics.some(
                 (topic) =>
                     topicName(topic)
@@ -279,7 +293,10 @@ export default function StudentSyllabusPage() {
                         .includes(searchText) ||
                     materials.some(
                         (material) =>
-                            material.topicId === topic.id &&
+                            (material.topicId === topic.id ||
+                             (section.id === firstSectionId &&
+                              topic.id === firstTopicId &&
+                              material.topicId == null)) &&
                             material.title
                                 .toLocaleLowerCase()
                                 .includes(searchText)
@@ -325,9 +342,9 @@ export default function StudentSyllabusPage() {
                     variant="ghost"
                     className="-ml-3 gap-2"
                 >
-                    <Link to="/student/syllabuses">
+                    <Link to={backPath}>
                         <ArrowLeft className="size-4" />
-                        Back to Syllabuses
+                        {validSource ? "Back to Course" : "Back to Syllabuses"}
                     </Link>
                 </Button>
 
@@ -571,21 +588,6 @@ export default function StudentSyllabusPage() {
                                         </div>
                                     </section>
 
-                                    {/* GENERAL MATERIALS */}
-                                    {generalMaterials.length > 0 &&
-                                        !searchText && (
-                                            <section className="rounded-2xl border bg-card p-5">
-                                                <h3 className="mb-4 flex items-center gap-2 font-semibold">
-                                                    <FileText className="size-4" />
-                                                    General Learning Materials
-                                                </h3>
-
-                                                <MaterialList
-                                                    items={generalMaterials}
-                                                />
-                                            </section>
-                                        )}
-
                                     {/* SECTIONS */}
                                     {filteredSections.map((section) => {
                                         const index = sections.findIndex(
@@ -622,7 +624,10 @@ export default function StudentSyllabusPage() {
                                                         .includes(searchText) ||
                                                     materials.some(
                                                         (m) =>
-                                                            m.topicId === topic.id &&
+                                                            (m.topicId === topic.id ||
+                                                             (section.id === firstSectionId &&
+                                                              topic.id === firstTopicId &&
+                                                              m.topicId == null)) &&
                                                             m.title
                                                                 .toLocaleLowerCase()
                                                                 .includes(searchText)
@@ -693,8 +698,10 @@ export default function StudentSyllabusPage() {
                                                             <MaterialList
                                                                 items={materials.filter(
                                                                     (m) =>
-                                                                        m.topicId ===
-                                                                        topic.id
+                                                                        m.topicId === topic.id ||
+                                                                        (m.topicId == null &&
+                                                                         section.id === firstSectionId &&
+                                                                         topic.id === firstTopicId)
                                                                 )}
                                                             />
                                                         </article>

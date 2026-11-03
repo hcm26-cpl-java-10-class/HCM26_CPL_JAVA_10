@@ -23,8 +23,11 @@ public record CourseDetailDTO(
         boolean contentUnlocked,
         int lessonCount,
         long totalDuration,
-        List<SectionItem> sections
+        List<SectionItem> sections,
+        SyllabusInfo syllabus
 ) {
+    public record SyllabusInfo(Long id, String code, String name) {}
+
 
     public record SectionItem(
             Long id,

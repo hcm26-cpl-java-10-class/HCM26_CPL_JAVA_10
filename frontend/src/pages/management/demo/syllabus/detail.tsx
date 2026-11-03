@@ -34,6 +34,16 @@ import { usePermissions } from "@/hooks/usePermissions";
 const norm = (s: string) =>
     s.trim().replace(/\s+/g, " ");
 
+function sectionHeading(title: string, index: number) {
+    const label = title
+        .replace(/^\s*Section\s+\d+\s*[:.\-?]?\s*/i, "")
+        .trim();
+
+    return label
+        ? `Section ${index + 1}: ${label}`
+        : `Section ${index + 1}`;
+}
+
 const equal = (a: string, b: string) =>
     norm(a).toLocaleLowerCase("vi") ===
     norm(b).toLocaleLowerCase("vi");
@@ -105,6 +115,8 @@ export default function SyllabusDetailPage() {
         useState("1");
 
     const [sectionMission, setSectionMission] = useState("");
+    const [sectionErrors, setSectionErrors] =
+        useState<Record<string, string>>({});
 
     const [bulkOpen, setBulkOpen] =
         useState(false);
@@ -122,6 +134,7 @@ export default function SyllabusDetailPage() {
 
     const [topicTitle, setTopicTitle] =
         useState("");
+    const [topicError, setTopicError] = useState("");
 
     const [confirm, setConfirm] =
         useState<{
@@ -159,6 +172,7 @@ export default function SyllabusDetailPage() {
 
     function openSection(section?: SyllabusSection){
         if (published) return;
+        setSectionErrors({});
         setSectionMission(section?.mission ?? "");
         setEditingSection(section ?? null);
 
@@ -195,7 +209,9 @@ export default function SyllabusDetailPage() {
         const mission = sectionMission.trim();
 
         if (mission.length > 2000) {
-            toast.error("Mission must not exceed 2000 characters");
+            setSectionErrors({
+                mission: "Mission must not exceed 2000 characters"
+            });
             return;
         }
 
@@ -204,9 +220,9 @@ export default function SyllabusDetailPage() {
             title.length > 150 ||
             !/\p{L}/u.test(title)
         ) {
-            toast.error(
-                "Section title must have 3-150 characters and contain letters"
-            );
+            setSectionErrors({
+                title: "Section title must have 3-150 characters and contain letters"
+            });
             return;
         }
 
@@ -214,9 +230,9 @@ export default function SyllabusDetailPage() {
             !/^(0|[1-9]\d*)$/.test(sectionOrder) ||
             !Number.isSafeInteger(order)
         ) {
-            toast.error(
-                "Order must be a non-negative integer"
-            );
+            setSectionErrors({
+                order: "Order must be a non-negative integer"
+            });
             return;
         }
 
@@ -227,9 +243,7 @@ export default function SyllabusDetailPage() {
                     equal(s.title, title)
             )
         ) {
-            toast.error(
-                "Duplicate Section title"
-            );
+            setSectionErrors({ title: "Duplicate Section title" });
             return;
         }
 
@@ -240,9 +254,7 @@ export default function SyllabusDetailPage() {
                     s.orderIndex === order
             )
         ) {
-            toast.error(
-                "Duplicate Section order"
-            );
+            setSectionErrors({ order: "Duplicate Section order" });
             return;
         }
 
@@ -350,6 +362,7 @@ export default function SyllabusDetailPage() {
         setTopicSection(section);
         setEditingTopic(topic ?? null);
         setTopicTitle(topic?.title ?? "");
+        setTopicError("");
     }
 
     async function saveTopic(
@@ -366,7 +379,7 @@ export default function SyllabusDetailPage() {
             title.length > 200 ||
             !/\p{L}/u.test(title)
         ) {
-            toast.error(
+            setTopicError(
                 "Topic title must contain letters and have 3-200 characters"
             );
             return;
@@ -379,9 +392,7 @@ export default function SyllabusDetailPage() {
                     equal(t.title, title)
             )
         ) {
-            toast.error(
-                "Duplicate Topic title"
-            );
+            setTopicError("Duplicate Topic title");
             return;
         }
 
@@ -530,17 +541,21 @@ export default function SyllabusDetailPage() {
                         </section>
 
                         {/* General Information */}
-                        <GeneralInformationPanel syllabusId={syllabusId} readOnly={published} />
+                        <div id="syllabus-information" className="scroll-mt-24">
+                            <GeneralInformationPanel syllabusId={syllabusId} readOnly={published} />
+                        </div>
 
                         {/* Course Learning Outcomes */}
                         <SyllabusWorkflowPanel syllabusId={syllabusId} />
 
-                        <CloPanel syllabusId={syllabusId} readOnly={published} />
+                        <div id="syllabus-clos" className="scroll-mt-24">
+                            <CloPanel syllabusId={syllabusId} readOnly={published} />
+                        </div>
 
 
 
                         {/* Sections Toolbar */}
-                        <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div id="syllabus-sections" className="flex scroll-mt-24 flex-wrap items-center justify-between gap-3">
                             <h2 className="text-xl font-semibold">
                                 Sections & Topics
                             </h2>
@@ -624,7 +639,7 @@ export default function SyllabusDetailPage() {
                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                         <div>
                                             <h3 className="font-semibold">
-                                                Section {index + 1}
+                                                {sectionHeading(section.title, index)}
 
                                             </h3>
 
@@ -723,6 +738,7 @@ export default function SyllabusDetailPage() {
                                                 <MaterialsPanel
                                                     syllabusId={syllabusId}
                                                     topicId={topic.id}
+                                                    includeShared={section.id === sections[0]?.id && topic.id === sections[0]?.topics[0]?.id}
                                                     readOnly={published}
                                                 />
                                             </div>
@@ -751,8 +767,6 @@ export default function SyllabusDetailPage() {
                                 </div>
                             )
                         )}
-                        {/* General Learning Materials */}
-                        <MaterialsPanel syllabusId={syllabusId} readOnly={published} />
                     </>
                 )}
             </div>
@@ -774,6 +788,7 @@ export default function SyllabusDetailPage() {
                         void saveSection(e)
                     }
                     className="space-y-4"
+                    noValidate
                 >
                     <div>
                         <label
@@ -785,6 +800,8 @@ export default function SyllabusDetailPage() {
 
                         <Input
                             id="section-title"
+                            aria-invalid={Boolean(sectionErrors.title)}
+                            onFocus={() => setSectionErrors(p => ({ ...p, title: "" }))}
                             value={sectionTitle}
                             maxLength={150}
                             onChange={(e) =>
@@ -794,6 +811,14 @@ export default function SyllabusDetailPage() {
                             }
                             required
                         />
+                        {sectionErrors.title && (
+                            <p role="alert" className="mt-1 text-xs text-destructive">
+                                {sectionErrors.title}
+                            </p>
+                        )}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            {sectionTitle.length}/150 characters
+                        </p>
                     </div>
 
                     <div>
@@ -806,6 +831,8 @@ export default function SyllabusDetailPage() {
                         </label>
                         <Input
                             id="section-order"
+                            aria-invalid={Boolean(sectionErrors.order)}
+                            onFocus={() => setSectionErrors(p => ({ ...p, order: "" }))}
                             type="number"
                             min={0}
                             step={1}
@@ -817,6 +844,11 @@ export default function SyllabusDetailPage() {
                             }
                             required
                         />
+                        {sectionErrors.order && (
+                            <p role="alert" className="mt-1 text-xs text-destructive">
+                                {sectionErrors.order}
+                            </p>
+                        )}
                     </div>
                     {/* Section Mission */}
                     <div className="space-y-2">
@@ -829,6 +861,8 @@ export default function SyllabusDetailPage() {
 
                         <textarea
                             id="section-mission"
+                            aria-invalid={Boolean(sectionErrors.mission)}
+                            onFocus={() => setSectionErrors(p => ({ ...p, mission: "" }))}
                             value={sectionMission}
                             onChange={(e) => setSectionMission(e.target.value)}
                             maxLength={2000}
@@ -840,8 +874,13 @@ export default function SyllabusDetailPage() {
                             className="w-full rounded-md border bg-background p-3 text-sm"
                         />
 
+                        {sectionErrors.mission && (
+                            <p role="alert" className="text-xs text-destructive">
+                                {sectionErrors.mission}
+                            </p>
+                        )}
                         <p className="text-xs text-muted-foreground">
-                            This mission will appear in the Student Learning Plan.
+                            {sectionMission.length}/2000 characters ? This mission will appear in the Student Learning Plan.
                         </p>
                     </div>
 
@@ -936,6 +975,7 @@ export default function SyllabusDetailPage() {
                         void saveTopic(e)
                     }
                     className="space-y-4"
+                    noValidate
                 >
                     <div>
                         <label
@@ -947,6 +987,8 @@ export default function SyllabusDetailPage() {
 
                         <Input
                             id="topic-title"
+                            aria-invalid={Boolean(topicError)}
+                            onFocus={() => setTopicError("")}
                             maxLength={200}
                             value={topicTitle}
                             onChange={(e) =>
@@ -956,6 +998,14 @@ export default function SyllabusDetailPage() {
                             }
                             required
                         />
+                        {topicError && (
+                            <p role="alert" className="mt-1 text-xs text-destructive">
+                                {topicError}
+                            </p>
+                        )}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            {topicTitle.length}/200 characters
+                        </p>
                     </div>
 
                     <div className="flex justify-end gap-2">

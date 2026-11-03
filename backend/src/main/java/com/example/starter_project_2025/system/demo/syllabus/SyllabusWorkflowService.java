@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.demo.syllabus;
 
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,7 @@ import java.util.Map;
 public class SyllabusWorkflowService {
 
     private final SyllabusRepository syllabuses;
+    private final CourseRepository courses;
     private final SyllabusSectionRepository sections;
     private final SyllabusTopicRepository topics;
     private final SyllabusCloRepository clos;
@@ -180,6 +182,11 @@ public class SyllabusWorkflowService {
 
     public ProgressView returnToDraft(Long syllabusId) {
         Syllabus syllabus = find(syllabusId);
+        if (courses.existsBySyllabus_Id(syllabusId)) {
+            throw new BusinessValidationException(
+                    Map.of("status", List.of("Detach this Syllabus from its Courses before returning it to Draft"))
+            );
+        }
 
         syllabus.setStatus(SyllabusStatus.DRAFT);
         syllabuses.saveAndFlush(syllabus);

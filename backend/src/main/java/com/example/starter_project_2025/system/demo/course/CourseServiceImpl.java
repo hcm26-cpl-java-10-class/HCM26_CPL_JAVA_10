@@ -2,6 +2,9 @@ package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.system.demo.category.Category;
 import com.example.starter_project_2025.system.demo.category.CategoryRepository;
+import com.example.starter_project_2025.system.demo.syllabus.Syllabus;
+import com.example.starter_project_2025.system.demo.syllabus.SyllabusRepository;
+import com.example.starter_project_2025.system.demo.syllabus.SyllabusStatus;
 import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidationResult;
 import com.example.starter_project_2025.system.demo.curriculum.CurriculumValidator;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
@@ -39,6 +42,7 @@ public class CourseServiceImpl
     CourseRepository courseRepository;
     UserRepository userRepository;
     CategoryRepository categoryRepository;
+    SyllabusRepository syllabusRepository;
     CurriculumValidator curriculumValidator;
     NotificationService notificationService;
 
@@ -77,6 +81,7 @@ public class CourseServiceImpl
         }
         validateThumbnailUrl(request.getThumbnailUrl(), ctx);
         resolveCategories(course, request, ctx);
+        resolveSyllabus(course, request, ctx);
     }
 
     @Override
@@ -99,6 +104,7 @@ public class CourseServiceImpl
             resolveCategories(course, request, ctx);
         }
         validateThumbnailUrl(request.getThumbnailUrl(), ctx);
+        resolveSyllabus(course, request, ctx);
         if (request.getIsFree() == null) {
             request.setIsFree(course.getIsFree());
         }
@@ -142,6 +148,10 @@ public class CourseServiceImpl
                 : course.getDescription();
         if (description == null || description.isBlank()) {
             ctx.add("description", "Add a course description before publishing");
+        }
+
+        if (course.getSyllabus() != null && !isSelectable(course.getSyllabus())) {
+            ctx.add("syllabusId", "Select a Published and Active syllabus before publishing");
         }
 
         CurriculumValidationResult result = curriculumValidator.validatePublish(course.getId());
@@ -193,6 +203,35 @@ public class CourseServiceImpl
                 course.setInstructor(user.getFullName());
             }
         }, () -> ctx.add("instructorId", "Instructor not found: " + request.getInstructorId()));
+    }
+
+    private static boolean isSelectable(Syllabus syllabus) {
+        return syllabus.getStatus() == SyllabusStatus.PUBLISHED
+                && Boolean.TRUE.equals(syllabus.getIsActive());
+    }
+
+    private void resolveSyllabus(Course course, CourseDTO request, ValidationContext ctx) {
+        if (Boolean.TRUE.equals(request.getClearSyllabus())) {
+            if (request.getSyllabusId() != null) {
+                ctx.add("syllabusId", "Cannot select and clear a syllabus together");
+            } else {
+                course.setSyllabus(null);
+            }
+            return;
+        }
+        if (request.getSyllabusId() == null) {
+            return; // No change on update; optional on create.
+        }
+        syllabusRepository.findById(request.getSyllabusId()).ifPresentOrElse(
+                syllabus -> {
+                    if (!isSelectable(syllabus)) {
+                        ctx.add("syllabusId", "Only Published and Active syllabuses can be assigned");
+                    } else {
+                        course.setSyllabus(syllabus);
+                    }
+                },
+                () -> ctx.add("syllabusId", "Syllabus not found")
+        );
     }
 
     private void validateThumbnailUrl(String thumbnailUrl, ValidationContext ctx) {

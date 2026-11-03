@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.demo.syllabus;
 
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.system.demo.syllabus.SyllabusModels.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ public class SyllabusService {
     private final SyllabusCloRepository clos;
     private final SyllabusMaterialRepository materials;
     private final SyllabusRepository syllabuses;
+    private final CourseRepository courses;
     private final SyllabusSectionRepository sections;
     private final SyllabusTopicRepository topics;
     private final SyllabusWorkflowService workflow;
@@ -266,6 +268,9 @@ public class SyllabusService {
 
     public void delete(Long id) {
         workflow.requireDraft(id);
+        if (courses.existsBySyllabus_Id(id)) {
+            fail("syllabusId", "Remove this Syllabus from all Courses before deleting it");
+        }
         Syllabus entity = syllabus(id);
         if (clos.countBySyllabus_Id(id) > 0) {
             fail("clos", "Delete all CLOs before deleting this Syllabus");

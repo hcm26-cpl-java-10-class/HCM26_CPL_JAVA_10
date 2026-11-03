@@ -8,6 +8,8 @@ import type {
   CourseDetail,
   CourseDTO,
   CourseFilter,
+  Pagination,
+  PageResponse,
 } from "@/types";
 
 const path = "/courses";
@@ -17,7 +19,33 @@ const base = createBaseApiService<CourseDTO, CourseFilter>({
   path: path,
 });
 
+export interface CourseSyllabusOption {
+  id: number;
+  code: string;
+  name: string;
+}
+
+export const courseSyllabusOptionsApi = {
+  getPage: async (pagination: Pagination, search = ""): Promise<PageResponse<CourseSyllabusOption>> => {
+    const { data } = await axiosInstance.get<PageResponse<CourseSyllabusOption>>(
+      "/course-syllabus-options", { params: { page: pagination.page ?? 0, size: pagination.size ?? 10, search } }
+    );
+    return data;
+  },
+  getById: async (id: string): Promise<CourseSyllabusOption> => {
+    const { data } = await axiosInstance.get<CourseSyllabusOption>(`/course-syllabus-options/${id}`);
+    return data;
+  },
+};
+
 export const courseApi = Object.assign({}, base, {
+  // Explicit clearing: Base mapper ignores null values on update.
+  update: (id: string, data: CourseDTO): Promise<CourseDTO> =>
+    base.update(id, {
+      ...data,
+      syllabusId: data.syllabusId === "" ? null : data.syllabusId,
+      clearSyllabus: data.syllabusId === "",
+    } as CourseDTO),
   /** Catalog cho người học: chỉ khóa PUBLISHED, hỗ trợ search / category / level / phân trang. */
   searchCatalog: async (params: CatalogSearchParams = {}): Promise<CatalogPage<CatalogCourse>> => {
     const { search, categoryId, level, page = 0, size = 12, sort } = params;

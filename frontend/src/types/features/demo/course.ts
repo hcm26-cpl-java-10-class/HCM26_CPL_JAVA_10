@@ -12,6 +12,10 @@ export interface CourseDTO extends BaseDTO {
   instructorId?: number;
   categoryIds?: number[];
   categoryNames?: string[];
+  syllabusId?: number | null | "";
+  syllabusCode?: string | null;
+  syllabusName?: string | null;
+  clearSyllabus?: boolean;
   /** true = bỏ danh mục của khóa học khi cập nhật (backend bỏ qua categoryId = null). */
   clearCategory?: boolean;
   status?: CourseStatus;
@@ -115,5 +119,6 @@ export interface CourseDetail {
   lessonCount: number;
   totalDuration: number;
   sections: CourseDetailSection[];
+  syllabus?: { id: number; code: string; name: string } | null;
   categoryNames?: string[] | null;
 }
