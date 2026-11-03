@@ -548,6 +548,28 @@ public class ExamAttemptService {
         attempt.setFinalScore(needsManual ? null : ExamScoring.applyPenalty(objectiveScore, penalty));
         attempt.setStatus(ExamAttemptLifecycle.finalStatus(needsManual, expired));
         attempt.setSubmittedAt(submittedAt);
+
+        markInvitationsCompleted(attempt);
+    }
+
+    /**
+     * Khi sinh viên nộp bài (hoặc hết giờ bị chấm), lời mời tương ứng chuyển sang COMPLETED
+     * để không còn ai gửi nhắc nhở nữa và giữ đúng vòng đời lời mời.
+     */
+    private void markInvitationsCompleted(ExamAttempt attempt) {
+        User student = attempt.getStudent();
+        if (student == null || student.getId() == null) {
+            return;
+        }
+        List<Invitation> invitations = invitationRepository
+                .findOpenByExamIdAndStudentId(attempt.getExam().getId(), student.getId());
+        if (invitations.isEmpty()) {
+            return;
+        }
+        for (Invitation invitation : invitations) {
+            invitation.setStatus(InvitationStatus.COMPLETED);
+            invitationRepository.save(invitation);
+        }
     }
 
     private record CodingOutcome(BigDecimal weight, boolean needsReview) {

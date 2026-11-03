@@ -53,7 +53,6 @@ export default function AnonymousAccessPage() {
             if (!data.valid) {
                 toast.error(data.message ?? "Mã truy cập không hợp lệ.");
             } else {
-                if (data.studentName) setStudentName(data.studentName);
                 toast.success("Mã hợp lệ! Vui lòng xác nhận thông tin của bạn.");
             }
         },
