@@ -1,5 +1,6 @@
 import axiosInstance from "@/api/axios";
 import type { WorkspaceCandidateItem, WorkspaceCreateRequest, WorkspaceDetail, WorkspaceResponse, WorkspaceProjectOption, WorkspaceMember, WorkspaceNavigation, WorkspaceBoardColumn, WorkspaceSectionKey, WorkspaceSectionContent, WorkspaceSectionItem, SectionCreate, SectionReview, ProjectLog, ProjectLogCreateRequest, ProjectLogFilters, ProjectLogPage, ProjectLogOptions, ProjectLogAudit } from "@/types/features/workspace";
+import type { WorkspaceResourceCollection, WorkspaceResourceDownloadTicket } from "@/types/features/workspace-resource";
 
 export const workspaceApi = {
   navigation: async (id: number, signal?: AbortSignal) =>
@@ -10,6 +11,20 @@ export const workspaceApi = {
     (await axiosInstance.put<{ columns: WorkspaceBoardColumn[] }>(`/workspaces/${id}/board-columns`, { columns })).data.columns,
   section: async (id: number, key: WorkspaceSectionKey, signal?: AbortSignal) =>
     (await axiosInstance.get<WorkspaceSectionContent>("/workspaces/" + id + "/" + key, { signal })).data,
+  /** US-RES-004: project resources visible to the active team. */
+  resources: async (id: number, signal?: AbortSignal): Promise<WorkspaceResourceCollection> =>
+    (await axiosInstance.get<WorkspaceResourceCollection>(`/workspaces/${id}/resources`, { signal })).data,
+  /** Requests the short-lived signed URL of one attached document. */
+  resourceDownloadTicket: async (id: number, resourceId: number, fileId: number): Promise<WorkspaceResourceDownloadTicket> => {
+    const ticket = (await axiosInstance.get<WorkspaceResourceDownloadTicket>(
+      `/workspaces/${id}/resources/${resourceId}/files/${fileId}/download-ticket`,
+    )).data;
+    const base = (axiosInstance.defaults.baseURL ?? "").replace(/\/$/, "");
+    return {
+      ...ticket,
+      url: ticket.url.startsWith("http") ? ticket.url : `${base}${ticket.url.startsWith("/") ? ticket.url : `/${ticket.url}`}`,
+    };
+  },
   createSectionItem: async (id: number, path: string, input: SectionCreate) =>
     (await axiosInstance.post<WorkspaceSectionItem>("/workspaces/" + id + "/" + path, input)).data,
   updateTask: async (id: number, taskId: string, input: SectionCreate) =>
