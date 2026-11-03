@@ -177,6 +177,14 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
                     user.setTenant(admin.getTenant());
                     changed = true;
                 }
+                // Seeded students are real, assignable roster members. The
+                // synthetic password already keeps them from signing in, so a
+                // previous seed's lock must be cleared: project members are
+                // only assignable when their user account is unlocked.
+                if (Boolean.TRUE.equals(user.getLocked())) {
+                    user.setLocked(false);
+                    changed = true;
+                }
                 if (changed) userRepository.saveAndFlush(user);
 
                 if (!classMemberRepository.existsByTrainingClass_IdAndUser_Id(
@@ -305,7 +313,9 @@ public class TeamAllocationDemoDataInitializer implements CommandLineRunner {
                 .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
                 .firstName(fullName)
                 .lastName(null)
-                .locked(true)
+                // Assignable roster member: the random password is what keeps
+                // the account unusable for login, not the locked flag.
+                .locked(false)
                 .build();
         student.setIsActive(true);
         student.getRoles().add(studentRole);

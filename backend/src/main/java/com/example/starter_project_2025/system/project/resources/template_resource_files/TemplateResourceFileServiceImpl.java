@@ -1,0 +1,170 @@
+package com.example.starter_project_2025.system.project.resources.template_resource_files;
+
+import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
+import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
+import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
+import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.system.project.resources.template_resources.TemplateResourceRepository;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+/**
+ * CRUD use case of {@link TemplateResourceFile}.
+ * <p>
+ * File rows are metadata only; the bytes are uploaded through the storage
+ * service and referenced by {@code storageKey}. Business rules:
+ * <ul>
+ *     <li>{@code resourceId} is mandatory, must reference an existing template
+ *     resource and can never be changed afterwards</li>
+ *     <li>{@code storageKey}, {@code originalName}, {@code contentType} are
+ *     mandatory and {@code sizeBytes} must be positive</li>
+ * </ul>
+ */
+@Service
+@Transactional
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class TemplateResourceFileServiceImpl
+        extends BaseCrudServiceImpl<TemplateResourceFile, Long, TemplateResourceFileDTO, TemplateResourceFileFilter>
+        implements TemplateResourceFileService {
+
+    static final int MAX_STORAGE_KEY_LENGTH = 100;
+    static final int MAX_ORIGINAL_NAME_LENGTH = 255;
+    static final int MAX_CONTENT_TYPE_LENGTH = 150;
+
+    static final String RESOURCE_ID_FIELD = "resourceId";
+    static final String STORAGE_KEY_FIELD = "storageKey";
+    static final String ORIGINAL_NAME_FIELD = "originalName";
+    static final String CONTENT_TYPE_FIELD = "contentType";
+    static final String SIZE_BYTES_FIELD = "sizeBytes";
+
+    TemplateResourceFileMapper templateResourceFileMapper;
+    TemplateResourceFileRepository templateResourceFileRepository;
+    TemplateResourceRepository templateResourceRepository;
+
+    @Override
+    protected BaseCrudRepository<TemplateResourceFile, Long> getRepository() {
+        return templateResourceFileRepository;
+    }
+
+    @Override
+    protected BaseCrudMapper<TemplateResourceFile, TemplateResourceFileDTO> getMapper() {
+        return templateResourceFileMapper;
+    }
+
+    @Override
+    protected String[] searchableFields() {
+        return new String[]{ORIGINAL_NAME_FIELD, CONTENT_TYPE_FIELD, STORAGE_KEY_FIELD};
+    }
+
+    @Override
+    protected void beforeCreate(TemplateResourceFile entity,
+                                TemplateResourceFileDTO request,
+                                ValidationContext ctx) {
+
+        normalize(entity);
+        validateResource(entity.getResourceId(), ctx);
+        validate(entity.getStorageKey(), entity.getOriginalName(), entity.getContentType(),
+                entity.getSizeBytes(), ctx);
+
+        if (entity.getIsActive() == null) {
+            entity.setIsActive(true);
+        }
+    }
+
+    @Override
+    protected void beforeUpdate(TemplateResourceFile entity,
+                                TemplateResourceFileDTO request,
+                                ValidationContext ctx) {
+
+        String storageKey = request.getStorageKey() != null
+                ? request.getStorageKey().trim() : entity.getStorageKey();
+        String originalName = request.getOriginalName() != null
+                ? request.getOriginalName().trim() : entity.getOriginalName();
+        String contentType = request.getContentType() != null
+                ? request.getContentType().trim() : entity.getContentType();
+        Long sizeBytes = request.getSizeBytes() != null ? request.getSizeBytes() : entity.getSizeBytes();
+
+        validate(storageKey, originalName, contentType, sizeBytes, ctx);
+
+        request.setStorageKey(storageKey);
+        request.setOriginalName(originalName);
+        request.setContentType(contentType);
+        request.setSizeBytes(sizeBytes);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TemplateResourceFileDTO> getByResource(Long resourceId) {
+
+        check("PROJECT_TEMPLATE_RESOURCE_FILE_READ");
+
+        return templateResourceFileRepository.findAllByResourceIdOrderByIdAsc(resourceId)
+                .stream()
+                .map(templateResourceFileMapper::toResponse)
+                .toList();
+    }
+
+    private void normalize(TemplateResourceFile entity) {
+
+        if (entity.getStorageKey() != null) {
+            entity.setStorageKey(entity.getStorageKey().trim());
+        }
+
+        if (entity.getOriginalName() != null) {
+            entity.setOriginalName(entity.getOriginalName().trim());
+        }
+
+        if (entity.getContentType() != null) {
+            entity.setContentType(entity.getContentType().trim());
+        }
+    }
+
+    private void validateResource(Long resourceId, ValidationContext ctx) {
+
+        if (resourceId == null) {
+            ctx.add(RESOURCE_ID_FIELD, "Template resource is required");
+            return;
+        }
+
+        if (!templateResourceRepository.existsById(resourceId)) {
+            ctx.add(RESOURCE_ID_FIELD, "Template resource not found: " + resourceId);
+        }
+    }
+
+    private void validate(String storageKey,
+                          String originalName,
+                          String contentType,
+                          Long sizeBytes,
+                          ValidationContext ctx) {
+
+        if (storageKey == null || storageKey.isBlank()) {
+            ctx.add(STORAGE_KEY_FIELD, "Storage key is required");
+        } else if (storageKey.length() > MAX_STORAGE_KEY_LENGTH) {
+            ctx.add(STORAGE_KEY_FIELD, "Storage key must not exceed " + MAX_STORAGE_KEY_LENGTH + " characters");
+        }
+
+        if (originalName == null || originalName.isBlank()) {
+            ctx.add(ORIGINAL_NAME_FIELD, "Original name is required");
+        } else if (originalName.length() > MAX_ORIGINAL_NAME_LENGTH) {
+            ctx.add(ORIGINAL_NAME_FIELD,
+                    "Original name must not exceed " + MAX_ORIGINAL_NAME_LENGTH + " characters");
+        }
+
+        if (contentType == null || contentType.isBlank()) {
+            ctx.add(CONTENT_TYPE_FIELD, "Content type is required");
+        } else if (contentType.length() > MAX_CONTENT_TYPE_LENGTH) {
+            ctx.add(CONTENT_TYPE_FIELD,
+                    "Content type must not exceed " + MAX_CONTENT_TYPE_LENGTH + " characters");
+        }
+
+        if (sizeBytes == null || sizeBytes <= 0) {
+            ctx.add(SIZE_BYTES_FIELD, "Size must be greater than zero");
+        }
+    }
+}
