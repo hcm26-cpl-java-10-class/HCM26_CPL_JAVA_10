@@ -52,7 +52,7 @@ export default function EssayAttemptListPage() {
                     <div>
                         <Button variant="ghost" size="sm" className="-ml-2 mb-2" onClick={() => navigate("/exams")}>
                             <ChevronLeft className="size-4" />
-                            Back to Exam Management
+                            Back to Assessment Management
                         </Button>
                         <h1 className="text-2xl font-semibold">Submissions Grading</h1>
                         <p className="mt-1 text-sm text-muted-foreground">

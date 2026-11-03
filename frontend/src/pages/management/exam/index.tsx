@@ -128,12 +128,12 @@ export default function ExamManagementPage() {
   };
 
   return (
-      <MainLayout pathName={{ exams: "Exam Management" }}>
+      <MainLayout pathName={{ exams: "Assessment Management" }}>
         <section className="flex flex-col gap-5">
 
           <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
             <div>
-              <p className="text-sm text-muted-foreground">Exam Management</p>
+              <p className="text-sm text-muted-foreground">Assessment Management</p>
               <h1 className="mt-1 text-2xl font-semibold">Exams List</h1>
             </div>
 

@@ -70,7 +70,7 @@ export default function ExamDetailPage() {
         <div className="flex min-w-0 items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate("/exams")}>
             <ArrowLeft className="mr-1 size-4" />
-            Exam Management
+            Assessment Management
           </Button>
           <span className="text-muted-foreground">/</span>
           <h1 className="truncate text-base font-semibold">{title ?? "Loading..."}</h1>

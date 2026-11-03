@@ -100,7 +100,7 @@ export default function ExamSimilarityPage() {
     };
 
     return (
-        <MainLayout pathName={{ exams: "Exam Management", grading: "Essay Grading", similarity: "Plagiarism Detection" }}>
+        <MainLayout pathName={{ exams: "Assessment Management", grading: "Essay Grading", similarity: "Plagiarism Detection" }}>
             <div className="space-y-6">
                 {/* Header */}
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b pb-4">
