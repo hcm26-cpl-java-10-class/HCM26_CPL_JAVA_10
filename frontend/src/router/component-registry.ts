@@ -46,7 +46,7 @@ import LessonReportsPage from "@/pages/management/demo/lesson-reports";
 import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
 import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
 import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage.tsx";
-import ManageStudentPage from "@/pages/management/demo/manage-student/ManageStudentPage";
+import DepartmentManagementPage from "@/pages/management/demo/department";
 
 export interface RouteConfig {
   path: string;
@@ -363,7 +363,7 @@ export const routes: RouteConfig[] = [
   // MANAGE STUDENT
   {
     path: "/manage-students",
-    component: ManageStudentPage,
+    component: DepartmentManagementPage,
     requiredPermission: "DEPARTMENT_READ",
     isModuleDriven: true,
   },
