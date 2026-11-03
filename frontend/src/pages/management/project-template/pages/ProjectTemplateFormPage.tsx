@@ -18,7 +18,17 @@ export function ProjectTemplateFormPage() {
   const parentId = new URLSearchParams(location.search).get("parentTemplateId");
   const parent = useQuery({
     queryKey: ["project-templates", options.user.email, options.activeRole, "parent", parentId],
-    queryFn: ({ signal }) => projectTemplateApi.getById(parentId!, signal),
+    queryFn: async ({ signal }) => {
+      const selectedParent = await projectTemplateApi.getById(parentId!, signal);
+      let master = selectedParent;
+      const visited = new Set<number>([master.id]);
+      while (master.parentTemplateId != null) {
+        if (visited.has(master.parentTemplateId) || visited.size >= 500) throw new Error("Invalid template hierarchy");
+        visited.add(master.parentTemplateId);
+        master = await projectTemplateApi.getById(String(master.parentTemplateId), signal);
+      }
+      return { template: selectedParent, master };
+    },
     enabled: !id && !!parentId && options.isSuccess, retry: false,
   });
   const template = useQuery({
@@ -50,7 +60,7 @@ export function ProjectTemplateFormPage() {
         <header className="border-b pb-4">
           <p className="text-sm text-muted-foreground">Project Templates</p>
           <h1 className="mt-1 text-2xl font-semibold">{id ? "Edit project template" : parentId ? "Create child module" : "Create project template"}</h1>
-          {parent.data && <p className="mt-2 text-sm text-muted-foreground">Parent: {parent.data.code} · {parent.data.name}</p>}
+          {parent.data && <p className="mt-2 text-sm text-muted-foreground">Parent: {parent.data.template.code} · {parent.data.template.name}</p>}
           <p className="mt-1 text-sm text-muted-foreground">{id ? "Update the general information for this draft." : "Save the project brief as a draft before configuring its team and milestones."}</p>
         </header>
         {!allowed ? <ProjectTemplateError denied />
@@ -68,7 +78,8 @@ export function ProjectTemplateFormPage() {
               </AlertDescription>
             </Alert>
           ) : options.data && (!id || template.data) && (!parentId || parent.data) ? (
-            <ProjectTemplateForm key={id ?? `create-${parentId}`} template={template.data} parentTemplate={parent.data} options={options.data}
+            <ProjectTemplateForm key={id ?? `create-${parentId}`} template={template.data} parentTemplate={parent.data?.template}
+              masterTemplate={parent.data?.master} options={options.data}
               minimumDurationWeeks={minimumDuration}
               onCancel={goBack} onSaved={(saved) => navigate(`/project-templates/${saved.id}/detail`)} />
           ) : null}

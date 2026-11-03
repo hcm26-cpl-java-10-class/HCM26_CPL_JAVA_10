@@ -56,9 +56,11 @@ public class TaskBacklogContextService {
             throw new TaskValidationException("backlogItemId", "Assign a project to this backlog item before adding subtasks");
         }
         Project project = workspaceAccess.requireProject(actor, projectId, lock);
-        var team = teams.findAllByProject_IdInOrderByIdDesc(List.of(projectId)).stream().findFirst()
+        var team = (project.getAssignmentId() != null && project.getTeamId() != null ? teams.findById(project.getTeamId())
+                : teams.findAllByProject_IdInOrderByIdDesc(List.of(projectId)).stream().findFirst())
                 .orElseThrow(() -> new TaskValidationException("backlogItemId", "This project has no active team"));
         workspaceAccess.requirePair(actor, projectId, team.getId(), false);
+        if (lock && !workspaceAccess.projectCanStart(project)) throw new AccessDeniedException("This project workspace is read-only");
         UUID alias = projectLinks.findByProjectId(projectId).map(TaskAlertData.ProjectLink::getId)
                 .orElseGet(() -> alias("subtask-project:", project.getId()));
         return new Context(backlog, project, team, alias);
@@ -91,6 +93,10 @@ public class TaskBacklogContextService {
         request.setSprintId(null);
         request.setMilestoneId(null);
         return context.backlog();
+    }
+
+    public boolean writable(Long backlogId, Long actorId) {
+        return workspaceAccess.projectCanStart(require(backlogId, actorId, false).project());
     }
 
     public List<Assignee> assignees(Context context) {

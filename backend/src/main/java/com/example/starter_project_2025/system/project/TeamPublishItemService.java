@@ -157,7 +157,7 @@ public class TeamPublishItemService {
             ProjectTeam team,
             List<ProjectMember> assignments
     ) {
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
             return;
         }

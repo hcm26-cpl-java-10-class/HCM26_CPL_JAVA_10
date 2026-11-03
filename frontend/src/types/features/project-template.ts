@@ -261,6 +261,7 @@ export interface ProjectTemplateFilter {
   status?: ProjectTemplateStatus;
   level?: ProjectTemplateLevel;
   category?: string;
+  includeModules?: boolean;
 }
 
 export interface ProjectTemplateOptions {

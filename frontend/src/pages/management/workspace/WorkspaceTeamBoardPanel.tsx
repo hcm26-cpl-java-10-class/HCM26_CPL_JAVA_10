@@ -186,7 +186,7 @@ function auditSummary(action: string, beforeState?: string | null, afterState?: 
   return { actionLabel, changes: [] as string[] };
 }
 
-export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMove, canDelete, canConfigureColumns, onCreateWorkItem }: { workspaceId: number; teamId: number; canUpdate: boolean; canMove: boolean; canDelete: boolean; canConfigureColumns: boolean; onCreateWorkItem?: () => void }) {
+export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOnly = false, canUpdate, canMove, canDelete, canConfigureColumns, onCreateWorkItem }: { workspaceId: number; teamId: number; projectId?: number | null; readOnly?: boolean; canUpdate: boolean; canMove: boolean; canDelete: boolean; canConfigureColumns: boolean; onCreateWorkItem?: () => void }) {
   const queryClient = useQueryClient();
   const [sprintId, setSprintId] = useState<number>();
   const [memberFilter, setMemberFilter] = useState("ALL");
@@ -264,8 +264,8 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
     return standard;
   };
   const query = useQuery({
-    queryKey: ["team-backlog-board", teamId],
-    queryFn: () => teamBacklogApi.getBoard(teamId),
+    queryKey: ["team-backlog-board", teamId, projectId, workspaceId],
+    queryFn: () => teamBacklogApi.getBoard(teamId, projectId, workspaceId),
     retry: false,
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
@@ -483,7 +483,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
           <p className="mt-1 text-sm text-muted-foreground">Theo dõi các work item của sprint và backlog nhóm.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {onCreateWorkItem ? <Button size="sm" onClick={onCreateWorkItem}><Plus className="size-4" />Tạo work item</Button> : null}
+          {!readOnly && onCreateWorkItem ? <Button size="sm" onClick={onCreateWorkItem}><Plus className="size-4" />Tạo work item</Button> : null}
           <div className="rounded-lg bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
             <strong className="block text-slate-900">Sprint {selectedSprint ? `#${selectedSprint.id}` : "—"}</strong>
             {formatDate(selectedSprint?.startDate)} – {formatDate(selectedSprint?.endDate)}
@@ -764,6 +764,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, canUpdate, canMov
       canEdit={canUpdate}
       canMove={canMove}
       canDelete={canDelete}
+      readOnly={readOnly}
       onChanged={async () => {
         await query.refetch();
         await queryClient.invalidateQueries({ queryKey: ["sprint-backlog-audit"] });

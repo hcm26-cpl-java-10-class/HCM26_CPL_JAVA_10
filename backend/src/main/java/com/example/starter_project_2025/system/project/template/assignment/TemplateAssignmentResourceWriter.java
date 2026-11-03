@@ -83,6 +83,7 @@ public class TemplateAssignmentResourceWriter {
             resource.setStorageKey(link ? "" : file.path("storageKey").asText());
             resource.setExternalUrl(link ? file.path("externalUrl").asText() : null);
             resource.setSourceTemplateId(templateId); resource.setSourceTemplateCode(code);
+            resource.setSourceResourceId(file.path("id").isNumber() ? file.path("id").asLong() : null);
             resource.setSourceTemplateName(name); resource.setSourceOrigin(origin);
             resources.save(resource);
         }

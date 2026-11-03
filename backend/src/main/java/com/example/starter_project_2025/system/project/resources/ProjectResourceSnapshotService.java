@@ -36,16 +36,20 @@ public class ProjectResourceSnapshotService {
     public void capture(Workspace workspace) {
         if (workspace.getProject() == null || snapshots.findByWorkspaceId(workspace.getId()).isPresent()) return;
         Long tenantId = workspace.getTenant().getId();
-        List<Project> assigned = assignments.findAllByTeam_IdAndIsActiveTrueOrderByIdAsc(workspace.getTeam().getId())
-                .stream().map(TeamSubprojectAssignment::getProject).toList();
+        List<Project> assigned = (workspace.getProject().getAssignmentId() == null
+                ? assignments.findAllByTeam_IdAndIsActiveTrueOrderByIdAsc(workspace.getTeam().getId()).stream()
+                    .filter(row -> row.getProject().getAssignmentId() == null)
+                : assignments.findAllByWorkspaceIdAndIsActiveTrueOrderByIdAsc(workspace.getId()).stream())
+                .map(TeamSubprojectAssignment::getProject).toList();
         Map<Long, Source> sources = new LinkedHashMap<>();
         List<Project> children = assigned.isEmpty() ? List.of(workspace.getProject()) : assigned;
         for (Project child : children) {
             requireSource(child, tenantId);
-            if (child.getParentProject() != null) {
-                Project parent = child.getParentProject();
+            Set<Long> visited = new java.util.HashSet<>();
+            visited.add(child.getId());
+            for (Project parent = child.getParentProject(); parent != null; parent = parent.getParentProject()) {
                 requireSource(parent, tenantId);
-                if (Objects.equals(parent.getId(), child.getId())) throw invalidSource();
+                if (!visited.add(parent.getId())) throw invalidSource();
                 sources.putIfAbsent(parent.getId(), new Source(parent, "PARENT"));
             }
         }
@@ -70,7 +74,11 @@ public class ProjectResourceSnapshotService {
                     || !"SUB_PROJECT".equals(file.getSourceOrigin()) || allowedTemplates.contains(file.getSourceTemplateId())).toList();
         }
         Map<String, List<ProjectResource>> grouped = new LinkedHashMap<>();
+        Set<String> included = new java.util.HashSet<>();
         for (ProjectResource file : files) {
+            String identity = file.getSourceResourceId() == null ? "resource-" + file.getId()
+                    : "template-" + file.getSourceTemplateId() + "-file-" + file.getSourceResourceId();
+            if (!included.add(identity)) continue;
             String key = file.getSourceTemplateId() == null ? "project-" + file.getProject().getId() : "template-" + file.getSourceTemplateId();
             grouped.computeIfAbsent(key, ignored -> new java.util.ArrayList<>()).add(file);
         }

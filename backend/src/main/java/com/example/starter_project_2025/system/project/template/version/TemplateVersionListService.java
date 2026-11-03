@@ -33,11 +33,17 @@ public class TemplateVersionListService {
 
     public Page<TemplateVersionListItem> getPage(String search, ProjectTemplateStatus status,
             ProjectTemplateLevel level, String category, Pageable pageable) {
+        return getPage(search, status, level, category, pageable, true);
+    }
+
+    public Page<TemplateVersionListItem> getPage(String search, ProjectTemplateStatus status,
+            ProjectTemplateLevel level, String category, Pageable pageable, boolean includeModules) {
         var user = access.requireUser("READ");
         Specification<ProjectTemplate> readable = (root, query, builder) -> builder.and(
                 builder.isTrue(root.get("isActive")),
                 builder.or(builder.isNull(root.get("tenantId")), builder.equal(root.get("tenantId"), user.getTenantId())),
                 builder.or(builder.isNull(root.get("code")), builder.notEqual(root.get("code"), "MANUAL-GROUPING-DEFAULT")));
+        if (!includeModules) readable = readable.and((root, query, builder) -> builder.isNull(root.get("parentTemplate")));
         var owners = templates.findAll(readable);
         Map<Long, List<ProjectTemplateSnapshot>> byTemplate = new LinkedHashMap<>();
         if (!owners.isEmpty()) {

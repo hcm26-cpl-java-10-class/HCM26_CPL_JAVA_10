@@ -225,7 +225,7 @@ public class TemplateAssignmentProvisioningService {
                                       Long actorId,
                                       String correlationId) {
 
-        Workspace existing = workspaces.findFirstByTeamIdOrderByIdAsc(team.getId()).orElse(null);
+        Workspace existing = workspaces.findCurrentByTeamId(team.getId()).orElse(null);
         if (existing != null) {
             if (existing.getProject() == null) {
                 existing.setProject(project);

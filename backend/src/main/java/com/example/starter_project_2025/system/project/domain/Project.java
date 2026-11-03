@@ -88,6 +88,9 @@ public class Project extends BaseEntity {
     @JoinColumn(name = "parent_project_id")
     private Project parentProject;
 
+    @Column(name = "assignment_id")
+    private Long assignmentId;
+
     public void setTenant(Tenant tenant) {
         this.tenant = tenant;
         this.tenantId = tenant == null ? null : tenant.getId();

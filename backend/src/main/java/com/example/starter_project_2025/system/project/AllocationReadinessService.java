@@ -169,7 +169,7 @@ public class AllocationReadinessService {
     private List<AllocationReadinessResponse.TeamReadinessIssue> inspectTeam(
             ProjectTeam team
     ) {
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
             return List.of(issue(
                     team,

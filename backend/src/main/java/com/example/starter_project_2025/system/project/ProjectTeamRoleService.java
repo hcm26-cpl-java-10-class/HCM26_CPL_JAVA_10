@@ -89,7 +89,16 @@ public class ProjectTeamRoleService {
                     "Chỉ có thể cập nhật vai trò cho nhóm DRAFT hoặc ACTIVE");
         }
 
-        applyRoleConfiguration(session, team, request, authentication, null);
+        applyRoleConfiguration(session, team, request, authentication, null, null);
+    }
+
+    @Transactional
+    public void updateRolesForAssignment(TeamAllocationSession session, ProjectTeam team,
+            UpdateTeamRolesRequest request, ProjectTemplateConstraints.RolePolicy policy, Authentication authentication) {
+        scopeAuthorizationService.assertCanManageTeamMentor(authentication, session.getTrainingClass());
+        if (!team.getAllocationSession().getId().equals(session.getId()))
+            throw new AccessDeniedException("The team belongs to another allocation session");
+        applyRoleConfiguration(session, team, request, authentication, null, policy);
     }
 
     // ------------------------------------------------------------------
@@ -134,7 +143,7 @@ public class ProjectTeamRoleService {
                 team,
                 request,
                 authentication,
-                membership.getClassMember().getId());
+                membership.getClassMember().getId(), null);
     }
 
     // ------------------------------------------------------------------
@@ -146,7 +155,8 @@ public class ProjectTeamRoleService {
             ProjectTeam team,
             UpdateTeamRolesRequest request,
             Authentication authentication,
-            Long requiredLeaderMemberId
+            Long requiredLeaderMemberId,
+            ProjectTemplateConstraints.RolePolicy assignmentPolicy
     ) {
         if (request == null || request.expectedVersion() == null) {
             throw new TeamRoleAssignmentException(
@@ -158,6 +168,10 @@ public class ProjectTeamRoleService {
 
         List<ProjectMember> assignments =
                 memberRepository.findAllByTeam_IdOrderByIdAsc(team.getId());
+        if (assignmentPolicy != null) assignments = assignments.stream().filter(member -> Boolean.TRUE.equals(member.getIsActive())
+                && Boolean.TRUE.equals(member.getClassMember().getIsActive())
+                && member.getClassMember().getStatus() == com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE
+                && team.getTrainingClass().getId().equals(member.getClassMember().getTrainingClass().getId())).toList();
         Map<Long, ProjectMember> assignmentsByMemberId = new HashMap<>();
         assignments.forEach(assignment ->
                 assignmentsByMemberId.put(assignment.getClassMember().getId(), assignment));
@@ -198,10 +212,10 @@ public class ProjectTeamRoleService {
                     invalidMemberIds.stream().distinct().toList());
         }
 
-        validateTemplatePolicy(team, requestedRoles, requiredLeaderMemberId);
+        validateTemplatePolicy(team, requestedRoles, requiredLeaderMemberId, assignmentPolicy);
 
         List<ProjectMember> changedAssignments = assignments.stream()
-                .filter(assignment -> !equalsRoleSpec(
+                .filter(assignment -> !ProjectMemberRole.isValidSpec(assignment.getRole()) || !equalsRoleSpec(
                         ProjectMemberRole.formatRoles(requestedRoles.get(
                                 assignment.getClassMember().getId())),
                         assignment.getRole()))
@@ -270,10 +284,11 @@ public class ProjectTeamRoleService {
     private void validateTemplatePolicy(
             ProjectTeam team,
             Map<Long, List<String>> requestedRoles,
-            Long requiredLeaderMemberId
+            Long requiredLeaderMemberId,
+            ProjectTemplateConstraints.RolePolicy assignmentPolicy
     ) {
-        ProjectTemplate template = team.getProjectTemplate();
-        ProjectTemplateConstraints.RolePolicy policy = template == null
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
+        ProjectTemplateConstraints.RolePolicy policy = assignmentPolicy != null ? assignmentPolicy : template == null
                 ? ProjectTemplateConstraints.RolePolicy.singleRoleDefault()
                 : ProjectTemplateConstraints.parseRolePolicy(objectMapper, template);
 

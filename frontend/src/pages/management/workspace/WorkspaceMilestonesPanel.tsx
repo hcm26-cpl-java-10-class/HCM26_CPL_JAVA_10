@@ -14,11 +14,14 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { useState } from "react";
 
-export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, access: _access }: {
+export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, access: _access, projectScoped = false, readOnly = false, title = "Milestones" }: {
   projectId?: number | null;
   teamId: number;
   workspaceId: number;
   access: WorkspaceSectionAccess;
+  projectScoped?: boolean;
+  readOnly?: boolean;
+  title?: string;
 }) {
   const [pendingDelete, setPendingDelete] = useState<MilestoneListItem | null>(null);
   const { activeRole } = usePermissions();
@@ -26,7 +29,8 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["workspace-milestones", projectId, teamId],
-    queryFn: () => milestoneApi.getTeamList(teamId, { page: 0, size: 100 }),
+    queryFn: () => projectScoped && projectId ? milestoneApi.getList(String(projectId), { teamId, page: 0, size: 100 })
+      : milestoneApi.getTeamList(teamId, { page: 0, size: 100 }),
     retry: false,
     refetchInterval: 30_000,
   });
@@ -58,8 +62,8 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
     return (
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-          <CardTitle>Milestones</CardTitle>
-          {!isStudent && createButton}
+          <CardTitle>{title}</CardTitle>
+          {!isStudent && !readOnly && createButton}
         </CardHeader>
         <CardContent>
           <p className="rounded-md border p-6 text-sm text-muted-foreground">Unable to load milestones.</p>
@@ -70,8 +74,8 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-        <CardTitle>Milestones</CardTitle>
-        {!isStudent && createButton}
+        <CardTitle>{title}</CardTitle>
+        {!isStudent && !readOnly && createButton}
       </CardHeader>
       <CardContent className="px-4 pb-4 pt-0">
         {query.isPending ? <p className="py-5 text-sm text-muted-foreground">Loading milestones…</p>
@@ -87,7 +91,7 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
                 <p className="flex min-w-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground"><CalendarClock className="size-3 shrink-0" />{new Date(milestone.deadline).toLocaleString("en-GB")}</p>
                 <Badge variant="outline" className="h-6 w-fit px-2 text-[11px]"><MilestoneStatusBadge status={milestone.lifecycleStatus} /></Badge>
                 <div className="flex min-w-0 flex-wrap items-center gap-1 lg:justify-end">
-                  {!isStudent && (milestone.lifecycleStatus === "PLANNED" || milestone.lifecycleStatus === "IN_PROGRESS" || milestone.lifecycleStatus === "CHANGES_REQUESTED") && <>
+                  {!isStudent && !readOnly && (milestone.lifecycleStatus === "PLANNED" || milestone.lifecycleStatus === "IN_PROGRESS" || milestone.lifecycleStatus === "CHANGES_REQUESTED") && <>
                     <Button size="icon" variant="ghost" className="size-8" title="Edit milestone" aria-label={`Edit ${milestone.title}`} onClick={() => navigate(milestone.lifecycleStatus === "PLANNED"
                       ? projectId ? `/projects/${projectId}/milestones/${milestone.id}/edit?teamId=${teamId}&scope=team&workspaceId=${workspaceId}` : `/teams/${teamId}/milestones/${milestone.id}/edit?workspaceId=${workspaceId}`
                       : `/teams/${teamId}/milestones/${milestone.id}/edit?workspaceId=${workspaceId}`)}><Pencil className="size-4" /></Button>
@@ -96,7 +100,7 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
                     }
                   </>}
                   <Button size="icon" variant="ghost" className="size-8" title="View milestone" aria-label={`View ${milestone.title}`} onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}?workspaceId=${workspaceId}`)}><Eye className="size-4" /></Button>
-                  {isStudent && (milestone.lifecycleStatus === "IN_PROGRESS" || milestone.lifecycleStatus === "CHANGES_REQUESTED") &&
+                  {isStudent && !readOnly && (milestone.lifecycleStatus === "IN_PROGRESS" || milestone.lifecycleStatus === "CHANGES_REQUESTED") &&
                     <Button size="icon" variant="ghost" className="size-8" title="Prepare and submit artifact" aria-label={`Submit artifact for ${milestone.title}`} onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}/submit?workspaceId=${workspaceId}`)}><Upload className="size-4" /></Button>}
                   {isStudent
                     ? <Button asChild size="icon" variant="secondary" className="size-8" title="View my submissions"><Link aria-label={`View my submissions for ${milestone.title}`} to={`/student/teams/${teamId}/milestones/${milestone.id}/submissions?workspaceId=${workspaceId}`}><ClipboardCheck className="size-4" /></Link></Button>

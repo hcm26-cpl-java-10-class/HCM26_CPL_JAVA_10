@@ -112,8 +112,10 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle className="flex items-center gap-2"><Flag className="size-5" />Milestone configuration</CardTitle>
-              <CardDescription className="mt-2">Define delivery stages, assessment criteria and submission rules for this template.</CardDescription>
+              <CardTitle className="flex items-center gap-2"><Flag className="size-5" />{weighted ? "Master milestone configuration" : "Module milestone configuration"}</CardTitle>
+              <CardDescription className="mt-2">{weighted
+                ? "Shared stages for the master project. In split assignments, all teams can view them and class mentors manage their assessment."
+                : "Stages for this module only. The assigned team works on these separately from the shared master milestones."}</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               {editable && <Button type="button" size="sm" variant="outline" disabled={refreshingRubrics || mutation.isPending}

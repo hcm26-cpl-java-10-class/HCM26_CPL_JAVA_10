@@ -174,11 +174,11 @@ public class MilestoneQueryService {
     @Transactional(readOnly = true)
     public MilestoneDetailResponse getTeamDetail(Long teamId, UUID milestoneId) {
         Long tenantId = teamRead.requireTenant(teamId);
-        var scope = scopeService.requireTeamScope(null, teamId, tenantId);
         var milestone = repository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, tenantId)
                 .filter(Milestone::isActive)
                 .filter(m -> !isStudent() || m.getStatus() != MilestoneStatus.PLANNED)
                 .orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
+        var scope = scopeService.requireTeamScope(milestone.getProjectId(), teamId, tenantId);
         var rubric = milestone.getRubricSnapshotId() == null ? null : rubricPort.requireSnapshotForRead(milestone.getRubricSnapshotId(), scope.projectId(), tenantId);
         var reviewer = milestone.getReviewerId() == null ? null
                 : reviewerPort.requireReviewerForRead(milestone.getReviewerId(), scope.projectId(), tenantId);

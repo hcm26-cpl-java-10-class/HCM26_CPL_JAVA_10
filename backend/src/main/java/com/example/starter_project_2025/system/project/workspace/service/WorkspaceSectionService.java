@@ -38,6 +38,9 @@ public class WorkspaceSectionService {
     }
     private void requireAction(Context context, WorkspaceSection section, String action) {
         requireRead(context, section);
+        if (context.workspace().getCurrentSlot() == null || context.workspace().getStatus()
+                != com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus.ACTIVE)
+            throw new AccessDeniedException("Previous workspaces are read-only");
         if (!Boolean.TRUE.equals(policy.describe(context.user(), section).actions().get(action)))
             throw new AccessDeniedException("This section action is not allowed");
     }
@@ -66,6 +69,7 @@ public class WorkspaceSectionService {
     @Transactional
     public BoardColumns updateBoardColumns(Long id, BoardColumns request) {
         Context context = context(id);
+        if (context.workspace().getCurrentSlot() == null) throw new AccessDeniedException("Previous workspaces are read-only");
         if (!access.permitted(context.user(), "SPRINT_WRITE")
                 && !access.permitted(context.user(), "SPRINT_BACKLOG_UPDATE"))
             throw new AccessDeniedException("Sprint board update permission is required to configure the team board");

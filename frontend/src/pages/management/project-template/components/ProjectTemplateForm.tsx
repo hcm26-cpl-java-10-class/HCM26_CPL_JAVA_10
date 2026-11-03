@@ -37,9 +37,10 @@ function TemplateField({ name, label, errors, suffix, children, required = true 
   );
 }
 
-export function ProjectTemplateForm({ template, parentTemplate, options, minimumDurationWeeks = 0, onCancel, onSaved, save }: {
+export function ProjectTemplateForm({ template, parentTemplate, masterTemplate, options, minimumDurationWeeks = 0, onCancel, onSaved, save }: {
   template?: ProjectTemplateDTO;
   parentTemplate?: ProjectTemplateDTO;
+  masterTemplate?: ProjectTemplateDTO;
   options: ProjectTemplateOptions;
   minimumDurationWeeks?: number;
   onCancel: () => void;
@@ -48,10 +49,11 @@ export function ProjectTemplateForm({ template, parentTemplate, options, minimum
 }) {
   const queryClient = useQueryClient();
   const [values, setValues] = useState(() => ({ ...toTemplateFormValues(template),
-    ...(!template && parentTemplate ? { category: parentTemplate.category, level: parentTemplate.level,
+    ...(!template && parentTemplate ? { category: masterTemplate?.category ?? parentTemplate.category, level: parentTemplate.level,
       estimatedDurationWeeks: String(parentTemplate.estimatedDurationWeeks), technologyStack: parentTemplate.technologyStack ?? "" } : {}) }));
   const wordCount = descriptionWordCount(values.description);
-  const categories = [...new Set([...options.categories, ...(template?.category ? [template.category] : [])])];
+  const categories = [...new Set([...options.categories, ...[template?.category, masterTemplate?.category, parentTemplate?.category]
+    .filter((value): value is string => !!value)])];
   const [lockVersion] = useState(template?.lockVersion);
   const [minimumDuration] = useState(minimumDurationWeeks);
   const [errors, setErrors] = useState<TemplateFieldErrors>({});
@@ -159,6 +161,9 @@ export function ProjectTemplateForm({ template, parentTemplate, options, minimum
                   <SelectTrigger {...inputProps("category")} className="w-full"><SelectValue placeholder="Select a category" /></SelectTrigger>
                   <SelectContent>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent>
                 </Select>
+                {!template && parentTemplate && <p className="text-xs text-muted-foreground">
+                  Defaulted from master project: {masterTemplate?.category ?? parentTemplate.category}.
+                </p>}
               </TemplateField>
               <TemplateField name="level" label="Level" errors={errors.level}>
                 <Select value={values.level} onValueChange={(value) => change("level", value as ProjectTemplateLevel)} disabled={mutation.isPending}>

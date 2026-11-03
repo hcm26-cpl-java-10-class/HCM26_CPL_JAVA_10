@@ -27,4 +27,7 @@ public class TeamSubprojectAssignment extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
+
+    @jakarta.persistence.Column(name = "workspace_id")
+    private Long workspaceId;
 }

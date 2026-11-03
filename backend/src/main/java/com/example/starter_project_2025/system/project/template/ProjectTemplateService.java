@@ -59,6 +59,11 @@ public class ProjectTemplateService {
 
     public Page<ProjectTemplateResponse> getPage(String search, ProjectTemplateStatus status,
             ProjectTemplateLevel level, String category, Pageable pageable) {
+        return getPage(search, status, level, category, pageable, true);
+    }
+
+    public Page<ProjectTemplateResponse> getPage(String search, ProjectTemplateStatus status,
+            ProjectTemplateLevel level, String category, Pageable pageable, boolean includeModules) {
         User user = access.requireUser("READ");
         if (pageable.getSort().stream().anyMatch(order -> !SORT_FIELDS.contains(order.getProperty()))) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid sort field");
@@ -71,6 +76,7 @@ public class ProjectTemplateService {
                     builder.isNull(root.get("tenantId")),
                     builder.equal(root.get("tenantId"), user.getTenantId())));
             conditions.add(builder.isTrue(root.get("isActive")));
+            if (!includeModules) conditions.add(builder.isNull(root.get("parentTemplate")));
             conditions.add(builder.or(builder.isNull(root.get("code")), builder.notEqual(root.get("code"), "MANUAL-GROUPING-DEFAULT")));
             if (status != null) conditions.add(builder.equal(root.get("status"), status));
             if (level != null) conditions.add(builder.equal(root.get("level"), level));

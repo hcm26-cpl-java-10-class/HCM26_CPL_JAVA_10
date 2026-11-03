@@ -11,6 +11,8 @@ import java.util.List;
 @Repository
 public interface SprintRepository extends BaseCrudRepository<Sprint, Long> {
 
+    List<Sprint> findAllByProjectIdInAndIsActiveTrueOrderByIdAsc(java.util.Collection<Long> projectIds);
+
     /**
      * Sprint names are unique inside the project workspace (UFR-PRJ-003-01,
      * AC03), not across the whole tenant: two different projects may both run a

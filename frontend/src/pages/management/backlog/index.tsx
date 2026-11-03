@@ -229,6 +229,8 @@ interface BoardSection {
 }
 
 export interface BacklogBoardProps {
+  readOnly?: boolean;
+  workspaceId?: number;
   /**
    * `true` when the board is mounted inside a page section (workspace Backlog
    * tab) instead of being the whole route page, so it must not claim the full
@@ -280,14 +282,16 @@ export function BacklogBoard({
   teamId = null,
   projectName = null,
   taskKeyPrefix = null,
+  readOnly = false,
+  workspaceId,
 }: BacklogBoardProps) {
   const queryClient = useQueryClient();
   const { hasAllPermissions, user } = usePermissions();
 
-  const canCreate = hasAllPermissions(["SPRINT_CREATE"]);
-  const canUpdate = hasAllPermissions(["SPRINT_UPDATE"]);
-  const canDelete = hasAllPermissions(["SPRINT_DELETE"]);
-  const canEditTask = hasAllPermissions(["SPRINT_BACKLOG_UPDATE"]);
+  const canCreate = !readOnly && hasAllPermissions(["SPRINT_CREATE"]);
+  const canUpdate = !readOnly && hasAllPermissions(["SPRINT_UPDATE"]);
+  const canDelete = !readOnly && hasAllPermissions(["SPRINT_DELETE"]);
+  const canEditTask = !readOnly && hasAllPermissions(["SPRINT_BACKLOG_UPDATE"]);
   const canEditBoard = canUpdate && canEditTask;
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -322,8 +326,8 @@ export function BacklogBoard({
    * queries below whenever the board is mounted for a team workspace.
    */
   const teamQuery = useQuery({
-    queryKey: [...TEAM_BOARD_QUERY_KEY, teamId ?? "none"],
-    queryFn: () => teamBacklogApi.getBoard(teamId as number),
+    queryKey: [...TEAM_BOARD_QUERY_KEY, teamId ?? "none", projectId, workspaceId],
+    queryFn: () => teamBacklogApi.getBoard(teamId as number, projectId, workspaceId),
     enabled: teamId != null,
   });
 
@@ -1366,6 +1370,7 @@ export function BacklogBoard({
         canEdit={canEditTask && !detailSection?.locked}
         canMove={canEditBoard && !detailSection?.locked}
         canDelete={canDelete}
+        readOnly={readOnly}
         onChanged={() => refreshBoard()}
         onDeleted={async () => {
           setDetailItem(null);

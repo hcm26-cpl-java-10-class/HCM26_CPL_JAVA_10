@@ -39,6 +39,7 @@ public class SubmissionQueryService {
     private final Clock milestoneClock;
     private final MilestoneSubmissionWindow submissionWindow;
     private final ObjectMapper objectMapper;
+    private final com.example.starter_project_2025.system.project.template.assignment.hierarchy.MasterProjectAccess masterAccess;
 
     @Transactional(readOnly = true)
     public SubmissionDtos.PageResponse getPage(Long projectId, int page, int size, String search,
@@ -49,7 +50,7 @@ public class SubmissionQueryService {
         int safeSize = Math.min(100, Math.max(1, size));
         var result = submissions.findAll(MilestoneSubmissionSpecifications.matching(
                         tenantProvider.requireCurrentTenantId(), projectId, null, null, normalize(search), status,
-                        executionStatus, mandatory, late, null, null, normalizeBucket(bucket)),
+                        executionStatus, mandatory, late, null, null, normalizeBucket(bucket)).and(masterAccess.submissionVisibility()),
                 PageRequest.of(safePage, safeSize, parseSort(sort)));
         return new SubmissionDtos.PageResponse(result.getContent().stream().map(this::toListItem).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages(),
@@ -95,8 +96,10 @@ public class SubmissionQueryService {
     }
 
     MilestoneSubmission require(UUID id) {
-        return submissions.findByIdAndTenantId(id, tenantProvider.requireCurrentTenantId())
+        var submission = submissions.findByIdAndTenantId(id, tenantProvider.requireCurrentTenantId())
                 .orElseThrow(() -> new ResourceNotFoundException("Submission or milestone does not exist or has changed"));
+        if (submission.getTeamId() == null) masterAccess.requireClassMaster(submission.getProjectId());
+        return submission;
     }
 
     MilestoneSubmission requireMine(UUID id) {
@@ -146,6 +149,9 @@ public class SubmissionQueryService {
         actions.put("createNextVersion", value.getStatus() == SubmissionStatus.CHANGES_REQUESTED && requestAllowed);
         actions.put("submit", value.getStatus() == SubmissionStatus.DRAFT
                 && submissionWindow.canSubmitNow(value.getMilestone()));
+        if (value.getTeamId() == null && masterAccess.requireClassMaster(value.getProjectId()).getStatus()
+                != com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE)
+            actions.replaceAll((action, allowed) -> false);
 
         return new SubmissionDtos.Detail(value.getId(), value.getProjectId(), value.getMilestone().getId(),
                 value.getMilestone().getTitle(), value.getMilestone().getDescription(),

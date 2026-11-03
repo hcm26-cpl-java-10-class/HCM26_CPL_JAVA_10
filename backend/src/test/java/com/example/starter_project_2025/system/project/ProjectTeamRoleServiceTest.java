@@ -190,7 +190,7 @@ class ProjectTeamRoleServiceTest {
     }
 
     @Test
-    void doesNotWriteHistoryForDraftRoleChanges() {
+    void recordsHistoryForDraftRoleChanges() {
         team.setStatus(ProjectTeamStatus.DRAFT);
         when(memberRepository.findAllByTeam_IdOrderByIdAsc(13L))
                 .thenReturn(List.of(member));
@@ -205,7 +205,8 @@ class ProjectTeamRoleServiceTest {
                 authentication);
 
         assertEquals("PM", member.getRole());
-        verifyNoInteractions(historyService);
+        verify(historyService).record(session, member.getClassMember(), team, team, null, "PM",
+                "ROLE_CHANGED", null, authentication);
     }
 
     @Test

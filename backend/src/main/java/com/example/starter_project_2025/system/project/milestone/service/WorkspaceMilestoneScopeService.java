@@ -18,6 +18,8 @@ import java.util.Map;
 public class WorkspaceMilestoneScopeService {
 
     private final ProjectTeamRepository teams;
+    private final com.example.starter_project_2025.system.project.resources.TeamSubprojectAssignmentRepository assignments;
+    private final com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository workspaces;
 
     @Transactional(readOnly = true)
     public MilestoneScope requireTeamScope(Long requestedProjectId, Long teamId, Long tenantId) {
@@ -39,12 +41,14 @@ public class WorkspaceMilestoneScopeService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Team was not found");
         }
         Long resolvedProjectId = team.getProjectId();
-        if (requestedProjectId != null && !requestedProjectId.equals(resolvedProjectId)) {
+        if (requestedProjectId != null && !requestedProjectId.equals(resolvedProjectId)
+                && !assignments.existsByTeam_IdAndProject_IdAndIsActiveTrue(teamId, requestedProjectId)
+                && !workspaces.existsByProjectIdAndTeamId(requestedProjectId, teamId)) {
             throw new MilestoneValidationException(Map.of(
                     "teamId", List.of("Team must belong to the selected project")
             ));
         }
-        return new MilestoneScope(tenantId, resolvedProjectId, team.getId());
+        return new MilestoneScope(tenantId, requestedProjectId == null ? resolvedProjectId : requestedProjectId, team.getId());
     }
 
     public record MilestoneScope(Long tenantId, Long projectId, Long teamId) {

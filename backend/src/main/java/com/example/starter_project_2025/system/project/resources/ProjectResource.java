@@ -55,6 +55,9 @@ public class ProjectResource extends BaseEntity {
     @Column(name = "source_template_id")
     private Long sourceTemplateId;
 
+    @Column(name = "source_resource_id", updatable = false)
+    private Long sourceResourceId;
+
     @Column(name = "source_template_code", length = 100)
     private String sourceTemplateCode;
 

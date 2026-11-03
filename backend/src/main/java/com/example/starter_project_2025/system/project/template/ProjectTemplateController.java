@@ -76,12 +76,13 @@ public class ProjectTemplateController {
             @RequestParam(required = false) ProjectTemplateStatus status,
             @RequestParam(required = false) ProjectTemplateLevel level,
             @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "true") boolean includeModules,
             @RequestParam(defaultValue = "0") String page,
             @RequestParam(defaultValue = "10") String size,
             Pageable pageable) {
         Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : Sort.by(Sort.Direction.DESC, "createdAt");
         return service.getPage(search, status, level, category,
-                PageRequest.of(number(page, "page", 0, Integer.MAX_VALUE), number(size, "size", 1, 100), sort));
+                PageRequest.of(number(page, "page", 0, Integer.MAX_VALUE), number(size, "size", 1, 100), sort), includeModules);
     }
 
     @GetMapping("/{id}")
@@ -97,12 +98,13 @@ public class ProjectTemplateController {
             @RequestParam(required = false) ProjectTemplateStatus status,
             @RequestParam(required = false) ProjectTemplateLevel level,
             @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "true") boolean includeModules,
             @RequestParam(defaultValue = "0") String page,
             @RequestParam(defaultValue = "10") String size,
             Pageable pageable) {
         Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : Sort.by(Sort.Direction.DESC, "createdAt");
         return versionListService.getPage(search, status, level, category,
-                PageRequest.of(number(page, "page", 0, Integer.MAX_VALUE), number(size, "size", 1, 100), sort));
+                PageRequest.of(number(page, "page", 0, Integer.MAX_VALUE), number(size, "size", 1, 100), sort), includeModules);
     }
 
     @PostMapping

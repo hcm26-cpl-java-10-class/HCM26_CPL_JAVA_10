@@ -85,6 +85,7 @@ public class SprintServiceImpl
 
     SprintMapper sprintMapper;
     SprintRepository sprintRepository;
+    com.example.starter_project_2025.system.project.template.assignment.hierarchy.AssignedProjectAccess assignmentAccess;
     SprintAuditService sprintAuditService;
     SprintOutboxService sprintOutboxService;
     SprintBacklogRepository sprintBacklogRepository;
@@ -114,6 +115,9 @@ public class SprintServiceImpl
     protected void beforeCreate(Sprint sprint, SprintDTO request, ValidationContext ctx) {
 
         normalize(sprint);
+        if (sprint.getProjectId() == null) sprint.setProjectId(assignmentAccess.currentProject(sprint.getTeamId()));
+        assignmentAccess.requireProject(sprint.getProjectId(), true);
+        assignmentAccess.requireTeam(sprint.getProjectId(), sprint.getTeamId());
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
@@ -160,6 +164,12 @@ public class SprintServiceImpl
 
         Sprint sprint = sprintRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Sprint", "id", id));
+        requireWritable(sprint);
+
+        Long destinationProject = request.getProjectId() != null ? request.getProjectId() : sprint.getProjectId();
+        Long destinationTeam = request.getTeamId() != null ? request.getTeamId() : sprint.getTeamId();
+        assignmentAccess.requireProject(destinationProject, true);
+        assignmentAccess.requireTeam(destinationProject, destinationTeam);
 
         String name = request.getName() != null ? request.getName().trim() : sprint.getName();
         String goal = request.getSprintGoal() != null ? request.getSprintGoal().trim() : sprint.getSprintGoal();
@@ -214,6 +224,7 @@ public class SprintServiceImpl
 
         Sprint sprint = sprintRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Sprint", "id", id));
+        requireWritable(sprint);
 
         Map<String, Object> before = snapshot(sprint);
         Long projectId = sprint.getProjectId();
@@ -288,6 +299,7 @@ public class SprintServiceImpl
         check("SPRINT_UPDATE");
 
         Sprint sprint = findSprint(sprintId);
+        requireWritable(sprint);
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
@@ -322,9 +334,34 @@ public class SprintServiceImpl
     }
 
     private Sprint findSprint(Long sprintId) {
-
-        return sprintRepository.findById(sprintId)
+        Sprint sprint = sprintRepository.findById(sprintId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sprint", "id", sprintId));
+        assignmentAccess.requireProject(sprint.getProjectId(), false);
+        return sprint;
+    }
+
+    private void requireWritable(Sprint sprint) {
+        assignmentAccess.requireProject(sprint.getProjectId(), true);
+        if (sprint.getProjectId() == null) assignmentAccess.requireTeamOnlyWrite(sprint.getTeamId());
+    }
+
+    @Override
+    public SprintDTO getById(Long id) {
+        assignmentAccess.requireProject(findSprint(id).getProjectId(), false);
+        return super.getById(id);
+    }
+
+    @Override
+    public org.springframework.data.domain.Page<SprintDTO> getAll(org.springframework.data.domain.Pageable pageable, String search, SprintFilter filter) {
+        checkPermission(CrudAction.READ);
+        org.springframework.data.jpa.domain.Specification<Sprint> spec = assignmentAccess.visibility();
+        org.springframework.data.jpa.domain.Specification<Sprint> filters = autoSpecBuilder.build(filter);
+        if (filters != null) spec = spec.and(filters);
+        if (search != null && !search.isBlank()) {
+            String keyword = "%" + search.toLowerCase(java.util.Locale.ROOT) + "%";
+            spec = spec.and((root, query, cb) -> cb.or(cb.like(cb.lower(root.get("name")), keyword), cb.like(cb.lower(root.get("sprintGoal")), keyword)));
+        }
+        return sprintRepository.findAll(spec, pageable).map(sprintMapper::toResponse);
     }
 
     private boolean isScopeEditable(Sprint sprint) {
