@@ -144,7 +144,7 @@ export function CourseEnrollmentAssignmentDialog({
     mutationFn: () => enrollmentApi.enrollDepartments(batchRequest),
     onSuccess: async (result) => {
       toast.success(
-        `${result.totalNewEnrollments} student${result.totalNewEnrollments === 1 ? "" : "s"} assigned to ${result.courseName}.`,
+        `${result.totalNewEnrollments} student${result.totalNewEnrollments === 1 ? "" : "s"} enrolled in ${result.courseName}.`,
       );
       setBatchResult(result);
       await Promise.all([
@@ -154,7 +154,7 @@ export function CourseEnrollmentAssignmentDialog({
       ]);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Department assignment failed.");
+      toast.error(error instanceof Error ? error.message : "Department enrollment failed.");
     },
   });
 
@@ -171,7 +171,7 @@ export function CourseEnrollmentAssignmentDialog({
     onSuccess: async ({ total, failed }) => {
       const succeeded = total - failed;
       if (succeeded > 0) {
-        toast.success(`${succeeded} student${succeeded === 1 ? "" : "s"} assigned to this course.`);
+        toast.success(`${succeeded} student${succeeded === 1 ? "" : "s"} enrolled in this course.`);
       }
       if (failed > 0) {
         toast.error(`${failed} student${failed === 1 ? "" : "s"} could not be enrolled.`);
@@ -184,7 +184,7 @@ export function CourseEnrollmentAssignmentDialog({
       }
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Student assignment failed.");
+      toast.error(error instanceof Error ? error.message : "Student enrollment failed.");
     },
   });
 
@@ -233,14 +233,14 @@ export function CourseEnrollmentAssignmentDialog({
     >
       <DialogTrigger asChild>
         <Button type="button" variant="outline" className="flex-1">
-          Assign
+          Enroll
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Assign {course.name}</DialogTitle>
+          <DialogTitle>Enroll in {course.name}</DialogTitle>
           <DialogDescription>
-            Choose one or more departments to assign their active students, or choose individual students.
+            Choose one or more departments to enroll their active students, or choose individual students.
           </DialogDescription>
         </DialogHeader>
 
@@ -256,7 +256,7 @@ export function CourseEnrollmentAssignmentDialog({
             }}
             disabled={isPending}
           >
-            <SelectTrigger aria-label="Assignment target" className="w-full">
+            <SelectTrigger aria-label="Enrollment target" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -375,7 +375,7 @@ export function CourseEnrollmentAssignmentDialog({
                   <p role="alert" className="text-sm text-destructive">
                     {previewQuery.error instanceof Error
                       ? previewQuery.error.message
-                      : "Could not check department assignment."}
+                      : "Could not check department enrollment."}
                   </p>
                 )}
                 {previewQuery.data && selectedDepartmentIds.length > 0 && (
@@ -406,7 +406,7 @@ export function CourseEnrollmentAssignmentDialog({
                   onClick={() => departmentMutation.mutate()}
                 >
                   {departmentMutation.isPending && <LoaderCircle className="size-4 animate-spin" />}
-                  Assign {selectedDepartmentIds.length > 1 ? "departments" : "department"}
+                  Enroll {selectedDepartmentIds.length > 1 ? "departments" : "department"}
                 </Button>
               </div>
             ) : (
@@ -486,7 +486,7 @@ export function CourseEnrollmentAssignmentDialog({
                       onClick={() => studentMutation.mutate()}
                     >
                       {studentMutation.isPending && <LoaderCircle className="size-4 animate-spin" />}
-                      Assign {selectedStudents.length} student{selectedStudents.length === 1 ? "" : "s"}
+                      Enroll {selectedStudents.length} student{selectedStudents.length === 1 ? "" : "s"}
                     </Button>
                   )}
                 </>
@@ -524,7 +524,7 @@ function BatchResultView({
         <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-600" />
         <div>
           <p className="font-medium">
-            {result.totalNewEnrollments} student{result.totalNewEnrollments === 1 ? "" : "s"} assigned to{" "}
+            {result.totalNewEnrollments} student{result.totalNewEnrollments === 1 ? "" : "s"} enrolled in{" "}
             {result.courseName}
           </p>
           {result.totalAlreadyEnrolled > 0 && (
