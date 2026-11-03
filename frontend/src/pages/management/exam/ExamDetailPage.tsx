@@ -4,6 +4,7 @@ import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, BookOpen, ClipboardCheck, Mail, Pencil, BarChart3 } from "lucide-react";
+import { useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ExamEditPanel } from "./ExamEditPanel";
 import { ExamQuestionsPanel } from "./ExamQuestionsPanel";
@@ -35,12 +36,32 @@ export default function ExamDetailPage() {
   const id = Number(examId);
   const active = tabFromPath(pathname, examId);
 
+  // This page fills the window and scrolls inside, so the browser page itself must not scroll
+  // (otherwise two scrollbars appear).
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const previous = [html.style.overflow, body.style.overflow];
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = previous[0];
+      body.style.overflow = previous[1];
+    };
+  }, []);
+
   const examQuery = useQuery({
     queryKey: ["exam-detail", id],
     queryFn: () => examApi.getById(examId),
     enabled: Number.isFinite(id) && id > 0,
   });
   const title = examQuery.data?.title;
+  const counts: Partial<Record<TabKey, { value: number; warn?: boolean }>> = {
+    questions: { value: examQuery.data?.questionIds?.length ?? examQuery.data?.questions?.length ?? 0 },
+    ...((examQuery.data?.pendingGradingCount ?? 0) > 0
+      ? { grading: { value: examQuery.data?.pendingGradingCount ?? 0, warn: true } }
+      : {}),
+  };
 
   return (
     // Full-screen page: no sidebar, so the tabs and their content can use the whole window.
@@ -72,6 +93,18 @@ export default function ExamDetailPage() {
             >
               <Icon className="size-4" />
               {label}
+              {counts[key] && (
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[11px] leading-none ${
+                    counts[key]?.warn
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                  title={counts[key]?.warn ? "Submissions waiting to be graded" : undefined}
+                >
+                  {counts[key]?.value}
+                </span>
+              )}
             </button>
           ))}
         </div>

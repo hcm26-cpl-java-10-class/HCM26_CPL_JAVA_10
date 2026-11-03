@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import { invitationApi } from "@/api";
 import type { InvitationDTO, InvitationStatus } from "@/types";
 import { CreateInvitationModal } from "@/components/features/invitation/CreateInvitationModal";
@@ -70,6 +72,7 @@ const STATUS_VARIANT: Record<InvitationStatus, "default" | "secondary" | "destru
 };
 
 export default function InvitationsPage() {
+    const embedded = useContext(EmbeddedLayoutContext);
     const { examId } = useParams<{ examId: string }>();
     const numericExamId = Number(examId);
 
@@ -146,7 +149,8 @@ export default function InvitationsPage() {
     return (
         <MainLayout pathName={{ exams: "Exam Management", invitations: "Invitations" }}>
             <section className="flex flex-col gap-5">
-                <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
+                <header className={`flex flex-wrap items-end gap-4 border-b pb-4 ${embedded ? "justify-end" : "justify-between"}`}>
+                    {!embedded && (
                     <div>
                         <p className="text-sm text-muted-foreground">
                             <ChevronLeft
@@ -162,6 +166,7 @@ export default function InvitationsPage() {
                             {total} invitation(s)
                         </p>
                     </div>
+                    )}
                     <Button onClick={() => setCreateOpen(true)}>
                         <Mail className="size-4" />
                         Create Invitation

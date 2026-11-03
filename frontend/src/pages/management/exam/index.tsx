@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookmarkPlus, CalendarClock, Clock, ListChecks, Plus, Search, Trophy, User } from "lucide-react";
+import { BookmarkPlus, CalendarClock, ClipboardCheck, Clock, ListChecks, Plus, Search, Trophy, User } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -53,6 +54,13 @@ const STATUS_STYLE: Record<ExamStatus, { label: string; className: string }> = {
   CLOSED: { label: "Closed", className: "bg-muted text-muted-foreground" },
 };
 
+const SORT_OPTIONS: { value: string; label: string }[] = [
+  { value: "createdAt,desc", label: "Newest first" },
+  { value: "createdAt,asc", label: "Oldest first" },
+  { value: "title,asc", label: "Title A–Z" },
+  { value: "startTime,desc", label: "Exam start time" },
+];
+
 const formatDateTime = (value?: string | null) =>
   value ? value.replace("T", " ").slice(0, 16) : "—";
 
@@ -72,15 +80,20 @@ export default function ExamManagementPage() {
   const [examSearch, setExamSearch] = useState("");
   const [examCategoryFilter, setExamCategoryFilter] = useState<ExamCategory | "ALL">("ALL");
   const [examPage, setExamPage] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<ExamStatus | "ALL">("ALL");
+  const [sortKey, setSortKey] = useState("createdAt,desc");
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDuration, setNewDuration] = useState("60");
   const [cfg, setCfg] = useState<ExamConfigForm>(DEFAULT_CONFIG);
 
+  // The status is worked out from the open/close time, so when it is filtered we load all exams
+  // (a teacher has few) and filter / page them here.
+  const clientFiltering = statusFilter !== "ALL";
   const examsQuery = useQuery({
-    queryKey: ["exam-management", examPage, examSearch, examCategoryFilter],
+    queryKey: ["exam-management", clientFiltering ? 0 : examPage, examSearch, examCategoryFilter, sortKey, clientFiltering],
     queryFn: () => examApi.getPage(
-        { page: examPage, size: PAGE_SIZE, sort: "createdAt,desc" },
+        { page: clientFiltering ? 0 : examPage, size: clientFiltering ? 500 : PAGE_SIZE, sort: sortKey },
         examSearch,
         examCategoryFilter === "ALL" ? undefined : { category: examCategoryFilter },
     ),
@@ -100,8 +113,19 @@ export default function ExamManagementPage() {
     onError: (error) => toast.error(getErrorMessage(error, "Failed to save exam")),
   });
 
-  const examRows = examsQuery.data?.content ?? [];
-  const examTotalPages = examsQuery.data?.totalPages ?? 0;
+  const loadedRows = examsQuery.data?.content ?? [];
+  const statusRows = clientFiltering ? loadedRows.filter((exam) => examStatus(exam) === statusFilter) : loadedRows;
+  const examRows = clientFiltering ? statusRows.slice(examPage * PAGE_SIZE, (examPage + 1) * PAGE_SIZE) : statusRows;
+  const examTotalPages = clientFiltering ? Math.ceil(statusRows.length / PAGE_SIZE) : examsQuery.data?.totalPages ?? 0;
+  const examTotal = clientFiltering ? statusRows.length : examsQuery.data?.totalElements ?? 0;
+  const hasFilters = examSearch !== "" || examCategoryFilter !== "ALL" || statusFilter !== "ALL";
+
+  const openCreateDialog = () => {
+    setNewTitle("");
+    setNewDuration("60");
+    setCfg({ ...DEFAULT_CONFIG, startTime: getFutureDatetimeString(2) });
+    setCreateOpen(true);
+  };
 
   return (
       <MainLayout pathName={{ exams: "Exam Management" }}>
@@ -114,14 +138,7 @@ export default function ExamManagementPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button
-                  onClick={() => {
-                    setNewTitle("");
-                    setNewDuration("60");
-                    setCfg({ ...DEFAULT_CONFIG, startTime: getFutureDatetimeString(2) });
-                    setCreateOpen(true);
-                  }}
-              >
+              <Button onClick={openCreateDialog}>
                 <Plus className="mr-2 size-4" />
                 Create Exam
               </Button>
@@ -164,17 +181,73 @@ export default function ExamManagementPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={statusFilter} onValueChange={(value) => {
+              setStatusFilter(value as ExamStatus | "ALL");
+              setExamPage(0);
+            }}>
+              <SelectTrigger aria-label="Filter by status" className="w-full max-w-[11rem]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                <SelectItem value="UPCOMING">Upcoming</SelectItem>
+                <SelectItem value="OPEN">Open</SelectItem>
+                <SelectItem value="CLOSED">Closed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortKey} onValueChange={(value) => {
+              setSortKey(value);
+              setExamPage(0);
+            }}>
+              <SelectTrigger aria-label="Sort exams" className="w-full max-w-[11rem]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <span className="text-sm text-muted-foreground">
-              {examsQuery.data?.totalElements ?? 0} exam(s)
+              {examTotal} exam(s)
             </span>
           </div>
 
           {examsQuery.isLoading ? (
-            <p className="py-16 text-center text-sm text-muted-foreground">Loading exams...</p>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Loading exams">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="flex flex-col gap-3 rounded-lg border p-4">
+                  <Skeleton className="h-5 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                  <div className="grid gap-2 border-t pt-3">
+                    {Array.from({ length: 5 }, (_, k) => <Skeleton key={k} className="h-4 w-full" />)}
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : examsQuery.isError ? (
             <p className="py-16 text-center text-sm text-destructive">Failed to load exams list.</p>
           ) : examRows.length === 0 ? (
-            <p className="py-16 text-center text-sm text-muted-foreground">No matching exams found.</p>
+            <div className="flex flex-col items-center gap-3 py-16 text-center">
+              <p className="text-sm text-muted-foreground">
+                {hasFilters ? "No exams match your filters." : "You have no exams yet."}
+              </p>
+              {hasFilters ? (
+                <Button variant="outline" size="sm" onClick={() => {
+                  setExamSearch("");
+                  setExamCategoryFilter("ALL");
+                  setStatusFilter("ALL");
+                  setExamPage(0);
+                }}>
+                  Clear filters
+                </Button>
+              ) : (
+                <Button size="sm" onClick={openCreateDialog}>
+                  <Plus className="mr-2 size-4" />
+                  Create your first exam
+                </Button>
+              )}
+            </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {examRows.map((exam) => {
@@ -191,9 +264,17 @@ export default function ExamManagementPage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h2 className="line-clamp-2 break-words text-base font-semibold leading-snug">{exam.title}</h2>
-                      <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${status.className}`}>
-                        {status.label}
-                      </span>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${status.className}`}>
+                          {status.label}
+                        </span>
+                        {(exam.pendingGradingCount ?? 0) > 0 && (
+                          <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                            <ClipboardCheck className="size-3" />
+                            {exam.pendingGradingCount} to grade
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {EXAM_CATEGORY_LABEL[exam.category ?? "ASSESSMENT"]}

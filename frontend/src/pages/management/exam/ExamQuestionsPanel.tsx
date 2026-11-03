@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ExamDTO, QuestionDTO, QuestionDifficulty, QuestionType } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, ChevronDown, ChevronUp, Dices, Eye, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronUp, Dices, Eye, Pencil, Plus, Save, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getErrorMessage } from "./examConfig";
@@ -124,6 +124,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   const [difficultyFilter, setDifficultyFilter] = useState<Set<QuestionDifficulty>>(new Set());
   const [topicFilter, setTopicFilter] = useState<Set<string>>(new Set());
   const [hideAdded, setHideAdded] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [page, setPage] = useState(0);
 
   // Selection / dialogs
@@ -325,6 +326,13 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   }
 
   const savedQuestions = activeExam.questions ?? [];
+  const selectedAll = [...savedQuestions, ...stagedQuestions];
+  const typeSummary = allowedTypes
+    .map((type) => {
+      const items = selectedAll.filter((q) => q.type === type);
+      return { type, count: items.length, points: items.reduce((sum, q) => sum + (q.points || 0), 0) };
+    })
+    .filter((row) => row.count > 0);
 
   return (
     <div className="flex flex-col gap-3">
@@ -335,9 +343,11 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
         </div>
       )}
 
-      <div className="grid gap-4 lg:h-[calc(100vh-12rem)] lg:min-h-[36rem] lg:grid-cols-[230px_minmax(0,1fr)_minmax(300px,0.75fr)]">
+      <div className={`grid gap-4 lg:h-[calc(100vh-12rem)] lg:min-h-[36rem] ${
+        filtersOpen ? "lg:grid-cols-[230px_minmax(0,1fr)_minmax(300px,0.75fr)]" : "lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.6fr)]"
+      }`}>
         {/* ---------------- Filters ---------------- */}
-        <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto rounded-md border p-4">
+        <aside className={`min-h-0 flex-col gap-4 overflow-y-auto rounded-md border p-4 ${filtersOpen ? "flex" : "hidden"}`}>
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Filters</h3>
             <button type="button" className="text-xs text-primary hover:underline disabled:opacity-40" disabled={!hasFilters} onClick={clearFilters}>
@@ -397,6 +407,10 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
               <p className="text-xs text-muted-foreground">{filtered.length} question(s)</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" aria-pressed={filtersOpen} onClick={() => setFiltersOpen((v) => !v)}>
+                <SlidersHorizontal className="mr-1 size-4" />
+                {filtersOpen ? "Hide filters" : "Show filters"}
+              </Button>
               <Button type="button" variant="outline" size="sm" disabled={activeExamStarted || addable.length === 0} onClick={addAllMatching}>
                 <Plus className="mr-1 size-4" />
                 Add all matching ({addable.length})
@@ -446,6 +460,15 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
             <p className="text-xs text-muted-foreground">
               Total weight: {totalPointsInExam} · Max score: {activeExam.maxScore ?? 10}
             </p>
+            {typeSummary.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {typeSummary.map((row) => (
+                  <span key={row.type} className="rounded-full bg-muted px-2 py-0.5 text-[11px]">
+                    {TYPE_LABEL[row.type]}: {row.count} · weight {row.points}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto p-3">

@@ -29,10 +29,17 @@ interface Props {
   editingExam?: ExamDTO | null;
 }
 
+function SectionTitle({ children }: { children: string }) {
+  return (
+    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:col-span-2">{children}</h3>
+  );
+}
+
 /** All fields of the exam form (shared by the Create dialog and the Edit tab). */
 export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, duration: newDuration, setDuration: setNewDuration, cfg, setCfg, editingExam }: Props) {
   return (
-<div className="grid min-h-0 flex-1 gap-4 overflow-y-auto py-5 pr-1 sm:grid-cols-2">
+<div className="grid gap-4 sm:grid-cols-2">
+      <SectionTitle>Basic</SectionTitle>
       <label className="grid gap-2 text-sm font-medium sm:col-span-2">
         Exam Title
         <Input required maxLength={200} value={newTitle} onChange={(event) => setNewTitle(event.target.value)} />
@@ -92,6 +99,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
       </label>
 
       <div className="grid gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
+        <SectionTitle>Schedule &amp; attempts</SectionTitle>
         <div className="grid gap-2 text-sm font-medium">
           <div className="flex flex-wrap items-center justify-between gap-1">
             <span>Start Time</span>
@@ -182,6 +190,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
           </span>
         </label>
 
+        <SectionTitle>Scoring</SectionTitle>
         <label className="grid gap-2 text-sm font-medium">
           Max Score (leave blank = 10)
           <Input type="number" min={0.01} step="0.01" placeholder="10" value={cfg.maxScore} onChange={(event) => setCfg((c) => ({ ...c, maxScore: event.target.value }))} />
@@ -198,6 +207,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
           </span>
         </label>
 
+        <SectionTitle>Late submission</SectionTitle>
         <div className="grid gap-2 text-sm font-medium">
           Late Submission Policy
           <Select value={cfg.latePolicy} onValueChange={(value) => setCfg((c) => ({
@@ -236,6 +246,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
           </label>
         )}
 
+        <SectionTitle>Results</SectionTitle>
         <div className="grid gap-2 text-sm font-medium">
           Result Visibility
           <Select value={cfg.resultVisibility} onValueChange={(value) => setCfg((c) => ({ ...c, resultVisibility: value as ResultVisibility }))}>
@@ -272,6 +283,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
 
       {/* NEW (anti-cheat): cau hinh chong gian lan theo tung de */}
       <div className="grid gap-3 border-t pt-4 sm:col-span-2">
+        <SectionTitle>Anti-cheat</SectionTitle>
         <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
           <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.antiCheatEnabled} onChange={(event) => setCfg((c) => ({ ...c, antiCheatEnabled: event.target.checked }))} />
           Anti-cheating monitoring (chống gian lận)

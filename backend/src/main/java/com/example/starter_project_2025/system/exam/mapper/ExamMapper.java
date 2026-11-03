@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.exam.mapper;
 
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.system.exam.domain.Exam;
+import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
+import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.service.ExamScoring;
 import com.example.starter_project_2025.system.exam.service.ExamTypePolicy;
@@ -23,6 +25,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
 
     private final QuestionMapper questionMapper;
     private final UserRepository userRepository;
+    private final ExamAttemptRepository attemptRepository;
 
     @Override
     public Exam toEntity(ExamDTO dto) {
@@ -41,6 +44,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setUpdatedAt(e.getUpdatedAt());
         d.setCreatedBy(e.getCreatedBy());
         d.setCreatedByName(creatorName(e.getCreatedBy()));
+        d.setPendingGradingCount(pendingGrading(e.getId()));
         d.setUpdatedBy(e.getUpdatedBy());
         d.setTitle(e.getTitle());
         d.setDurationMinutes(e.getDurationMinutes());
@@ -81,6 +85,17 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
     public void update(Exam e, ExamDTO dto) {
         if (dto.getIsActive() != null) e.setIsActive(dto.getIsActive());
         apply(e, dto);
+    }
+
+    /** So bai dang cho cham (PENDING_REVIEW hoac EXPIRED); 0 neu khong dem duoc. */
+    private long pendingGrading(Long examId) {
+        if (examId == null) return 0L;
+        try {
+            return attemptRepository.countByExam_IdAndStatusIn(
+                    examId, java.util.List.of(ExamAttemptStatus.PENDING_REVIEW, ExamAttemptStatus.EXPIRED));
+        } catch (RuntimeException ex) {
+            return 0L;
+        }
     }
 
     /** Ten day du cua nguoi tao; null neu khong tim thay (du lieu cu). */

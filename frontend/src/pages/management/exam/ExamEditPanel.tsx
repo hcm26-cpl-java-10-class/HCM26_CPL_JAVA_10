@@ -111,6 +111,21 @@ export function ExamEditPanel({ examId }: { examId: number }) {
     deleteExamMutation.mutate();
   };
 
+  // Unsaved changes: compare the form with the saved exam.
+  const dirty = exam
+    ? JSON.stringify([newTitle, newDuration, cfg]) !==
+      JSON.stringify([exam.title, String(exam.durationMinutes), configFromExam(exam)])
+    : false;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
   if (examQuery.isLoading) {
     return <p className="py-10 text-center text-sm text-muted-foreground">Loading exam...</p>;
   }
@@ -167,10 +182,13 @@ export function ExamEditPanel({ examId }: { examId: number }) {
               AI Similarity Check
             </Button>
           </div>
-          <Button type="submit" disabled={saveExamMutation.isPending || !newTitle.trim()}>
-            <Save className="mr-2 size-4" />
-            {saveExamMutation.isPending ? "Saving..." : "Save"}
-          </Button>
+          <div className="flex items-center gap-3">
+            {dirty && <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Unsaved changes</span>}
+            <Button type="submit" disabled={saveExamMutation.isPending || !newTitle.trim() || !dirty}>
+              <Save className="mr-2 size-4" />
+              {saveExamMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
         </div>
       </form>
 

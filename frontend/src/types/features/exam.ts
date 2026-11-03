@@ -98,6 +98,8 @@ export interface ExamDTO {
   updatedAt?: string | null;
   /** Full name of the creator (empty for old data). */
   createdByName?: string | null;
+  /** Submitted attempts waiting for the teacher to grade. */
+  pendingGradingCount?: number;
   title: string;
   durationMinutes: number;
   startTime?: string | null;
