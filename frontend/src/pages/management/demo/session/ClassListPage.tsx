@@ -91,14 +91,6 @@ export default function ClassListPage() {
                         {status && <Button variant="ghost" size="sm" onClick={() => setStatus("")}>Clear filter</Button>}
                     </div>
                 )}
-                {classes.isPending ? (
-                    <p role="status" className="p-12 text-center text-sm text-muted-foreground">Loading classes...</p>
-                ) : classes.isError ? (
-                    <div role="alert" className="space-y-3 p-10 text-center">
-                        <p className="text-sm text-muted-foreground">Could not load classes from the training system. Please check that the external service is available.</p>
-                        <Button variant="outline" onClick={() => void classes.refetch()}>Try again</Button>
-                    </div>
-                ) : (
                     <>
                         <Table className="min-w-[1120px] [&_td]:px-4 [&_td]:py-4 [&_th]:px-4">
                             <TableHeader className="bg-muted/50">
@@ -116,6 +108,16 @@ export default function ClassListPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
+                                {classes.isPending ? (
+                                    <TableRow><TableCell colSpan={11} className="h-32 text-center"><p role="status" className="text-muted-foreground">Loading classes...</p></TableCell></TableRow>
+                                ) : classes.isError ? (
+                                    <TableRow><TableCell colSpan={11} className="h-32 text-center">
+                                        <div role="alert" className="space-y-3 whitespace-normal">
+                                            <p className="text-muted-foreground">Could not load classes from the training system. Please check that the external service is available.</p>
+                                            <Button variant="outline" onClick={() => void classes.refetch()}>Try again</Button>
+                                        </div>
+                                    </TableCell></TableRow>
+                                ) : null}
                                 {rows.map((row, index) => {
                                     const label = statusLabel(row.status);
                                     return <TableRow key={row.id} data-state={selected.has(row.id) ? "selected" : undefined}>
@@ -133,13 +135,12 @@ export default function ClassListPage() {
                                 })}
                             </TableBody>
                         </Table>
-                        {!rows.length && <div className="space-y-2 p-12 text-center text-muted-foreground"><GraduationCap className="mx-auto size-8" /><p className="text-sm">{search || status ? "No classes match your search or filters." : "No classes available."}</p></div>}
+                        {!classes.isPending && !classes.isError && !rows.length && <div className="space-y-2 p-12 text-center text-muted-foreground"><GraduationCap className="mx-auto size-8" /><p className="text-sm">{search || status ? "No classes match your search or filters." : "No classes available."}</p></div>}
                         <div className="flex flex-wrap items-center justify-between gap-2 border-t px-5 py-4 text-xs text-muted-foreground">
                             <span>{rows.length} classes{selectedCount > 0 ? ` · ${selectedCount} selected` : ""}</span>
                             {rows.length > 0 && <span>You've reached the end</span>}
                         </div>
                     </>
-                )}
             </section>
         </MainLayout>
     );
