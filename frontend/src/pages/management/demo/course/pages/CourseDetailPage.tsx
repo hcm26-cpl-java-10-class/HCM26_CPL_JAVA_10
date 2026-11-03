@@ -43,7 +43,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import {
@@ -64,10 +64,6 @@ const CONTENT_ICON: Record<LessonContentType, LucideIcon> = {
 
 export function CourseDetailPage() {
   const { id } = useParams();
-  const location = useLocation();
-  const inEnrollments = location.pathname.startsWith("/course-enrollments");
-  const backTo = inEnrollments ? "/course-enrollments" : "/courses";
-  const backLabel = inEnrollments ? "enrollments" : "courses";
   const courseId = Number(id);
   const validId = Number.isInteger(courseId) && courseId > 0;
 
@@ -79,17 +75,15 @@ export function CourseDetailPage() {
   });
 
   const course = detailQuery.data;
-  const breadcrumbTitles: Record<string, string> = inEnrollments
-    ? { "course-enrollments": "Enrollments" }
-    : { courses: "Courses" };
+  const breadcrumbTitles: Record<string, string> = { courses: "Courses" };
   if (id && course?.name) breadcrumbTitles[id] = course.name;
 
   return (
     <MainLayout pathName={breadcrumbTitles}>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <Button asChild variant="ghost" className="-ml-3">
-          <Link to={backTo}>
-            <ArrowLeft className="size-4" /> Back to {backLabel}
+          <Link to="/courses">
+            <ArrowLeft className="size-4" /> Back to courses
           </Link>
         </Button>
 
@@ -99,7 +93,7 @@ export function CourseDetailPage() {
             text="This course does not exist or is no longer available."
             action={
               <Button asChild>
-                <Link to={backTo}>Browse courses</Link>
+                <Link to="/courses">Browse courses</Link>
               </Button>
             }
           />
@@ -113,7 +107,7 @@ export function CourseDetailPage() {
             </Button>
           </div>
         ) : (
-          <CourseDetailContent course={course} enrollmentsView={inEnrollments} />
+          <CourseDetailContent course={course} />
         )}
       </div>
     </MainLayout>
@@ -123,12 +117,9 @@ export function CourseDetailPage() {
 export function CourseDetailContent({
   course,
   enrollmentManagement = false,
-  enrollmentsView = false,
 }: {
   course: CourseDetail;
   enrollmentManagement?: boolean;
-  /** Trang chi tiết mở từ Enrollments: hiện danh sách learners, gọn card Assign. */
-  enrollmentsView?: boolean;
 }) {
   const hero = (
     <section className="overflow-hidden rounded-2xl border bg-card">
@@ -242,9 +233,8 @@ export function CourseDetailContent({
         {information}
       </div>
 
-      <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-        {enrollmentsView && <CourseLearnersSideCard courseId={course.id} />}
-        <CourseActionCard course={course} compact={enrollmentsView} />
+      <aside className="lg:sticky lg:top-4 lg:self-start">
+        <CourseActionCard course={course} />
       </aside>
     </div>
   );
@@ -333,82 +323,9 @@ function CourseLearnersPanel({ courseId }: { courseId: number }) {
   );
 }
 
-const SIDE_LEARNERS_PAGE_SIZE = 5;
-
-/** Danh sách người tham gia course (cột phải, phía trên card Assign). */
-function CourseLearnersSideCard({ courseId }: { courseId: number }) {
-  const [page, setPage] = useState(0);
-  const reportQuery = useQuery({ queryKey: ["course-report"], queryFn: courseReportApi.getCourseEnrollmentReport });
-  const learners = useMemo(
-    () => reportQuery.data?.find((item) => item.courseId === courseId)?.learners ?? [],
-    [reportQuery.data, courseId],
-  );
-  const pageCount = Math.max(1, Math.ceil(learners.length / SIDE_LEARNERS_PAGE_SIZE));
-  const safePage = Math.min(page, pageCount - 1);
-  const visible = learners.slice(safePage * SIDE_LEARNERS_PAGE_SIZE, (safePage + 1) * SIDE_LEARNERS_PAGE_SIZE);
-
-  return (
-    <div className="space-y-4 rounded-2xl border bg-card p-6 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Users className="size-5 text-muted-foreground" /> Learners
-        </h2>
-        {!reportQuery.isLoading && !reportQuery.isError && learners.length > 0 && (
-          <Badge variant="secondary">{learners.length}</Badge>
-        )}
-      </div>
-
-      {reportQuery.isLoading ? (
-        <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
-          <LoaderCircle className="mr-2 size-4 animate-spin" /> Loading learners...
-        </div>
-      ) : reportQuery.isError ? (
-        <p className="py-6 text-center text-sm text-destructive">Could not load learners.</p>
-      ) : learners.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">No learner</p>
-      ) : (
-        <>
-          <ul className="space-y-3">
-            {visible.map((learner) => (
-              <li key={learner.enrollmentId} className="rounded-xl border bg-background p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {learner.studentName || learner.studentEmail || "Student"}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">{learner.studentEmail || "No email"}</p>
-                  </div>
-                  <Badge variant={learner.completed ? "default" : "secondary"} className="shrink-0">
-                    {learner.completed ? "Completed" : "In progress"}
-                  </Badge>
-                </div>
-                <div className="mt-3 flex items-center gap-3">
-                  <Progress value={learner.progressPercentage} className="flex-1" />
-                  <span className="text-xs font-semibold">{learner.progressPercentage}%</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {pageCount > 1 && (
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <Button variant="outline" size="sm" onClick={() => setPage(Math.max(0, safePage - 1))} disabled={safePage === 0}>
-                <ChevronLeft className="size-4" />
-              </Button>
-              <span>Page {safePage + 1} of {pageCount}</span>
-              <Button variant="outline" size="sm" onClick={() => setPage(Math.min(pageCount - 1, safePage + 1))} disabled={safePage >= pageCount - 1}>
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 /** Nút hành động động: Ghi danh / Tiếp tục học / Xem trước (staff). */
-function CourseActionCard({ course, compact = false }: { course: CourseDetail; compact?: boolean }) {
-  const { isStudentView, canEnroll, canCancel, enrollmentsQuery, enrollmentByCourseId, enrollMutation, cancelMutation } =
+function CourseActionCard({ course }: { course: CourseDetail }) {
+  const { canEnroll, canCancel, enrollmentsQuery, enrollmentByCourseId, enrollMutation, cancelMutation } =
     useCourseEnrollment();
   const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -474,59 +391,42 @@ function CourseActionCard({ course, compact = false }: { course: CourseDetail; c
 
   return (
     <div className="space-y-4 rounded-2xl border bg-card p-6 shadow-sm">
-      {isStudentView ? (
-        <>
-          {course.enrolled ? (
-            <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
-              <CheckCircle2 className="size-5" /> You are enrolled
-            </div>
-          ) : (
-            <div>
-              <p className="text-2xl font-bold">{course.isFree ? "Free" : "Enrollment required"}</p>
-              <p className="text-sm text-muted-foreground">
-                {course.isFree
-                  ? "Lesson content is available for free. Enroll to track your progress."
-                  : "Enroll to unlock all lesson content."}
-              </p>
-            </div>
-          )}
-
-          {action}
-        </>
+      {course.enrolled ? (
+        <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
+          <CheckCircle2 className="size-5" /> You are enrolled
+        </div>
       ) : (
-        <>
-          {!compact && (
-            <div>
-              <p className="text-2xl font-bold">Assign students</p>
-              <p className="text-sm text-muted-foreground">
-                Assign departments or individual students to this course.
-              </p>
-            </div>
-          )}
-
-          <PermissionGate permissions={["DEPARTMENT_READ", "DEPARTMENT_UPDATE"]} requireAll>
-            <DepartmentEnrollmentControl courseId={course.id} />
-          </PermissionGate>
-        </>
+        <div>
+          <p className="text-2xl font-bold">{course.isFree ? "Free" : "Enrollment required"}</p>
+          <p className="text-sm text-muted-foreground">
+            {course.isFree
+              ? "Lesson content is available for free. Enroll to track your progress."
+              : "Enroll to unlock all lesson content."}
+          </p>
+        </div>
       )}
 
-      {!compact && (
-        <ul className="space-y-2 border-t pt-4 text-sm text-muted-foreground">
-          <li className="flex items-center gap-2">
-            <BookOpen className="size-4" /> {course.lessonCount} lessons
-          </li>
-          <li className="flex items-center gap-2">
-            <Clock className="size-4" /> {formatTotalDuration(course.totalDuration)} of content
-          </li>
-          {course.level && (
-            <li className="flex items-center gap-2">
-              <GraduationCap className="size-4" /> {LEVEL_LABEL[course.level]} level
-            </li>
-          )}
-        </ul>
-      )}
+      {action}
 
-      {isStudentView && course.enrolled && enrollment && canCancel && (
+      <PermissionGate permissions={["DEPARTMENT_READ", "DEPARTMENT_UPDATE"]} requireAll>
+        <DepartmentEnrollmentControl courseId={course.id} />
+      </PermissionGate>
+
+      <ul className="space-y-2 border-t pt-4 text-sm text-muted-foreground">
+        <li className="flex items-center gap-2">
+          <BookOpen className="size-4" /> {course.lessonCount} lessons
+        </li>
+        <li className="flex items-center gap-2">
+          <Clock className="size-4" /> {formatTotalDuration(course.totalDuration)} of content
+        </li>
+        {course.level && (
+          <li className="flex items-center gap-2">
+            <GraduationCap className="size-4" /> {LEVEL_LABEL[course.level]} level
+          </li>
+        )}
+      </ul>
+
+      {course.enrolled && enrollment && canCancel && (
         <div className="space-y-2 border-t pt-4">
           <p
             className={`rounded-lg px-3 py-2 text-xs ${
@@ -646,13 +546,12 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
       }),
     onSuccess: async (result) => {
       toast.success(
-        `${result.newEnrollments} student${result.newEnrollments === 1 ? "" : "s"} assigned to ${result.courseName}.`,
+        `${result.newEnrollments} student${result.newEnrollments === 1 ? "" : "s"} enrolled in ${result.courseName}.`,
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["department-overview"] }),
         queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
         queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
-        queryClient.invalidateQueries({ queryKey: ["course-report"] }),
         queryClient.invalidateQueries({ queryKey: ["course-assigned-departments", courseId] }),
       ]);
       setSessionAssignedIds((ids) => [...ids, result.departmentId]);
@@ -661,7 +560,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
       setSelectedStudents([]);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Department assignment failed.");
+      toast.error(error instanceof Error ? error.message : "Department enrollment failed.");
     },
   });
 
@@ -678,7 +577,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
     onSuccess: async ({ total, failed }) => {
       const succeeded = total - failed;
       if (succeeded > 0) {
-        toast.success(`${succeeded} student${succeeded === 1 ? "" : "s"} assigned to this course.`);
+        toast.success(`${succeeded} student${succeeded === 1 ? "" : "s"} enrolled in this course.`);
       }
       if (failed > 0) {
         toast.error(`${failed} student${failed === 1 ? "" : "s"} could not be enrolled.`);
@@ -687,12 +586,11 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
         queryClient.invalidateQueries({ queryKey: ["department-overview"] }),
         queryClient.invalidateQueries({ queryKey: ["course-catalog"] }),
         queryClient.invalidateQueries({ queryKey: ["course-detail"] }),
-        queryClient.invalidateQueries({ queryKey: ["course-report"] }),
       ]);
       setSelectedStudents([]);
     },
     onError: (error) => {
-      toast.error(error instanceof Error ? error.message : "Student assignment failed.");
+      toast.error(error instanceof Error ? error.message : "Student enrollment failed.");
     },
   });
 
@@ -706,7 +604,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
   return (
     <div className="space-y-2 border-t pt-4">
       <label htmlFor="course-enrollment-target" className="text-sm font-medium">
-        Assign a department or student
+        Enroll a department or student
       </label>
       <Select
         value={targetType}
@@ -795,7 +693,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
             <p role="alert" className="text-xs text-destructive">
               {previewQuery.error instanceof Error
                 ? previewQuery.error.message
-                : "Could not check department assignment."}
+                : "Could not check department enrollment."}
             </p>
           )}
           {preview && (
@@ -813,7 +711,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
                 {departmentEnrollMutation.isPending && (
                   <LoaderCircle className="size-4 animate-spin" />
                 )}
-                Assign department
+                Enroll department
               </Button>
             </>
           )}
@@ -898,7 +796,7 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
                   {studentEnrollMutation.isPending && (
                     <LoaderCircle className="size-4 animate-spin" />
                   )}
-                  Assign {selectedStudents.length} student{selectedStudents.length === 1 ? "" : "s"}
+                  Enroll {selectedStudents.length} student{selectedStudents.length === 1 ? "" : "s"}
                 </Button>
               )}
             </>
