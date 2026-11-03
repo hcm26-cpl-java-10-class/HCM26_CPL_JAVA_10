@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { CatalogCourse } from "@/types";
-import { CheckCircle2, Clock, GraduationCap, PlayCircle, BookOpen } from "lucide-react";
+import { CheckCircle2, Clock, GraduationCap, PlayCircle, BookOpen, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CourseEnrollmentAssignmentDialog } from "./CourseEnrollmentAssignmentDialog";
 import { LEVEL_BADGE_CLASS, LEVEL_LABEL, formatTotalDuration } from "../utils/course.utils.ts";
@@ -16,6 +16,8 @@ interface CourseCardProps {
   onEnroll: (courseId: number) => void;
   disableNavigation?: boolean;
   onSelect?: (course: CatalogCourse) => void;
+  /** Đường dẫn tới trang chi tiết (mặc định /courses/:id). */
+  detailPath?: string;
 }
 
 export function CourseCard({
@@ -27,8 +29,9 @@ export function CourseCard({
   onEnroll,
   disableNavigation = false,
   onSelect,
+  detailPath: detailPathProp,
 }: CourseCardProps) {
-  const detailPath = `/courses/${course.id}`;
+  const detailPath = detailPathProp ?? `/courses/${course.id}`;
 
   const handleSelect = () => {
     if (disableNavigation && onSelect) {
@@ -138,6 +141,11 @@ export function CourseCard({
         </div>
 
         <div className="mt-auto flex gap-2 pt-2">
+          <Button asChild variant="outline" className="flex-1">
+            <Link to={detailPath} aria-label={`View detail of ${course.name}`}>
+              <Eye className="size-4" /> View detail
+            </Link>
+          </Button>
           {course.enrolled && enrollmentId !== undefined ? (
             <Button asChild className="flex-1">
               <Link to={`/enrollments/${enrollmentId}/learn`}>
@@ -145,13 +153,11 @@ export function CourseCard({
               </Link>
             </Button>
           ) : (
-            <>
-              {!course.enrolled && canEnroll && (
-                <Button className="flex-1" disabled={isEnrolling} onClick={() => onEnroll(course.id)}>
-                  {isEnrolling ? "Enrolling..." : "Enroll"}
-                </Button>
-              )}
-            </>
+            !course.enrolled && canEnroll && (
+              <Button className="flex-1" disabled={isEnrolling} onClick={() => onEnroll(course.id)}>
+                {isEnrolling ? "Enrolling..." : "Enroll"}
+              </Button>
+            )
           )}
         </div>
         {canAssign && (

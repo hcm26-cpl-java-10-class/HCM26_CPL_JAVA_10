@@ -6,7 +6,14 @@ import type {
     Enrollment,
 } from "@/types";
 import type { DepartmentMemberPage } from "@/types";
-import type { AuditLogRow, AuditLogParams, PageResponse } from "@/types";
+import type {
+    AuditFilterOptions,
+    AuditLogParams,
+    AuditLogRow,
+    AuditSummary,
+    DepartmentLogStudent,
+    PageResponse,
+} from "@/types";
 
 interface DepartmentEnrollmentRequest {
     departmentId: number;
@@ -136,6 +143,29 @@ export const enrollmentApi = {
 
     getAuditLogs: async (params: AuditLogParams): Promise<PageResponse<AuditLogRow>> => {
         const response = await axiosInstance.get("/audit/enrollments", { params });
+        return response.data;
+    },
+
+    getAuditSummary: async (params: AuditLogParams): Promise<AuditSummary> => {
+        const response = await axiosInstance.get<AuditSummary>("/audit/enrollments/summary", { params });
+        return response.data;
+    },
+
+    getAuditFilterOptions: async (): Promise<AuditFilterOptions> => {
+        const response = await axiosInstance.get<AuditFilterOptions>("/audit/enrollments/filter-options");
+        return response.data;
+    },
+
+    /** Học viên của một lần assign department -> course (tìm kiếm + phân trang). */
+    getDepartmentLogStudents: async (
+        departmentId: number,
+        courseId: number,
+        params: { search?: string; page?: number; size?: number },
+    ): Promise<PageResponse<DepartmentLogStudent>> => {
+        const response = await axiosInstance.get(
+            `/audit/enrollments/departments/${departmentId}/courses/${courseId}/students`,
+            { params },
+        );
         return response.data;
     },
 };

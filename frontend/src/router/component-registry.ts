@@ -46,6 +46,7 @@ import LessonReportsPage from "@/pages/management/demo/lesson-reports";
 import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
 import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
 import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage.tsx";
+import { CourseDetailPage } from "@/pages/management/demo/course/pages/CourseDetailPage";
 
 export interface RouteConfig {
   path: string;
@@ -334,6 +335,13 @@ export const routes: RouteConfig[] = [
     component: CourseReportPage,
     requiredPermission: "COURSE_REPORT_READ",
     isModuleDriven: true,
+  },
+
+  // Chi tiết khóa học mở từ trang Enrollments (giữ nguyên menu/breadcrumb Enrollments)
+  {
+    path: "/course-enrollments/:id",
+    component: CourseDetailPage,
+    requiredPermission: "COURSE_READ",
   },
 
   // Q&A

@@ -50,8 +50,12 @@ export interface AuditLogRow {
     actorEmail?: string;
     targetName?: string;
     targetType?: string;
+    courseId?: number | null;
     courseName?: string;
+    departmentId?: number | null;
     departmentName?: string;
+    /** Số học viên được assign (log DEPARTMENT); 1 với log ENROLLMENT. */
+    studentCount?: number;
     detail?: string;
     status?: string;
     source?: string;
@@ -65,8 +69,36 @@ export interface AuditLogParams {
     search?: string;
     status?: string;
     source?: string;
+    departmentId?: number;
+    courseId?: number;
     fromDate?: string;
     toDate?: string;
-    page: number;
-    size: number;
+    page?: number;
+    size?: number;
+}
+
+export interface AuditSummary {
+    totalRecords: number;
+    totalDepartments: number;
+    totalStudents: number;
+    totalCourses: number;
+}
+
+export interface AuditFilterOption {
+    id: number;
+    name: string;
+}
+
+export interface AuditFilterOptions {
+    departments: AuditFilterOption[];
+    courses: AuditFilterOption[];
+}
+
+export interface DepartmentLogStudent {
+    studentId: number;
+    fullName: string;
+    email?: string;
+    status: string;
+    progressPercentage: number;
+    enrolledAt?: string;
 }

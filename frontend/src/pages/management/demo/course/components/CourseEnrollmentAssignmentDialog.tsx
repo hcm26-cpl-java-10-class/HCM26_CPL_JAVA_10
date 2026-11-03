@@ -144,7 +144,7 @@ export function CourseEnrollmentAssignmentDialog({
     mutationFn: () => enrollmentApi.enrollDepartments(batchRequest),
     onSuccess: async (result) => {
       toast.success(
-        `${result.totalNewEnrollments} student${result.totalNewEnrollments === 1 ? "" : "s"} enrolled in ${result.courseName}.`,
+        `${result.totalNewEnrollments} student${result.totalNewEnrollments === 1 ? "" : "s"} assigned to ${result.courseName}.`,
       );
       setBatchResult(result);
       await Promise.all([
@@ -171,7 +171,7 @@ export function CourseEnrollmentAssignmentDialog({
     onSuccess: async ({ total, failed }) => {
       const succeeded = total - failed;
       if (succeeded > 0) {
-        toast.success(`${succeeded} student${succeeded === 1 ? "" : "s"} enrolled in this course.`);
+        toast.success(`${succeeded} student${succeeded === 1 ? "" : "s"} assigned to this course.`);
       }
       if (failed > 0) {
         toast.error(`${failed} student${failed === 1 ? "" : "s"} could not be enrolled.`);
@@ -233,14 +233,14 @@ export function CourseEnrollmentAssignmentDialog({
     >
       <DialogTrigger asChild>
         <Button type="button" variant="outline" className="flex-1">
-          Enroll
+          Assign
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Enroll in {course.name}</DialogTitle>
+          <DialogTitle>Assign students to {course.name}</DialogTitle>
           <DialogDescription>
-            Choose one or more departments to enroll their active students, or choose individual students.
+            Choose one or more departments to assign their active students, or choose individual students.
           </DialogDescription>
         </DialogHeader>
 
@@ -381,14 +381,14 @@ export function CourseEnrollmentAssignmentDialog({
                 {previewQuery.data && selectedDepartmentIds.length > 0 && (
                   <div className="rounded-lg border p-3 text-sm">
                     <p className="font-medium">
-                      {previewQuery.data.totalNewEnrollments} new enrollment
+                      {previewQuery.data.totalNewEnrollments} new assignment
                       {previewQuery.data.totalNewEnrollments === 1 ? "" : "s"} across{" "}
                       {selectedDepartmentIds.length} department
                       {selectedDepartmentIds.length === 1 ? "" : "s"}
                     </p>
                     {previewQuery.data.totalAlreadyEnrolled > 0 && (
                       <p className="mt-1 text-muted-foreground">
-                        {previewQuery.data.totalAlreadyEnrolled} already enrolled (skipped).
+                        {previewQuery.data.totalAlreadyEnrolled} already assigned (skipped).
                       </p>
                     )}
                   </div>
@@ -406,7 +406,7 @@ export function CourseEnrollmentAssignmentDialog({
                   onClick={() => departmentMutation.mutate()}
                 >
                   {departmentMutation.isPending && <LoaderCircle className="size-4 animate-spin" />}
-                  Enroll {selectedDepartmentIds.length > 1 ? "departments" : "department"}
+                  Assign {selectedDepartmentIds.length > 1 ? "departments" : "department"}
                 </Button>
               </div>
             ) : (
@@ -486,7 +486,7 @@ export function CourseEnrollmentAssignmentDialog({
                       onClick={() => studentMutation.mutate()}
                     >
                       {studentMutation.isPending && <LoaderCircle className="size-4 animate-spin" />}
-                      Enroll {selectedStudents.length} student{selectedStudents.length === 1 ? "" : "s"}
+                      Assign {selectedStudents.length} student{selectedStudents.length === 1 ? "" : "s"}
                     </Button>
                   )}
                 </>
@@ -524,7 +524,7 @@ function BatchResultView({
         <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-600" />
         <div>
           <p className="font-medium">
-            {result.totalNewEnrollments} student{result.totalNewEnrollments === 1 ? "" : "s"} enrolled in{" "}
+            {result.totalNewEnrollments} student{result.totalNewEnrollments === 1 ? "" : "s"} assigned to{" "}
             {result.courseName}
           </p>
           {result.totalAlreadyEnrolled > 0 && (
@@ -551,7 +551,7 @@ function BatchResultView({
                   <span className="min-w-0 flex-1 truncate">
                     {memberName(member)} ({member.email})
                   </span>
-                  <Badge className="shrink-0 bg-green-600 text-[10px] text-white">Enrolled</Badge>
+                  <Badge className="shrink-0 bg-green-600 text-[10px] text-white">Assigned</Badge>
                 </li>
               ))}
               {department.alreadyEnrolledMembers.map((member) => (
