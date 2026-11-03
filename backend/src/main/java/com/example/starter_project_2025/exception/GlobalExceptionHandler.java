@@ -157,6 +157,17 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(com.example.starter_project_2025.system.schedule.ScheduleValidationException.class)
+    public ResponseEntity<ErrorResponse> handleScheduleValidation(com.example.starter_project_2025.system.schedule.ScheduleValidationException ex) {
+        log.error("[ScheduleValidation] Issues count: {}, issues: {}", ex.getResult().issues().size(), ex.getResult().issues());
+        String msg = ex.getResult().issues().isEmpty() ? ex.getMessage() : ex.getResult().issues().get(0).message();
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                msg,
+                LocalDateTime.now());
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex) {
         ErrorResponse error = new ErrorResponse(

@@ -55,7 +55,17 @@ public class SessionServiceImpl
         checkPermission(CrudAction.READ);
         conflicts.lockForWrite();
         conflicts.requireValid(requests.stream().map(r -> candidate(null, r)).toList());
-        return requests.stream().map(this::create).toList();
+        return requests.stream().map(r -> {
+            Session entity = sessionMapper.toEntity(r);
+            if (entity.getStatus() == null) {
+                entity.setStatus(Session.SessionStatus.SCHEDULED);
+            }
+            if (entity.getIsActive() == null) {
+                entity.setIsActive(true);
+            }
+            Session saved = sessionRepository.save(entity);
+            return sessionMapper.toDto(saved);
+        }).toList();
     }
 
     @Override

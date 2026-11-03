@@ -614,7 +614,7 @@ export default function TrainingCalendarAdjustDemo({
   function handleExtractActivities(topicId: string, dayId?: string) {
     const topic = topics.find((t) => t.id === topicId);
     if (!topic) return;
-    const defaultTrainer = topic.trainer || "NgaTTT45";
+    const defaultTrainer = topic.trainer || "Nguyễn Ngọc Tân (Trainer)";
 
     if (dayId) {
       const day = topic.days.find((d) => d.id === dayId);
@@ -736,7 +736,7 @@ export default function TrainingCalendarAdjustDemo({
         newActivity(
           nextStart,
           nextEnd,
-          topic.trainer || "NgaTTT45",
+          topic.trainer || "Nguyễn Ngọc Tân (Trainer)",
           "New training activity",
           "Lecture",
           "Offline",
@@ -1077,7 +1077,7 @@ export default function TrainingCalendarAdjustDemo({
           name: `${topic.name}`,
           date: nextDate,
           activities: [
-            newActivity("08:00", "12:00", topic.trainer || "NgaTTT45", topic.name, "Lecture", "Self Learning", "1 (08h00 - 12h00)", "4h"),
+            newActivity("08:00", "12:00", topic.trainer || "Nguyễn Ngọc Tân (Trainer)", topic.name, "Lecture", "Self Learning", "1 (08h00 - 12h00)", "4h"),
             newActivity("13:00", "17:00", "", "Assignment", "Assignment", "Offline", "2 (13h00 - 17h00)", "4h"),
           ],
         },
@@ -1108,7 +1108,7 @@ export default function TrainingCalendarAdjustDemo({
       sessionHours: topicSessionHours,
       startDateStr: nextStartDate,
       startTime: topicDailyStart,
-      trainer: "NgaTTT45",
+      trainer: "Nguyễn Ngọc Tân (Trainer)",
       format: "Self Learning",
       skipWeekends: topicSkipWeekends,
     });
@@ -1119,10 +1119,10 @@ export default function TrainingCalendarAdjustDemo({
         id: uid(),
         code: topicCode.trim(),
         name: topicName.trim(),
-        trainer: "NgaTTT45",
+        trainer: "Nguyễn Ngọc Tân (Trainer)",
         mentor: "",
         prerequisite: prev.length > 0 ? prev[prev.length - 1].id : "",
-        location: "[HCM] [FTOWN-1] Full Time 2026",
+        location: "Phòng Lab 201 (F-Town 2)",
         defaultSection: "Section 1",
         slot: "1",
         durationHours: topicTotalHours,
@@ -1175,7 +1175,7 @@ export default function TrainingCalendarAdjustDemo({
         sessionHours: topicSessionHours,
         startDateStr: curStartDate,
         startTime,
-        trainer: "NgaTTT45",
+        trainer: "Nguyễn Ngọc Tân (Trainer)",
         format: "Self Learning",
         skipWeekends: true,
       });
@@ -1193,10 +1193,10 @@ export default function TrainingCalendarAdjustDemo({
         id: `topic-${preset.code.toLowerCase()}`,
         code: preset.code,
         name: preset.name,
-        trainer: "NgaTTT45",
+        trainer: "Nguyễn Ngọc Tân (Trainer)",
         mentor: "",
         prerequisite: index > 0 ? `topic-${sourceList[index - 1].code.toLowerCase()}` : "",
-        location: "[HCM] [FTOWN-1] Full Time 2026",
+        location: "Phòng Lab 201 (F-Town 2)",
         defaultSection: "Section 1",
         slot: "1",
         durationHours: topicHours,
@@ -1409,29 +1409,33 @@ export default function TrainingCalendarAdjustDemo({
             (t.name && topic.trainer && t.name.toLowerCase().includes(topic.trainer.toLowerCase())) ||
             (topic.trainer && topic.trainer.toLowerCase().includes((t.name || "").toLowerCase()))
         );
-        const resolvedTrainerId = matchedTr?.id || 1;
+        const resolvedTrainerId = matchedTr?.id || realTrainers[0]?.id || 1;
+
+        const defaultRoom = realRooms[0] || { id: 1, name: "Phòng Lab 201 (F-Town 2)" };
+        const matchedRoom = realRooms.find(
+          (r) =>
+            r.name.toLowerCase() === (topic.location || "").toLowerCase() ||
+            (topic.location && r.name.toLowerCase().includes(topic.location.toLowerCase())) ||
+            (topic.location && topic.location.toLowerCase().includes(r.name.toLowerCase()))
+        ) || defaultRoom;
 
         topic.days.forEach((day) => {
           day.activities.forEach((act) => {
             const isOnline = act.format === "Online" || (topic.location && topic.location.toLowerCase().includes("online"));
-            const roomName = isOnline
-              ? "Online MS Teams"
-              : topic.location || "Phòng Lab 201 (F-Town 2)";
-            const roomId = isOnline
-              ? undefined
-              : (roomName.includes("304") ? 2 : (roomName.includes("405") ? 3 : 1));
+            const finalRoomId = isOnline ? 5 : matchedRoom.id;
+            const finalRoomName = isOnline ? "Online MS Teams" : matchedRoom.name;
             const meetingUrl = isOnline ? "https://teams.microsoft.com/meet/local-java-01" : undefined;
 
             allSessionPayloads.push({
               classId: parsedClassId,
               topicId: Number(resolvedTopicId),
               trainerId: Number(resolvedTrainerId),
-              roomId: roomId,
+              roomId: finalRoomId,
               meetingUrl: meetingUrl,
               title: `[${topic.code || "TOPIC"}] ${act.name || topic.name}`.slice(0, 150),
               startTime: `${day.date}T${act.start}:00`,
               endTime: `${day.date}T${act.end}:00`,
-              location: roomName,
+              location: finalRoomName,
               status: "SCHEDULED",
               isActive: true,
               note: `PIC: ${act.pic || topic.trainer || "Trainer"} · ${act.contribution || "Lecture"}`,
@@ -1477,7 +1481,9 @@ export default function TrainingCalendarAdjustDemo({
       }
     } catch (err: any) {
       console.error("Save error:", err);
-      toast.error(err?.response?.data?.message || "Failed to save calendar updates.");
+      const serverMsg = err?.response?.data?.message || err?.message || "Failed to save calendar updates.";
+      setError(`Lỗi lưu lịch: ${serverMsg}`);
+      toast.error(`Lỗi lưu lịch: ${serverMsg}`);
     } finally {
       setIsSaving(false);
     }
@@ -1843,7 +1849,7 @@ export default function TrainingCalendarAdjustDemo({
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-semibold text-gray-700">Trainers:</label>
                   <select
-                    value={topic.trainer || "NgaTTT45"}
+                    value={topic.trainer || "Nguyễn Ngọc Tân (Trainer)"}
                     disabled={isReadOnly}
                     onChange={(e) => changeTopic(topic.id, { trainer: e.target.value })}
                     className="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
