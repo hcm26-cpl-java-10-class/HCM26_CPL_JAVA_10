@@ -4,6 +4,7 @@ import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.demo.course.Course;
+import com.example.starter_project_2025.system.demo.department.Department;
 import com.example.starter_project_2025.system.rbac.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -46,6 +47,11 @@ public class CourseEnrollment extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "course_id", nullable = false)
     Course course;
+
+    /** Department được dùng để assign khóa học này (null nếu enroll lẻ từng học viên). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    Department department;
 
     @Column(name = "last_lesson_id")
     Long lastLessonId;

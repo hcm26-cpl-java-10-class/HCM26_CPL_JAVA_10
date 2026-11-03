@@ -12,10 +12,11 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { AuditLogRow, PageResponse } from "@/types";
+import type { AuditFilterOptions, AuditLogRow, AuditSummary, PageResponse } from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import {
     Activity,
+    BookOpen,
     Building2,
     Calendar,
     ChevronLeft,
@@ -25,12 +26,13 @@ import {
     GraduationCap,
     RotateCcw,
     Search,
-    ShieldAlert,
     User,
+    Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
+import { DepartmentLogDetailSheet } from "./DepartmentLogDetailSheet";
 
 const getStatusBadge = (status?: string | null) => {
     switch (status?.toUpperCase()) {
@@ -60,25 +62,44 @@ export default function EnrollmentLogPage() {
     const [search, setSearch] = useState("");
     const [status, setStatus] = useState("ALL");
     const [source, setSource] = useState("ALL");
+    const [departmentId, setDepartmentId] = useState("ALL");
+    const [courseId, setCourseId] = useState("ALL");
     const [fromDate, setFromDate] = useState("");
     const [toDate, setToDate] = useState("");
     const [page, setPage] = useState(0);
     const [pageSize, setPageSize] = useState(20);
     const [selected, setSelected] = useState<AuditLogRow | null>(null);
 
+    const isDepartmentTab = activeTab === "DEPARTMENT";
+
+    const filterParams = useMemo(
+        () => ({
+            type: activeTab,
+            search: search || undefined,
+            status: status === "ALL" ? undefined : status,
+            source: !isDepartmentTab && source !== "ALL" ? source : undefined,
+            departmentId: isDepartmentTab && departmentId !== "ALL" ? Number(departmentId) : undefined,
+            courseId: courseId === "ALL" ? undefined : Number(courseId),
+            fromDate: fromDate || undefined,
+            toDate: toDate || undefined,
+        }),
+        [activeTab, search, status, source, departmentId, courseId, fromDate, toDate, isDepartmentTab],
+    );
+
     const { data, isLoading, isError } = useQuery<PageResponse<AuditLogRow>>({
-        queryKey: ["audit-logs", { activeTab, search, status, source, fromDate, toDate, page, pageSize }],
-        queryFn: () =>
-            enrollmentApi.getAuditLogs({
-                type: activeTab,
-                search: search || undefined,
-                status: status === "ALL" ? undefined : status,
-                source: source === "ALL" ? undefined : source,
-                fromDate: fromDate || undefined,
-                toDate: toDate || undefined,
-                page,
-                size: pageSize,
-            }),
+        queryKey: ["audit-logs", filterParams, page, pageSize],
+        queryFn: () => enrollmentApi.getAuditLogs({ ...filterParams, page, size: pageSize }),
+    });
+
+    const { data: summary } = useQuery<AuditSummary>({
+        queryKey: ["audit-summary", filterParams],
+        queryFn: () => enrollmentApi.getAuditSummary(filterParams),
+    });
+
+    const { data: filterOptions } = useQuery<AuditFilterOptions>({
+        queryKey: ["audit-filter-options"],
+        queryFn: () => enrollmentApi.getAuditFilterOptions(),
+        staleTime: 60_000,
     });
 
     const rows = data?.content ?? [];
@@ -94,49 +115,92 @@ export default function EnrollmentLogPage() {
         setSearch("");
         setStatus("ALL");
         setSource("ALL");
+        setDepartmentId("ALL");
+        setCourseId("ALL");
         setFromDate("");
         setToDate("");
         setPage(0);
     };
 
-    const isFiltered = Boolean(search || status !== "ALL" || source !== "ALL" || fromDate || toDate);
+    const isFiltered = Boolean(
+        search ||
+        status !== "ALL" ||
+        (!isDepartmentTab && source !== "ALL") ||
+        (isDepartmentTab && departmentId !== "ALL") ||
+        courseId !== "ALL" ||
+        fromDate ||
+        toDate,
+    );
 
-    const summaryCards = useMemo(() => [
+    const colCount = 8;
+
+    const summaryCards = [
         {
-            label: "Total Records",
-            value: totalElements.toLocaleString(),
+            label: isDepartmentTab ? "Department Assignments" : "Enrollment Records",
+            value: (summary?.totalRecords ?? totalElements).toLocaleString(),
             icon: Activity,
             color: "text-blue-500",
         },
         {
-            label: "Current Context",
-            value: activeTab === "ENROLLMENT" ? "Student Enrollments" : "Department Assigns",
-            icon: activeTab === "ENROLLMENT" ? GraduationCap : Building2,
-            color: activeTab === "ENROLLMENT" ? "text-indigo-500" : "text-violet-500",
+            label: "Departments",
+            value: (summary?.totalDepartments ?? 0).toLocaleString(),
+            icon: Building2,
+            color: "text-violet-500",
         },
         {
-            label: "Audit Engine",
-            value: "Active",
-            icon: ShieldAlert,
+            label: "Students",
+            value: (summary?.totalStudents ?? 0).toLocaleString(),
+            icon: Users,
+            color: "text-indigo-500",
+        },
+        {
+            label: "Courses",
+            value: (summary?.totalCourses ?? 0).toLocaleString(),
+            icon: BookOpen,
             color: "text-emerald-500",
         },
-    ], [totalElements, activeTab]);
+    ];
 
     const handleExport = async () => {
-        const result = await enrollmentApi.getAuditLogs({
-            type: activeTab,
-            search: search || undefined,
-            status: status === "ALL" ? undefined : status,
-            source: source === "ALL" ? undefined : source,
-            fromDate: fromDate || undefined,
-            toDate: toDate || undefined,
-            page: 0,
-            size: 10_000,
-        });
+        const result = await enrollmentApi.getAuditLogs({ ...filterParams, page: 0, size: 10_000 });
         const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-        const headers = ["Type", "Actor", "Actor email", "Target", "Course", "Department", "Source", "Status", "Progress", "Cancellation reason", "Timestamp", "Details"];
-        const lines = (result.content ?? []).map((row) => [row.type, row.actorName, row.actorEmail, row.targetName, row.courseName, row.departmentName, row.source, row.status, row.progressPercentage == null ? "" : `${row.progressPercentage}%`, row.cancellationReason, row.createdAt, row.detail].map(csvCell).join(","));
-        const blob = new Blob([[headers.map(csvCell).join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
+        const headers = [
+            "Type",
+            "Actor",
+            "Actor email",
+            "Target",
+            "Course",
+            "Department",
+            "Students",
+            "Source",
+            "Status",
+            "Progress",
+            "Cancellation reason",
+            "Timestamp",
+            "Details",
+        ];
+        const lines = (result.content ?? []).map((row) =>
+            [
+                row.type,
+                row.actorName,
+                row.actorEmail,
+                row.targetName,
+                row.courseName,
+                row.departmentName,
+                row.studentCount,
+                row.source,
+                row.status,
+                row.progressPercentage == null ? "" : `${row.progressPercentage}%`,
+                row.cancellationReason,
+                row.createdAt,
+                row.detail,
+            ]
+                .map(csvCell)
+                .join(","),
+        );
+        const blob = new Blob([[headers.map(csvCell).join(","), ...lines].join("\n")], {
+            type: "text/csv;charset=utf-8",
+        });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -185,7 +249,10 @@ export default function EnrollmentLogPage() {
                         <Tabs
                             value={activeTab}
                             onValueChange={(val) => {
-                                setActiveTab(val as "ENROLLMENT" | "DEPARTMENT");
+                                const nextTab = val as "ENROLLMENT" | "DEPARTMENT";
+                                setActiveTab(nextTab);
+                                setSource("ALL");
+                                setDepartmentId("ALL");
                                 setPage(0);
                             }}
                             className="w-full sm:w-auto"
@@ -207,7 +274,7 @@ export default function EnrollmentLogPage() {
                         )}
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
                         <div className="sm:col-span-2 space-y-1.5">
                             <span className="text-xs font-medium text-muted-foreground">Search</span>
                             <div className="relative">
@@ -215,7 +282,7 @@ export default function EnrollmentLogPage() {
                                 <Input
                                     value={search}
                                     onChange={(e) => handleFilterChange(setSearch, e.target.value)}
-                                    placeholder="Search by target, course, actor..."
+                                    placeholder={isDepartmentTab ? "Search department, course, student..." : "Search student, course, actor..."}
                                     className="h-9 pl-9 text-xs"
                                 />
                             </div>
@@ -237,21 +304,55 @@ export default function EnrollmentLogPage() {
                             </Select>
                         </div>
 
+                        {/* Chỉ hiển thị Department filter ở tab Department Logs */}
+                        {isDepartmentTab && (
+                            <div className="space-y-1.5">
+                                <span className="text-xs font-medium text-muted-foreground">Department</span>
+                                <Select value={departmentId} onValueChange={(val) => handleFilterChange(setDepartmentId, val)}>
+                                    <SelectTrigger className="h-9 text-xs">
+                                        <SelectValue placeholder="All" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ALL">All Departments</SelectItem>
+                                        {(filterOptions?.departments ?? []).map((d) => (
+                                            <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
                         <div className="space-y-1.5">
-                            <span className="text-xs font-medium text-muted-foreground">Source</span>
-                            <Select value={source} onValueChange={(val) => handleFilterChange(setSource, val)}>
+                            <span className="text-xs font-medium text-muted-foreground">Course</span>
+                            <Select value={courseId} onValueChange={(val) => handleFilterChange(setCourseId, val)}>
                                 <SelectTrigger className="h-9 text-xs">
                                     <SelectValue placeholder="All" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="ALL">All Sources</SelectItem>
-                                    <SelectItem value="SELF_ENROLLED">Self Enrolled</SelectItem>
-                                    <SelectItem value="MANUAL">Manual</SelectItem>
-                                    <SelectItem value="BATCH_IMPORT">Batch Import</SelectItem>
-                                    <SelectItem value="API">API System</SelectItem>
+                                    <SelectItem value="ALL">All Courses</SelectItem>
+                                    {(filterOptions?.courses ?? []).map((c) => (
+                                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        {!isDepartmentTab && (
+                            <div className="space-y-1.5">
+                                <span className="text-xs font-medium text-muted-foreground">Source</span>
+                                <Select value={source} onValueChange={(val) => handleFilterChange(setSource, val)}>
+                                    <SelectTrigger className="h-9 text-xs">
+                                        <SelectValue placeholder="All" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ALL">All Sources</SelectItem>
+                                        <SelectItem value="SELF_ENROLLED">Self Enrolled</SelectItem>
+                                        <SelectItem value="MANUAL">Manual</SelectItem>
+                                        <SelectItem value="API">API System</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
 
                         <div className="space-y-1.5">
                             <span className="text-xs font-medium text-muted-foreground">From Date</span>
@@ -277,15 +378,19 @@ export default function EnrollmentLogPage() {
 
                 {/* Table */}
                 <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
+                    <div className="max-h-[calc(100vh-20rem)] min-h-60 overflow-auto">
                         <table className="min-w-full text-left text-sm">
-                            <thead className="bg-muted/50 border-b text-xs uppercase tracking-wider text-muted-foreground">
+                            <thead className="sticky top-0 z-10 border-b bg-muted text-xs uppercase tracking-wider text-muted-foreground shadow-[0_1px_0_0_var(--border)]">
                             <tr>
                                 <th className="px-4 py-3 font-semibold">Type</th>
                                 <th className="px-4 py-3 font-semibold">Actor</th>
-                                <th className="px-4 py-3 font-semibold">Target</th>
-                                <th className="px-4 py-3 font-semibold">Course / Dept</th>
-                                <th className="px-4 py-3 font-semibold">Source</th>
+                                <th className="px-4 py-3 font-semibold">{isDepartmentTab ? "Department" : "Student"}</th>
+                                <th className="px-4 py-3 font-semibold">Course</th>
+                                {isDepartmentTab ? (
+                                    <th className="px-4 py-3 text-right font-semibold">Students</th>
+                                ) : (
+                                    <th className="px-4 py-3 font-semibold">Source</th>
+                                )}
                                 <th className="px-4 py-3 font-semibold">Timestamp</th>
                                 <th className="px-4 py-3 font-semibold">Status</th>
                                 <th className="px-4 py-3 text-right font-semibold">Action</th>
@@ -295,7 +400,7 @@ export default function EnrollmentLogPage() {
                             <tbody className="divide-y divide-border/60">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                                    <td colSpan={colCount} className="px-4 py-12 text-center text-muted-foreground">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                                             <span>Loading logs...</span>
@@ -304,13 +409,13 @@ export default function EnrollmentLogPage() {
                                 </tr>
                             ) : isError ? (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-12 text-center text-destructive">
+                                    <td colSpan={colCount} className="px-4 py-12 text-center text-destructive">
                                         Failed to fetch logs.
                                     </td>
                                 </tr>
                             ) : rows.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                                    <td colSpan={colCount} className="px-4 py-12 text-center text-muted-foreground">
                                         No logs match current query.
                                     </td>
                                 </tr>
@@ -340,18 +445,28 @@ export default function EnrollmentLogPage() {
                                         </td>
 
                                         <td className="px-4 py-3 align-middle">
-                                            <div className="font-medium text-foreground">{row.targetName ?? "-"}</div>
+                                            <div className="font-medium text-foreground">
+                                                {isDepartmentTab ? row.departmentName ?? "-" : row.targetName ?? "-"}
+                                            </div>
                                             <div className="text-xs text-muted-foreground">{row.targetType ?? "-"}</div>
                                         </td>
 
-                                        <td className="px-4 py-3 align-middle">
-                                            <div className="font-medium text-foreground">{row.courseName ?? "-"}</div>
-                                            <div className="text-xs text-muted-foreground">{row.departmentName ?? "-"}</div>
+                                        <td className="px-4 py-3 align-middle font-medium text-foreground">
+                                            {row.courseName ?? "-"}
                                         </td>
 
-                                        <td className="px-4 py-3 align-middle text-xs font-mono text-muted-foreground">
-                                            {row.source ?? "-"}
-                                        </td>
+                                        {isDepartmentTab ? (
+                                            <td className="px-4 py-3 text-right align-middle">
+                                                <span className="inline-flex items-center gap-1.5 font-semibold text-foreground">
+                                                    <Users className="size-3.5 text-muted-foreground" />
+                                                    {(row.studentCount ?? 0).toLocaleString()}
+                                                </span>
+                                            </td>
+                                        ) : (
+                                            <td className="px-4 py-3 align-middle text-xs font-mono text-muted-foreground">
+                                                {row.source ?? "-"}
+                                            </td>
+                                        )}
 
                                         <td className="px-4 py-3 align-middle whitespace-nowrap text-xs text-muted-foreground">
                                             {formatDate(row.createdAt)}
@@ -438,8 +553,16 @@ export default function EnrollmentLogPage() {
                 </div>
             </div>
 
-            {/* Modal Chi tiáº¿t */}
-            <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+            {/* Detail: department assignment */}
+            <DepartmentLogDetailSheet
+                row={selected?.type === "DEPARTMENT" ? selected : null}
+                onClose={() => setSelected(null)}
+                formatDate={formatDate}
+                statusClass={getStatusBadge}
+            />
+
+            {/* Detail: student enrollment */}
+            <Sheet open={!!selected && selected.type !== "DEPARTMENT"} onOpenChange={(open) => !open && setSelected(null)}>
                 <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-6">
                     <SheetHeader className="border-b pb-4">
                         <SheetTitle className="text-xl font-bold flex items-center justify-between">
@@ -476,20 +599,16 @@ export default function EnrollmentLogPage() {
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 text-xs">
                                     <div>
-                                        <span className="text-muted-foreground">Target Name:</span>
+                                        <span className="text-muted-foreground">Student Name:</span>
                                         <p className="mt-0.5 font-medium text-foreground">{selected.targetName ?? "-"}</p>
                                     </div>
                                     <div>
                                         <span className="text-muted-foreground">Type:</span>
                                         <p className="mt-0.5 font-medium text-foreground">{selected.targetType ?? "-"}</p>
                                     </div>
-                                    <div>
+                                    <div className="col-span-2">
                                         <span className="text-muted-foreground">Course:</span>
                                         <p className="mt-0.5 font-medium text-foreground">{selected.courseName ?? "-"}</p>
-                                    </div>
-                                    <div>
-                                        <span className="text-muted-foreground">Department:</span>
-                                        <p className="mt-0.5 font-medium text-foreground">{selected.departmentName ?? "-"}</p>
                                     </div>
                                 </div>
                             </div>
