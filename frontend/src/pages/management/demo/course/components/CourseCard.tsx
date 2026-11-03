@@ -13,6 +13,8 @@ interface CourseCardProps {
   canEnroll: boolean;
   isEnrolling: boolean;
   canAssign: boolean;
+  showEnrollmentAction?: boolean;
+  showDetailAction?: boolean;
   onEnroll: (courseId: number) => void;
   disableNavigation?: boolean;
   onSelect?: (course: CatalogCourse) => void;
@@ -26,6 +28,8 @@ export function CourseCard({
   canEnroll,
   isEnrolling,
   canAssign,
+  showEnrollmentAction = true,
+  showDetailAction = false,
   onEnroll,
   disableNavigation = false,
   onSelect,
