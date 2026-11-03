@@ -1,7 +1,6 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
 
-/** Khớp class Department trong class diagram (cây cha/con). */
-export interface DepartmentDTO extends BaseDTO {
+export interface Department extends BaseDTO {
   code?: string;
   name?: string;
   description?: string;
@@ -10,6 +9,9 @@ export interface DepartmentDTO extends BaseDTO {
   /** Chỉ đọc. */
   parentDepartmentName?: string;
 }
+
+/** Khớp class Department trong class diagram (cây cha/con). */
+export type DepartmentDTO = Department;
 
 export interface DepartmentFilter extends BaseFilter {
   parentDepartmentId?: string | number;

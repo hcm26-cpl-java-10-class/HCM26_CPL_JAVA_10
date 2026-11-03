@@ -11,9 +11,13 @@ import { PermissionGate } from "@/components/PermissionGate";
 interface ToolbarActionsProps {
   table: any;
   headerActions?: React.ReactNode;
+  labels?: {
+    import?: string;
+    export?: string;
+  };
 }
 
-export function ToolbarActions({ table, headerActions }: ToolbarActionsProps) {
+export function ToolbarActions({ table, headerActions, labels }: ToolbarActionsProps) {
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -52,26 +56,28 @@ export function ToolbarActions({ table, headerActions }: ToolbarActionsProps) {
         )}
       </PermissionGate>
 
-      {table.permission?.canImport && (
-        <PermissionGate permission={table.permission?.keys?.import}>
-          <ActionButton
-            onClick={() => setImportOpen(true)}
-            tooltip="Import data"
-            title="Import"
-            variant="secondary"
-            icon={<Upload size={16} />}
-          />
-        </PermissionGate>
-      )}
-
       {table.permission?.canExport && (
         <PermissionGate permission={table.permission?.keys?.export}>
           <ActionButton
             onClick={() => setExportOpen(true)}
-            tooltip="Export data"
-            title="Export"
-            variant="secondary"
+            tooltip={labels?.export ?? "Export data"}
+            title={labels?.export ?? "Export"}
+            variant={labels ? "outline" : "secondary"}
             icon={<Download size={16} />}
+            className={labels ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-50" : undefined}
+          />
+        </PermissionGate>
+      )}
+
+      {table.permission?.canImport && (
+        <PermissionGate permission={table.permission?.keys?.import}>
+          <ActionButton
+            onClick={() => setImportOpen(true)}
+            tooltip={labels?.import ?? "Import data"}
+            title={labels?.import ?? "Import"}
+            variant={labels ? "outline" : "secondary"}
+            icon={<Upload size={16} />}
+            className={labels ? "border-orange-300 bg-white text-orange-700 hover:bg-orange-50" : undefined}
           />
         </PermissionGate>
       )}
