@@ -335,7 +335,7 @@ export default function DepartmentManagementPage() {
                                                 disabled={department.stats.members === 0 || department.isActive === false}
                                                 onClick={() => setEnrollDepartment(department)}
                                             >
-                                                Enroll Course
+                                                Assign Course
                                             </Button>
                                         </PermissionGate>
                                     </div>

@@ -76,13 +76,13 @@ export function DepartmentEnrollmentDialog({
             }),
         onSuccess: async (result) => {
             toast.success(
-                `${result.newEnrollments} student${result.newEnrollments === 1 ? "" : "s"} enrolled in ${result.courseName}.`,
+                `${result.newEnrollments} student${result.newEnrollments === 1 ? "" : "s"} assigned to ${result.courseName}.`,
             );
             await queryClient.invalidateQueries({ queryKey: ["department-overview"] });
             onOpenChange(false);
         },
         onError: (error) => {
-            toast.error(error instanceof Error ? error.message : "Department enrollment failed.");
+            toast.error(error instanceof Error ? error.message : "Department assignment failed.");
         },
     });
 
@@ -92,9 +92,9 @@ export function DepartmentEnrollmentDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Create department enrollment</DialogTitle>
+                    <DialogTitle>Create department assignment</DialogTitle>
                     <DialogDescription>
-                        Enroll every active student in {department.name} in the selected published course.
+                        Assign every active student in {department.name} to the selected published course.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -253,7 +253,7 @@ export function DepartmentEnrollmentDialog({
                             onClick={() => enrollMutation.mutate()}
                         >
                             {enrollMutation.isPending && <LoaderCircle className="size-4 animate-spin" />}
-                            Enroll department
+                            Assign department
                         </Button>
                     </div>
                 </div>
