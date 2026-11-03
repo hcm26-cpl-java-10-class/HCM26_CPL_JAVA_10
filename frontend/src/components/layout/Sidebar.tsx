@@ -11,12 +11,17 @@ import { authApi } from "@/api/features/auth.api";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
 
+/** Sidebar order of the entries that make up the "Class" section. */
+const CLASS_SECTION_URLS = ["/classes"];
+
 function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
-    const schedules = items.filter((item) => item.url === "/sessions")
-        .map((item) => ({ ...item, title: "Class List" }));
-    const remaining = items.filter((item) => item.url !== "/sessions");
+    const withoutSessions = items.filter(
+        (item) => item.url !== "/sessions" && item.title.toLowerCase() !== "sessions"
+    );
+    const classItems = CLASS_SECTION_URLS.flatMap((url) => withoutSessions.filter((item) => item.url === url));
+    const remaining = withoutSessions.filter((item) => !CLASS_SECTION_URLS.includes(item.url));
     const sections = [
-        { title: "Class", url: "", icon: iconMap["graduation-cap"], children: schedules },
+        { title: "Class", url: "", icon: iconMap["graduation-cap"], children: classItems },
         { title: "Audit", url: "/training/audit", icon: iconMap["clipboard-check"] },
         { title: "Trainee", url: "/training/trainee", icon: iconMap.users },
         { title: "Log Work", url: "/training/log-work", icon: iconMap.briefcase },

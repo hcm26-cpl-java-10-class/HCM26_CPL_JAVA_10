@@ -19,6 +19,9 @@ import TraineePage from "@/pages/management/training/trainee";
 import LogWorkPage from "@/pages/management/training/log-work";
 import ContentPage from "@/pages/management/training/content";
 import ReportsPage from "@/pages/management/training/reports";
+import ClassListPage from "@/pages/management/training/class/ClassListPage";
+import ClassDetailPage from "@/pages/management/training/class/ClassDetailPage";
+import SessionDetailPage from "@/pages/management/demo/session/SessionDetailPage";
 
 
 export interface RouteConfig {
@@ -35,6 +38,10 @@ export const routes: RouteConfig[] = [
   { path: "/training/log-work", component: LogWorkPage },
   { path: "/training/content", component: ContentPage },
   { path: "/training/reports", component: ReportsPage },
+  // Class List is a sidebar module (registered by the backend as /classes); the detail pages are reached from it
+  { path: "/classes", component: ClassListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/classes/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/sessions/:sessionId", component: SessionDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   {

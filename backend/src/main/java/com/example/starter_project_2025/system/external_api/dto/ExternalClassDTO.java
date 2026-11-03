@@ -21,4 +21,23 @@ public class ExternalClassDTO {
     String endDate;
     String status;
     Integer plannedSize;
+
+    String site;
+    String traineeType;
+    String program;
+    String trainingProgram;
+    String classAdmin;
+    Integer enrolledTrainees;
+    String masterTrainer;
+    String deliveryType;
+    String formatType;
+    String skills;
+    String location;
+    String subjectType;
+    String plannedRevenue;
+    String scope;
+    String supplierPartner;
+    String keyProgram;
+    String globalSe;
+    String jobRecommendation;
 }

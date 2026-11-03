@@ -18,6 +18,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -69,6 +70,57 @@ public class ExternalApiServiceImpl implements ExternalApiService {
     }
 
     @Override
+    public ExternalClassDTO createClass(ExternalClassDTO dto) {
+        log.info("Creating class in external API: {}", dto.getCode());
+
+        String url = UriComponentsBuilder
+                .fromHttpUrl(baseUrl)
+                .path("/api/classes")
+                .toUriString();
+
+        return executePost(url, dto, ExternalClassDTO.class, "class");
+    }
+
+    @Override
+    public ExternalClassDTO updateClass(Long id, ExternalClassDTO dto) {
+        log.info("Updating class id={} in external API", id);
+
+        String url = UriComponentsBuilder
+                .fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}")
+                .buildAndExpand(id)
+                .toUriString();
+
+        return executePut(url, dto, ExternalClassDTO.class, "class (id=" + id + ")");
+    }
+
+    @Override
+    public void deleteClass(Long id) {
+        log.info("Deleting class id={} in external API", id);
+
+        String url = UriComponentsBuilder
+                .fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}")
+                .buildAndExpand(id)
+                .toUriString();
+
+        executeDelete(url, "class (id=" + id + ")");
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> batchImportClasses(List<ExternalClassDTO> dtoList) {
+        log.info("Batch importing {} classes to external API", dtoList.size());
+
+        String url = UriComponentsBuilder
+                .fromHttpUrl(baseUrl)
+                .path("/api/classes/batch")
+                .toUriString();
+
+        return executePost(url, dtoList, Map.class, "classes batch");
+    }
+
+    @Override
     public List<ExternalTrainerDTO> fetchTrainers(String status) {
         log.info("Fetching trainers from external API with status={}", status);
 
@@ -98,9 +150,6 @@ public class ExternalApiServiceImpl implements ExternalApiService {
 
     // ======================== PRIVATE HELPERS ========================
 
-    /**
-     * Build HTTP headers with optional Bearer token.
-     */
     private HttpHeaders buildHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -113,90 +162,85 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         return headers;
     }
 
-    /**
-     * Execute a GET request that returns a single object.
-     */
     private <T> T executeGet(String url, Class<T> responseType, String resourceName) {
         try {
             HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
-
-            ResponseEntity<T> response = restTemplate.exchange(
-                    url, HttpMethod.GET, entity, responseType);
+            ResponseEntity<T> response = restTemplate.exchange(url, HttpMethod.GET, entity, responseType);
 
             if (response.getBody() == null) {
-                throw new ExternalApiException(
-                        "External API returned empty body for " + resourceName);
+                throw new ExternalApiException("External API returned empty body for " + resourceName);
             }
-
-            log.debug("Successfully fetched {} from external API", resourceName);
             return response.getBody();
-
         } catch (HttpClientErrorException e) {
-            log.error("Client error fetching {} from external API: {} - {}",
-                    resourceName, e.getStatusCode(), e.getResponseBodyAsString());
             throw new ExternalApiException(
-                    "External API client error for " + resourceName + ": " + e.getStatusCode(),
+                    e.getResponseBodyAsString().contains("message") ? e.getResponseBodyAsString() : "External API error: " + e.getStatusCode(),
                     e.getStatusCode().value(),
                     e.getResponseBodyAsString());
-
-        } catch (HttpServerErrorException e) {
-            log.error("Server error fetching {} from external API: {} - {}",
-                    resourceName, e.getStatusCode(), e.getResponseBodyAsString());
-            throw new ExternalApiException(
-                    "External API server error for " + resourceName + ": " + e.getStatusCode(),
-                    e.getStatusCode().value(),
-                    e.getResponseBodyAsString());
-
-        } catch (ResourceAccessException e) {
-            log.error("Timeout/connection error fetching {} from external API: {}",
-                    resourceName, e.getMessage());
-            throw new ExternalApiException(
-                    "External API is unreachable for " + resourceName + ": " + e.getMessage(), e);
+        } catch (Exception e) {
+            throw new ExternalApiException("External API error: " + e.getMessage(), e);
         }
     }
 
-    /**
-     * Execute a GET request that returns a list of objects.
-     */
+    private <T, R> R executePost(String url, T body, Class<R> responseType, String resourceName) {
+        try {
+            HttpEntity<T> entity = new HttpEntity<>(body, buildHeaders());
+            ResponseEntity<R> response = restTemplate.exchange(url, HttpMethod.POST, entity, responseType);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            throw new ExternalApiException(
+                    e.getResponseBodyAsString(),
+                    e.getStatusCode().value(),
+                    e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new ExternalApiException("External API error: " + e.getMessage(), e);
+        }
+    }
+
+    private <T, R> R executePut(String url, T body, Class<R> responseType, String resourceName) {
+        try {
+            HttpEntity<T> entity = new HttpEntity<>(body, buildHeaders());
+            ResponseEntity<R> response = restTemplate.exchange(url, HttpMethod.PUT, entity, responseType);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            throw new ExternalApiException(
+                    e.getResponseBodyAsString(),
+                    e.getStatusCode().value(),
+                    e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new ExternalApiException("External API error: " + e.getMessage(), e);
+        }
+    }
+
+    private void executeDelete(String url, String resourceName) {
+        try {
+            HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
+            restTemplate.exchange(url, HttpMethod.DELETE, entity, Void.class);
+        } catch (HttpClientErrorException e) {
+            throw new ExternalApiException(
+                    e.getResponseBodyAsString(),
+                    e.getStatusCode().value(),
+                    e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new ExternalApiException("External API error: " + e.getMessage(), e);
+        }
+    }
+
     private <T> List<T> executeGetList(String url,
                                        ParameterizedTypeReference<List<T>> typeRef,
                                        String resourceName) {
         try {
             HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
-
-            ResponseEntity<List<T>> response = restTemplate.exchange(
-                    url, HttpMethod.GET, entity, typeRef);
+            ResponseEntity<List<T>> response = restTemplate.exchange(url, HttpMethod.GET, entity, typeRef);
 
             List<T> body = response.getBody();
-            if (body == null) {
-                log.warn("External API returned null body for {}, returning empty list", resourceName);
-                return List.of();
-            }
-
-            log.info("Successfully fetched {} {} from external API", body.size(), resourceName);
-            return body;
-
+            return body != null ? body : List.of();
         } catch (HttpClientErrorException e) {
-            log.error("Client error fetching {} from external API: {} - {}",
-                    resourceName, e.getStatusCode(), e.getResponseBodyAsString());
             throw new ExternalApiException(
                     "External API client error for " + resourceName + ": " + e.getStatusCode(),
                     e.getStatusCode().value(),
                     e.getResponseBodyAsString());
-
-        } catch (HttpServerErrorException e) {
-            log.error("Server error fetching {} from external API: {} - {}",
-                    resourceName, e.getStatusCode(), e.getResponseBodyAsString());
-            throw new ExternalApiException(
-                    "External API server error for " + resourceName + ": " + e.getStatusCode(),
-                    e.getStatusCode().value(),
-                    e.getResponseBodyAsString());
-
-        } catch (ResourceAccessException e) {
-            log.error("Timeout/connection error fetching {} from external API: {}",
-                    resourceName, e.getMessage());
-            throw new ExternalApiException(
-                    "External API is unreachable for " + resourceName + ": " + e.getMessage(), e);
+        } catch (Exception e) {
+            throw new ExternalApiException("External API is unreachable for " + resourceName + ": " + e.getMessage(), e);
         }
     }
 }
