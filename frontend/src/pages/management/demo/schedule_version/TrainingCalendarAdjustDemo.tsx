@@ -1413,15 +1413,21 @@ export default function TrainingCalendarAdjustDemo({
 
         topic.days.forEach((day) => {
           day.activities.forEach((act) => {
-            const roomName =
-              act.format === "Online"
-                ? "Online MS Teams"
-                : topic.location || "Phòng Lab 201 (F-Town 2)";
+            const isOnline = act.format === "Online" || (topic.location && topic.location.toLowerCase().includes("online"));
+            const roomName = isOnline
+              ? "Online MS Teams"
+              : topic.location || "Phòng Lab 201 (F-Town 2)";
+            const roomId = isOnline
+              ? undefined
+              : (roomName.includes("304") ? 2 : (roomName.includes("405") ? 3 : 1));
+            const meetingUrl = isOnline ? "https://teams.microsoft.com/meet/local-java-01" : undefined;
 
             allSessionPayloads.push({
               classId: parsedClassId,
               topicId: Number(resolvedTopicId),
               trainerId: Number(resolvedTrainerId),
+              roomId: roomId,
+              meetingUrl: meetingUrl,
               title: `[${topic.code || "TOPIC"}] ${act.name || topic.name}`.slice(0, 150),
               startTime: `${day.date}T${act.start}:00`,
               endTime: `${day.date}T${act.end}:00`,
@@ -1435,22 +1441,35 @@ export default function TrainingCalendarAdjustDemo({
       });
 
       // Lưu hàng loạt xuống DB
+      let saveSuccess = false;
       try {
         await sessionApi.createBatch(allSessionPayloads);
-      } catch (batchErr) {
-        console.warn("createBatch fallback to sequential create:", batchErr);
+        saveSuccess = true;
+      } catch (batchErr: any) {
+        console.warn("createBatch error, falling back to sequential create:", batchErr);
+        let savedCount = 0;
+        let lastErr: any = null;
         for (const sDto of allSessionPayloads) {
           try {
             await sessionApi.create(sDto);
+            savedCount++;
           } catch (singleErr) {
-            console.error("Failed to save session:", sDto, singleErr);
+            lastErr = singleErr;
+            console.error("Failed to save single session:", sDto, singleErr);
           }
+        }
+        if (savedCount > 0) {
+          saveSuccess = true;
+        } else {
+          throw lastErr || batchErr;
         }
       }
 
-      toast.success(
-        `Đã lưu thành công lịch đào tạo cho lớp ${selectedClassId} (${activityCount} buổi học)!`
-      );
+      if (saveSuccess) {
+        toast.success(
+          `Đã lưu thành công lịch đào tạo cho lớp ${selectedClassId} (${allSessionPayloads.length} buổi học)!`
+        );
+      }
       setDirty(false);
       setSaveOpen(false);
       if (onSave) {

@@ -98,14 +98,22 @@ public class LocalExternalApiService implements ExternalApiService {
         return managedTrainers.merge(List.of(
                 new ExternalTrainerDTO(1L, "Nguyễn Ngọc Tân (Trainer)", "trainer.an@example.com", "active"),
                 new ExternalTrainerDTO(2L, "Nguyễn Mạnh Hoàng (Trainer)", "trainer.binh@example.com", "active"),
-                new ExternalTrainerDTO(3L, "Trần Văn Bình (Trainer)", "trainer.old@example.com", "inactive")
+                new ExternalTrainerDTO(3L, "Nguyễn Văn Thắng (Trainer)", "trainer.thang@example.com", "active"),
+                new ExternalTrainerDTO(4L, "Nguyễn Tuấn Danh (Trainer)", "trainer.danh@example.com", "active"),
+                new ExternalTrainerDTO(5L, "Huỳnh Tấn Phát (Trainer)", "trainer.phat@example.com", "active")
         ).stream().filter(item -> matchesStatus(status, item.getStatus())).toList(), status);
     }
 
     @Override
     public List<ExternalRoomDTO> fetchRooms() {
-        return List.of(new ExternalRoomDTO(1L, "Phòng Lab 201 (F-Town 2)", 30),
-                new ExternalRoomDTO(2L, "Phòng 304 (Innovation Hall)", 25));
+        return List.of(
+                new ExternalRoomDTO(1L, "Phòng Lab 201 (F-Town 2)", 30),
+                new ExternalRoomDTO(2L, "Phòng 304 (Innovation Hall)", 25),
+                new ExternalRoomDTO(3L, "Phòng Lab 405 (F-Town 1)", 30),
+                new ExternalRoomDTO(4L, "Phòng Online Zoom A", 100),
+                new ExternalRoomDTO(5L, "Online MS Teams", 100),
+                new ExternalRoomDTO(6L, "Room A101", 30)
+        );
     }
 
     private ExternalClassDTO toClass(Long id, ExternalClassRequest request, Long programId, Integer enrolledCount) {

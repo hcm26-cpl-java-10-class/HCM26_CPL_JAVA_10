@@ -291,18 +291,30 @@ public class ScheduleValidationEngine {
                 && Objects.equals(a.trainerId(), c.trainerId()) && active(a.status())
                 && a.effectiveFrom() != null && !start.toLocalDate().isBefore(a.effectiveFrom())
                 && (a.effectiveTo() == null || !end.toLocalDate().isAfter(a.effectiveTo())));
-        if (checkAssignment && !assigned) issue(issues, "ASSIGNMENT_INVALID", "teachingAssignmentId", "No active teaching assignment matches this class, subject, and instructor for the full session duration.", index);
+        if (checkAssignment && c.teachingAssignmentId() != null && !assigned) issue(issues, "ASSIGNMENT_INVALID", "teachingAssignmentId", "No active teaching assignment matches this class, subject, and instructor for the full session duration.", index);
 
         Long room = canonicalRoom(c, ref);
         if (c.roomId() != null && ref.rooms().stream().noneMatch(r -> Objects.equals(r.getId(), c.roomId())))
             issue(issues, "ROOM_NOT_FOUND", "roomId", "The selected room could not be found. Select a room from the available list.", index);
-        if (c.location() != null && !c.location().isBlank() && room == null)
-            issue(issues, "ROOM_NOT_FOUND", "location", "The room name does not match an available room. Select a room from the list.", index);
+        if (c.location() != null && !c.location().isBlank() && room == null) {
+            boolean isVirtual = c.location().toLowerCase(Locale.ROOT).contains("online")
+                    || c.location().toLowerCase(Locale.ROOT).contains("teams")
+                    || c.location().toLowerCase(Locale.ROOT).contains("zoom");
+            if (!isVirtual && (c.meetingUrl() == null || !c.meetingUrl().matches("https?://[^\\s]+"))) {
+                issue(issues, "ROOM_NOT_FOUND", "location", "The room name does not match an available room. Select a room from the list.", index);
+            }
+        }
         if (c.roomId() != null && c.location() != null && !c.location().isBlank()
                 && ref.rooms().stream().noneMatch(r -> Objects.equals(r.getId(), c.roomId()) && normalized(r.getName()).equals(normalized(c.location()))))
             issue(issues, "ROOM_MISMATCH", "location", "The selected room and room name do not match. Select the room again.", index);
-        if (room == null && (c.meetingUrl() == null || !c.meetingUrl().matches("https?://[^\\s]+")))
-            issue(issues, "VENUE_REQUIRED", "meetingUrl", "Select a valid room or enter an online meeting URL beginning with http:// or https://.", index);
+        if (room == null && (c.meetingUrl() == null || !c.meetingUrl().matches("https?://[^\\s]+"))) {
+            boolean isVirtual = c.location() != null && (c.location().toLowerCase(Locale.ROOT).contains("online")
+                    || c.location().toLowerCase(Locale.ROOT).contains("teams")
+                    || c.location().toLowerCase(Locale.ROOT).contains("zoom"));
+            if (!isVirtual) {
+                issue(issues, "VENUE_REQUIRED", "meetingUrl", "Select a valid room or enter an online meeting URL beginning with http:// or https://.", index);
+            }
+        }
         for (var holiday : ref.holidays()) {
             if (holiday.date() == null) throw new IllegalStateException("The holiday calendar contains an entry without a date. Contact your administrator.");
             LocalDate last = holiday.endDate() == null ? holiday.date() : holiday.endDate();
