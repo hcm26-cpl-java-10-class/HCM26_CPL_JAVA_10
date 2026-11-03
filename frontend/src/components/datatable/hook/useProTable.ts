@@ -256,7 +256,7 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
         });
         return res.content;
       },
-      enabled: permission.canRead && !field.relation?.searchable,
+      enabled: permission.canRead,
       staleTime: 5 * 60 * 1000,
     })),
   });

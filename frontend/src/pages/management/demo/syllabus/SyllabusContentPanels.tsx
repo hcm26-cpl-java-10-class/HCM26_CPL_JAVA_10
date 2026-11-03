@@ -75,7 +75,6 @@ export function CloPanel({
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState<SyllabusClo | null>(null);
     const [details, setDetails] = useState("");
-    const [detailsError, setDetailsError] = useState("");
     const [deleting, setDeleting] = useState<SyllabusClo | null>(null);
     const [busy, setBusy] = useState(false);
 
@@ -99,7 +98,6 @@ export function CloPanel({
         if (readOnly) return;
         setEditing(null);
         setDetails("");
-        setDetailsError("");
         setOpen(true);
     }
 
@@ -107,7 +105,6 @@ export function CloPanel({
         if (readOnly) return;
         setEditing(item);
         setDetails(item.details);
-        setDetailsError("");
         setOpen(true);
     }
 
@@ -123,9 +120,7 @@ export function CloPanel({
             value.length > 2000 ||
             !/\p{L}/u.test(value)
         ) {
-            setDetailsError(
-                "CLO Details must contain letters (10-2000 characters)."
-            );
+            toast.error("CLO Details must contain letters (10-2000 characters).");
             return;
         }
 
@@ -136,7 +131,7 @@ export function CloPanel({
         );
 
         if (duplicate) {
-            setDetailsError("This CLO already exists.");
+            toast.error("This CLO already exists.");
             return;
         }
 
@@ -283,7 +278,7 @@ export function CloPanel({
                     if (!busy) setOpen(false);
                 }}
             >
-                <form noValidate onSubmit={(event) => void save(event)} className="space-y-4">
+                <form onSubmit={(event) => void save(event)} className="space-y-4">
                     <div className="space-y-2">
                         <label htmlFor="clo-details" className="text-sm font-medium">
                             CLO Details *
@@ -297,20 +292,11 @@ export function CloPanel({
                             required
                             disabled={busy}
                             placeholder="Describe the expected learning outcome"
-                            aria-invalid={Boolean(detailsError)}
-                            onChange={(event) => {
-                                setDetails(event.target.value);
-                                setDetailsError("");
-                            }}
+                            onChange={(event) => setDetails(event.target.value)}
                         />
 
-                        {detailsError && (
-                            <p role="alert" className="text-xs text-destructive">
-                                {detailsError}
-                            </p>
-                        )}
                         <p className="text-xs text-muted-foreground">
-                            {details.trim().length}/2000 characters ? CLO code is generated automatically.
+                            CLO code is generated automatically.
                         </p>
                     </div>
 
@@ -403,12 +389,10 @@ const materialTypes: SyllabusMaterialType[] = [
 export function MaterialsPanel({
                                    syllabusId,
                                    topicId = null,
-                                   includeShared = false,
                                    readOnly = false,
                                }: {
     syllabusId: number;
     topicId?: number | null;
-    includeShared?: boolean;
     readOnly?: boolean;
 }) {
     const qc = useQueryClient();
@@ -432,7 +416,6 @@ export function MaterialsPanel({
         useState<SyllabusMaterial | null>(null);
 
     const [busy, setBusy] = useState(false);
-    const [urlError, setUrlError] = useState("");
 
     const query = useQuery({
         queryKey: ["syllabus-materials", syllabusId],
@@ -445,8 +428,7 @@ export function MaterialsPanel({
     // Only show materials belonging to this Topic.
     // null means materials shared by the whole Syllabus.
     const visibleMaterials = allMaterials.filter(
-        (item) => (item.topicId ?? null) === scopedTopicId ||
-            (includeShared && item.topicId == null)
+        (item) => (item.topicId ?? null) === scopedTopicId
     );
 
     async function refresh() {
@@ -464,7 +446,6 @@ export function MaterialsPanel({
             ...emptyMaterial,
             topicId: scopedTopicId,
         });
-        setUrlError("");
         setOpen(true);
     }
 
@@ -482,7 +463,6 @@ export function MaterialsPanel({
             note: item.note ?? "",
             topicId: scopedTopicId,
         });
-        setUrlError("");
 
         setOpen(true);
     }
@@ -495,7 +475,6 @@ export function MaterialsPanel({
             ...previous,
             [field]: value,
         }));
-        if (field === "url") setUrlError("");
     }
 
     async function save(event: FormEvent<HTMLFormElement>) {
@@ -506,7 +485,7 @@ export function MaterialsPanel({
         const url = form.url.trim();
 
         if (!url || url.length > 2048) {
-            setUrlError("URL is required (max 2048 characters).");
+            toast.error("URL is required (max 2048 characters).");
             return;
         }
 
@@ -522,7 +501,7 @@ export function MaterialsPanel({
                 throw new Error("Invalid URL");
             }
         } catch {
-            setUrlError("Enter a valid HTTP or HTTPS URL.");
+            toast.error("Enter a valid HTTP or HTTPS URL.");
             return;
         }
 
@@ -546,7 +525,7 @@ export function MaterialsPanel({
         );
 
         if (duplicate) {
-            setUrlError("This URL already exists in the selected Topic.");
+            toast.error("This URL already exists in the selected Topic.");
             return;
         }
 
@@ -703,12 +682,6 @@ export function MaterialsPanel({
                                         <ExternalLink className="mt-1 size-3 shrink-0" />
                                     </a>
 
-                                    {item.topicId == null && (
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            Shared Syllabus reference ? Edit to assign to this Topic
-                                        </p>
-                                    )}
-
                                     {item.note && (
                                         <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
                                             {item.note}
@@ -773,7 +746,6 @@ export function MaterialsPanel({
             >
                 <form
                     onSubmit={(event) => void save(event)}
-                    noValidate
                     className="max-h-[70vh] space-y-4 overflow-y-auto pr-2"
                 >
                     <div className="space-y-1">
@@ -820,17 +792,11 @@ export function MaterialsPanel({
                             maxLength={2048}
                             disabled={busy}
                             placeholder="https://..."
-                            aria-invalid={Boolean(urlError)}
                             onChange={(event) =>
                                 update("url", event.target.value)
                             }
                         />
 
-                        {urlError && (
-                            <p role="alert" className="text-xs text-destructive">
-                                {urlError}
-                            </p>
-                        )}
                         <p className="text-xs text-muted-foreground">
                             The display name is generated automatically from the URL.
                         </p>
