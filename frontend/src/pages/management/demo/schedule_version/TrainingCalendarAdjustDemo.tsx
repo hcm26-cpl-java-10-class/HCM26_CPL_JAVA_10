@@ -513,6 +513,13 @@ export default function TrainingCalendarAdjustDemo({
   const [collapsedDays, setCollapsedDays] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
   const [realClasses, setRealClasses] = useState<SharedClass[]>([]);
+
+  const selectedClassNumericId = useMemo(() => {
+    const matched = realClasses.find(
+      (c) => c.code === selectedClassId || String(c.id) === String(selectedClassId)
+    );
+    return matched?.id || parseClassIdToNumber(selectedClassId);
+  }, [realClasses, selectedClassId]);
   const [realTrainers, setRealTrainers] = useState<SharedTrainer[]>([]);
   const [realRooms, setRealRooms] = useState<Array<{ id: number; name: string }>>([]);
 
@@ -1366,32 +1373,80 @@ export default function TrainingCalendarAdjustDemo({
         }
       }
 
-      // 2. Lưu từng buổi học (StudySession) xuống Backend
-      const parsedClassId = parseClassIdToNumber(version.classId);
-      const sessionSaves = [];
-      for (const topic of topics) {
-        for (const day of topic.days) {
-          for (const act of day.activities) {
-            const sessionPayload: SessionDTO = {
+      // 2. Lưu từng buổi học (Session) xuống Backend với đầy đủ trường bắt buộc
+      const parsedClassId = selectedClassNumericId;
+
+      // Xóa các buổi học cũ của lớp này để tránh trùng lịch khi điều chỉnh lại
+      try {
+        await sessionApi.deleteByClassId(parsedClassId);
+      } catch (clearErr) {
+        console.info("Clear by classId fallback to page deletion:", clearErr);
+        try {
+          const oldPage = await sessionApi.getPage({ page: 0, size: 200 }, undefined, { ids: [], classId: parsedClassId });
+          if (oldPage?.content?.length) {
+            await Promise.allSettled(oldPage.content.map((s) => (s.id != null ? sessionApi.delete(String(s.id)) : Promise.resolve(null))));
+          }
+        } catch {}
+      }
+
+      // Chuẩn bị payload chuẩn cho tất cả các buổi học
+      const normalizeStr = (str?: string) => (str ? str.replace(/[\[\]]/g, "").trim().toLowerCase() : "");
+      const allSessionPayloads: SessionDTO[] = [];
+
+      topics.forEach((topic, topicIdx) => {
+        let matchedSub = systemSubjects.find(
+          (s) =>
+            (s.code && topic.code && normalizeStr(s.code) === normalizeStr(topic.code)) ||
+            (s.name && topic.name && normalizeStr(s.name) === normalizeStr(topic.name))
+        );
+        if (!matchedSub && systemSubjects.length > 0) {
+          matchedSub = systemSubjects[topicIdx % systemSubjects.length];
+        }
+        const resolvedTopicId = matchedSub?.id || (topicIdx + 1);
+
+        const matchedTr = realTrainers.find(
+          (t) =>
+            (t.name && topic.trainer && t.name.toLowerCase().includes(topic.trainer.toLowerCase())) ||
+            (topic.trainer && topic.trainer.toLowerCase().includes((t.name || "").toLowerCase()))
+        );
+        const resolvedTrainerId = matchedTr?.id || 1;
+
+        topic.days.forEach((day) => {
+          day.activities.forEach((act) => {
+            const roomName =
+              act.format === "Online"
+                ? "Online MS Teams"
+                : topic.location || "Phòng Lab 201 (F-Town 2)";
+
+            allSessionPayloads.push({
               classId: parsedClassId,
-              title: `[${topic.code}] ${act.name}`,
+              topicId: Number(resolvedTopicId),
+              trainerId: Number(resolvedTrainerId),
+              title: `[${topic.code || "TOPIC"}] ${act.name || topic.name}`.slice(0, 150),
               startTime: `${day.date}T${act.start}:00`,
               endTime: `${day.date}T${act.end}:00`,
-              location: act.format === "Online" ? "Online MS Teams" : "Room A101",
+              location: roomName,
               status: "SCHEDULED",
-              note: `PIC: ${act.pic} · ${act.contribution}`,
-            };
-            sessionSaves.push(
-              sessionApi.create(sessionPayload).catch((e) => {
-                console.info("Session persistence fallback:", e?.message);
-                return null;
-              })
-            );
+              isActive: true,
+              note: `PIC: ${act.pic || topic.trainer || "Trainer"} · ${act.contribution || "Lecture"}`,
+            });
+          });
+        });
+      });
+
+      // Lưu hàng loạt xuống DB
+      try {
+        await sessionApi.createBatch(allSessionPayloads);
+      } catch (batchErr) {
+        console.warn("createBatch fallback to sequential create:", batchErr);
+        for (const sDto of allSessionPayloads) {
+          try {
+            await sessionApi.create(sDto);
+          } catch (singleErr) {
+            console.error("Failed to save session:", sDto, singleErr);
           }
         }
       }
-
-      await Promise.allSettled(sessionSaves);
 
       toast.success(
         `Đã lưu thành công lịch đào tạo cho lớp ${selectedClassId} (${activityCount} buổi học)!`
@@ -1479,7 +1534,7 @@ export default function TrainingCalendarAdjustDemo({
               </Button>
             </div>
 
-            <Link to="/calendar/preview">
+            <Link to={`/calendar/preview?date=${earliestTopicDate || learningStart || classStart}&classId=${selectedClassNumericId}`}>
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-medium">
                 <CalendarDays className="size-3.5 text-primary" />
                 Xem thời khóa biểu (Timetable)

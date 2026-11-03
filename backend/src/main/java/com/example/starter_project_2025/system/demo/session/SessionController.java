@@ -100,4 +100,22 @@ public class SessionController
             @Valid @RequestBody(required = false) SessionCompleteDTO completeDTO) {
         return ResponseEntity.ok(sessionService.completeSession(id, completeDTO));
     }
+
+    @org.springframework.web.bind.annotation.PostMapping("/batch")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_CREATE')")
+    @Operation(summary = "Batch create scheduled sessions for a class schedule version")
+    public ResponseEntity<java.util.List<SessionDTO>> createBatch(@Valid @RequestBody java.util.List<SessionDTO> dtos) {
+        return ResponseEntity.ok(sessionService.createValidatedBatch(dtos));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/class/{classId}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_DELETE')")
+    @Operation(summary = "Clear all sessions of a class to allow rescheduling")
+    public ResponseEntity<Void> deleteByClassId(@PathVariable Long classId) {
+        java.util.List<Session> sessions = sessionRepository.findByClassId(classId);
+        if (!sessions.isEmpty()) {
+            sessionRepository.deleteAll(sessions);
+        }
+        return ResponseEntity.noContent().build();
+    }
 }

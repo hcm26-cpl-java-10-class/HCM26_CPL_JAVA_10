@@ -37,4 +37,11 @@ export const sessionApi = Object.assign({}, base, {
         const res = await axiosInstance.patch<SessionDTO>(`${path}/${id}/complete`, data);
         return res.data;
     },
+    createBatch: async (sessions: SessionDTO[]): Promise<SessionDTO[]> => {
+        const response = await axiosInstance.post<SessionDTO[]>(`${path}/batch`, sessions);
+        return response.data;
+    },
+    deleteByClassId: async (classId: number | string): Promise<void> => {
+        await axiosInstance.delete(`${path}/class/${classId}`);
+    },
 });
