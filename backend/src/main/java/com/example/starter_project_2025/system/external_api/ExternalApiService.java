@@ -74,4 +74,66 @@ public interface ExternalApiService {
      * @return list of external rooms
      */
     List<ExternalRoomDTO> fetchRooms();
+
+    // ===================== TRAINEES =====================
+
+    /** Fetch trainees enrolled in a class. */
+    Object fetchClassTrainees(Long classId);
+
+    /** Fetch all trainees (pool). */
+    Object fetchAllTrainees();
+
+    /** Add a trainee to a class. */
+    Object addTraineeToClass(Long classId, Object body);
+
+    /** Remove a trainee from a class. */
+    Object removeTraineeFromClass(Long classId, Long traineeId, Object body);
+
+    // ===================== STATUS LIFECYCLE =====================
+
+    /** Get status transition info for a class. */
+    Object fetchClassStatusInfo(Long classId);
+
+    /** Transition a class to a new status. */
+    Object transitionClassStatus(Long classId, Object body);
+
+    // ===================== SESSIONS =====================
+
+    /** Fetch sessions for a class. */
+    Object fetchClassSessions(Long classId);
+
+    /** Create a session for a class. */
+    Object createClassSession(Long classId, Object body);
+
+    /** Delete a session. */
+    void deleteClassSession(Long classId, Long sessionId);
+
+    // ===================== ATTENDANCE =====================
+
+    /** Get attendance for a session. */
+    Object fetchSessionAttendance(Long classId, Long sessionId);
+
+    /** Save attendance for a session. */
+    Object saveSessionAttendance(Long classId, Long sessionId, Object body);
+
+    // ===================== BUDGET =====================
+
+    /** Get budget for a class. */
+    Object fetchClassBudget(Long classId);
+
+    // ===================== AUDIT =====================
+
+    /** Get all audit records. */
+    Object fetchAllAudits();
+
+    /** Get audits for a class. */
+    Object fetchClassAudits(Long classId);
+
+    /** Create an audit record. */
+    Object createAudit(Object body);
+
+    // ===================== ANALYTICS =====================
+
+    /** Get training analytics. */
+    Object fetchAnalytics();
 }

@@ -1,22 +1,32 @@
-import { ArrowLeft, CalendarDays, ClipboardList, Users, Wallet, FileText } from "lucide-react";
+import {
+    ArrowLeft,
+    CalendarDays,
+    ClipboardList,
+    FileText,
+    Users,
+    Wallet,
+} from "lucide-react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
-import { NotIntegratedPanel } from "@/components/common/NotIntegratedPanel";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useExternalClass } from "@/hooks/useExternalLookups";
 import { classTitle } from "@/utils/class.utils";
+import { ClassBudgetTab } from "./components/ClassBudgetTab";
 import { ClassCalendarTab } from "./components/ClassCalendarTab";
 import { ClassInfoTab } from "./components/ClassInfoTab";
+import { ClassLifecyclePanel } from "./components/ClassLifecyclePanel";
+import { ClassSessionsTab } from "./components/ClassSessionsTab";
 import { ClassStatusBadge } from "./components/ClassStatusBadge";
+import { ClassTraineeTab } from "./components/ClassTraineeTab";
 
 const TABS = [
     { value: "info", label: "Class Info", icon: FileText },
     { value: "trainees", label: "Trainee List", icon: Users },
-    { value: "calendar", label: "Calendar", icon: CalendarDays },
-    { value: "budget", label: "Budget & Operation Info", icon: Wallet },
-    { value: "activities", label: "Activities", icon: ClipboardList },
+    { value: "sessions", label: "Sessions", icon: CalendarDays },
+    { value: "calendar", label: "Calendar", icon: ClipboardList },
+    { value: "budget", label: "Budget & Operation", icon: Wallet },
 ] as const;
 
 type TabValue = (typeof TABS)[number]["value"];
@@ -52,7 +62,6 @@ export default function ClassDetailPage() {
     const query = useExternalClass(id);
     const classItem = query.data;
 
-    // The list page hands over its query string so that "Back" restores the same search / filter / page
     const listSearch = (location.state as { listSearch?: string } | null)?.listSearch;
     const backTo = listSearch ? `${CLASS_LIST_PATH}?${listSearch}` : CLASS_LIST_PATH;
 
@@ -78,21 +87,36 @@ export default function ClassDetailPage() {
                 ) : classItem ? (
                     <>
                         <header className="space-y-2 border-b p-4 sm:p-5">
-                            <Link to={backTo} className="inline-flex items-center gap-1 text-sm text-blue-800 hover:underline dark:text-blue-300">
+                            <Link
+                                to={backTo}
+                                className="inline-flex items-center gap-1 text-sm text-blue-800 hover:underline dark:text-blue-300"
+                            >
                                 <ArrowLeft className="size-4" /> Back to Class List
                             </Link>
                             <div className="flex flex-wrap items-center gap-3">
-                                <h1 className="break-words text-lg font-semibold">Class Details: {classTitle(classItem)}</h1>
+                                <h1 className="break-words text-lg font-semibold">
+                                    Class Details: {classTitle(classItem)}
+                                </h1>
                                 <ClassStatusBadge status={classItem.status} />
                             </div>
                         </header>
 
+                        {/* Lifecycle panel always visible at top */}
+                        <div className="border-b px-4 py-3 sm:px-5">
+                            <ClassLifecyclePanel classItem={classItem} />
+                        </div>
+
                         <Tabs
                             value={tab}
-                            onValueChange={(value) => setSearchParams({ tab: value }, { replace: true, state: location.state })}
+                            onValueChange={(value) =>
+                                setSearchParams({ tab: value }, { replace: true, state: location.state })
+                            }
                             className="gap-0"
                         >
-                            <TabsList variant="line" className="h-11 w-full justify-start gap-2 overflow-x-auto rounded-none border-b px-3 sm:px-4">
+                            <TabsList
+                                variant="line"
+                                className="h-11 w-full justify-start gap-2 overflow-x-auto rounded-none border-b px-3 sm:px-4"
+                            >
                                 {TABS.map(({ value, label, icon: Icon }) => (
                                     <TabsTrigger
                                         key={value}
@@ -110,12 +134,11 @@ export default function ClassDetailPage() {
                                 </TabsContent>
 
                                 <TabsContent value="trainees">
-                                    <NotIntegratedPanel
-                                        icon={Users}
-                                        title="Trainee list is not integrated yet"
-                                        description="The Trainee module has no screen or API for this yet and the master training system exposes no class → trainee relation, so no trainees are listed instead of showing an invented table."
-                                        needs="a Trainee API that lists the trainees of a class (Trainee module owner)."
-                                    />
+                                    <ClassTraineeTab classItem={classItem} />
+                                </TabsContent>
+
+                                <TabsContent value="sessions">
+                                    <ClassSessionsTab classItem={classItem} />
                                 </TabsContent>
 
                                 <TabsContent value="calendar">
@@ -123,21 +146,7 @@ export default function ClassDetailPage() {
                                 </TabsContent>
 
                                 <TabsContent value="budget">
-                                    <NotIntegratedPanel
-                                        icon={Wallet}
-                                        title="Budget & operation info is not integrated yet"
-                                        description="There is no budget or operation data source in this application, so no figures are shown."
-                                        needs="a budget / operation info contract for classes (owner of that module)."
-                                    />
-                                </TabsContent>
-
-                                <TabsContent value="activities">
-                                    <NotIntegratedPanel
-                                        icon={ClipboardList}
-                                        title="Class activities are not integrated yet"
-                                        description="Lessons in this application belong to Courses, not to classes, and there is no class activity API, so none are shown."
-                                        needs="an Activity API linked to a class (owner of the Activity / Lesson module)."
-                                    />
+                                    <ClassBudgetTab classItem={classItem} />
                                 </TabsContent>
                             </div>
                         </Tabs>

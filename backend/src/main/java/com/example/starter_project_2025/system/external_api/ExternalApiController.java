@@ -79,6 +79,123 @@ public class ExternalApiController {
         return ResponseEntity.ok(externalApiService.fetchRooms());
     }
 
+    // ======================== TRAINEES ========================
+
+    @GetMapping("/classes/{id}/trainees")
+    @Operation(summary = "Fetch trainees enrolled in a class")
+    public ResponseEntity<Object> getClassTrainees(@PathVariable Long id) {
+        return ResponseEntity.ok(externalApiService.fetchClassTrainees(id));
+    }
+
+    @GetMapping("/trainees")
+    @Operation(summary = "Fetch all trainees (pool)")
+    public ResponseEntity<Object> getAllTrainees() {
+        return ResponseEntity.ok(externalApiService.fetchAllTrainees());
+    }
+
+    @PostMapping("/classes/{id}/trainees")
+    @Operation(summary = "Add trainee to class")
+    public ResponseEntity<Object> addTraineeToClass(@PathVariable Long id, @RequestBody Object body) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(externalApiService.addTraineeToClass(id, body));
+    }
+
+    @DeleteMapping("/classes/{classId}/trainees/{traineeId}")
+    @Operation(summary = "Remove trainee from class")
+    public ResponseEntity<Object> removeTraineeFromClass(
+            @PathVariable Long classId,
+            @PathVariable Long traineeId,
+            @RequestBody(required = false) Object body) {
+        return ResponseEntity.ok(externalApiService.removeTraineeFromClass(classId, traineeId, body));
+    }
+
+    // ======================== STATUS LIFECYCLE ========================
+
+    @GetMapping("/classes/{id}/status")
+    @Operation(summary = "Fetch status transition info for class")
+    public ResponseEntity<Object> getClassStatusInfo(@PathVariable Long id) {
+        return ResponseEntity.ok(externalApiService.fetchClassStatusInfo(id));
+    }
+
+    @PatchMapping("/classes/{id}/status")
+    @Operation(summary = "Transition class status")
+    public ResponseEntity<Object> transitionClassStatus(@PathVariable Long id, @RequestBody Object body) {
+        return ResponseEntity.ok(externalApiService.transitionClassStatus(id, body));
+    }
+
+    // ======================== SESSIONS ========================
+
+    @GetMapping("/classes/{id}/sessions")
+    @Operation(summary = "Fetch sessions for class")
+    public ResponseEntity<Object> getClassSessions(@PathVariable Long id) {
+        return ResponseEntity.ok(externalApiService.fetchClassSessions(id));
+    }
+
+    @PostMapping("/classes/{id}/sessions")
+    @Operation(summary = "Create session for class")
+    public ResponseEntity<Object> createClassSession(@PathVariable Long id, @RequestBody Object body) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(externalApiService.createClassSession(id, body));
+    }
+
+    @DeleteMapping("/classes/{classId}/sessions/{sessionId}")
+    @Operation(summary = "Delete session")
+    public ResponseEntity<Void> deleteClassSession(@PathVariable Long classId, @PathVariable Long sessionId) {
+        externalApiService.deleteClassSession(classId, sessionId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ======================== ATTENDANCE ========================
+
+    @GetMapping("/classes/{classId}/sessions/{sessionId}/attendance")
+    @Operation(summary = "Fetch attendance for session")
+    public ResponseEntity<Object> getSessionAttendance(@PathVariable Long classId, @PathVariable Long sessionId) {
+        return ResponseEntity.ok(externalApiService.fetchSessionAttendance(classId, sessionId));
+    }
+
+    @PutMapping("/classes/{classId}/sessions/{sessionId}/attendance")
+    @Operation(summary = "Save attendance for session")
+    public ResponseEntity<Object> saveSessionAttendance(
+            @PathVariable Long classId,
+            @PathVariable Long sessionId,
+            @RequestBody Object body) {
+        return ResponseEntity.ok(externalApiService.saveSessionAttendance(classId, sessionId, body));
+    }
+
+    // ======================== BUDGET ========================
+
+    @GetMapping("/classes/{id}/budget")
+    @Operation(summary = "Fetch budget for class")
+    public ResponseEntity<Object> getClassBudget(@PathVariable Long id) {
+        return ResponseEntity.ok(externalApiService.fetchClassBudget(id));
+    }
+
+    // ======================== AUDIT ========================
+
+    @GetMapping("/audits")
+    @Operation(summary = "Fetch all audits")
+    public ResponseEntity<Object> getAllAudits() {
+        return ResponseEntity.ok(externalApiService.fetchAllAudits());
+    }
+
+    @GetMapping("/classes/{id}/audits")
+    @Operation(summary = "Fetch audits for class")
+    public ResponseEntity<Object> getClassAudits(@PathVariable Long id) {
+        return ResponseEntity.ok(externalApiService.fetchClassAudits(id));
+    }
+
+    @PostMapping("/audits")
+    @Operation(summary = "Create an audit")
+    public ResponseEntity<Object> createAudit(@RequestBody Object body) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(externalApiService.createAudit(body));
+    }
+
+    // ======================== ANALYTICS ========================
+
+    @GetMapping("/analytics")
+    @Operation(summary = "Fetch training analytics")
+    public ResponseEntity<Object> getAnalytics() {
+        return ResponseEntity.ok(externalApiService.fetchAnalytics());
+    }
+
     /** "all" is our own marker for "no status filter"; the upstream system is simply not given a status. */
     private static String toUpstreamStatus(String status) {
         return status == null || ALL_STATUSES.equalsIgnoreCase(status.trim()) ? null : status;

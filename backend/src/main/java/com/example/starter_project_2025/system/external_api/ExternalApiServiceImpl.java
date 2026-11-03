@@ -148,6 +148,132 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         return executeGetList(url, new ParameterizedTypeReference<>() {}, "rooms");
     }
 
+    // ======================== TRAINEES ========================
+
+    @Override
+    public Object fetchClassTrainees(Long classId) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/trainees").buildAndExpand(classId).toUriString();
+        return executeGetGeneric(url, "class trainees");
+    }
+
+    @Override
+    public Object fetchAllTrainees() {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl).path("/api/trainees").toUriString();
+        return executeGetGeneric(url, "all trainees");
+    }
+
+    @Override
+    public Object addTraineeToClass(Long classId, Object body) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/trainees").buildAndExpand(classId).toUriString();
+        return executePostGeneric(url, body, "add trainee");
+    }
+
+    @Override
+    public Object removeTraineeFromClass(Long classId, Long traineeId, Object body) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{classId}/trainees/{traineeId}")
+                .buildAndExpand(classId, traineeId).toUriString();
+        return executeDeleteWithBody(url, body, "remove trainee");
+    }
+
+    // ======================== STATUS LIFECYCLE ========================
+
+    @Override
+    public Object fetchClassStatusInfo(Long classId) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/status").buildAndExpand(classId).toUriString();
+        return executeGetGeneric(url, "class status info");
+    }
+
+    @Override
+    public Object transitionClassStatus(Long classId, Object body) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/status").buildAndExpand(classId).toUriString();
+        return executePatchGeneric(url, body, "class status transition");
+    }
+
+    // ======================== SESSIONS ========================
+
+    @Override
+    public Object fetchClassSessions(Long classId) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/sessions").buildAndExpand(classId).toUriString();
+        return executeGetGeneric(url, "class sessions");
+    }
+
+    @Override
+    public Object createClassSession(Long classId, Object body) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/sessions").buildAndExpand(classId).toUriString();
+        return executePostGeneric(url, body, "create session");
+    }
+
+    @Override
+    public void deleteClassSession(Long classId, Long sessionId) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{classId}/sessions/{sessionId}")
+                .buildAndExpand(classId, sessionId).toUriString();
+        executeDelete(url, "delete session");
+    }
+
+    // ======================== ATTENDANCE ========================
+
+    @Override
+    public Object fetchSessionAttendance(Long classId, Long sessionId) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{classId}/sessions/{sessionId}/attendance")
+                .buildAndExpand(classId, sessionId).toUriString();
+        return executeGetGeneric(url, "session attendance");
+    }
+
+    @Override
+    public Object saveSessionAttendance(Long classId, Long sessionId, Object body) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{classId}/sessions/{sessionId}/attendance")
+                .buildAndExpand(classId, sessionId).toUriString();
+        return executePutGeneric(url, body, "save attendance");
+    }
+
+    // ======================== BUDGET ========================
+
+    @Override
+    public Object fetchClassBudget(Long classId) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/budget").buildAndExpand(classId).toUriString();
+        return executeGetGeneric(url, "class budget");
+    }
+
+    // ======================== AUDIT ========================
+
+    @Override
+    public Object fetchAllAudits() {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl).path("/api/audits").toUriString();
+        return executeGetGeneric(url, "audits");
+    }
+
+    @Override
+    public Object fetchClassAudits(Long classId) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/audits").buildAndExpand(classId).toUriString();
+        return executeGetGeneric(url, "class audits");
+    }
+
+    @Override
+    public Object createAudit(Object body) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl).path("/api/audits").toUriString();
+        return executePostGeneric(url, body, "create audit");
+    }
+
+    // ======================== ANALYTICS ========================
+
+    @Override
+    public Object fetchAnalytics() {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl).path("/api/analytics").toUriString();
+        return executeGetGeneric(url, "analytics");
+    }
+
     // ======================== PRIVATE HELPERS ========================
 
     private HttpHeaders buildHeaders() {
@@ -160,6 +286,66 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         }
 
         return headers;
+    }
+
+    private Object executeGetGeneric(String url, String resourceName) {
+        try {
+            HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
+            ResponseEntity<Object> response = restTemplate.exchange(url, HttpMethod.GET, entity, Object.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            throw new ExternalApiException(e.getResponseBodyAsString(), e.getStatusCode().value(), e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new ExternalApiException("External API error: " + e.getMessage(), e);
+        }
+    }
+
+    private Object executePostGeneric(String url, Object body, String resourceName) {
+        try {
+            HttpEntity<Object> entity = new HttpEntity<>(body, buildHeaders());
+            ResponseEntity<Object> response = restTemplate.exchange(url, HttpMethod.POST, entity, Object.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            throw new ExternalApiException(e.getResponseBodyAsString(), e.getStatusCode().value(), e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new ExternalApiException("External API error: " + e.getMessage(), e);
+        }
+    }
+
+    private Object executePutGeneric(String url, Object body, String resourceName) {
+        try {
+            HttpEntity<Object> entity = new HttpEntity<>(body, buildHeaders());
+            ResponseEntity<Object> response = restTemplate.exchange(url, HttpMethod.PUT, entity, Object.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            throw new ExternalApiException(e.getResponseBodyAsString(), e.getStatusCode().value(), e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new ExternalApiException("External API error: " + e.getMessage(), e);
+        }
+    }
+
+    private Object executePatchGeneric(String url, Object body, String resourceName) {
+        try {
+            HttpEntity<Object> entity = new HttpEntity<>(body, buildHeaders());
+            ResponseEntity<Object> response = restTemplate.exchange(url, HttpMethod.PATCH, entity, Object.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            throw new ExternalApiException(e.getResponseBodyAsString(), e.getStatusCode().value(), e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new ExternalApiException("External API error: " + e.getMessage(), e);
+        }
+    }
+
+    private Object executeDeleteWithBody(String url, Object body, String resourceName) {
+        try {
+            HttpEntity<Object> entity = new HttpEntity<>(body, buildHeaders());
+            ResponseEntity<Object> response = restTemplate.exchange(url, HttpMethod.DELETE, entity, Object.class);
+            return response.getBody();
+        } catch (HttpClientErrorException e) {
+            throw new ExternalApiException(e.getResponseBodyAsString(), e.getStatusCode().value(), e.getResponseBodyAsString());
+        } catch (Exception e) {
+            throw new ExternalApiException("External API error: " + e.getMessage(), e);
+        }
     }
 
     private <T> T executeGet(String url, Class<T> responseType, String resourceName) {

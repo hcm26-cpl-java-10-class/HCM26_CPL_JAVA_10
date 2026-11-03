@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { dashboardApi, type DashboardStats } from "../../../api/features/dashboard.api";
 import { MainLayout } from "../../../components/layout/MainLayout";
 import { usePermissions } from "@/hooks/usePermissions";
+import { TrainingDashboard } from "../training/class/components/TrainingDashboard";
 
 export const Dashboard: React.FC = () => {
     const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -86,6 +87,10 @@ export const Dashboard: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div className="mt-8">
+                <TrainingDashboard />
             </div>
 
             <div className="mt-8 bg-white rounded-lg shadow p-6">
