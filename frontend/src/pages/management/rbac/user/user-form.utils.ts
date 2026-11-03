@@ -1,5 +1,42 @@
 import type { UserDTO } from "@/types";
 
+export interface UserFormData {
+  fullName: string;
+  username: string;
+  email: string;
+  employeeCode: string;
+  roleIds: string[];
+  roles: string[];
+  departmentIds: string[];
+  status: "ACTIVE" | "INACTIVE";
+  skills: string[];
+  description: string;
+}
+
+export function toUserPayload(data: UserFormData, initialData: UserDTO | null): UserDTO {
+  const nameParts = data.fullName.trim().split(/\s+/);
+  const firstName = nameParts.pop() ?? "";
+  const lastName = nameParts.join(" ");
+  const toPositiveIds = (ids: string[]) =>
+    ids
+      .map((id) => Number(id))
+      .filter((id) => !Number.isNaN(id) && id > 0);
+  return {
+    ...initialData,
+    firstName,
+    lastName,
+    username: data.username.trim(),
+    email: data.email,
+    employeeCode: data.employeeCode,
+    status: data.status,
+    isActive: data.status === "ACTIVE",
+    roleIds: toPositiveIds(data.roleIds),
+    departmentIds: toPositiveIds(data.departmentIds),
+    skills: data.skills,
+    description: data.description,
+  };
+}
+
 export type UserFormValues = {
   firstName: string;
   lastName: string;
@@ -99,10 +136,52 @@ export function toPayload(v: UserFormValues, mode: "create" | "edit"): UserDTO {
 }
 
 /** Lấy lỗi validate theo trường từ response BE ({ errors: { field: [msg] } }). */
-export function extractServerErrors(error: any): { fieldErrors: FieldErrors; message: string } {
-  const data = error?.response?.data;
+export function extractServerErrors(error: unknown): { fieldErrors: FieldErrors; message: string } {
+  const responseData =
+    typeof error === "object" && error !== null && "response" in error
+      ? error.response
+      : undefined;
+  const data =
+    typeof responseData === "object" && responseData !== null && "data" in responseData
+      ? responseData.data
+      : undefined;
+  const errorData =
+    typeof data === "object" && data !== null
+      ? (data as { errors?: unknown; message?: unknown })
+      : undefined;
+  const fieldErrors =
+    typeof errorData?.errors === "object" && errorData.errors !== null
+      ? (errorData.errors as FieldErrors)
+      : {};
+  const message =
+    typeof errorData?.message === "string"
+      ? errorData.message
+      : "Đã có lỗi xảy ra, vui lòng thử lại.";
+
   return {
-    fieldErrors: (data?.errors ?? {}) as FieldErrors,
-    message: data?.message || "Đã có lỗi xảy ra, vui lòng thử lại.",
+    fieldErrors,
+    message,
   };
+}
+
+export function extractDetailedServerError(error: unknown): string {
+  const responseData =
+    typeof error === "object" && error !== null && "response" in error
+      ? error.response
+      : undefined;
+  const data =
+    typeof responseData === "object" && responseData !== null && "data" in responseData
+      ? responseData.data
+      : undefined;
+
+  if (typeof data === "object" && data !== null) {
+    const response = data as { message?: unknown; errors?: unknown };
+    if (typeof response.message === "string" && response.message) {
+      return response.message;
+    }
+    if (response.errors !== undefined) {
+      return JSON.stringify(response.errors) || extractServerErrors(error).message;
+    }
+  }
+  return extractServerErrors(error).message;
 }

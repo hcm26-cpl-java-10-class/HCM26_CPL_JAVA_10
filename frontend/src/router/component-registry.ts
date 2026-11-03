@@ -13,6 +13,7 @@ import StudentExamList from "@/pages/student/StudentExamList";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
+import RolePermissionMatrixPage from "@/pages/management/fams/RolePermissionMatrixPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
@@ -26,6 +27,11 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+  {
+    path: "/fams/role-permission-matrix",
+    component: RolePermissionMatrixPage,
+    requiredPermission: "ROLE_UPDATE",
+  },
   { path: "/fams/module-group-module", component: ModuleGroupModulePage, isPublic: true },
   { path: "/module-group-module", component: ModuleGroupModulePage, isPublic: true },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },

@@ -49,9 +49,17 @@ interface ProTableProps<TData = any> {
 
     /** Optional: Override default create button. If not provided, shows default "Create" button */
     headerActions?: React.ReactNode;
+    toolbarActionLabels?: {
+        import?: string;
+        export?: string;
+    };
+    actionColumnLabel?: string;
 
     /** Optional: Complete override of row actions. If provided, you have full control */
-    renderRowActions?: (row: TData) => React.ReactNode;
+    renderRowActions?: (
+        row: TData,
+        actions: { onView: (row: TData) => void; onEdit: (row: TData) => void; onDelete: (row: TData) => void },
+    ) => React.ReactNode;
 
     /** Optional: Custom card renderer for card view */
     renderCard?: (props: EntityCardRendererProps) => React.ReactNode;
@@ -107,6 +115,8 @@ interface ProTableProps<TData = any> {
 export function ProTable<TData = any>({
     table,
     headerActions,
+    toolbarActionLabels,
+    actionColumnLabel = "Actions",
     renderRowActions,
     renderCard,
     onView,
@@ -251,7 +261,15 @@ export function ProTable<TData = any>({
     );
 
     // Use provided renderer or default (with individual overrides support)
-    const finalRenderRowActions = renderRowActions || defaultRenderRowActions;
+    const rowActionHandlers = {
+        onView: onView || setDetailRow,
+        onEdit: onEdit || table.openEdit,
+        onDelete: onDelete || setDeleteItem,
+    };
+    const finalRenderRowActions = (row: TData) =>
+        renderRowActions
+            ? renderRowActions(row, rowActionHandlers)
+            : defaultRenderRowActions(row);
     const effectiveViewMode: ViewMode = isBrowseMode ? "card" : viewMode;
     const cardRowClickHandler =
         onRowClick || (isBrowseMode ? ((onView || setDetailRow) as (row: TData) => void) : undefined);
@@ -261,6 +279,7 @@ export function ProTable<TData = any>({
             <Toolbar
                 table={table}
                 headerActions={headerActions}
+                actionLabels={toolbarActionLabels}
                 viewMode={effectiveViewMode}
                 onViewModeChange={setViewMode}
                 showViewModeToggle={!isBrowseMode}
@@ -316,7 +335,7 @@ export function ProTable<TData = any>({
                                             className="sticky top-0 right-0 z-30 h-12 px-4 py-3 align-middle text-left font-semibold text-gray-900 border-b border-l border-gray-200 bg-gray-50 shadow-sm dark:bg-gray-800"
                                         >
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="whitespace-nowrap">Actions</span>
+                                                <span className="whitespace-nowrap">{actionColumnLabel}</span>
                                                 <ColumnToggle
                                                     schema={schema}
                                                     columnVisibility={table.columnVisibility}
