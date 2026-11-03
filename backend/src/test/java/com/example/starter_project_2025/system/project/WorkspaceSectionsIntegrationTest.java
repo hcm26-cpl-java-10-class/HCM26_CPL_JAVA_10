@@ -159,10 +159,18 @@ class WorkspaceSectionsIntegrationTest {
                 .andExpect(status().is(expected));
     }
 
+    JsonNode sectionByKey(JsonNode sections, String key) {
+        for (JsonNode section : sections) {
+            if (key.equals(section.path("key").asText())) return section;
+        }
+        throw new AssertionError("Missing workspace section: " + key);
+    }
+
     @Test void ac01And02AllDirectSectionApisUseWorkspaceContext() throws Exception {
         mock.seed(scope());
         var navigation = read("/sections");
-        assertThat(navigation.get("sections")).hasSize(8);
+        assertThat(navigation.get("sections")).hasSize(9);
+        assertThat(sectionByKey(navigation.get("sections"), "resources").get("canRead").asBoolean()).isTrue();
         for (String key : List.of("milestones", "sprints", "backlog", "artifacts", "feedback", "activity")) {
             var body = read("/" + key);
             assertThat(body.get("workspaceId").asLong()).isEqualTo(workspaceId);
@@ -184,8 +192,8 @@ class WorkspaceSectionsIntegrationTest {
         grant("WORKSPACE_READ");
         assertThat(read("").get("activities").isNull()).isTrue();
         var sections = read("/sections").get("sections");
-        assertThat(sections.get(2).get("canRead").asBoolean()).isFalse();
-        assertThat(sections.get(7).get("canRead").asBoolean()).isFalse();
+        assertThat(sectionByKey(sections, "milestones").get("canRead").asBoolean()).isFalse();
+        assertThat(sectionByKey(sections, "activity").get("canRead").asBoolean()).isFalse();
         for (String key : List.of("members", "milestones", "sprints", "backlog", "artifacts", "feedback", "activity"))
             mvc.perform(get("/api/workspaces/" + workspaceId + "/" + key)
                     .header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
@@ -268,7 +276,7 @@ class WorkspaceSectionsIntegrationTest {
                 .removeIf(permission -> permission.getName().equals("FEEDBACK_READ")));
         mvc.perform(get("/api/workspaces/" + workspaceId + "/feedback")
                 .header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
-        assertThat(read("/sections").get("sections").get(6).get("canRead").asBoolean()).isFalse();
+        assertThat(sectionByKey(read("/sections").get("sections"), "feedback").get("canRead").asBoolean()).isFalse();
         tx.executeWithoutResult(status -> {
             teams.findById(teamId).orElseThrow().setAssignedMentorId(null);
             memberships.findById(membershipId).orElseThrow().getClassMember().setStatus(ClassMemberStatus.INACTIVE);
