@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import type { FieldSchema } from "@/types";
 import { FormFieldRenderer } from "./FormFieldRenderer";
+import { validateForm } from "./validateForm";
 
 type SectionField = {
   name: string;
@@ -82,6 +83,9 @@ const sideMenuFormLayouts: Record<string, FormLayout> = {
   },
 };
 
+/** Field dạng chọn/bật tắt: validate ngay khi đổi giá trị (blur của Radix Select không đáng tin). */
+const CHOICE_TYPES = new Set(["select", "icon", "relation", "boolean"]);
+
 interface FormModalProps {
   open: boolean;
   onClose: (open: boolean) => void;
@@ -106,6 +110,8 @@ export function FormModal({
   fieldErrors = {},
 }: FormModalProps) {
   const [form, setForm] = useState<Record<string, any>>({});
+  const [clientErrors, setClientErrors] = useState<Record<string, string[]>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const editableFields: FieldSchema[] = schema.fields.filter(
     (f: FieldSchema) =>
@@ -119,6 +125,7 @@ export function FormModal({
   );
 
   useEffect(() => {
+    setClientErrors({});
     if (initial) {
       const next: Record<string, any> = {};
 
@@ -147,22 +154,100 @@ export function FormModal({
       });
       setForm(defaults);
     }
+    setClientErrors({});
+    setTouched({});
   }, [initial, open]);
 
-  const updateField = (name: string, value: any) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
+  /** Validate đúng 1 field với state form mới nhất, cập nhật lỗi của field đó. */
+  const validateSingleField = (name: string, nextForm: Record<string, any>) => {
+    const field = editableFieldMap.get(name);
+    if (!field) return;
+    const errors = validateForm([field], nextForm, {
+      isEdit: !!initial,
+      initial,
+    });
+    setClientErrors((prev) => {
+      const { [name]: _removed, ...rest } = prev;
+      return errors[name] ? { ...rest, [name]: errors[name] } : rest;
+    });
   };
 
+  const updateField = (name: string, value: any) => {
+    const nextForm = { ...form, [name]: value };
+    setForm(nextForm);
+
+    const field = editableFieldMap.get(name);
+    const isChoice = !!field && CHOICE_TYPES.has(field.type);
+
+    if (isChoice || touched[name]) {
+      // Đã rời field hoặc là ô chọn: báo lỗi/xoá lỗi ngay khi giá trị đổi
+      validateSingleField(name, nextForm);
+    } else {
+      setClientErrors((prev) => {
+        if (!prev[name]) return prev;
+        const { [name]: _removed, ...rest } = prev;
+        return rest;
+      });
+    }
+  };
+
+  /** Rời khỏi ô nhập (Tab, click ra ngoài...) -> báo lỗi luôn. */
+  const handleFieldBlur = (field: FieldSchema) => {
+    if (CHOICE_TYPES.has(field.type)) return;
+    setTouched((prev) => (prev[field.name] ? prev : { ...prev, [field.name]: true }));
+    validateSingleField(field.name, form);
+  };
+
+  const mergedErrors: Record<string, string[]> = { ...fieldErrors, ...clientErrors };
+
   const handleSubmit = () => {
+    if (schema.entityName === "student") {
+      const errors: Record<string, string[]> = {};
+      schema.fields.filter((field: FieldSchema) => field.required).forEach((field: FieldSchema) => {
+        const value = form[field.name];
+        if (value === undefined || value === null || String(value).trim() === "") {
+          errors[field.name] = [`${field.label} là bắt buộc.`];
+        }
+      });
+
+      const email = String(form.email ?? "").trim();
+      if (email && !/^[A-Za-z0-9._%+-]+@gmail\.com$/i.test(email)) {
+        errors.email = ["Email phải có định dạng @gmail.com."];
+      }
+
+      const address = String(form.address ?? "");
+      if (address.length > 1000) {
+        errors.address = ["Địa chỉ không được vượt quá 1000 ký tự."];
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setClientErrors(errors);
+        return;
+      }
+      setClientErrors({});
+      onSubmit({ ...form, email });
+      return;
+    }
+
+    setClientErrors({});
+    const errors = validateForm(editableFields, form, {
+      isEdit: !!initial,
+      initial,
+    });
+    setClientErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     onSubmit(form);
   };
 
+  const getFieldErrors = (fieldName: string) =>
+    clientErrors[fieldName]?.length ? clientErrors[fieldName] : fieldErrors[fieldName];
+
   const hasError = (fieldName: string) =>
-    fieldErrors[fieldName] && fieldErrors[fieldName].length > 0;
+    Boolean(mergedErrors[fieldName]?.length);
 
   const renderField = (field: FieldSchema) => (
+    <div key={field.name} onBlur={() => handleFieldBlur(field)}>
     <FormFieldRenderer
-      key={field.name}
       field={field}
       value={form[field.name]}
       errorClass={
@@ -170,10 +255,12 @@ export function FormModal({
           ? "border-destructive focus-visible:ring-destructive"
           : ""
       }
-      fieldErrors={fieldErrors[field.name]}
+      fieldErrors={getFieldErrors(field.name)}
       relationOptions={relationOptions}
+      initial={initial}
       onChange={updateField}
     />
+    </div>
   );
 
   const configuredFieldNames = new Set(

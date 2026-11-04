@@ -7,13 +7,16 @@ import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
 import { StudentNavbar } from "@/components/layout/StudentNavbar";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
+import type { ReactNode } from "react";
 
 export function MainLayout({
-    children,
-    pathName,
-}: {
-    children: React.ReactNode;
+                               children,
+                               pathName,
+                               pathLinks,
+                           }: {
+    children: ReactNode;
     pathName?: Record<string, string>;
+    pathLinks?: Record<string, string>;
 }) {
     const { activeRole } = usePermissions();
     const embedded = useContext(EmbeddedLayoutContext);
@@ -29,7 +32,7 @@ export function MainLayout({
                 <StudentNavbar />
 
                 <header className="flex h-14 shrink-0 items-center border-b px-6">
-                    <DynamicBreadcrumbs pathTitles={pathName} variant="student" />
+                    <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} variant="student" />
                 </header>
 
                 <main className="flex flex-1 min-h-0 flex-col overflow-y-auto px-6 pb-6 pt-4">
@@ -46,7 +49,7 @@ export function MainLayout({
                 <header className="flex h-16 shrink-0 items-center gap-2">
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
                         <div className="flex items-center gap-2">
-                            <DynamicBreadcrumbs pathTitles={pathName} />
+                            <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} />
                         </div>
                         <HeaderRight />
                     </div>
