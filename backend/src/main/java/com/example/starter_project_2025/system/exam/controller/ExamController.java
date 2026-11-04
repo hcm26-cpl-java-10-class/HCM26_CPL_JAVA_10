@@ -70,9 +70,6 @@ public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter
         return ResponseEntity.ok(service.updateQuestion(id, questionId, request));
     }
 
-    @GetMapping("/active")
-    public ResponseEntity<Page<ExamDTO>> getActiveExams(Pageable pageable) {
-        return ResponseEntity.ok(service.getExamsSortedByOpenStatus(pageable));
-    }
+
 
 }
