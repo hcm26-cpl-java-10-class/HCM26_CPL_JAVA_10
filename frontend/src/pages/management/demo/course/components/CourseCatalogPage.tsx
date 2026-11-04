@@ -20,19 +20,16 @@ import {
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   GraduationCap,
-  LoaderCircle,
   Search,
   SearchX,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { CatalogPagination } from "./CatalogPagination.tsx";
 import { CourseCard, CourseCardSkeleton } from "./CourseCard.tsx";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { CourseDetailContent } from "../pages/CourseDetailPage";
 
 const PAGE_SIZE = 12;
 const ALL = "all";
@@ -149,7 +146,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
     placeholderData: keepPreviousData,
   });
 
-  const { canEnroll, enrollmentsQuery, enrollmentByCourseId, enrollMutation } = useCourseEnrollment();
+  const { isStudentView, canEnroll, enrollmentsQuery, enrollmentByCourseId, enrollMutation } = useCourseEnrollment();
 
   const courses = coursesQuery.data?.content ?? [];
   const totalElements = coursesQuery.data?.totalElements ?? 0;
@@ -175,7 +172,9 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
 
   const showSkeleton = coursesQuery.isLoading;
   const enrollingCourseId = enrollMutation.isPending ? enrollMutation.variables : undefined;
-  const [selectedCourse, setSelectedCourse] = useState<CatalogCourse | null>(null);
+  const navigate = useNavigate();
+  // Ở trang Enrollments (embedded): mở chi tiết ngay trong Enrollments (/course-enrollments/:id).
+  const openCourseDetail = (course: CatalogCourse) => navigate(`/course-enrollments/${course.id}`);
 
   const content = (
     <div className={embedded ? "space-y-5" : "mx-auto w-full max-w-7xl space-y-8"}>
@@ -331,14 +330,15 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
                 key={course.id}
                 course={course}
                 enrollmentId={enrollmentByCourseId.get(course.id)?.id}
+                isStudentView={isStudentView}
                 canEnroll={canEnroll}
                 isEnrolling={enrollingCourseId === course.id}
-                canAssign={embedded}
+                canAssign={embedded && !isStudentView}
                 showEnrollmentAction={!embedded}
                 showDetailAction={embedded}
                 onEnroll={(courseId) => enrollMutation.mutate(courseId)}
                 disableNavigation={embedded}
-                onSelect={embedded ? setSelectedCourse : undefined}
+                onSelect={embedded ? openCourseDetail : undefined}
               />
             ))}
           </div>
@@ -353,53 +353,10 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
         )}
       </section>
 
-      {embedded && (
-        <EmbeddedCourseDetailSheet
-          course={selectedCourse}
-          open={Boolean(selectedCourse)}
-          onOpenChange={(open) => !open && setSelectedCourse(null)}
-        />
-      )}
     </div>
   );
 
   if (embedded) return content;
 
   return <MainLayout pathName={{ courses: "Courses" }}>{content}</MainLayout>;
-}
-
-function EmbeddedCourseDetailSheet({
-  course,
-  open,
-  onOpenChange,
-}: {
-  course: CatalogCourse | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const detailQuery = useQuery({
-    queryKey: ["course-detail", course?.id],
-    queryFn: () => courseApi.getCatalogDetail(course!.id),
-    enabled: open && Boolean(course),
-  });
-
-  if (!course) return null;
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-5xl">
-        <div className="p-6">
-          {detailQuery.isLoading ? (
-            <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
-              <LoaderCircle className="mr-2 size-5 animate-spin" /> Loading course details...
-            </div>
-          ) : detailQuery.isError || !detailQuery.data ? (
-            <div className="py-12 text-center text-sm text-destructive">Could not load this course.</div>
-          ) : (
-            <CourseDetailContent course={detailQuery.data} enrollmentManagement />
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
 }
