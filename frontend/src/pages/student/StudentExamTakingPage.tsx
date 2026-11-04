@@ -1,6 +1,7 @@
 import {
     runCode,
     saveExamAnswers,
+    sendEntryPhoto,
     sendIntegrityEvents, // NEW (anti-cheat)
     startOrResumeExam,
     submitExamAttempt,
@@ -19,6 +20,7 @@ import { toast } from 'sonner';
 import { CodingWorkspace } from './components/CodingWorkspace';
 import { EssayPopup } from './components/EssayPopup';
 import { ExamIntegrityNotice, useExamIntegrity } from '@/hooks/useExamIntegrity'; // NEW (anti-cheat)
+import { FontSizeControl, useQuestionFontSize } from '@/hooks/useQuestionFontSize';
 
 const attemptQueryKey = (examId: number) => ['student-exam-attempt', examId] as const;
 
@@ -160,8 +162,11 @@ export default function StudentExamTakingPage() {
         config: attempt?.integrity,
         active: attempt?.status === 'IN_PROGRESS',
         send: sendIntegrityEvents,
+        sendEntryPhoto,
+        onEntryPhotoSaved: () => void attemptQuery.refetch(),
     });
 
+    const questionFont = useQuestionFontSize();
     const [flagged, setFlagged] = useState<Set<number>>(new Set());
     const [activeQuestionId, setActiveQuestionId] = useState<number | null>(null);
     const flagKey = attempt ? `exam-flagged-${attempt.id}` : null;
@@ -618,16 +623,16 @@ export default function StudentExamTakingPage() {
     };
 
     const pinnedBar = (
-        <div className="pointer-events-none sticky top-0 z-30 flex items-start justify-between gap-4 py-3">
+        <div className="pointer-events-none sticky top-3 z-30 flex h-0 items-start justify-between gap-4">
             {timerBox}
-            <div className="pointer-events-auto flex w-[15.5rem] shrink-0 flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <div className="pointer-events-auto flex w-[11.5rem] shrink-0 flex-col gap-2 rounded-xl border bg-card p-2.5 shadow-sm">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
                     <span className="w-full text-sm font-semibold text-foreground">Questions Navigation</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-black ring-1 ring-border" /> Unanswered</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-green-600" /> Answered</span>
                     <span className="flex items-center gap-1"><span className="inline-block h-3 w-3 rounded-sm bg-yellow-400" /> Flagged</span>
                 </div>
-                <div className="grid max-h-[8.5rem] grid-cols-5 justify-items-center gap-2 overflow-y-auto p-1">
+                <div className="grid max-h-[8.5rem] grid-cols-5 justify-items-center gap-1.5 overflow-y-auto p-0.5">
                     {attempt.questions.map((question, index) => {
                         const isFlagged = flagged.has(question.id);
                         const color = isFlagged
@@ -644,12 +649,15 @@ export default function StudentExamTakingPage() {
                                 aria-label={`Question ${index + 1}: ${isAnswered(question) ? 'Answered' : 'Unanswered'}${isFlagged ? ', Flagged' : ''}`}
                                 aria-current={activeId === question.id ? 'true' : undefined}
                                 onClick={() => jumpToQuestion(question)}
-                                className={`flex h-8 w-8 items-center justify-center rounded-sm text-xs font-medium ${color} ${ring}`}
+                                className={`flex h-7 w-7 items-center justify-center rounded-sm text-xs font-medium ${color} ${ring}`}
                             >
                                 {index + 1}
                             </button>
                         );
                     })}
+                </div>
+                <div className="border-t pt-2">
+                    <FontSizeControl font={questionFont} />
                 </div>
             </div>
         </div>
@@ -663,7 +671,7 @@ export default function StudentExamTakingPage() {
 
     if (!isFinished && currentCode) {
         return (
-            <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }}>
+            <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }} focusMode>
                 {timeUpOverlay}
                 <CodingWorkspace
                     key={currentCode.id}
@@ -686,7 +694,7 @@ export default function StudentExamTakingPage() {
     }
 
     return (
-        <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }}>
+        <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }} focusMode={!isFinished}>
             {timeUpOverlay}
             <main className="flex w-full flex-col gap-5">
                 {!isFinished && pinnedBar}
@@ -703,6 +711,8 @@ export default function StudentExamTakingPage() {
                         onClose={closeEssay}
                     />
                 )}
+                {/* Timer + Questions Navigation noi tren noi dung; chua cho deu 2 ben de cau hoi luon nam giua. */}
+                <div className="w-full lg:px-[12.5rem]">
                 <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
                     <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
                         <div>
@@ -850,7 +860,7 @@ export default function StudentExamTakingPage() {
                                             {starButton(question.id, index + 1)}
                                         </div>
 
-                                        <p className="mt-3 whitespace-pre-wrap">{question.content}</p>
+                                        <p className="mt-3 whitespace-pre-wrap" style={questionFont.style}>{question.content}</p>
 
                                         {question.imageUrl?.trim() && (
                                             <div className="mt-3">
@@ -913,7 +923,7 @@ export default function StudentExamTakingPage() {
                                                                 className="mt-1"
                                                             />
                                                             <div className="flex flex-col gap-2">
-                                                                <span>{option.content}</span>
+                                                                <span style={questionFont.style}>{option.content}</span>
                                                                 {option.imageUrl?.trim() && (
                                                                     <img
                                                                         src={option.imageUrl}
@@ -937,6 +947,7 @@ export default function StudentExamTakingPage() {
                             </footer>
                         </>
                     )}
+                </div>
                 </div>
             </main>
         </MainLayout>

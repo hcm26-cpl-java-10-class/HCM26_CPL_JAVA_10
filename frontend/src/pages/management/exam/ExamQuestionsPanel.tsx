@@ -28,6 +28,12 @@ const DIFFICULTY_STYLE: Record<QuestionDifficulty, string> = {
   HARD: "text-red-600 dark:text-red-400",
 };
 
+function formatDateTime(value?: string | null): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
 const normalizeTopic = (topic?: string | null) => (topic ?? "").trim().toLowerCase();
 
 function toggleIn<T>(set: Set<T>, value: T): Set<T> {
@@ -64,7 +70,7 @@ function LibraryCard({
   onPreview: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const longText = q.content.length > 140 || q.content.includes("\n") || q.type === "MULTIPLE_CHOICE";
+  const longText = q.content.length > 140 || q.content.includes("\n") || q.type === "MULTIPLE_CHOICE" || q.type === "CODING";
   return (
     <div className={`rounded-lg border bg-card p-4 shadow-xs ${state === "inExam" ? "opacity-70" : ""}`}>
       <div className="flex items-start justify-between gap-3">
@@ -85,7 +91,7 @@ function LibraryCard({
               Added
             </Button>
           )}
-          {state === "inExam" && <Badge variant="outline" className="text-[10px]">In exam</Badge>}
+          {state === "inExam" && <Badge variant="outline" className="text-[10px]">In assessment</Badge>}
         </div>
       </div>
 
@@ -176,7 +182,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       refreshExams();
       void queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
     },
-    onError: (error) => toast.error(getErrorMessage(error, "Failed to add questions to exam")),
+    onError: (error) => toast.error(getErrorMessage(error, "Failed to add questions to assessment")),
   });
 
   const removeQuestionMutation = useMutation({
@@ -186,9 +192,9 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       setActiveExam(exam);
       refreshExams();
       void queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
-      toast.success("Question removed from exam");
+      toast.success("Question removed from assessment");
     },
-    onError: (error) => toast.error(getErrorMessage(error, "Failed to remove question from exam")),
+    onError: (error) => toast.error(getErrorMessage(error, "Failed to remove question from assessment")),
   });
 
   const sourceIdsInExam = useMemo(() => {
@@ -254,12 +260,12 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       const existing = new Set(prev.map((q) => q.id));
       return [...prev, ...addable.filter((q) => !existing.has(q.id))];
     });
-    toast.success(`Added ${addable.length} question(s) to the selection. Click "Save to Exam" to keep them.`);
+    toast.success(`Added ${addable.length} question(s) to the selection. Click "Save to Assessment" to keep them.`);
   };
 
   const handleSaveStagedToExam = () => {
     if (activeExamStarted) {
-      toast.error("Exam has started, questions cannot be added.");
+      toast.error("Students have already started this assessment, so questions cannot be added.");
       return;
     }
     if (!activeExam?.id || stagedQuestions.length === 0) return;
@@ -267,7 +273,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
     addQuestionsMutation.mutate(ids, {
       onSuccess: () => {
         setStagedQuestions([]);
-        toast.success(`Saved ${ids.length} question(s) to exam successfully!`);
+        toast.success(`Saved ${ids.length} question(s) to assessment successfully!`);
       },
     });
   };
@@ -315,14 +321,14 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       return [...prev, ...picked.filter((q) => !existing.has(q.id))];
     });
     setIsRandomOpen(false);
-    toast.success(`Added ${picked.length} random question(s) to the selection! Click "Save to Exam" to keep them.`);
+    toast.success(`Added ${picked.length} random question(s) to the selection! Click "Save to Assessment" to keep them.`);
   };
 
   if (examQuery.isLoading) {
     return <p className="py-10 text-center text-sm text-muted-foreground">Loading questions...</p>;
   }
   if (!activeExam) {
-    return <p className="py-10 text-center text-sm text-destructive">Failed to load the exam.</p>;
+    return <p className="py-10 text-center text-sm text-destructive">Failed to load the assessment.</p>;
   }
 
   const savedQuestions = activeExam.questions ?? [];
@@ -339,7 +345,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
       {activeExamStarted && (
         <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
           <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <span>Exam has started. Adding, editing, and removing questions are disabled to protect student results.</span>
+          <span>Students have already started this assessment. Adding, editing, and removing questions are disabled to protect student results.</span>
         </div>
       )}
 
@@ -368,7 +374,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                 {TYPE_LABEL[type]}
               </label>
             ))}
-            {allowedTypes.length < 3 && <p className="text-[11px] text-muted-foreground">Limited by the exam&apos;s question format.</p>}
+            {allowedTypes.length < 3 && <p className="text-[11px] text-muted-foreground">Limited by the assessment&apos;s question format.</p>}
           </fieldset>
 
           <fieldset className="grid gap-2">
@@ -395,7 +401,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
 
           <label className="flex cursor-pointer items-center gap-2 border-t pt-3 text-sm">
             <input type="checkbox" className="size-4 cursor-pointer accent-primary" checked={hideAdded} onChange={(e) => setHideAdded(e.target.checked)} />
-            Hide questions already in the exam
+            Hide questions already in the assessment
           </label>
         </aside>
 
@@ -487,7 +493,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                     <Button type="button" variant="ghost" size="icon-sm" aria-label="Preview question" title="Preview" onClick={() => setPreviewQuestion(q)}>
                       <Eye className="size-3.5" />
                     </Button>
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Edit question" title={activeExamStarted ? "Exam has started" : "Edit question points/content"} disabled={activeExamStarted} onClick={() => setEditingQuestion(q)}>
+                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Edit question" title={activeExamStarted ? "Students have already started this assessment" : "Edit question points/content"} disabled={activeExamStarted} onClick={() => setEditingQuestion(q)}>
                       <Pencil className="size-3.5" />
                     </Button>
                     <Button
@@ -495,8 +501,8 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                       variant="ghost"
                       size="icon-sm"
                       className="text-muted-foreground hover:text-destructive"
-                      aria-label="Remove question from exam"
-                      title={activeExamStarted ? "Exam has started" : "Remove question from exam"}
+                      aria-label="Remove question from assessment"
+                      title={activeExamStarted ? "Students have already started this assessment" : "Remove question from assessment"}
                       disabled={activeExamStarted || removeQuestionMutation.isPending}
                       onClick={() => removeQuestionMutation.mutate({ examId: activeExam.id!, questionId: q.id })}
                     >
@@ -539,38 +545,87 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
             >
               <Save className="mr-1.5 size-4" />
               {addQuestionsMutation.isPending
-                ? "Saving to exam..."
+                ? "Saving to assessment..."
                 : stagedQuestions.length > 0
-                  ? `Save ${stagedQuestions.length} Question(s) to Exam`
-                  : "Save to Exam"}
+                  ? `Save ${stagedQuestions.length} Question(s) to Assessment`
+                  : "Save to Assessment"}
             </Button>
             <p className={`text-center text-[11px] ${stagedQuestions.length > 0 ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
               {stagedQuestions.length > 0
-                ? `${stagedQuestions.length} question(s) are only in this list. Click "Save to Exam" to keep them.`
+                ? `${stagedQuestions.length} question(s) are only in this list. Click "Save to Assessment" to keep them.`
                 : "All selected questions are saved."}
             </p>
           </div>
         </section>
       </div>
 
-      {/* Preview */}
+      {/* Preview: full screen, shows everything we have about the question */}
       <Dialog open={previewQuestion !== null} onOpenChange={(open) => { if (!open) setPreviewQuestion(null); }}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="h-screen max-h-screen w-screen max-w-none overflow-y-auto rounded-none p-6 sm:max-w-none">
           <DialogHeader>
-            <DialogTitle>Question preview</DialogTitle>
+            <DialogTitle>Question preview{previewQuestion ? ` #${previewQuestion.id}` : ""}</DialogTitle>
             <DialogDescription>{previewQuestion && <QuestionMeta q={previewQuestion} />}</DialogDescription>
           </DialogHeader>
           {previewQuestion && (
-            <div className="grid gap-3">
-              <p className="whitespace-pre-wrap break-words text-sm">{previewQuestion.content}</p>
-              {previewQuestion.imageUrl && <img src={previewQuestion.imageUrl} alt="" className="max-h-64 rounded-md border object-contain" />}
-              {previewQuestion.type === "CODING" && previewQuestion.code && (
-                <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
-                  {`public static ${previewQuestion.code.returnType} ${previewQuestion.code.functionName}(${previewQuestion.code.params.map((p) => `${p.type} ${p.name}`).join(", ")})`}
-                </pre>
-              )}
-              <QuestionAnswers question={previewQuestion} />
-              {previewQuestion.topic?.trim() && <p className="text-xs text-muted-foreground">Topic: {previewQuestion.topic.trim()}</p>}
+            <div className="mx-auto grid w-full max-w-5xl content-start gap-5">
+              <section className="grid gap-2 rounded-md border p-4">
+                <h3 className="text-xs font-semibold uppercase text-muted-foreground">Information</h3>
+                <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                  {[
+                    ["ID", `#${previewQuestion.id}`],
+                    ["Type", TYPE_LABEL[previewQuestion.type]],
+                    ["Difficulty", DIFFICULTY_LABEL[previewQuestion.difficulty]],
+                    ["Topic", previewQuestion.topic?.trim() || "-"],
+                    ["Weight", String(previewQuestion.points)],
+                    ["Status", previewQuestion.isActive ? "Active" : "Inactive"],
+                    ["Created at", formatDateTime(previewQuestion.createdAt)],
+                    ...(previewQuestion.createdBy != null ? [["Created by", `User #${previewQuestion.createdBy}`]] : []),
+                    ["Last updated", formatDateTime(previewQuestion.updatedAt)],
+                    ...(previewQuestion.updatedBy != null ? [["Updated by", `User #${previewQuestion.updatedBy}`]] : []),
+                    ...(previewQuestion.sourceQuestionId != null ? [["Copied from question", `#${previewQuestion.sourceQuestionId}`]] : []),
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex gap-2">
+                      <dt className="w-32 shrink-0 text-muted-foreground">{label}</dt>
+                      <dd className="min-w-0 break-words font-medium">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+
+              <section className="grid gap-2">
+                <h3 className="text-xs font-semibold uppercase text-muted-foreground">Content</h3>
+                <p className="whitespace-pre-wrap break-words text-sm">{previewQuestion.content}</p>
+                {previewQuestion.imageUrl && <img src={previewQuestion.imageUrl} alt="" className="max-h-96 rounded-md border object-contain" />}
+              </section>
+
+              <section className="grid gap-2">
+                <h3 className="text-xs font-semibold uppercase text-muted-foreground">
+                  {previewQuestion.type === "CODING" ? "Coding details" : previewQuestion.type === "ESSAY" ? "Essay" : "Answers"}
+                </h3>
+                <QuestionAnswers question={previewQuestion} />
+                {previewQuestion.type === "ESSAY" && (previewQuestion.gradingCriteria ?? []).length > 0 && (
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2">Grading criterion</th>
+                          <th className="px-3 py-2">Description</th>
+                          <th className="w-24 px-3 py-2">Weight</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(previewQuestion.gradingCriteria ?? []).map((c, i) => (
+                          <tr key={i} className="border-b last:border-b-0">
+                            <td className="px-3 py-2 font-medium">{c.name}</td>
+                            <td className="px-3 py-2 text-muted-foreground">{c.description || "-"}</td>
+                            <td className="px-3 py-2">{c.weightPercentage}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
             </div>
           )}
         </DialogContent>
@@ -584,7 +639,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
               Add Random Questions
             </DialogTitle>
             <DialogDescription>
-              Select quantity and scope to randomly select and add questions into this exam.
+              Select quantity and scope to randomly select and add questions into this assessment.
             </DialogDescription>
           </DialogHeader>
 
@@ -662,7 +717,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                   </SelectContent>
                 </Select>
                 {lockedQuestionType && (
-                    <p className="text-[10px] text-muted-foreground">Locked by exam type</p>
+                    <p className="text-[10px] text-muted-foreground">Locked by assessment type</p>
                 )}
               </div>
 
@@ -688,7 +743,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                 <span className="font-semibold text-foreground">{eligibleForRandom.length} questions</span>
               </div>
               <div className="flex justify-between text-muted-foreground">
-                <span>Will add to exam:</span>
+                <span>Will add to assessment:</span>
                 <span className="font-semibold text-indigo-600">
                   {Math.min(randomCount, eligibleForRandom.length)} question(s)
                 </span>

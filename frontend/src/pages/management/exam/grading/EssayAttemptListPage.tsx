@@ -93,7 +93,7 @@ export default function EssayAttemptListPage() {
                         </TableHeader>
                         <TableBody>
                             {!validId && (
-                                <TableRow><TableCell colSpan={7} className="h-24 text-center text-destructive">Invalid exam ID.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={7} className="h-24 text-center text-destructive">Invalid assessment ID.</TableCell></TableRow>
                             )}
                             {attemptsQuery.isLoading && (
                                 <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">Loading submissions...</TableCell></TableRow>

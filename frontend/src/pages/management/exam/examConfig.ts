@@ -22,6 +22,8 @@ export interface ExamConfigForm {
   blockCopyPaste: boolean;
   requireFullscreen: boolean;
   singleSession: boolean;
+  cameraProctoring: boolean;
+  notifyOnViolation: boolean;
 }
 
 export const DEFAULT_CONFIG: ExamConfigForm = {
@@ -31,7 +33,7 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   shuffleQuestions: false,
   shuffleOptions: false,
   showAnswersAfterExam: true,
-  category: "ASSESSMENT",
+  category: "ASSIGNMENT",
   passScore: "",
   maxScore: "",
   latePolicy: "NOT_ALLOWED",
@@ -45,6 +47,8 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   blockCopyPaste: true,
   requireFullscreen: false,
   singleSession: true,
+  cameraProctoring: false,
+  notifyOnViolation: false,
 };
 
 export const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -65,7 +69,7 @@ export const EXAM_CATEGORY_OPTIONS = Object.keys(EXAM_CATEGORY_LABEL) as ExamCat
 
 export const RESULT_VISIBILITY_LABEL: Record<ResultVisibility, string> = {
   IMMEDIATE: "View immediately after grading",
-  AFTER_EXAM_CLOSED: "View after exam closes",
+  AFTER_EXAM_CLOSED: "View after assessment closes",
   MANUAL_RELEASE: "Manually released by teacher",
 };
 
@@ -86,7 +90,7 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   shuffleQuestions: exam.shuffleQuestions ?? false,
   shuffleOptions: exam.shuffleOptions ?? false,
   showAnswersAfterExam: exam.showAnswersAfterExam ?? false,
-  category: exam.category ?? "ASSESSMENT",
+  category: exam.category ?? "ASSIGNMENT",
   passScore: exam.passScore != null ? String(exam.passScore) : "",
   maxScore: exam.maxScore != null ? String(exam.maxScore) : "",
   latePolicy: exam.latePolicy ?? "NOT_ALLOWED",
@@ -100,44 +104,15 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   blockCopyPaste: exam.blockCopyPaste ?? false,
   requireFullscreen: exam.requireFullscreen ?? false,
   singleSession: exam.singleSession ?? false,
+  cameraProctoring: exam.cameraProctoring ?? false,
+  notifyOnViolation: exam.notifyOnViolation ?? false,
 });
 
-export function validateConfig(
-    duration: number,
-    cfg: ExamConfigForm,
-    originalStartTime?: string,
-    originalEndTime?: string,
-): string | null {
-  const now = Date.now() - 60 * 1000; // Allow 1-min grace when saving
-
-  if (cfg.startTime) {
-    const start = new Date(cfg.startTime).getTime();
-    const isStartChanged = !originalStartTime || new Date(originalStartTime).getTime() !== start;
-    if (isStartChanged && start < now) {
-      return "Start time must be at current time or later (recommended: set at least 1 minute ahead so students have time to join).";
-    }
-  }
-
-  if (cfg.endTime) {
-    const end = new Date(cfg.endTime).getTime();
-    const isEndChanged = !originalEndTime || new Date(originalEndTime).getTime() !== end;
-    if (isEndChanged && end < now) {
-      return "End time cannot be in the past.";
-    }
-  }
-
-  if (cfg.startTime && cfg.endTime) {
-    const start = new Date(cfg.startTime).getTime();
-    const end = new Date(cfg.endTime).getTime();
-    if (start >= end) return "End time must be after start time.";
-    const windowMinutes = Math.floor((end - start) / 60000);
-    if (duration > windowMinutes) return `Exam duration (${duration} mins) exceeds the available time window (${windowMinutes} mins).`;
-  }
+export function validateConfig(_duration: number, cfg: ExamConfigForm): string | null {
   if (!(Number(cfg.maxAttempts) >= 1)) return "Maximum attempts must be at least 1.";
   if (cfg.maxScore !== "" && !(Number(cfg.maxScore) > 0 && Number(cfg.maxScore) <= 1000)) return "Max score must be greater than 0 and at most 1000.";
   if (cfg.passScore !== "" && Number(cfg.passScore) < 0) return "Passing score must be >= 0.";
   if (cfg.passScore !== "" && Number(cfg.passScore) > (cfg.maxScore !== "" ? Number(cfg.maxScore) : 10)) return "Passing score cannot exceed the max score.";
-  if (cfg.latePolicy !== "NOT_ALLOWED" && !cfg.endTime) return "End time is required when setting a late submission policy.";
   if (cfg.latePolicy === "ALLOWED_WITH_PENALTY") {
     const pct = Number(cfg.latePenaltyPercent);
     if (!(pct >= 1 && pct <= 100)) return "Late penalty percentage must be between 1% and 100%.";
@@ -183,5 +158,7 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
     blockCopyPaste: cfg.blockCopyPaste,
     requireFullscreen: cfg.requireFullscreen,
     singleSession: cfg.singleSession,
+    cameraProctoring: cfg.cameraProctoring,
+    notifyOnViolation: cfg.notifyOnViolation,
   };
 }

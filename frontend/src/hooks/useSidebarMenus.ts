@@ -63,7 +63,9 @@ export function useActiveModuleGroups(enabled = true) {
 
                 acc[module.moduleGroupId].push({
                     ...module,
-                    name: module.title,
+                    // "Exams" is shown to teachers as "Assessments" (the DB title may still be the old one).
+                    title: module.url === "/exams" && module.title === "Exams" ? "Assessments" : module.title,
+                    name: module.url === "/exams" && module.title === "Exams" ? "Assessments" : module.title,
                 });
                 return acc;
             }, {});

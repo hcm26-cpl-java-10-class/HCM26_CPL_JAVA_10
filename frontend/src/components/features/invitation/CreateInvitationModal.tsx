@@ -41,10 +41,11 @@ interface AuthForm {
 
 interface AnonForm {
     maxAccessAttempts: string;
+    maxAccessTime: string;
 }
 
 const DEFAULT_AUTH: AuthForm = { userId: "", note: "", expiresAt: "" };
-const DEFAULT_ANON: AnonForm = { maxAccessAttempts: "1" };
+const DEFAULT_ANON: AnonForm = { maxAccessAttempts: "1", maxAccessTime: "" };
 
 const REMINDER_OPTIONS: { value: ReminderType; label: string }[] = [
     { value: "ONE_HOUR", label: "1 hour before" },
@@ -164,11 +165,16 @@ export function CreateInvitationModal({
                 const req: ReminderRequest = {
                     reminderType: reminderType as ReminderType,
                     scheduledAt: reminderType === "CUSTOM" ? toIso(customReminder) : undefined,
+                    // Phải gắn invitationId, nếu không backend sẽ gửi nhắc nhở cho toàn bộ đề.
+                    invitationId: inv.id,
                 };
                 try {
                     await invitationApi.scheduleReminder(examId, req);
                     toast.success("Email reminder scheduled.");
-                } catch {
+                } catch (error) {
+                    toast.error(
+                        getErrorMessage(error, "Failed to schedule reminder for this invitation."),
+                    );
                 }
             }
 
@@ -185,6 +191,7 @@ export function CreateInvitationModal({
         mutationFn: async () => {
             const request: AnonymousInvitationRequest = {
                 maxAccessAttempts: Number(anon.maxAccessAttempts) || 1,
+                maxAccessTime: toIso(anon.maxAccessTime) || undefined,
             };
             return invitationApi.createAnonymous(examId, request);
         },
@@ -193,7 +200,8 @@ export function CreateInvitationModal({
             if (inv.id) {
                 try {
                     qr = await invitationApi.getQrDataUrl(inv.id);
-                } catch {
+                } catch (error) {
+                    toast.error(getErrorMessage(error, "Failed to generate QR code."));
                 }
             }
             setAnonInvitations((prev) => new Map(prev).set(inv.id!, { inv, qr }));
@@ -373,6 +381,21 @@ export function CreateInvitationModal({
                                 />
                                 <p className="text-xs text-muted-foreground">
                                     Number of times a student can take the exam using this link
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Access Window (optional)</Label>
+                                <Input
+                                    type="datetime-local"
+                                    value={anon.maxAccessTime}
+                                    onChange={(e) =>
+                                        setAnon((f) => ({ ...f, maxAccessTime: e.target.value }))
+                                    }
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    The link stops working after this moment. Leave empty to use the exam
+                                    start time plus duration.
                                 </p>
                             </div>
 

@@ -558,7 +558,7 @@ export default function ResultStatisticsPage() {
                     </p>
 
                     <h1 className="mt-1 text-2xl font-bold text-foreground">
-                        Exam Result Statistics
+                        Assessment Result Statistics
                     </h1>
 
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -569,7 +569,7 @@ export default function ResultStatisticsPage() {
 
                 {!validExamId && (
                     <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-                        Invalid exam ID. Please open this page using the URL
+                        Invalid assessment ID. Please open this page using the URL
                         /exams/ID/result-statistics.
                     </div>
                 )}
@@ -727,7 +727,7 @@ export default function ResultStatisticsPage() {
                                 Student Attempt Results
                             </h2>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Each row represents one exam attempt.
+                                Each row represents one assessment attempt.
                             </p>
                         </div>
 

@@ -11,8 +11,6 @@ import type { Dispatch, SetStateAction } from "react";
 import {
   EXAM_CATEGORY_OPTIONS,
   EXAM_TYPE_LABEL,
-  getFutureDatetimeString,
-  getLocalDatetimeString,
   LATE_POLICY_LABEL,
   RESULT_VISIBILITY_LABEL,
   type ExamConfigForm,
@@ -36,12 +34,12 @@ function SectionTitle({ children }: { children: string }) {
 }
 
 /** All fields of the exam form (shared by the Create dialog and the Edit tab). */
-export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, duration: newDuration, setDuration: setNewDuration, cfg, setCfg, editingExam }: Props) {
+export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, duration: newDuration, setDuration: setNewDuration, cfg, setCfg }: Props) {
   return (
-<div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-2">
       <SectionTitle>Basic</SectionTitle>
       <label className="grid gap-2 text-sm font-medium sm:col-span-2">
-        Exam Title
+        Assessment Title
         <Input required maxLength={200} value={newTitle} onChange={(event) => setNewTitle(event.target.value)} />
       </label>
 
@@ -51,7 +49,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
       </label>
 
       <label className="grid gap-2 text-sm font-medium">
-        Exam Password / Access Code (leave blank if not required)
+        Assessment Password / Access Code (leave blank if not required)
         <Input
             type="text"
             placeholder="e.g. EXAM2026"
@@ -64,7 +62,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
       <label className="grid gap-2 text-sm font-medium">
         Question Format
         <Select value={cfg.examType} onValueChange={(value) => setCfg((c) => ({ ...c, examType: value as ExamType }))}>
-          <SelectTrigger aria-label="Exam type"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Assessment type"><SelectValue /></SelectTrigger>
           <SelectContent>
             {(Object.keys(EXAM_TYPE_LABEL) as ExamType[]).map((key) => (
                 <SelectItem key={key} value={key}>{EXAM_TYPE_LABEL[key]}</SelectItem>
@@ -77,7 +75,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
       </label>
 
       <label className="grid gap-2 text-sm font-medium">
-        Exam Category
+        Assessment Category
         <Select value={cfg.category} onValueChange={(value) => {
           const category = value as ExamCategory;
           setCfg((current) => ({
@@ -86,7 +84,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
             showAnswersAfterExam: EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT[category],
           }));
         }}>
-          <SelectTrigger aria-label="Exam category"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Assessment category"><SelectValue /></SelectTrigger>
           <SelectContent>
             {EXAM_CATEGORY_OPTIONS.map((category) => (
                 <SelectItem key={category} value={category}>{EXAM_CATEGORY_LABEL[category]}</SelectItem>
@@ -99,94 +97,13 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
       </label>
 
       <div className="grid gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
-        <SectionTitle>Schedule &amp; attempts</SectionTitle>
-        <div className="grid gap-2 text-sm font-medium">
-          <div className="flex flex-wrap items-center justify-between gap-1">
-            <span>Start Time</span>
-            <div className="flex items-center gap-1 font-normal">
-              <button
-                type="button"
-                className="text-[11px] text-primary hover:underline cursor-pointer"
-                onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(2) }))}
-              >
-                Now +2m
-              </button>
-              <span className="text-[10px] text-muted-foreground">·</span>
-              <button
-                type="button"
-                className="text-[11px] text-primary hover:underline cursor-pointer"
-                onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(15) }))}
-              >
-                +15m
-              </button>
-              <span className="text-[10px] text-muted-foreground">·</span>
-              <button
-                type="button"
-                className="text-[11px] text-primary hover:underline cursor-pointer"
-                onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(60) }))}
-              >
-                +1h
-              </button>
-              {cfg.startTime && (
-                <>
-                  <span className="text-[10px] text-muted-foreground">·</span>
-                  <button
-                    type="button"
-                    className="text-[11px] text-destructive hover:underline cursor-pointer"
-                    onClick={() => setCfg((c) => ({ ...c, startTime: "" }))}
-                  >
-                    Clear
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-          <Input
-              type="datetime-local"
-              min={editingExam?.startTime && new Date(editingExam.startTime).getTime() < Date.now()
-                ? undefined
-                : getLocalDatetimeString()}
-              value={cfg.startTime}
-              onChange={(event) => setCfg((c) => ({ ...c, startTime: event.target.value }))}
-          />
-          <p className="text-[11px] font-normal text-muted-foreground">
-            {cfg.startTime
-              ? "Must be current time or later (rec: at least 1–2 min ahead)."
-              : "Leave blank = no open limit (students can start anytime)."}
-          </p>
-        </div>
-
-        <div className="grid gap-2 text-sm font-medium">
-          <div className="flex flex-wrap items-center justify-between gap-1">
-            <span>End Time</span>
-            {cfg.endTime && (
-              <button
-                type="button"
-                className="text-[11px] text-destructive hover:underline cursor-pointer font-normal"
-                onClick={() => setCfg((c) => ({ ...c, endTime: "" }))}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          <Input
-              type="datetime-local"
-              min={cfg.startTime || (editingExam?.endTime && new Date(editingExam.endTime).getTime() < Date.now() ? undefined : getLocalDatetimeString())}
-              value={cfg.endTime}
-              onChange={(event) => setCfg((c) => ({ ...c, endTime: event.target.value }))}
-          />
-          <p className="text-[11px] font-normal text-muted-foreground">
-            {cfg.endTime
-              ? "Exam will automatically close at this time."
-              : "Leave blank = no closing deadline."}
-          </p>
-        </div>
+        <SectionTitle>Attempts</SectionTitle>
 
         <label className="grid gap-2 text-sm font-medium">
           Maximum Attempts
           <Input type="number" min={1} value={cfg.maxAttempts} onChange={(event) => setCfg((c) => ({ ...c, maxAttempts: event.target.value }))} />
           <span className="text-xs font-normal text-muted-foreground">
-            Number of times a student can take this exam.
+            Number of times a student can take this assessment.
           </span>
         </label>
 
@@ -263,7 +180,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         </div>
 
         <div className="grid gap-2 text-sm font-medium">
-          Show Answers After Exam
+          Show Answers After Assessment
           <label className="flex h-9 items-center gap-2 rounded-md border border-input bg-background/50 px-3 py-1 cursor-pointer">
             <input
               type="checkbox"
@@ -308,6 +225,14 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.singleSession} onChange={(event) => setCfg((c) => ({ ...c, singleSession: event.target.checked }))} />
                 Detect multiple tabs / devices
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.cameraProctoring} onChange={(event) => setCfg((c) => ({ ...c, cameraProctoring: event.target.checked }))} />
+                Camera proctoring (face photo at start, detect camera off / covered / away / extra person)
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.notifyOnViolation} onChange={(event) => setCfg((c) => ({ ...c, notifyOnViolation: event.target.checked }))} />
+                Notify the examinee when a violation is detected
               </label>
             </div>
         )}

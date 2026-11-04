@@ -11,5 +11,9 @@ public enum IntegrityEventType {
     CONTEXT_MENU,      // chuot phai
     DEVTOOLS_KEY,      // F12 / Ctrl+Shift+I / Ctrl+U ...
     PRINT_ATTEMPT,     // Ctrl+P / PrintScreen
-    MULTI_SESSION      // cung bai thi mo o tab/thiet bi khac
+    MULTI_SESSION,     // cung bai thi mo o tab/thiet bi khac
+    CAMERA_OFF,        // camera bi tat / mat ket noi
+    CAMERA_COVERED,    // camera bi che (toi/dong nhat)
+    FACE_MISSING,      // nguoi thi roi khoi camera
+    MULTIPLE_FACES     // co nguoi khac xuat hien trong camera
 }

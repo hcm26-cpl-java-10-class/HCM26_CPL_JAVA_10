@@ -9,6 +9,7 @@ import type {
   ExamDTO,
   ExamFilter,
   ExamCategory,
+  ExamInvitationOverview,
   GradeSubmissionRequest,
   QuestionDTO,
   QuestionFilter,
@@ -37,6 +38,10 @@ export interface PublishedExamScore {
 
 export const examApi = {
   ...examBase,
+  listInvitationOverviews: async (): Promise<ExamInvitationOverview[]> => {
+    const response = await axiosInstance.get<ExamInvitationOverview[]>("/exams/invitations/overview");
+    return response.data;
+  },
   getMyPublishedExamScores: async (): Promise<PublishedExamScore[]> => {
     const response = await axiosInstance.get<PublishedExamScore[]>("/exams/my-scores");
     return response.data;

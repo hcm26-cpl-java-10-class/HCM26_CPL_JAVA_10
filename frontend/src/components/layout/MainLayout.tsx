@@ -7,13 +7,21 @@ import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
 import { StudentNavbar } from "@/components/layout/StudentNavbar";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
+import type { ReactNode } from "react";
 
 export function MainLayout({
     children,
     pathName,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    pathLinks: _pathLinks,
+    focusMode = false,
 }: {
-    children: React.ReactNode;
+    children: ReactNode;
     pathName?: Record<string, string>;
+    /** Accepted for callers from other branches; DynamicBreadcrumbs does not support custom links yet. */
+    pathLinks?: Record<string, string>;
+    /** Hide the navbar / breadcrumbs / sidebar (e.g. while taking an exam). */
+    focusMode?: boolean;
 }) {
     const { activeRole } = usePermissions();
     const embedded = useContext(EmbeddedLayoutContext);
@@ -21,6 +29,16 @@ export function MainLayout({
 
     if (embedded) {
         return <>{children}</>;
+    }
+
+    if (focusMode) {
+        return (
+            <div className="flex h-screen max-h-[calc(100vh-18px)] flex-col overflow-hidden">
+                <main className="flex flex-1 min-h-0 flex-col overflow-y-auto px-6 pb-6 pt-4">
+                    {children}
+                </main>
+            </div>
+        );
     }
 
     if (isStudentView) {
