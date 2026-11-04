@@ -18,6 +18,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import type { ExternalClass } from "@/types";
 import type { ClassCalendarVersion } from "@/types/features/external";
 import { retryUnlessClientError } from "@/utils/query.utils";
+import { CalendarOverviewChart } from "./CalendarOverviewChart";
 
 const STATUSES = [
     { value: "active", label: "Active" },
@@ -169,6 +170,7 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
             </footer>
 
             <Dialog open={!!detail} onOpenChange={(open) => { if (!open) setDetail(null); }}>
+                {detail && mode === "overview" ? <CalendarOverviewChart calendar={detail} onDownload={() => download(detail, true)} /> : (
                 <DialogContent className="sm:max-w-xl">
                     <DialogHeader><DialogTitle>{mode === "adjust" ? "Adjust calendar" : mode === "overview" ? "Calendar overview" : `Calendar version ${detail?.version}`}</DialogTitle><DialogDescription className="break-all">{detail?.name}</DialogDescription></DialogHeader>
                     {detail && mode === "adjust" ? <form className="space-y-4" onSubmit={(event) => {
@@ -187,9 +189,9 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
                         <dt className="text-muted-foreground">Last Modified By</dt><dd>{detail.lastModifiedBy}</dd>
                         <dt className="text-muted-foreground">Status</dt><dd><StatusBadge status={detail.status} /></dd>
                     </dl>
-                    {mode === "overview" && <div className="max-h-64 overflow-auto border-t pt-4"><p className="mb-3 text-sm font-medium">{detail.sessions?.length ?? 0} sessions</p>{detail.sessions?.length ? detail.sessions.map((session) => <div key={session.id} className="border-b py-2 text-sm"><p className="font-medium">{session.topic || "Session"}</p><p className="text-muted-foreground">{session.date} · {session.slot || "—"} · {session.trainer || "—"}</p></div>) : <p className="text-sm text-muted-foreground">No session snapshot available for this version.</p>}</div>}
                     </>}
                 </DialogContent>
+                )}
             </Dialog>
         </div>
     );

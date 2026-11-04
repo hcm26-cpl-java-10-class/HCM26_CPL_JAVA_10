@@ -69,3 +69,23 @@ it("offers all five actions, downloads a workbook and saves staged adjustments",
     await waitFor(() => expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")).toHaveLength(1));
     expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")[0].data).toEqual({ updates: [{ id: 2, name: "Java_Calendar_1.2", historyChange: "Updated calendar plan" }] });
 });
+
+it("opens the overview chart with topic date ranges and closes back to the calendar", async () => {
+    fakeHttp.on("get", "/external/classes/1/calendars", [{ ...records[1], sessions: [
+        { id: 1, classId: 1, date: "2026-05-25", topic: "Java" },
+        { id: 2, classId: 1, date: "2026-06-02", topic: "Java" },
+        { id: 3, classId: 1, date: "2026-05-26", topic: "React" },
+        { id: 4, classId: 1, date: "2026-02-30", topic: "Invalid date" },
+    ] }]);
+    const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
+    await user.click(await screen.findByRole("button", { name: "Actions for calendar version 1.2" }));
+    await user.click(screen.getByRole("menuitem", { name: "Overview" }));
+    const dialog = screen.getByRole("dialog", { name: "Calendar Overview Chart" });
+    expect(within(dialog).getByRole("rowheader", { name: "Java" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("cell", { name: "25-May - 02-Jun, 2 sessions" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("cell", { name: "26-May, 1 session" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("rowheader", { name: "Invalid date" })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Close calendar overview" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Java_Calendar_1.2" })).toBeInTheDocument();
+});
