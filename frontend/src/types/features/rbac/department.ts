@@ -1,10 +1,10 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
 
 export interface DepartmentDTO extends BaseDTO {
-export interface Department extends BaseDTO {
   code?: string;
   name?: string;
   description?: string;
+
   /** null/undefined = phòng ban gốc. Khi sửa (PUT) luôn được áp dụng. */
   parentDepartmentId?: string | number | null;
   /** Chỉ đọc. */
@@ -12,7 +12,7 @@ export interface Department extends BaseDTO {
 }
 
 /** Khớp class Department trong class diagram (cây cha/con). */
-export type DepartmentDTO = Department;
+export type Department = DepartmentDTO;
 
 export interface DepartmentFilter extends BaseFilter {
   parentDepartmentId?: string | number;
