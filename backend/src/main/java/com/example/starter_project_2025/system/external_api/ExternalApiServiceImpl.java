@@ -298,6 +298,11 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         return executePutGeneric(baseUrl + "/api/classes/" + classId + "/calendars", body, "class calendars");
     }
 
+    @Override
+    public Object createCalendarVersion(Long classId, Long calendarId, Object body) {
+        return executePostGeneric(baseUrl + "/api/classes/" + classId + "/calendars/" + calendarId + "/versions", body, "calendar version");
+    }
+
     private Object executeGetGeneric(String url, String resourceName) {
         try {
             HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());

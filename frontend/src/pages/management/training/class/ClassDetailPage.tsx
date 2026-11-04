@@ -16,7 +16,6 @@ import { classTitle } from "@/utils/class.utils";
 import { ClassBudgetTab } from "./components/ClassBudgetTab";
 import { ClassCalendarTab } from "./components/ClassCalendarTab";
 import { ClassInfoTab } from "./components/ClassInfoTab";
-import { ClassLifecyclePanel } from "./components/ClassLifecyclePanel";
 import { ClassSessionsTab } from "./components/ClassSessionsTab";
 import { ClassStatusBadge } from "./components/ClassStatusBadge";
 import { ClassTraineeTab } from "./components/ClassTraineeTab";
@@ -101,11 +100,6 @@ export default function ClassDetailPage() {
                             </div>
                         </header>
 
-                        {/* Lifecycle panel always visible at top */}
-                        <div className="border-b px-4 py-3 sm:px-5">
-                            <ClassLifecyclePanel classItem={classItem} />
-                        </div>
-
                         <Tabs
                             value={tab}
                             onValueChange={(value) =>
@@ -115,15 +109,15 @@ export default function ClassDetailPage() {
                         >
                             <TabsList
                                 variant="line"
-                                className="h-11 w-full justify-start gap-2 overflow-x-auto rounded-none border-b px-3 sm:px-4"
+                                className="group-data-[orientation=horizontal]/tabs:h-14 w-full justify-start gap-2 overflow-x-auto overflow-y-hidden rounded-none border-b px-3 sm:gap-3 sm:px-4"
                             >
                                 {TABS.map(({ value, label, icon: Icon }) => (
                                     <TabsTrigger
                                         key={value}
                                         value={value}
-                                        className="flex-none px-3 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-300 after:bg-blue-800"
+                                        className="flex-none gap-2 px-3 text-sm font-semibold sm:px-4 sm:text-base data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-300 after:bottom-0 after:bg-blue-800"
                                     >
-                                        <Icon aria-hidden /> {label}
+                                        <Icon aria-hidden className="size-4 sm:size-5" /> {label}
                                     </TabsTrigger>
                                 ))}
                             </TabsList>

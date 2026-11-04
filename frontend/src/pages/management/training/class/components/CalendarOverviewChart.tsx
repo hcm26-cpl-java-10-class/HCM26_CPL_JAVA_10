@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { ClassCalendarVersion } from "@/types/features/external";
 
 const DAY = 86400000;
+const COLORS = ["#6366f1", "#38bdf8", "#22c55e", "#a78bfa", "#f59e0b", "#ec4899", "#14b8a6"];
 
 function dateValue(value: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -26,7 +27,13 @@ export function CalendarOverviewChart({ calendar, onDownload }: {
     const chart = useMemo(() => {
         const groups = new Map<string, { label: string; start: number; end: number; count: number }>();
         let unavailable = 0;
-        for (const session of calendar.sessions ?? []) {
+        for (const item of calendar.overviewItems ?? []) {
+            const start = dateValue(item.startDate);
+            const end = dateValue(item.endDate);
+            if (start === null || end === null || end < start) { unavailable++; continue; }
+            groups.set(item.id, { label: item.label, start, end, count: 0 });
+        }
+        for (const session of calendar.overviewItems?.length ? [] : calendar.sessions ?? []) {
             const date = dateValue(session.date);
             if (date === null) { unavailable++; continue; }
             const label = session.topic?.trim() || `Session #${session.id}`;
@@ -41,7 +48,7 @@ export function CalendarOverviewChart({ calendar, onDownload }: {
         const start = rows.length ? Math.min(...rows.map((row) => row.start)) : 0;
         const end = rows.length ? Math.max(...rows.map((row) => row.end)) : 0;
         return { rows, start, end, span: Math.max(DAY, end - start + DAY), unavailable };
-    }, [calendar.sessions]);
+    }, [calendar.sessions, calendar.overviewItems]);
 
     return (
         <DialogContent showCloseButton={false} className="flex h-[88dvh] max-h-[950px] w-[calc(100%-2rem)] max-w-[1500px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1500px,calc(100vw-4rem))]">
@@ -60,24 +67,30 @@ export function CalendarOverviewChart({ calendar, onDownload }: {
                 </div>
                 {chart.rows.length ? (
                     <div className="min-w-[700px]">
-                        <div className="ml-44 flex justify-between border-b pb-2 pl-4 text-xs text-muted-foreground sm:ml-52">
-                            <span>{dateLabel(chart.start, true)}</span><span>{dateLabel(chart.end, true)}</span>
+                        <div className="ml-44 flex justify-between border-b px-3 pb-2 text-xs text-muted-foreground sm:ml-52">
+                            {Array.from({ length: 5 }, (_, index) => <span key={index}>{dateLabel(chart.start + (chart.end - chart.start) * index / 4, true)}</span>)}
                         </div>
                         <div role="table" aria-label="Calendar overview by topic">
-                            {chart.rows.map((row) => {
-                                const left = (row.start - chart.start) / chart.span * 100;
-                                const width = Math.max(0.5, (row.end - row.start + DAY) / chart.span * 100);
+                            {chart.rows.map((row, index) => {
+                                const left = 80 + (row.start - chart.start) / chart.span * 840;
+                                const width = Math.max(4, (row.end - row.start + DAY) / chart.span * 840);
                                 const range = row.start === row.end ? dateLabel(row.start) : `${dateLabel(row.start)} - ${dateLabel(row.end)}`;
-                                return <div role="row" key={row.label} className="flex min-h-14">
+                                return <div role="row" key={`${row.label}-${index}`} className="flex min-h-14">
                                     <div role="rowheader" className="flex w-44 shrink-0 items-center justify-end border-b px-3 text-right text-sm sm:w-52"><span className="truncate" title={row.label}>{row.label}</span></div>
-                                    <div role="cell" className="relative min-w-0 flex-1 border-b border-l" aria-label={`${range}, ${row.count} ${row.count === 1 ? "session" : "sessions"}`}>
-                                        <div className="absolute inset-y-0 left-0 right-0 bg-[linear-gradient(to_right,transparent_calc(25%-1px),var(--color-border)_25%,transparent_calc(25%+1px))] bg-[length:25%_100%] opacity-30" aria-hidden />
-                                        <div className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-indigo-200 dark:bg-indigo-900" style={{ left: `${left}%`, width: `${width}%` }} aria-hidden />
-                                        <span className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded bg-background/90 px-1 text-xs font-medium sm:text-sm" style={{ left: `${Math.min(left, 76)}%` }} title={`${row.label}: ${range}`}>{range}</span>
+                                    <div role="cell" className="relative min-w-0 flex-1 border-b border-l" aria-label={row.count ? `${range}, ${row.count} ${row.count === 1 ? "session" : "sessions"}` : range}>
+                                        <svg viewBox="0 0 1000 56" preserveAspectRatio="none" className="block h-14 w-full" role="img" aria-label={`${row.label}: ${range}`}>
+                                            <title>{row.label}: {dateLabel(row.start, true)} – {dateLabel(row.end, true)}</title>
+                                            {[80, 290, 500, 710, 920].map((x) => <line key={x} x1={x} x2={x} y1={0} y2={56} className="stroke-border" strokeDasharray="3 4" strokeWidth={0.6} />)}
+                                            <rect x={left} y={13} width={width} height={30} rx={2} fill={COLORS[index % COLORS.length]} opacity={0.9} />
+                                            <text x={left + width / 2} y={32} textAnchor="middle" fontSize={13} fontWeight={500} className="fill-foreground stroke-background" strokeWidth={4} paintOrder="stroke">{range}</text>
+                                        </svg>
                                     </div>
                                 </div>;
                             })}
                         </div>
+                        <svg viewBox="0 0 1000 30" preserveAspectRatio="none" className="ml-44 h-8 w-[calc(100%-11rem)] sm:ml-52 sm:w-[calc(100%-13rem)]" aria-hidden>
+                            {[80, 290, 500, 710, 920].map((x, index) => <g key={x}><line x1={x} x2={x} y1={0} y2={7} className="stroke-border" /><text x={x} y={23} textAnchor="middle" fontSize={11} className="fill-muted-foreground">{dateLabel(chart.start + (chart.end - chart.start) * index / 4)}</text></g>)}
+                        </svg>
                     </div>
                 ) : <div className="flex min-h-64 flex-col items-center justify-center gap-3 text-center text-muted-foreground"><CalendarDays className="size-9" /><p>No dated sessions available for this calendar version.</p></div>}
                 {chart.unavailable > 0 && <p className="mt-4 text-xs text-muted-foreground">{chart.unavailable} sessions have no valid date and cannot be shown on the chart.</p>}

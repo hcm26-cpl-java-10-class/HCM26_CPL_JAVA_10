@@ -9,6 +9,7 @@ import {
     Users,
 } from "lucide-react";
 import { useTrainingAnalytics } from "@/hooks/useExternalLookups";
+import { MainLayout } from "@/components/layout/MainLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -171,7 +172,7 @@ export function TrainingDashboard() {
                 <div className="rounded-xl border bg-card p-4 space-y-3">
                     <h3 className="font-semibold text-sm">Phân bổ theo trạng thái</h3>
                     <div className="space-y-2">
-                        {Object.entries(byStatus).map(([status, count]) => (
+                        {Object.entries(byStatus).map(([status, count], i) => (
                             <SimpleBar
                                 key={status}
                                 label={status}

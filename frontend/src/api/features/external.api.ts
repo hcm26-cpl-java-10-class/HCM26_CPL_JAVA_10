@@ -18,6 +18,16 @@ export const ALL_STATUSES = "all";
 
 /** Access to the master training system, proxied by the backend under /api/external. */
 export const externalApi = {
+    createCalendarVersion: async (classId: number, calendarId: number, data: {
+        classStartDate: string; actualLearningStartDate: string; overviewItems: import("@/types/features/external").CalendarTopic[];
+    }): Promise<ClassCalendarVersion> => {
+        const response = await axiosInstance.post<ClassCalendarVersion>(`/external/classes/${classId}/calendars/${calendarId}/versions`, data);
+        return response.data;
+    },
+    downloadCalendarWithDetailedTime: async (classId: number, calendarId: number): Promise<Blob> => {
+        const response = await axiosInstance.get<Blob>(`/external/classes/${classId}/calendars/${calendarId}/export`, { responseType: "blob" });
+        return response.data;
+    },
     saveClassCalendars: async (classId: number, updates: Array<{ id: number; name: string; historyChange: string }>): Promise<void> => {
         await axiosInstance.put(`/external/classes/${classId}/calendars`, { updates });
     },
