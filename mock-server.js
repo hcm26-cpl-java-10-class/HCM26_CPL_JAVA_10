@@ -308,6 +308,201 @@ const STATUS_LABELS = {
 // ======================== SERVER ========================
 
 const calendarVersions = new Map();
+
+// ==================== FAMS OPERATION & ACTIVITIES STORAGE ====================
+function formatFamsTimestamp(date = new Date()) {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const pad = (n) => String(n).padStart(2, "0");
+  return pad(date.getDate()) + "-" + months[date.getMonth()] + "-" + date.getFullYear() + " " + pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds());
+}
+
+function getInitials(name = "Admin") {
+  const clean = String(name).trim();
+  if (!clean) return "AD";
+  const caps = clean.replace(/[^A-Z]/g, "");
+  if (caps.length >= 2) return caps.slice(0, 2);
+  const parts = clean.split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return clean.slice(0, 2).toUpperCase();
+}
+
+function createDefaultMilestones(classId) {
+  return [
+    {
+      id: 1, name: "Feb - 2026", status: "Baselined", checkpointType: "STANDARD", salaryPaid: "Yes",
+      startDate: "2026-02-01", endDate: "2026-02-28",
+      topics: [
+        { id: 101, topic: "[L1_AL_DF] [NFP] Database Fundamentals For All by FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 868 },
+        { id: 102, topic: "[L1_AL_ECWL] [NFP] Effective Communication with LEAP Technique (Instructor Led) (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 360 },
+        { id: 103, topic: "[L1_AL_DSAA] [NFP] Data Structures and Algorithms for ALL by FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 810 },
+        { id: 104, topic: "[L1_AL_APWS] [NFP] Agile Practitioner with Scrum For All By FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 210 }
+      ]
+    },
+    {
+      id: 2, name: "Mar - 2026", status: "Baselined", checkpointType: "STANDARD", salaryPaid: "Yes",
+      startDate: "2026-03-01", endDate: "2026-03-31",
+      topics: [
+        { id: 201, topic: "[L1_AL_VCG] [NFP] Version Control - Git for ALL by FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 264 },
+        { id: 202, topic: "[L4_MOCK_PROJECT] [NFP] Mock Project for Fresher (1.0) - Phase 1", maxScore: 10, passingScore: 6, weightedNumber: 5520 }
+      ]
+    },
+    {
+      id: 3, name: "Apr - 2026", status: "Baselined", checkpointType: "STANDARD", salaryPaid: "Yes",
+      startDate: "2026-04-01", endDate: "2026-04-30",
+      topics: [
+        { id: 301, topic: "[L4_MOCK_PROJECT] [NFP] Mock Project for Fresher (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 9840 },
+        { id: 302, topic: "[FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - April", maxScore: 10, passingScore: 6, weightedNumber: 3060 }
+      ]
+    },
+    {
+      id: 4, name: "May - 2026", status: "Baselined", checkpointType: "STANDARD", salaryPaid: "Yes",
+      startDate: "2026-05-01", endDate: "2026-05-31",
+      topics: [
+        { id: 401, topic: "[L2_JA_JS] [NFP] Java SE/Java Language Programing (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 2880 },
+        { id: 402, topic: "[FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - May", maxScore: 10, passingScore: 6, weightedNumber: 1260 }
+      ]
+    },
+    {
+      id: 5, name: "Jun - 2026", status: "Baselined", checkpointType: "STANDARD", salaryPaid: "Yes",
+      startDate: "2026-06-01", endDate: "2026-06-30",
+      topics: [
+        { id: 501, topic: "[L2_JA_ORM] [NFP] ORM Framework - Hibernate (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 2400 },
+        { id: 502, topic: "[L2_JA_FEF(JS.KS)] [NFP] Front-end Fundamentals (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 4230 },
+        { id: 503, topic: "[L3_JSFW] [NFP] JavaScript Framework - React (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 4000 }
+      ]
+    }
+  ];
+}
+
+function createDefaultTopicAssessments() {
+  const titles = [
+    "1. L1_AL_CCGM - [NFP] Company Culture & Global Mindset (Instructor Led)",
+    "2. [FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - Jan&Feb",
+    "3. L1_AL_GC - [NFP] Global Collaboration",
+    "4. L1_AL_PSE - [NFP] Problem Solving",
+    "5. L1_AL_TME - [NFP] Time Management (E-learning)",
+    "6. L1_AL_DF - [NFP] Database Fundamentals For All by FSA",
+    "7. L1_AL_APWS - [NFP] Agile Practitioner with Scrum For All By FSA",
+    "8. L1_AL_ECWL - [NFP] Effective Communication with LEAP Technique (Instructor Led)",
+    "9. L1_AL_DSAA - [NFP] Data Structures and Algorithms for ALL by FSA",
+    "10. L1_AL_VCG - [NFP] Version Control - Git for ALL by FSA",
+    "11. FR_FU_KOR_IM - FR_FU_KOR_IM",
+    "12. [L4_MOCK_PROJECT] [NFP] Mock Project for Fresher (1.0) - Phase 1",
+    "13. [FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - April",
+    "14. L4_MOCK_PROJECT - [NFP] Mock Project for Fresher"
+  ];
+  return titles.map((title, idx) => {
+    const topicNum = idx + 1;
+    if (topicNum === 6) {
+      return {
+        id: topicNum, title,
+        assessments: [
+          { id: 601, name: "Assignments", weightedNumber: 30, quantity: 2, note: "(2 assignments)", action: "Keep", changeStatus: "none" },
+          { id: 602, name: "Final Theory Test", weightedNumber: 28, quantity: 1, note: "", action: "Keep", changeStatus: "confirmed" },
+          { id: 603, name: "Final Final Test", weightedNumber: 42, quantity: 1, note: "", action: "Keep", changeStatus: "none" }
+        ]
+      };
+    }
+    if (topicNum === 9) {
+      return {
+        id: topicNum, title,
+        assessments: [
+          { id: 901, name: "Assignments", weightedNumber: 30, quantity: 3, note: "", action: "Keep", changeStatus: "waiting" },
+          { id: 902, name: "Final Theory Test", weightedNumber: 30, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
+          { id: 903, name: "Final Practice Test", weightedNumber: 40, quantity: 1, note: "", action: "Keep", changeStatus: "none" }
+        ]
+      };
+    }
+    return {
+      id: topicNum, title,
+      assessments: [
+        { id: topicNum * 100 + 1, name: "Assignments", weightedNumber: 30, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
+        { id: topicNum * 100 + 2, name: "Final Theory Test", weightedNumber: 30, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
+        { id: topicNum * 100 + 3, name: "Final Practice Test", weightedNumber: 40, quantity: 1, note: "", action: "Keep", changeStatus: "none" }
+      ]
+    };
+  });
+}
+
+let budgetOperations = {};
+let topicAssessmentsByClass = {};
+let classActivities = {
+  1: [
+    { id: 1, classId: 1, author: "UyenHTM", initials: "UH", content: "has updated trainee allocation info.", timestamp: "06-Aug-2026 09:41:25", type: "history" },
+    { id: 2, classId: 1, author: "UyenHTM", initials: "UH", content: "has updated trainee status.", timestamp: "06-Aug-2026 09:34:35", type: "history" },
+    { id: 3, classId: 1, author: "UyenHTM", initials: "UH", content: "has reverted to in progress the class with following reason:\nUPDATE MILESTONE.", timestamp: "28-Jul-2026 15:19:32", type: "history" },
+    { id: 4, classId: 1, author: "UyenHTM", initials: "UH", content: "has edited trainee mark.", timestamp: "27-Jul-2026 17:02:19", type: "history" },
+    { id: 5, classId: 1, author: "UyenHTM", initials: "UH", content: "has updated class milestone.", timestamp: "27-Jul-2026 16:26:47", type: "history" },
+    { id: 6, classId: 1, author: "NgaTTT45", initials: "NT", content: "All trainees completed Final Practice Exam for Milestone Jun - 2026. Ready for graduation review.", timestamp: "26-Jul-2026 14:10:05", type: "comment" },
+    { id: 7, classId: 1, author: "NhiNLY4", initials: "NN", content: "has updated trainee reward and penalty.", timestamp: "25-Jul-2026 10:22:14", type: "history" }
+  ]
+};
+let activityIdCounter = 100;
+
+function appendClassActivity(classId, author, content, type = "history") {
+  if (!classActivities[classId]) classActivities[classId] = [];
+  activityIdCounter++;
+  const entry = {
+    id: activityIdCounter,
+    classId,
+    author: author || "UyenHTM",
+    initials: getInitials(author || "UyenHTM"),
+    content,
+    timestamp: formatFamsTimestamp(new Date()),
+    type
+  };
+  classActivities[classId].unshift(entry);
+  return entry;
+}
+
+function getOrCreateBudgetOperation(classId) {
+  if (!budgetOperations[classId]) {
+    const cls = classes.find(c => c.id === classId);
+    budgetOperations[classId] = {
+      classId,
+      operatingInfo: {
+        actualStartDate: cls?.startDate || "2026-01-23",
+        earlyGraduatedDate: classId === 1 ? "2026-07-22" : (cls?.endDate || "2026-07-22"),
+        actualEndDate: "",
+        gpaCalculation: { topicMark: 70, disciplinePoint: 30, bonusPoint: 10, penaltyPoint: 20 },
+        hasNoAllocationNeeds: false
+      },
+      milestones: createDefaultMilestones(classId)
+    };
+  }
+  const record = budgetOperations[classId];
+  const totalWeightedNumber = (record.milestones || []).reduce((sum, m) => sum + (m.topics || []).reduce((s, t) => s + (Number(t.weightedNumber) || 0), 0), 0);
+  return { ...record, totalWeightedNumber };
+}
+
+function getOrCreateTopicAssessments(classId) {
+  if (!topicAssessmentsByClass[classId]) {
+    const initial = createDefaultTopicAssessments();
+    topicAssessmentsByClass[classId] = {
+      current: JSON.parse(JSON.stringify(initial)),
+      baseline: JSON.parse(JSON.stringify(initial))
+    };
+  }
+  return topicAssessmentsByClass[classId];
+}
+
+function getOrCreateClassActivities(classId) {
+  if (!classActivities[classId]) {
+    classActivities[classId] = [
+      {
+        id: ++activityIdCounter,
+        classId,
+        author: "UyenHTM",
+        initials: "UH",
+        content: "has initialized class operating info.",
+        timestamp: "01-May-2026 09:00:00",
+        type: "history"
+      }
+    ];
+  }
+  return classActivities[classId];
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -463,9 +658,12 @@ const server = http.createServer(async (req, res) => {
   const attendanceMatch = pathname.match(/^\/api\/classes\/(\d+)\/sessions\/(\d+)\/attendance$/);
   const classBudgetMatch = pathname.match(/^\/api\/classes\/(\d+)\/budget$/);
   const classAuditMatch = pathname.match(/^\/api\/classes\/(\d+)\/audits$/);
+  const classOperationMatch = pathname.match(/^\/api\/classes\/(\d+)\/operation$/);
+  const classAssessmentsMatch = pathname.match(/^\/api\/classes\/(\d+)\/topic-assessments$/);
+  const classActivitiesMatch = pathname.match(/^\/api\/classes\/(\d+)\/activities$/);
 
   // GET /api/classes/:id
-  if (req.method === 'GET' && classDetailMatch && !classStatusMatch && !classTraineesMatch && !classSessionsMatch && !classBudgetMatch && !classAuditMatch) {
+  if (req.method === 'GET' && classDetailMatch && !classStatusMatch && !classTraineesMatch && !classSessionsMatch && !classBudgetMatch && !classAuditMatch && !classOperationMatch && !classAssessmentsMatch && !classActivitiesMatch) {
     const id = parseInt(classDetailMatch[1], 10);
     const item = classes.find(c => c.id === id);
     if (!item) return json(res, 404, { message: `Class #${id} not found` });
@@ -1041,6 +1239,77 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/trainers') { return json(res, 200, trainers); }
   if (pathname === '/api/rooms') { return json(res, 200, rooms); }
+
+  
+  // ======== FAMS BUDGET & OPERATION INFO ========
+  if (req.method === 'GET' && classOperationMatch) {
+    const classId = parseInt(classOperationMatch[1], 10);
+    return json(res, 200, getOrCreateBudgetOperation(classId));
+  }
+
+  if (req.method === 'PUT' && classOperationMatch) {
+    const classId = parseInt(classOperationMatch[1], 10);
+    const data = await readBody(req);
+    const current = getOrCreateBudgetOperation(classId);
+    budgetOperations[classId] = {
+      ...current,
+      ...data,
+      classId,
+    };
+    appendClassActivity(classId, 'UyenHTM', 'has updated class operating info and milestone configuration.', 'history');
+    return json(res, 200, budgetOperations[classId]);
+  }
+
+  // ======== TOPIC ASSESSMENTS ========
+  if (req.method === 'GET' && classAssessmentsMatch) {
+    const classId = parseInt(classAssessmentsMatch[1], 10);
+    const data = getOrCreateTopicAssessments(classId);
+    return json(res, 200, data.current);
+  }
+
+  if (req.method === 'PUT' && classAssessmentsMatch) {
+    const classId = parseInt(classAssessmentsMatch[1], 10);
+    const body = await readBody(req);
+    const state = getOrCreateTopicAssessments(classId);
+    if (body.action === 'discard') {
+      state.current = JSON.parse(JSON.stringify(state.baseline));
+    } else if (body.action === 'reject') {
+      state.current = (body.topics || state.current).map(t => ({
+        ...t,
+        assessments: (t.assessments || []).map(a => ({ ...a, changeStatus: 'none' }))
+      }));
+      appendClassActivity(classId, 'UyenHTM', 'has rejected topic assessment configuration changes.', 'history');
+    } else if (body.action === 'confirm') {
+      state.current = (body.topics || state.current).map(t => ({
+        ...t,
+        assessments: (t.assessments || []).map(a => ({
+          ...a,
+          changeStatus: a.changeStatus === 'waiting' ? 'confirmed' : a.changeStatus
+        }))
+      }));
+      state.baseline = JSON.parse(JSON.stringify(state.current));
+      appendClassActivity(classId, 'UyenHTM', 'has confirmed topic assessment configuration.', 'history');
+    } else if (Array.isArray(body.topics)) {
+      state.current = body.topics;
+    }
+    return json(res, 200, state.current);
+  }
+
+  // ======== CLASS ACTIVITIES ========
+  if (req.method === 'GET' && classActivitiesMatch) {
+    const classId = parseInt(classActivitiesMatch[1], 10);
+    return json(res, 200, getOrCreateClassActivities(classId));
+  }
+
+  if (req.method === 'POST' && classActivitiesMatch) {
+    const classId = parseInt(classActivitiesMatch[1], 10);
+    const body = await readBody(req);
+    const author = body.author || 'UyenHTM';
+    const content = body.content || '';
+    const type = body.type || 'comment';
+    const newEntry = appendClassActivity(classId, author, content, type);
+    return json(res, 201, newEntry);
+  }
 
   return json(res, 404, { message: "Not found" });
 });

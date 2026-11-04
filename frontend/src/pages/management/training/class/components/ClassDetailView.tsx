@@ -1,8 +1,7 @@
-import { Activity, ArrowLeft, HelpCircle } from "lucide-react";
+import { ArrowLeft, HelpCircle } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
-import { NotIntegratedPanel } from "@/components/common/NotIntegratedPanel";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -18,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useExternalClass } from "@/hooks/useExternalLookups";
 import { classTitle, getClassStatusMeta } from "@/utils/class.utils";
+import { ClassActivitiesTab } from "./ClassActivitiesTab";
 import { ClassBudgetTab } from "./ClassBudgetTab";
 import { ClassCalendarTab } from "./ClassCalendarTab";
 import { ClassInfoTab } from "./ClassInfoTab";
@@ -210,12 +210,7 @@ export function ClassDetailView() {
                                 </TabsContent>
 
                                 <TabsContent value="activities">
-                                    <NotIntegratedPanel
-                                        icon={Activity}
-                                        title="Class Activities Log"
-                                        description={`Activity history and operational logs for ${classTitle(classItem)} will appear here.`}
-                                        needs="GET /api/external/classes/:classId/activities"
-                                    />
+                                    <ClassActivitiesTab classItem={classItem} />
                                 </TabsContent>
                             </div>
                         </Tabs>

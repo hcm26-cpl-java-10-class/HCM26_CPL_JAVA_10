@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { externalApi } from "@/api/features/external.api";
 import { retryUnlessClientError } from "@/utils/query.utils";
+import type { ClassOperationData, TopicAssessment } from "@/types";
 
 const STALE_TIME_MS = 60_000;
 
@@ -20,6 +21,9 @@ export const externalKeys = {
     trainers: ["external", "trainers"] as const,
     activeTrainers: ["external", "trainers", "active"] as const,
     rooms: ["external", "rooms"] as const,
+    classOperation: (id: string | number) => ["external", "class", String(id), "operation"] as const,
+    topicAssessments: (id: string | number) => ["external", "class", String(id), "topicAssessments"] as const,
+    classActivities: (id: string | number) => ["external", "class", String(id), "activities"] as const,
 };
 
 /** Every class known to the master training system, whatever its status. */
@@ -64,6 +68,7 @@ export function useTransitionClassStatus(classId: string | undefined) {
             void qc.invalidateQueries({ queryKey: externalKeys.class(classId ?? "") });
             void qc.invalidateQueries({ queryKey: externalKeys.classStatus(classId ?? "") });
             void qc.invalidateQueries({ queryKey: externalKeys.classes });
+            void qc.invalidateQueries({ queryKey: externalKeys.classActivities(classId ?? "") });
         },
     });
 }
@@ -97,6 +102,7 @@ export function useAddTrainee(classId: string | undefined) {
         onSuccess: () => {
             void qc.invalidateQueries({ queryKey: externalKeys.classTrainees(classId ?? "") });
             void qc.invalidateQueries({ queryKey: externalKeys.class(classId ?? "") });
+            void qc.invalidateQueries({ queryKey: externalKeys.classActivities(classId ?? "") });
         },
     });
 }
@@ -109,6 +115,7 @@ export function useRemoveTrainee(classId: string | undefined) {
         onSuccess: () => {
             void qc.invalidateQueries({ queryKey: externalKeys.classTrainees(classId ?? "") });
             void qc.invalidateQueries({ queryKey: externalKeys.class(classId ?? "") });
+            void qc.invalidateQueries({ queryKey: externalKeys.classActivities(classId ?? "") });
         },
     });
 }
@@ -260,5 +267,83 @@ export function useExternalRooms(enabled = true) {
         enabled,
         staleTime: STALE_TIME_MS,
         retry: retryUnlessClientError,
+    });
+}
+
+// ===================== BUDGET & OPERATION INFO =====================
+
+export function useClassOperation(classId: string | undefined) {
+    return useQuery({
+        queryKey: externalKeys.classOperation(classId ?? ""),
+        queryFn: () => externalApi.getClassOperation(classId as string),
+        enabled: !!classId,
+        staleTime: STALE_TIME_MS,
+        retry: retryUnlessClientError,
+    });
+}
+
+export function useSaveClassOperation(classId: string | undefined) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (data: Partial<ClassOperationData>) =>
+            externalApi.saveClassOperation(classId as string, data),
+        onSuccess: () => {
+            void qc.invalidateQueries({ queryKey: externalKeys.classOperation(classId ?? "") });
+            void qc.invalidateQueries({ queryKey: externalKeys.class(classId ?? "") });
+            void qc.invalidateQueries({ queryKey: externalKeys.classActivities(classId ?? "") });
+        },
+    });
+}
+
+// ===================== TOPIC ASSESSMENTS =====================
+
+export function useTopicAssessments(classId: string | undefined) {
+    return useQuery({
+        queryKey: externalKeys.topicAssessments(classId ?? ""),
+        queryFn: () => externalApi.getTopicAssessments(classId as string),
+        enabled: !!classId,
+        staleTime: STALE_TIME_MS,
+        retry: retryUnlessClientError,
+    });
+}
+
+export function useSaveTopicAssessments(classId: string | undefined) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({
+            topics,
+            action,
+        }: {
+            topics: TopicAssessment[];
+            action?: "confirm" | "reject" | "discard";
+        }) => externalApi.saveTopicAssessments(classId as string, topics, action),
+        onSuccess: () => {
+            void qc.invalidateQueries({ queryKey: externalKeys.topicAssessments(classId ?? "") });
+            void qc.invalidateQueries({ queryKey: externalKeys.classOperation(classId ?? "") });
+            void qc.invalidateQueries({ queryKey: externalKeys.classActivities(classId ?? "") });
+        },
+    });
+}
+
+// ===================== CLASS ACTIVITIES =====================
+
+export function useClassActivities(classId: string | undefined) {
+    return useQuery({
+        queryKey: externalKeys.classActivities(classId ?? ""),
+        queryFn: () => externalApi.getClassActivities(classId as string),
+        enabled: !!classId,
+        staleTime: 10_000,
+        retry: retryUnlessClientError,
+    });
+}
+
+export function useAddClassActivity(classId: string | undefined) {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (activity: { author?: string; content: string; type?: "history" | "comment" }) =>
+            externalApi.addClassActivity(classId as string, activity),
+        onSuccess: () => {
+            void qc.invalidateQueries({ queryKey: externalKeys.classActivities(classId ?? "") });
+        },
     });
 }

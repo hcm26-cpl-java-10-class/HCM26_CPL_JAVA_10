@@ -243,3 +243,55 @@
 .animate-out {
   animation-fill-mode: forwards;
 }
+
+/* Visible custom scrollbars for all scrollable containers */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.6) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.6);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.85);
+}
+
+
+/* FAMS custom vertical scrollbar - prominent and draggable */
+.fams-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #8c96a4 #f1f5f9;
+}
+
+.fams-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.fams-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.fams-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #8c96a4;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.fams-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #64748b;
+}
