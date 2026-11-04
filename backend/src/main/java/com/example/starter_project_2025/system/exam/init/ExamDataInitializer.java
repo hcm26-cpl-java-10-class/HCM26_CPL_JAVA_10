@@ -66,10 +66,10 @@ public class ExamDataInitializer {
                 ExamCategory.MIDTERM, ExamType.MIXED, ResultVisibility.MANUAL_RELEASE, false, "5", false,
                 join(head(mc, 8), head(essay, 2))) ? 1 : 0;
         created += create(existing, creatorId, "Java - Bài tự luận (mẫu)", 60,
-                ExamCategory.ASSESSMENT, ExamType.ESSAY, ResultVisibility.MANUAL_RELEASE, false, "5", false,
+                ExamCategory.ASSIGNMENT, ExamType.ESSAY, ResultVisibility.MANUAL_RELEASE, false, "5", false,
                 head(essay, 4)) ? 1 : 0;
         created += create(existing, creatorId, "Lập trình Java - Thuật toán cơ bản (mẫu)", 45,
-                ExamCategory.ASSESSMENT, ExamType.CODING, ResultVisibility.AFTER_EXAM_CLOSED, true, "5", false,
+                ExamCategory.ASSIGNMENT, ExamType.CODING, ResultVisibility.AFTER_EXAM_CLOSED, true, "5", false,
                 head(coding, 5)) ? 1 : 0;
         created += create(existing, creatorId, "Java tổng hợp - Cuối kỳ (mẫu)", 90,
                 ExamCategory.FINAL_TEST, ExamType.MIXED, ResultVisibility.MANUAL_RELEASE, false, "5", true,

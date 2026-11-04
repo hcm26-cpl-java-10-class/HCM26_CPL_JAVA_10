@@ -86,7 +86,7 @@ public class Exam extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private ExamCategory category = ExamCategory.ASSESSMENT;
+    private ExamCategory category = ExamCategory.ASSIGNMENT;
 
     @Column(length = 100)
     private String accessCode;

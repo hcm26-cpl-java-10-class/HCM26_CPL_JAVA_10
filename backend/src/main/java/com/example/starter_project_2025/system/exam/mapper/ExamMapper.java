@@ -63,7 +63,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setLateGraceMinutes(e.getLateGraceMinutes());
         d.setResultVisibility(e.getResultVisibility());
         d.setExamType(ExamTypePolicy.effective(e.getExamType()));
-        d.setCategory(e.getCategory() == null ? ExamCategory.ASSESSMENT : e.getCategory());
+        d.setCategory(e.getCategory() == null ? ExamCategory.ASSIGNMENT : e.getCategory());
 
         List<Question> sorted = e.getQuestions().stream()
                 .sorted(Comparator.comparing(Question::getId)).toList();
