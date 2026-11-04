@@ -38,7 +38,6 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
     )) LIKE LOWER(CONCAT('%', :keyword, '%'))
        OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
        OR LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
-       OR LOWER(COALESCE(u.username, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
        OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
     """)
     List<Long> findIdsByActorName(@Param("keyword") String keyword);
