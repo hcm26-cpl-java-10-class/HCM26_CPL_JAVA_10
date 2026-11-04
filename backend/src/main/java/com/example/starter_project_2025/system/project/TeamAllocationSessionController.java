@@ -35,9 +35,27 @@ public class TeamAllocationSessionController {
     private final ProjectTeamMembershipService membershipService;
     private final ProjectTeamMentorService mentorService;
     private final ProjectTeamRoleService roleService;
+    private final ProjectTeamLeaderService leaderService;
     private final ProjectTeamTemplateService teamTemplateService;
     private final TemplateCandidateService templateCandidateService;
     private final AllocationReadinessService readinessService;
+    private final AutoAllocationService autoAllocationService;
+    private final AutoAllocationCoordinator autoAllocationCoordinator;
+
+    @PostMapping("/{sessionId}/auto-allocation/preview")
+    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    public AutoAllocationPreview previewAutoAllocation(@PathVariable Long classId,
+            @PathVariable Long sessionId, Authentication authentication) {
+        return autoAllocationService.preview(classId, sessionId, authentication);
+    }
+
+    @PostMapping("/{sessionId}/auto-allocation/confirm")
+    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    public ResponseEntity<String> confirmAutoAllocation(@PathVariable Long classId,
+            @PathVariable Long sessionId, @RequestHeader("X-Idempotency-Key") String key,
+            @RequestBody AutoAllocationConfirmRequest request, Authentication authentication) {
+        return autoAllocationCoordinator.confirm(classId, sessionId, key, request, authentication);
+    }
 
     @GetMapping("/mentors")
     @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
@@ -209,6 +227,15 @@ public class TeamAllocationSessionController {
     ) {
         roleService.updateRoles(
                 classId, sessionId, teamId, request, authentication);
+    }
+
+    @PutMapping("/{sessionId}/teams/{teamId}/leader")
+    @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
+    public java.util.Map<String, Long> assignTeamLeader(@PathVariable Long classId,
+            @PathVariable Long sessionId, @PathVariable Long teamId,
+            @Valid @RequestBody AssignTeamLeaderRequest request, Authentication authentication) {
+        return java.util.Map.of("leaderMemberId", leaderService.assign(
+                classId, sessionId, teamId, request, authentication));
     }
 
     @PostMapping("/{sessionId}/teams/{teamId}/members")

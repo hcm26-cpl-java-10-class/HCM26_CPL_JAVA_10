@@ -24,6 +24,7 @@ public class WorkspaceSectionPolicy {
     public String readPermission(WorkspaceSection section) {
         return switch (section) {
             case OVERVIEW -> "WORKSPACE_READ";
+            case RESOURCES -> "PROJECT_RESOURCE_READ";
             case MEMBERS -> "WORKSPACE_MEMBER_READ";
             case MILESTONE -> "MILESTONE_READ";
             case SPRINT, BACKLOG -> "SPRINT_READ";

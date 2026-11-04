@@ -95,59 +95,27 @@ const toDateTimeLocal = (value?: string | null) => {
 };
 
 /**
- * Board statuses map onto the backend lifecycle: the product backlog is
- * `TODO`, and the workflow columns are `TODO` (To do), `IN_PROGRESS`,
- * `REVIEW` and `DONE` - the same statuses the workspace Kanban board uses.
+ * The Backlog board uses the same four statuses as the Kanban board:
+ * `TODO` / `IN_PROGRESS` / `REVIEW` / `DONE`. The product backlog box is a
+ * grouping of items without a sprint, so its items simply stay in `TODO`.
  */
-const toSprintBacklogStatus = (status: BacklogStatus): SprintBacklogStatus => {
-  switch (status) {
-    case "IN_PROGRESS":
-      return "IN_PROGRESS";
-    case "REVIEW":
-      return "REVIEW";
-    case "DONE":
-      return "DONE";
-    case "BLOCKED":
-      return "BLOCKED";
-    default:
-      return "TODO";
-  }
-};
+const toSprintBacklogStatus = (status: BacklogStatus): SprintBacklogStatus =>
+  status;
 
 /**
  * Reverse mapping used when the `/backlogs` page reads the flat list of Sprint
- * Backlog records (the backend has no `BACKLOG` status).
- * <p>
- * `REVIEW` is kept as its own column so the Backlogs tab shows the same
- * statuses as the workspace Kanban board instead of reporting review work as
- * in progress.
+ * Backlog records.
  */
 const toBoardStatus = (
   status: SprintBacklogStatus | null | undefined,
-  hasSprint: boolean,
-): BacklogStatus => {
-  switch (status) {
-    case "IN_PROGRESS":
-      return "IN_PROGRESS";
-    case "REVIEW":
-      return "REVIEW";
-    case "BLOCKED":
-      return "BLOCKED";
-    case "DONE":
-      return "DONE";
-    case "TODO":
-      return "SPRINT_BACKLOG";
-    default:
-      return hasSprint ? "SPRINT_BACKLOG" : "BACKLOG";
-  }
-};
+): BacklogStatus => status ?? "TODO";
 
 const toPlanningItem = (dto: SprintBacklogDTO): SprintPlanningItem => ({
   id: dto.id as number,
   title: dto.title ?? null,
   description: dto.description ?? null,
   priority: (dto.priority as BacklogPriority | null | undefined) ?? null,
-  status: toBoardStatus(dto.status, dto.sprintId != null),
+  status: toBoardStatus(dto.status),
   workType: (dto.workType as SprintBacklogWorkType | null | undefined) ?? "TASK",
   sprintId: dto.sprintId ?? null,
   assigneeProjectMemberId: dto.assigneeProjectMemberId ?? null,
@@ -478,7 +446,7 @@ export function BacklogBoard({
 
   const matchesFilters = useCallback(
     (item: SprintPlanningItem, prefix: string) => {
-      const status = item.status ?? "BACKLOG";
+      const status = item.status ?? "TODO";
 
       if (statusFilter !== "ALL" && status !== statusFilter) {
         return false;
@@ -828,8 +796,8 @@ export function BacklogBoard({
           ?.projectId ?? null);
 
   /**
-   * The board uses the same workflow as the workspace Kanban board:
-   * `SPRINT_BACKLOG` (To do) / `IN_PROGRESS` / `REVIEW` / `DONE`.
+   * The board uses the same four statuses as the workspace Kanban board:
+   * `TODO` / `IN_PROGRESS` / `REVIEW` / `DONE`.
    * Any of them can be picked in any direction - the team owns its board.
    */
   const handleItemStatusChange = async (

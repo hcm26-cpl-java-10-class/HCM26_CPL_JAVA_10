@@ -52,6 +52,7 @@ public class UnassignedClassMemberService {
                         ClassMemberStatus.ACTIVE
                 )
                 .stream()
+                .filter(AllocationStudentEligibility::isEligible)
                 .filter(member -> !assignedMemberIds.contains(member.getId()))
                 .map(member -> new UnassignedClassMemberResponse(
                         member.getId(),
@@ -88,6 +89,7 @@ public class UnassignedClassMemberService {
                         ClassMemberStatus.ACTIVE
                 )
                 .stream()
+                .filter(AllocationStudentEligibility::isEligible)
                 .map(member -> new ClassMemberRosterResponse(
                         member.getId(),
                         member.getUser().getFullName(),

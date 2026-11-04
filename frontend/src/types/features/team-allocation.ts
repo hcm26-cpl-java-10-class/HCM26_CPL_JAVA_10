@@ -11,6 +11,17 @@ export interface AllocationSession {
   version: number;
 }
 
+export interface AutoAllocationPreview {
+  sessionId: number;
+  standardMax: number;
+  eligibleCount: number;
+  fingerprint: string;
+  teams: Array<{
+    teamName: string;
+    members: Array<{ memberId: number; fullName: string; userCode: string | null }>;
+  }>;
+}
+
 export interface MentorOption {
   mentorId: number;
   fullName: string;
@@ -47,6 +58,7 @@ export interface DraftWarning {
 
 export interface AllocationTeam {
   teamId: number;
+  leaderMemberId?: number | null;
   teamName: string;
   status: ProjectTeamStatus;
   version: number;

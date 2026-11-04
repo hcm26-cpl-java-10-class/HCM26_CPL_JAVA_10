@@ -177,7 +177,7 @@ class TaskAlertIntegrationTest {
         send(mentorToken, null, body("Reminder")).andExpect(status().isUnprocessableEntity());
         unchanged();
     }
-    @ParameterizedTest @ValueSource(strings = {"DONE", "FUTURE", "UNASSIGNED", "STALE", "REVIEW", "BLOCKED"})
+    @ParameterizedTest @ValueSource(strings = {"DONE", "FUTURE", "UNASSIGNED", "STALE", "REVIEW"})
     void ac03OneInvalidTaskRollsBackWholeBatch(String change) throws Exception {
         String payload = body("Keep this note.");
         tx.executeWithoutResult(status -> {
@@ -187,7 +187,6 @@ class TaskAlertIntegrationTest {
                 case "FUTURE" -> task.setDeadline(now.plusSeconds(60));
                 case "UNASSIGNED" -> task.setAssigneeProjectMemberId(null);
                 case "REVIEW" -> task.setStatus(TaskStatus.REVIEW);
-                case "BLOCKED" -> task.setStatus(TaskStatus.BLOCKED);
                 default -> task.setTitle("Changed after the dialog opened");
             }
         });
@@ -262,7 +261,6 @@ class TaskAlertIntegrationTest {
             task(projectAlias, memberAlias, TaskStatus.TODO, null);
             task(projectAlias, memberAlias, TaskStatus.TODO, now.plusSeconds(1));
             task(projectAlias, memberAlias, TaskStatus.REVIEW, now.minusSeconds(1));
-            task(projectAlias, memberAlias, TaskStatus.BLOCKED, now.minusSeconds(1));
             task(projectAlias, memberAlias, TaskStatus.DONE, now.minusSeconds(1));
         });
         mvc.perform(get("/api/task-alerts/overdue").param("projectId", projectAlias.toString())
@@ -341,19 +339,16 @@ class TaskAlertIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(projectAlias.toString()));
         unchanged();
     }
-    @Test void unmappedLegacyTaskCrudStillWorksButCannotSendAlerts() throws Exception {
+    @Test void newTasksRequireABacklogButUnmappedLegacyTasksStillCannotSendAlerts() throws Exception {
         UUID legacyProject = UUID.randomUUID();
-        var response = mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + mentorToken)
+        mvc.perform(post("/api/tasks").header("Authorization", "Bearer " + mentorToken)
                 .header("Idempotency-Key", UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("projectId", legacyProject, "title", "Legacy task",
                         "priority", "MEDIUM", "tags", List.of(), "deadline", now.minusSeconds(1).toString()))))
-                .andExpect(status().isOk()).andReturn();
-        var saved = json.readTree(response.getResponse().getContentAsString());
-        assertThat(Instant.parse(saved.get("deadline").asText())).isEqualTo(now.minusSeconds(1));
-        mvc.perform(get("/api/tasks/" + saved.get("id").asText()).header("Authorization", "Bearer " + mentorToken))
-                .andExpect(status().isOk());
+                .andExpect(status().isUnprocessableEntity());
+        Task legacyTask = tx.execute(status -> task(legacyProject, memberAlias, TaskStatus.TODO, now.minusSeconds(1)));
         var request = new TaskAlertDtos.Send(legacyProject,
-                List.of(new TaskAlertDtos.Selection(UUID.fromString(saved.get("id").asText()), saved.get("version").asLong())), "Reminder");
+                List.of(new TaskAlertDtos.Selection(legacyTask.getId(), legacyTask.getVersion())), "Reminder");
         send(mentorToken, UUID.randomUUID().toString(), json.writeValueAsString(request)).andExpect(status().isForbidden());
         assertThat(outbox.count()).isEqualTo(oldEvents);
     }

@@ -3,10 +3,9 @@ import type { TaskPriority } from "./task";
 
 /**
  * Lifecycle of a Sprint Backlog item (kept in sync with the backend
- * `SprintBacklogStatus` enum): To do -> In progress -> Review -> Done, with Blocked.
+ * `SprintBacklogStatus` enum): To do -> In progress -> Review -> Done.
  */
-export type SprintBacklogStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE" | "BLOCKED"
-  | "CUSTOM_1" | "CUSTOM_2" | "CUSTOM_3" | "CUSTOM_4" | "CUSTOM_5";
+export type SprintBacklogStatus = "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
 
 /**
  * Work type of a Sprint Backlog item (kept in sync with the backend

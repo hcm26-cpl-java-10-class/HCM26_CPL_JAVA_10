@@ -46,7 +46,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
 
-const COLUMN_ORDER = ["BACKLOG", "TODO", "IN_PROGRESS", "REVIEW", "DONE", "BLOCKED"];
+const COLUMN_ORDER = ["BACKLOG", "TODO", "IN_PROGRESS", "REVIEW", "DONE"];
 
 const COLUMN_STYLES: Record<
   string,
@@ -81,12 +81,6 @@ const COLUMN_STYLES: Record<
     icon: Check,
     badge: "bg-emerald-100 text-emerald-800",
     background: "bg-emerald-50/70",
-  },
-  BLOCKED: {
-    accent: "bg-rose-500",
-    icon: AlertCircle,
-    badge: "bg-rose-100 text-rose-800",
-    background: "bg-rose-50/70",
   },
 };
 
@@ -665,7 +659,7 @@ export default function ProjectBoardPage() {
 
     console.log("handleDrop:", { targetColumnKey, taskId: task.id, taskStatus: task.status, taskSprintId: task.sprintId });
 
-    const validStatuses: BoardTaskStatus[] = ["TODO", "IN_PROGRESS", "REVIEW", "DONE", "BLOCKED"];
+    const validStatuses: BoardTaskStatus[] = ["TODO", "IN_PROGRESS", "REVIEW", "DONE"];
     const isTargetBacklog = targetColumnKey === "BACKLOG";
     const isTargetStatus = validStatuses.includes(targetColumnKey as BoardTaskStatus);
 
@@ -758,10 +752,9 @@ export default function ProjectBoardPage() {
   // Workflow validation matching backend TaskStatusWorkflow
   const isValidTransition = (from: BoardTaskStatus, to: BoardTaskStatus): boolean => {
     const transitions: Record<BoardTaskStatus, BoardTaskStatus[]> = {
-      TODO: ["IN_PROGRESS", "BLOCKED"],
-      IN_PROGRESS: ["REVIEW", "BLOCKED", "TODO"],
-      REVIEW: ["DONE", "BLOCKED", "IN_PROGRESS"],
-      BLOCKED: ["TODO", "IN_PROGRESS"],
+      TODO: ["IN_PROGRESS"],
+      IN_PROGRESS: ["TODO", "REVIEW"],
+      REVIEW: ["IN_PROGRESS", "DONE"],
       DONE: ["REVIEW"],
     };
     return transitions[from]?.includes(to) ?? false;
@@ -903,7 +896,6 @@ export default function ProjectBoardPage() {
     .filter((column) => column.key !== "BACKLOG")
     .reduce((count, column) => count + column.count, 0);
   const doneTaskCount = orderedColumns.find((column) => column.key === "DONE")?.count ?? 0;
-  const blockedTaskCount = orderedColumns.find((column) => column.key === "BLOCKED")?.count ?? 0;
   const completionPercent = sprintTaskCount > 0
     ? Math.round((doneTaskCount / sprintTaskCount) * 100)
     : 0;
@@ -1146,7 +1138,7 @@ export default function ProjectBoardPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/70 sm:grid-cols-4">
+              <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/70 sm:grid-cols-3">
                 <div className="border-b border-r border-slate-100 px-4 py-3 sm:border-b-0">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Sprint tasks</p>
                   <p className="mt-1 text-lg font-bold text-slate-900">{sprintTaskCount}</p>
@@ -1158,7 +1150,7 @@ export default function ProjectBoardPage() {
                     <span className="text-xs font-medium text-slate-500">/ {sprintTaskCount} tasks</span>
                   </p>
                 </div>
-                <div className="border-r border-slate-100 px-4 py-3">
+                <div className="px-4 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Completion</p>
                   <div className="mt-2 flex items-center gap-2">
                     <div
@@ -1173,13 +1165,6 @@ export default function ProjectBoardPage() {
                     </div>
                     <span className="text-xs font-bold text-emerald-700">{completionPercent}%</span>
                   </div>
-                </div>
-                <div className="px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Blocked</p>
-                  <p className="mt-1 flex items-center gap-2 text-lg font-bold text-rose-700">
-                    {blockedTaskCount}
-                    <span className="text-xs font-medium text-slate-500">tasks</span>
-                  </p>
                 </div>
               </div>
             </section>

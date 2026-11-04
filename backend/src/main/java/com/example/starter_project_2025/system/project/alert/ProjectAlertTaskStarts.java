@@ -107,7 +107,7 @@ public class ProjectAlertTaskStarts {
         if(state==null)return null;
         try {var node=json.readTree(state);if(node.isObject()){var value=node.get(key);return value==null||value.isNull()?null:value.asText();}
             return "status".equals(key)?node.asText():null;
-        } catch(Exception legacy) {return "status".equals(key)&&Set.of("TODO","IN_PROGRESS","REVIEW","DONE","BLOCKED").contains(state)?state:null;}
+        } catch(Exception legacy) {return "status".equals(key)&&Set.of("TODO","IN_PROGRESS","REVIEW","DONE").contains(state)?state:null;}
     }
     private Instant at(LocalDateTime date,ZoneId zone) {return date==null?null:date.atZone(zone).toInstant();}
 }
