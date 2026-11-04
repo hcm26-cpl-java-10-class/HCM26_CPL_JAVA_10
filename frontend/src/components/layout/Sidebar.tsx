@@ -1,3 +1,5 @@
+import {useSelector} from "react-redux";
+import type {RootState} from "@/store/store";
 import { useDispatch } from "react-redux";
 import { setLogout } from "@/store/slices/auth/authSlice";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
@@ -18,6 +20,7 @@ export function SidebarMenu() {
     const { toggleSidebar, state } = useSidebar();
     const { data: moduleGroups = [] } = useActiveModuleGroups();
 
+    const canManageCourse = useSelector((s:RootState)=>s.auth.permissions.includes("ADMIN_ACCESS")&&s.auth.permissions.includes("COURSE_READ"));
     const navGroups = useMemo(() => {
         const resolveIcon = (iconName?: string) => {
             const key: keyof typeof iconMap =
@@ -26,7 +29,7 @@ export function SidebarMenu() {
             return iconMap[key];
         };
 
-        return moduleGroups
+        const groups = moduleGroups
             .map((group) => ({
                 id: group.id ?? group.name ?? "group",
                 name: group.name ?? "Menu",
@@ -56,7 +59,13 @@ export function SidebarMenu() {
                     }),
             }))
             .filter((group) => group.items.length > 0);
-    }, [location.pathname, moduleGroups]);
+        if(canManageCourse){const group=groups.find(g=>g.name==="Course Management"||g.name==="Course Online");if(group){
+          const items=[["Courses","/courses","graduation-cap"],["Enrollments","/course-enrollments","bar-chart"]];
+          group.items=items.map(([title,url,icon])=>({title,url,icon:resolveIcon(icon),isActive:location.pathname===url||(url==="/course-enrollments"&&location.pathname==="/enrollments")}));
+        }}
+        for(const group of groups)if(group.name==="Course Management"||group.name==="Course Online")group.items=group.items.filter(item=>["/courses","/course-enrollments","/enrollments"].includes(item.url));
+        return groups;
+    }, [location.pathname, moduleGroups,canManageCourse]);
 
     return (
         <Sidebar variant="inset" collapsible="icon">

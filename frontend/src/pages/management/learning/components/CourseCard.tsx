@@ -16,6 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { CourseThumbnail } from "@/components/CourseThumbnail";
 import type { LearningCourse } from "../learning.types";
 
 interface CourseCardProps {
@@ -32,24 +33,27 @@ export const CourseCard: React.FC<CourseCardProps> = ({
   const isCompleted = course.status === "completed";
   const isSaved = course.status === "saved";
   const isInProgress = course.status === "in_progress";
-
   return (
     <div className="bg-white dark:bg-[#141414] rounded-xl border border-gray-200 dark:border-[#262626] p-5 sm:p-6 transition-all hover:border-gray-300 dark:hover:border-[#383838] shadow-xs">
       {/* 1. Header: Provider & Category Badges */}
       <div className="flex items-center justify-between gap-3 mb-3">
-        {course.provider && <div className="flex items-center gap-2.5">
-          <div className="size-6 rounded bg-blue-50 dark:bg-[#1e293b] border border-blue-200 dark:border-[#334155] flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-400 select-none">
-            {course.provider.slice(0, 2).toUpperCase()}
+        {course.provider && (
+          <div className="flex items-center gap-2.5">
+            <div className="size-6 rounded bg-blue-50 dark:bg-[#1e293b] border border-blue-200 dark:border-[#334155] flex items-center justify-center text-[10px] font-bold text-blue-700 dark:text-blue-400 select-none">
+              {course.provider.slice(0, 2).toUpperCase()}
+            </div>
+            <span className="text-xs font-medium text-gray-500 dark:text-neutral-400">
+              {course.provider}
+            </span>
           </div>
-          <span className="text-xs font-medium text-gray-500 dark:text-neutral-400">
-            {course.provider}
-          </span>
-        </div>}
+        )}
 
         <div className="flex items-center gap-2">
-          {course.skill && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200 dark:bg-[#1e3a8a]/30 dark:text-[#60a5fa] dark:border-[#1e3a8a]/50">
-            {course.skill}
-          </span>}
+          {course.skill && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200 dark:bg-[#1e3a8a]/30 dark:text-[#60a5fa] dark:border-[#1e3a8a]/50">
+              {course.skill}
+            </span>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -62,10 +66,14 @@ export const CourseCard: React.FC<CourseCardProps> = ({
                 <MoreVertical className="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44 bg-white border-gray-200 text-gray-700 dark:bg-[#1a1a1a] dark:border-[#2e2e2e] dark:text-neutral-200 shadow-md">
+            <DropdownMenuContent
+              align="end"
+              className="w-48 bg-white border-gray-200 text-gray-700 dark:bg-[#1a1a1a] dark:border-[#2e2e2e] dark:text-neutral-200 shadow-md"
+            >
               <DropdownMenuItem asChild className="cursor-pointer hover:bg-gray-50 focus:bg-gray-50 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800">
-                <Link to="/courses">View courses</Link>
+                <Link to="/courses">View course catalog</Link>
               </DropdownMenuItem>
+
               {isSaved && onRemoveBookmark && (
                 <DropdownMenuItem
                   onClick={() => onRemoveBookmark(course.id)}
@@ -79,22 +87,34 @@ export const CourseCard: React.FC<CourseCardProps> = ({
         </div>
       </div>
 
+      {course.thumbnailUrl && <div className="mb-4 overflow-hidden rounded-lg"><CourseThumbnail src={course.thumbnailUrl} /></div>}
+
       {/* 2. Course Title */}
       <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white tracking-tight leading-snug mb-2">
         {course.title}
       </h3>
 
+      {course.description && <p className="mb-3 break-words text-sm text-muted-foreground">{course.description}</p>}
+
       {/* 3. Progress / Meta Info Subline */}
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-gray-500 dark:text-neutral-400 mb-3.5">
         <span className="font-medium text-gray-700 dark:text-neutral-300">Course</span>
         <span className="text-gray-300 dark:text-neutral-600">•</span>
-        {course.status === "enrolled" && <>
-          <span>Progress is not available</span>
-          {course.enrolledAt && <span>Enrolled {new Date(course.enrolledAt).toLocaleDateString()}</span>}
-        </>}
+        {course.status === "enrolled" && (
+          <>
+            <span>Progress is not available</span>
+            {course.enrolledAt && (
+              <span>Enrolled {new Date(course.enrolledAt).toLocaleDateString()}</span>
+            )}
+          </>
+        )}
         {isInProgress && (
           <>
-            <span className="font-semibold text-blue-600 dark:text-blue-400">{course.progress === null ? "Progress is not available" : `${course.progress}% complete`}</span>
+            <span className="font-semibold text-blue-600 dark:text-blue-400">
+              {course.progress === null
+                ? "Progress is not available"
+                : `${course.progress}% complete`}
+            </span>
             {course.estimatedCompletion && (
               <>
                 <span className="text-gray-300 dark:text-neutral-600">•</span>
@@ -119,7 +139,9 @@ export const CourseCard: React.FC<CourseCardProps> = ({
             {course.score && (
               <>
                 <span className="text-gray-300 dark:text-neutral-600">•</span>
-                <span className="text-gray-700 dark:text-neutral-300 font-semibold">Grade: {course.score}%</span>
+                <span className="text-gray-700 dark:text-neutral-300 font-semibold">
+                  Grade: {course.score}%
+                </span>
               </>
             )}
           </>
@@ -161,15 +183,8 @@ export const CourseCard: React.FC<CourseCardProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-            <Button
-              asChild
-              size="sm"
-              className="bg-[#2563eb] hover:bg-blue-600 text-white font-semibold text-xs px-4 h-9 shadow-xs cursor-pointer"
-            >
-              <Link to="/courses" className="inline-flex items-center gap-1.5">
-                <Play className="size-3 fill-current" />
-                <span>Continue Learning</span>
-              </Link>
+            <Button asChild size="sm" className="bg-[#2563eb] text-white">
+              <Link to={course.nextItem.link || "/courses"}><Play className="size-3" />Continue learning</Link>
             </Button>
           </div>
         </div>
@@ -216,7 +231,9 @@ export const CourseCard: React.FC<CourseCardProps> = ({
       {/* 7. Saved Course Actions */}
       {isSaved && (
         <div className="flex items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-[#262626]">
-          <span className="text-xs text-gray-500 dark:text-neutral-400">Ready to start this curriculum?</span>
+          <span className="text-xs text-gray-500 dark:text-neutral-400">
+            Ready to start this curriculum?
+          </span>
           <div className="flex items-center gap-2">
             {onRemoveBookmark && (
               <Button

@@ -51,6 +51,7 @@ public class UserDataInitializer implements CommandLineRunner {
         .orElseThrow(() -> new IllegalStateException("Role TEACHER not found. Ensure role seed runs first."));
 
       ensureUserWithRole(adminEmail, adminPassword, adminFirstName, adminLastName, adminRole, false);
+      ensureUserWithRole(adminEmail, adminPassword, adminFirstName, adminLastName, studentRole, false);
       ensureUserWithRole(STUDENT_EMAIL, DEFAULT_PASSWORD, "John", "Doe", studentRole, true);
       ensureUserWithRole(TEACHER_EMAIL, DEFAULT_PASSWORD, "Teacher", "User", teacherRole, true);
       deactivateLegacyJaneAccount();

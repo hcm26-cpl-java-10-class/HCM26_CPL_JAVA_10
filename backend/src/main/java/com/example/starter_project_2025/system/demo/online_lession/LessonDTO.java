@@ -19,6 +19,10 @@ import static com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class LessonDTO extends BaseDTO {
+    Integer durationSeconds;
+    String contentType;
+    String contentUrl;
+    String textContent;
 
     @NotBlank(groups = OnCreate.class, message = "Lesson title is required")
     @Size(max = 200, message = "Title must not exceed 200 characters")

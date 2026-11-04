@@ -1,19 +1,23 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { KeyRound, UserCheck } from "lucide-react";
+import { KeyRound, UserCheck, X, Check, Loader2 } from "lucide-react";
 
 interface ProfileHeaderProps {
   isEditing: boolean;
   disabled?: boolean;
+  isSaving?: boolean;
   onOpenChangePassword: () => void;
   onTriggerUpdateProfile: () => void;
+  onCancelEditing: () => void;
 }
 
 export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   isEditing,
   disabled = false,
+  isSaving = false,
   onOpenChangePassword,
   onTriggerUpdateProfile,
+  onCancelEditing,
 }) => {
   return (
     <div className="flex flex-col gap-4 pb-6">
@@ -38,25 +42,61 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onOpenChangePassword}
-            className="bg-white hover:bg-gray-50 border-gray-200 text-gray-700 dark:bg-card dark:text-gray-200 dark:border-border dark:hover:bg-muted shadow-xs transition-colors cursor-pointer"
-          >
-            <KeyRound className="h-4 w-4 mr-1 text-gray-500" />
-            Change Password
-          </Button>
+          {!isEditing ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onOpenChangePassword}
+                className="bg-white hover:bg-gray-50 border-gray-200 text-gray-700 dark:bg-card dark:text-gray-200 dark:border-border dark:hover:bg-muted shadow-xs transition-colors cursor-pointer"
+              >
+                <KeyRound className="h-4 w-4 mr-1 text-gray-500" />
+                Change Password
+              </Button>
 
-          <Button
-            type="button"
-            disabled={disabled}
-            onClick={onTriggerUpdateProfile}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs transition-colors cursor-pointer"
-          >
-            <UserCheck className="h-4 w-4 mr-1" />
-            {isEditing ? "Editing Profile..." : "Update Profile"}
-          </Button>
+              <Button
+                type="button"
+                disabled={disabled}
+                onClick={onTriggerUpdateProfile}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs transition-colors cursor-pointer"
+              >
+                <UserCheck className="h-4 w-4 mr-1" />
+                Update Profile
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancelEditing}
+                disabled={isSaving}
+                className="cursor-pointer"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Cancel
+              </Button>
+
+              <Button
+                type="submit"
+                form="profile-form"
+                disabled={isSaving}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs transition-colors cursor-pointer"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 mr-1" />
+                    Save Changes
+                  </>
+                )}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -22,6 +22,8 @@ export interface LearningCourse {
   id: string;
   courseId?: number;
   title: string;
+  description?: string | null;
+  thumbnailUrl?: string | null;
   skill: string;
   provider: string;
   lastAccessed: string;

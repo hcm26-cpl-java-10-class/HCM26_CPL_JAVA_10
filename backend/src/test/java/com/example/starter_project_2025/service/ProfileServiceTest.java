@@ -125,10 +125,58 @@ public class ProfileServiceTest {
         assertEquals("Jane", sampleUser.getFirstName());
         assertEquals("Doe Smith", sampleUser.getLastName());
         assertEquals("0988 777 666", sampleUser.getPhoneNumber());
+        assertEquals("0988 777 666", sampleUser.getPhone());
         // Verify protected fields remained unchanged
         assertEquals("admin@example.com", sampleUser.getEmail());
         assertEquals("EMP10014", sampleUser.getEmployeeCode());
         assertEquals("FHN.G2", sampleUser.getDepartment());
+    }
+
+    @Test
+    @DisplayName("updateProfile - Single word name sets firstName and empty lastName")
+    void updateProfile_SingleWordName_ShouldSucceed() {
+        when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.of(sampleUser));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateProfileRequest request = new UpdateProfileRequest("Cher", "0911 222 333");
+        UserProfileResponse response = profileService.updateProfile("admin@example.com", request);
+
+        assertNotNull(response);
+        assertEquals("Cher", sampleUser.getFirstName());
+        assertEquals("", sampleUser.getLastName());
+        assertEquals("Cher", sampleUser.getFullName());
+        assertEquals("0911 222 333", sampleUser.getPhoneNumber());
+    }
+
+    @Test
+    @DisplayName("updateProfile - Student account updates successfully while keeping student role")
+    void updateProfile_StudentAccount_ShouldSucceed() {
+        Role studentRole = Role.builder().name("STUDENT").build();
+        User studentUser = User.builder()
+                .id(2L)
+                .email("student@example.com")
+                .firstName("John")
+                .lastName("Doe")
+                .phoneNumber("0903 221 879")
+                .employeeCode("STU10001")
+                .department("FHN.G2")
+                .isActive(true)
+                .roles(Set.of(studentRole))
+                .build();
+
+        when(userRepository.findByEmail("student@example.com")).thenReturn(Optional.of(studentUser));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateProfileRequest request = new UpdateProfileRequest("John Updated", "0912 999 888");
+        UserProfileResponse response = profileService.updateProfile("student@example.com", request);
+
+        assertNotNull(response);
+        assertEquals("John", studentUser.getFirstName());
+        assertEquals("Updated", studentUser.getLastName());
+        assertEquals("0912 999 888", studentUser.getPhoneNumber());
+        assertEquals("STUDENT", response.role());
+        assertEquals("STU10001", studentUser.getEmployeeCode());
+        assertEquals("student@example.com", studentUser.getEmail());
     }
 
     @Test

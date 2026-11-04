@@ -10,6 +10,6 @@ public record UpdateProfileRequest(
     String fullName,
 
     @NotBlank(message = "Phone number is required")
-    @Pattern(regexp = "^(0|\\+84)?[0-9\\s\\-().]{9,15}$", message = "Phone number format is invalid (must be 9 to 15 digits)")
+    @Pattern(regexp = "^(0|\\+84|\\+)?[0-9\\s\\-().]{8,20}$", message = "Phone number format is invalid (must be 8 to 15 digits)")
     String phoneNumber
 ) {}

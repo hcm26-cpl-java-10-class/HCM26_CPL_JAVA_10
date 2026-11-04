@@ -56,11 +56,13 @@ export const PersonalProfilePage: React.FC = () => {
   // Profile data state
   const [profile, setProfile] = useState<UserProfileData>(initialData);
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [profileError, setProfileError] = useState(false);
   const [reload, setReload] = useState(0);
-  const displayedProfile = profile.email === auth.email ? profile : initialData;
+
+  const displayedProfile = profile.email ? profile : initialData;
 
   // Optional preview states for edge-case verification requested by SRS note
   // (normal, loading, empty, permission_denied, conflict)
@@ -71,6 +73,7 @@ export const PersonalProfilePage: React.FC = () => {
     let cancelled = false;
     const fetchProfile = async () => {
       if (!auth.isAuthenticated && !localStorage.getItem("token")) {
+        setIsLoading(false);
         return;
       }
       try {
@@ -78,7 +81,9 @@ export const PersonalProfilePage: React.FC = () => {
         setProfileError(false);
         const data = await profileApi.getProfile();
         if (cancelled) return;
-        if (data.email !== auth.email) throw new Error("Profile identity does not match the session");
+        if (auth.email && data.email.trim().toLowerCase() !== auth.email.trim().toLowerCase()) {
+          throw new Error("Profile identity does not match the session");
+        }
         setProfile(data);
         // Synchronize Redux user name with backend profile
         dispatch(
@@ -114,13 +119,17 @@ export const PersonalProfilePage: React.FC = () => {
     }
 
     try {
+      setIsSaving(true);
       if (auth.isAuthenticated || localStorage.getItem("token")) {
         const updated = await profileApi.updateProfile({
           fullName: values.fullName.trim(),
+          email: values.email.trim(),
           phoneNumber: values.phoneNumber.trim(),
         });
-        if (store.getState().auth.email !== auth.email) return;
-        if (updated.email !== auth.email) throw new Error("Profile identity does not match the session");
+        if (store.getState().auth.email && auth.email && store.getState().auth.email.toLowerCase() !== auth.email.toLowerCase()) return;
+        if (auth.email && updated.email.trim().toLowerCase() !== auth.email.trim().toLowerCase()) {
+          throw new Error("Profile identity does not match the session");
+        }
         setProfile(updated);
         // Synchronize Redux user and header with updated name
         dispatch(
@@ -148,6 +157,8 @@ export const PersonalProfilePage: React.FC = () => {
 
       toast.error("Profile update failed", { description: serverMsg });
       throw err;
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -167,8 +178,10 @@ export const PersonalProfilePage: React.FC = () => {
         <ProfileHeader
           isEditing={isEditing}
           disabled={isLoading || profileError}
+          isSaving={isSaving}
           onOpenChangePassword={() => setIsChangePasswordOpen(true)}
-          onTriggerUpdateProfile={() => setIsEditing(true)}
+          onTriggerUpdateProfile={() => { if (!profileError && !isLoading) setIsEditing(true); }}
+          onCancelEditing={() => setIsEditing(false)}
         />
 
         {profileError && <Alert variant="destructive">
@@ -241,9 +254,10 @@ export const PersonalProfilePage: React.FC = () => {
               <PersonalInfoCard
                 key={auth.email}
                 disabled={isLoading || profileError}
+                isSaving={isSaving}
                 profile={displayedProfile}
                 isEditing={isEditing}
-                onStartEditing={() => { if (!profileError) setIsEditing(true); }}
+                onStartEditing={() => { if (!profileError && !isLoading) setIsEditing(true); }}
                 onCancelEditing={() => setIsEditing(false)}
                 onSaveProfile={handleSaveProfile}
               />

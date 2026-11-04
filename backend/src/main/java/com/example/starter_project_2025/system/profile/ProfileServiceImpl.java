@@ -50,7 +50,9 @@ public class ProfileServiceImpl implements ProfileService {
             user.setLastName("");
         }
 
-        user.setPhoneNumber(request.phoneNumber().trim());
+        String trimmedPhone = request.phoneNumber().trim();
+        user.setPhoneNumber(trimmedPhone);
+        user.setPhone(trimmedPhone);
 
         User saved = userRepository.save(user);
         return mapToResponse(saved);
@@ -107,7 +109,9 @@ public class ProfileServiceImpl implements ProfileService {
                 .lastName(user.getLastName())
                 .email(user.getEmail())
                 .employeeCode(user.getEmployeeCode() != null ? user.getEmployeeCode() : "")
-                .phoneNumber(user.getPhoneNumber() != null ? user.getPhoneNumber() : "")
+                .phoneNumber(user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank()
+                        ? user.getPhoneNumber()
+                        : (user.getPhone() != null ? user.getPhone() : ""))
                 .role(primaryRole)
                 .roles(roleNames)
                 .department(user.getDepartment() != null ? user.getDepartment() : "")

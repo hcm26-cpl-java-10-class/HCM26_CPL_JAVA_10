@@ -26,6 +26,7 @@ public class LearningRecordsService {
         }
         var courses = enrollments.getMyCourses(userId).stream().map(e -> CourseEnrollmentDTO.builder()
                 .id(e.getId()).courseId(e.getCourse().getId()).courseName(e.getCourse().getName())
+                .courseDescription(e.getCourse().getDescription())
                 .thumbnailUrl(e.getCourse().getThumbnailUrl()).instructor(e.getCourse().getInstructor())
                 .enrolledAt(e.getCreatedAt()).build()).toList();
         return new Records(courses, null, null, null, null, null);

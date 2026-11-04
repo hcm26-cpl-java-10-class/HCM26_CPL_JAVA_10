@@ -21,6 +21,7 @@ export interface BackendProfileResponse {
 
 export interface UpdateProfilePayload {
   fullName: string;
+  email: string;
   phoneNumber: string;
 }
 

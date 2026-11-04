@@ -9,32 +9,47 @@ interface PersonalInfoCardProps {
   profile: UserProfileData;
   isEditing: boolean;
   disabled?: boolean;
+  isSaving?: boolean;
   onStartEditing: () => void;
   onCancelEditing: () => void;
   onSaveProfile: (updatedValues: ProfileFormValues) => Promise<void>;
 }
 
+// --- Shared input style constants ---
+const EDITABLE_INPUT_CLASSES =
+  "bg-white dark:bg-zinc-950 border-blue-500/60 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-900 dark:text-zinc-100 disabled:opacity-100";
+
+const LOCKED_INPUT_CLASSES =
+  "bg-slate-100/80 dark:bg-zinc-900/80 border-slate-200 dark:border-zinc-800 text-slate-800 dark:text-zinc-200 cursor-not-allowed disabled:opacity-100 read-only:opacity-100";
+
+const VIEW_MODE_INPUT_CLASSES =
+  "bg-slate-100/80 dark:bg-zinc-900/80 border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-zinc-100 disabled:text-slate-900 dark:disabled:text-zinc-100 disabled:opacity-100 read-only:opacity-100";
+
 export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
   profile,
   isEditing,
   disabled = false,
+  isSaving = false,
   onStartEditing,
   onCancelEditing,
   onSaveProfile,
 }) => {
   const [formValues, setFormValues] = useState<ProfileFormValues>({
-    fullName: profile.fullName,
-    phoneNumber: profile.phoneNumber,
+    fullName: profile.fullName || "",
+    email: profile.email || "",
+    phoneNumber: profile.phoneNumber || "",
   });
 
   const [errors, setErrors] = useState<ProfileFormErrors>({});
-  const [isSaving, setIsSaving] = useState(false);
+  const [localSaving, setLocalSaving] = useState(false);
+  const saving = isSaving || localSaving;
 
-  // Sync with profile prop when it changes or when cancelling
+  // Sync with profile prop when it changes or when toggling edit mode
   useEffect(() => {
     setFormValues({
-      fullName: profile.fullName,
-      phoneNumber: profile.phoneNumber,
+      fullName: profile.fullName || "",
+      email: profile.email || "",
+      phoneNumber: profile.phoneNumber || "",
     });
     setErrors({});
   }, [profile, isEditing]);
@@ -43,18 +58,30 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
     const newErrors: ProfileFormErrors = {};
 
     // Validate Full Name
-    if (!formValues.fullName.trim()) {
+    const trimmedName = formValues.fullName.trim();
+    if (!trimmedName) {
       newErrors.fullName = "Full name is required.";
-    } else if (formValues.fullName.trim().length < 2) {
+    } else if (trimmedName.length < 2) {
       newErrors.fullName = "Full name must be at least 2 characters.";
+    } else if (trimmedName.length > 100) {
+      newErrors.fullName = "Full name must not exceed 100 characters.";
     }
 
-    // Validate Phone Number (supports Vietnamese & international formats, spaces, dashes)
-    const cleanedPhone = formValues.phoneNumber.replace(/[\s\-().]/g, "");
-    if (!formValues.phoneNumber.trim()) {
+    // Validate Email
+    const trimmedEmail = formValues.email.trim();
+    if (!trimmedEmail) {
+      newErrors.email = "Email is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      newErrors.email = "Please enter a valid email address.";
+    }
+
+    // Validate Phone Number
+    const trimmedPhone = formValues.phoneNumber.trim();
+    const cleanedPhone = trimmedPhone.replace(/[\s\-().]/g, "");
+    if (!trimmedPhone) {
       newErrors.phoneNumber = "Phone number is required.";
-    } else if (!/^(0|\+84)?[0-9]{9,11}$/.test(cleanedPhone)) {
-      newErrors.phoneNumber = "Please enter a valid phone number (9–11 digits, e.g. 0903 221 879).";
+    } else if (!/^\+?[0-9]{8,15}$/.test(cleanedPhone)) {
+      newErrors.phoneNumber = "Please enter a valid phone number (8–15 digits, e.g. 0903 221 879).";
     }
 
     setErrors(newErrors);
@@ -62,8 +89,9 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
   };
 
   const isFormChanged =
-    formValues.fullName.trim() !== profile.fullName.trim() ||
-    formValues.phoneNumber.trim() !== profile.phoneNumber.trim();
+    formValues.fullName.trim() !== (profile.fullName || "").trim() ||
+    formValues.email.trim() !== (profile.email || "").trim() ||
+    formValues.phoneNumber.trim() !== (profile.phoneNumber || "").trim();
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,10 +102,14 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
     }
 
     try {
-      setIsSaving(true);
-      await onSaveProfile(formValues);
+      setLocalSaving(true);
+      await onSaveProfile({
+        fullName: formValues.fullName.trim(),
+        email: formValues.email.trim(),
+        phoneNumber: formValues.phoneNumber.trim(),
+      });
     } finally {
-      setIsSaving(false);
+      setLocalSaving(false);
     }
   };
 
@@ -107,7 +139,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
         )}
       </div>
 
-      <form onSubmit={handleSave}>
+      <form id="profile-form" onSubmit={handleSave}>
         {/* 6 fields in a 2-column grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
           {/* 1. Full Name (Editable) */}
@@ -120,7 +152,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
                 id="fullName"
                 name="fullName"
                 type="text"
-                disabled={!isEditing || isSaving}
+                disabled={!isEditing || saving}
                 value={formValues.fullName}
                 onChange={(e) => {
                   setFormValues((prev) => ({ ...prev, fullName: e.target.value }));
@@ -128,9 +160,11 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
                     setErrors((prev) => ({ ...prev, fullName: undefined }));
                   }
                 }}
-                className={`bg-white dark:bg-card ${
-                  !isEditing ? "bg-gray-50/50 text-gray-700 dark:bg-muted/20" : "focus:border-blue-500 focus:ring-blue-500/20"
-                } ${errors.fullName ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+                className={`${
+                  isEditing
+                    ? `${EDITABLE_INPUT_CLASSES} ${errors.fullName ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`
+                    : VIEW_MODE_INPUT_CLASSES
+                }`}
                 placeholder="Enter full name"
               />
             </div>
@@ -142,27 +176,42 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
             )}
           </div>
 
-          {/* 2. Email (Read-only) */}
+          {/* 2. Email (Editable in edit mode) */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="email" className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                Email
+                Email {isEditing && <span className="text-red-500">*</span>}
               </Label>
-              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                <Lock className="size-3 text-gray-400" /> Read-only
-              </span>
             </div>
             <Input
               id="email"
+              name="email"
               type="email"
               disabled
-              value={profile.email}
-              className="bg-gray-50/70 text-gray-500 dark:bg-muted/30 dark:text-gray-400 cursor-not-allowed select-none"
               readOnly
+              value={isEditing ? formValues.email : profile.email}
+              onChange={(e) => {
+                setFormValues((prev) => ({ ...prev, email: e.target.value }));
+                if (errors.email) {
+                  setErrors((prev) => ({ ...prev, email: undefined }));
+                }
+              }}
+              className={`${
+                isEditing
+                  ? `${EDITABLE_INPUT_CLASSES} ${errors.email ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`
+                  : VIEW_MODE_INPUT_CLASSES
+              }`}
+              placeholder="Enter email address"
             />
+            {errors.email && (
+              <p className="text-xs text-red-500 flex items-center gap-1 mt-0.5">
+                <AlertCircle className="size-3.5" />
+                {errors.email}
+              </p>
+            )}
           </div>
 
-          {/* 3. Employee Code (Read-only) */}
+          {/* 3. Employee Code (Read-only always) */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="employeeCode" className="text-xs font-semibold text-gray-700 dark:text-gray-300">
@@ -177,7 +226,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
               type="text"
               disabled
               value={profile.employeeCode}
-              className="bg-gray-50/70 text-gray-500 dark:bg-muted/30 dark:text-gray-400 cursor-not-allowed select-none"
+              className={LOCKED_INPUT_CLASSES}
               readOnly
             />
           </div>
@@ -191,7 +240,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
               id="phoneNumber"
               name="phoneNumber"
               type="tel"
-              disabled={!isEditing || isSaving}
+              disabled={!isEditing || saving}
               value={formValues.phoneNumber}
               onChange={(e) => {
                 setFormValues((prev) => ({ ...prev, phoneNumber: e.target.value }));
@@ -199,9 +248,11 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
                   setErrors((prev) => ({ ...prev, phoneNumber: undefined }));
                 }
               }}
-              className={`bg-white dark:bg-card ${
-                !isEditing ? "bg-gray-50/50 text-gray-700 dark:bg-muted/20" : "focus:border-blue-500 focus:ring-blue-500/20"
-              } ${errors.phoneNumber ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`}
+              className={`${
+                isEditing
+                  ? `${EDITABLE_INPUT_CLASSES} ${errors.phoneNumber ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : ""}`
+                  : VIEW_MODE_INPUT_CLASSES
+              }`}
               placeholder="e.g. 0903 221 879"
             />
             {errors.phoneNumber && (
@@ -212,7 +263,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
             )}
           </div>
 
-          {/* 5. Role (Read-only for ordinary users) */}
+          {/* 5. Role (Read-only always) */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="role" className="text-xs font-semibold text-gray-700 dark:text-gray-300">
@@ -227,12 +278,12 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
               type="text"
               disabled
               value={profile.role}
-              className="bg-gray-50/70 text-gray-500 dark:bg-muted/30 dark:text-gray-400 cursor-not-allowed select-none"
+              className={LOCKED_INPUT_CLASSES}
               readOnly
             />
           </div>
 
-          {/* 6. Department (Read-only for ordinary users) */}
+          {/* 6. Department (Read-only always) */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="department" className="text-xs font-semibold text-gray-700 dark:text-gray-300">
@@ -247,7 +298,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
               type="text"
               disabled
               value={profile.department}
-              className="bg-gray-50/70 text-gray-500 dark:bg-muted/30 dark:text-gray-400 cursor-not-allowed select-none"
+              className={LOCKED_INPUT_CLASSES}
               readOnly
             />
           </div>
@@ -260,7 +311,7 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
               type="button"
               variant="outline"
               onClick={onCancelEditing}
-              disabled={isSaving}
+              disabled={saving}
               className="cursor-pointer"
             >
               <X className="size-4 mr-1" />
@@ -268,10 +319,10 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
             </Button>
             <Button
               type="submit"
-              disabled={isSaving || !isFormChanged}
+              disabled={saving}
               className="bg-blue-600 hover:bg-blue-700 text-white cursor-pointer font-medium disabled:opacity-50"
             >
-              {isSaving ? (
+              {saving ? (
                 <>
                   <Loader2 className="size-4 mr-1.5 animate-spin" />
                   Saving...

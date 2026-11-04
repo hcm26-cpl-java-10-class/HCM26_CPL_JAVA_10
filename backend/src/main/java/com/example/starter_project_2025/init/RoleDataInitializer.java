@@ -62,6 +62,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "COURSE_READ",
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE",
+                        "ENROLLMENT_DELETE",
                         "LESSON_READ",
                         "EXAM_TAKE"
                 )

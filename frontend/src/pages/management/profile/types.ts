@@ -22,6 +22,7 @@ export interface UserProfileData {
 
 export interface ProfileFormValues {
   fullName: string;
+  email: string;
   phoneNumber: string;
 }
 
@@ -33,6 +34,7 @@ export interface ChangePasswordValues {
 
 export interface ProfileFormErrors {
   fullName?: string;
+  email?: string;
   phoneNumber?: string;
 }
 

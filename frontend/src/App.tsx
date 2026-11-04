@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
 import { RoleSwitchProvider } from "./contexts/RoleSwitchContext";
+import { CourseProvider } from "./contexts/CourseContext";
 import { usePermissions } from "./hooks/usePermissions";
 import { useActiveModuleGroups } from "./hooks/useSidebarMenus";
 import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
@@ -19,12 +20,32 @@ function AppRoutes() {
     const homePath = isAuthenticated ? getHomePathByRole(activeRole, permissions) : "/login";
 
     // Create component lookup map from module-driven routes
-    const componentRegistry = Object.fromEntries(
-        routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
-    );
+    const explicitOverrides: Record<string, any> = {
+        "/courses": routes.find((r) => r.path === "/courses")?.component,
+        "/enrollments": routes.find((r) => r.path === "/enrollments")?.component,
+        "/course-enrollments": routes.find((r) => r.path === "/course-enrollments")?.component,
+        "/my-learning": routes.find((r) => r.path === "/my-learning")?.component,
+        "/fams/my-learning": routes.find((r) => r.path === "/fams/my-learning")?.component,
+        "/learning": routes.find((r) => r.path === "/learning")?.component,
+        "/profile": routes.find((r) => r.path === "/profile")?.component,
+        "/fams/profile": routes.find((r) => r.path === "/fams/profile")?.component,
+        "/fams/ho-so-ca-nhan-oi-mat-khau": routes.find((r) => r.path === "/fams/ho-so-ca-nhan-oi-mat-khau")?.component,
+        "/fams/ho-so-ca-nhan-doi-mat-khau": routes.find((r) => r.path === "/fams/ho-so-ca-nhan-doi-mat-khau")?.component,
+    };
 
-    // Get non-module routes (frontend-controlled)
-    const staticRoutes = routes.filter((r) => !r.isModuleDriven);
+    const componentRegistry = {
+        ...Object.fromEntries(
+            routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
+        ),
+        ...explicitOverrides,
+    };
+
+    // Get non-module routes (frontend-controlled), ensuring essential app routes are always registered
+    const staticRoutes = [
+        ...routes.filter((r) => !r.isModuleDriven),
+        { path: "/courses", component: routes.find((r) => r.path === "/courses")?.component },
+        { path: "/enrollments", component: routes.find((r) => r.path === "/enrollments")?.component },
+    ].filter((r): r is any => !!r && !!r.component);
 
     return (
         <Routes>
@@ -95,7 +116,9 @@ function App() {
             />
             <AuthProvider>
                 <RoleSwitchProvider>
-                    <AppRoutes />
+                    <CourseProvider>
+                        <AppRoutes />
+                    </CourseProvider>
                 </RoleSwitchProvider>
             </AuthProvider>
         </BrowserRouter>

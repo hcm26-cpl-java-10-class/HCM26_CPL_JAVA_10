@@ -184,6 +184,68 @@ public class ProfileControllerTest {
     }
 
     @Test
+    @DisplayName("PUT /api/profile - Should accept international phone number with leading +")
+    void updateProfile_InternationalPhone_ShouldReturn200() throws Exception {
+        UpdateProfileRequest request = new UpdateProfileRequest("Jane Doe", "+84 912 345 678");
+
+        UserProfileResponse updatedResponse = UserProfileResponse.builder()
+                .id(1L)
+                .fullName("Jane Doe")
+                .email("admin@example.com")
+                .phoneNumber("+84 912 345 678")
+                .role("ADMIN")
+                .build();
+
+        when(profileService.updateProfile(eq("admin@example.com"), any(UpdateProfileRequest.class)))
+                .thenReturn(updatedResponse);
+
+        mockMvc.perform(put("/api/profile")
+                        .principal(mockAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.phoneNumber").value("+84 912 345 678"));
+    }
+
+    @Test
+    @DisplayName("PUT /api/profile - Student should update profile successfully")
+    void updateProfile_Student_ShouldReturn200() throws Exception {
+        User studentUser = User.builder()
+                .id(2L)
+                .email("student@example.com")
+                .firstName("John")
+                .lastName("Doe")
+                .isActive(true)
+                .roles(Set.of(Role.builder().name("STUDENT").build()))
+                .build();
+        UserPrincipal studentPrincipal = UserPrincipal.fromUser(studentUser);
+        UsernamePasswordAuthenticationToken studentAuth =
+                new UsernamePasswordAuthenticationToken(studentPrincipal, null, studentPrincipal.getAuthorities());
+
+        UpdateProfileRequest request = new UpdateProfileRequest("John Updated", "0903 111 222");
+
+        UserProfileResponse studentResponse = UserProfileResponse.builder()
+                .id(2L)
+                .fullName("John Updated")
+                .email("student@example.com")
+                .phoneNumber("0903 111 222")
+                .role("STUDENT")
+                .build();
+
+        when(profileService.updateProfile(eq("student@example.com"), any(UpdateProfileRequest.class)))
+                .thenReturn(studentResponse);
+
+        mockMvc.perform(put("/api/profile")
+                        .principal(studentAuth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("John Updated"))
+                .andExpect(jsonPath("$.role").value("STUDENT"))
+                .andExpect(jsonPath("$.email").value("student@example.com"));
+    }
+
+    @Test
     @DisplayName("POST /api/profile/change-password - Should return 204 when valid")
     void changePassword_ValidRequest_ShouldReturn204() throws Exception {
         ChangePasswordRequest request = new ChangePasswordRequest("oldPass123", "newSecretPass99", "newSecretPass99");
