@@ -245,6 +245,54 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         return executeGetGeneric(url, "class budget");
     }
 
+    // ======================== OPERATION & MILESTONES ========================
+
+    @Override
+    public Object fetchClassOperation(Long classId) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/operation").buildAndExpand(classId).toUriString();
+        return executeGetGeneric(url, "class operation");
+    }
+
+    @Override
+    public Object saveClassOperation(Long classId, Object body) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/operation").buildAndExpand(classId).toUriString();
+        return executePutGeneric(url, body, "save class operation");
+    }
+
+    // ======================== TOPIC ASSESSMENTS ========================
+
+    @Override
+    public Object fetchTopicAssessments(Long classId) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/topic-assessments").buildAndExpand(classId).toUriString();
+        return executeGetGeneric(url, "topic assessments");
+    }
+
+    @Override
+    public Object saveTopicAssessments(Long classId, Object body) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/topic-assessments").buildAndExpand(classId).toUriString();
+        return executePutGeneric(url, body, "save topic assessments");
+    }
+
+    // ======================== ACTIVITIES ========================
+
+    @Override
+    public Object fetchClassActivities(Long classId) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/activities").buildAndExpand(classId).toUriString();
+        return executeGetGeneric(url, "class activities");
+    }
+
+    @Override
+    public Object addClassActivity(Long classId, Object body) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{id}/activities").buildAndExpand(classId).toUriString();
+        return executePostGeneric(url, body, "add class activity");
+    }
+
     // ======================== AUDIT ========================
 
     @Override

@@ -1,12 +1,15 @@
 import type {
     AttendanceRecord,
     AuditRecord,
+    ClassActivity,
     ClassBudget,
+    ClassOperationData,
     ClassSession,
     ExternalClass,
     ExternalRoom,
     ExternalTrainer,
     StatusTransitionInfo,
+    TopicAssessment,
     Trainee,
     TrainingAnalytics,
 } from "@/types";
@@ -255,6 +258,55 @@ export const externalApi = {
 
     getRooms: async (): Promise<ExternalRoom[]> => {
         const response = await axiosInstance.get<ExternalRoom[]>("/external/rooms");
+        return response.data;
+    },
+
+    // ===================== BUDGET & OPERATION INFO =====================
+    getClassOperation: async (classId: string | number): Promise<ClassOperationData> => {
+        const response = await axiosInstance.get<ClassOperationData>(`/external/classes/${classId}/operation`);
+        return response.data;
+    },
+
+    saveClassOperation: async (
+        classId: string | number,
+        data: Partial<ClassOperationData>
+    ): Promise<ClassOperationData> => {
+        const response = await axiosInstance.put<ClassOperationData>(`/external/classes/${classId}/operation`, data);
+        return response.data;
+    },
+
+    // ===================== TOPIC ASSESSMENTS =====================
+    getTopicAssessments: async (classId: string | number): Promise<TopicAssessment[]> => {
+        const response = await axiosInstance.get<TopicAssessment[]>(`/external/classes/${classId}/topic-assessments`);
+        return response.data;
+    },
+
+    saveTopicAssessments: async (
+        classId: string | number,
+        topics: TopicAssessment[],
+        action?: "confirm" | "reject" | "discard"
+    ): Promise<TopicAssessment[]> => {
+        const response = await axiosInstance.put<TopicAssessment[]>(
+            `/external/classes/${classId}/topic-assessments`,
+            { topics, action }
+        );
+        return response.data;
+    },
+
+    // ===================== CLASS ACTIVITIES =====================
+    getClassActivities: async (classId: string | number): Promise<ClassActivity[]> => {
+        const response = await axiosInstance.get<ClassActivity[]>(`/external/classes/${classId}/activities`);
+        return response.data;
+    },
+
+    addClassActivity: async (
+        classId: string | number,
+        activity: { author?: string; content: string; type?: "history" | "comment" }
+    ): Promise<ClassActivity> => {
+        const response = await axiosInstance.post<ClassActivity>(
+            `/external/classes/${classId}/activities`,
+            activity
+        );
         return response.data;
     },
 };
