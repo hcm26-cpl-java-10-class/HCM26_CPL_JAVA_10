@@ -60,6 +60,7 @@ public class ExamIntegrityReportDTO {
         private int cameraCoveredCount;    // CAMERA_COVERED
         private int faceMissingCount;      // FACE_MISSING (roi khoi camera)
         private int multipleFacesCount;    // MULTIPLE_FACES
+        private int headTurnedCount;       // HEAD_TURNED (quay dau > 45 do)
         private boolean hasEntryPhoto;     // da chup anh luc vao thi
         private int totalAwaySeconds;
         private Instant lastViolationAt;
