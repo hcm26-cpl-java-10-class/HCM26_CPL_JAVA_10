@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.exam.service;
 import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.dto.PublishedExamScoreDTO;
+import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,6 +68,7 @@ public class PublishedExamScoreService {
             return new PublishedExamScoreDTO(
                     attempt.getExam().getId(),
                     attempt.getExam().getTitle(),
+                    attempt.getExam().getCategory(),
                     attempt.getAttemptNumber(),
                     null,
                     null,
@@ -82,6 +84,7 @@ public class PublishedExamScoreService {
         return new PublishedExamScoreDTO(
                 attempt.getExam().getId(),
                 attempt.getExam().getTitle(),
+                attempt.getExam().getCategory(),
                 attempt.getAttemptNumber(),
                 attempt.getObjectiveScore(),
                 attempt.getFinalScore(),

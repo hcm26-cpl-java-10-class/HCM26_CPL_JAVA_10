@@ -34,6 +34,21 @@ public class ExamCategoryMigration {
             log.warn("ExamCategoryMigration: cannot read database type: {}", e.getMessage());
             return;
         }
+        // Cot type cua exam_integrity_event cung la ENUM: de nhan loai moi (CAMERA_*, HEAD_TURNED) can doi sang VARCHAR
+        List<String> typeAlters = "H2".equalsIgnoreCase(product)
+                ? List.of("ALTER TABLE exam_integrity_event ALTER COLUMN type VARCHAR(30) NOT NULL",
+                          "ALTER TABLE exam_integrity_event ALTER COLUMN type SET DATA TYPE VARCHAR(30)")
+                : ("MySQL".equalsIgnoreCase(product) || "MariaDB".equalsIgnoreCase(product))
+                    ? List.of("ALTER TABLE exam_integrity_event MODIFY COLUMN type VARCHAR(30) NOT NULL")
+                    : List.of();
+        for (String sql : typeAlters) {
+            try {
+                jdbc.execute(sql);
+                break;
+            } catch (Exception e) {
+                log.warn("ExamCategoryMigration: '{}' failed: {}", sql, e.getMessage());
+            }
+        }
         for (String table : List.of("exam", "exam_template")) {
             // 1) doi cot ENUM cua database sang VARCHAR (neu da la VARCHAR thi khong anh huong)
             List<String> alters = "H2".equalsIgnoreCase(product)
