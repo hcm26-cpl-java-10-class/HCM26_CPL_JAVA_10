@@ -1139,9 +1139,6 @@ export default function ResultStatisticsPage() {
                     <h2 className="text-lg font-semibold">
                         Result Publication
                     </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        Only users with the EXAM_UPDATE permission can manage result publication.
-                    </p>
 
                     {publicationQuery.isLoading && (
                         <p className="mt-4 text-sm text-muted-foreground">

@@ -3,12 +3,14 @@ package com.example.starter_project_2025.system.exam.service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,7 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
@@ -32,6 +35,7 @@ import com.example.starter_project_2025.system.exam.domain.InvitationRepository;
 import com.example.starter_project_2025.system.exam.domain.InvitationStatus;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamFilter;
+import com.example.starter_project_2025.system.exam.dto.ExamInvitationOverviewDTO;
 import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
@@ -57,6 +61,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	private final ExamReminderRepository examReminderRepository;
 	private final QuestionMapper questionMapper;
 	private final QuestionValidator questionValidator;
+	private final ExamAccessGuard examAccessGuard;
 
 	@Override
 	protected BaseCrudRepository<Exam, Long> getRepository() {
@@ -71,6 +76,46 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	@Override
 	protected String[] searchableFields() {
 		return new String[]{"title"};
+	}
+
+	/**
+	 * Tổng quan số lượng lời mời của các đề thi mà giáo viên sở hữu.
+	 * Dùng cho trang "/invitations" của giáo viên (admin thấy tất cả).
+	 */
+	public List<ExamInvitationOverviewDTO> listInvitationOverviews(UserPrincipal principal) {
+		List<Exam> exams = examRepository.findAll().stream()
+				.filter(exam -> examAccessGuard.canManage(exam, principal))
+				.toList();
+
+		return exams.stream()
+				.map(exam -> {
+					List<Invitation> invitations = invitationRepository.findByExamId(exam.getId());
+					Map<InvitationStatus, Long> counts = invitations.stream()
+							.collect(Collectors.groupingBy(Invitation::getStatus, Collectors.counting()));
+					long anonymous = invitations.stream()
+							.filter(i -> Boolean.TRUE.equals(i.getAnonymous()))
+							.count();
+
+					return ExamInvitationOverviewDTO.builder()
+							.examId(exam.getId())
+							.examTitle(exam.getTitle())
+							.startTime(exam.getStartTime())
+							.endTime(exam.getEndTime())
+							.total(invitations.size())
+							.pending(counts.getOrDefault(InvitationStatus.PENDING, 0L).intValue())
+							.sent(counts.getOrDefault(InvitationStatus.SENT, 0L).intValue())
+							.accepted(counts.getOrDefault(InvitationStatus.ACCEPTED, 0L).intValue())
+							.rejected(counts.getOrDefault(InvitationStatus.REJECTED, 0L).intValue())
+							.expired(counts.getOrDefault(InvitationStatus.EXPIRED, 0L).intValue())
+							.revoked(counts.getOrDefault(InvitationStatus.REVOKED, 0L).intValue())
+							.completed(counts.getOrDefault(InvitationStatus.COMPLETED, 0L).intValue())
+							.anonymous((int) anonymous)
+							.build();
+				})
+				.filter(dto -> dto.getTotal() != null && dto.getTotal() > 0)
+				.sorted(Comparator.comparing(ExamInvitationOverviewDTO::getStartTime,
+						Comparator.nullsLast(Comparator.naturalOrder())))
+				.toList();
 	}
 
 	@Override

@@ -123,7 +123,7 @@ export default function ExamManagementPage() {
   const openCreateDialog = () => {
     setNewTitle("");
     setNewDuration("60");
-    setCfg({ ...DEFAULT_CONFIG, startTime: getFutureDatetimeString(2) });
+    setCfg(DEFAULT_CONFIG);
     setCreateOpen(true);
   };
 
