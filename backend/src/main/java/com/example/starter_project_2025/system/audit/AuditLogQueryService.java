@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.audit;
 
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,19 +26,47 @@ public class AuditLogQueryService {
             String action,
             String entityType,
             String result,
+            String keyword,
             LocalDate fromDate,
             LocalDate toDate,
             Pageable pageable
     ) {
         Specification<AuditLog> spec = Specification.where(null);
 
-        if (actorName != null && !actorName.isBlank()) {
-            String keyword = actorName.trim();
-            List<Long> matchingUserIds =
-                    userRepository.findIdsByActorName(keyword);
+        if (keyword != null && !keyword.isBlank()) {
+            String term = keyword.trim();
+            String termPattern = "%" + term.toLowerCase() + "%";
+            List<Long> matchingActorIds = userRepository.findIdsByActorName(term);
+            Long numericTerm = parseLongOrNull(term);
 
             spec = spec.and((root, query, cb) -> {
-                String pattern = "%" + keyword.toLowerCase() + "%";
+                List<Predicate> predicates = new ArrayList<>();
+
+                predicates.add(cb.like(cb.lower(root.get("actorEmail")), termPattern));
+                predicates.add(cb.like(cb.lower(root.get("action")), termPattern));
+                predicates.add(cb.like(cb.lower(root.get("entityType")), termPattern));
+                predicates.add(cb.like(cb.lower(root.get("entityId")), termPattern));
+                predicates.add(cb.like(cb.lower(root.get("correlationId")), termPattern));
+
+                if (!matchingActorIds.isEmpty()) {
+                    predicates.add(root.get("actorId").in(matchingActorIds));
+                }
+
+                if (numericTerm != null) {
+                    predicates.add(cb.equal(root.get("actorId"), numericTerm));
+                }
+
+                return cb.or(predicates.toArray(new Predicate[0]));
+            });
+        }
+
+        if (actorName != null && !actorName.isBlank()) {
+            String nameTerm = actorName.trim();
+            List<Long> matchingUserIds =
+                    userRepository.findIdsByActorName(nameTerm);
+
+            spec = spec.and((root, query, cb) -> {
+                String pattern = "%" + nameTerm.toLowerCase() + "%";
 
                 var actorNamePredicate = cb.or(
                         cb.like(cb.lower(root.get("actorEmail")), pattern),
@@ -93,6 +122,22 @@ public class AuditLogQueryService {
 
         return repository.findAll(spec, pageable)
                 .map(AuditLogDTO::fromEntity);
+    }
+
+    @Transactional(readOnly = true)
+    public AuditLogFilterOptions getFilterOptions() {
+        return new AuditLogFilterOptions(
+                repository.findDistinctActions(),
+                repository.findDistinctEntityTypes()
+        );
+    }
+
+    private static Long parseLongOrNull(String value) {
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     @Transactional(readOnly = true)

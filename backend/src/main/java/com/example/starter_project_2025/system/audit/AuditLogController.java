@@ -29,6 +29,7 @@ public class AuditLogController {
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String entityType,
             @RequestParam(required = false) String result,
+            @RequestParam(required = false) String keyword,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
             @RequestParam(required = false)
@@ -54,10 +55,16 @@ public class AuditLogController {
 
         return ResponseEntity.ok(
                 queryService.search(
-                        actorId, actorName, action, entityType, result,
+                        actorId, actorName, action, entityType, result, keyword,
                         fromDate, toDate, pageable
                 )
         );
+    }
+
+    @GetMapping("/filter-options")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<AuditLogFilterOptions> getFilterOptions() {
+        return ResponseEntity.ok(queryService.getFilterOptions());
     }
 
     @GetMapping("/entity/{entityType}/{entityId}")

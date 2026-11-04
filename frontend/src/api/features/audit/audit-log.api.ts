@@ -20,10 +20,16 @@ export interface AuditLogFilter {
     action?: string;
     entityType?: string;
     result?: string;
+    keyword?: string;
     fromDate?: string;
     toDate?: string;
     page?: number;
     size?: number;
+}
+
+export interface AuditLogFilterOptions {
+    actions: string[];
+    entityTypes: string[];
 }
 
 export interface AuditLogPage {
@@ -50,6 +56,14 @@ export const auditLogApi = {
         const response = await axiosInstance.get<AuditLogPage>(
             "/audit-logs",
             { params },
+        );
+
+        return response.data;
+    },
+
+    getFilterOptions: async (): Promise<AuditLogFilterOptions> => {
+        const response = await axiosInstance.get<AuditLogFilterOptions>(
+            "/audit-logs/filter-options",
         );
 
         return response.data;

@@ -18,10 +18,29 @@ import {
 
 const PAGE_SIZE = 20;
 
-type Period = "7days" | "30days" | "thisMonth" | "all";
+// Used until the list of actions present in the database has been loaded
+const KNOWN_ACTIONS = [
+  "LOGIN", "LOGOUT", "REGISTER", "VERIFY_EMAIL", "FORGOT_PASSWORD",
+  "RESET_PASSWORD", "CREATE", "UPDATE", "DELETE", "IMPORT", "EXPORT",
+  "ADD_QUESTION", "REMOVE_QUESTION", "CANCEL", "INVITE", "BATCH_INVITE",
+  "RESEND", "REVOKE",
+];
+
+function useDebouncedValue<T>(value: T, delay = 400): T {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debounced;
+}
+
+type Period = "7days" | "30days" | "thisMonth" | "all" | "custom";
 
 function getDateRange(period: Period) {
-  if (period === "all") {
+  if (period === "all" || period === "custom") {
     return { fromDate: undefined, toDate: undefined };
   }
 
@@ -585,7 +604,9 @@ export default function AuditLogPage() {
     const [showExportModal, setShowExportModal] = useState(false);
     const [exporting, setExporting] = useState(false);
 
-    const [period, setPeriod] = useState<Period>("7days");
+    const [period, setPeriod] = useState<Period>("30days");
+    const [customFrom, setCustomFrom] = useState("");
+    const [customTo, setCustomTo] = useState("");
 
 
     const [page, setPage] = useState(0);
@@ -598,40 +619,41 @@ export default function AuditLogPage() {
         entityId: string;
     } | null>(null);
 
+    const metaQuery = useQuery({
+        queryKey: ["audit-log-filter-options"],
+        queryFn: () => auditLogApi.getFilterOptions(),
+        staleTime: 60_000,
+    });
+
+    const actionOptions = useMemo(() => {
+        const values = metaQuery.data?.actions?.length
+            ? metaQuery.data.actions
+            : KNOWN_ACTIONS;
+
+        return values.map((value) => ({
+            label: getActionLabel(value),
+            value,
+        }));
+    }, [metaQuery.data]);
+
+    const entityTypeOptions = useMemo(
+        () =>
+            (metaQuery.data?.entityTypes ?? []).map((value) => ({
+                label: value,
+                value,
+            })),
+        [metaQuery.data],
+    );
+
     const auditSchema = useMemo(
         () => ({
             fields: [
-                {
-                    name: "dateRange",
-                    label: "Date Range",
-                    type: "date",
-                    filterable: true,
-                },
                 {
                     name: "action",
                     label: "Action",
                     type: "select",
                     filterable: true,
-                    filterOptions: [
-                        { label: "Login", value: "LOGIN" },
-                        { label: "Logout", value: "LOGOUT" },
-                        { label: "Register", value: "REGISTER" },
-                        { label: "Verify email", value: "VERIFY_EMAIL" },
-                        { label: "Forgot password", value: "FORGOT_PASSWORD" },
-                        { label: "Reset password", value: "RESET_PASSWORD" },
-                        { label: "Create", value: "CREATE" },
-                        { label: "Update", value: "UPDATE" },
-                        { label: "Delete", value: "DELETE" },
-                        { label: "Import", value: "IMPORT" },
-                        { label: "Export", value: "EXPORT" },
-                        { label: "Add question", value: "ADD_QUESTION" },
-                        { label: "Remove question", value: "REMOVE_QUESTION" },
-                        { label: "Cancel", value: "CANCEL" },
-                        { label: "Invite", value: "INVITE" },
-                        { label: "Batch invite", value: "BATCH_INVITE" },
-                        { label: "Resend", value: "RESEND" },
-                        { label: "Revoke", value: "REVOKE" },
-                    ],
+                    filterOptions: actionOptions,
                 },
                 {
                     name: "actorName",
@@ -642,8 +664,9 @@ export default function AuditLogPage() {
                 {
                     name: "entityType",
                     label: "Entity Type",
-                    type: "text",
+                    type: "select",
                     filterable: true,
+                    filterOptions: entityTypeOptions,
                 },
                 {
                     name: "result",
@@ -657,7 +680,7 @@ export default function AuditLogPage() {
                 },
             ] as FieldSchema[],
         }),
-        [],
+        [actionOptions, entityTypeOptions],
     );
 
 
@@ -685,27 +708,45 @@ export default function AuditLogPage() {
 
 
     const [appliedFilters, setAppliedFilters] = useState<AuditLogFilter>(() => ({
-        ...getDateRange("7days"),
+        ...getDateRange("30days"),
     }));
 
-    useEffect(() => {
-        const dateRange = filters.dateRange as
-            | { from?: string; to?: string }
-            | undefined;
+    // Text inputs are debounced so that typing does not fire a request per keystroke
+    const debouncedSearch = useDebouncedValue(search);
+    const debouncedActorName = useDebouncedValue(String(filters.actorName ?? ""));
 
-        const presetRange = getDateRange(period);
+    useEffect(() => {
+        const range =
+            period === "custom"
+                ? {
+                    fromDate: customFrom || undefined,
+                    toDate:
+                        customTo && (!customFrom || customTo >= customFrom)
+                            ? customTo
+                            : undefined,
+                }
+                : getDateRange(period);
 
         setPage(0);
 
         setAppliedFilters({
-            fromDate: dateRange?.from || presetRange.fromDate,
-            toDate: dateRange?.to || presetRange.toDate,
-            actorName: String(filters.actorName ?? "").trim() || undefined,
+            ...range,
+            keyword: debouncedSearch.trim() || undefined,
+            actorName: debouncedActorName.trim() || undefined,
             action: String(filters.action ?? "") || undefined,
-            entityType: String(filters.entityType ?? "").trim() || undefined,
+            entityType: String(filters.entityType ?? "") || undefined,
             result: String(filters.result ?? "") || undefined,
         });
-    }, [filters, period]);
+    }, [
+        period,
+        customFrom,
+        customTo,
+        debouncedSearch,
+        debouncedActorName,
+        filters.action,
+        filters.entityType,
+        filters.result,
+    ]);
 
 
     const queryFilter = useMemo(
@@ -727,25 +768,65 @@ export default function AuditLogPage() {
     const logs = auditQuery.data?.content ?? [];
     const totalElements = auditQuery.data?.totalElements ?? 0;
 
-    const filteredLogs = useMemo(() => {
-        const keyword = search.trim().toLowerCase();
+    // Search is done by the server (keyword), so the page is shown as returned
+    const filteredLogs = logs;
 
-        if (!keyword) return logs;
+    const removeFilter = (name: string) =>
+        setFilters((previous) => {
+            const next = { ...previous };
+            delete next[name];
+            return next;
+        });
 
-        return logs.filter((log) =>
-            [
-                log.actorEmail,
-                log.actorId,
-                log.action,
-                log.entityType,
-                log.entityId,
-                log.result,
-                log.correlationId,
-            ]
-                .map((value) => String(value ?? "").toLowerCase())
-                .some((value) => value.includes(keyword)),
-        );
-    }, [logs, search]);
+    const clearAll = () => {
+        setFilters({});
+        setSearch("");
+        setPeriod("30days");
+        setCustomFrom("");
+        setCustomTo("");
+        setPage(0);
+    };
+
+    const activeChips: { key: string; label: string; onRemove: () => void }[] = [];
+
+    if (search.trim()) {
+        activeChips.push({
+            key: "search",
+            label: `Search: ${search.trim()}`,
+            onRemove: () => {
+                setSearch("");
+                setPage(0);
+            },
+        });
+    }
+    if (filters.action) {
+        activeChips.push({
+            key: "action",
+            label: `Action: ${getActionLabel(String(filters.action))}`,
+            onRemove: () => removeFilter("action"),
+        });
+    }
+    if (filters.entityType) {
+        activeChips.push({
+            key: "entityType",
+            label: `Entity: ${String(filters.entityType)}`,
+            onRemove: () => removeFilter("entityType"),
+        });
+    }
+    if (filters.actorName) {
+        activeChips.push({
+            key: "actorName",
+            label: `Actor: ${String(filters.actorName)}`,
+            onRemove: () => removeFilter("actorName"),
+        });
+    }
+    if (filters.result) {
+        activeChips.push({
+            key: "result",
+            label: `Result: ${filters.result === "SUCCESS" ? "Success" : "Failure"}`,
+            onRemove: () => removeFilter("result"),
+        });
+    }
 
     const paginationTable = {
         page,
@@ -808,7 +889,36 @@ export default function AuditLogPage() {
                                 <option value="30days">Last 30 days</option>
                                 <option value="thisMonth">This month</option>
                                 <option value="all">All time</option>
+                                <option value="custom">Custom range</option>
                             </select>
+
+                            {period === "custom" && (
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="date"
+                                        value={customFrom}
+                                        max={customTo || undefined}
+                                        onChange={(event) => {
+                                            setCustomFrom(event.target.value);
+                                            setPage(0);
+                                        }}
+                                        className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                        aria-label="From date"
+                                    />
+                                    <span className="text-slate-400">–</span>
+                                    <input
+                                        type="date"
+                                        value={customTo}
+                                        min={customFrom || undefined}
+                                        onChange={(event) => {
+                                            setCustomTo(event.target.value);
+                                            setPage(0);
+                                        }}
+                                        className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                        aria-label="To date"
+                                    />
+                                </div>
+                            )}
 
                             {/* 4. Export (same row, pushed to the right) */}
                             <button
@@ -834,6 +944,34 @@ export default function AuditLogPage() {
                                 Export
                             </button>
                         </div>
+
+                        {activeChips.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2 md:px-5">
+                                {activeChips.map((chip) => (
+                                    <span
+                                        key={chip.key}
+                                        className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
+                                    >
+                                        {chip.label}
+                                        <button
+                                            type="button"
+                                            onClick={chip.onRemove}
+                                            aria-label={`Remove ${chip.label}`}
+                                            className="ml-1 rounded-full px-1 hover:bg-blue-100"
+                                        >
+                                            ×
+                                        </button>
+                                    </span>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={clearAll}
+                                    className="text-xs font-medium text-slate-500 hover:text-slate-700 hover:underline"
+                                >
+                                    Clear all
+                                </button>
+                            </div>
+                        )}
 
                         <div className="border-t border-slate-200">
                             <div className="flex flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-5">
