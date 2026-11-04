@@ -28,6 +28,7 @@ const TYPE_LABEL: Record<string, string> = {
     CAMERA_COVERED: "Camera covered",
     FACE_MISSING: "Left camera view",
     MULTIPLE_FACES: "Extra person in view",
+    HEAD_TURNED: "Head turned > 35°",
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -45,6 +46,7 @@ const TYPE_COLOR: Record<string, string> = {
     CAMERA_COVERED: "bg-yellow-600",
     FACE_MISSING: "bg-teal-500",
     MULTIPLE_FACES: "bg-indigo-600",
+    HEAD_TURNED: "bg-cyan-600",
 };
 
 /** Nhom loai vi pham dung cho bo loc (khop cac cot dem cua bang). */
@@ -60,6 +62,7 @@ const FILTER_TYPES: { key: string; label: string; count: (r: IntegrityReportRow)
     { key: "CAMERA_COVERED", label: "Camera covered", count: (r) => r.cameraCoveredCount },
     { key: "FACE_MISSING", label: "Left camera view", count: (r) => r.faceMissingCount },
     { key: "MULTIPLE_FACES", label: "Extra person in view", count: (r) => r.multipleFacesCount },
+    { key: "HEAD_TURNED", label: "Head turned > 35°", count: (r) => r.headTurnedCount },
 ];
 
 const PAGE_SIZE = 10;

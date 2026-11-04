@@ -228,7 +228,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
               </label>
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.cameraProctoring} onChange={(event) => setCfg((c) => ({ ...c, cameraProctoring: event.target.checked }))} />
-                Camera proctoring (face photo at start, detect camera off / covered / away / extra person)
+                Camera proctoring (face photo at start, detect camera off / covered / away / extra person / head turned over 35°)
               </label>
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.notifyOnViolation} onChange={(event) => setCfg((c) => ({ ...c, notifyOnViolation: event.target.checked }))} />
