@@ -8,6 +8,7 @@ import {
     ChevronUp,
     Clock,
     Eye,
+    EyeOff,
     Folder,
     FolderOpen,
     FolderX,
@@ -113,16 +114,75 @@ function QuestionAnswersPreview({ question }: { question: QuestionDTO }) {
     }
 
     if (question.type === "CODING") {
+        const code = question.code;
+        if (!code) {
+            return (
+                <div className="p-3 rounded-lg bg-muted/20 border text-xs italic text-muted-foreground">
+                    Bài tập lập trình — chấm điểm tự động qua Test Cases (chưa có dữ liệu code).
+                </div>
+            );
+        }
+        const params = (code.params ?? []).map((p) => `${p.type} ${p.name}`).join(", ");
+        const signature = `public static ${code.returnType} ${code.functionName}(${params})`;
+        const tests = code.tests ?? [];
+        const codeBlock = (title: string, body?: string | null) => (
+            <div className="space-y-1">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{title}</span>
+                <pre className="p-2.5 rounded bg-muted/60 border font-mono text-[11px] leading-relaxed overflow-x-auto whitespace-pre max-h-80 overflow-y-auto">
+                    {body && body.trim() ? body : "(trống)"}
+                </pre>
+            </div>
+        );
         return (
-            <div className="p-3 rounded-lg bg-muted/20 border space-y-1 text-xs">
-                <span className="font-semibold text-muted-foreground">Bài tập lập trình (Coding Problem):</span>
-                {question.codeSpec ? (
-                    <div className="mt-1 p-2 rounded bg-muted/60 font-mono text-[11px] overflow-x-auto">
-                        {question.codeSpec}
-                    </div>
-                ) : (
-                    <p className="text-muted-foreground italic">Chấm điểm tự động qua Test Cases.</p>
-                )}
+            <div className="p-3 rounded-lg bg-muted/20 border space-y-3 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-muted-foreground">Bài tập lập trình (Coding Problem):</span>
+                    <code className="font-mono text-[11px] text-primary">{signature}</code>
+                    {code.timeLimitSeconds ? (
+                        <Badge variant="outline" className="h-4 px-1.5 text-[10px]">{code.timeLimitSeconds}s / test</Badge>
+                    ) : null}
+                </div>
+
+                {codeBlock("Class Solution (starter code)", code.starterCode)}
+                {codeBlock(code.customMain ? "Class Main (custom)" : "Class Main (auto-generated)", code.mainCode)}
+
+                <div className="space-y-1">
+                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                        Test cases ({tests.length})
+                    </span>
+                    {tests.length === 0 ? (
+                        <p className="text-muted-foreground italic">Chưa có test case.</p>
+                    ) : (
+                        <div className="rounded border overflow-x-auto">
+                            <table className="w-full text-[11px]">
+                                <thead className="bg-muted/50 text-muted-foreground">
+                                    <tr>
+                                        <th className="px-2 py-1 text-left font-medium w-8">#</th>
+                                        <th className="px-2 py-1 text-left font-medium">Input</th>
+                                        <th className="px-2 py-1 text-left font-medium">Expected</th>
+                                        <th className="px-2 py-1 text-left font-medium w-16">Loại</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/60 font-mono">
+                                    {tests.map((t, i) => (
+                                        <tr key={i}>
+                                            <td className="px-2 py-1 text-muted-foreground">{i + 1}</td>
+                                            <td className="px-2 py-1 whitespace-pre-wrap break-all">
+                                                {(code.params ?? []).map((p, k) => `${p.name} = ${t.inputs?.[k] ?? ""}`).join(", ")}
+                                            </td>
+                                            <td className="px-2 py-1 whitespace-pre-wrap break-all">{t.expected}</td>
+                                            <td className="px-2 py-1 font-sans">
+                                                <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+                                                    {t.visible ? "Visible" : "Hidden"}
+                                                </Badge>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
             </div>
         );
     }
@@ -143,11 +203,10 @@ function QuestionAnswersPreview({ question }: { question: QuestionDTO }) {
                     return (
                         <li
                             key={option.id ?? index}
-                            className={`flex items-start gap-2 rounded px-2.5 py-1.5 text-xs transition-colors border ${
-                                isCorrect
-                                    ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 font-medium border-emerald-500/30"
-                                    : "bg-background/60 text-muted-foreground border-transparent"
-                            }`}
+                            className={`flex items-start gap-2 rounded px-2.5 py-1.5 text-xs transition-colors border ${isCorrect
+                                ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 font-medium border-emerald-500/30"
+                                : "bg-background/60 text-muted-foreground border-transparent"
+                                }`}
                         >
                             <span className={`font-semibold shrink-0 ${isCorrect ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/70"}`}>
                                 {letter}.
@@ -381,6 +440,12 @@ export default function QuestionListPage() {
         });
     };
 
+    const allExpanded =
+        filteredQuestions.length > 0 && filteredQuestions.every((q) => expandedIds.has(q.id));
+    const toggleAllPreview = () => {
+        setExpandedIds(allExpanded ? new Set() : new Set(filteredQuestions.map((q) => q.id)));
+    };
+
     // Toggle Active Status
     const handleToggleStatus = async (id: number | string, currentActive: boolean) => {
         try {
@@ -423,7 +488,6 @@ export default function QuestionListPage() {
     // Routing actions
     const createPage = entityConfig.actionPages?.create;
     const editPage = entityConfig.actionPages?.edit;
-    const detailPage = entityConfig.actionPages?.detail;
 
     const createUrl = useMemo(() => {
         if (!createPage) return "";
@@ -465,18 +529,27 @@ export default function QuestionListPage() {
         };
     }, [editPage, navigate]);
 
-    const onView = useMemo(() => {
-        if (!detailPage) return undefined;
-        return (row: any) => {
-            const pathTemplate = normalizeEntityActionPath(entityConfig.path, detailPage.path);
-            const path = resolveEntityActionPath(pathTemplate, row, entityConfig.schema.idField);
-            if (!path) {
-                toast.error("Unable to open detail page because row id is missing.");
-                return;
-            }
-            navigate(path);
-        };
-    }, [detailPage, navigate]);
+    // Table view: only Edit + Delete (no "view detail" eye)
+    const renderTableRowActions = (row: QuestionDTO) => (
+        <>
+            {onEdit && (
+                <PermissionGate permission={table.permission?.keys?.update}>
+                    <ActionButton
+                        onClick={() => onEdit(row)}
+                        tooltip="Edit"
+                        icon={<Pencil size={10} className="text-gray-500" />}
+                    />
+                </PermissionGate>
+            )}
+            <PermissionGate permission={table.permission?.keys?.delete}>
+                <ActionButton
+                    onClick={() => setDeleteTarget(row)}
+                    tooltip="Delete"
+                    icon={<Trash2 size={10} className="text-red-500" />}
+                />
+            </PermissionGate>
+        </>
+    );
 
     const isStudentRole = normalizeRole(activeRole) === STUDENT_ROLE;
     const isReadOnlyLikeRole =
@@ -498,7 +571,7 @@ export default function QuestionListPage() {
     return (
         <MainLayout pathName={{ questions: "Questions" }}>
             <div className="flex flex-1 min-h-0 gap-4 h-[calc(100vh-6.5rem)]">
-                
+
                 {/* LEFT SIDEBAR: Full Multi-dimensional Filters */}
                 <aside className="w-64 xl:w-72 shrink-0 flex flex-col bg-card border rounded-xl overflow-hidden shadow-sm">
                     {/* Header */}
@@ -635,11 +708,10 @@ export default function QuestionListPage() {
                                 <button
                                     type="button"
                                     onClick={() => handleSelectTopic("")}
-                                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                        !selectedTopic
-                                            ? "bg-primary text-primary-foreground shadow-xs"
-                                            : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                                    }`}
+                                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${!selectedTopic
+                                        ? "bg-primary text-primary-foreground shadow-xs"
+                                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                        }`}
                                 >
                                     <div className="flex items-center gap-2 truncate">
                                         <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
@@ -647,9 +719,8 @@ export default function QuestionListPage() {
                                     </div>
                                     <Badge
                                         variant="secondary"
-                                        className={`text-[10px] px-1.5 py-0 font-normal ${
-                                            !selectedTopic ? "bg-primary-foreground/20 text-primary-foreground" : ""
-                                        }`}
+                                        className={`text-[10px] px-1.5 py-0 font-normal ${!selectedTopic ? "bg-primary-foreground/20 text-primary-foreground" : ""
+                                            }`}
                                     >
                                         {allQuestions.length}
                                     </Badge>
@@ -667,11 +738,10 @@ export default function QuestionListPage() {
                                                 key={topic}
                                                 type="button"
                                                 onClick={() => handleSelectTopic(topic)}
-                                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors group ${
-                                                    isSelected
-                                                        ? "bg-primary/15 text-primary border border-primary/20 shadow-xs dark:bg-primary/20"
-                                                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                                                }`}
+                                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors group ${isSelected
+                                                    ? "bg-primary/15 text-primary border border-primary/20 shadow-xs dark:bg-primary/20"
+                                                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                    }`}
                                             >
                                                 <div className="flex items-center gap-2 truncate">
                                                     {isSelected ? (
@@ -683,9 +753,8 @@ export default function QuestionListPage() {
                                                 </div>
                                                 <Badge
                                                     variant="secondary"
-                                                    className={`text-[10px] px-1.5 py-0 font-normal shrink-0 ${
-                                                        isSelected ? "bg-primary/20 text-primary border border-primary/30" : ""
-                                                    }`}
+                                                    className={`text-[10px] px-1.5 py-0 font-normal shrink-0 ${isSelected ? "bg-primary/20 text-primary border border-primary/30" : ""
+                                                        }`}
                                                 >
                                                     {count}
                                                 </Badge>
@@ -701,11 +770,10 @@ export default function QuestionListPage() {
                                         <button
                                             type="button"
                                             onClick={() => handleSelectTopic("Uncategorized")}
-                                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors group ${
-                                                selectedTopic === "Uncategorized"
-                                                    ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shadow-xs"
-                                                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                                            }`}
+                                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors group ${selectedTopic === "Uncategorized"
+                                                ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shadow-xs"
+                                                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                }`}
                                         >
                                             <div className="flex items-center gap-2 truncate">
                                                 <FolderX className={`w-3.5 h-3.5 shrink-0 ${selectedTopic === "Uncategorized" ? "text-amber-600 dark:text-amber-400" : "text-amber-500"}`} />
@@ -713,9 +781,8 @@ export default function QuestionListPage() {
                                             </div>
                                             <Badge
                                                 variant="secondary"
-                                                className={`text-[10px] px-1.5 py-0 font-normal shrink-0 ${
-                                                    selectedTopic === "Uncategorized" ? "bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30" : ""
-                                                }`}
+                                                className={`text-[10px] px-1.5 py-0 font-normal shrink-0 ${selectedTopic === "Uncategorized" ? "bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30" : ""
+                                                    }`}
                                             >
                                                 {noTopicCount}
                                             </Badge>
@@ -742,7 +809,7 @@ export default function QuestionListPage() {
 
                 {/* RIGHT COLUMN: Question Library Workspace */}
                 <main className="flex-1 min-w-0 flex flex-col bg-card border rounded-xl p-4 shadow-sm overflow-hidden">
-                    
+
                     {/* Top Action Toolbar */}
                     <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b">
                         {/* Left: Active Filters indicator */}
@@ -786,16 +853,30 @@ export default function QuestionListPage() {
 
                         {/* Right: View Mode Toggle & Actions */}
                         <div className="flex items-center gap-2">
+                            {/* Preview all answers (card view) */}
+                            {viewMode === "card" && (
+                                <Button
+                                    type="button"
+                                    variant={allExpanded ? "default" : "outline"}
+                                    size="sm"
+                                    className="h-8 gap-1.5 text-xs"
+                                    onClick={toggleAllPreview}
+                                    disabled={filteredQuestions.length === 0}
+                                >
+                                    {allExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                                    {allExpanded ? "Hide all answers" : "Preview all"}
+                                </Button>
+                            )}
+
                             {/* View Mode Switcher: Card vs Table */}
                             <div className="flex items-center bg-muted/40 p-1 rounded-lg border text-xs font-medium">
                                 <button
                                     type="button"
                                     onClick={() => setViewMode("card")}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${
-                                        viewMode === "card"
-                                            ? "bg-primary text-primary-foreground shadow-xs font-semibold"
-                                            : "text-muted-foreground hover:text-foreground"
-                                    }`}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${viewMode === "card"
+                                        ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                                        : "text-muted-foreground hover:text-foreground"
+                                        }`}
                                     title="View as Cards"
                                 >
                                     <LayoutGrid className="size-3.5" />
@@ -804,11 +885,10 @@ export default function QuestionListPage() {
                                 <button
                                     type="button"
                                     onClick={() => setViewMode("table")}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${
-                                        viewMode === "table"
-                                            ? "bg-primary text-primary-foreground shadow-xs font-semibold"
-                                            : "text-muted-foreground hover:text-foreground"
-                                    }`}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${viewMode === "table"
+                                        ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                                        : "text-muted-foreground hover:text-foreground"
+                                        }`}
                                     title="View as Table"
                                 >
                                     <TableIcon className="size-3.5" />
@@ -890,17 +970,6 @@ export default function QuestionListPage() {
                                                                 {isExpanded ? "Hide answers" : "Preview"}
                                                             </Button>
 
-                                                            {onView && (
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                                                                    title="View Details"
-                                                                    onClick={() => onView(q)}
-                                                                >
-                                                                    <Eye className="size-3.5" />
-                                                                </Button>
-                                                            )}
                                                             {!browseMode && onEdit && (
                                                                 <Button
                                                                     variant="ghost"
@@ -1020,7 +1089,7 @@ export default function QuestionListPage() {
                                     headerActions={browseMode ? undefined : headerActions}
                                     hideActions={browseMode}
                                     onEdit={browseMode ? undefined : onEdit}
-                                    onView={onView}
+                                    renderRowActions={browseMode ? undefined : renderTableRowActions}
                                     renderCard={entityConfig.cardRenderer}
                                 />
                             </div>

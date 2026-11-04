@@ -72,11 +72,11 @@ export function QuestionEditPage() {
                         <CardTitle>Edit Question</CardTitle>
                         <CardDescription>Update question #{id}.</CardDescription>
                     </CardHeader>
-                    <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
+                    <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
                         {questionQuery.isLoading ? (
-                            <p className="text-sm text-muted-foreground">Loading question data...</p>
+                            <p className="p-6 text-sm text-muted-foreground">Loading question data...</p>
                         ) : questionQuery.isError ? (
-                            <p className="text-sm text-destructive">
+                            <p className="p-6 text-sm text-destructive">
                                 {getErrorMessage(questionQuery.error, "Unable to load question.")}
                             </p>
                         ) : (
@@ -87,6 +87,7 @@ export function QuestionEditPage() {
                                 isSaving={updateMutation.isPending}
                                 submitLabel="Save changes"
                                 showActive
+                                fillHeight
                             />
                         )}
                     </CardContent>
