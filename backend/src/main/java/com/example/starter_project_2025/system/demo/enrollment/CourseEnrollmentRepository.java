@@ -70,4 +70,15 @@ public interface CourseEnrollmentRepository
             @Param("departmentId") Long departmentId,
             @Param("courseId") Long courseId
     );
+
+    @Query("select e from CourseEnrollment e join fetch e.user join fetch e.course "
+            + "left join fetch e.department")
+    List<CourseEnrollment> findAllForAudit();
+
+    @Query("select e from CourseEnrollment e join fetch e.user "
+            + "where e.department.id = :departmentId and e.course.id = :courseId")
+    List<CourseEnrollment> findAllByDepartmentAndCourse(
+            @Param("departmentId") Long departmentId,
+            @Param("courseId") Long courseId
+    );
 }
