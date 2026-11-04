@@ -1,4 +1,4 @@
-gitimport type {
+import type {
     AttendanceRecord,
         AuditRecord,
         ClassActivity,
