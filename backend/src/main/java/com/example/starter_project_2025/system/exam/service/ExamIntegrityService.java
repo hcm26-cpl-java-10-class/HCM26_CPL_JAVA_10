@@ -23,12 +23,16 @@ public class ExamIntegrityService {
 
     /** Gioi han chong spam: toi da so su kien cho 1 luot thi. */
     static final int MAX_EVENTS_PER_ATTEMPT = 2000;
+    /** Toi da so anh bang chung camera cho 1 luot thi (tranh phinh database). */
+    static final int MAX_EVIDENCE_PER_ATTEMPT = 40;
+    static final String IMAGE_PREFIX = "data:image/jpeg;base64,";
     /** Neu tab cu con "song" (heartbeat) trong khoang nay thi coi la dang mo song song. */
     static final Duration SESSION_ALIVE_WINDOW = Duration.ofSeconds(45);
 
     private final ExamAttemptRepository attemptRepository;
     private final ExamRepository examRepository;
     private final ExamIntegrityEventRepository eventRepository;
+    private final ExamProctorImageRepository proctorImageRepository;
 
     // ------------------------------------------------------------------ ghi nhan
 
@@ -43,6 +47,7 @@ public class ExamIntegrityService {
 
         Instant now = Instant.now();
         List<ExamIntegrityEvent> toSave = new ArrayList<>();
+        Map<ExamIntegrityEvent, String> snapshots = new IdentityHashMap<>();
 
         // --- phat hien nhieu tab / thiet bi (heartbeat) ---
         String clientId = request.getClientId();
@@ -65,12 +70,24 @@ public class ExamIntegrityService {
                 if (!isEnabled(exam, item.getType())) continue;
                 Integer dur = item.getDurationSeconds() == null ? null
                         : Math.max(0, Math.min(item.getDurationSeconds(), 24 * 3600));
-                toSave.add(build(attempt, item.getType(), now, dur, item.getDetail(), userAgent, ip));
+                // su kien camera duoc gui khi ket thuc vi pham -> lui thoi diem ve luc bat dau
+                Instant at = isCameraType(item.getType()) && dur != null ? now.minusSeconds(dur) : now;
+                ExamIntegrityEvent ev = build(attempt, item.getType(), at, dur, item.getDetail(), userAgent, ip);
+                toSave.add(ev);
+                if (isCameraType(item.getType()) && validImage(item.getSnapshot())) {
+                    snapshots.put(ev, item.getSnapshot());
+                }
             }
         }
+        long evidence = proctorImageRepository.countByAttemptIdAndEventIdIsNotNull(attemptId);
         for (ExamIntegrityEvent e : toSave) {
             if (existing++ >= MAX_EVENTS_PER_ATTEMPT) break;
             eventRepository.save(e);
+            String snap = snapshots.get(e);
+            if (snap != null && evidence < MAX_EVIDENCE_PER_ATTEMPT) {
+                saveImage(attempt, e.getId(), now, snap);
+                evidence++;
+            }
         }
     }
 
@@ -83,7 +100,65 @@ public class ExamIntegrityService {
             case COPY, CUT, PASTE, CONTEXT_MENU, DEVTOOLS_KEY, PRINT_ATTEMPT ->
                     Boolean.TRUE.equals(exam.getBlockCopyPaste());
             case MULTI_SESSION -> Boolean.TRUE.equals(exam.getSingleSession());
+            case CAMERA_OFF, CAMERA_COVERED, FACE_MISSING, MULTIPLE_FACES, HEAD_TURNED ->
+                    Boolean.TRUE.equals(exam.getCameraProctoring());
         };
+    }
+
+    static boolean isCameraType(IntegrityEventType type) {
+        return type == IntegrityEventType.CAMERA_OFF || type == IntegrityEventType.CAMERA_COVERED
+                || type == IntegrityEventType.FACE_MISSING || type == IntegrityEventType.MULTIPLE_FACES
+                || type == IntegrityEventType.HEAD_TURNED;
+    }
+
+    static boolean validImage(String data) {
+        return data != null && data.startsWith(IMAGE_PREFIX) && data.length() > IMAGE_PREFIX.length()
+                && data.length() <= 400_000;
+    }
+
+    private void saveImage(ExamAttempt attempt, Long eventId, Instant at, String imageData) {
+        ExamProctorImage img = new ExamProctorImage();
+        img.setAttemptId(attempt.getId());
+        img.setExamId(attempt.getExam().getId());
+        img.setEventId(eventId);
+        img.setCapturedAt(at);
+        img.setImageData(imageData);
+        proctorImageRepository.save(img);
+    }
+
+    // ------------------------------------------------------------------ anh luc vao thi
+
+    /** Luu anh chup nguoi thi luc vao thi (chi luu 1 lan cho moi luot thi). */
+    @Transactional
+    public void saveEntryPhoto(Long attemptId, Long studentId, String imageData) {
+        ExamAttempt attempt = attemptRepository.lockByIdAndStudentId(attemptId, studentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam attempt not found"));
+        Exam exam = attempt.getExam();
+        if (!Boolean.TRUE.equals(exam.getAntiCheatEnabled()) || !Boolean.TRUE.equals(exam.getCameraProctoring())) {
+            return;
+        }
+        if (attempt.getStatus() != ExamAttemptStatus.IN_PROGRESS) return;
+        if (!validImage(imageData)) {
+            throw new IllegalArgumentException("Invalid photo");
+        }
+        if (proctorImageRepository.existsByAttemptIdAndEventIdIsNull(attemptId)) return;
+        saveImage(attempt, null, Instant.now(), imageData);
+    }
+
+    @Transactional(readOnly = true)
+    public ExamIntegrityReportDTO.EntryPhotoDTO getEntryPhoto(Long examId, Long attemptId) {
+        ExamAttempt a = attemptRepository.findById(attemptId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam attempt not found"));
+        if (!a.getExam().getId().equals(examId)) {
+            throw new ResourceNotFoundException("Exam attempt not found");
+        }
+        ExamIntegrityReportDTO.EntryPhotoDTO dto = new ExamIntegrityReportDTO.EntryPhotoDTO();
+        proctorImageRepository.findFirstByAttemptIdAndEventIdIsNullOrderByCapturedAtAsc(attemptId)
+                .ifPresent(i -> {
+                    dto.setImageData(i.getImageData());
+                    dto.setCapturedAt(i.getCapturedAt());
+                });
+        return dto;
     }
 
     private ExamIntegrityEvent build(ExamAttempt a, IntegrityEventType type, Instant at,
@@ -108,6 +183,7 @@ public class ExamIntegrityService {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
         List<ExamAttempt> attempts = attemptRepository.findAllByExam_Id(examId);
+        Set<Long> withPhoto = new HashSet<>(proctorImageRepository.findAttemptIdsWithEntryPhoto(examId));
         Map<Long, List<ExamIntegrityEvent>> byAttempt = new HashMap<>();
         for (ExamIntegrityEvent e : eventRepository.findAllByExamIdOrderByOccurredAtAsc(examId)) {
             byAttempt.computeIfAbsent(e.getAttemptId(), k -> new ArrayList<>()).add(e);
@@ -132,6 +208,7 @@ public class ExamIntegrityService {
         for (ExamAttempt a : sorted) {
             List<ExamIntegrityEvent> events = byAttempt.getOrDefault(a.getId(), List.of());
             ExamIntegrityReportDTO.Row r = toRow(a, events);
+            r.setHasEntryPhoto(withPhoto.contains(a.getId()));
             for (ExamIntegrityEvent e : events) totals.merge(e.getType().name(), 1, Integer::sum);
             if (r.isFlagged()) flagged++;
             totalViolations += r.getTotalViolations();
@@ -194,6 +271,11 @@ public class ExamIntegrityService {
                 case CONTEXT_MENU -> r.setContextMenuCount(r.getContextMenuCount() + 1);
                 case DEVTOOLS_KEY, PRINT_ATTEMPT -> r.setShortcutCount(r.getShortcutCount() + 1);
                 case MULTI_SESSION -> r.setMultiSessionCount(r.getMultiSessionCount() + 1);
+                case CAMERA_OFF -> r.setCameraOffCount(r.getCameraOffCount() + 1);
+                case CAMERA_COVERED -> r.setCameraCoveredCount(r.getCameraCoveredCount() + 1);
+                case FACE_MISSING -> r.setFaceMissingCount(r.getFaceMissingCount() + 1);
+                case MULTIPLE_FACES -> r.setMultipleFacesCount(r.getMultipleFacesCount() + 1);
+                case HEAD_TURNED -> r.setHeadTurnedCount(r.getHeadTurnedCount() + 1);
             }
             if (e.getDurationSeconds() != null) away += e.getDurationSeconds();
             if (last == null || e.getOccurredAt().isAfter(last)) last = e.getOccurredAt();
@@ -245,7 +327,15 @@ public class ExamIntegrityService {
             throw new ResourceNotFoundException("Exam attempt not found");
         }
         List<ExamIntegrityReportDTO.EventDTO> out = new ArrayList<>();
-        for (ExamIntegrityEvent e : eventRepository.findAllByAttemptIdOrderByOccurredAtAsc(attemptId)) {
+        List<ExamIntegrityEvent> list = eventRepository.findAllByAttemptIdOrderByOccurredAtAsc(attemptId);
+        Map<Long, String> snaps = new HashMap<>();
+        if (!list.isEmpty()) {
+            for (ExamProctorImage i : proctorImageRepository.findAllByEventIdIn(
+                    list.stream().map(ExamIntegrityEvent::getId).toList())) {
+                snaps.put(i.getEventId(), i.getImageData());
+            }
+        }
+        for (ExamIntegrityEvent e : list) {
             ExamIntegrityReportDTO.EventDTO d = new ExamIntegrityReportDTO.EventDTO();
             d.setId(e.getId());
             d.setType(e.getType().name());
@@ -254,6 +344,7 @@ public class ExamIntegrityService {
             d.setDetail(e.getDetail());
             d.setUserAgent(e.getUserAgent());
             d.setIpAddress(e.getIpAddress());
+            d.setSnapshot(snaps.get(e.getId()));
             out.add(d);
         }
         return out;

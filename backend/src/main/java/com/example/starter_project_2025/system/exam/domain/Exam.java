@@ -10,6 +10,7 @@ import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.question.domain.Question;
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnDefault;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,8 +20,8 @@ import lombok.Setter;
 @Table(name = "exam")
 @ResourcePermission("EXAM")
 @ResourceMenu(
-        title = "Exams",
-        group = "Exam Management",
+        title = "Assessments",
+        group = "Assessment Management",
         icon = "book-open",
         url = "/exams",
         order = 1,
@@ -38,6 +39,15 @@ public class Exam extends BaseEntity {
     private LocalDateTime startTime;
 
     private LocalDateTime endTime;
+
+    /** Tinh nang dat lich (start/end) da bi go bo: luon tra ve null de moi noi coi nhu "mo tu do". Gia tri cu van nam trong DB. */
+    public LocalDateTime getStartTime() {
+        return null;
+    }
+
+    public LocalDateTime getEndTime() {
+        return null;
+    }
 
     @Column(nullable = false)
     private Integer maxAttempts = 1;
@@ -76,7 +86,7 @@ public class Exam extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private ExamCategory category = ExamCategory.ASSESSMENT;
+    private ExamCategory category = ExamCategory.ASSIGNMENT;
 
     @Column(length = 100)
     private String accessCode;
@@ -100,6 +110,16 @@ public class Exam extends BaseEntity {
     /** Phat hien mo bai thi o nhieu tab/thiet bi. */
     @Column(nullable = false)
     private Boolean singleSession = false;
+
+    /** Giam sat bang camera: chup anh luc vao thi, phat hien tat/che/roi camera, nhieu nguoi. */
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private Boolean cameraProctoring = false;
+
+    /** Hien thong bao cho nguoi thi khi he thong ghi nhan vi pham. */
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private Boolean notifyOnViolation = false;
 
     @ManyToMany
     @JoinTable(name = "exam_question",
