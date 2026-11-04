@@ -315,20 +315,20 @@ it("warns before leaving through a link or closing the page and removes the warn
 it("keeps Calendar drafts when switching tabs is declined and discards them only after confirmation", async () => {
     grant("SESSION_READ", "SESSION_UPDATE");
     fakeHttp.on("get", "/external/classes/1", { id: 1, code: "JAVA_01", status: "active" });
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    fakeHttp.on("get", "/classes/1", { id: 1, code: "JAVA_01", status: "active" });
     const { default: ClassDetailPage } = await import("../ClassDetailPage");
     const { user } = renderAt(<ClassDetailPage />, { route: "/classes/1?tab=calendar", path: "/classes/:classId" });
     await user.click(await screen.findByRole("button", { name: "Edit calendar version 1.2" }));
     fireEvent.change(screen.getByLabelText("Calendar name for version 1.2"), { target: { value: "Draft name" } });
     await user.click(screen.getByRole("tab", { name: "Class Info" }));
-    expect(confirm).toHaveBeenCalledOnce();
+    const leaveDialog = await screen.findByRole("dialog", { name: "Unsaved Changes" });
+    await user.click(within(leaveDialog).getByRole("button", { name: "Stay" }));
     expect(screen.getByRole("tab", { name: "Calendar" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByLabelText("Calendar name for version 1.2")).toHaveValue("Draft name");
-    confirm.mockReturnValue(true);
     await user.click(screen.getByRole("tab", { name: "Class Info" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "Unsaved Changes" })).getByRole("button", { name: "Leave" }));
     expect(screen.getByRole("tab", { name: "Class Info" })).toHaveAttribute("aria-selected", "true");
     await user.click(screen.getByRole("tab", { name: "Calendar" }));
     expect(await screen.findByRole("button", { name: "Java_Calendar_1.2" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
-    confirm.mockRestore();
 });
