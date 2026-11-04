@@ -28,8 +28,9 @@ export function SidebarMenu() {
                 const groupNameLower = (group.name || "").toLowerCase();
                 const isRbacGroup = groupNameLower.includes("rbac");
 
-                const items = (group.modules || [])
+                const items = group.modules
                     .filter((module) => !!module.url)
+                    // Temporarily hide standalone "Modules" navigation item under "System Management"
                     .filter((module) => {
                         const isUnderSystemManagement =
                             (group.name || "").toLowerCase().includes("system");
@@ -41,29 +42,14 @@ export function SidebarMenu() {
                         }
                         return true;
                     })
-                    .map((module) => {
-                        const moduleUrl = (module.url ?? "").replace(/\/+$/, "");
-                        const normalizedTitle = (module.title ?? "").trim().toLocaleLowerCase();
-                        const isRoleManagement =
-                            moduleUrl === "/roles" ||
-                            moduleUrl === "/role" ||
-                            normalizedTitle === "roles" ||
-                            normalizedTitle === "quản lý vai trò" ||
-                            normalizedTitle === "role management";
-                        
-                        const url = isRoleManagement
-                            ? "/fams/role-permission-matrix"
-                            : module.url ?? "#";
-
-                        return {
-                            title: module.title ?? "Untitled",
-                            url,
-                            icon: resolveIcon(module.icon),
-                            isActive:
-                                !!url &&
-                                (location.pathname === url || location.pathname.startsWith(`${url}/`)),
-                        };
-                    });
+                    .map((module) => ({
+                        title: module.title ?? "Untitled",
+                        url: module.url ?? "#",
+                        icon: resolveIcon(module.icon),
+                        isActive:
+                            !!module.url &&
+                            (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
+                    }));
 
                 if (isRbacGroup) {
                     const hasLocation = items.some(
@@ -87,10 +73,34 @@ export function SidebarMenu() {
                     items,
                 };
             })
+                    .map((module) => {
+                        const moduleUrl = module.url?.replace(/\/+$/, "");
+                        const normalizedTitle = (module.title ?? "").trim().toLocaleLowerCase();
+                        const isRoleManagement =
+                            moduleUrl === "/roles" ||
+                            moduleUrl === "/role" ||
+                            normalizedTitle === "roles" ||
+                            normalizedTitle === "quản lý vai trò" ||
+                            normalizedTitle === "role management";
+                        const url = isRoleManagement
+                            ? "/fams/role-permission-matrix"
+                            : module.url ?? "#";
+
+                        return {
+                            title: module.title ?? "Untitled",
+                            url,
+                            icon: resolveIcon(module.icon),
+                            isActive:
+                                location.pathname === url ||
+                                location.pathname.startsWith(`${url}/`),
+                        };
+                    }),
+            }))
             .filter((group) => group.items.length > 0);
     }, [location.pathname, moduleGroups]);
 
     return (
+        <Sidebar variant="inset" collapsible="icon">
         <Sidebar
             variant="inset"
             collapsible="icon"
@@ -103,10 +113,10 @@ export function SidebarMenu() {
                     variant="ghost"
                     onClick={toggleSidebar}
                     className="
-                        flex h-auto w-full min-w-0 items-center justify-start gap-3
-                        group-data-[collapsible=icon]:justify-center
-                        group-data-[collapsible=icon]:px-0
-                    "
+            flex h-auto w-full min-w-0 items-center justify-start gap-3
+            group-data-[collapsible=icon]:justify-center
+            group-data-[collapsible=icon]:px-0
+          "
                 >
                     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-600 text-sm font-semibold text-white">
                         F
@@ -126,6 +136,9 @@ export function SidebarMenu() {
                 )}
             </SidebarContent>
 
+            <SidebarFooter className="p-4 text-xs flex flex-row items-center gap-2 text-muted-foreground group-data-[collapsible=icon]:justify-center">
+                {state === "expanded" && <span className="flex-1 truncate">RBAC System v1.0</span>}
+            {/* Footer */}
             <SidebarFooter className="flex flex-col items-start gap-1 p-4 text-xs text-slate-400 group-data-[collapsible=icon]:items-center">
                 {state === "expanded" && (
                     <span className="flex-1 truncate">
