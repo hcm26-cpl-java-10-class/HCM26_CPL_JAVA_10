@@ -7,14 +7,16 @@ export interface ExamConfigForm {
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
   showAnswersAfterExam: boolean;
-  category: ExamCategory;
+  /** "" = not chosen yet (the teacher must pick one). */
+  category: ExamCategory | "";
   passScore: string;
   maxScore: string;
   latePolicy: LatePolicy;
   latePenaltyPercent: string;
   lateGraceMinutes: string;
   resultVisibility: ResultVisibility;
-  examType: ExamType;
+  /** "" = not chosen yet (the teacher must pick one). */
+  examType: ExamType | "";
   accessCode: string;
   // NEW (anti-cheat)
   antiCheatEnabled: boolean;
@@ -29,18 +31,18 @@ export interface ExamConfigForm {
 export const DEFAULT_CONFIG: ExamConfigForm = {
   startTime: "",
   endTime: "",
-  maxAttempts: "1",
+  maxAttempts: "",
   shuffleQuestions: false,
   shuffleOptions: false,
   showAnswersAfterExam: true,
-  category: "ASSIGNMENT",
+  category: "",
   passScore: "",
   maxScore: "",
   latePolicy: "NOT_ALLOWED",
   latePenaltyPercent: "",
   lateGraceMinutes: "0",
   resultVisibility: "IMMEDIATE",
-  examType: "MIXED",
+  examType: "",
   accessCode: "",
   antiCheatEnabled: false,
   detectTabSwitch: true,
@@ -69,7 +71,7 @@ export const EXAM_CATEGORY_OPTIONS = Object.keys(EXAM_CATEGORY_LABEL) as ExamCat
 
 export const RESULT_VISIBILITY_LABEL: Record<ResultVisibility, string> = {
   IMMEDIATE: "View immediately after grading",
-  AFTER_EXAM_CLOSED: "View after assessment closes",
+  AFTER_EXAM_CLOSED: "View after exam closes",
   MANUAL_RELEASE: "Manually released by teacher",
 };
 
@@ -84,8 +86,11 @@ export const getFutureDatetimeString = (minutesAhead: number) =>
   getLocalDatetimeString(new Date(Date.now() + minutesAhead * 60 * 1000));
 
 /** Keep an enum value only when it is one of the known options (unknown / empty -> fallback). */
-const pickEnum = <T extends string>(value: string | null | undefined, allowed: Record<T, unknown>, fallback: T): T =>
-  value && value in allowed ? (value as T) : fallback;
+const pickEnum = <T extends string, F extends string = T>(
+  value: string | null | undefined,
+  allowed: Record<T, unknown>,
+  fallback: F,
+): T | F => (value && value in allowed ? (value as T) : fallback);
 
 export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   startTime: toInputDateTime(exam.startTime),
@@ -94,14 +99,14 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   shuffleQuestions: exam.shuffleQuestions ?? false,
   shuffleOptions: exam.shuffleOptions ?? false,
   showAnswersAfterExam: exam.showAnswersAfterExam ?? false,
-  category: pickEnum(exam.category, EXAM_CATEGORY_LABEL, "ASSIGNMENT"),
+  category: pickEnum(exam.category, EXAM_CATEGORY_LABEL, ""),
   passScore: exam.passScore != null ? String(exam.passScore) : "",
   maxScore: exam.maxScore != null ? String(exam.maxScore) : "",
   latePolicy: pickEnum(exam.latePolicy, LATE_POLICY_LABEL, "NOT_ALLOWED"),
   latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
   lateGraceMinutes: String(exam.lateGraceMinutes ?? 0),
   resultVisibility: pickEnum(exam.resultVisibility, RESULT_VISIBILITY_LABEL, "IMMEDIATE"),
-  examType: pickEnum(exam.examType, EXAM_TYPE_LABEL, "MIXED"),
+  examType: pickEnum(exam.examType, EXAM_TYPE_LABEL, ""),
   accessCode: exam.accessCode ?? "",
   antiCheatEnabled: exam.antiCheatEnabled ?? false,
   detectTabSwitch: exam.detectTabSwitch ?? false,
@@ -112,11 +117,57 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   notifyOnViolation: exam.notifyOnViolation ?? false,
 });
 
-export function validateConfig(_duration: number, cfg: ExamConfigForm): string | null {
+/** Required selects that must be chosen by the teacher (no default value). */
+export function getRequiredFieldErrors(cfg: ExamConfigForm): { examType?: string; category?: string; maxAttempts?: string } {
+  const errors: { examType?: string; category?: string; maxAttempts?: string } = {};
+  if (!cfg.examType) errors.examType = "Please select a question format.";
+  if (!cfg.category) errors.category = "Please select a category.";
+  if (cfg.maxAttempts.trim() === "") errors.maxAttempts = "Please enter the maximum number of attempts.";
+  else if (!(Number(cfg.maxAttempts) >= 1)) errors.maxAttempts = "Maximum attempts must be at least 1.";
+  return errors;
+}
+
+export function validateConfig(
+  duration: number,
+  cfg: ExamConfigForm,
+  originalStartTime?: string,
+  originalEndTime?: string,
+): string | null {
+  const required = getRequiredFieldErrors(cfg);
+  if (required.examType) return required.examType;
+  if (required.category) return required.category;
+  if (required.maxAttempts) return required.maxAttempts;
+
+  const now = Date.now() - 60 * 1000; // Allow 1-min grace when saving
+
+  if (cfg.startTime) {
+    const start = new Date(cfg.startTime).getTime();
+    const isStartChanged = !originalStartTime || new Date(originalStartTime).getTime() !== start;
+    if (isStartChanged && start < now) {
+      return "Start time must be at current time or later (recommended: set at least 1 minute ahead so students have time to join).";
+    }
+  }
+
+  if (cfg.endTime) {
+    const end = new Date(cfg.endTime).getTime();
+    const isEndChanged = !originalEndTime || new Date(originalEndTime).getTime() !== end;
+    if (isEndChanged && end < now) {
+      return "End time cannot be in the past.";
+    }
+  }
+
+  if (cfg.startTime && cfg.endTime) {
+    const start = new Date(cfg.startTime).getTime();
+    const end = new Date(cfg.endTime).getTime();
+    if (start >= end) return "End time must be after start time.";
+    const windowMinutes = Math.floor((end - start) / 60000);
+    if (duration > windowMinutes) return `Exam duration (${duration} mins) exceeds the available time window (${windowMinutes} mins).`;
+  }
   if (!(Number(cfg.maxAttempts) >= 1)) return "Maximum attempts must be at least 1.";
   if (cfg.maxScore !== "" && !(Number(cfg.maxScore) > 0 && Number(cfg.maxScore) <= 1000)) return "Max score must be greater than 0 and at most 1000.";
   if (cfg.passScore !== "" && Number(cfg.passScore) < 0) return "Passing score must be >= 0.";
   if (cfg.passScore !== "" && Number(cfg.passScore) > (cfg.maxScore !== "" ? Number(cfg.maxScore) : 10)) return "Passing score cannot exceed the max score.";
+  if (cfg.latePolicy !== "NOT_ALLOWED" && !cfg.endTime) return "End time is required when setting a late submission policy.";
   if (cfg.latePolicy === "ALLOWED_WITH_PENALTY") {
     const pct = Number(cfg.latePenaltyPercent);
     if (!(pct >= 1 && pct <= 100)) return "Late penalty percentage must be between 1% and 100%.";
