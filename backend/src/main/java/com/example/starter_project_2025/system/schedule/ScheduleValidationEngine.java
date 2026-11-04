@@ -1,19 +1,153 @@
 package com.example.starter_project_2025.system.schedule;
 
 import com.example.starter_project_2025.system.demo.session.*;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
 import java.time.*;
 import java.util.*;
 
 @Service
-@RequiredArgsConstructor
 public class ScheduleValidationEngine {
     private final SessionRepository sessions;
     private final ScheduleReferenceProvider references;
     private final ScheduleRules rules;
     private final ScheduleWriteLockRepository locks;
+    private final ScheduleSourceRegistry scopedSources;
+    private final ScheduleScopedSettings scopedSettings;
+
+    /** Source-compatible constructor for legacy callers/tests. Scoped mode has no default scope. */
+    public ScheduleValidationEngine(SessionRepository sessions, ScheduleReferenceProvider references,
+            ScheduleRules rules, ScheduleWriteLockRepository locks) {
+        this(sessions, references, rules, locks,
+                new ScheduleSourceRegistry(List.of(new DemoSessionScheduleSource(sessions))), new ScheduleScopedSettings());
+    }
+
+    public ScheduleValidationEngine(SessionRepository sessions, ScheduleReferenceProvider references,
+            ScheduleRules rules, ScheduleWriteLockRepository locks,
+            ScheduleSourceRegistry scopedSources, ScheduleScopedSettings scopedSettings) {
+        this.sessions = sessions;
+        this.references = references;
+        this.rules = rules;
+        this.locks = locks;
+        this.scopedSources = scopedSources;
+        this.scopedSettings = scopedSettings;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ScheduleValidationEngine(SessionRepository sessions, ScheduleReferenceProvider references,
+            ScheduleRules rules, ScheduleWriteLockRepository locks,
+            org.springframework.beans.factory.ObjectProvider<ScheduleSourceRegistry> sourceProvider,
+            org.springframework.beans.factory.ObjectProvider<ScheduleScopedSettings> settingsProvider) {
+        this(sessions, references, rules, locks,
+                sourceProvider.getIfAvailable(() -> new ScheduleSourceRegistry(List.of(new DemoSessionScheduleSource(sessions)))),
+                settingsProvider.getIfAvailable(ScheduleScopedSettings::new));
+    }
+
+    /**
+     * Internal server-side integration only; not exposed through any controller. Replacement
+     * keys must be derived by a trusted caller. Reports observed resource overlaps, never full
+     * eligibility while topic/reference/active/venue policies remain pending.
+     * This preview does not start a transaction: standalone source reads finish their own
+     * transactions inside the registry's error boundary. A caller supplying a write transaction
+     * must roll it back on database failure; this incomplete preview is not a write gate.
+     */
+    public ScheduleScopedValidationResult validateScoped(ScheduleValidationBatch batch) {
+        var scope = Set.copyOf(scopedSettings.getSources());
+        var issues = new ArrayList<ScheduleScopedValidationResult.Diagnostic>();
+        var reads = new ArrayList<ScheduleSessionSource.ReadResult>();
+        for (var code : List.of("TOPIC_MAPPING_PENDING", "ACTIVE_POLICY_PENDING", "REFERENCE_VENUE_CONTRACT_PENDING"))
+            issues.add(ScheduleScopedValidationResult.Diagnostic.incomplete(code, "eligibility", "Scoped business eligibility contract is not confirmed"));
+        if (batch == null || batch.candidates().isEmpty() || batch.candidates().size() > rules.getMaxBatchSize()) {
+            issues.add(new ScheduleScopedValidationResult.Diagnostic(ScheduleScopedValidationResult.Kind.INVALID,
+                    "BATCH_SIZE", "sessions", "Provide between 1 and " + rules.getMaxBatchSize() + " candidates", null, null, null));
+            return ScheduleScopedValidationResult.fromChecks(ScheduleScopedValidationResult.Status.INCOMPLETE, scope, reads, issues);
+        }
+        var excluded = new HashSet<ScheduleEntryKey>();
+        for (var item : batch.candidates()) {
+            var key = item.replacedKey();
+            if (key == null) continue;
+            if (!scope.contains(key.source())) {
+                issues.add(ScheduleScopedValidationResult.Diagnostic.incomplete("EDIT_SOURCE_OUTSIDE_SCOPE", "id", "Edit source is outside the configured server scope"));
+                continue;
+            }
+            var lookup = scopedSources.lookup(key);
+            issues.addAll(lookup.diagnostics());
+            if (lookup.status() == ScheduleSessionSource.LookupStatus.FOUND) excluded.add(key);
+            else if (lookup.status() == ScheduleSessionSource.LookupStatus.NOT_FOUND)
+                issues.add(new ScheduleScopedValidationResult.Diagnostic(ScheduleScopedValidationResult.Kind.INVALID,
+                        "NOT_FOUND", "id", "Edited schedule entry does not exist in its source", null, null, key));
+        }
+        var candidates = batch.candidates().stream().map(item -> explicitIds(item.candidate())).toList();
+        for (int i = 0; i < candidates.size(); i++) inspectScopedFacts(candidates.get(i), i, null, issues);
+        var timed = candidates.stream().filter(this::orderedTimes).toList();
+        if (!timed.isEmpty()) {
+            var from = timed.stream().map(ScheduleCandidate::startTime).min(LocalDateTime::compareTo).orElseThrow();
+            var until = timed.stream().map(ScheduleCandidate::endTime).max(LocalDateTime::compareTo).orElseThrow();
+            for (var source : scope) {
+                var read = scopedSources.read(source, from, until);
+                var entries = read.entries().stream().filter(entry -> !excluded.contains(entry.key())).toList();
+                reads.add(new ScheduleSessionSource.ReadResult(source, read.status(), entries, read.diagnostics()));
+            }
+        }
+        for (int i = 0; i < candidates.size(); i++) {
+            for (var read : reads) {
+                for (var entry : read.entries()) {
+                    var facts = explicitIds(entry.facts());
+                    // No eligibility revalidation of historical assignments; these are occupancy facts.
+                    if (i == 0) inspectScopedFacts(facts, null, entry.key(), issues);
+                    collectScopedComparison(candidates.get(i), facts, i, null, entry.key(), issues);
+                }
+            }
+            for (int j = 0; j < i; j++) {
+                collectScopedComparison(candidates.get(i), candidates.get(j), i, j, null, issues);
+                collectScopedComparison(candidates.get(j), candidates.get(i), j, i, null, issues);
+            }
+        }
+        return ScheduleScopedValidationResult.fromChecks(ScheduleScopedValidationResult.Status.INCOMPLETE, scope, reads, issues);
+    }
+
+    private void inspectScopedFacts(ScheduleCandidate c, Integer index, ScheduleEntryKey key,
+            List<ScheduleScopedValidationResult.Diagnostic> issues) {
+        if (!orderedTimes(c)) issues.add(new ScheduleScopedValidationResult.Diagnostic(
+                ScheduleScopedValidationResult.Kind.INCOMPLETE, "TIME_DATA_INCOMPLETE", "startTime",
+                "A usable time interval is required for conflict comparison", index, null, key));
+        if (!positiveId(c.classId()) || !positiveId(c.trainerId())) issues.add(new ScheduleScopedValidationResult.Diagnostic(
+                ScheduleScopedValidationResult.Kind.INCOMPLETE, "RESOURCE_DATA_INCOMPLETE", "assignment",
+                "Class or trainer identity is missing/invalid; null identities are never compared as equal", index, null, key));
+        if (!positiveId(c.roomId()) && (c.meetingUrl() == null || c.meetingUrl().isBlank()))
+            issues.add(new ScheduleScopedValidationResult.Diagnostic(ScheduleScopedValidationResult.Kind.INCOMPLETE,
+                    "VENUE_DATA_INCOMPLETE", "roomId", "No explicit room identity or meeting URL; room names are not resolved", index, null, key));
+    }
+
+    private boolean positiveId(Long id) { return id != null && id > 0; }
+    private boolean orderedTimes(ScheduleCandidate c) {
+        return c.startTime() != null && c.endTime() != null && c.endTime().isAfter(c.startTime());
+    }
+
+    private ScheduleCandidate explicitIds(ScheduleCandidate c) {
+        return new ScheduleCandidate(null, c.classId(), c.topicId(), c.trainerId(), c.teachingAssignmentId(),
+                c.roomId(), null, c.meetingUrl(), c.title(), c.startTime(), c.endTime());
+    }
+
+    private void collectScopedComparison(ScheduleCandidate a, ScheduleCandidate b, int index, Integer peer,
+            ScheduleEntryKey key, List<ScheduleScopedValidationResult.Diagnostic> issues) {
+        if (!orderedTimes(a) || !orderedTimes(b)) return;
+        var observed = new ArrayList<ScheduleIssue>();
+        // Explicit-ID comparison has no catalogue lookup: location is null on both facts.
+        // These empty catalogues are NOT passed to checkConditions or used as eligibility evidence.
+        var comparisonOnly = new ScheduleReferences(List.of(), List.of(), List.of(), List.of(), List.of());
+        compare(a, b, index, peer, key == null ? null : key.id(), comparisonOnly, observed);
+        for (var issue : observed) {
+            boolean known = switch (issue.code()) {
+                case "CLASS_CONFLICT" -> positiveId(a.classId()) && positiveId(b.classId());
+                case "TRAINER_CONFLICT" -> positiveId(a.trainerId()) && positiveId(b.trainerId());
+                case "ROOM_CONFLICT" -> positiveId(a.roomId()) && positiveId(b.roomId());
+                default -> false;
+            };
+            if (known) issues.add(new ScheduleScopedValidationResult.Diagnostic(ScheduleScopedValidationResult.Kind.INVALID,
+                    issue.code(), issue.field(), issue.message(), index, peer, key));
+        }
+    }
 
     /** Call BEFORE reading sessions, then validate and write in the SAME transaction. */
     @Transactional(propagation = Propagation.MANDATORY)
@@ -76,8 +210,29 @@ public class ScheduleValidationEngine {
         LocalDateTime from = candidates.stream().map(ScheduleCandidate::startTime).min(LocalDateTime::compareTo).orElseThrow();
         LocalDateTime to = candidates.stream().map(ScheduleCandidate::endTime).max(LocalDateTime::compareTo).orElseThrow();
         List<Session> existing = sessions.findBlockingInRange(from, to);
+        var studyEntries = List.<ScheduleSessionSource.Entry>of();
+        if (scopedSources.contains(ScheduleEntryKey.Source.STUDY_SESSION)) {
+            var read = scopedSources.read(ScheduleEntryKey.Source.STUDY_SESSION, from, to);
+            if (read.status() != ScheduleSessionSource.ReadStatus.COMPLETE) {
+                issue(issues,"SOURCE_UNAVAILABLE","sessions","Study session bookings could not be verified.",-1);
+            } else studyEntries = read.entries().stream().filter(e -> Boolean.TRUE.equals(e.isActive()) && !"CANCELLED".equals(e.rawStatus())).toList();
+        }
         for (int i = 0; i < candidates.size(); i++) {
             var candidate = candidates.get(i);
+            for (var old : studyEntries) {
+                var facts=old.facts();
+                if(!orderedTimes(facts) || facts.classId()==null || facts.trainerId()==null) {
+                    issue(issues,"RESOURCE_DATA_INCOMPLETE","sessions","An existing study session has incomplete resource identity.",i);
+                    continue;
+                }
+                int first=issues.size();
+                compare(candidate,facts,i,null,old.key().id(),ref,issues);
+                for(int position=first;position<issues.size();position++) {
+                    var error=issues.get(position);
+                    issues.set(position,new ScheduleIssue(error.code(),error.field(),error.message(),error.candidateIndex(),
+                            error.relatedCandidateIndex(),error.relatedSessionId(),error.relatedTitle(),error.relatedStart(),error.relatedEnd(),ScheduleEntryKey.Source.STUDY_SESSION));
+                }
+            }
             for (Session old : existing) {
                 if (!excluded.contains(old.getId())) compare(candidate, fromSession(old), i, null, old.getId(), ref, issues);
             }
@@ -95,6 +250,17 @@ public class ScheduleValidationEngine {
     }
 
     private void checkConditions(ScheduleCandidate c, int index, ScheduleReferences ref, List<ScheduleIssue> issues) {
+        checkConditions(c, index, ref, issues, true);
+    }
+
+    /** Assignment identity is checked locally by the integration service, without guessing a topic ID. */
+    public List<ScheduleIssue> inspectResources(List<ScheduleCandidate> candidates, ScheduleReferences resources) {
+        var issues = new ArrayList<ScheduleIssue>();
+        for (int i = 0; i < candidates.size(); i++) checkConditions(candidates.get(i), i, resources, issues, false);
+        return issues;
+    }
+
+    private void checkConditions(ScheduleCandidate c, int index, ScheduleReferences ref, List<ScheduleIssue> issues, boolean checkAssignment) {
         var start = c.startTime();
         var end = c.endTime();
         if (!start.toLocalDate().equals(end.toLocalDate()) || start.toLocalTime().isBefore(rules.getOpeningTime())
@@ -125,18 +291,30 @@ public class ScheduleValidationEngine {
                 && Objects.equals(a.trainerId(), c.trainerId()) && active(a.status())
                 && a.effectiveFrom() != null && !start.toLocalDate().isBefore(a.effectiveFrom())
                 && (a.effectiveTo() == null || !end.toLocalDate().isAfter(a.effectiveTo())));
-        if (!assigned) issue(issues, "ASSIGNMENT_INVALID", "teachingAssignmentId", "No active teaching assignment matches this class, subject, and instructor for the full session duration.", index);
+        if (checkAssignment && c.teachingAssignmentId() != null && !assigned) issue(issues, "ASSIGNMENT_INVALID", "teachingAssignmentId", "No active teaching assignment matches this class, subject, and instructor for the full session duration.", index);
 
         Long room = canonicalRoom(c, ref);
         if (c.roomId() != null && ref.rooms().stream().noneMatch(r -> Objects.equals(r.getId(), c.roomId())))
             issue(issues, "ROOM_NOT_FOUND", "roomId", "The selected room could not be found. Select a room from the available list.", index);
-        if (c.location() != null && !c.location().isBlank() && room == null)
-            issue(issues, "ROOM_NOT_FOUND", "location", "The room name does not match an available room. Select a room from the list.", index);
+        if (c.location() != null && !c.location().isBlank() && room == null) {
+            boolean isVirtual = c.location().toLowerCase(Locale.ROOT).contains("online")
+                    || c.location().toLowerCase(Locale.ROOT).contains("teams")
+                    || c.location().toLowerCase(Locale.ROOT).contains("zoom");
+            if (!isVirtual && (c.meetingUrl() == null || !c.meetingUrl().matches("https?://[^\\s]+"))) {
+                issue(issues, "ROOM_NOT_FOUND", "location", "The room name does not match an available room. Select a room from the list.", index);
+            }
+        }
         if (c.roomId() != null && c.location() != null && !c.location().isBlank()
                 && ref.rooms().stream().noneMatch(r -> Objects.equals(r.getId(), c.roomId()) && normalized(r.getName()).equals(normalized(c.location()))))
             issue(issues, "ROOM_MISMATCH", "location", "The selected room and room name do not match. Select the room again.", index);
-        if (room == null && (c.meetingUrl() == null || !c.meetingUrl().matches("https?://[^\\s]+")))
-            issue(issues, "VENUE_REQUIRED", "meetingUrl", "Select a valid room or enter an online meeting URL beginning with http:// or https://.", index);
+        if (room == null && (c.meetingUrl() == null || !c.meetingUrl().matches("https?://[^\\s]+"))) {
+            boolean isVirtual = c.location() != null && (c.location().toLowerCase(Locale.ROOT).contains("online")
+                    || c.location().toLowerCase(Locale.ROOT).contains("teams")
+                    || c.location().toLowerCase(Locale.ROOT).contains("zoom"));
+            if (!isVirtual) {
+                issue(issues, "VENUE_REQUIRED", "meetingUrl", "Select a valid room or enter an online meeting URL beginning with http:// or https://.", index);
+            }
+        }
         for (var holiday : ref.holidays()) {
             if (holiday.date() == null) throw new IllegalStateException("The holiday calendar contains an entry without a date. Contact your administrator.");
             LocalDate last = holiday.endDate() == null ? holiday.date() : holiday.endDate();

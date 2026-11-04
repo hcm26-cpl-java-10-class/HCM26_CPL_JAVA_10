@@ -1,4 +1,5 @@
 import { getCalendarSessions, getMyCalendarSessions } from "@/api/features/calendar.api";
+import { classSetupApi, type SharedClass } from "@/api/features/class-setup.api";
 import type {
   CalendarSessionResponse,
   CalendarSessionsPage,
@@ -293,6 +294,20 @@ export default function WeeklyCalendarPage() {
   const [keyword, setKeyword] = useState("");
   // Bộ lọc lớp học (classId)
   const classFilter = searchParams.get("classId") || "ALL";
+
+  const [systemClasses, setSystemClasses] = useState<SharedClass[]>([
+    { id: 1, code: "LOCAL_JAVA_01", name: "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)", status: "active", plannedSize: 30 },
+    { id: 2, code: "LOCAL_JAVA_02", name: "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)", status: "active", plannedSize: 30 },
+    { id: 26, code: "HCM26_FR_FU_KS_JAVA_01", name: "[HCM26_FR_FU_KS_JAVA_01] Lớp Java SE & Spring Boot", status: "active", plannedSize: 30 },
+  ]);
+
+  useEffect(() => {
+    classSetupApi.getActiveClasses().then((res) => {
+      if (res && res.length > 0) {
+        setSystemClasses(res);
+      }
+    }).catch(() => {});
+  }, []);
 
   const rawPage = searchParams.get("page") ?? "0";
   const parsedPage = Number(rawPage);
@@ -761,11 +776,18 @@ export default function WeeklyCalendarPage() {
               className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-medium"
             >
               <option value="ALL">Tất cả lớp học</option>
-              {availableClasses.map((c) => (
-                <option key={c} value={String(c)}>
-                  CLASS-{String(c).padStart(2, "0")}
+              {systemClasses.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.name ? c.name : `CLASS-${String(c.id).padStart(2, "0")}`}
                 </option>
               ))}
+              {availableClasses
+                .filter((c) => !systemClasses.some((sc) => sc.id === c))
+                .map((c) => (
+                  <option key={c} value={String(c)}>
+                    CLASS-${String(c).padStart(2, "0")}
+                  </option>
+                ))}
             </select>
           </div>
 

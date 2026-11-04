@@ -75,9 +75,9 @@ export type TrainingTopic = {
 };
 
 export const PRESET_CLASSES = [
-  { id: "LOCAL_JAVA_01", name: "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)" },
-  { id: "LOCAL_JAVA_02", name: "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)" },
-  { id: "HCM26_FR_FU_KS_JAVA_01", name: "[HCM26_FR_FU_KS_JAVA_01] Lớp Java SE & Spring Boot" },
+  { id: "LOCAL_JAVA_01", name: "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)", startDate: "2026-10-01" },
+  { id: "LOCAL_JAVA_02", name: "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)", startDate: "2026-11-15" },
+  { id: "HCM26_FR_FU_KS_JAVA_01", name: "[HCM26_FR_FU_KS_JAVA_01] Lớp Java SE & Spring Boot", startDate: "2026-05-14" },
 ];
 
 export const LOCATION_OPTIONS = [
@@ -513,8 +513,39 @@ export default function TrainingCalendarAdjustDemo({
   const [collapsedDays, setCollapsedDays] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
   const [realClasses, setRealClasses] = useState<SharedClass[]>([]);
+
+  const selectedClassNumericId = useMemo(() => {
+    const matched = realClasses.find(
+      (c) => c.code === selectedClassId || String(c.id) === String(selectedClassId)
+    );
+    return matched?.id || parseClassIdToNumber(selectedClassId);
+  }, [realClasses, selectedClassId]);
   const [realTrainers, setRealTrainers] = useState<SharedTrainer[]>([]);
   const [realRooms, setRealRooms] = useState<Array<{ id: number; name: string }>>([]);
+
+  const earliestTopicDate = useMemo(() => {
+    let minD: string | null = null;
+    for (const t of topics) {
+      for (const d of t.days) {
+        if (d.date && (!minD || d.date < minD)) {
+          minD = d.date;
+        }
+      }
+    }
+    return minD;
+  }, [topics]);
+
+  // Tự động đồng bộ ngày bắt đầu khi chuyển lớp
+  useEffect(() => {
+    const selectedClass = realClasses.find(
+      (c) => (c.code || String(c.id)) === selectedClassId
+    ) || PRESET_CLASSES.find((c) => c.id === selectedClassId);
+
+    if (selectedClass && "startDate" in selectedClass && selectedClass.startDate) {
+      setClassStart(selectedClass.startDate);
+      setLearningStart(selectedClass.startDate);
+    }
+  }, [selectedClassId, realClasses]);
 
   useEffect(() => {
     let isMounted = true;
@@ -583,7 +614,7 @@ export default function TrainingCalendarAdjustDemo({
   function handleExtractActivities(topicId: string, dayId?: string) {
     const topic = topics.find((t) => t.id === topicId);
     if (!topic) return;
-    const defaultTrainer = topic.trainer || "NgaTTT45";
+    const defaultTrainer = topic.trainer || "Nguyễn Ngọc Tân (Trainer)";
 
     if (dayId) {
       const day = topic.days.find((d) => d.id === dayId);
@@ -705,7 +736,7 @@ export default function TrainingCalendarAdjustDemo({
         newActivity(
           nextStart,
           nextEnd,
-          topic.trainer || "NgaTTT45",
+          topic.trainer || "Nguyễn Ngọc Tân (Trainer)",
           "New training activity",
           "Lecture",
           "Offline",
@@ -760,7 +791,9 @@ export default function TrainingCalendarAdjustDemo({
     setSplitTotalHours(topic.durationHours || (topic.days.length > 0 ? topic.days.length * 2.5 : 20));
     setSplitSessionHours(topic.sessionHours || 2.5);
     setSplitDailyStart(topic.days[0]?.activities[0]?.start || "08:00");
-    setSplitStartDate(topic.days[0]?.date || learningStart);
+    const firstDayDate = topic.days[0]?.date;
+    const defaultSplitStart = firstDayDate && firstDayDate >= learningStart ? firstDayDate : (firstDayDate || learningStart);
+    setSplitStartDate(defaultSplitStart);
     setSplitSkipWeekends(true);
     setSplitModalOpen(true);
   }
@@ -896,7 +929,20 @@ export default function TrainingCalendarAdjustDemo({
           }
 
           if (topicMap.size > 0) {
-            setTopics(Array.from(topicMap.values()));
+            const loadedList = Array.from(topicMap.values());
+            setTopics(loadedList);
+            let minDate: string | null = null;
+            for (const t of loadedList) {
+              for (const d of t.days) {
+                if (d.date && (!minDate || d.date < minDate)) {
+                  minDate = d.date;
+                }
+              }
+            }
+            if (minDate) {
+              setLearningStart((prev) => (minDate < prev ? minDate : prev));
+              setClassStart((prev) => (minDate < prev ? minDate : prev));
+            }
           } else {
             setTopics([]);
           }
@@ -1031,7 +1077,7 @@ export default function TrainingCalendarAdjustDemo({
           name: `${topic.name}`,
           date: nextDate,
           activities: [
-            newActivity("08:00", "12:00", topic.trainer || "NgaTTT45", topic.name, "Lecture", "Self Learning", "1 (08h00 - 12h00)", "4h"),
+            newActivity("08:00", "12:00", topic.trainer || "Nguyễn Ngọc Tân (Trainer)", topic.name, "Lecture", "Self Learning", "1 (08h00 - 12h00)", "4h"),
             newActivity("13:00", "17:00", "", "Assignment", "Assignment", "Offline", "2 (13h00 - 17h00)", "4h"),
           ],
         },
@@ -1062,7 +1108,7 @@ export default function TrainingCalendarAdjustDemo({
       sessionHours: topicSessionHours,
       startDateStr: nextStartDate,
       startTime: topicDailyStart,
-      trainer: "NgaTTT45",
+      trainer: "Nguyễn Ngọc Tân (Trainer)",
       format: "Self Learning",
       skipWeekends: topicSkipWeekends,
     });
@@ -1073,10 +1119,10 @@ export default function TrainingCalendarAdjustDemo({
         id: uid(),
         code: topicCode.trim(),
         name: topicName.trim(),
-        trainer: "NgaTTT45",
+        trainer: "Nguyễn Ngọc Tân (Trainer)",
         mentor: "",
         prerequisite: prev.length > 0 ? prev[prev.length - 1].id : "",
-        location: "[HCM] [FTOWN-1] Full Time 2026",
+        location: "Phòng Lab 201 (F-Town 2)",
         defaultSection: "Section 1",
         slot: "1",
         durationHours: topicTotalHours,
@@ -1129,7 +1175,7 @@ export default function TrainingCalendarAdjustDemo({
         sessionHours: topicSessionHours,
         startDateStr: curStartDate,
         startTime,
-        trainer: "NgaTTT45",
+        trainer: "Nguyễn Ngọc Tân (Trainer)",
         format: "Self Learning",
         skipWeekends: true,
       });
@@ -1147,10 +1193,10 @@ export default function TrainingCalendarAdjustDemo({
         id: `topic-${preset.code.toLowerCase()}`,
         code: preset.code,
         name: preset.name,
-        trainer: "NgaTTT45",
+        trainer: "Nguyễn Ngọc Tân (Trainer)",
         mentor: "",
         prerequisite: index > 0 ? `topic-${sourceList[index - 1].code.toLowerCase()}` : "",
-        location: "[HCM] [FTOWN-1] Full Time 2026",
+        location: "Phòng Lab 201 (F-Town 2)",
         defaultSection: "Section 1",
         slot: "1",
         durationHours: topicHours,
@@ -1199,10 +1245,11 @@ export default function TrainingCalendarAdjustDemo({
     setRemoval(null);
   }
 
-  function validateScheduleLogic(): string | null {
-    if (!classStart || !learningStart)
+  function validateScheduleLogic(customLearningStart?: string): string | null {
+    const effectiveStart = customLearningStart || learningStart;
+    if (!classStart || !effectiveStart)
       return "Enter both class start and actual learning start dates.";
-    if (learningStart < classStart)
+    if (effectiveStart < classStart)
       return "Actual learning start date cannot be before class start date.";
     if (!topics.length) return "Curriculum must have at least one topic.";
 
@@ -1215,8 +1262,8 @@ export default function TrainingCalendarAdjustDemo({
       for (const day of topic.days) {
         if (!day.name.trim() || !day.date)
           return `Please complete the date and day title in [${topic.code}].`;
-        if (day.date < learningStart)
-          return `[${topic.code}]: Training date (${day.date}) cannot be before actual learning start (${learningStart}).`;
+        if (day.date < effectiveStart)
+          return `[${topic.code}]: Training date (${day.date}) cannot be before actual learning start (${effectiveStart}).`;
         if (!day.activities.length)
           return `[${topic.code} - ${day.name}]: Each training day requires at least one scheduled activity.`;
 
@@ -1291,7 +1338,15 @@ export default function TrainingCalendarAdjustDemo({
   }
 
   async function handleSaveVersion() {
-    const errorMsg = validateScheduleLogic();
+    // Tự động đồng bộ ngày bắt đầu học nếu có buổi học diễn ra sớm hơn
+    if (earliestTopicDate && earliestTopicDate < learningStart) {
+      setLearningStart(earliestTopicDate);
+      if (classStart > earliestTopicDate) {
+        setClassStart(earliestTopicDate);
+      }
+    }
+
+    const errorMsg = validateScheduleLogic(earliestTopicDate && earliestTopicDate < learningStart ? earliestTopicDate : learningStart);
     if (errorMsg) {
       setError(errorMsg);
       return;
@@ -1318,36 +1373,107 @@ export default function TrainingCalendarAdjustDemo({
         }
       }
 
-      // 2. Lưu từng buổi học (StudySession) xuống Backend
-      const parsedClassId = parseClassIdToNumber(version.classId);
-      const sessionSaves = [];
-      for (const topic of topics) {
-        for (const day of topic.days) {
-          for (const act of day.activities) {
-            const sessionPayload: SessionDTO = {
+      // 2. Lưu từng buổi học (Session) xuống Backend với đầy đủ trường bắt buộc
+      const parsedClassId = selectedClassNumericId;
+
+      // Xóa các buổi học cũ của lớp này để tránh trùng lịch khi điều chỉnh lại
+      try {
+        await sessionApi.deleteByClassId(parsedClassId);
+      } catch (clearErr) {
+        console.info("Clear by classId fallback to page deletion:", clearErr);
+        try {
+          const oldPage = await sessionApi.getPage({ page: 0, size: 200 }, undefined, { ids: [], classId: parsedClassId });
+          if (oldPage?.content?.length) {
+            await Promise.allSettled(oldPage.content.map((s) => (s.id != null ? sessionApi.delete(String(s.id)) : Promise.resolve(null))));
+          }
+        } catch {}
+      }
+
+      // Chuẩn bị payload chuẩn cho tất cả các buổi học
+      const normalizeStr = (str?: string) => (str ? str.replace(/[\[\]]/g, "").trim().toLowerCase() : "");
+      const allSessionPayloads: SessionDTO[] = [];
+
+      topics.forEach((topic, topicIdx) => {
+        let matchedSub = systemSubjects.find(
+          (s) =>
+            (s.code && topic.code && normalizeStr(s.code) === normalizeStr(topic.code)) ||
+            (s.name && topic.name && normalizeStr(s.name) === normalizeStr(topic.name))
+        );
+        if (!matchedSub && systemSubjects.length > 0) {
+          matchedSub = systemSubjects[topicIdx % systemSubjects.length];
+        }
+        const resolvedTopicId = matchedSub?.id || (topicIdx + 1);
+
+        const matchedTr = realTrainers.find(
+          (t) =>
+            (t.name && topic.trainer && t.name.toLowerCase().includes(topic.trainer.toLowerCase())) ||
+            (topic.trainer && topic.trainer.toLowerCase().includes((t.name || "").toLowerCase()))
+        );
+        const resolvedTrainerId = matchedTr?.id || realTrainers[0]?.id || 1;
+
+        const defaultRoom = realRooms[0] || { id: 1, name: "Phòng Lab 201 (F-Town 2)" };
+        const matchedRoom = realRooms.find(
+          (r) =>
+            r.name.toLowerCase() === (topic.location || "").toLowerCase() ||
+            (topic.location && r.name.toLowerCase().includes(topic.location.toLowerCase())) ||
+            (topic.location && topic.location.toLowerCase().includes(r.name.toLowerCase()))
+        ) || defaultRoom;
+
+        topic.days.forEach((day) => {
+          day.activities.forEach((act) => {
+            const isOnline = act.format === "Online" || (topic.location && topic.location.toLowerCase().includes("online"));
+            const finalRoomId = isOnline ? 5 : matchedRoom.id;
+            const finalRoomName = isOnline ? "Online MS Teams" : matchedRoom.name;
+            const meetingUrl = isOnline ? "https://teams.microsoft.com/meet/local-java-01" : undefined;
+
+            allSessionPayloads.push({
               classId: parsedClassId,
-              title: `[${topic.code}] ${act.name}`,
+              topicId: Number(resolvedTopicId),
+              trainerId: Number(resolvedTrainerId),
+              roomId: finalRoomId,
+              meetingUrl: meetingUrl,
+              title: `[${topic.code || "TOPIC"}] ${act.name || topic.name}`.slice(0, 150),
               startTime: `${day.date}T${act.start}:00`,
               endTime: `${day.date}T${act.end}:00`,
-              location: act.format === "Online" ? "Online MS Teams" : "Room A101",
+              location: finalRoomName,
               status: "SCHEDULED",
-              note: `PIC: ${act.pic} · ${act.contribution}`,
-            };
-            sessionSaves.push(
-              sessionApi.create(sessionPayload).catch((e) => {
-                console.info("Session persistence fallback:", e?.message);
-                return null;
-              })
-            );
+              isActive: true,
+              note: `PIC: ${act.pic || topic.trainer || "Trainer"} · ${act.contribution || "Lecture"}`,
+            });
+          });
+        });
+      });
+
+      // Lưu hàng loạt xuống DB
+      let saveSuccess = false;
+      try {
+        await sessionApi.createBatch(allSessionPayloads);
+        saveSuccess = true;
+      } catch (batchErr: any) {
+        console.warn("createBatch error, falling back to sequential create:", batchErr);
+        let savedCount = 0;
+        let lastErr: any = null;
+        for (const sDto of allSessionPayloads) {
+          try {
+            await sessionApi.create(sDto);
+            savedCount++;
+          } catch (singleErr) {
+            lastErr = singleErr;
+            console.error("Failed to save single session:", sDto, singleErr);
           }
+        }
+        if (savedCount > 0) {
+          saveSuccess = true;
+        } else {
+          throw lastErr || batchErr;
         }
       }
 
-      await Promise.allSettled(sessionSaves);
-
-      toast.success(
-        `Đã lưu thành công lịch đào tạo cho lớp ${selectedClassId} (${activityCount} buổi học)!`
-      );
+      if (saveSuccess) {
+        toast.success(
+          `Đã lưu thành công lịch đào tạo cho lớp ${selectedClassId} (${allSessionPayloads.length} buổi học)!`
+        );
+      }
       setDirty(false);
       setSaveOpen(false);
       if (onSave) {
@@ -1355,7 +1481,9 @@ export default function TrainingCalendarAdjustDemo({
       }
     } catch (err: any) {
       console.error("Save error:", err);
-      toast.error(err?.response?.data?.message || "Failed to save calendar updates.");
+      const serverMsg = err?.response?.data?.message || err?.message || "Failed to save calendar updates.";
+      setError(`Lỗi lưu lịch: ${serverMsg}`);
+      toast.error(`Lỗi lưu lịch: ${serverMsg}`);
     } finally {
       setIsSaving(false);
     }
@@ -1431,7 +1559,7 @@ export default function TrainingCalendarAdjustDemo({
               </Button>
             </div>
 
-            <Link to="/calendar/preview">
+            <Link to={`/calendar/preview?date=${earliestTopicDate || learningStart || classStart}&classId=${selectedClassNumericId}`}>
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-medium">
                 <CalendarDays className="size-3.5 text-primary" />
                 Xem thời khóa biểu (Timetable)
@@ -1560,12 +1688,32 @@ export default function TrainingCalendarAdjustDemo({
         </div>
 
         {error && (
-          <p
+          <div
             role="alert"
-            className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-300 bg-red-50 p-3.5 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300 shadow-xs"
           >
-            {error}
-          </p>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-red-800 dark:text-red-200">Xung đột ngày học:</span>
+              <span>{error}</span>
+            </div>
+            {earliestTopicDate && earliestTopicDate < learningStart && (
+              <Button
+                type="button"
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white shadow-xs text-xs h-7 px-3 cursor-pointer shrink-0"
+                onClick={() => {
+                  setLearningStart(earliestTopicDate);
+                  if (classStart > earliestTopicDate) {
+                    setClassStart(earliestTopicDate);
+                  }
+                  setError(null);
+                  toast.success(`Đã tự động đồng bộ ngày bắt đầu học thành ${earliestTopicDate}!`);
+                }}
+              >
+                Đồng bộ ngày bắt đầu học ({earliestTopicDate})
+              </Button>
+            )}
+          </div>
         )}
 
         {topics.length === 0 && (
@@ -1701,7 +1849,7 @@ export default function TrainingCalendarAdjustDemo({
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-semibold text-gray-700">Trainers:</label>
                   <select
-                    value={topic.trainer || "NgaTTT45"}
+                    value={topic.trainer || "Nguyễn Ngọc Tân (Trainer)"}
                     disabled={isReadOnly}
                     onChange={(e) => changeTopic(topic.id, { trainer: e.target.value })}
                     className="h-9 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"

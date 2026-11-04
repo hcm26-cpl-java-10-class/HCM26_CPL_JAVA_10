@@ -108,22 +108,7 @@ public class LocalClassSetupDataInitializer implements CommandLineRunner {
                         return teachingAssignmentRepository.save(created);
                     });
 
-            if (sessionRepository.findByClassId(1L).isEmpty()) {
-                sessionRepository.save(Session.builder()
-                        .classId(1L)
-                        .topicId(firstSubject.getSubject().getId())
-                        .trainerId(1L)
-                        .teachingAssignmentId(assignment.getId())
-                        .roomId(1L)
-                        .location("Phòng Lab 201 (F-Town 2)")
-                        .title("Java Core - Buổi 01: OOP & Collections")
-                        .startTime(LocalDateTime.of(2026, 11, 2, 8, 30))
-                        .endTime(LocalDateTime.of(2026, 11, 2, 11, 30))
-                        .status(Session.SessionStatus.SCHEDULED)
-                        .note("Kế hoạch môn học lớp LOCAL_JAVA_01")
-                        .isActive(true)
-                        .build());
-            }
+            // Removed hardcoded sample session: start clean without mock data
         }
 
         log.info("LOCAL SAMPLE DATA enabled: classes, trainers, rooms, LMS courses and Java training programs. "
