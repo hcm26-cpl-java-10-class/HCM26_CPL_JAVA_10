@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlignLeft, CalendarDays, ChevronDown, Download, Eye, Loader2, MoreVertical, Save, Settings } from "lucide-react";
+import { AlignLeft, CalendarDays, Check, ChevronDown, Download, Eye, Loader2, MoreVertical, Pencil, Save, Settings } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { utils, writeFile } from "xlsx";
@@ -53,6 +53,22 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
     const [detail, setDetail] = useState<ClassCalendarVersion | null>(null);
     const [mode, setMode] = useState<"detail" | "overview" | "adjust">("detail");
     const [pending, setPending] = useState<Record<number, ClassCalendarVersion>>({});
+    const [editingNameId, setEditingNameId] = useState<number | null>(null);
+
+    const updatePendingField = (item: ClassCalendarVersion, field: "name" | "historyChange", value: string) => {
+        const original = query.data?.find((d) => d.id === item.id);
+        const currentPending = pending[item.id] ?? original ?? item;
+        const updated = { ...currentPending, [field]: value };
+        if (original && updated.name === original.name && (updated.historyChange || "") === (original.historyChange || "")) {
+            setPending((prev) => {
+                const next = { ...prev };
+                delete next[item.id];
+                return next;
+            });
+        } else {
+            setPending((prev) => ({ ...prev, [item.id]: updated }));
+        }
+    };
     const tableViewport = useRef<HTMLDivElement>(null);
     const horizontalScrollbar = useRef<HTMLDivElement>(null);
     const [tableWidth, setTableWidth] = useState(1050);
@@ -171,10 +187,63 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
                                 <p className="text-sm text-muted-foreground">{query.data?.length ? "No calendars match the selected statuses." : "No calendar versions available for this class yet."}</p>
                             </TableCell></TableRow>
                         ) : rows.map((item, index) => (
-                            <TableRow key={item.id}>
+                            <TableRow key={item.id} className={pending[item.id] ? "bg-amber-50/50 dark:bg-amber-950/20" : ""}>
                                 <TableCell>{index + 1}</TableCell>
-                                <TableCell><button type="button" onClick={() => open(item, "detail")} className="text-left font-medium text-blue-800 hover:underline focus-visible:outline-2 dark:text-blue-300">{item.name}</button>{pending[item.id] && <span className="ml-2 text-xs text-amber-700">Unsaved</span>}</TableCell>
-                                <TableCell className="min-w-56 max-w-80 whitespace-normal">{item.historyChange || "—"}</TableCell>
+                                <TableCell className="min-w-64">
+                                    {editingNameId === item.id ? (
+                                        <div className="flex items-center gap-1">
+                                            <input
+                                                type="text"
+                                                autoFocus
+                                                aria-label={`Calendar name for version ${item.version}`}
+                                                value={item.name}
+                                                className="h-8 w-full rounded border border-blue-400 bg-background px-2 py-1 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                                onChange={(e) => updatePendingField(item, "name", e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter" || e.key === "Escape") setEditingNameId(null);
+                                                }}
+                                                onBlur={() => setEditingNameId(null)}
+                                            />
+                                            <Button size="icon" variant="ghost" className="size-8 shrink-0 text-green-600 hover:text-green-700" onClick={() => setEditingNameId(null)} aria-label="Confirm name">
+                                                <Check className="size-4" />
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1.5">
+                                            <button type="button" onClick={() => open(item, "detail")} className="text-left font-medium text-blue-800 hover:underline focus-visible:outline-2 dark:text-blue-300">
+                                                {item.name}
+                                            </button>
+                                            {canUpdate && (
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    type="button"
+                                                    onClick={() => setEditingNameId(item.id)}
+                                                    className="size-6 text-muted-foreground opacity-60 transition-opacity hover:opacity-100 hover:text-foreground"
+                                                    title="Click to rename"
+                                                    aria-label={`Rename ${item.name}`}
+                                                >
+                                                    <Pencil className="size-3" />
+                                                </Button>
+                                            )}
+                                            {pending[item.id] && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">Unsaved</span>}
+                                        </div>
+                                    )}
+                                </TableCell>
+                                <TableCell className="min-w-56 max-w-80">
+                                    {canUpdate ? (
+                                        <input
+                                            type="text"
+                                            aria-label={`History change note for version ${item.version}`}
+                                            value={item.historyChange ?? ""}
+                                            placeholder="Add change note…"
+                                            className="w-full rounded border border-transparent bg-transparent px-2 py-1 text-sm text-foreground transition-colors hover:border-input focus:border-blue-400 focus:bg-background focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder:text-muted-foreground/60"
+                                            onChange={(e) => updatePendingField(item, "historyChange", e.target.value)}
+                                        />
+                                    ) : (
+                                        <span className="whitespace-normal">{item.historyChange || "—"}</span>
+                                    )}
+                                </TableCell>
                                 <TableCell>{modifiedDate(item.lastModifiedDate)}</TableCell>
                                 <TableCell>{item.lastModifiedBy || "—"}</TableCell>
                                 <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
@@ -209,7 +278,7 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
                     <p id="calendar-save-status" role="status" className="text-xs text-muted-foreground">
                         {!canUpdate ? "Read-only access" : pendingCount > 0 ? `${pendingCount} unsaved ${pendingCount === 1 ? "change" : "changes"}` : "No unsaved changes"}
                     </p>
-                    <Button type="button" className="min-w-36 bg-blue-800 text-white hover:bg-blue-900 disabled:opacity-60" disabled={!canSave}
+                    <Button type="button" className="min-w-36 bg-blue-800 text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 disabled:opacity-100 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500" disabled={!canSave}
                         aria-describedby="calendar-save-status" aria-busy={save.isPending}
                         onClick={() => { if (canSave) save.mutate(); }}>
                         {save.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Save className="size-4" aria-hidden />}

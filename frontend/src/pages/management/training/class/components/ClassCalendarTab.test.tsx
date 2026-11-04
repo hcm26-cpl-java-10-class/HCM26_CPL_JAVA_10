@@ -166,3 +166,28 @@ it("opens Detail as a topic page with expandable lesson rows and preserves list 
     await user.click(screen.getByRole("button", { name: "Back to Calendar List" }));
     expect(screen.getByRole("table", { name: "Calendar version history" })).toBeInTheDocument();
 });
+
+it("enables Save changes when inline changes are made and submits update batch", async () => {
+    grant("SESSION_READ", "SESSION_UPDATE");
+    fakeHttp.on("put", "/external/classes/1/calendars", { message: "Saved" });
+    const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
+    await screen.findByRole("button", { name: "Java_Calendar_1.2" });
+    const saveBtn = screen.getByRole("button", { name: "Save changes" });
+    expect(saveBtn).toBeDisabled();
+    expect(screen.getByText("No unsaved changes")).toBeInTheDocument();
+
+    const noteInput = screen.getByLabelText("History change note for version 1.2");
+    await user.clear(noteInput);
+    await user.type(noteInput, "Updated schedule for sprint");
+
+    expect(screen.getByText("1 unsaved change")).toBeInTheDocument();
+    expect(saveBtn).toBeEnabled();
+
+    await user.click(saveBtn);
+    await waitFor(() => expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")).toHaveLength(1));
+    expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")[0].data).toEqual({
+        updates: [
+            { id: 2, name: "Java_Calendar_1.2", historyChange: "Updated schedule for sprint" }
+        ]
+    });
+});
