@@ -5,7 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { GENDER_OPTIONS, USER_STATUS_HEADER_CLASS, type UserStatus } from "@/types";
+import {
+  GENDER_OPTIONS,
+  USER_STATUS_HEADER_CLASS,
+  type DepartmentDTO,
+  type RoleDTO,
+  type UserAccountStatus,
+} from "@/types";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -130,14 +136,14 @@ export function UserDetailPage() {
   });
 
   const user = userQuery.data;
-  const nameOf = (list: any[] | undefined, ids?: Array<string | number>) =>
+  const nameOf = (list: Array<Pick<RoleDTO | DepartmentDTO, "id" | "name">> | undefined, ids?: Array<string | number>) =>
     (ids ?? []).map((i) => list?.find((x) => String(x.id) === String(i))?.name ?? `#${i}`);
 
   const roleNames = nameOf(roleQuery.data?.content ?? roleQuery.data?.items, user?.roleIds);
   const deptNames = nameOf(deptQuery.data?.content ?? deptQuery.data?.items, user?.departmentIds);
   const fullName = [user?.lastName, user?.firstName].filter(Boolean).join(" ");
   const displayName = fullName || user?.email || "";
-  const status: UserStatus = user?.status ?? (user?.isActive === false ? "INACTIVE" : "ACTIVE");
+  const status: UserAccountStatus = user?.status ?? (user?.isActive === false ? "INACTIVE" : "ACTIVE");
   const initial = (user?.firstName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase();
 
   return (

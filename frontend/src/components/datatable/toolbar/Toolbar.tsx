@@ -10,6 +10,10 @@ export type ViewMode = "table" | "card";
 interface ToolbarProps {
   table: any;
   headerActions?: React.ReactNode;
+  actionLabels?: {
+    import?: string;
+    export?: string;
+  };
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
   showViewModeToggle?: boolean;
@@ -20,6 +24,7 @@ interface ToolbarProps {
 export function Toolbar({
   table,
   headerActions,
+  actionLabels,
   viewMode = "table",
   onViewModeChange,
   showViewModeToggle = true,
@@ -75,7 +80,7 @@ export function Toolbar({
       </div>
 
       {showActions && (
-        <ToolbarActions table={table} headerActions={headerActions} />
+        <ToolbarActions table={table} headerActions={headerActions} labels={actionLabels} />
       )}
     </div>
   );
