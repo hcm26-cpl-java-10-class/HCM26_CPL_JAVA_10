@@ -14,8 +14,9 @@ import axios from "axios";
 import { CheckCircle2, Loader2, Play, Plus, Trash2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
-export const VISIBLE_TESTS = 2;
-export const HIDDEN_TESTS = 8;
+export const DEFAULT_TEST_COUNT = 5;
+export const DEFAULT_VISIBLE_TESTS = 2;
+export const MIN_TESTS = 1;
 export const DEFAULT_TIME_LIMIT = 5;
 export const MIN_TIME_LIMIT = 1;
 export const MAX_TIME_LIMIT = 10;
@@ -83,10 +84,10 @@ export function detectDeclaration(code: string, preferredName?: string): Detecte
 }
 
 export function emptyTests(paramCount: number): CodeTestCase[] {
-    return Array.from({ length: VISIBLE_TESTS + HIDDEN_TESTS }, (_, i) => ({
+    return Array.from({ length: DEFAULT_TEST_COUNT }, (_, i) => ({
         inputs: Array.from({ length: paramCount }, () => ""),
         expected: "",
-        visible: i < VISIBLE_TESTS,
+        visible: i < DEFAULT_VISIBLE_TESTS,
     }));
 }
 
@@ -112,6 +113,7 @@ export function normalizeSpecForSave(spec: CodeSpec): CodeSpec {
         timeLimitSeconds: spec.timeLimitSeconds ?? DEFAULT_TIME_LIMIT,
         customMain: !!spec.customMain,
         mainCode: spec.customMain ? spec.mainCode ?? "" : null,
+        referenceCode: spec.referenceCode?.trim() ? spec.referenceCode : null,
         tests: spec.tests.map((t) => ({
             inputs: params.map((p, k) => normalizeValue(p.type, t.inputs[k] ?? "")),
             expected: normalizeValue(spec.returnType, t.expected),
@@ -192,6 +194,7 @@ export function codeSpecIssues(spec: CodeSpec | null | undefined): CodeSpecIssue
     });
     if (issues.some((x) => x.field === "fn" || x.field === "ret" || x.field.startsWith("param"))) return issues;
 
+    if (spec.tests.length < MIN_TESTS) issues.push({ message: "Add at least one test case.", field: "tests" });
     spec.tests.forEach((t, i) => {
         const label = `Test ${i + 1} (${t.visible ? "visible" : "hidden"})`;
         spec.params.forEach((p, k) => {
@@ -337,7 +340,9 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
     const [mainError, setMainError] = useState<string | null>(null);
     /** Declaration the custom main was written for (to warn when it changes afterwards). */
     const [mainBase, setMainBase] = useState<string | null>(() => (value.customMain ? declSig : null));
-    const [refCode, setRefCode] = useState("");
+    // The teacher's demo solution is saved with the question, so it lives in the spec (not in local state).
+    const refCode = value.referenceCode ?? "";
+    const setRefCode = (next: string) => onChange({ ...value, referenceCode: next });
     const [resetting, setResetting] = useState(false);
     const [resetNote, setResetNote] = useState<string | null>(null);
     const [running, setRunning] = useState(false);
@@ -380,6 +385,16 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
             ...value,
             tests: value.tests.map((t, i) => (i === index ? { ...t, ...patch } : t)),
         });
+
+    const addTest = () =>
+        onChange({
+            ...value,
+            tests: [...value.tests, { inputs: value.params.map(() => ""), expected: "", visible: false }],
+        });
+    const removeTest = (index: number) => {
+        if (value.tests.length <= MIN_TESTS) return;
+        onChange({ ...value, tests: value.tests.filter((_, i) => i !== index) });
+    };
 
     const signature = `public static ${value.returnType} ${value.functionName || "..."}(${value.params
         .map((p) => `${p.type} ${p.name}`)
@@ -550,8 +565,9 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
             <div className="grid gap-1">
                 <Label>Function declaration (Coderbyte style, Java only)</Label>
                 <p className="text-xs text-muted-foreground">
-                    The system generates the starter code for students. Exactly {VISIBLE_TESTS} visible and {HIDDEN_TESTS} hidden
-                    tests are required; every passed test is worth 10% of the question&apos;s score.
+                    The system generates the starter code for students. Add as many test cases as you need (at least {MIN_TESTS});
+                    tick the ones students may see during the exam, the others are used for grading only. Every test is worth the
+                    same share of the question&apos;s score.
                 </p>
             </div>
 
@@ -677,109 +693,6 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
                 <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{signature}</code>
             </div>
 
-            <div className="grid gap-2">
-                <Label>Test cases</Label>
-                <p className="text-xs text-muted-foreground">
-                    Values are trimmed, except for String and char which keep their spaces. Array items must not contain commas.
-                </p>
-                <div className="overflow-x-auto rounded-md border">
-                    <table className="w-full min-w-[640px] text-left text-sm">
-                        <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
-                            <tr>
-                                <th className="w-10 px-2 py-2">#</th>
-                                <th className="w-24 px-2 py-2">Shown to</th>
-                                {value.params.map((p, k) => (
-                                    <th key={k} className="px-2 py-2" title={hint(p.type)}>
-                                        {p.name || `p${k + 1}`} <span className="font-normal">({p.type})</span>
-                                    </th>
-                                ))}
-                                <th className="px-2 py-2" title={hint(value.returnType)}>
-                                    Expected <span className="font-normal">({value.returnType})</span>
-                                </th>
-                                {result && <th className="px-2 py-2">Reference output</th>}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {value.tests.map((t, i) => {
-                                const r = result?.tests[i];
-                                return (
-                                    <tr key={i} className={`border-b last:border-b-0 ${t.visible ? "bg-blue-50/40 dark:bg-blue-950/20" : ""}`}>
-                                        <td className="px-2 py-1.5 text-xs font-medium">{i + 1}</td>
-                                        <td className="px-2 py-1.5 text-xs">{t.visible ? "Students" : "Grading only"}</td>
-                                        {value.params.map((p, k) => (
-                                            <td key={k} className="px-2 py-1.5">
-                                                <Input
-                                                    aria-label={`Test ${i + 1} ${p.name}`}
-                                                    aria-invalid={bad.has(`in-${i}-${k}`) || duplicateRows.has(i)}
-                                                    className={`h-8 min-w-[7rem] font-mono text-xs ${invalid(`in-${i}-${k}`)} ${
-                                                        duplicateRows.has(i) ? "border-destructive focus-visible:ring-destructive" : ""
-                                                    }`}
-                                                    value={t.inputs[k] ?? ""}
-                                                    disabled={disabled}
-                                                    onChange={(e) =>
-                                                        setTest(i, {
-                                                            inputs: value.params.map((_, j) =>
-                                                                j === k ? e.target.value : t.inputs[j] ?? "",
-                                                            ),
-                                                        })
-                                                    }
-                                                />
-                                            </td>
-                                        ))}
-                                        <td className="px-2 py-1.5">
-                                            <Input
-                                                aria-label={`Test ${i + 1} expected result`}
-                                                aria-invalid={bad.has(`exp-${i}`)}
-                                                className={`h-8 min-w-[7rem] font-mono text-xs ${invalid(`exp-${i}`)}`}
-                                                value={t.expected}
-                                                disabled={disabled}
-                                                onChange={(e) => setTest(i, { expected: e.target.value })}
-                                            />
-                                        </td>
-                                        {result && (
-                                            <td className="px-2 py-1.5">
-                                                {r ? (
-                                                    <div className="flex items-center gap-2">
-                                                        {r.status === "OK" ? (
-                                                            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
-                                                        ) : (
-                                                            <XCircle className="h-4 w-4 shrink-0 text-red-600" />
-                                                        )}
-                                                        <span
-                                                            className="max-w-[10rem] truncate font-mono text-xs"
-                                                            title={r.error ?? r.actual ?? ""}
-                                                        >
-                                                            {r.status === "OK" || r.status === "WRONG_ANSWER"
-                                                                ? r.actual === ""
-                                                                    ? "(empty)"
-                                                                    : r.actual
-                                                                : STATUS_LABEL[r.status] ?? r.status}
-                                                        </span>
-                                                        {r.status === "WRONG_ANSWER" && !disabled && (
-                                                            <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                variant="outline"
-                                                                className="h-6 px-2 text-xs"
-                                                                onClick={() => fillExpected([i])}
-                                                            >
-                                                                Use
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-xs text-muted-foreground">-</span>
-                                                )}
-                                            </td>
-                                        )}
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
             <div className="grid gap-3 rounded-md border p-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="grid gap-1">
@@ -857,15 +770,15 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
             <div className="grid gap-3 rounded-md border border-dashed p-3">
                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
                     Check the tests with a reference solution
-                    <span className="text-xs font-normal text-muted-foreground">(not saved, students never see it)</span>
+                    <span className="text-xs font-normal text-muted-foreground">(saved with the question, students never see it)</span>
                 </div>
                 {(
                     <div className="grid gap-3">
                         <p className="text-xs text-muted-foreground">
                             Paste your own Java solution (class <code>Solution</code> with the function above). It runs on all{" "}
                             {value.tests.length} tests, hidden ones included. Tests whose output differs from the expected result
-                            are marked, and you can copy the reference output into the expected column. The code is kept only while this
-                            form is open.
+                            are marked, and you can copy the reference output into the expected column. The code is saved with the question
+                            for teachers only.
                         </p>
                         <textarea
                             aria-label="Reference solution"
@@ -931,6 +844,139 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
                         )}
                     </div>
                 )}
+            </div>
+            <div className="grid gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Label>
+                        Test cases ({value.tests.length}) - {value.tests.filter((t) => t.visible).length} shown to students
+                    </Label>
+                    <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={addTest}>
+                        <Plus className="mr-1 h-4 w-4" /> Add test case
+                    </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                    Tick &quot;Show to students&quot; for the tests students can see while taking the exam. Values are trimmed, except for String and char which keep their spaces. Array items must not contain commas.
+                </p>
+                <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full min-w-[640px] text-left text-sm">
+                        <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
+                            <tr>
+                                <th className="w-10 px-2 py-2">#</th>
+                                <th className="w-28 px-2 py-2">Show to students</th>
+                                {value.params.map((p, k) => (
+                                    <th key={k} className="px-2 py-2" title={hint(p.type)}>
+                                        {p.name || `p${k + 1}`} <span className="font-normal">({p.type})</span>
+                                    </th>
+                                ))}
+                                <th className="px-2 py-2" title={hint(value.returnType)}>
+                                    Expected <span className="font-normal">({value.returnType})</span>
+                                </th>
+                                {result && <th className="px-2 py-2">Reference output</th>}
+                                <th className="w-10 px-2 py-2"><span className="sr-only">Remove</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {value.tests.map((t, i) => {
+                                const r = result?.tests[i];
+                                return (
+                                    <tr key={i} className={`border-b last:border-b-0 ${t.visible ? "bg-blue-50/40 dark:bg-blue-950/20" : ""}`}>
+                                        <td className="px-2 py-1.5 text-xs font-medium">{i + 1}</td>
+                                        <td className="px-2 py-1.5">
+                                            <label className="flex items-center gap-2 text-xs">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label={`Show test ${i + 1} to students`}
+                                                    checked={t.visible}
+                                                    disabled={disabled}
+                                                    onChange={(e) => setTest(i, { visible: e.target.checked })}
+                                                />
+                                                {t.visible ? "Shown" : "Hidden"}
+                                            </label>
+                                        </td>
+                                        {value.params.map((p, k) => (
+                                            <td key={k} className="px-2 py-1.5">
+                                                <Input
+                                                    aria-label={`Test ${i + 1} ${p.name}`}
+                                                    aria-invalid={bad.has(`in-${i}-${k}`) || duplicateRows.has(i)}
+                                                    className={`h-8 min-w-[7rem] font-mono text-xs ${invalid(`in-${i}-${k}`)} ${
+                                                        duplicateRows.has(i) ? "border-destructive focus-visible:ring-destructive" : ""
+                                                    }`}
+                                                    value={t.inputs[k] ?? ""}
+                                                    disabled={disabled}
+                                                    onChange={(e) =>
+                                                        setTest(i, {
+                                                            inputs: value.params.map((_, j) =>
+                                                                j === k ? e.target.value : t.inputs[j] ?? "",
+                                                            ),
+                                                        })
+                                                    }
+                                                />
+                                            </td>
+                                        ))}
+                                        <td className="px-2 py-1.5">
+                                            <Input
+                                                aria-label={`Test ${i + 1} expected result`}
+                                                aria-invalid={bad.has(`exp-${i}`)}
+                                                className={`h-8 min-w-[7rem] font-mono text-xs ${invalid(`exp-${i}`)}`}
+                                                value={t.expected}
+                                                disabled={disabled}
+                                                onChange={(e) => setTest(i, { expected: e.target.value })}
+                                            />
+                                        </td>
+                                        {result && (
+                                            <td className="px-2 py-1.5">
+                                                {r ? (
+                                                    <div className="flex items-center gap-2">
+                                                        {r.status === "OK" ? (
+                                                            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                                                        ) : (
+                                                            <XCircle className="h-4 w-4 shrink-0 text-red-600" />
+                                                        )}
+                                                        <span
+                                                            className="max-w-[10rem] truncate font-mono text-xs"
+                                                            title={r.error ?? r.actual ?? ""}
+                                                        >
+                                                            {r.status === "OK" || r.status === "WRONG_ANSWER"
+                                                                ? r.actual === ""
+                                                                    ? "(empty)"
+                                                                    : r.actual
+                                                                : STATUS_LABEL[r.status] ?? r.status}
+                                                        </span>
+                                                        {r.status === "WRONG_ANSWER" && !disabled && (
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-6 px-2 text-xs"
+                                                                onClick={() => fillExpected([i])}
+                                                            >
+                                                                Use
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">-</span>
+                                                )}
+                                            </td>
+                                        )}
+                                        <td className="px-2 py-1.5">
+                                            <Button
+                                                type="button"
+                                                size="icon"
+                                                variant="ghost"
+                                                aria-label={`Remove test ${i + 1}`}
+                                                disabled={disabled || value.tests.length <= MIN_TESTS}
+                                                onClick={() => removeTest(i)}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
     );

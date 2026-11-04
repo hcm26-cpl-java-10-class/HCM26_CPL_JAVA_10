@@ -34,6 +34,8 @@ export interface CodeSpec {
   customMain?: boolean;
   /** Main class (custom or auto-generated). Only saved when customMain is true. */
   mainCode?: string | null;
+  /** Teacher's demo solution used to check the tests. Teacher-only; never sent to students. */
+  referenceCode?: string | null;
 }
 export type QuestionDifficulty = "EASY" | "MEDIUM" | "HARD";
 

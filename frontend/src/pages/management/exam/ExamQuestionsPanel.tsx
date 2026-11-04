@@ -64,7 +64,7 @@ function LibraryCard({
   onPreview: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const longText = q.content.length > 140 || q.content.includes("\n") || q.type === "MULTIPLE_CHOICE";
+  const longText = q.content.length > 140 || q.content.includes("\n") || q.type === "MULTIPLE_CHOICE" || q.type === "CODING";
   return (
     <div className={`rounded-lg border bg-card p-4 shadow-xs ${state === "inExam" ? "opacity-70" : ""}`}>
       <div className="flex items-start justify-between gap-3">
