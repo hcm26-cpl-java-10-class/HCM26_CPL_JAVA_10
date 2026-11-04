@@ -210,6 +210,7 @@ public class CourseEnrollmentService {
                 CourseEnrollment enrollment = new CourseEnrollment();
                 enrollment.setUser(student);
                 enrollment.setCourse(course);
+                enrollment.setDepartment(department);
                 newEnrollments.add(enrollment);
             }
         }
@@ -303,6 +304,7 @@ public class CourseEnrollmentService {
                     CourseEnrollment enrollment = new CourseEnrollment();
                     enrollment.setUser(student);
                     enrollment.setCourse(course);
+                    enrollment.setDepartment(department);
                     newEnrollments.add(enrollment);
                 }
             }

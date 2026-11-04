@@ -10,7 +10,6 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { ArrowRight, BookOpen, CalendarDays, CheckCircle2, GraduationCap, UserRound } from "lucide-react";
 import { Link } from "react-router-dom";
-import { AdminDepartmentStudentCourses } from "./AdminDepartmentStudentCourses";
 import { useAdminStudentPreview } from "./useAdminStudentPreview";
 
 const checklistItems = [
@@ -104,12 +103,6 @@ export default function StudentLandingPage() {
           </div>
         </motion.div>
       </section>
-
-      {isAdminStudentPreview && (
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
-          <AdminDepartmentStudentCourses />
-        </div>
-      )}
 
       {canReadEnrollments && !isAdminStudentPreview && (
         <section className="mt-6 space-y-4">

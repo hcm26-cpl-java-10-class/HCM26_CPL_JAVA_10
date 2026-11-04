@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePermissions } from "@/hooks/usePermissions";
-import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
 import {
   auditableFieldsSchema,
   type EntityConfig,
@@ -19,6 +18,7 @@ import {
   Search,
 } from "lucide-react";
 import { useState } from "react";
+import CertificateManagement from "./components/CertificateManagement";
 
 // 1. Cấu hình Schema: Chuẩn hóa theo CertificateDTO & Entity ở Backend
 const certificateSchema: EntitySchema = {
@@ -94,7 +94,7 @@ export default function CertificateManagementPage() {
 
   // Admin / Instructor quản lý chứng chỉ qua AutoCrudPage
   if (activeRole?.toUpperCase() !== "STUDENT") {
-    return <AutoCrudPage entity={entityConfig} />;
+    return <CertificateManagement />
   }
 
   // Học viên xem bảng danh sách các chứng chỉ đã đạt được

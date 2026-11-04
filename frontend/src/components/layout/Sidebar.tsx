@@ -33,8 +33,7 @@ export function SidebarMenu() {
                         return (
                             !!module.url &&
                             !module.hiddenInMenu &&
-                            url !== "/enrollments" &&
-                            url !== "/departments"
+                            url !== "/enrollments"
                         );
                     })
                     .map((module) => ({
