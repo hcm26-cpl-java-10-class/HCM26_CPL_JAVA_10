@@ -123,7 +123,7 @@ export function ClassDetailView() {
                 ...(identifier && resolvedName ? { [identifier]: resolvedName } : {}),
             }}
         >
-            <section className="w-full min-w-0 overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
+            <section className="w-full min-w-0 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col h-[calc(100vh-140px)] min-h-[620px] overflow-hidden">
                 {!identifier ? (
                     <ApiErrorState
                         error={undefined}
@@ -172,7 +172,7 @@ export function ClassDetailView() {
                         </header>
 
                         {/* Tabs Navigation */}
-                        <Tabs value={activeTab} onValueChange={handleTabChange} className="gap-0">
+                        <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0 gap-0">
                             <TabsList
                                 variant="line"
                                 className="group-data-[orientation=horizontal]/tabs:h-11 w-full justify-start gap-4 overflow-x-auto overflow-y-hidden rounded-none border-b px-5 sm:gap-6"
@@ -188,7 +188,7 @@ export function ClassDetailView() {
                                 ))}
                             </TabsList>
 
-                            <div className="p-5">
+                            <div className="flex-1 min-h-0 overflow-y-auto p-5 fams-scrollbar">
                                 <TabsContent value="info">
                                     <ClassInfoTab classItem={classItem} />
                                 </TabsContent>
