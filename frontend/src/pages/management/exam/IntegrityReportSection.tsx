@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+    getEntryPhoto,
     getIntegrityEvents,
     getIntegrityReport,
     type IntegrityReportRow,
@@ -23,6 +24,10 @@ const TYPE_LABEL: Record<string, string> = {
     DEVTOOLS_KEY: "Phím DevTools",
     PRINT_ATTEMPT: "In / chụp màn hình",
     MULTI_SESSION: "Mở nhiều nơi",
+    CAMERA_OFF: "Camera off",
+    CAMERA_COVERED: "Camera covered",
+    FACE_MISSING: "Left camera view",
+    MULTIPLE_FACES: "Extra person in view",
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -36,6 +41,10 @@ const TYPE_COLOR: Record<string, string> = {
     DEVTOOLS_KEY: "bg-rose-500",
     PRINT_ATTEMPT: "bg-pink-500",
     MULTI_SESSION: "bg-red-600",
+    CAMERA_OFF: "bg-red-700",
+    CAMERA_COVERED: "bg-yellow-600",
+    FACE_MISSING: "bg-teal-500",
+    MULTIPLE_FACES: "bg-indigo-600",
 };
 
 /** Nhom loai vi pham dung cho bo loc (khop cac cot dem cua bang). */
@@ -47,6 +56,10 @@ const FILTER_TYPES: { key: string; label: string; count: (r: IntegrityReportRow)
     { key: "CONTEXT_MENU", label: "Chuột phải", count: (r) => r.contextMenuCount },
     { key: "DEVTOOLS_KEY", label: "Phím tắt DevTools / in", count: (r) => r.shortcutCount },
     { key: "MULTI_SESSION", label: "Mở nhiều nơi", count: (r) => r.multiSessionCount },
+    { key: "CAMERA_OFF", label: "Camera off", count: (r) => r.cameraOffCount },
+    { key: "CAMERA_COVERED", label: "Camera covered", count: (r) => r.cameraCoveredCount },
+    { key: "FACE_MISSING", label: "Left camera view", count: (r) => r.faceMissingCount },
+    { key: "MULTIPLE_FACES", label: "Extra person in view", count: (r) => r.multipleFacesCount },
 ];
 
 const PAGE_SIZE = 10;
@@ -89,6 +102,26 @@ function BarRow({ label, value, max, color }: { label: string; value: number; ma
     );
 }
 
+function EntryPhotoBox({ examId, attemptId }: { examId: number; attemptId: number }) {
+    const q = useQuery({
+        queryKey: ["integrity-entry-photo", examId, attemptId],
+        queryFn: () => getEntryPhoto(examId, attemptId),
+    });
+    if (q.isLoading) return <p className="mt-3 text-sm text-muted-foreground">Loading entry photo...</p>;
+    if (!q.data?.imageData) return null;
+    return (
+        <div className="mt-3 flex items-start gap-3">
+            <a href={q.data.imageData} target="_blank" rel="noreferrer" title="Open full size">
+                <img src={q.data.imageData} alt="Entry photo" className="h-28 w-36 rounded-md border object-cover" />
+            </a>
+            <div className="text-sm">
+                <p className="font-medium">Entry photo</p>
+                <p className="text-muted-foreground">Taken at {fmtDate(q.data.capturedAt)} before the exam started.</p>
+            </div>
+        </div>
+    );
+}
+
 function EventList({ examId, attemptId }: { examId: number; attemptId: number }) {
     const q = useQuery({
         queryKey: ["integrity-events", examId, attemptId],
@@ -107,6 +140,7 @@ function EventList({ examId, attemptId }: { examId: number; attemptId: number })
                         <th className="px-3 py-1.5">IP</th>
                         <th className="px-3 py-1.5">Trình duyệt</th>
                         <th className="px-3 py-1.5">Chi tiết</th>
+                        <th className="px-3 py-1.5">Photo</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -123,6 +157,13 @@ function EventList({ examId, attemptId }: { examId: number; attemptId: number })
                             <td className="px-3 py-1.5">{e.ipAddress ?? "—"}</td>
                             <td className="max-w-[16rem] truncate px-3 py-1.5" title={e.userAgent ?? ""}>{e.userAgent ?? "—"}</td>
                             <td className="px-3 py-1.5">{e.detail ?? ""}</td>
+                            <td className="px-3 py-1.5">
+                                {e.snapshot ? (
+                                    <a href={e.snapshot} target="_blank" rel="noreferrer" title="Open evidence photo">
+                                        <img src={e.snapshot} alt="Evidence" className="h-12 w-16 rounded border object-cover" />
+                                    </a>
+                                ) : "—"}
+                            </td>
                         </tr>
                     ))}
                 </tbody>
@@ -346,6 +387,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                             <span>Vi phạm gần nhất: {fmtDate(r.lastViolationAt)}</span>
                                                             {r.description && <span className="sm:col-span-2 lg:col-span-4">Mô tả: {r.description}</span>}
                                                         </div>
+                                                        {r.hasEntryPhoto && <EntryPhotoBox examId={examId} attemptId={r.attemptId} />}
                                                         <p className="mb-2 mt-3 text-sm font-medium">Chi tiết sự kiện</p>
                                                         <EventList examId={examId} attemptId={r.attemptId} />
                                                     </td>

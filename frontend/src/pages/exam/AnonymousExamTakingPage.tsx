@@ -1,6 +1,7 @@
 import {
     runAnonymousCode,
     saveAnonymousAnswers,
+    sendAnonymousEntryPhoto,
     sendAnonymousIntegrityEvents, // NEW (anti-cheat)
     startAnonymousExam,
     submitAnonymousExam,
@@ -94,6 +95,8 @@ export default function AnonymousExamTakingPage() {
         config: attempt?.integrity,
         active: attempt?.status === 'IN_PROGRESS',
         send: (id, payload) => sendAnonymousIntegrityEvents(id, sessionToken, payload),
+        sendEntryPhoto: (id, imageData) => sendAnonymousEntryPhoto(id, sessionToken, imageData),
+        onEntryPhotoSaved: () => void attemptQuery.refetch(),
     });
     const flagKey = attempt ? `anonymous-exam-flagged-${attempt.id}` : null;
 

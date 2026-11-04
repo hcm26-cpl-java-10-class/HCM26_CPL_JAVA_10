@@ -100,6 +100,8 @@ public class ExamDTO extends BaseDTO {
     private Boolean blockCopyPaste;
     private Boolean requireFullscreen;
     private Boolean singleSession;
+    private Boolean cameraProctoring;
+    private Boolean notifyOnViolation;
 
     @JsonProperty(access = READ_ONLY)
     private Boolean hasPassword;

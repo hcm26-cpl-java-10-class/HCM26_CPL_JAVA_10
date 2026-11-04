@@ -134,6 +134,8 @@ export interface ExamDTO {
   blockCopyPaste?: boolean;
   requireFullscreen?: boolean;
   singleSession?: boolean;
+  cameraProctoring?: boolean;
+  notifyOnViolation?: boolean;
 }
 
 export interface ExamFilter {

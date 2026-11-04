@@ -1,6 +1,7 @@
 import {
     runCode,
     saveExamAnswers,
+    sendEntryPhoto,
     sendIntegrityEvents, // NEW (anti-cheat)
     startOrResumeExam,
     submitExamAttempt,
@@ -160,6 +161,8 @@ export default function StudentExamTakingPage() {
         config: attempt?.integrity,
         active: attempt?.status === 'IN_PROGRESS',
         send: sendIntegrityEvents,
+        sendEntryPhoto,
+        onEntryPhotoSaved: () => void attemptQuery.refetch(),
     });
 
     const [flagged, setFlagged] = useState<Set<number>>(new Set());

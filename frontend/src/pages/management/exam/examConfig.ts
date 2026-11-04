@@ -22,6 +22,8 @@ export interface ExamConfigForm {
   blockCopyPaste: boolean;
   requireFullscreen: boolean;
   singleSession: boolean;
+  cameraProctoring: boolean;
+  notifyOnViolation: boolean;
 }
 
 export const DEFAULT_CONFIG: ExamConfigForm = {
@@ -45,6 +47,8 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   blockCopyPaste: true,
   requireFullscreen: false,
   singleSession: true,
+  cameraProctoring: false,
+  notifyOnViolation: false,
 };
 
 export const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -100,6 +104,8 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   blockCopyPaste: exam.blockCopyPaste ?? false,
   requireFullscreen: exam.requireFullscreen ?? false,
   singleSession: exam.singleSession ?? false,
+  cameraProctoring: exam.cameraProctoring ?? false,
+  notifyOnViolation: exam.notifyOnViolation ?? false,
 });
 
 export function validateConfig(_duration: number, cfg: ExamConfigForm): string | null {
@@ -152,5 +158,7 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
     blockCopyPaste: cfg.blockCopyPaste,
     requireFullscreen: cfg.requireFullscreen,
     singleSession: cfg.singleSession,
+    cameraProctoring: cfg.cameraProctoring,
+    notifyOnViolation: cfg.notifyOnViolation,
   };
 }

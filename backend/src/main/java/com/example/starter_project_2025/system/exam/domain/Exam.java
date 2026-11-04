@@ -10,6 +10,7 @@ import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.question.domain.Question;
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnDefault;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -109,6 +110,16 @@ public class Exam extends BaseEntity {
     /** Phat hien mo bai thi o nhieu tab/thiet bi. */
     @Column(nullable = false)
     private Boolean singleSession = false;
+
+    /** Giam sat bang camera: chup anh luc vao thi, phat hien tat/che/roi camera, nhieu nguoi. */
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private Boolean cameraProctoring = false;
+
+    /** Hien thong bao cho nguoi thi khi he thong ghi nhan vi pham. */
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private Boolean notifyOnViolation = false;
 
     @ManyToMany
     @JoinTable(name = "exam_question",
