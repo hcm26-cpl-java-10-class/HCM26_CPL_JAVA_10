@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.external_api;
 import com.example.starter_project_2025.system.external_api.dto.ExternalClassDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalRoomDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerDTO;
+import com.example.starter_project_2025.system.external_api.dto.ExternalClassRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,10 @@ import java.util.Map;
  * Service interface for fetching and managing data from the external system (hệ thống tổng).
  */
 public interface ExternalApiService {
+
+    default boolean isSampleData() {
+        return false;
+    }
 
     /**
      * Fetch list of classes from the external system.
@@ -28,13 +33,32 @@ public interface ExternalApiService {
      */
     ExternalClassDTO fetchClassById(Long id);
 
+    ExternalClassDTO createClass(ExternalClassRequest request);
+
+    ExternalClassDTO updateClass(Long id, ExternalClassRequest request);
+
     /**
      * Create a new class in the external system.
      *
      * @param dto the class data
      * @return the created external class
      */
-    ExternalClassDTO createClass(ExternalClassDTO dto);
+    default ExternalClassDTO createClass(ExternalClassDTO dto) {
+        Boolean jobRec = null;
+        if (dto.getJobRecommendation() instanceof Boolean b) {
+            jobRec = b;
+        } else if (dto.getJobRecommendation() instanceof String s) {
+            jobRec = "yes".equalsIgnoreCase(s) || "true".equalsIgnoreCase(s);
+        }
+        return createClass(new ExternalClassRequest(
+                dto.getCode(), dto.getName(), dto.getStartDate(), dto.getEndDate(),
+                dto.getStatus(), dto.getPlannedSize(), dto.getDeliveryType(),
+                dto.getTraineeType(), dto.getFormatType(), dto.getSkills(),
+                dto.getSite(), dto.getLocation(), dto.getSubjectType(),
+                dto.getScope(), dto.getSupplierPartner(), dto.getKeyProgram(),
+                jobRec
+        ));
+    }
 
     /**
      * Update an existing class in the external system.
@@ -43,7 +67,22 @@ public interface ExternalApiService {
      * @param dto the updated class data
      * @return the updated external class
      */
-    ExternalClassDTO updateClass(Long id, ExternalClassDTO dto);
+    default ExternalClassDTO updateClass(Long id, ExternalClassDTO dto) {
+        Boolean jobRec = null;
+        if (dto.getJobRecommendation() instanceof Boolean b) {
+            jobRec = b;
+        } else if (dto.getJobRecommendation() instanceof String s) {
+            jobRec = "yes".equalsIgnoreCase(s) || "true".equalsIgnoreCase(s);
+        }
+        return updateClass(id, new ExternalClassRequest(
+                dto.getCode(), dto.getName(), dto.getStartDate(), dto.getEndDate(),
+                dto.getStatus(), dto.getPlannedSize(), dto.getDeliveryType(),
+                dto.getTraineeType(), dto.getFormatType(), dto.getSkills(),
+                dto.getSite(), dto.getLocation(), dto.getSubjectType(),
+                dto.getScope(), dto.getSupplierPartner(), dto.getKeyProgram(),
+                jobRec
+        ));
+    }
 
     /**
      * Delete a class in the external system.
@@ -58,7 +97,9 @@ public interface ExternalApiService {
      * @param dtoList list of classes to import
      * @return import result map
      */
-    Map<String, Object> batchImportClasses(List<ExternalClassDTO> dtoList);
+    default Map<String, Object> batchImportClasses(List<ExternalClassDTO> dtoList) {
+        return Map.of();
+    }
 
     /**
      * Fetch list of trainers from the external system.
@@ -78,66 +119,87 @@ public interface ExternalApiService {
     // ===================== TRAINEES =====================
 
     /** Fetch trainees enrolled in a class. */
-    Object fetchClassTrainees(Long classId);
+    default Object fetchClassTrainees(Long classId) { return List.of(); }
 
     /** Fetch all trainees (pool). */
-    Object fetchAllTrainees();
+    default Object fetchAllTrainees() { return List.of(); }
 
     /** Add a trainee to a class. */
-    Object addTraineeToClass(Long classId, Object body);
+    default Object addTraineeToClass(Long classId, Object body) { return Map.of(); }
+
+    /** Update trainee details in a class. */
+    default Object updateClassTrainee(Long classId, Long traineeId, Object body) { return Map.of(); }
+
+    /** Batch save staged trainee changes (create, update, delete) for a class. */
+    default Object batchSaveClassTrainees(Long classId, Object body) { return Map.of(); }
 
     /** Remove a trainee from a class. */
-    Object removeTraineeFromClass(Long classId, Long traineeId, Object body);
+    default Object removeTraineeFromClass(Long classId, Long traineeId, Object body) { return Map.of(); }
 
     // ===================== STATUS LIFECYCLE =====================
 
     /** Get status transition info for a class. */
-    Object fetchClassStatusInfo(Long classId);
+    default Object fetchClassStatusInfo(Long classId) { return Map.of(); }
 
     /** Transition a class to a new status. */
-    Object transitionClassStatus(Long classId, Object body);
+    default Object transitionClassStatus(Long classId, Object body) { return Map.of(); }
 
     // ===================== SESSIONS =====================
 
     /** Fetch sessions for a class. */
-    Object fetchClassSessions(Long classId);
+    default Object fetchClassSessions(Long classId) { return List.of(); }
 
-    Object fetchClassCalendars(Long classId);
-    Object saveClassCalendars(Long classId, Object body);
-    Object createCalendarVersion(Long classId, Long calendarId, Object body);
+    default Object fetchClassCalendars(Long classId) { return List.of(); }
+    default Object saveClassCalendars(Long classId, Object body) { return Map.of(); }
+    default Object createCalendarVersion(Long classId, Long calendarId, Object body) { return Map.of(); }
 
     /** Create a session for a class. */
-    Object createClassSession(Long classId, Object body);
+    default Object createClassSession(Long classId, Object body) { return Map.of(); }
 
     /** Delete a session. */
-    void deleteClassSession(Long classId, Long sessionId);
+    default void deleteClassSession(Long classId, Long sessionId) {}
 
     // ===================== ATTENDANCE =====================
 
     /** Get attendance for a session. */
-    Object fetchSessionAttendance(Long classId, Long sessionId);
+    default Object fetchSessionAttendance(Long classId, Long sessionId) { return List.of(); }
 
     /** Save attendance for a session. */
-    Object saveSessionAttendance(Long classId, Long sessionId, Object body);
+    default Object saveSessionAttendance(Long classId, Long sessionId, Object body) { return Map.of(); }
 
     // ===================== BUDGET =====================
 
     /** Get budget for a class. */
-    Object fetchClassBudget(Long classId);
+    default Object fetchClassBudget(Long classId) { return Map.of(); }
+
+    // ===================== OPERATION & MILESTONES =====================
+
+    default Object fetchClassOperation(Long classId) { return Map.of(); }
+    default Object saveClassOperation(Long classId, Object body) { return Map.of(); }
+
+    // ===================== TOPIC ASSESSMENTS =====================
+
+    default Object fetchTopicAssessments(Long classId) { return Map.of(); }
+    default Object saveTopicAssessments(Long classId, Object body) { return Map.of(); }
+
+    // ===================== ACTIVITIES =====================
+
+    default Object fetchClassActivities(Long classId) { return List.of(); }
+    default Object addClassActivity(Long classId, Object body) { return Map.of(); }
 
     // ===================== AUDIT =====================
 
     /** Get all audit records. */
-    Object fetchAllAudits();
+    default Object fetchAllAudits() { return List.of(); }
 
     /** Get audits for a class. */
-    Object fetchClassAudits(Long classId);
+    default Object fetchClassAudits(Long classId) { return List.of(); }
 
     /** Create an audit record. */
-    Object createAudit(Object body);
+    default Object createAudit(Object body) { return Map.of(); }
 
     // ===================== ANALYTICS =====================
 
     /** Get training analytics. */
-    Object fetchAnalytics();
+    default Object fetchAnalytics() { return Map.of(); }
 }

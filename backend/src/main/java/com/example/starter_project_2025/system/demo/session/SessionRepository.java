@@ -13,6 +13,8 @@ public interface SessionRepository extends BaseCrudRepository<Session,Long> {
 
     List<Session> findByClassId(Long classId);
 
+    boolean existsByTopicId(Long topicId);
+
     /**
      * Active, non-cancelled sessions whose time range overlaps [start, end) and that belong to the
      * same class or are taught by the same trainer. Adjacent ranges (end == other start) do not overlap.

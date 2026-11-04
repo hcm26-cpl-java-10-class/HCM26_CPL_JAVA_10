@@ -1,20 +1,44 @@
 import type {
     AttendanceRecord,
-    AuditRecord,
-    ClassBudget,
-    ClassSession,
-    ExternalClass,
-    ExternalRoom,
-    ExternalTrainer,
-    StatusTransitionInfo,
-    Trainee,
-    TrainingAnalytics,
+        AuditRecord,
+        ClassActivity,
+        ClassBudget,
+        ClassOperationData,
+        ClassSession,
+        ExternalClass,
+        ExternalRoom,
+        ExternalTrainer,
+        StatusTransitionInfo,
+        TopicAssessment,
+        Trainee,
+        TrainingAnalytics,
 } from "@/types";
 import axiosInstance from "../axios";
+import { traineeService } from "./trainee.api";
 import type { ClassCalendarVersion } from "@/types/features/external";
+import {
+    findMockClass,
+    getMockBudgetByClass,
+    getMockCalendarsByClass,
+    MOCK_TRAINEES_POOL,
+    MOCK_TRAINING_CLASSES,
+} from "@/pages/management/training/class/mocks/classTrainee.mock";
 
 /** Asks the backend for records of every status instead of its default ("active"). */
 export const ALL_STATUSES = "all";
+
+const useMockFallback = () => !import.meta.env.VITEST;
+
+async function withFallback<T>(request: () => Promise<T>, fallback: () => T): Promise<T> {
+    try {
+        return await request();
+    } catch (error) {
+        if (useMockFallback()) {
+            return fallback();
+        }
+        throw error;
+    }
+}
 
 /** Access to the master training system, proxied by the backend under /api/external. */
 export const externalApi = {
@@ -32,18 +56,46 @@ export const externalApi = {
         await axiosInstance.put(`/external/classes/${classId}/calendars`, { updates });
     },
     getClassCalendars: async (classId: number): Promise<ClassCalendarVersion[]> => {
-        const response = await axiosInstance.get<ClassCalendarVersion[]>(`/external/classes/${classId}/calendars`);
-        return response.data;
+        return withFallback(
+            async () => (await axiosInstance.get<ClassCalendarVersion[]>(`/external/classes/${classId}/calendars`)).data,
+            () => getMockCalendarsByClass(classId),
+        );
     },
     // ===================== CLASSES =====================
     getClasses: async (status: string = ALL_STATUSES): Promise<ExternalClass[]> => {
-        const response = await axiosInstance.get<ExternalClass[]>("/external/classes", { params: { status } });
-        return response.data;
+        return withFallback(
+            async () => (await axiosInstance.get<ExternalClass[]>("/external/classes", { params: { status } })).data,
+            () => MOCK_TRAINING_CLASSES,
+        );
     },
 
     getClassById: async (id: string | number): Promise<ExternalClass> => {
-        const response = await axiosInstance.get<ExternalClass>(`/external/classes/${id}`);
-        return response.data;
+        const raw = String(id).trim();
+        const isNumericId = /^[1-9]\d*$/.test(raw);
+
+        if (!isNumericId) {
+            const list = await externalApi.getClasses();
+            const matched = list.find(
+                (item) =>
+                    (item.code ?? "").toLowerCase() === raw.toLowerCase() ||
+                    (item.name ?? "").toLowerCase() === raw.toLowerCase(),
+            );
+            if (matched) return matched;
+            const mockMatch = useMockFallback() ? findMockClass(raw) : undefined;
+            if (mockMatch) return mockMatch;
+            throw Object.assign(new Error(`Class '${raw}' not found`), { response: { status: 404 } });
+        }
+
+        return withFallback(
+            async () => (await axiosInstance.get<ExternalClass>(`/external/classes/${raw}`)).data,
+            () => {
+                const found = findMockClass(raw);
+                if (!found) {
+                    throw Object.assign(new Error(`Class '${raw}' not found`), { response: { status: 404 } });
+                }
+                return found;
+            },
+        );
     },
 
     createClass: async (data: Partial<ExternalClass>): Promise<ExternalClass> => {
@@ -85,13 +137,14 @@ export const externalApi = {
 
     // ===================== TRAINEES =====================
     getClassTrainees: async (classId: string | number): Promise<Trainee[]> => {
-        const response = await axiosInstance.get<Trainee[]>(`/external/classes/${classId}/trainees`);
-        return response.data;
+        return traineeService.getByClassId(classId);
     },
 
     getAllTrainees: async (): Promise<Trainee[]> => {
-        const response = await axiosInstance.get<Trainee[]>("/external/trainees");
-        return response.data;
+        return withFallback(
+            async () => (await axiosInstance.get<Trainee[]>("/external/trainees")).data,
+            () => MOCK_TRAINEES_POOL,
+        );
     },
 
     addTraineeToClass: async (
@@ -166,8 +219,10 @@ export const externalApi = {
 
     // ===================== BUDGET =====================
     getClassBudget: async (classId: string | number): Promise<ClassBudget> => {
-        const response = await axiosInstance.get<ClassBudget>(`/external/classes/${classId}/budget`);
-        return response.data;
+        return withFallback(
+            async () => (await axiosInstance.get<ClassBudget>(`/external/classes/${classId}/budget`)).data,
+            () => getMockBudgetByClass(classId),
+        );
     },
 
     // ===================== AUDIT =====================
@@ -200,6 +255,55 @@ export const externalApi = {
 
     getRooms: async (): Promise<ExternalRoom[]> => {
         const response = await axiosInstance.get<ExternalRoom[]>("/external/rooms");
+        return response.data;
+    },
+
+    // ===================== BUDGET & OPERATION INFO =====================
+    getClassOperation: async (classId: string | number): Promise<ClassOperationData> => {
+        const response = await axiosInstance.get<ClassOperationData>(`/external/classes/${classId}/operation`);
+        return response.data;
+    },
+
+    saveClassOperation: async (
+        classId: string | number,
+        data: Partial<ClassOperationData>
+    ): Promise<ClassOperationData> => {
+        const response = await axiosInstance.put<ClassOperationData>(`/external/classes/${classId}/operation`, data);
+        return response.data;
+    },
+
+    // ===================== TOPIC ASSESSMENTS =====================
+    getTopicAssessments: async (classId: string | number): Promise<TopicAssessment[]> => {
+        const response = await axiosInstance.get<TopicAssessment[]>(`/external/classes/${classId}/topic-assessments`);
+        return response.data;
+    },
+
+    saveTopicAssessments: async (
+        classId: string | number,
+        topics: TopicAssessment[],
+        action?: "confirm" | "reject" | "discard"
+    ): Promise<TopicAssessment[]> => {
+        const response = await axiosInstance.put<TopicAssessment[]>(
+            `/external/classes/${classId}/topic-assessments`,
+            { topics, action }
+        );
+        return response.data;
+    },
+
+    // ===================== CLASS ACTIVITIES =====================
+    getClassActivities: async (classId: string | number): Promise<ClassActivity[]> => {
+        const response = await axiosInstance.get<ClassActivity[]>(`/external/classes/${classId}/activities`);
+        return response.data;
+    },
+
+    addClassActivity: async (
+        classId: string | number,
+        activity: { author?: string; content: string; type?: "history" | "comment" }
+    ): Promise<ClassActivity> => {
+        const response = await axiosInstance.post<ClassActivity>(
+            `/external/classes/${classId}/activities`,
+            activity
+        );
         return response.data;
     },
 };

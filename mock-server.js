@@ -130,26 +130,26 @@ const rooms = [
 
 // Trainee pool
 let allTrainees = [
-  { id: 101, code: "HV001", fullName: "Nguyen Van An", email: "anvn@fsoft.com.vn", phone: "0901234567", university: "HCMUT", gpa: 3.5, status: "studying" },
-  { id: 102, code: "HV002", fullName: "Tran Thi Bich", email: "bichtt@fsoft.com.vn", phone: "0902345678", university: "HCMUS", gpa: 3.2, status: "studying" },
-  { id: 103, code: "HV003", fullName: "Le Minh Duc", email: "duclm@fsoft.com.vn", phone: "0903456789", university: "UIT", gpa: 3.8, status: "studying" },
-  { id: 104, code: "HV004", fullName: "Pham Thi Em", email: "empth@fsoft.com.vn", phone: "0904567890", university: "HCMUT", gpa: 3.1, status: "studying" },
-  { id: 105, code: "HV005", fullName: "Hoang Van Phuc", email: "phuchv@fsoft.com.vn", phone: "0905678901", university: "RMIT", gpa: 3.6, status: "studying" },
-  { id: 106, code: "HV006", fullName: "Nguyen Thi Giang", email: "giangnt@fsoft.com.vn", phone: "0906789012", university: "HCMUS", gpa: 3.4, status: "studying" },
-  { id: 107, code: "HV007", fullName: "Do Van Hai", email: "haidv@fsoft.com.vn", phone: "0907890123", university: "TDTU", gpa: 3.0, status: "studying" },
-  { id: 108, code: "HV008", fullName: "Vo Thi Lan", email: "lanvt@fsoft.com.vn", phone: "0908901234", university: "UEH", gpa: 3.7, status: "studying" },
-  { id: 109, code: "HV009", fullName: "Bui Quoc Minh", email: "minhbq@fsoft.com.vn", phone: "0909012345", university: "VGU", gpa: 3.3, status: "studying" },
-  { id: 110, code: "HV010", fullName: "Dang Thi Nga", email: "ngadt@fsoft.com.vn", phone: "0900123456", university: "HCMUTE", gpa: 3.9, status: "studying" },
-  { id: 111, code: "HV011", fullName: "Ly Thanh Phong", email: "phonglt@fsoft.com.vn", phone: "0901234560", university: "HCMUT", gpa: 3.5, status: "studying" },
-  { id: 112, code: "HV012", fullName: "Truong Minh Quan", email: "quantm@fsoft.com.vn", phone: "0902345670", university: "HUTECH", gpa: 2.9, status: "dropped" }
+  { id: 101, code: "SE180101", fptAccount: "SE180101", fullName: "Hoàng Phương Bình", personalEmail: "phuongbinh.conan@gmail.com", email: "phuongbinh.conan@gmail.com", nationalId: "075204005839", employeeId: "", accessCardId: "", dob: "2004-08-23", gender: "Male", phone: "0901234567", university: "FPTU", gpa: 3.5, status: "Active" },
+  { id: 102, code: "SS180102", fptAccount: "SS180102", fullName: "Trần Việt Anh", personalEmail: "anhviettran357@gmail.com", email: "anhviettran357@gmail.com", nationalId: "091204006506", employeeId: "", accessCardId: "", dob: "2004-01-28", gender: "Male", phone: "0902345678", university: "FPTU", gpa: 3.4, status: "Active" },
+  { id: 103, code: "AI180103", fptAccount: "AI180103", fullName: "Trần Vũ Gia Bảo", personalEmail: "baohse321@gmail.com", email: "baohse321@gmail.com", nationalId: "052203001644", employeeId: "", accessCardId: "", dob: "2003-09-23", gender: "Male", phone: "0903456789", university: "UIT", gpa: 3.8, status: "Active" },
+  { id: 104, code: "IA180104", fptAccount: "IA180104", fullName: "Đỗ Gia Huy", personalEmail: "dogiahuy2252004@gmail.com", email: "dogiahuy2252004@gmail.com", nationalId: "079204001295", employeeId: "", accessCardId: "", dob: "2004-05-22", gender: "Male", phone: "0904567890", university: "HCMUT", gpa: 3.6, status: "Active" },
+  { id: 105, code: "SE180105", fptAccount: "SE180105", fullName: "Phan Thành Quang Huy", personalEmail: "ptqhuy1606@gmail.com", email: "ptqhuy1606@gmail.com", nationalId: "046204000175", employeeId: "", accessCardId: "", dob: "2004-06-16", gender: "Male", phone: "0905678901", university: "HCMUS", gpa: 3.6, status: "Active" },
+  { id: 106, code: "SS180106", fptAccount: "SS180106", fullName: "Lê Đình Khôi", personalEmail: "koledinleko@gmail.com", email: "koledinleko@gmail.com", nationalId: "079202004580", employeeId: "", accessCardId: "", dob: "2002-09-27", gender: "Male", phone: "0906789012", university: "HCMUS", gpa: 3.4, status: "Active" },
+  { id: 107, code: "AI180107", fptAccount: "AI180107", fullName: "Đặng Xuân Nam", personalEmail: "dangxuannam32@gmail.com", email: "dangxuannam32@gmail.com", nationalId: "052204002602", employeeId: "", accessCardId: "", dob: "2004-03-12", gender: "Male", phone: "0907890123", university: "TDTU", gpa: 3.5, status: "Active" },
+  { id: 108, code: "IA180108", fptAccount: "IA180108", fullName: "Nguyễn Thị Minh Thư", personalEmail: "minhthu.nguyen04@gmail.com", email: "minhthu.nguyen04@gmail.com", nationalId: "079304008112", employeeId: "FPT26081", accessCardId: "AC-88201", dob: "2004-11-05", gender: "Female", phone: "0908901234", university: "UEH", gpa: 3.7, status: "Active" },
+  { id: 109, code: "SE180109", fptAccount: "SE180109", fullName: "Phạm Quốc Tuấn", personalEmail: "quoctuan.pham@gmail.com", email: "quoctuan.pham@gmail.com", nationalId: "075203009421", employeeId: "FPT26082", accessCardId: "AC-88202", dob: "2003-07-19", gender: "Male", phone: "0909012345", university: "VGU", gpa: 3.3, status: "Active" },
+  { id: 110, code: "SS180110", fptAccount: "SS180110", fullName: "Võ Ngọc Khánh Linh", personalEmail: "khanhlinh.vo04@gmail.com", email: "khanhlinh.vo04@gmail.com", nationalId: "048304003519", employeeId: "", accessCardId: "", dob: "2004-02-14", gender: "Female", phone: "0900123456", university: "HCMUTE", gpa: 3.9, status: "Active" },
+  { id: 111, code: "AI180111", fptAccount: "AI180111", fullName: "Lý Thanh Phong", personalEmail: "phonglt9@gmail.com", email: "phonglt9@gmail.com", nationalId: "079204005110", employeeId: "", accessCardId: "", dob: "2004-04-18", gender: "Male", phone: "0901234560", university: "HCMUT", gpa: 3.5, status: "Active" },
+  { id: 112, code: "IA180112", fptAccount: "IA180112", fullName: "Trương Minh Quân", personalEmail: "quantm4@gmail.com", email: "quantm4@gmail.com", nationalId: "079204006224", employeeId: "", accessCardId: "", dob: "2004-10-09", gender: "Male", phone: "0902345670", university: "HUTECH", gpa: 2.9, status: "Inactive" }
 ];
 
 // Class-trainee enrollment mapping (classId -> traineeIds[])
 let enrollments = {
-  1: [101,102,103,104,105,106,107,108,109,110,111,112, 101,102,103,104,105,106,107,108,109,110,111],
-  2: [103,104,105,106,107,108,109,110],
+  1: [101,102,103,104,105,106,107,108,109,110,111,112],
+  2: [101,102,103,104,105,106,107,108,109,110],
   3: [101,102,103,104,105,106,107,108,109,110,111],
-  4: [101,103,105,107,109,111,102,104,106,108,110,112, 101,103,105,107,109,111]
+  4: [101,103,105,107,109,111,102,104,106,108,110,112]
 };
 // Deduplicate
 Object.keys(enrollments).forEach(k => {
@@ -308,6 +308,201 @@ const STATUS_LABELS = {
 // ======================== SERVER ========================
 
 const calendarVersions = new Map();
+
+// ==================== FAMS OPERATION & ACTIVITIES STORAGE ====================
+function formatFamsTimestamp(date = new Date()) {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const pad = (n) => String(n).padStart(2, "0");
+  return pad(date.getDate()) + "-" + months[date.getMonth()] + "-" + date.getFullYear() + " " + pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds());
+}
+
+function getInitials(name = "Admin") {
+  const clean = String(name).trim();
+  if (!clean) return "AD";
+  const caps = clean.replace(/[^A-Z]/g, "");
+  if (caps.length >= 2) return caps.slice(0, 2);
+  const parts = clean.split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return clean.slice(0, 2).toUpperCase();
+}
+
+function createDefaultMilestones(classId) {
+  return [
+    {
+      id: 1, name: "Feb - 2026", status: "Baselined", checkpointType: "STANDARD", salaryPaid: "Yes",
+      startDate: "2026-02-01", endDate: "2026-02-28",
+      topics: [
+        { id: 101, topic: "[L1_AL_DF] [NFP] Database Fundamentals For All by FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 868 },
+        { id: 102, topic: "[L1_AL_ECWL] [NFP] Effective Communication with LEAP Technique (Instructor Led) (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 360 },
+        { id: 103, topic: "[L1_AL_DSAA] [NFP] Data Structures and Algorithms for ALL by FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 810 },
+        { id: 104, topic: "[L1_AL_APWS] [NFP] Agile Practitioner with Scrum For All By FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 210 }
+      ]
+    },
+    {
+      id: 2, name: "Mar - 2026", status: "Baselined", checkpointType: "STANDARD", salaryPaid: "Yes",
+      startDate: "2026-03-01", endDate: "2026-03-31",
+      topics: [
+        { id: 201, topic: "[L1_AL_VCG] [NFP] Version Control - Git for ALL by FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 264 },
+        { id: 202, topic: "[L4_MOCK_PROJECT] [NFP] Mock Project for Fresher (1.0) - Phase 1", maxScore: 10, passingScore: 6, weightedNumber: 5520 }
+      ]
+    },
+    {
+      id: 3, name: "Apr - 2026", status: "Baselined", checkpointType: "STANDARD", salaryPaid: "Yes",
+      startDate: "2026-04-01", endDate: "2026-04-30",
+      topics: [
+        { id: 301, topic: "[L4_MOCK_PROJECT] [NFP] Mock Project for Fresher (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 9840 },
+        { id: 302, topic: "[FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - April", maxScore: 10, passingScore: 6, weightedNumber: 3060 }
+      ]
+    },
+    {
+      id: 4, name: "May - 2026", status: "Baselined", checkpointType: "STANDARD", salaryPaid: "Yes",
+      startDate: "2026-05-01", endDate: "2026-05-31",
+      topics: [
+        { id: 401, topic: "[L2_JA_JS] [NFP] Java SE/Java Language Programing (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 2880 },
+        { id: 402, topic: "[FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - May", maxScore: 10, passingScore: 6, weightedNumber: 1260 }
+      ]
+    },
+    {
+      id: 5, name: "Jun - 2026", status: "Baselined", checkpointType: "STANDARD", salaryPaid: "Yes",
+      startDate: "2026-06-01", endDate: "2026-06-30",
+      topics: [
+        { id: 501, topic: "[L2_JA_ORM] [NFP] ORM Framework - Hibernate (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 2400 },
+        { id: 502, topic: "[L2_JA_FEF(JS.KS)] [NFP] Front-end Fundamentals (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 4230 },
+        { id: 503, topic: "[L3_JSFW] [NFP] JavaScript Framework - React (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 4000 }
+      ]
+    }
+  ];
+}
+
+function createDefaultTopicAssessments() {
+  const titles = [
+    "1. L1_AL_CCGM - [NFP] Company Culture & Global Mindset (Instructor Led)",
+    "2. [FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - Jan&Feb",
+    "3. L1_AL_GC - [NFP] Global Collaboration",
+    "4. L1_AL_PSE - [NFP] Problem Solving",
+    "5. L1_AL_TME - [NFP] Time Management (E-learning)",
+    "6. L1_AL_DF - [NFP] Database Fundamentals For All by FSA",
+    "7. L1_AL_APWS - [NFP] Agile Practitioner with Scrum For All By FSA",
+    "8. L1_AL_ECWL - [NFP] Effective Communication with LEAP Technique (Instructor Led)",
+    "9. L1_AL_DSAA - [NFP] Data Structures and Algorithms for ALL by FSA",
+    "10. L1_AL_VCG - [NFP] Version Control - Git for ALL by FSA",
+    "11. FR_FU_KOR_IM - FR_FU_KOR_IM",
+    "12. [L4_MOCK_PROJECT] [NFP] Mock Project for Fresher (1.0) - Phase 1",
+    "13. [FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - April",
+    "14. L4_MOCK_PROJECT - [NFP] Mock Project for Fresher"
+  ];
+  return titles.map((title, idx) => {
+    const topicNum = idx + 1;
+    if (topicNum === 6) {
+      return {
+        id: topicNum, title,
+        assessments: [
+          { id: 601, name: "Assignments", weightedNumber: 30, quantity: 2, note: "(2 assignments)", action: "Keep", changeStatus: "none" },
+          { id: 602, name: "Final Theory Test", weightedNumber: 28, quantity: 1, note: "", action: "Keep", changeStatus: "confirmed" },
+          { id: 603, name: "Final Final Test", weightedNumber: 42, quantity: 1, note: "", action: "Keep", changeStatus: "none" }
+        ]
+      };
+    }
+    if (topicNum === 9) {
+      return {
+        id: topicNum, title,
+        assessments: [
+          { id: 901, name: "Assignments", weightedNumber: 30, quantity: 3, note: "", action: "Keep", changeStatus: "waiting" },
+          { id: 902, name: "Final Theory Test", weightedNumber: 30, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
+          { id: 903, name: "Final Practice Test", weightedNumber: 40, quantity: 1, note: "", action: "Keep", changeStatus: "none" }
+        ]
+      };
+    }
+    return {
+      id: topicNum, title,
+      assessments: [
+        { id: topicNum * 100 + 1, name: "Assignments", weightedNumber: 30, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
+        { id: topicNum * 100 + 2, name: "Final Theory Test", weightedNumber: 30, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
+        { id: topicNum * 100 + 3, name: "Final Practice Test", weightedNumber: 40, quantity: 1, note: "", action: "Keep", changeStatus: "none" }
+      ]
+    };
+  });
+}
+
+let budgetOperations = {};
+let topicAssessmentsByClass = {};
+let classActivities = {
+  1: [
+    { id: 1, classId: 1, author: "UyenHTM", initials: "UH", content: "has updated trainee allocation info.", timestamp: "06-Aug-2026 09:41:25", type: "history" },
+    { id: 2, classId: 1, author: "UyenHTM", initials: "UH", content: "has updated trainee status.", timestamp: "06-Aug-2026 09:34:35", type: "history" },
+    { id: 3, classId: 1, author: "UyenHTM", initials: "UH", content: "has reverted to in progress the class with following reason:\nUPDATE MILESTONE.", timestamp: "28-Jul-2026 15:19:32", type: "history" },
+    { id: 4, classId: 1, author: "UyenHTM", initials: "UH", content: "has edited trainee mark.", timestamp: "27-Jul-2026 17:02:19", type: "history" },
+    { id: 5, classId: 1, author: "UyenHTM", initials: "UH", content: "has updated class milestone.", timestamp: "27-Jul-2026 16:26:47", type: "history" },
+    { id: 6, classId: 1, author: "NgaTTT45", initials: "NT", content: "All trainees completed Final Practice Exam for Milestone Jun - 2026. Ready for graduation review.", timestamp: "26-Jul-2026 14:10:05", type: "comment" },
+    { id: 7, classId: 1, author: "NhiNLY4", initials: "NN", content: "has updated trainee reward and penalty.", timestamp: "25-Jul-2026 10:22:14", type: "history" }
+  ]
+};
+let activityIdCounter = 100;
+
+function appendClassActivity(classId, author, content, type = "history") {
+  if (!classActivities[classId]) classActivities[classId] = [];
+  activityIdCounter++;
+  const entry = {
+    id: activityIdCounter,
+    classId,
+    author: author || "UyenHTM",
+    initials: getInitials(author || "UyenHTM"),
+    content,
+    timestamp: formatFamsTimestamp(new Date()),
+    type
+  };
+  classActivities[classId].unshift(entry);
+  return entry;
+}
+
+function getOrCreateBudgetOperation(classId) {
+  if (!budgetOperations[classId]) {
+    const cls = classes.find(c => c.id === classId);
+    budgetOperations[classId] = {
+      classId,
+      operatingInfo: {
+        actualStartDate: cls?.startDate || "2026-01-23",
+        earlyGraduatedDate: classId === 1 ? "2026-07-22" : (cls?.endDate || "2026-07-22"),
+        actualEndDate: "",
+        gpaCalculation: { topicMark: 70, disciplinePoint: 30, bonusPoint: 10, penaltyPoint: 20 },
+        hasNoAllocationNeeds: false
+      },
+      milestones: createDefaultMilestones(classId)
+    };
+  }
+  const record = budgetOperations[classId];
+  const totalWeightedNumber = (record.milestones || []).reduce((sum, m) => sum + (m.topics || []).reduce((s, t) => s + (Number(t.weightedNumber) || 0), 0), 0);
+  return { ...record, totalWeightedNumber };
+}
+
+function getOrCreateTopicAssessments(classId) {
+  if (!topicAssessmentsByClass[classId]) {
+    const initial = createDefaultTopicAssessments();
+    topicAssessmentsByClass[classId] = {
+      current: JSON.parse(JSON.stringify(initial)),
+      baseline: JSON.parse(JSON.stringify(initial))
+    };
+  }
+  return topicAssessmentsByClass[classId];
+}
+
+function getOrCreateClassActivities(classId) {
+  if (!classActivities[classId]) {
+    classActivities[classId] = [
+      {
+        id: ++activityIdCounter,
+        classId,
+        author: "UyenHTM",
+        initials: "UH",
+        content: "has initialized class operating info.",
+        timestamp: "01-May-2026 09:00:00",
+        type: "history"
+      }
+    ];
+  }
+  return classActivities[classId];
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -456,15 +651,19 @@ const server = http.createServer(async (req, res) => {
   const classDetailMatch = pathname.match(/^\/api\/classes\/(\d+)$/);
   const classStatusMatch = pathname.match(/^\/api\/classes\/(\d+)\/status$/);
   const classTraineesMatch = pathname.match(/^\/api\/classes\/(\d+)\/trainees$/);
+  const classTraineesBatchMatch = pathname.match(/^\/api\/classes\/(\d+)\/trainees\/batch$/);
   const classTraineeItemMatch = pathname.match(/^\/api\/classes\/(\d+)\/trainees\/(\d+)$/);
   const classSessionsMatch = pathname.match(/^\/api\/classes\/(\d+)\/sessions$/);
   const classSessionItemMatch = pathname.match(/^\/api\/classes\/(\d+)\/sessions\/(\d+)$/);
   const attendanceMatch = pathname.match(/^\/api\/classes\/(\d+)\/sessions\/(\d+)\/attendance$/);
   const classBudgetMatch = pathname.match(/^\/api\/classes\/(\d+)\/budget$/);
   const classAuditMatch = pathname.match(/^\/api\/classes\/(\d+)\/audits$/);
+  const classOperationMatch = pathname.match(/^\/api\/classes\/(\d+)\/operation$/);
+  const classAssessmentsMatch = pathname.match(/^\/api\/classes\/(\d+)\/topic-assessments$/);
+  const classActivitiesMatch = pathname.match(/^\/api\/classes\/(\d+)\/activities$/);
 
   // GET /api/classes/:id
-  if (req.method === 'GET' && classDetailMatch && !classStatusMatch && !classTraineesMatch && !classSessionsMatch && !classBudgetMatch && !classAuditMatch) {
+  if (req.method === 'GET' && classDetailMatch && !classStatusMatch && !classTraineesMatch && !classSessionsMatch && !classBudgetMatch && !classAuditMatch && !classOperationMatch && !classAssessmentsMatch && !classActivitiesMatch) {
     const id = parseInt(classDetailMatch[1], 10);
     const item = classes.find(c => c.id === id);
     if (!item) return json(res, 404, { message: `Class #${id} not found` });
@@ -482,30 +681,48 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, trainees);
   }
 
-  // POST /api/classes/:id/trainees  - Add trainee to class
+  // POST /api/classes/:id/trainees  - Add or create trainee in class
   if (req.method === 'POST' && classTraineesMatch) {
     const classId = parseInt(classTraineesMatch[1], 10);
     const cls = classes.find(c => c.id === classId);
     if (!cls) return json(res, 404, { message: `Class #${classId} not found` });
-    if (cls.status === 'completed' || cls.status === 'closed' || cls.status === 'cancelled') {
-      return json(res, 400, { message: `Không thể thêm học viên vào lớp có trạng thái '${STATUS_LABELS[cls.status] || cls.status}'` });
-    }
 
     const data = await readBody(req);
+    if (!enrollments[classId]) enrollments[classId] = [];
+
+    // Support creating a brand-new trainee record directly
+    if (!data.traineeId && data.fullName) {
+      const nextId = allTrainees.reduce((max, t) => Math.max(max, t.id), 100) + 1;
+      const account = (data.fptAccount || data.code || '').trim();
+      const email = (data.personalEmail || data.email || '').trim();
+      const newTrainee = {
+        id: nextId,
+        code: account,
+        fptAccount: account,
+        fullName: String(data.fullName).trim(),
+        personalEmail: email,
+        email,
+        nationalId: String(data.nationalId || '').trim(),
+        employeeId: String(data.employeeId || '').trim(),
+        accessCardId: String(data.accessCardId || '').trim(),
+        dob: data.dob || '',
+        gender: data.gender || 'Male',
+        status: data.status || 'Active',
+      };
+      allTrainees.push(newTrainee);
+      enrollments[classId].push(nextId);
+      cls.enrolledTrainees = enrollments[classId].length;
+      return json(res, 201, { message: 'Trainee added successfully', trainee: newTrainee });
+    }
+
     const traineeId = parseInt(data.traineeId, 10);
-    if (!traineeId) return json(res, 400, { message: 'traineeId is required' });
+    if (!traineeId) return json(res, 400, { message: 'traineeId or fullName is required' });
 
     const trainee = allTrainees.find(t => t.id === traineeId);
     if (!trainee) return json(res, 404, { message: `Trainee #${traineeId} not found` });
 
-    if (!enrollments[classId]) enrollments[classId] = [];
     if (enrollments[classId].includes(traineeId)) {
       return json(res, 400, { message: `Học viên '${trainee.fullName}' đã được đăng ký vào lớp này` });
-    }
-
-    const enrolled = enrollments[classId].length;
-    if (enrolled >= cls.plannedSize) {
-      return json(res, 400, { message: `Lớp đã đủ ${cls.plannedSize} học viên theo kế hoạch. Không thể thêm thêm.` });
     }
 
     enrollments[classId].push(traineeId);
@@ -513,18 +730,114 @@ const server = http.createServer(async (req, res) => {
     return json(res, 201, { message: `Đã thêm học viên '${trainee.fullName}' vào lớp`, trainee });
   }
 
+  // PUT /api/classes/:id/trainees/batch - Batch sync staged trainee CRUD changes
+  if (req.method === 'PUT' && classTraineesBatchMatch) {
+    const classId = parseInt(classTraineesBatchMatch[1], 10);
+    const cls = classes.find(c => c.id === classId);
+    if (!cls) return json(res, 404, { message: `Class #${classId} not found` });
+
+    const body = await readBody(req);
+    const created = Array.isArray(body.created) ? body.created : [];
+    const updated = Array.isArray(body.updated) ? body.updated : [];
+    const deletedIds = Array.isArray(body.deletedIds) ? body.deletedIds.map(Number) : [];
+
+    if (!enrollments[classId]) enrollments[classId] = [];
+
+    // 1. Apply deletions from class enrollment
+    if (deletedIds.length > 0) {
+      const deletedSet = new Set(deletedIds);
+      enrollments[classId] = enrollments[classId].filter(id => !deletedSet.has(id));
+    }
+
+    // 2. Apply updates to existing trainees
+    for (const item of updated) {
+      const target = allTrainees.find(t => t.id === Number(item.id));
+      if (target) {
+        const account = (item.fptAccount ?? item.code ?? target.fptAccount ?? '').trim();
+        const email = (item.personalEmail ?? item.email ?? target.personalEmail ?? '').trim();
+        Object.assign(target, {
+          fullName: item.fullName !== undefined ? String(item.fullName).trim() : target.fullName,
+          fptAccount: account,
+          code: account,
+          personalEmail: email,
+          email,
+          nationalId: item.nationalId !== undefined ? String(item.nationalId).trim() : target.nationalId,
+          employeeId: item.employeeId !== undefined ? String(item.employeeId).trim() : target.employeeId,
+          accessCardId: item.accessCardId !== undefined ? String(item.accessCardId).trim() : target.accessCardId,
+          dob: item.dob !== undefined ? item.dob : target.dob,
+          gender: item.gender !== undefined ? item.gender : target.gender,
+          status: item.status !== undefined ? item.status : target.status,
+        });
+      }
+    }
+
+    // 3. Apply creations
+    let nextId = allTrainees.reduce((max, t) => Math.max(max, t.id), 100);
+    for (const item of created) {
+      nextId += 1;
+      const account = (item.fptAccount || item.code || '').trim();
+      const email = (item.personalEmail || item.email || '').trim();
+      const newTrainee = {
+        id: nextId,
+        code: account,
+        fptAccount: account,
+        fullName: String(item.fullName || '').trim(),
+        personalEmail: email,
+        email,
+        nationalId: String(item.nationalId || '').trim(),
+        employeeId: String(item.employeeId || '').trim(),
+        accessCardId: String(item.accessCardId || '').trim(),
+        dob: item.dob || '',
+        gender: item.gender || 'Male',
+        status: item.status || 'Active',
+      };
+      allTrainees.push(newTrainee);
+      enrollments[classId].push(nextId);
+    }
+
+    cls.enrolledTrainees = enrollments[classId].length;
+    const syncedTrainees = getClassTrainees(classId, classSessions);
+    return json(res, 200, { message: 'Trainee changes saved successfully!', trainees: syncedTrainees });
+  }
+
+  // PUT /api/classes/:id/trainees/:traineeId - Update single trainee in class
+  if (req.method === 'PUT' && classTraineeItemMatch) {
+    const classId = parseInt(classTraineeItemMatch[1], 10);
+    const traineeId = parseInt(classTraineeItemMatch[2], 10);
+    const cls = classes.find(c => c.id === classId);
+    if (!cls) return json(res, 404, { message: `Class #${classId} not found` });
+
+    const target = allTrainees.find(t => t.id === traineeId);
+    if (!target) return json(res, 404, { message: `Trainee #${traineeId} not found` });
+
+    const item = await readBody(req);
+    const account = (item.fptAccount ?? item.code ?? target.fptAccount ?? '').trim();
+    const email = (item.personalEmail ?? item.email ?? target.personalEmail ?? '').trim();
+    Object.assign(target, {
+      fullName: item.fullName !== undefined ? String(item.fullName).trim() : target.fullName,
+      fptAccount: account,
+      code: account,
+      personalEmail: email,
+      email,
+      nationalId: item.nationalId !== undefined ? String(item.nationalId).trim() : target.nationalId,
+      employeeId: item.employeeId !== undefined ? String(item.employeeId).trim() : target.employeeId,
+      accessCardId: item.accessCardId !== undefined ? String(item.accessCardId).trim() : target.accessCardId,
+      dob: item.dob !== undefined ? item.dob : target.dob,
+      gender: item.gender !== undefined ? item.gender : target.gender,
+      status: item.status !== undefined ? item.status : target.status,
+    });
+    return json(res, 200, target);
+  }
+
   // DELETE /api/classes/:id/trainees/:traineeId - Remove trainee from class
   if (req.method === 'DELETE' && classTraineeItemMatch) {
     const classId = parseInt(classTraineeItemMatch[1], 10);
     const traineeId = parseInt(classTraineeItemMatch[2], 10);
     const data = await readBody(req).catch(() => ({}));
-    const reason = data.reason || 'Not specified';
+    const reason = data.reason || 'Removed from class';
 
     const cls = classes.find(c => c.id === classId);
     if (!cls) return json(res, 404, { message: `Class #${classId} not found` });
-    if (cls.status === 'completed' || cls.status === 'closed') {
-      return json(res, 400, { message: `Không thể xóa học viên khỏi lớp đã hoàn thành hoặc đóng` });
-    }
 
     if (!enrollments[classId]) enrollments[classId] = [];
     const idx = enrollments[classId].indexOf(traineeId);
@@ -926,6 +1239,77 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/api/trainers') { return json(res, 200, trainers); }
   if (pathname === '/api/rooms') { return json(res, 200, rooms); }
+
+  
+  // ======== FAMS BUDGET & OPERATION INFO ========
+  if (req.method === 'GET' && classOperationMatch) {
+    const classId = parseInt(classOperationMatch[1], 10);
+    return json(res, 200, getOrCreateBudgetOperation(classId));
+  }
+
+  if (req.method === 'PUT' && classOperationMatch) {
+    const classId = parseInt(classOperationMatch[1], 10);
+    const data = await readBody(req);
+    const current = getOrCreateBudgetOperation(classId);
+    budgetOperations[classId] = {
+      ...current,
+      ...data,
+      classId,
+    };
+    appendClassActivity(classId, 'UyenHTM', 'has updated class operating info and milestone configuration.', 'history');
+    return json(res, 200, budgetOperations[classId]);
+  }
+
+  // ======== TOPIC ASSESSMENTS ========
+  if (req.method === 'GET' && classAssessmentsMatch) {
+    const classId = parseInt(classAssessmentsMatch[1], 10);
+    const data = getOrCreateTopicAssessments(classId);
+    return json(res, 200, data.current);
+  }
+
+  if (req.method === 'PUT' && classAssessmentsMatch) {
+    const classId = parseInt(classAssessmentsMatch[1], 10);
+    const body = await readBody(req);
+    const state = getOrCreateTopicAssessments(classId);
+    if (body.action === 'discard') {
+      state.current = JSON.parse(JSON.stringify(state.baseline));
+    } else if (body.action === 'reject') {
+      state.current = (body.topics || state.current).map(t => ({
+        ...t,
+        assessments: (t.assessments || []).map(a => ({ ...a, changeStatus: 'none' }))
+      }));
+      appendClassActivity(classId, 'UyenHTM', 'has rejected topic assessment configuration changes.', 'history');
+    } else if (body.action === 'confirm') {
+      state.current = (body.topics || state.current).map(t => ({
+        ...t,
+        assessments: (t.assessments || []).map(a => ({
+          ...a,
+          changeStatus: a.changeStatus === 'waiting' ? 'confirmed' : a.changeStatus
+        }))
+      }));
+      state.baseline = JSON.parse(JSON.stringify(state.current));
+      appendClassActivity(classId, 'UyenHTM', 'has confirmed topic assessment configuration.', 'history');
+    } else if (Array.isArray(body.topics)) {
+      state.current = body.topics;
+    }
+    return json(res, 200, state.current);
+  }
+
+  // ======== CLASS ACTIVITIES ========
+  if (req.method === 'GET' && classActivitiesMatch) {
+    const classId = parseInt(classActivitiesMatch[1], 10);
+    return json(res, 200, getOrCreateClassActivities(classId));
+  }
+
+  if (req.method === 'POST' && classActivitiesMatch) {
+    const classId = parseInt(classActivitiesMatch[1], 10);
+    const body = await readBody(req);
+    const author = body.author || 'UyenHTM';
+    const content = body.content || '';
+    const type = body.type || 'comment';
+    const newEntry = appendClassActivity(classId, author, content, type);
+    return json(res, 201, newEntry);
+  }
 
   return json(res, 404, { message: "Not found" });
 });

@@ -36,6 +36,14 @@ public class ExternalApiController {
                 .body(calendarExcelExporter.export(id, calendarId));
     }
 
+    @GetMapping("/data-source")
+    @Operation(summary = "Identify whether shared data is local sample data")
+    public DataSourceResponse getDataSource() {
+        return new DataSourceResponse(externalApiService.isSampleData());
+    }
+
+    public record DataSourceResponse(boolean sampleData) {}
+
     @GetMapping("/classes")
     @Operation(summary = "Fetch classes from external system",
             description = "status defaults to 'active'; pass status=all to list classes of every status")
@@ -107,6 +115,23 @@ public class ExternalApiController {
     @Operation(summary = "Add trainee to class")
     public ResponseEntity<Object> addTraineeToClass(@PathVariable Long id, @RequestBody Object body) {
         return ResponseEntity.status(HttpStatus.CREATED).body(externalApiService.addTraineeToClass(id, body));
+    }
+
+    @PutMapping("/classes/{classId}/trainees/{traineeId}")
+    @Operation(summary = "Update trainee details in a class")
+    public ResponseEntity<Object> updateClassTrainee(
+            @PathVariable Long classId,
+            @PathVariable Long traineeId,
+            @RequestBody Object body) {
+        return ResponseEntity.ok(externalApiService.updateClassTrainee(classId, traineeId, body));
+    }
+
+    @PutMapping("/classes/{classId}/trainees/batch")
+    @Operation(summary = "Batch save staged trainee changes (create, update, delete) for a class")
+    public ResponseEntity<Object> batchSaveClassTrainees(
+            @PathVariable Long classId,
+            @RequestBody Object body) {
+        return ResponseEntity.ok(externalApiService.batchSaveClassTrainees(classId, body));
     }
 
     @DeleteMapping("/classes/{classId}/trainees/{traineeId}")
@@ -195,6 +220,48 @@ public class ExternalApiController {
     @Operation(summary = "Fetch budget for class")
     public ResponseEntity<Object> getClassBudget(@PathVariable Long id) {
         return ResponseEntity.ok(externalApiService.fetchClassBudget(id));
+    }
+
+    // ======================== OPERATION & MILESTONES ========================
+
+    @GetMapping("/classes/{id}/operation")
+    @Operation(summary = "Fetch operating info and milestones for class")
+    public ResponseEntity<Object> getClassOperation(@PathVariable Long id) {
+        return ResponseEntity.ok(externalApiService.fetchClassOperation(id));
+    }
+
+    @PutMapping("/classes/{id}/operation")
+    @Operation(summary = "Update operating info and milestones for class")
+    public ResponseEntity<Object> saveClassOperation(@PathVariable Long id, @RequestBody Object body) {
+        return ResponseEntity.ok(externalApiService.saveClassOperation(id, body));
+    }
+
+    // ======================== TOPIC ASSESSMENTS ========================
+
+    @GetMapping("/classes/{id}/topic-assessments")
+    @Operation(summary = "Fetch topic assessment configuration")
+    public ResponseEntity<Object> getTopicAssessments(@PathVariable Long id) {
+        return ResponseEntity.ok(externalApiService.fetchTopicAssessments(id));
+    }
+
+    @PutMapping("/classes/{id}/topic-assessments")
+    @Operation(summary = "Update or confirm topic assessment configuration")
+    public ResponseEntity<Object> saveTopicAssessments(@PathVariable Long id, @RequestBody Object body) {
+        return ResponseEntity.ok(externalApiService.saveTopicAssessments(id, body));
+    }
+
+    // ======================== ACTIVITIES ========================
+
+    @GetMapping("/classes/{id}/activities")
+    @Operation(summary = "Fetch activities for class")
+    public ResponseEntity<Object> getClassActivities(@PathVariable Long id) {
+        return ResponseEntity.ok(externalApiService.fetchClassActivities(id));
+    }
+
+    @PostMapping("/classes/{id}/activities")
+    @Operation(summary = "Add activity/comment for class")
+    public ResponseEntity<Object> addClassActivity(@PathVariable Long id, @RequestBody Object body) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(externalApiService.addClassActivity(id, body));
     }
 
     // ======================== AUDIT ========================

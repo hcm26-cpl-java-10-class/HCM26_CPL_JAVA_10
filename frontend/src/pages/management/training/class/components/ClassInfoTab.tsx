@@ -1,105 +1,89 @@
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
-import { DetailGroup, DetailItem } from "@/components/common/DetailGrid";
+import { useState, type ReactNode } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import type { ExternalClass } from "@/types";
 import { programLabel } from "@/utils/class.utils";
 import { formatDate } from "@/utils/session.utils";
-import { ClassStatusBadge } from "./ClassStatusBadge";
 
-/**
- * Class Info > General. Every label of the reference design is shown; the ones the master system's class API
- * does not return say "Not available" explicitly instead of being hidden or filled with made-up values.
- */
+interface InfoField {
+    label: string;
+    value?: ReactNode;
+}
+
+function displayValue(value?: ReactNode): ReactNode {
+    if (value === null || value === undefined) return "—";
+    if (typeof value === "string" && value.trim() === "") return "—";
+    return value;
+}
+
 export function ClassInfoTab({ classItem }: { classItem: ExternalClass }) {
     const [open, setOpen] = useState(true);
 
+    const trainingProgram =
+        classItem.trainingProgram ||
+        classItem.program ||
+        (classItem.programId != null ? programLabel(classItem.programId) : undefined);
+
+    const generalFields: InfoField[] = [
+        // Row 1
+        { label: "Class Name", value: classItem.name || classItem.code },
+        { label: "Delivery Type", value: classItem.deliveryType },
+        { label: "Trainee Type", value: classItem.traineeType },
+        // Row 2
+        { label: "Format Type", value: classItem.formatType },
+        { label: "Skills", value: classItem.skills },
+        { label: "Training Program", value: trainingProgram },
+        // Row 3
+        { label: "Site", value: classItem.site },
+        { label: "Location", value: classItem.location },
+        { label: "Expected Start Date", value: classItem.startDate ? formatDate(classItem.startDate) : undefined },
+        // Row 4
+        { label: "Expected End Date", value: classItem.endDate ? formatDate(classItem.endDate) : undefined },
+        {
+            label: "Planned Trainee No.",
+            value: classItem.plannedSize != null ? String(classItem.plannedSize) : undefined,
+        },
+        { label: "Subject Type", value: classItem.subjectType },
+        // Row 5
+        { label: "Planned Revenue", value: classItem.plannedRevenue },
+        { label: "Scope", value: classItem.scope },
+        { label: "Supplier/Partner", value: classItem.supplierPartner },
+        // Row 6
+        { label: "Key Program", value: classItem.keyProgram },
+        { label: "Global SE", value: classItem.globalSe },
+        { label: "Job Recommendation", value: classItem.jobRecommendation },
+    ];
+
     return (
-        <div className="space-y-3">
-            <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border">
-                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left text-base font-semibold hover:bg-muted/40">
-                    General
+        <div className="space-y-4">
+            <Collapsible open={open} onOpenChange={setOpen} className="overflow-hidden rounded-lg border bg-card">
+                <CollapsibleTrigger className="flex w-full items-center justify-between bg-muted/30 px-4 py-3 text-left text-sm font-semibold hover:bg-muted/50">
+                    <span>General</span>
                     <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} aria-hidden />
                 </CollapsibleTrigger>
+
                 <CollapsibleContent>
-                    <div className="grid gap-x-10 border-t px-4 py-1 md:grid-cols-2 xl:grid-cols-3">
-                        <DetailGroup>
-                            <DetailItem label="Class Name" unavailable={!classItem.name}>
-                                {classItem.name}
-                            </DetailItem>
-                            <DetailItem label="Class Code" unavailable={!classItem.code}>
-                                {classItem.code}
-                            </DetailItem>
-                            <DetailItem label="Delivery Type" unavailable={!classItem.deliveryType}>
-                                {classItem.deliveryType}
-                            </DetailItem>
-                            <DetailItem label="Trainee Type" unavailable={!classItem.traineeType}>
-                                {classItem.traineeType}
-                            </DetailItem>
-                            <DetailItem label="Format Type" unavailable={!classItem.formatType}>
-                                {classItem.formatType}
-                            </DetailItem>
-                            <DetailItem label="Skills" unavailable={!classItem.skills}>
-                                {classItem.skills}
-                            </DetailItem>
-                        </DetailGroup>
-
-                        <DetailGroup>
-                            <DetailItem label="Training Program" unavailable={!classItem.trainingProgram && classItem.programId == null}>
-                                {classItem.trainingProgram || programLabel(classItem.programId)}
-                            </DetailItem>
-                            <DetailItem label="Site" unavailable={!classItem.site}>
-                                {classItem.site}
-                            </DetailItem>
-                            <DetailItem label="Location" unavailable={!classItem.location}>
-                                {classItem.location}
-                            </DetailItem>
-                            <DetailItem label="Expected Start Date" unavailable={!classItem.startDate}>
-                                {formatDate(classItem.startDate)}
-                            </DetailItem>
-                            <DetailItem label="Expected End Date" unavailable={!classItem.endDate}>
-                                {formatDate(classItem.endDate)}
-                            </DetailItem>
-                            <DetailItem label="Planned Trainee No." unavailable={classItem.plannedSize == null}>
-                                {classItem.plannedSize}
-                            </DetailItem>
-                        </DetailGroup>
-
-                        <DetailGroup>
-                            <DetailItem label="Subject Type" unavailable={!classItem.subjectType}>
-                                {classItem.subjectType}
-                            </DetailItem>
-                            <DetailItem label="Planned Revenue" unavailable={!classItem.plannedRevenue}>
-                                {classItem.plannedRevenue}
-                            </DetailItem>
-                            <DetailItem label="Scope" unavailable={!classItem.scope}>
-                                {classItem.scope}
-                            </DetailItem>
-                            <DetailItem label="Supplier / Partner" unavailable={!classItem.supplierPartner}>
-                                {classItem.supplierPartner}
-                            </DetailItem>
-                            <DetailItem label="Key Program" unavailable={!classItem.keyProgram}>
-                                {classItem.keyProgram}
-                            </DetailItem>
-                            <DetailItem label="Class Admin" unavailable={!classItem.classAdmin}>
-                                {classItem.classAdmin}
-                            </DetailItem>
-                            <DetailItem label="Master Trainer" unavailable={!classItem.masterTrainer}>
-                                {classItem.masterTrainer}
-                            </DetailItem>
-                            <DetailItem label="Status" unavailable={!classItem.status}>
-                                <ClassStatusBadge status={classItem.status} />
-                            </DetailItem>
-                        </DetailGroup>
-                    </div>
+                    <dl className="grid grid-cols-1 border-t md:grid-cols-3">
+                        {generalFields.map((field, index) => (
+                            <div
+                                key={field.label}
+                                className={cn(
+                                    "grid grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)] items-baseline gap-3 border-b px-4 py-3 text-sm",
+                                    "md:border-r md:[&:nth-child(3n)]:border-r-0",
+                                    index >= generalFields.length - 3 && "md:border-b-0",
+                                    index === generalFields.length - 1 && "border-b-0",
+                                )}
+                            >
+                                <dt className="font-medium text-muted-foreground">{field.label}</dt>
+                                <dd className="break-words font-semibold text-foreground">{displayValue(field.value)}</dd>
+                            </div>
+                        ))}
+                    </dl>
                 </CollapsibleContent>
             </Collapsible>
-
-            <p className="text-xs text-muted-foreground">
-                “Not available” means the master training system's class API does not return that field (it provides the code, name, program id,
-                start / end dates, status and planned size). Nothing is guessed or stored locally.
-            </p>
         </div>
     );
 }
+
+export default ClassInfoTab;

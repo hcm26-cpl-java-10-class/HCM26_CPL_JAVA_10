@@ -71,7 +71,11 @@ export function SidebarMenu() {
                         icon: resolveIcon(module.icon),
                         isActive:
                             !!module.url &&
-                            (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
+                            (location.pathname === module.url ||
+                                location.pathname.startsWith(`${module.url}/`) ||
+                                (module.url === "/classes" &&
+                                    (location.pathname.startsWith("/training-operations/class-details/") ||
+                                        location.pathname.startsWith("/class-details/")))),
                     })),
             }))
             .filter((group) => group.items.length > 0)
