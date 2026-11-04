@@ -10,7 +10,6 @@ import {
     EyeOff,
     Folder,
     FolderOpen,
-    Filter,
     FolderX,
     Layers,
     LayoutGrid,
@@ -38,7 +37,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     Dialog,
     DialogContent,
@@ -616,133 +614,6 @@ export default function QuestionListPage() {
         return topics.filter((t) => t.toLowerCase().includes(q));
     }, [topics, topicSearch]);
 
-    // Filters popover + search box on the top bar (bound to the same state as the sidebar)
-    const activeFilterCount =
-        selectedTypes.size +
-        selectedDifficulties.size +
-        (selectedTopic ? 1 : 0) +
-        (createdFrom || createdTo ? 1 : 0) +
-        (updatedFrom || updatedTo ? 1 : 0);
-
-    const dateInputClass = "h-8 px-2 text-[11px] bg-muted/30 dark:[color-scheme:dark]";
-
-    const filtersPopover = (
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button type="button" variant="outline" className="h-9 gap-1.5">
-                    <Filter size={14} />
-                    Filters
-                    {activeFilterCount > 0 && (
-                        <Badge className="h-5 min-w-5 px-1.5 text-xs rounded-full ml-0.5">{activeFilterCount}</Badge>
-                    )}
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-80 max-h-[70vh] overflow-y-auto space-y-3">
-                <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">Filters</span>
-                    {hasActiveFilters && (
-                        <button type="button" onClick={handleClearAllFilters} className="text-xs text-primary hover:underline">
-                            Clear all
-                        </button>
-                    )}
-                </div>
-
-                <div className="space-y-1.5">
-                    <span className="text-xs font-semibold text-muted-foreground block">Question Type</span>
-                    {(["MULTIPLE_CHOICE", "CODING", "ESSAY"] as QuestionType[]).map((t) => (
-                        <label key={t} className="flex items-center justify-between text-xs cursor-pointer">
-                            <span className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedTypes.has(t)}
-                                    onChange={() => toggleType(t)}
-                                    className="size-3.5 rounded border-input accent-primary cursor-pointer"
-                                />
-                                {TYPE_LABEL[t]}
-                            </span>
-                            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">{typeCounts[t] ?? 0}</Badge>
-                        </label>
-                    ))}
-                </div>
-
-                <div className="space-y-1.5 pt-2 border-t">
-                    <span className="text-xs font-semibold text-muted-foreground block">Difficulty</span>
-                    {(["EASY", "MEDIUM", "HARD"] as QuestionDifficulty[]).map((d) => (
-                        <label key={d} className="flex items-center justify-between text-xs cursor-pointer">
-                            <span className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedDifficulties.has(d)}
-                                    onChange={() => toggleDifficulty(d)}
-                                    className="size-3.5 rounded border-input accent-primary cursor-pointer"
-                                />
-                                <span className={`font-medium ${DIFFICULTY_STYLE[d].text}`}>{DIFFICULTY_LABEL[d]}</span>
-                            </span>
-                            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">{difficultyCounts[d] ?? 0}</Badge>
-                        </label>
-                    ))}
-                </div>
-
-                <div className="space-y-1.5 pt-2 border-t">
-                    <span className="text-xs font-semibold text-muted-foreground block">Topic</span>
-                    <Select
-                        value={selectedTopic || "__all__"}
-                        onValueChange={(v) => {
-                            const next = v === "__all__" ? "" : v;
-                            if (next !== selectedTopic) handleSelectTopic(next || selectedTopic);
-                        }}
-                    >
-                        <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="__all__">All topics</SelectItem>
-                            {topics.map((t) => (
-                                <SelectItem key={t} value={t}>{t}</SelectItem>
-                            ))}
-                            {noTopicCount > 0 && <SelectItem value="Uncategorized">Uncategorized</SelectItem>}
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div className="space-y-1.5 pt-2 border-t">
-                    <span className="text-xs font-semibold text-muted-foreground block">Created At</span>
-                    <div className="grid grid-cols-2 gap-1.5">
-                        <Input type="date" value={createdFrom} max={createdTo || undefined} onChange={(e) => setCreatedFrom(e.target.value)} className={dateInputClass} aria-label="Created from" />
-                        <Input type="date" value={createdTo} min={createdFrom || undefined} onChange={(e) => setCreatedTo(e.target.value)} className={dateInputClass} aria-label="Created to" />
-                    </div>
-                    <span className="text-xs font-semibold text-muted-foreground block pt-1">Updated At</span>
-                    <div className="grid grid-cols-2 gap-1.5">
-                        <Input type="date" value={updatedFrom} max={updatedTo || undefined} onChange={(e) => setUpdatedFrom(e.target.value)} className={dateInputClass} aria-label="Updated from" />
-                        <Input type="date" value={updatedTo} min={updatedFrom || undefined} onChange={(e) => setUpdatedTo(e.target.value)} className={dateInputClass} aria-label="Updated to" />
-                    </div>
-                </div>
-            </PopoverContent>
-        </Popover>
-    );
-
-    const searchBox = (
-        <div className="relative w-56 xl:w-72">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-                placeholder="Search..."
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                className="h-9 pl-8 pr-8"
-            />
-            {keyword && (
-                <button
-                    type="button"
-                    onClick={() => setKeyword("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    aria-label="Clear search"
-                >
-                    <X className="h-3.5 w-3.5" />
-                </button>
-            )}
-        </div>
-    );
-
     const filterSummary = (
         <>
 
@@ -1140,20 +1011,12 @@ export default function QuestionListPage() {
                     <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b min-h-[3.25rem]">
                         <div className="flex flex-wrap items-center gap-3">
                             {viewSwitcher}
-                            {filtersPopover}
-                            {searchBox}
                             {filterSummary}
                         </div>
 
                         <div className="flex items-center gap-2">
-                            {viewMode === "card" ? (
-                                <>
-                                    {previewAllButton}
-                                    {!browseMode && headerActions}
-                                </>
-                            ) : (
-                                !browseMode && <ToolbarActions table={effectiveTable} headerActions={headerActions} />
-                            )}
+                            {viewMode === "card" && previewAllButton}
+                            {!browseMode && <ToolbarActions table={effectiveTable} headerActions={headerActions} />}
                         </div>
                     </div>
 
@@ -1170,13 +1033,16 @@ export default function QuestionListPage() {
                                     ) : (
                                         cardPagedData.map((q) => {
                                             const isExpanded = expandedIds.has(q.id);
+                                            const isActive = Boolean(q.isActive ?? true);
+                                            const dimClass = isActive ? "" : "opacity-50 hover:opacity-100 transition-opacity";
                                             const diffStyle = DIFFICULTY_STYLE[q.difficulty] ?? DIFFICULTY_STYLE.MEDIUM;
 
                                             return (
                                                 <div
                                                     key={q.id}
                                                     id={`question-card-${q.id}`}
-                                                    className="rounded-xl border bg-card p-4 hover:border-border/80 transition-all shadow-xs space-y-3"
+                                                    className={`rounded-xl border p-4 hover:border-border/80 transition-all shadow-xs space-y-3 ${isActive ? "bg-card" : "bg-muted/20 border-dashed"
+                                                        }`}
                                                 >
                                                     {/* Top Header Row */}
                                                     <div className="flex items-start justify-between gap-3">
@@ -1254,13 +1120,13 @@ export default function QuestionListPage() {
                                                     </div>
 
                                                     {/* Question Content */}
-                                                    <p className="text-sm font-medium text-foreground whitespace-pre-wrap break-words leading-relaxed">
+                                                    <p className={`text-sm font-medium text-foreground whitespace-pre-wrap break-words leading-relaxed ${dimClass}`}>
                                                         {q.content}
                                                     </p>
 
                                                     {/* Expandable Answers / Preview Section */}
                                                     {isExpanded && (
-                                                        <div className="pt-2 border-t">
+                                                        <div className={`pt-2 border-t ${dimClass}`}>
                                                             <QuestionAnswersPreview question={q} />
                                                             <div className="flex justify-center pt-2">
                                                                 <Button
@@ -1285,7 +1151,7 @@ export default function QuestionListPage() {
                                                     )}
 
                                                     {/* Metadata Footer: Created At & Updated At */}
-                                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t text-[11px] text-muted-foreground">
+                                                    <div className={`flex flex-wrap items-center justify-between gap-2 pt-2 border-t text-[11px] text-muted-foreground ${dimClass}`}>
                                                         <div className="flex flex-wrap items-center gap-4">
                                                             <span className="flex items-center gap-1.5">
                                                                 <Calendar className="size-3 text-muted-foreground/70" />

@@ -22,6 +22,7 @@ import { CodingWorkspace } from '@/pages/student/components/CodingWorkspace';
 import { EssayPopup } from '@/pages/student/components/EssayPopup';
 import { ExamIntegrityNotice, useExamIntegrity } from '@/hooks/useExamIntegrity'; // NEW (anti-cheat)
 import { FontSizeControl, useQuestionFontSize } from '@/hooks/useQuestionFontSize';
+import { SubmitConfirmOverlay } from '@/components/exam/SubmitConfirmOverlay';
 
 const attemptQueryKey = (examId: string) => ["anonymous-exam-attempt", examId] as const;
 
@@ -100,6 +101,8 @@ export default function AnonymousExamTakingPage() {
         onEntryPhotoSaved: () => void attemptQuery.refetch(),
     });
     const questionFont = useQuestionFontSize();
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const skipConfirmRef = useRef(false);
     const flagKey = attempt ? `anonymous-exam-flagged-${attempt.id}` : null;
 
     const submitMutation = useMutation({
@@ -308,12 +311,12 @@ export default function AnonymousExamTakingPage() {
             return;
         }
 
-        if (
-            requireConfirmation &&
-            !window.confirm('Bạn có chắc muốn nộp bài? Vui lòng kiểm tra lại các câu trả lời.')
-        ) {
+        if (requireConfirmation && !skipConfirmRef.current) {
+            // In-page dialog: a native confirm() would take the browser out of fullscreen.
+            setConfirmOpen(true);
             return;
         }
+        skipConfirmRef.current = false;
 
         submitStartedRef.current = true;
         timerRefs.current.forEach((timer) => window.clearTimeout(timer));
@@ -505,6 +508,20 @@ export default function AnonymousExamTakingPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
+            {confirmOpen && (
+                <SubmitConfirmOverlay
+                    title="Nộp bài?"
+                    message="Bạn có chắc muốn nộp bài? Vui lòng kiểm tra lại các câu trả lời."
+                    confirmLabel="Nộp bài"
+                    cancelLabel="Hủy"
+                    onCancel={() => setConfirmOpen(false)}
+                    onConfirm={() => {
+                        setConfirmOpen(false);
+                        skipConfirmRef.current = true;
+                        void submitCurrentAnswers(true);
+                    }}
+                />
+            )}
             <header className="sticky top-0 z-30 border-b bg-white/95 backdrop-blur">
                 <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
                     <div className="flex items-center gap-3">

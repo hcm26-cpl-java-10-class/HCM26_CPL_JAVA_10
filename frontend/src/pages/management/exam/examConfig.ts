@@ -83,6 +83,10 @@ export const getLocalDatetimeString = (date = new Date()) => {
 export const getFutureDatetimeString = (minutesAhead: number) =>
   getLocalDatetimeString(new Date(Date.now() + minutesAhead * 60 * 1000));
 
+/** Keep an enum value only when it is one of the known options (unknown / empty -> fallback). */
+const pickEnum = <T extends string>(value: string | null | undefined, allowed: Record<T, unknown>, fallback: T): T =>
+  value && value in allowed ? (value as T) : fallback;
+
 export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   startTime: toInputDateTime(exam.startTime),
   endTime: toInputDateTime(exam.endTime),
@@ -90,14 +94,14 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   shuffleQuestions: exam.shuffleQuestions ?? false,
   shuffleOptions: exam.shuffleOptions ?? false,
   showAnswersAfterExam: exam.showAnswersAfterExam ?? false,
-  category: exam.category ?? "ASSIGNMENT",
+  category: pickEnum(exam.category, EXAM_CATEGORY_LABEL, "ASSIGNMENT"),
   passScore: exam.passScore != null ? String(exam.passScore) : "",
   maxScore: exam.maxScore != null ? String(exam.maxScore) : "",
-  latePolicy: exam.latePolicy ?? "NOT_ALLOWED",
+  latePolicy: pickEnum(exam.latePolicy, LATE_POLICY_LABEL, "NOT_ALLOWED"),
   latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
   lateGraceMinutes: String(exam.lateGraceMinutes ?? 0),
-  resultVisibility: exam.resultVisibility ?? "IMMEDIATE",
-  examType: exam.examType ?? "MIXED",
+  resultVisibility: pickEnum(exam.resultVisibility, RESULT_VISIBILITY_LABEL, "IMMEDIATE"),
+  examType: pickEnum(exam.examType, EXAM_TYPE_LABEL, "MIXED"),
   accessCode: exam.accessCode ?? "",
   antiCheatEnabled: exam.antiCheatEnabled ?? false,
   detectTabSwitch: exam.detectTabSwitch ?? false,
@@ -141,17 +145,17 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
     shuffleQuestions: cfg.shuffleQuestions,
     shuffleOptions: cfg.shuffleOptions,
     showAnswersAfterExam: cfg.showAnswersAfterExam,
-    category: cfg.category,
+    category: cfg.category || undefined,
     passScore: cfg.passScore !== "" ? Number(cfg.passScore) : undefined,
     maxScore: cfg.maxScore !== "" ? Number(cfg.maxScore) : undefined,
-    latePolicy: cfg.latePolicy,
+    latePolicy: cfg.latePolicy || undefined,
     latePenaltyPercent:
       cfg.latePolicy === "ALLOWED_WITH_PENALTY" && cfg.latePenaltyPercent !== ""
         ? Number(cfg.latePenaltyPercent)
         : undefined,
     lateGraceMinutes: Number(cfg.lateGraceMinutes || 0),
-    resultVisibility: cfg.resultVisibility,
-    examType: cfg.examType,
+    resultVisibility: cfg.resultVisibility || undefined,
+    examType: cfg.examType || undefined,
     accessCode: cfg.accessCode ? cfg.accessCode.trim() : "",
     antiCheatEnabled: cfg.antiCheatEnabled,
     detectTabSwitch: cfg.detectTabSwitch,
