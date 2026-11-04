@@ -56,7 +56,9 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE",
                         "LESSON_READ",
-                        "EXAM_TAKE"
+                        "EXAM_TAKE",
+                        "PROGRAM_READ",
+                        "SUBJECT_READ"
                 )
         );
 
@@ -70,7 +72,9 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "LESSON_CREATE", "LESSON_READ", "LESSON_UPDATE", "LESSON_DELETE",
                         "EXAM_CREATE", "EXAM_READ", "EXAM_UPDATE", "EXAM_DELETE",
                         "QUESTION_CREATE", "QUESTION_READ", "QUESTION_UPDATE", "QUESTION_DELETE",
-                        "INVITATION_CREATE", "INVITATION_READ", "INVITATION_UPDATE", "INVITATION_DELETE"
+                        "INVITATION_CREATE", "INVITATION_READ", "INVITATION_UPDATE", "INVITATION_DELETE",
+                        "PROGRAM_READ", "PROGRAM_CREATE", "PROGRAM_UPDATE", "PROGRAM_DELETE",
+                        "SUBJECT_READ", "SUBJECT_CREATE", "SUBJECT_UPDATE", "SUBJECT_DELETE"
                 )
         );
 

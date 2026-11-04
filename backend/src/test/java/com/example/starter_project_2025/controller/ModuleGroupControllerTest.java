@@ -31,7 +31,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 //@WebMvcTest(ModuleGroupController.class)
 @WebMvcTest(value = ModuleGroupController.class, excludeAutoConfiguration = {
         org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration.class
+        org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration.class,
+        org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration.class,
+        org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration.class
 })
 @AutoConfigureMockMvc(addFilters = false) // Quan trọng: Dòng này sẽ tắt các Filter như JwtAuthenticationFilter
 public class ModuleGroupControllerTest {
@@ -54,6 +56,12 @@ public class ModuleGroupControllerTest {
 
     @MockBean
     private ImportService importService;
+
+    @MockBean
+    private RefreshTokenService refreshTokenService;
+
+    @MockBean
+    private com.example.starter_project_2025.security.UserDetailsServiceImpl userDetailsService;
 
     private ModuleGroupDTO mockDto;
 
