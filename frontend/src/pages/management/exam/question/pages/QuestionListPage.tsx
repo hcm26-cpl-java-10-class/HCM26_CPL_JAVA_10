@@ -11,6 +11,7 @@ import {
     EyeOff,
     Folder,
     FolderOpen,
+    Filter,
     FolderX,
     Layers,
     LayoutGrid,
@@ -30,6 +31,7 @@ import { ProTable } from "@/components/datatable/ProTable";
 import ActionButton from "@/components/datatable/common/ActionButton";
 import { PermissionGate } from "@/components/PermissionGate";
 import { useProTable } from "@/components/datatable/hook/useProTable";
+import { ToolbarActions } from "@/components/datatable/toolbar/ToolbarActions";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { normalizeEntityActionPath, resolveEntityActionPath } from "@/router/entity-action.utils";
@@ -37,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     Dialog,
     DialogContent,
@@ -242,6 +245,12 @@ export default function QuestionListPage() {
     const [selectedTopic, setSelectedTopic] = useState<string>(initialTopic);
     const [topicSearch, setTopicSearch] = useState("");
 
+    // Date range filters (yyyy-mm-dd)
+    const [createdFrom, setCreatedFrom] = useState("");
+    const [createdTo, setCreatedTo] = useState("");
+    const [updatedFrom, setUpdatedFrom] = useState("");
+    const [updatedTo, setUpdatedTo] = useState("");
+
     // Pagination for Card View
     const [cardPage, setCardPage] = useState(0);
     const [cardPageSize, setCardPageSize] = useState(10);
@@ -331,13 +340,30 @@ export default function QuestionListPage() {
             list = list.filter((item) => (item.topic || "").trim().toLowerCase() === topicLower);
         }
 
+        // 5. Created At / Updated At date ranges
+        const inRange = (value: string | null | undefined, from: string, to: string) => {
+            if (!from && !to) return true;
+            if (!value) return false;
+            const t = new Date(value).getTime();
+            if (isNaN(t)) return false;
+            if (from && t < new Date(`${from}T00:00:00`).getTime()) return false;
+            if (to && t > new Date(`${to}T23:59:59.999`).getTime()) return false;
+            return true;
+        };
+        if (createdFrom || createdTo) {
+            list = list.filter((item) => inRange(item.createdAt, createdFrom, createdTo));
+        }
+        if (updatedFrom || updatedTo) {
+            list = list.filter((item) => inRange(item.updatedAt || item.createdAt, updatedFrom, updatedTo));
+        }
+
         return list;
-    }, [allQuestions, keyword, selectedTypes, selectedDifficulties, selectedTopic]);
+    }, [allQuestions, keyword, selectedTypes, selectedDifficulties, selectedTopic, createdFrom, createdTo, updatedFrom, updatedTo]);
 
     // Reset pagination when filter criteria change
     useEffect(() => {
         setCardPage(0);
-    }, [keyword, selectedTypes, selectedDifficulties, selectedTopic]);
+    }, [keyword, selectedTypes, selectedDifficulties, selectedTopic, createdFrom, createdTo, updatedFrom, updatedTo]);
 
     // Card View Paged Data
     const cardTotalPages = Math.max(1, Math.ceil(filteredQuestions.length / cardPageSize));
@@ -381,7 +407,7 @@ export default function QuestionListPage() {
             loading: isLoadingSummary,
             isFetching: isLoadingSummary,
             refetch: async () => {
-                await Promise.all([table.refetch?.(), refetchQuestions?.()]);
+                await refetchQuestions();
             },
         };
     }, [table, filteredQuestions, cardPage, cardPageSize, isLoadingSummary, refetchQuestions]);
@@ -422,13 +448,24 @@ export default function QuestionListPage() {
         setSelectedTypes(new Set());
         setSelectedDifficulties(new Set());
         setSelectedTopic("");
+        setCreatedFrom("");
+        setCreatedTo("");
+        setUpdatedFrom("");
+        setUpdatedTo("");
         const newParams = new URLSearchParams(searchParams);
         newParams.delete("topic");
         setSearchParams(newParams, { replace: true });
     };
 
     const hasActiveFilters = Boolean(
-        keyword || selectedTypes.size > 0 || selectedDifficulties.size > 0 || selectedTopic
+        keyword ||
+        selectedTypes.size > 0 ||
+        selectedDifficulties.size > 0 ||
+        selectedTopic ||
+        createdFrom ||
+        createdTo ||
+        updatedFrom ||
+        updatedTo
     );
 
     const togglePreview = (id: number | string) => {
@@ -446,13 +483,25 @@ export default function QuestionListPage() {
         setExpandedIds(allExpanded ? new Set() : new Set(filteredQuestions.map((q) => q.id)));
     };
 
-    // Toggle Active Status
+    // Toggle Active Status (update directly, card view data comes from the "all-summary" query)
     const handleToggleStatus = async (id: number | string, currentActive: boolean) => {
+        const row = allQuestions.find((q) => q.id === id);
+        if (!row) return;
+        const nextActive = !currentActive;
+
+        queryClient.setQueryData(["question", "all-summary"], (old: any) =>
+            old?.content
+                ? { ...old, content: old.content.map((q: QuestionDTO) => (q.id === id ? { ...q, isActive: nextActive } : q)) }
+                : old
+        );
+
         try {
-            await table.patchField(id, "isActive", !currentActive);
-            await refetchQuestions();
-            toast.success("Updated question status.");
+            const { createdAt, updatedAt, ...payload } = row as any;
+            await questionApi.update(id as any, { ...payload, isActive: nextActive } as any);
+            await queryClient.invalidateQueries({ queryKey: ["question"] });
+            toast.success(nextActive ? "Question activated." : "Question deactivated.");
         } catch {
+            await refetchQuestions();
             toast.error("Failed to update status.");
         }
     };
@@ -568,6 +617,241 @@ export default function QuestionListPage() {
         return topics.filter((t) => t.toLowerCase().includes(q));
     }, [topics, topicSearch]);
 
+    // Filters popover + search box on the top bar (bound to the same state as the sidebar)
+    const activeFilterCount =
+        selectedTypes.size +
+        selectedDifficulties.size +
+        (selectedTopic ? 1 : 0) +
+        (createdFrom || createdTo ? 1 : 0) +
+        (updatedFrom || updatedTo ? 1 : 0);
+
+    const dateInputClass = "h-8 px-2 text-[11px] bg-muted/30 dark:[color-scheme:dark]";
+
+    const filtersPopover = (
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button type="button" variant="outline" className="h-9 gap-1.5">
+                    <Filter size={14} />
+                    Filters
+                    {activeFilterCount > 0 && (
+                        <Badge className="h-5 min-w-5 px-1.5 text-xs rounded-full ml-0.5">{activeFilterCount}</Badge>
+                    )}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-80 max-h-[70vh] overflow-y-auto space-y-3">
+                <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold">Filters</span>
+                    {hasActiveFilters && (
+                        <button type="button" onClick={handleClearAllFilters} className="text-xs text-primary hover:underline">
+                            Clear all
+                        </button>
+                    )}
+                </div>
+
+                <div className="space-y-1.5">
+                    <span className="text-xs font-semibold text-muted-foreground block">Question Type</span>
+                    {(["MULTIPLE_CHOICE", "CODING", "ESSAY"] as QuestionType[]).map((t) => (
+                        <label key={t} className="flex items-center justify-between text-xs cursor-pointer">
+                            <span className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedTypes.has(t)}
+                                    onChange={() => toggleType(t)}
+                                    className="size-3.5 rounded border-input accent-primary cursor-pointer"
+                                />
+                                {TYPE_LABEL[t]}
+                            </span>
+                            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">{typeCounts[t] ?? 0}</Badge>
+                        </label>
+                    ))}
+                </div>
+
+                <div className="space-y-1.5 pt-2 border-t">
+                    <span className="text-xs font-semibold text-muted-foreground block">Difficulty</span>
+                    {(["EASY", "MEDIUM", "HARD"] as QuestionDifficulty[]).map((d) => (
+                        <label key={d} className="flex items-center justify-between text-xs cursor-pointer">
+                            <span className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedDifficulties.has(d)}
+                                    onChange={() => toggleDifficulty(d)}
+                                    className="size-3.5 rounded border-input accent-primary cursor-pointer"
+                                />
+                                <span className={`font-medium ${DIFFICULTY_STYLE[d].text}`}>{DIFFICULTY_LABEL[d]}</span>
+                            </span>
+                            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">{difficultyCounts[d] ?? 0}</Badge>
+                        </label>
+                    ))}
+                </div>
+
+                <div className="space-y-1.5 pt-2 border-t">
+                    <span className="text-xs font-semibold text-muted-foreground block">Topic</span>
+                    <Select
+                        value={selectedTopic || "__all__"}
+                        onValueChange={(v) => {
+                            const next = v === "__all__" ? "" : v;
+                            if (next !== selectedTopic) handleSelectTopic(next || selectedTopic);
+                        }}
+                    >
+                        <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="__all__">All topics</SelectItem>
+                            {topics.map((t) => (
+                                <SelectItem key={t} value={t}>{t}</SelectItem>
+                            ))}
+                            {noTopicCount > 0 && <SelectItem value="Uncategorized">Uncategorized</SelectItem>}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="space-y-1.5 pt-2 border-t">
+                    <span className="text-xs font-semibold text-muted-foreground block">Created At</span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <Input type="date" value={createdFrom} max={createdTo || undefined} onChange={(e) => setCreatedFrom(e.target.value)} className={dateInputClass} aria-label="Created from" />
+                        <Input type="date" value={createdTo} min={createdFrom || undefined} onChange={(e) => setCreatedTo(e.target.value)} className={dateInputClass} aria-label="Created to" />
+                    </div>
+                    <span className="text-xs font-semibold text-muted-foreground block pt-1">Updated At</span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <Input type="date" value={updatedFrom} max={updatedTo || undefined} onChange={(e) => setUpdatedFrom(e.target.value)} className={dateInputClass} aria-label="Updated from" />
+                        <Input type="date" value={updatedTo} min={updatedFrom || undefined} onChange={(e) => setUpdatedTo(e.target.value)} className={dateInputClass} aria-label="Updated to" />
+                    </div>
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+
+    const searchBox = (
+        <div className="relative w-56 xl:w-72">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+                placeholder="Search..."
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                className="h-9 pl-8 pr-8"
+            />
+            {keyword && (
+                <button
+                    type="button"
+                    onClick={() => setKeyword("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label="Clear search"
+                >
+                    <X className="h-3.5 w-3.5" />
+                </button>
+            )}
+        </div>
+    );
+
+    const filterSummary = (
+        <>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-semibold text-foreground">
+                    {filteredQuestions.length} {filteredQuestions.length === 1 ? "question" : "questions"}
+                </span>
+                {selectedTopic && (
+                    <Badge variant="outline" className="text-xs font-medium capitalize flex items-center gap-1">
+                        <span>Topic: {selectedTopic}</span>
+                        <X className="size-3 cursor-pointer hover:text-foreground" onClick={() => handleSelectTopic("")} />
+                    </Badge>
+                )}
+                {Array.from(selectedTypes).map((t) => (
+                    <Badge key={t} variant="secondary" className="text-xs font-medium flex items-center gap-1">
+                        <span>{TYPE_LABEL[t]}</span>
+                        <X className="size-3 cursor-pointer hover:text-foreground" onClick={() => toggleType(t)} />
+                    </Badge>
+                ))}
+                {Array.from(selectedDifficulties).map((d) => (
+                    <Badge key={d} variant="secondary" className="text-xs font-medium flex items-center gap-1">
+                        <span className={DIFFICULTY_STYLE[d].text}>{DIFFICULTY_LABEL[d]}</span>
+                        <X className="size-3 cursor-pointer hover:text-foreground" onClick={() => toggleDifficulty(d)} />
+                    </Badge>
+                ))}
+                {keyword && (
+                    <Badge variant="outline" className="text-xs font-medium flex items-center gap-1">
+                        <span>Search: "{keyword}"</span>
+                        <X className="size-3 cursor-pointer hover:text-foreground" onClick={() => setKeyword("")} />
+                    </Badge>
+                )}
+                {(createdFrom || createdTo) && (
+                    <Badge variant="outline" className="text-xs font-medium flex items-center gap-1">
+                        <span>Created: {createdFrom || "…"} → {createdTo || "…"}</span>
+                        <X className="size-3 cursor-pointer hover:text-foreground" onClick={() => { setCreatedFrom(""); setCreatedTo(""); }} />
+                    </Badge>
+                )}
+                {(updatedFrom || updatedTo) && (
+                    <Badge variant="outline" className="text-xs font-medium flex items-center gap-1">
+                        <span>Updated: {updatedFrom || "…"} → {updatedTo || "…"}</span>
+                        <X className="size-3 cursor-pointer hover:text-foreground" onClick={() => { setUpdatedFrom(""); setUpdatedTo(""); }} />
+                    </Badge>
+                )}
+                {hasActiveFilters && (
+                    <button
+                        onClick={handleClearAllFilters}
+                        className="text-xs text-primary hover:underline ml-1"
+                    >
+                        Clear all
+                    </button>
+                )}
+            </div>
+
+        </>
+    );
+
+    const previewAllButton = (
+        <>
+
+
+            <Button
+                type="button"
+                variant={allExpanded ? "default" : "outline"}
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                onClick={toggleAllPreview}
+                disabled={filteredQuestions.length === 0}
+            >
+                {allExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                {allExpanded ? "Hide all answers" : "Preview all"}
+            </Button>
+
+        </>
+    );
+
+    const viewSwitcher = (
+        <>
+            {/* View Mode Switcher: Card vs Table */}
+            <div className="flex items-center bg-muted/40 p-1 rounded-lg border text-xs font-medium">
+                <button
+                    type="button"
+                    onClick={() => setViewMode("card")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${viewMode === "card"
+                        ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                        }`}
+                    title="View as Cards"
+                >
+                    <LayoutGrid className="size-3.5" />
+                    <span>Card</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setViewMode("table")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${viewMode === "table"
+                        ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                        }`}
+                    title="View as Table"
+                >
+                    <TableIcon className="size-3.5" />
+                    <span>Table</span>
+                </button>
+            </div>
+
+        </>
+    );
+
     return (
         <MainLayout pathName={{ questions: "Questions" }}>
             <div className="flex flex-1 min-h-0 gap-4 h-[calc(100vh-6.5rem)]">
@@ -675,6 +959,49 @@ export default function QuestionListPage() {
                                         </label>
                                     );
                                 })}
+                            </div>
+                        </div>
+
+                        {/* 3b. Created / Updated date range */}
+                        <div className="space-y-2 pt-2 border-t">
+                            <span className="text-xs font-semibold text-muted-foreground block">Created At</span>
+                            <div className="grid grid-cols-2 gap-1.5">
+                                <Input
+                                    type="date"
+                                    value={createdFrom}
+                                    max={createdTo || undefined}
+                                    onChange={(e) => setCreatedFrom(e.target.value)}
+                                    className="h-8 px-2 text-[11px] bg-muted/30 dark:[color-scheme:dark]"
+                                    aria-label="Created from"
+                                />
+                                <Input
+                                    type="date"
+                                    value={createdTo}
+                                    min={createdFrom || undefined}
+                                    onChange={(e) => setCreatedTo(e.target.value)}
+                                    className="h-8 px-2 text-[11px] bg-muted/30 dark:[color-scheme:dark]"
+                                    aria-label="Created to"
+                                />
+                            </div>
+
+                            <span className="text-xs font-semibold text-muted-foreground block pt-1">Updated At</span>
+                            <div className="grid grid-cols-2 gap-1.5">
+                                <Input
+                                    type="date"
+                                    value={updatedFrom}
+                                    max={updatedTo || undefined}
+                                    onChange={(e) => setUpdatedFrom(e.target.value)}
+                                    className="h-8 px-2 text-[11px] bg-muted/30 dark:[color-scheme:dark]"
+                                    aria-label="Updated from"
+                                />
+                                <Input
+                                    type="date"
+                                    value={updatedTo}
+                                    min={updatedFrom || undefined}
+                                    onChange={(e) => setUpdatedTo(e.target.value)}
+                                    className="h-8 px-2 text-[11px] bg-muted/30 dark:[color-scheme:dark]"
+                                    aria-label="Updated to"
+                                />
                             </div>
                         </div>
 
@@ -810,93 +1137,24 @@ export default function QuestionListPage() {
                 {/* RIGHT COLUMN: Question Library Workspace */}
                 <main className="flex-1 min-w-0 flex flex-col bg-card border rounded-xl p-4 shadow-sm overflow-hidden">
 
-                    {/* Top Action Toolbar */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b">
-                        {/* Left: Active Filters indicator */}
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <span className="font-semibold text-foreground">
-                                {filteredQuestions.length} {filteredQuestions.length === 1 ? "question" : "questions"}
-                            </span>
-                            {selectedTopic && (
-                                <Badge variant="outline" className="text-xs font-medium capitalize flex items-center gap-1">
-                                    <span>Topic: {selectedTopic}</span>
-                                    <X className="size-3 cursor-pointer hover:text-foreground" onClick={() => handleSelectTopic("")} />
-                                </Badge>
-                            )}
-                            {Array.from(selectedTypes).map((t) => (
-                                <Badge key={t} variant="secondary" className="text-xs font-medium flex items-center gap-1">
-                                    <span>{TYPE_LABEL[t]}</span>
-                                    <X className="size-3 cursor-pointer hover:text-foreground" onClick={() => toggleType(t)} />
-                                </Badge>
-                            ))}
-                            {Array.from(selectedDifficulties).map((d) => (
-                                <Badge key={d} variant="secondary" className="text-xs font-medium flex items-center gap-1">
-                                    <span className={DIFFICULTY_STYLE[d].text}>{DIFFICULTY_LABEL[d]}</span>
-                                    <X className="size-3 cursor-pointer hover:text-foreground" onClick={() => toggleDifficulty(d)} />
-                                </Badge>
-                            ))}
-                            {keyword && (
-                                <Badge variant="outline" className="text-xs font-medium flex items-center gap-1">
-                                    <span>Search: "{keyword}"</span>
-                                    <X className="size-3 cursor-pointer hover:text-foreground" onClick={() => setKeyword("")} />
-                                </Badge>
-                            )}
-                            {hasActiveFilters && (
-                                <button
-                                    onClick={handleClearAllFilters}
-                                    className="text-xs text-primary hover:underline ml-1"
-                                >
-                                    Clear all
-                                </button>
-                            )}
+                    {/* Single top bar shared by Card and Table view (same position in both) */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b min-h-[3.25rem]">
+                        <div className="flex flex-wrap items-center gap-3">
+                            {viewSwitcher}
+                            {filtersPopover}
+                            {searchBox}
+                            {filterSummary}
                         </div>
 
-                        {/* Right: View Mode Toggle & Actions */}
                         <div className="flex items-center gap-2">
-                            {/* Preview all answers (card view) */}
-                            {viewMode === "card" && (
-                                <Button
-                                    type="button"
-                                    variant={allExpanded ? "default" : "outline"}
-                                    size="sm"
-                                    className="h-8 gap-1.5 text-xs"
-                                    onClick={toggleAllPreview}
-                                    disabled={filteredQuestions.length === 0}
-                                >
-                                    {allExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                                    {allExpanded ? "Hide all answers" : "Preview all"}
-                                </Button>
+                            {viewMode === "card" ? (
+                                <>
+                                    {previewAllButton}
+                                    {!browseMode && headerActions}
+                                </>
+                            ) : (
+                                !browseMode && <ToolbarActions table={effectiveTable} headerActions={headerActions} />
                             )}
-
-                            {/* View Mode Switcher: Card vs Table */}
-                            <div className="flex items-center bg-muted/40 p-1 rounded-lg border text-xs font-medium">
-                                <button
-                                    type="button"
-                                    onClick={() => setViewMode("card")}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${viewMode === "card"
-                                        ? "bg-primary text-primary-foreground shadow-xs font-semibold"
-                                        : "text-muted-foreground hover:text-foreground"
-                                        }`}
-                                    title="View as Cards"
-                                >
-                                    <LayoutGrid className="size-3.5" />
-                                    <span>Card</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setViewMode("table")}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${viewMode === "table"
-                                        ? "bg-primary text-primary-foreground shadow-xs font-semibold"
-                                        : "text-muted-foreground hover:text-foreground"
-                                        }`}
-                                    title="View as Table"
-                                >
-                                    <TableIcon className="size-3.5" />
-                                    <span>Table</span>
-                                </button>
-                            </div>
-
-                            {!browseMode && headerActions}
                         </div>
                     </div>
 
@@ -918,6 +1176,7 @@ export default function QuestionListPage() {
                                             return (
                                                 <div
                                                     key={q.id}
+                                                    id={`question-card-${q.id}`}
                                                     className="rounded-xl border bg-card p-4 hover:border-border/80 transition-all shadow-xs space-y-3"
                                                 >
                                                     {/* Top Header Row */}
@@ -1004,6 +1263,25 @@ export default function QuestionListPage() {
                                                     {isExpanded && (
                                                         <div className="pt-2 border-t">
                                                             <QuestionAnswersPreview question={q} />
+                                                            <div className="flex justify-center pt-2">
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-7 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                                                                    onClick={() => {
+                                                                        togglePreview(q.id);
+                                                                        requestAnimationFrame(() =>
+                                                                            document
+                                                                                .getElementById(`question-card-${q.id}`)
+                                                                                ?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    <ChevronUp className="size-3.5" />
+                                                                    Collapse
+                                                                </Button>
+                                                            </div>
                                                         </div>
                                                     )}
 
@@ -1088,6 +1366,7 @@ export default function QuestionListPage() {
                                     mode={browseMode ? "browse" : "default"}
                                     headerActions={browseMode ? undefined : headerActions}
                                     hideActions={browseMode}
+                                    hideToolbar
                                     onEdit={browseMode ? undefined : onEdit}
                                     renderRowActions={browseMode ? undefined : renderTableRowActions}
                                     renderCard={entityConfig.cardRenderer}
