@@ -37,6 +37,10 @@ export interface InvitationDTO extends BaseDTO {
     examDurationMinutes?: number;
     examMaxAttempts?: number;
     examHasPassword?: boolean;
+    /** Nguồn tạo lời mời: MANUAL hoặc COURSE. */
+    sourceType?: string | null;
+    /** Lớp (course) dùng làm nguồn khi tạo lời mời hàng loạt. */
+    sourceCourseId?: number | null;
 }
 
 export interface InvitationCreateRequest {
@@ -63,6 +67,36 @@ export interface BatchInvitationRequest {
     expiresAt?: string;
 }
 
+export type InvitationBulkStatus = "SUCCESS" | "SKIPPED" | "FAILED";
+
+/** Kết quả xử lý lời mời của một học viên trong bulk invite theo lớp. */
+export interface InvitationBulkItemResult {
+    userId?: number | null;
+    userEmail?: string | null;
+    userFullName?: string | null;
+    invitationId?: number | null;
+    status: InvitationBulkStatus;
+    reason?: string | null;
+}
+
+/** Học viên thuộc một lớp (course) — nguồn danh sách để mời dự thi hàng loạt. */
+export interface CourseStudentDTO {
+    id: number;
+    email: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    fullName?: string | null;
+}
+
+/** Yêu cầu mời dự thi hàng loạt theo lớp. `userIds` rỗng = mời toàn bộ lớp. */
+export interface GroupInvitationRequest {
+    courseId: number;
+    userIds?: number[];
+    note?: string;
+    expiresAt?: string;
+    sendEmail?: boolean;
+}
+
 export interface BatchInvitationResponse {
     examId?: number;
     totalRequested: number;
@@ -70,7 +104,7 @@ export interface BatchInvitationResponse {
     skippedCount?: number;
     failedCount?: number;
     failureCount?: number;
-    items?: BatchInvitationItemResult[];
+    items?: InvitationBulkItemResult[];
     successfulInvitations?: InvitationDTO[];
     errors?: string[];
 }
@@ -92,6 +126,8 @@ export interface AnonymousAccessResponse {
     valid: boolean;
     accessAttemptsRemaining?: number;
     message?: string;
+    /** Backend có thể không trả về (endpoint public chỉ trả kết quả hợp lệ/không). */
+    studentName?: string | null;
 }
 
 export interface AnonymousSessionRequest {

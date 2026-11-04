@@ -131,6 +131,17 @@ public class CourseEnrollmentController {
         return userRepository.searchActiveStudents(normalizedSearch, pageable);
     }
 
+    /**
+     * Danh sách học viên của một lớp (course) — nguồn để mời dự thi hàng loạt theo lớp.
+     */
+    @GetMapping("/courses/{courseId}/students")
+    @PreAuthorize("hasAuthority('COURSE_READ') and hasAuthority('INVITATION_READ')")
+    public List<CourseStudentDTO> getCourseStudents(
+            @PathVariable Long courseId
+    ) {
+        return enrollmentService.getStudentsByCourse(courseId);
+    }
+
     @GetMapping("/students/{studentId}/courses")
     @PreAuthorize("hasAuthority('DEPARTMENT_READ')")
     public List<CourseEnrollmentDTO> getStudentCourses(

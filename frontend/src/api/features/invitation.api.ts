@@ -6,6 +6,8 @@ import type {
     AnonymousSessionResponse,
     BatchInvitationRequest,
     BatchInvitationResponse,
+    CourseStudentDTO,
+    GroupInvitationRequest,
     InvitationCreateRequest,
     InvitationDTO,
     InvitationStatus,
@@ -40,6 +42,26 @@ export const invitationApi = {
         const response = await axiosInstance.post<BatchInvitationResponse>(
             `/exams/${examId}/invitations/batch`,
             request,
+        );
+        return response.data;
+    },
+
+    /** Mời dự thi hàng loạt theo lớp (course). */
+    createByCourse: async (
+        examId: number,
+        request: GroupInvitationRequest,
+    ): Promise<BatchInvitationResponse> => {
+        const response = await axiosInstance.post<BatchInvitationResponse>(
+            `/exams/${examId}/invitations/by-course`,
+            request,
+        );
+        return response.data;
+    },
+
+    /** Danh sách học viên (active, role STUDENT) đã đăng ký một lớp. */
+    getCourseStudents: async (courseId: number): Promise<CourseStudentDTO[]> => {
+        const response = await axiosInstance.get<CourseStudentDTO[]>(
+            `/enrollments/courses/${courseId}/students`,
         );
         return response.data;
     },
