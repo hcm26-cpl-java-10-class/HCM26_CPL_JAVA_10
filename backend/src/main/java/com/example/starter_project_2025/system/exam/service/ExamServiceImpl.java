@@ -9,9 +9,14 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -124,6 +129,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 
 		Exam exam = examRepository.lockForAttemptStart(id)
 				.orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+		checkOwnership(exam);
 
 		beforeDelete(exam);
 
@@ -257,8 +263,52 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	}
 
 	private Exam findExam(Long examId) {
-		return examRepository.findById(examId)
+		Exam exam = examRepository.findById(examId)
 				.orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+		checkOwnership(exam);
+		return exam;
+	}
+
+	/** Giao vien (khong phai ADMIN) chi duoc thay/quan ly de thi do chinh minh tao; ADMIN va vai tro khac khong bi gioi han. */
+	private Long ownerScopeUserId() {
+		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+		if (auth != null && auth.getPrincipal() instanceof UserPrincipal principal
+				&& examAccessGuard.isOwnerScoped(principal)) {
+			return principal.getUser().getId();
+		}
+		return null;
+	}
+
+	/** De cua nguoi khac duoc coi nhu khong ton tai (khong lo thong tin). */
+	private void checkOwnership(Exam exam) {
+		Long scope = ownerScopeUserId();
+		if (scope != null && !Objects.equals(exam.getCreatedBy(), scope)) {
+			throw new ResourceNotFoundException("Exam not found");
+		}
+	}
+
+	@Override
+	public Page<ExamDTO> getAll(Pageable pageable, String search, ExamFilter filter) {
+		Long scope = ownerScopeUserId();
+		if (scope != null) {
+			if (filter == null) {
+				filter = new ExamFilter();
+			}
+			filter.setCreatedBy(scope);
+		}
+		return super.getAll(pageable, search, filter);
+	}
+
+	@Override
+	public ExamDTO getById(Long id) {
+		examRepository.findById(id).ifPresent(this::checkOwnership);
+		return super.getById(id);
+	}
+
+	@Override
+	public ExamDTO update(Long id, ExamDTO request) {
+		examRepository.findById(id).ifPresent(this::checkOwnership);
+		return super.update(id, request);
 	}
 
 	private void deleteExamCopies(Set<Question> before, Set<Question> after) {

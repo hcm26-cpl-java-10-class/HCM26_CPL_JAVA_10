@@ -54,6 +54,18 @@ public class ExamAccessGuard {
         }
     }
 
+    /**
+     * Giao vien (TEACHER) khong phai ADMIN: chi duoc thay/quan ly de thi do chinh minh tao.
+     * ADMIN thay tat ca; cac vai tro khac (vd. sinh vien) khong bi gioi han o day.
+     */
+    public boolean isOwnerScoped(UserPrincipal principal) {
+        if (principal == null || principal.getUser() == null || principal.getUser().getRoles() == null) {
+            return false;
+        }
+        boolean teacher = principal.getUser().getRoles().stream().anyMatch(r -> "TEACHER".equals(r.getName()));
+        return teacher && !isAdmin(principal);
+    }
+
     public boolean isAdmin(UserPrincipal principal) {
         if (principal == null || principal.getUser() == null || principal.getUser().getRoles() == null) {
             return false;
