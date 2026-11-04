@@ -10,6 +10,7 @@ import {
     traineeService,
 } from "@/api/features/trainee.api";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
+import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -588,7 +589,16 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                                         <TableCell className="px-3 py-3 text-sm text-foreground">{index + 1}</TableCell>
                                         <TableCell className="px-3 py-3 text-sm font-medium text-[#3b4cb8] dark:text-blue-300">
                                             <div className="flex items-center gap-2">
-                                                <span>{trainee.fullName || "—"}</span>
+                                                <TooltipWrapper content="View Profile">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenView(trainee)}
+                                                        className="cursor-pointer text-left font-medium text-[#3b4cb8] transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring dark:text-blue-300"
+                                                        title="View Profile"
+                                                    >
+                                                        {trainee.fullName || "—"}
+                                                    </button>
+                                                </TooltipWrapper>
                                                 {isNewRow ? (
                                                     <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                                                         New

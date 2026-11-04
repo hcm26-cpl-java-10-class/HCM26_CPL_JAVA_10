@@ -315,6 +315,14 @@ describe("ClassDetailView & TraineeListTab", () => {
         expect(within(profileDialog).getByText("phuongbinh.conan@gmail.com")).toBeInTheDocument();
         await user.click(within(profileDialog).getAllByRole("button", { name: "Close" })[0]);
 
+        // Clicking directly on Full Name button opens View Profile dialog
+        const traineeNameBtn = screen.getByRole("button", { name: "Trần Việt Anh" });
+        expect(traineeNameBtn).toHaveAttribute("title", "View Profile");
+        await user.click(traineeNameBtn);
+        const nameProfileDialog = await screen.findByRole("dialog", { name: "Trainee Profile" });
+        expect(within(nameProfileDialog).getByText("anhviettran357@gmail.com")).toBeInTheDocument();
+        await user.click(within(nameProfileDialog).getAllByRole("button", { name: "Close" })[0]);
+
         // Bulk selection: Export Selected and Delete Selected start disabled
         const exportSelectedBtn = screen.getByRole("button", { name: /export selected/i });
         const deleteSelectedBtn = screen.getByRole("button", { name: /delete selected/i });
