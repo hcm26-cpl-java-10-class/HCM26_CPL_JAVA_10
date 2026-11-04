@@ -25,6 +25,13 @@ export type SidebarModuleGroup = ModuleGroupDTO & {
     hiddenInMenu?: boolean;
 };
 
+// Display-only renames for menu group names (DB data is untouched).
+const GROUP_NAME_OVERRIDES: Record<string, string> = {
+    "Course Management": "Course Online",
+    "COURSE_ONLINE": "Course Online",
+    "Course Online": "Course Online",
+};
+
 const menuPagination: Pagination = {
     page: 0,
     size: 9999,
@@ -160,6 +167,11 @@ export function useActiveModuleGroups(enabled = true) {
             }
 
             return groups
+                .map((group) => ({
+                    ...group,
+                    name: (group.name && GROUP_NAME_OVERRIDES[group.name]) || group.name,
+                    modules: groupedModules[group.id ?? ""] ?? [],
+                }))
                 .map((group) => {
                     const groupId = String(group.id ?? "");
                     const groupMods = (groupedModules[groupId] ?? [])
