@@ -10,7 +10,9 @@ import {
     Check,
     ChevronDown,
     Copy,
-    ExternalLink,
+    Download,
+    LayoutGrid,
+    Table2,
     Layers3,
     ListChecks,
     Search,
@@ -18,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { MainLayout } from "@/components/layout/MainLayout";
+import SyllabusLearningPlanTable, { ResourceAction } from "./SyllabusLearningPlanTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,9 +114,11 @@ function InfoField({
 }
 
 function MaterialList({
-                          items,
+                          items, syllabusId, onDownload,
                       }: {
     items: Material[];
+    syllabusId: number;
+    onDownload: (key: string, name: string) => Promise<void>;
 }) {
     if (!items.length) {
         return (
@@ -171,21 +176,7 @@ function MaterialList({
                         )}
 
                         {link ? (
-                            <Button
-                                asChild
-                                size="sm"
-                                variant="outline"
-                                className="mt-3 gap-2"
-                            >
-                                <a
-                                    href={link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    Open resource
-                                    <ExternalLink className="size-3.5" />
-                                </a>
-                            </Button>
+                            <ResourceAction material={material} syllabusId={syllabusId} onDownload={onDownload} />
                         ) : (
                             <p className="mt-3 text-xs text-muted-foreground">
                                 Resource link unavailable.
@@ -226,6 +217,8 @@ export default function StudentSyllabusPage() {
 
     const [tab, setTab] = useState("overview");
     const [search, setSearch] = useState("");
+    const [planView, setPlanView] = useState<"cards" | "table">("cards");
+    const [downloading, setDownloading] = useState(false);
 
     const [openById, setOpenById] = useState<
         Record<number, boolean>
@@ -262,6 +255,7 @@ export default function StudentSyllabusPage() {
         (a, b) => a.orderIndex - b.orderIndex
     );
 
+    const cloById = new Map(clos.map((clo) => [clo.id, clo]));
     const materials = syllabus?.materials ?? [];
 
     const generalMaterials = materials.filter(
@@ -272,6 +266,11 @@ export default function StudentSyllabusPage() {
     const firstTopicId = sections[0]?.topics[0]?.id;
 
     const searchText = search.trim().toLocaleLowerCase();
+    const topicMatchesClo = (topic: Topic) => (topic.cloIds ?? []).some((cloId) => {
+        const clo = cloById.get(cloId);
+        return clo != null &&
+            `${clo.code} ${clo.details}`.toLocaleLowerCase().includes(searchText);
+    });
 
     const filteredSections = sections.filter(
         (section) =>
@@ -291,6 +290,7 @@ export default function StudentSyllabusPage() {
                     topicName(topic)
                         .toLocaleLowerCase()
                         .includes(searchText) ||
+                    topicMatchesClo(topic) ||
                     materials.some(
                         (material) =>
                             (material.topicId === topic.id ||
@@ -329,6 +329,41 @@ export default function StudentSyllabusPage() {
         }
     }
 
+    function saveBlob(blob: Blob, fileName: string) {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = fileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    }
+
+    async function downloadFile(key: string, fileName: string) {
+        try {
+            const blob = await studentSyllabusApi.downloadFile(syllabusId, key);
+            saveBlob(blob, fileName);
+        } catch {
+            toast.error("Unable to download learning file.");
+        }
+    }
+
+    async function downloadAll() {
+        if (!syllabus || downloading) return;
+        setDownloading(true);
+        try {
+            const archive = await studentSyllabusApi.downloadArchive(syllabusId);
+            const safeCode = syllabus.code.replace(/[^a-zA-Z0-9_-]/g, "_");
+            saveBlob(archive, `${safeCode}_student_materials.zip`);
+            toast.success("Materials archive downloaded.");
+        } catch {
+            toast.error("Unable to download materials archive.");
+        } finally {
+            setDownloading(false);
+        }
+    }
+
     return (
         <MainLayout
             pathName={{
@@ -336,7 +371,8 @@ export default function StudentSyllabusPage() {
                 [String(id)]: syllabus?.name ?? "Details",
             }}
         >
-            <div className="mx-auto w-full max-w-6xl space-y-6 pb-10">
+            <div className={`mx-auto w-full space-y-6 pb-10 ${tab === "learning" && planView === "table" ? "max-w-[1600px]" : "max-w-6xl"}`}>
+
                 <Button
                     asChild
                     variant="ghost"
@@ -384,7 +420,9 @@ export default function StudentSyllabusPage() {
                         </div>
                     </section>
                 ) : (
-                    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+                    <div className={tab === "learning" && planView === "table"
+                        ? "grid items-start gap-6"
+                        : "grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_280px]"}>
                         <div className="min-w-0 space-y-6">
                             {/* SYLLABUS HEADER */}
                             <header className="overflow-hidden rounded-2xl border bg-card">
@@ -543,7 +581,22 @@ export default function StudentSyllabusPage() {
                                                 </p>
                                             </div>
 
-                                            <div className="flex gap-2">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <div className="flex items-center rounded-md border bg-background p-0.5" aria-label="Learning plan view mode">
+                                                    <Button size="sm" variant={planView === "cards" ? "secondary" : "ghost"}
+                                                        onClick={() => setPlanView("cards")} aria-pressed={planView === "cards"} className="gap-1.5">
+                                                        <LayoutGrid className="size-4" /> Cards
+                                                    </Button>
+                                                    <Button size="sm" variant={planView === "table" ? "secondary" : "ghost"}
+                                                        onClick={() => setPlanView("table")} aria-pressed={planView === "table"} className="gap-1.5">
+                                                        <Table2 className="size-4" /> Table
+                                                    </Button>
+                                                </div>
+                                                <Button size="sm" variant="outline" onClick={() => void downloadAll()}
+                                                    disabled={downloading || materials.length === 0} className="gap-1.5">
+                                                    <Download className="size-4" /> {downloading ? "Preparing ZIP..." : "Download all materials"}
+                                                </Button>
+                                                {planView === "cards" && <>
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
@@ -559,9 +612,13 @@ export default function StudentSyllabusPage() {
                                                 >
                                                     Collapse all
                                                 </Button>
+                                                </>}
                                             </div>
                                         </div>
 
+                                        <p className="mt-3 text-xs text-muted-foreground">
+                                            Uploaded documents are packed into the ZIP; external references are included as links (.url), not copied files.
+                                        </p>
                                         <div className="relative mt-4">
                                             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 
@@ -588,6 +645,10 @@ export default function StudentSyllabusPage() {
                                         </div>
                                     </section>
 
+                                    {planView === "table" ? (
+                                        <SyllabusLearningPlanTable sections={sections} clos={clos} materials={materials}
+                                            syllabusId={syllabusId} search={search} onDownload={downloadFile} />
+                                    ) : <>
                                     {/* SECTIONS */}
                                     {filteredSections.map((section) => {
                                         const index = sections.findIndex(
@@ -622,6 +683,7 @@ export default function StudentSyllabusPage() {
                                                     topicName(topic)
                                                         .toLocaleLowerCase()
                                                         .includes(searchText) ||
+                                                    topicMatchesClo(topic) ||
                                                     materials.some(
                                                         (m) =>
                                                             (m.topicId === topic.id ||
@@ -695,7 +757,30 @@ export default function StudentSyllabusPage() {
                                                                 {topicName(topic)}
                                                             </h4>
 
+                                                            {(topic.cloIds ?? []).some((cloId) => cloById.has(cloId)) && (
+                                                                <div className="space-y-2 rounded-lg border bg-card/60 p-3">
+                                                                    <p className="text-xs font-medium text-muted-foreground">
+                                                                        Learning outcomes
+                                                                    </p>
+                                                                    {(topic.cloIds ?? []).map((cloId) => {
+                                                                        const clo = cloById.get(cloId);
+                                                                        return clo ? (
+                                                                            <div key={clo.id} className="flex flex-wrap items-start gap-2 sm:flex-nowrap">
+                                                                                <Badge variant="outline" className="shrink-0">
+                                                                                    {clo.code}
+                                                                                </Badge>
+                                                                                <p className="min-w-0 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
+                                                                                    {clo.details}
+                                                                                </p>
+                                                                            </div>
+                                                                        ) : null;
+                                                                    })}
+                                                                </div>
+                                                            )}
+
                                                             <MaterialList
+                                                                syllabusId={syllabusId}
+                                                                onDownload={downloadFile}
                                                                 items={materials.filter(
                                                                     (m) =>
                                                                         m.topicId === topic.id ||
@@ -724,12 +809,13 @@ export default function StudentSyllabusPage() {
                                                 : "No sections available."}
                                         </div>
                                     )}
+                                    </>}
                                 </TabsContent>
                             </Tabs>
                         </div>
 
                         {/* COURSE-STYLE SIDEBAR */}
-                        <aside className="space-y-4 lg:sticky lg:top-4">
+                        <aside className={tab === "learning" && planView === "table" ? "hidden" : "space-y-4 lg:sticky lg:top-4"}>
                             <section className="rounded-2xl border bg-card p-5">
                                 <h2 className="font-semibold">
                                     Syllabus at a glance

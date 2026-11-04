@@ -166,6 +166,7 @@ export default function SyllabusDetailPage() {
             qc.invalidateQueries({ queryKey: ["syllabus", syllabusId] }),
             qc.invalidateQueries({ queryKey: ["syllabuses"] }),
             qc.invalidateQueries({ queryKey: ["syllabus-progress", syllabusId] }),
+            qc.invalidateQueries({ queryKey: ["syllabus-coverage", syllabusId] }),
         ]);
         setValidation(null);
     }
@@ -551,7 +552,6 @@ export default function SyllabusDetailPage() {
                         <div id="syllabus-clos" className="scroll-mt-24">
                             <CloPanel syllabusId={syllabusId} readOnly={published} />
                         </div>
-
 
 
                         {/* Sections Toolbar */}

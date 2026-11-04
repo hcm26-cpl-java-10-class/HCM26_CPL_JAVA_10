@@ -9,7 +9,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.Locale;
 
 @Service
@@ -22,6 +27,7 @@ public class StudentSyllabusCatalogService {
     private final SyllabusTopicRepository topics;
     private final SyllabusCloRepository clos;
     private final SyllabusMaterialRepository materials;
+    private final SyllabusTopicCloLinkRepository topicCloLinks;
 
     public record Item(
             Long id,
@@ -42,7 +48,8 @@ public class StudentSyllabusCatalogService {
     public record TopicView(
             Long id,
             String title,
-            Integer orderIndex
+            Integer orderIndex,
+            List<Long> cloIds
     ) {}
 
     public record SectionView(
@@ -179,6 +186,23 @@ public class StudentSyllabusCatalogService {
                         )
                 );
 
+        // Resolve Topic-CLO links only AFTER checking Published + Active.
+        // A single query avoids per-Topic lookups, and the allowed set ensures
+        // this response never exposes CLOs belonging to another Syllabus.
+        List<SyllabusClo> syllabusClos = clos.findBySyllabus_IdOrderByOrderIndexAsc(id);
+        Set<Long> allowedCloIds = new HashSet<>();
+        for (SyllabusClo clo : syllabusClos) {
+            allowedCloIds.add(clo.getId());
+        }
+        Map<Long, List<Long>> topicCloIds = new HashMap<>();
+        for (SyllabusTopicCloLink link : topicCloLinks.findAllForSyllabus(id)) {
+            Long cloId = link.getClo().getId();
+            if (allowedCloIds.contains(cloId)) {
+                topicCloIds.computeIfAbsent(link.getTopic().getId(), key -> new ArrayList<>())
+                        .add(cloId);
+            }
+        }
+
         List<SectionView> sectionViews =
                 sections.findBySyllabus_IdOrderByOrderIndexAsc(id)
                         .stream()
@@ -195,15 +219,16 @@ public class StudentSyllabusCatalogService {
                                         .map(topic -> new TopicView(
                                                 topic.getId(),
                                                 topic.getTitle(),
-                                                topic.getOrderIndex()
+                                                topic.getOrderIndex(),
+                                                List.copyOf(topicCloIds.getOrDefault(
+                                                        topic.getId(), List.of()))
                                         ))
                                         .toList()
                         ))
                         .toList();
 
         List<CloView> cloViews =
-                clos.findBySyllabus_IdOrderByOrderIndexAsc(id)
-                        .stream()
+                syllabusClos.stream()
                         .map(clo -> new CloView(
                                 clo.getId(),
                                 clo.getCode(),

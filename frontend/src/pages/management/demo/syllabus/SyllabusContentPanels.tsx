@@ -13,6 +13,9 @@ import {
 } from "@/api/features/demo/syllabus.api";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import SyllabusCoveragePanel from "./SyllabusCoveragePanel";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
@@ -78,6 +81,7 @@ export function CloPanel({
     const [detailsError, setDetailsError] = useState("");
     const [deleting, setDeleting] = useState<SyllabusClo | null>(null);
     const [busy, setBusy] = useState(false);
+    const [mappingOpen, setMappingOpen] = useState(false);
 
     const query = useQuery({
         queryKey: ["syllabus-clos", syllabusId],
@@ -85,12 +89,20 @@ export function CloPanel({
         enabled: Number.isSafeInteger(syllabusId) && syllabusId > 0,
     });
 
+    const coverageQuery = useQuery({
+        queryKey: ["syllabus-coverage", syllabusId],
+        queryFn: () => syllabusApi.coverage(syllabusId),
+        enabled: Number.isSafeInteger(syllabusId) && syllabusId > 0,
+    });
+    const coverage = coverageQuery.data;
+    const coveredCloById = new Map((coverage?.clos ?? []).map((clo) => [clo.id, clo]));
     const clos = query.data ?? [];
 
     async function refresh() {
         await Promise.all([
             qc.invalidateQueries({ queryKey: ["syllabus-clos", syllabusId] }),
             qc.invalidateQueries({ queryKey: ["syllabus-progress", syllabusId] }),
+            qc.invalidateQueries({ queryKey: ["syllabus-coverage", syllabusId] }),
             qc.invalidateQueries({ queryKey: ["syllabuses"] }),
         ]);
     }
@@ -182,8 +194,8 @@ export function CloPanel({
     }
 
     return (
-        <section className="w-full rounded-xl border bg-card p-5">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <section className="w-full space-y-4 rounded-xl border bg-card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 className="text-xl font-semibold">Course Learning Outcomes</h2>
                     <p className="text-sm text-muted-foreground">
@@ -198,6 +210,30 @@ export function CloPanel({
                     </Button>
                 )}
             </div>
+
+            {coverage && (
+                <div className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                        {[
+                            { label: "Total CLOs", value: String(coverage.totalClos) },
+                            { label: "CLO Coverage", value: `${coverage.coveragePercent}%` },
+                            { label: "Unlinked Topics", value: String(coverage.unlinkedTopics) },
+                        ].map((item) => (
+                            <div key={item.label} className="rounded-lg border bg-muted/20 p-3">
+                                <p className="text-xs text-muted-foreground">{item.label}</p>
+                                <p className="mt-1 text-xl font-semibold">{item.value}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <Progress value={coverage.coveragePercent} aria-label="CLO coverage percentage" />
+                </div>
+            )}
+            {coverageQuery.isError && (
+                <div role="alert" className="flex items-center gap-2 text-sm text-muted-foreground">
+                    Could not load CLO coverage.
+                    <Button size="sm" variant="outline" onClick={() => void coverageQuery.refetch()}>Retry</Button>
+                </div>
+            )}
 
             {query.isPending ? (
                 <p className="text-sm text-muted-foreground">Loading CLOs...</p>
@@ -225,6 +261,8 @@ export function CloPanel({
                         <tr className="border-b text-left">
                             <th className="w-24 p-3">CLO</th>
                             <th className="p-3">CLO Details</th>
+                            <th className="w-28 p-3">Topics</th>
+                            <th className="w-32 p-3">Coverage</th>
                             {(canEdit || canDelete) && (
                                 <th className="w-40 p-3 text-right">Actions</th>
                             )}
@@ -240,6 +278,27 @@ export function CloPanel({
 
                                 <td className="whitespace-pre-wrap p-3 align-top">
                                     {clo.details}
+                                </td>
+
+                                <td className="p-3 align-top">
+                                    {coverage ? (
+                                        <Button
+                                            type="button" variant="ghost" size="sm"
+                                            className="h-auto px-1 text-xs"
+                                            onClick={() => setMappingOpen(true)}
+                                            title="Show Topic–CLO mapping"
+                                        >
+                                            {coveredCloById.get(clo.id)?.topicCount ?? 0} topics
+                                        </Button>
+                                    ) : <span className="text-xs text-muted-foreground">—</span>}
+                                </td>
+                                <td className="p-3 align-top">
+                                    {coverage ? (
+                                        <Badge variant="outline">
+                                            {(coveredCloById.get(clo.id)?.topicCount ?? 0) > 0
+                                                ? "Covered" : "Not covered"}
+                                        </Badge>
+                                    ) : <span className="text-xs text-muted-foreground">—</span>}
                                 </td>
 
                                 {(canEdit || canDelete) && (
@@ -274,6 +333,21 @@ export function CloPanel({
                     </table>
                 </div>
             )}
+
+            {coverage && coverage.totalClos > 0 && coverage.coveredClos < coverage.totalClos && (
+                <div className="rounded-lg border px-3 py-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Needs attention:</span>{" "}
+                    {coverage.clos.filter((clo) => clo.topicCount === 0).map((clo) => clo.code).join(", ")}
+                    {" — no supporting Topic assigned yet."}
+                </div>
+            )}
+
+            <SyllabusCoveragePanel
+                syllabusId={syllabusId}
+                readOnly={readOnly}
+                expanded={mappingOpen}
+                onExpandedChange={setMappingOpen}
+            />
 
             <Modal
                 open={open && !readOnly}
@@ -433,6 +507,7 @@ export function MaterialsPanel({
 
     const [busy, setBusy] = useState(false);
     const [urlError, setUrlError] = useState("");
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
     const query = useQuery({
         queryKey: ["syllabus-materials", syllabusId],
@@ -465,6 +540,7 @@ export function MaterialsPanel({
             topicId: scopedTopicId,
         });
         setUrlError("");
+        setSelectedFile(null);
         setOpen(true);
     }
 
@@ -483,6 +559,7 @@ export function MaterialsPanel({
             topicId: scopedTopicId,
         });
         setUrlError("");
+        setSelectedFile(null);
 
         setOpen(true);
     }
@@ -505,24 +582,24 @@ export function MaterialsPanel({
 
         const url = form.url.trim();
 
-        if (!url || url.length > 2048) {
+        if (!selectedFile && (!url || url.length > 2048)) {
             setUrlError("URL is required (max 2048 characters).");
             return;
         }
 
-        try {
-            const parsed = new URL(url);
-
-            if (
-                !["http:", "https:"].includes(parsed.protocol) ||
-                !parsed.hostname ||
-                parsed.username ||
-                parsed.password
-            ) {
-                throw new Error("Invalid URL");
+        if (!selectedFile) {
+            try {
+                const parsed = new URL(url);
+                if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) {
+                    throw new Error("Invalid URL");
+                }
+            } catch {
+                setUrlError("Enter a valid HTTP or HTTPS URL.");
+                return;
             }
-        } catch {
-            setUrlError("Enter a valid HTTP or HTTPS URL.");
+        }
+        if (selectedFile && (selectedFile.size === 0 || selectedFile.size > 20 * 1024 * 1024)) {
+            setUrlError("Select a file smaller than 20 MB.");
             return;
         }
 
@@ -536,9 +613,9 @@ export function MaterialsPanel({
         }
 
         // Auto-generate the required backend title from the URL.
-        const title = automaticMaterialTitle(url);
+        const title = selectedFile ? selectedFile.name.slice(0, 200) : automaticMaterialTitle(url);
 
-        const duplicate = allMaterials.some(
+        const duplicate = !selectedFile && allMaterials.some(
             (item) =>
                 item.id !== editing?.id &&
                 item.url.trim().toLowerCase() === url.toLowerCase() &&
@@ -564,6 +641,10 @@ export function MaterialsPanel({
         setBusy(true);
 
         try {
+            if (selectedFile) {
+                const uploaded = await syllabusApi.uploadMaterialFile(syllabusId, selectedFile);
+                payload.url = uploaded.url;
+            }
             if (editing) {
                 await syllabusApi.updateMaterial(
                     syllabusId,
@@ -576,12 +657,38 @@ export function MaterialsPanel({
 
             await refresh();
             setOpen(false);
+            setSelectedFile(null);
 
             toast.success("Learning Material saved successfully.");
         } catch (error) {
             toast.error(errorMessage(error));
         } finally {
             setBusy(false);
+        }
+    }
+
+    async function openMaterial(item: SyllabusMaterial) {
+        try {
+            const pathname = new URL(item.url).pathname;
+            const prefix = `/api/student/syllabuses/${syllabusId}/material-files/`;
+            if (pathname.startsWith(prefix)) {
+                const key = pathname.slice(prefix.length);
+                if (!/^[a-f0-9-]{36}_[A-Za-z0-9._-]{1,100}$/.test(key)) throw new Error("Invalid file key");
+                const blob = await syllabusApi.downloadAdminFile(syllabusId, key);
+                const fileUrl = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = fileUrl;
+                a.download = key.substring(key.indexOf("_") + 1);
+                document.body.appendChild(a);
+                a.click(); a.remove();
+                window.setTimeout(() => URL.revokeObjectURL(fileUrl), 30_000);
+            } else {
+                const url = new URL(item.url);
+                if (!["http:", "https:"].includes(url.protocol)) throw new Error("Unsafe URL");
+                window.open(url.href, "_blank", "noopener,noreferrer");
+            }
+        } catch {
+            toast.error("Unable to open learning material.");
         }
     }
 
@@ -693,15 +800,11 @@ export function MaterialsPanel({
                                 className="border-b last:border-0"
                             >
                                 <td className="p-2 align-top">
-                                    <a
-                                        href={item.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-start gap-1 break-all text-primary underline-offset-4 hover:underline"
-                                    >
+                                    <button type="button" onClick={() => void openMaterial(item)}
+                                        className="inline-flex items-start gap-1 break-all text-left text-primary underline-offset-4 hover:underline">
                                         {item.title}
                                         <ExternalLink className="mt-1 size-3 shrink-0" />
-                                    </a>
+                                    </button>
 
                                     {item.topicId == null && (
                                         <p className="mt-1 text-xs text-muted-foreground">
@@ -816,9 +919,9 @@ export function MaterialsPanel({
                             id={`material-url-${topicId ?? "general"}`}
                             type="url"
                             value={form.url}
-                            required
+                            required={!selectedFile}
                             maxLength={2048}
-                            disabled={busy}
+                            disabled={busy || Boolean(selectedFile)}
                             placeholder="https://..."
                             aria-invalid={Boolean(urlError)}
                             onChange={(event) =>
@@ -832,8 +935,17 @@ export function MaterialsPanel({
                             </p>
                         )}
                         <p className="text-xs text-muted-foreground">
-                            The display name is generated automatically from the URL.
+                            Enter an external URL, or upload a file below. Uploaded files can be included in the Student ZIP.
                         </p>
+                        <label className="mt-3 block text-sm font-medium" htmlFor={`material-file-${topicId ?? "general"}`}>
+                            Upload material (optional)
+                        </label>
+                        <Input id={`material-file-${topicId ?? "general"}`} type="file"
+                            accept=".pdf,.pptx,.docx,.xlsx,.txt" disabled={busy}
+                            onChange={(event) => { setSelectedFile(event.target.files?.[0] ?? null); setUrlError(""); }} />
+                        {selectedFile && <p className="text-xs text-muted-foreground">
+                            {selectedFile.name} — this file will replace the URL when saved.
+                        </p>}
                     </div>
 
                     <p className="rounded-md border p-2 text-xs text-muted-foreground">

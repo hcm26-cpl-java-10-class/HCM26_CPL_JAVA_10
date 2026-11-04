@@ -125,6 +125,34 @@ export type SyllabusMaterial = SyllabusMaterialInput & {
 };
 
 // ==========================================
+// CLO COVERAGE ANALYSIS (Topic – CLO links)
+// ==========================================
+
+export type SyllabusCloCoverage = {
+    id: number;
+    code: string;
+    details: string;
+    topicCount: number;
+};
+
+export type SyllabusTopicCoverage = {
+    id: number;
+    sectionId: number;
+    title: string;
+    cloIds: number[];
+};
+
+export type SyllabusCoverage = {
+    syllabusId: number;
+    totalClos: number;
+    coveredClos: number;
+    coveragePercent: number;
+    unlinkedTopics: number;
+    clos: SyllabusCloCoverage[];
+    topics: SyllabusTopicCoverage[];
+};
+
+// ==========================================
 // EXCEL IMPORT
 // ==========================================
 
@@ -143,6 +171,22 @@ const root = "/syllabuses";
 // ==========================================
 
 export const syllabusApi = {
+
+    // --------------------------------------
+    // CLO COVERAGE / TOPIC MAPPING
+    // --------------------------------------
+
+    coverage: async (syllabusId: number): Promise<SyllabusCoverage> =>
+        (await api.get<SyllabusCoverage>(`${root}/${syllabusId}/coverage`)).data,
+
+    setTopicClos: async (
+        syllabusId: number,
+        topicId: number,
+        cloIds: number[]
+    ): Promise<SyllabusCoverage> =>
+        (await api.put<SyllabusCoverage>(
+            `${root}/${syllabusId}/topics/${topicId}/clos`, { cloIds }
+        )).data,
 
     // --------------------------------------
     // COMPLETION PROGRESS / PUBLISH
@@ -244,6 +288,17 @@ export const syllabusApi = {
     // --------------------------------------
     // LEARNING MATERIALS
     // --------------------------------------
+
+    uploadMaterialFile: async (syllabusId: number, file: File): Promise<{ url: string; fileName: string }> => {
+        const body = new FormData();
+        body.append("file", file);
+        return (await api.post(`${root}/${syllabusId}/material-files`, body, {
+            headers: { "Content-Type": undefined }, // Browser chooses multipart boundary.
+        })).data;
+    },
+
+    downloadAdminFile: async (syllabusId: number, key: string): Promise<Blob> =>
+        (await api.get(`${root}/${syllabusId}/material-files/${encodeURIComponent(key)}`, { responseType: "blob" })).data,
 
     listMaterials: async (syllabusId: number) =>
         (

@@ -12,9 +12,9 @@ import {
     LockKeyhole,
     Pencil,
     Plus,
-    Search,
+
     Trash2,
-    X,
+
 } from "lucide-react";
 
 import {
@@ -26,7 +26,6 @@ import {
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { FormModal } from "@/components/datatable/modal/form/FormModal";
 import type { EntitySchema } from "@/types";
@@ -38,10 +37,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { CatalogPagination } from "@/pages/management/demo/course/components/CatalogPagination";
 import { useDebouncedValue } from "@/pages/management/demo/course/hooks/useDebouncedValue";
 import { usePermissions } from "@/hooks/usePermissions";
 import { SyllabusImportAction } from "./SyllabusImportAction";
+import { SyllabusListToolbar, SyllabusListFooter, type SyllabusViewMode } from "./SyllabusListControls";
+import { SyllabusStatFilterCard } from "./SyllabusStatFilterCard";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const PAGE_SIZE = 10;
 
@@ -147,6 +148,8 @@ export default function SyllabusesPage() {
     const [status, setStatus] = useState("all");
     const [sortBy, setSortBy] = useState("name");
     const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = useState(PAGE_SIZE);
+    const [view, setView] = useState<SyllabusViewMode>("table");
 
     const [serverErrors, setServerErrors] =
         useState<Record<string, string[]>>({});
@@ -176,13 +179,15 @@ const query = useQuery({
 
     const rows = [...filtered].sort(
         (a, b) =>
-            sortBy === "code"
-                ? a.code.localeCompare(b.code)
-                : a.name.localeCompare(b.name)
+            sortBy === "completion"
+                ? b.completionPercent - a.completionPercent || a.name.localeCompare(b.name)
+                : sortBy === "code"
+                    ? a.code.localeCompare(b.code)
+                    : a.name.localeCompare(b.name)
     );
 
     const totalPages = Math.ceil(
-        rows.length / PAGE_SIZE
+        rows.length / pageSize
     );
 
     const effectivePage = Math.min(
@@ -191,8 +196,8 @@ const query = useQuery({
     );
 
     const paged = rows.slice(
-        effectivePage * PAGE_SIZE,
-        (effectivePage + 1) * PAGE_SIZE
+        effectivePage * pageSize,
+        (effectivePage + 1) * pageSize
     );
 
     const draftCount = all.filter(
@@ -324,350 +329,216 @@ const query = useQuery({
         <MainLayout
             pathName={{ syllabuses: "Syllabuses" }}
         >
-            <div className="mx-auto w-full max-w-7xl space-y-6 pb-10">
-                {/* PAGE HEADER */}
-                <header className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex w-full flex-col gap-4 pb-5 font-inter">
+                {/* Keep Syllabus semantics while following the Course list layout. */}
+                <header className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">
-                            Syllabuses
-                        </h1>
-
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Create, manage and publish course outlines.
-                        </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                        {import.meta.env.DEV && canCreate && canEdit && <SyllabusImportAction />}
-
-                        {canCreate && (
-                            <Button onClick={openCreate}>
-                                <Plus className="size-4" />
-                                Create Syllabus
-                            </Button>
-                        )}
+                        <h1 className="text-xl font-semibold tracking-tight">Syllabuses</h1>
+                        <p className="text-sm text-muted-foreground">Create, manage and publish course outlines.</p>
                     </div>
                 </header>
 
-                {/* OVERVIEW */}
-                <section
-                    className="grid gap-3 sm:grid-cols-3"
-                    aria-label="Syllabus overview"
-                >
-                    {(
-                        [
-                            [
-                                "Total syllabuses",
-                                all.length,
-                            ],
-                            ["Draft", draftCount],
-                            ["Published", publishedCount],
-                        ] as const
-                    ).map(([label, value]) => (
-                        <div
-                            key={label}
-                            className="rounded-2xl border bg-card p-4"
-                        >
-                            <p className="text-xs text-muted-foreground">
-                                {label}
-                            </p>
-
-                            <p className="mt-1 text-2xl font-semibold tabular-nums">
-                                {value}
-                            </p>
-                        </div>
-                    ))}
-                </section>
-
-                {/* SEARCH, FILTER AND SORT */}
-                <section className="grid gap-3 rounded-2xl border bg-card p-4 md:grid-cols-[minmax(0,1fr)_170px_170px]">
-                    <div className="relative">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-
-                        <Input
-                            aria-label="Search syllabus name or code"
-                            value={search}
-                            placeholder="Search by code or syllabus name..."
-                            className="pl-9 pr-9"
-                            onChange={(event) => {
-                                setSearch(
-                                    event.target.value
-                                );
+                <section className="grid gap-3 sm:grid-cols-3" aria-label="Syllabus overview">
+                    {([
+                        { label: debouncedSearch ? "Matching syllabuses" : "Total syllabuses", count: all.length, filter: "all", hint: "Show all Syllabuses" },
+                        { label: "Draft", count: draftCount, filter: "DRAFT", hint: "Show Draft Syllabuses only" },
+                        { label: "Published", count: publishedCount, filter: "PUBLISHED", hint: "Show Published Syllabuses only" },
+                    ] as const).map((item) => (
+                        <SyllabusStatFilterCard
+                            key={item.filter}
+                            label={item.label}
+                            value={query.isPending ? "—" : item.count}
+                            hint={item.hint}
+                            selected={status === item.filter}
+                            onClick={() => {
+                                setStatus(item.filter);
+                                setSearch("");
                                 setPage(0);
                             }}
                         />
-
-                        {search && (
-                            <button
-                                type="button"
-                                aria-label="Clear search"
-                                onClick={() => {
-                                    setSearch("");
-                                    setPage(0);
-                                }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                            >
-                                <X className="size-4" />
-                            </button>
-                        )}
-                    </div>
-
-                    <Select
-                        value={status}
-                        onValueChange={(value) => {
-                            setStatus(value);
-                            setPage(0);
-                        }}
-                    >
-                        <SelectTrigger
-                            aria-label="Filter status"
-                            className="w-full"
-                        >
-                            <SelectValue />
-                        </SelectTrigger>
-
-                        <SelectContent>
-                            <SelectItem value="all">
-                                All statuses
-                            </SelectItem>
-
-                            <SelectItem value="DRAFT">
-                                Draft
-                            </SelectItem>
-
-                            <SelectItem value="PUBLISHED">
-                                Published
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
-
-                    <Select
-                        value={sortBy}
-                        onValueChange={(value) => {
-                            setSortBy(value);
-                            setPage(0);
-                        }}
-                    >
-                        <SelectTrigger
-                            aria-label="Sort syllabuses"
-                            className="w-full"
-                        >
-                            <SelectValue />
-                        </SelectTrigger>
-
-                        <SelectContent>
-                            <SelectItem value="name">
-                                Name (A–Z)
-                            </SelectItem>
-
-                            <SelectItem value="code">
-                                Code (A–Z)
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+                    ))}
                 </section>
 
-                <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-          <span>
-            {query.isPending
-                ? "Loading..."
-                : `${rows.length} syllabuses found`}
-          </span>
+                <SyllabusListToolbar
+                    search={search}
+                    searchLabel="Search syllabus name or code"
+                    view={view}
+                    onViewChange={setView}
+                    onSearchChange={(value) => { setSearch(value); setPage(0); }}
+                    filters={<>
+                        <Select value={status} onValueChange={(value) => { setStatus(value); setPage(0); }}>
+                            <SelectTrigger aria-label="Filter syllabus status" className="h-9 w-[142px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All statuses</SelectItem>
+                                <SelectItem value="DRAFT">Draft</SelectItem>
+                                <SelectItem value="PUBLISHED">Published</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select value={sortBy} onValueChange={(value) => { setSortBy(value); setPage(0); }}>
+                            <SelectTrigger aria-label="Sort syllabuses" className="h-9 w-[158px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="name">Name (A–Z)</SelectItem>
+                                <SelectItem value="code">Code (A–Z)</SelectItem>
+                                <SelectItem value="completion">Completion (high)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </>}
+                    actions={<>
+                        {import.meta.env.DEV && canCreate && canEdit && <SyllabusImportAction />}
+                        {canCreate && (
+                            <Button size="sm" onClick={openCreate}>
+                                <Plus className="size-4" /> Create Syllabus
+                            </Button>
+                        )}
+                    </>}
+                />
 
-                    {(search || status !== "all") && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                                setSearch("");
-                                setStatus("all");
-                                setPage(0);
-                            }}
-                        >
-                            Clear filters
-                        </Button>
-                    )}
-                </div>
-
-                {/* SYLLABUS TABLE */}
-                {query.isPending ? (
-                    <div className="rounded-2xl border bg-card p-8 text-sm text-muted-foreground">
-                        Loading syllabuses...
+                {(search || status !== "all") && (
+                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <span>{query.isPending ? "Loading…" : `${rows.length} matching syllabuses`}</span>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => {
+                            setSearch(""); setStatus("all"); setPage(0);
+                        }}>Clear filters</Button>
                     </div>
-                ) : query.isError ? (
-                    <div
-                        role="alert"
-                        className="space-y-3 rounded-2xl border bg-card p-6"
-                    >
-                        <p>Could not load syllabuses.</p>
+                )}
 
-                        <Button
-                            variant="outline"
-                            onClick={() =>
-                                void query.refetch()
-                            }
-                        >
-                            Try again
-                        </Button>
+                {query.isPending ? (
+                    <div className="rounded-md border bg-card p-8 text-center text-sm text-muted-foreground">Loading syllabuses…</div>
+                ) : query.isError ? (
+                    <div role="alert" className="rounded-md border bg-card p-8 text-center">
+                        <p className="text-sm text-destructive">Unable to load syllabuses.</p>
+                        <Button className="mt-3" variant="outline" onClick={() => void query.refetch()}>Retry</Button>
+                    </div>
+                ) : view === "table" ? (
+                    <div className="overflow-x-auto rounded-md border bg-card">
+                        <Table className="min-w-[920px] table-fixed text-sm">
+                            <TableHeader className="bg-background">
+                                <TableRow>
+                                    <TableHead className="w-12 text-center">#</TableHead>
+                                    <TableHead className="w-[160px]">Code</TableHead>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead className="w-24 text-center">Sections</TableHead>
+                                    <TableHead className="w-32">Status</TableHead>
+                                    <TableHead className="w-[170px]">Completion</TableHead>
+                                    <TableHead className="w-32 text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {paged.map((item, index) => {
+                                    const published = item.status === "PUBLISHED";
+                                    return (
+                                        <TableRow key={item.id} className="odd:bg-muted/20">
+                                            <TableCell className="text-center text-muted-foreground tabular-nums">
+                                                {effectivePage * pageSize + index + 1}
+                                            </TableCell>
+                                            <TableCell className="truncate font-mono text-xs font-medium" title={item.code}>
+                                                {item.code}
+                                            </TableCell>
+                                            <TableCell className="truncate font-medium" title={item.name}>
+                                                <Link to={`/syllabuses/${item.id}`} className="hover:underline">{item.name}</Link>
+                                            </TableCell>
+                                            <TableCell className="text-center tabular-nums">{item.sectionCount}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={published ? "secondary" : "outline"}>
+                                                    {published && <LockKeyhole className="mr-1 size-3" />}
+                                                    {published ? "Published" : "Draft"}
+                                                </Badge>
+                                                {!item.isActive && (
+                                                    <Badge variant="outline" className="ml-1">Inactive</Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="space-y-1">
+                                                    <span className="text-xs font-medium tabular-nums">{item.completionPercent}%</span>
+                                                    <Progress value={item.completionPercent} className="h-1.5" />
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Button asChild size="icon-sm" variant="outline" title="View Syllabus">
+                                                        <Link to={`/syllabuses/${item.id}`} aria-label={`View ${item.name}`}><Eye className="size-4" /></Link>
+                                                    </Button>
+                                                    {canEdit && !published && (
+                                                        <Button size="icon-sm" variant="outline" title="Edit Syllabus"
+                                                            aria-label={`Edit ${item.name}`} onClick={() => openEdit(item)}>
+                                                            <Pencil className="size-4" />
+                                                        </Button>
+                                                    )}
+                                                    {canDelete && !published && (
+                                                        <Button size="icon-sm" variant="outline" className="text-destructive hover:text-destructive"
+                                                            title="Delete Syllabus" aria-label={`Delete ${item.name}`}
+                                                            onClick={() => setDeleting(item)}>
+                                                            <Trash2 className="size-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                                {rows.length === 0 && (
+                                    <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
+                                        {search.trim() || status !== "all" ? "No matching syllabuses." : "No syllabuses yet."}
+                                    </TableCell></TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto rounded-2xl border bg-card">
-                        <table className="w-full min-w-[850px] text-sm">
-                            <thead className="bg-muted/40 text-left">
-                            <tr>
-                                <th scope="col" className="p-3">
-                                    Code
-                                </th>
-                                <th scope="col" className="p-3">
-                                    Name
-                                </th>
-                                <th scope="col" className="p-3">
-                                    Sections
-                                </th>
-                                <th scope="col" className="p-3">
-                                    Status
-                                </th>
-                                <th scope="col" className="p-3">
-                                    Completion
-                                </th>
-                                <th scope="col" className="p-3">
-                                    Actions
-                                </th>
-                            </tr>
-                            </thead>
-
-                            <tbody>
-                            {paged.map((item) => {
-                                const published =
-                                    item.status === "PUBLISHED";
-
-                                return (
-                                    <tr
-                                        key={item.id}
-                                        className="border-t hover:bg-muted/20"
-                                    >
-                                        <td className="p-3 font-mono text-xs font-semibold">
-                                            {item.code}
-                                        </td>
-
-                                        <td className="p-3 font-medium">
-                                            {item.name}
-                                        </td>
-
-                                        <td className="p-3 tabular-nums">
-                                            {item.sectionCount}
-                                        </td>
-
-                                        <td className="p-3">
-                                            <Badge
-                                                variant={
-                                                    published
-                                                        ? "secondary"
-                                                        : "outline"
-                                                }
-                                            >
-                                                {published && (
-                                                    <LockKeyhole className="mr-1 size-3" />
-                                                )}
-
-                                                {published
-                                                    ? "Published"
-                                                    : "Draft"}
-                                            </Badge>
-
-                                            {!item.isActive && (
-                                                <Badge
-                                                    variant="outline"
-                                                    className="ml-2"
-                                                >
-                                                    Inactive
-                                                </Badge>
-                                            )}
-                                        </td>
-
-                                        <td className="min-w-36 p-3">
-                                            <div className="space-y-1">
-                          <span className="text-xs font-medium tabular-nums">
-                            {item.completionPercent}%
-                          </span>
-
-                                                <Progress
-                                                    value={
-                                                        item.completionPercent
-                                                    }
-                                                    className="h-2"
-                                                />
-                                            </div>
-                                        </td>
-
-                                        <td className="p-3">
-                                            <div className="flex flex-wrap gap-2">
-                                                <Button
-                                                    asChild
-                                                    size="sm"
-                                                    variant="outline"
-                                                >
-                                                    <Link
-                                                        to={`/syllabuses/${item.id}`}
-                                                    >
-                                                        <Eye className="size-4" />
-                                                        Detail
-                                                    </Link>
-                                                </Button>
-
-                                                {canEdit &&
-                                                    !published && (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() =>
-                                                                openEdit(item)
-                                                            }
-                                                        >
-                                                            <Pencil className="size-4" />
-                                                            Edit
-                                                        </Button>
-                                                    )}
-
-                                                {canDelete &&
-                                                    !published && (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="destructive"
-                                                            onClick={() =>
-                                                                setDeleting(item)
-                                                            }
-                                                        >
-                                                            <Trash2 className="size-4" />
-                                                            Delete
-                                                        </Button>
-                                                    )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            </tbody>
-                        </table>
-
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {paged.map((item, index) => {
+                            const published = item.status === "PUBLISHED";
+                            return (
+                                <article key={item.id} className="flex min-h-60 flex-col gap-3 rounded-md border bg-card p-4">
+                                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                        <span>#{effectivePage * pageSize + index + 1}</span>
+                                        <Badge variant={published ? "secondary" : "outline"}>{published ? "Published" : "Draft"}</Badge>
+                                    </div>
+                                    <div className="min-w-0 space-y-1">
+                                        <p className="break-all font-mono text-xs text-muted-foreground">{item.code}</p>
+                                        <Link to={`/syllabuses/${item.id}`} className="block font-semibold hover:underline">{item.name}</Link>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">{item.sectionCount} section(s){!item.isActive ? " · Inactive" : ""}</p>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Completion</span><span className="font-medium tabular-nums">{item.completionPercent}%</span></div>
+                                        <Progress value={item.completionPercent} className="h-1.5" />
+                                    </div>
+                                    <div className="mt-auto flex flex-wrap gap-2 border-t pt-3">
+                                        <Button asChild size="sm" variant="outline"><Link to={`/syllabuses/${item.id}`}><Eye className="size-4" /> Detail</Link></Button>
+                                        {canEdit && !published && (
+                                            <Button size="sm" variant="outline" onClick={() => openEdit(item)}><Pencil className="size-4" /> Edit</Button>
+                                        )}
+                                        {canDelete && !published && (
+                                            <Button size="sm" variant="outline" className="text-destructive hover:text-destructive"
+                                                onClick={() => setDeleting(item)}><Trash2 className="size-4" /> Delete</Button>
+                                        )}
+                                    </div>
+                                </article>
+                            );
+                        })}
                         {rows.length === 0 && (
-                            <div className="p-10 text-center text-sm text-muted-foreground">
-                                {search.trim() ||
-                                status !== "all"
-                                    ? "No matching syllabuses."
-                                    : "No syllabuses yet."}
+                            <div className="col-span-full rounded-md border bg-card p-10 text-center text-sm text-muted-foreground">
+                                {search.trim() || status !== "all" ? "No matching syllabuses." : "No syllabuses yet."}
                             </div>
                         )}
                     </div>
                 )}
 
-                <CatalogPagination
-                    page={effectivePage}
-                    totalPages={totalPages}
-                    onPageChange={setPage}
-                />
+                {!query.isPending && !query.isError && (
+                    <SyllabusListFooter
+                        count={rows.length}
+                        page={effectivePage}
+                        pageSize={pageSize}
+                        onPageChange={setPage}
+                        onPageSizeChange={(value) => { setPageSize(value); setPage(0); }}
+                    />
+                )}
 
-                {/* CREATE / EDIT: shared Base validation */}
+{/* CREATE / EDIT: shared Base validation */}
                 <FormModal
                     open={formOpen}
                     onClose={(open) => {
