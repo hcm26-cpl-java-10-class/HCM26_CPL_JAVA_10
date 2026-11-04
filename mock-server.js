@@ -320,6 +320,43 @@ const server = http.createServer(async (req, res) => {
 
   // Calendar version history is sample data owned by this development service.
   const calendarsMatch = pathname.match(/^\/api\/classes\/(\d+)\/calendars$/);
+  const newCalendarVersionMatch = pathname.match(/^\/api\/classes\/(\d+)\/calendars\/(\d+)\/versions$/);
+  if (req.method === 'POST' && newCalendarVersionMatch) {
+    const classId = Number(newCalendarVersionMatch[1]);
+    const source = (calendarVersions.get(classId) || []).find(item => item.id === Number(newCalendarVersionMatch[2]));
+    if (!source) return json(res, 404, { message: 'Calendar version not found' });
+    const body = await readBody(req);
+    const validDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+      Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+    if (!validDate(body?.classStartDate) || !validDate(body?.actualLearningStartDate) || body.actualLearningStartDate < body.classStartDate ||
+        !Array.isArray(body?.overviewItems) || body.overviewItems.length === 0 || body.overviewItems.length > 500) {
+      return json(res, 400, { message: 'Valid start dates and at least one topic are required' });
+    }
+    const ids = new Set();
+    for (const topic of body.overviewItems) {
+      if (!topic || typeof topic.id !== 'string' || !topic.id || ids.has(topic.id) || typeof topic.label !== 'string' || !topic.label.trim() ||
+          !validDate(topic.startDate) || !validDate(topic.endDate) || topic.endDate < topic.startDate || topic.startDate < body.actualLearningStartDate ||
+          !Array.isArray(topic.lessons) || topic.lessons.some(lesson => !lesson || typeof lesson.name !== 'string' || !lesson.name.trim() || !validDate(lesson.from) || !validDate(lesson.to) ||
+            lesson.from < topic.startDate || lesson.to > topic.endDate || lesson.to < lesson.from)) {
+        return json(res, 400, { message: 'Topic dates and lesson dates must be valid and within the learning calendar' });
+      }
+      ids.add(topic.id);
+    }
+    const versions = calendarVersions.get(classId);
+    const minor = Math.max(...versions.map(item => Number(item.version.split('.')[1]) || 0)) + 1;
+    const version = `1.${minor}`;
+    const baseName = source.name.replace(/(?:DRAFT_)?version_[\d.]+$/, '');
+    const name = `${baseName}${baseName === source.name ? '_' : ''}DRAFT_version_${version}`;
+    const managedTopics = new Set((source.overviewItems?.length ? source.overviewItems.map(topic => topic.label.replace(/^\[|\]$/g, '')) :
+      (source.sessions || []).map(session => session.topicCode || session.topic)));
+    const retainedSessions = (source.sessions || []).filter(session => !managedTopics.has(session.topicCode || session.topic));
+    const created = { ...JSON.parse(JSON.stringify(source)), id: Math.max(...versions.map(item => item.id)) + 1,
+      name, version, status: 'draft', historyChange: `Adjusted from version ${source.version}`,
+      classStartDate: body.classStartDate, actualLearningStartDate: body.actualLearningStartDate,
+      overviewItems: body.overviewItems, sessions: JSON.parse(JSON.stringify(retainedSessions)), lastModifiedDate: new Date().toISOString(), lastModifiedBy: 'Demo Admin' };
+    versions.unshift(created);
+    return json(res, 201, created);
+  }
   if (['GET', 'PUT'].includes(req.method) && calendarsMatch) {
     const classId = Number(calendarsMatch[1]);
     const cls = classes.find(item => item.id === classId);
@@ -335,6 +372,38 @@ const server = http.createServer(async (req, res) => {
       ['Update plan', '2026-03-17T13:56:00', 'UyenHTM'],
       ['Initial training calendar', '2026-01-20T09:00:00', 'NgaTTT45'],
     ];
+    // Calendar-only demo ranges; these do not create or change class sessions.
+    const sampleTopics = [
+      ['OC', '05-25', '05-25'], ['L1_AL_PSE', '05-26', '05-26'], ['L1_AL_CCGM', '05-26', '05-26'],
+      ['L1_AL_TESO', '05-27', '05-27'], ['L1_AL_GC', '05-27', '05-27'], ['L1_AL_TME', '05-28', '05-28'],
+      ['L1_AL_AAE', '05-29', '06-02'], ['L1_AL_DF', '06-03', '06-08'], ['L1_AL_DSAA', '06-09', '06-10'],
+      ['L1_AL_ECWL', '06-11', '06-11'], ['L1_AL_ECWL_2', '06-12', '06-12'], ['L1_AL_APWS', '06-15', '06-16'],
+      ['L1_AL_VCG', '06-17', '06-17'], ['L2_JA_JS', '06-18', '06-29'], ['L3_AL_CFFF', '06-30', '06-30'],
+      ['L2_JA_ORM', '07-01', '07-07'], ['L2_AL_FEF', '07-08', '07-14'], ['L3_AL_CFFF_2', '07-15', '07-15'],
+      ['L3_JSFW', '07-16', '07-24'], ['L2_AN_AE', '07-27', '08-05'], ['L4_MOCK', '08-06', '09-04'],
+      ['CC', '09-07', '09-07'],
+    ];
+    const shiftDate = (date) => new Date(Date.parse(`2026-${date}T00:00:00Z`) +
+      (classId === 1 ? Date.parse('2026-01-23T00:00:00Z') - Date.parse('2026-05-25T00:00:00Z') : 0)).toISOString().slice(0, 10);
+    const topicNames = [
+      'Opening Ceremony', 'Problem Solving (E-learning)', 'Company Culture & Global Mindset (Instructor-led)',
+      'Teamwork Essentials: Stand Out as a Valuable Team Member (E-learning)', 'Global Collaboration',
+      'Time Management (E-learning)', 'AI Augmented Engineer', 'Digital Fundamentals', 'Data Structures and Algorithms',
+      'Effective Communication', 'Effective Communication Workshop', 'Agile Project Working Skills', 'Version Control with Git',
+      'Java Standard', 'Final Foundation Assessment', 'Object Relational Mapping', 'Front-end Fundamentals',
+      'Final Foundation Review', 'JavaScript Framework', 'Application Engineering', 'Mock Project', 'Course Closing',
+    ];
+    const overviewItems = [1, 2].includes(classId) ? sampleTopics.map(([label, start, end], index) => {
+      const name = topicNames[index];
+      const slot = `[HCM] [CENTER_BUILDING_HCM] Part Time 2,3,4,5,6_${index % 2 ? 'Morning' : 'Afternoon'}`;
+      const title = index === 1 ? '[NFP] Problem Solving' : index === 2 ? '[NFP] Company Culture & Global Mindset (Instructor Led)' : index === 3 ? '[NFP] Teamwork Essentials' : name;
+      return {
+        id: `${classId}-${index}`, label: `[${label}]`, name: title, version: index === 0 ? undefined : '1.0', slot,
+        startDate: shiftDate(start), endDate: shiftDate(end),
+        lessons: [{ id: `${classId}-${index}-lesson`, name: index === 2 ? 'Company Culture' : name, from: shiftDate(start), to: shiftDate(end), slot,
+          trainer: cls.masterTrainer, venue: cls.location, notes: name }],
+      };
+    }) : undefined;
     if (!calendarVersions.has(classId)) calendarVersions.set(classId, changes.map(([historyChange, lastModifiedDate, lastModifiedBy], index) => ({
       id: classId * 100 + 9 - index,
       classId,
@@ -345,6 +414,9 @@ const server = http.createServer(async (req, res) => {
       lastModifiedBy,
       status: index === 0 ? 'active' : index === 1 ? 'draft' : 'inactive',
       sessions: JSON.parse(JSON.stringify(classSessions.filter(session => session.classId === classId))),
+      overviewItems,
+      actualLearningStartDate: overviewItems?.[0]?.startDate,
+      classStartDate: cls.startDate,
     })));
     const versions = calendarVersions.get(classId);
     if (req.method === 'PUT') {

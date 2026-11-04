@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlignLeft, CalendarDays, ChevronDown, Download, Eye, MoreVertical, Settings } from "lucide-react";
-import { useMemo, useState } from "react";
+import { AlignLeft, CalendarDays, ChevronDown, Download, Eye, Loader2, MoreVertical, Save, Settings } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { utils, writeFile } from "xlsx";
 import { toast } from "sonner";
@@ -8,17 +8,18 @@ import { externalApi } from "@/api/features/external.api";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ExternalClass } from "@/types";
 import type { ClassCalendarVersion } from "@/types/features/external";
 import { retryUnlessClientError } from "@/utils/query.utils";
 import { CalendarOverviewChart } from "./CalendarOverviewChart";
+import { CalendarDetailView } from "./CalendarDetailView";
+import { CalendarAdjustView } from "./CalendarAdjustView";
+import { downloadBlob } from "@/components/datatable/util/dataio.utils";
 
 const STATUSES = [
     { value: "active", label: "Active" },
@@ -51,9 +52,10 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
     const [statuses, setStatuses] = useState<CalendarStatus[]>(STATUSES.map((item) => item.value));
     const [detail, setDetail] = useState<ClassCalendarVersion | null>(null);
     const [mode, setMode] = useState<"detail" | "overview" | "adjust">("detail");
-    const [adjustName, setAdjustName] = useState("");
-    const [adjustHistory, setAdjustHistory] = useState("");
     const [pending, setPending] = useState<Record<number, ClassCalendarVersion>>({});
+    const tableViewport = useRef<HTMLDivElement>(null);
+    const horizontalScrollbar = useRef<HTMLDivElement>(null);
+    const [tableWidth, setTableWidth] = useState(1050);
     const save = useMutation({
         mutationFn: () => externalApi.saveClassCalendars(classItem.id, Object.values(pending).map(({ id, name, historyChange }) => ({ id, name, historyChange }))),
         onSuccess: async () => {
@@ -66,10 +68,17 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
     const open = (item: ClassCalendarVersion, view: typeof mode) => {
         setDetail(item);
         setMode(view);
-        setAdjustName(item.name);
-        setAdjustHistory(item.historyChange);
     };
-    const download = (item: ClassCalendarVersion, detailed: boolean) => {
+    const download = async (item: ClassCalendarVersion, detailed: boolean) => {
+        if (detailed) {
+            try {
+                const blob = await externalApi.downloadCalendarWithDetailedTime(classItem.id, item.id);
+                downloadBlob(blob, `${item.name.replace(/[<>:"/\\|?*]/g, "_")}_detailed_time.xlsx`);
+            } catch {
+                toast.error("Could not download the detailed training calendar. Please try again.");
+            }
+            return;
+        }
         const workbook = utils.book_new();
         utils.book_append_sheet(workbook, utils.json_to_sheet([{
             "Calendar Name": item.name, "Version": item.version, "History Change": item.historyChange,
@@ -91,8 +100,27 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
     const rows = useMemo(() => (query.data ?? []).map((item) => pending[item.id] ?? item)
         .filter((item) => statuses.includes(item.status))
         .sort((a, b) => b.lastModifiedDate.localeCompare(a.lastModifiedDate) || b.id - a.id), [query.data, statuses, pending]);
+    const pendingCount = Object.keys(pending).length;
+    const canSave = canUpdate && pendingCount > 0 && !save.isPending;
+
+    useEffect(() => {
+        const viewport = tableViewport.current;
+        if (!viewport) return;
+        const measure = () => {
+            const contentWidth = Math.max(viewport.scrollWidth, viewport.querySelector("table")?.scrollWidth ?? 0);
+            setTableWidth(contentWidth + viewport.offsetWidth - viewport.clientWidth);
+        };
+        const observer = new ResizeObserver(measure);
+        observer.observe(viewport);
+        const table = viewport.querySelector("table");
+        if (table) observer.observe(table);
+        measure();
+        return () => observer.disconnect();
+    }, [canRead, query.data, pending, mode, detail?.id]);
 
     if (!canRead) return <ApiErrorState error={undefined} kind="forbidden" resource="calendar history" />;
+    if (detail && mode === "detail") return <CalendarDetailView calendar={detail} classItem={classItem} onBack={() => setDetail(null)} />;
+    if (detail && mode === "adjust" && canUpdate) return <CalendarAdjustView calendar={detail} classItem={classItem} onBack={() => setDetail(null)} />;
 
     return (
         <div className="flex min-h-[480px] min-w-0 flex-col gap-5">
@@ -115,8 +143,12 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="overflow-hidden border-y">
-                <Table aria-label="Calendar version history" className="min-w-[1050px] [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:h-14">
+            <div ref={tableViewport} role="region" aria-label="Scrollable calendar table" tabIndex={0}
+                onScroll={(event) => {
+                    if (horizontalScrollbar.current) horizontalScrollbar.current.scrollLeft = event.currentTarget.scrollLeft;
+                }}
+                className="max-h-[55dvh] w-full min-w-0 overflow-x-hidden overflow-y-auto border-y focus-visible:outline-2 focus-visible:outline-blue-800">
+                <table aria-label="Calendar version history" className="w-full min-w-[1450px] caption-bottom text-sm [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:h-14">
                     <TableHeader className="bg-muted/50">
                         <TableRow>
                             <TableHead className="w-14">No.</TableHead>
@@ -161,37 +193,33 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
                             </TableRow>
                         ))}
                     </TableBody>
-                </Table>
+                </table>
             </div>
 
-            <footer className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+            <footer className="sticky bottom-0 z-10 mt-auto flex flex-wrap items-center justify-between gap-3 border-t bg-card pb-4">
+            <div ref={horizontalScrollbar} role="region" aria-label="Scroll calendar columns horizontally" tabIndex={0}
+                onScroll={(event) => {
+                    if (tableViewport.current) tableViewport.current.scrollLeft = event.currentTarget.scrollLeft;
+                }}
+                className="h-6 w-full min-w-0 shrink-0 basis-full overflow-x-scroll overflow-y-hidden border-b bg-neutral-100 [scrollbar-width:auto] [scrollbar-color:#909090_#f5f5f5] [&::-webkit-scrollbar]:h-4 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-neutral-400 [&::-webkit-scrollbar-track]:bg-neutral-100">
+                <div style={{ width: tableWidth, minWidth: 1450 }} className="h-px" />
+            </div>
                 <Button variant="outline" asChild><Link to="/classes">Back to Class List</Link></Button>
-                <Button disabled={!canUpdate || save.isPending || !Object.keys(pending).length} onClick={() => save.mutate()}>{save.isPending ? "Saving…" : "Save changes"}</Button>
+                <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
+                    <p id="calendar-save-status" role="status" className="text-xs text-muted-foreground">
+                        {!canUpdate ? "Read-only access" : pendingCount > 0 ? `${pendingCount} unsaved ${pendingCount === 1 ? "change" : "changes"}` : "No unsaved changes"}
+                    </p>
+                    <Button type="button" className="min-w-36 bg-blue-800 text-white hover:bg-blue-900 disabled:opacity-60" disabled={!canSave}
+                        aria-describedby="calendar-save-status" aria-busy={save.isPending}
+                        onClick={() => { if (canSave) save.mutate(); }}>
+                        {save.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Save className="size-4" aria-hidden />}
+                        {save.isPending ? "Saving…" : "Save changes"}
+                    </Button>
+                </div>
             </footer>
 
             <Dialog open={!!detail} onOpenChange={(open) => { if (!open) setDetail(null); }}>
-                {detail && mode === "overview" ? <CalendarOverviewChart calendar={detail} onDownload={() => download(detail, true)} /> : (
-                <DialogContent className="sm:max-w-xl">
-                    <DialogHeader><DialogTitle>{mode === "adjust" ? "Adjust calendar" : mode === "overview" ? "Calendar overview" : `Calendar version ${detail?.version}`}</DialogTitle><DialogDescription className="break-all">{detail?.name}</DialogDescription></DialogHeader>
-                    {detail && mode === "adjust" ? <form className="space-y-4" onSubmit={(event) => {
-                        event.preventDefault();
-                        if (!adjustName.trim() || !adjustHistory.trim()) return;
-                        setPending((current) => ({ ...current, [detail.id]: { ...detail, name: adjustName.trim(), historyChange: adjustHistory.trim() } }));
-                        setDetail(null);
-                    }}>
-                        <label className="block space-y-2 text-sm font-medium">Calendar Name<Input required maxLength={255} value={adjustName} onChange={(event) => setAdjustName(event.target.value)} /></label>
-                        <label className="block space-y-2 text-sm font-medium">History Change<Textarea required maxLength={1000} value={adjustHistory} onChange={(event) => setAdjustHistory(event.target.value)} /></label>
-                        <p className="text-xs text-muted-foreground">Apply your adjustments, then select Save changes to save them.</p>
-                        <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setDetail(null)}>Cancel</Button><Button type="submit" disabled={!adjustName.trim() || !adjustHistory.trim()}>Apply</Button></div>
-                    </form> : detail && <><dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-4 text-sm">
-                        <dt className="text-muted-foreground">History Change</dt><dd className="break-words">{detail.historyChange}</dd>
-                        <dt className="text-muted-foreground">Last Modified Date</dt><dd>{modifiedDate(detail.lastModifiedDate)}</dd>
-                        <dt className="text-muted-foreground">Last Modified By</dt><dd>{detail.lastModifiedBy}</dd>
-                        <dt className="text-muted-foreground">Status</dt><dd><StatusBadge status={detail.status} /></dd>
-                    </dl>
-                    </>}
-                </DialogContent>
-                )}
+                {detail && mode === "overview" && <CalendarOverviewChart calendar={detail} onDownload={() => download(detail, true)} />}
             </Dialog>
         </div>
     );

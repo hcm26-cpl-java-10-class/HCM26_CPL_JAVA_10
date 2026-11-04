@@ -19,6 +19,29 @@ export interface Trainee {
 
 // ===================== CLASS SESSION =====================
 
+export interface CalendarLesson {
+    id: string;
+    name: string;
+    from: string;
+    to: string;
+    slot?: string;
+    trainer?: string;
+    venue?: string;
+    notes?: string;
+    materials?: string;
+}
+
+export interface CalendarTopic {
+    id: string;
+    label: string;
+    startDate: string;
+    endDate: string;
+    name?: string;
+    version?: string;
+    slot?: string;
+    lessons?: CalendarLesson[];
+}
+
 export interface ClassCalendarVersion {
     id: number;
     classId: number;
@@ -29,6 +52,9 @@ export interface ClassCalendarVersion {
     lastModifiedBy: string;
     status: "active" | "inactive" | "draft";
     sessions?: ClassSession[];
+    overviewItems?: CalendarTopic[];
+    actualLearningStartDate?: string;
+    classStartDate?: string;
 }
 
 export interface ClassSession {
@@ -44,6 +70,9 @@ export interface ClassSession {
     type?: string;
     /** upcoming | completed | cancelled */
     status?: string;
+    topicCode?: string;
+    topicVersion?: string;
+    notes?: string;
 }
 
 export interface AttendanceRecord {

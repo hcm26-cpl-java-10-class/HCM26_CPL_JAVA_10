@@ -1,11 +1,14 @@
 import {
+    AlertTriangle,
     BookOpen,
     CalendarPlus,
     CheckCircle2,
+    ChevronDown,
     ClipboardCheck,
     FlaskConical,
     GraduationCap,
     MapPin,
+    Pencil,
     Plus,
     Trash2,
     User,
@@ -14,6 +17,7 @@ import {
 import { useMemo, useState } from "react";
 import {
     useClassSessions,
+    useClassTrainees,
     useCreateSession,
     useDeleteSession,
     useSaveAttendance,

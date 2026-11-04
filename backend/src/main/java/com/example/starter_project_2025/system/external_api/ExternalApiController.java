@@ -25,6 +25,16 @@ public class ExternalApiController {
     private static final String ALL_STATUSES = "all";
 
     ExternalApiService externalApiService;
+    CalendarExcelExporter calendarExcelExporter;
+
+    @GetMapping("/classes/{id}/calendars/{calendarId}/export")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_READ')")
+    public ResponseEntity<byte[]> exportCalendar(@PathVariable Long id, @PathVariable Long calendarId) throws java.io.IOException {
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=training-calendar-" + calendarId + ".xlsx")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(calendarExcelExporter.export(id, calendarId));
+    }
 
     @GetMapping("/classes")
     @Operation(summary = "Fetch classes from external system",
@@ -165,6 +175,12 @@ public class ExternalApiController {
     @Operation(summary = "Fetch calendar version history for a class")
     public ResponseEntity<Object> getClassCalendars(@PathVariable Long id) {
         return ResponseEntity.ok(externalApiService.fetchClassCalendars(id));
+    }
+
+    @PostMapping("/classes/{id}/calendars/{calendarId}/versions")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_UPDATE')")
+    public ResponseEntity<Object> createCalendarVersion(@PathVariable Long id, @PathVariable Long calendarId, @RequestBody Object body) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(externalApiService.createCalendarVersion(id, calendarId, body));
     }
 
     @PutMapping("/classes/{id}/calendars")
