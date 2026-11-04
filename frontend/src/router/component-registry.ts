@@ -37,6 +37,8 @@ export const routes: RouteConfig[] = [
   { path: "/training/trainee", component: TraineePage },
   { path: "/training/log-work", component: LogWorkPage },
   { path: "/training/content", component: ContentPage },
+  { path: "/subjects", component: ContentPage, requiredPermission: "SUBJECT_READ" },
+  { path: "/programs", component: ContentPage, requiredPermission: "PROGRAM_READ" },
   { path: "/training/reports", component: ReportsPage },
   // Class List is a sidebar module (registered by the backend as /classes); the detail pages are reached from it
   { path: "/classes", component: ClassListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },

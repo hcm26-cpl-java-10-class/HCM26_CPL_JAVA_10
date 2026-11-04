@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -15,7 +16,7 @@ public class CsvParser implements FileParser {
 
     @Override
     public boolean supports(String filename) {
-        return filename.endsWith(".csv");
+        return filename != null && filename.toLowerCase().endsWith(".csv");
     }
 
     @Override
@@ -23,13 +24,16 @@ public class CsvParser implements FileParser {
 
         List<Map<String, String>> result = new ArrayList<>();
 
-        try (CSVReader reader = new CSVReader(new InputStreamReader(input))) {
+        try (CSVReader reader = new CSVReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
 
             List<String[]> rows = reader.readAll();
 
             if (rows.size() < 2) return result;
 
             String[] headers = rows.get(0);
+            if (headers.length > 0 && headers[0] != null && headers[0].startsWith("\uFEFF")) {
+                headers[0] = headers[0].substring(1);
+            }
 
             for (int i = 1; i < rows.size(); i++) {
                 Map<String, String> rowMap = new HashMap<>();
@@ -43,7 +47,7 @@ public class CsvParser implements FileParser {
                 result.add(rowMap);
             }
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Error parsing CSV: " + e.getMessage(), e);
         }
 
         return result;

@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.external_api.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -27,7 +28,13 @@ public class ExternalClassDTO {
     String program;
     String trainingProgram;
     String classAdmin;
+
+    @JsonAlias({"enrolledCount", "actualSize", "traineeCount"})
     Integer enrolledTrainees;
+
+    @JsonAlias({"enrolledTrainees", "actualSize", "traineeCount"})
+    Integer enrolledCount;
+
     String masterTrainer;
     String deliveryType;
     String formatType;
@@ -39,5 +46,13 @@ public class ExternalClassDTO {
     String supplierPartner;
     String keyProgram;
     String globalSe;
-    String jobRecommendation;
+    Object jobRecommendation;
+
+    public Integer getEnrolledCount() {
+        return enrolledCount != null ? enrolledCount : enrolledTrainees;
+    }
+
+    public Integer getEnrolledTrainees() {
+        return enrolledTrainees != null ? enrolledTrainees : enrolledCount;
+    }
 }
