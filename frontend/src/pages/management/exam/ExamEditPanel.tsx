@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ExamConfigFields } from "./ExamConfigFields";
-import { buildExamRequest, configFromExam, DEFAULT_CONFIG, getErrorMessage, toInputDateTime, validateConfig, type ExamConfigForm } from "./examConfig";
+import { buildExamRequest, configFromExam, DEFAULT_CONFIG, getErrorMessage, validateConfig, type ExamConfigForm } from "./examConfig";
 
 export function ExamEditPanel({ examId }: { examId: number }) {
   const queryClient = useQueryClient();
@@ -45,9 +45,9 @@ export function ExamEditPanel({ examId }: { examId: number }) {
     onSuccess: (updated) => {
       queryClient.setQueryData(["exam-detail", examId], updated);
       void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
-      toast.success("Exam updated successfully");
+      toast.success("Assessment updated successfully");
     },
-    onError: (error) => toast.error(getErrorMessage(error, "Failed to save exam")),
+    onError: (error) => toast.error(getErrorMessage(error, "Failed to save assessment")),
   });
 
   const deleteExamMutation = useMutation({
@@ -57,16 +57,16 @@ export function ExamEditPanel({ examId }: { examId: number }) {
       setDeleteConfirmInput("");
       queryClient.removeQueries({ queryKey: ["exam-detail", examId] });
       void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
-      toast.success("Exam deleted successfully");
+      toast.success("Assessment deleted successfully");
       navigate("/exams");
     },
-    onError: (error) => toast.error(getErrorMessage(error, "Failed to delete exam")),
+    onError: (error) => toast.error(getErrorMessage(error, "Failed to delete assessment")),
   });
 
   const saveExamAsTemplateMutation = useMutation({
     mutationFn: () => {
       if (!examToSaveAsTemplate?.id) {
-        throw new Error("Select an exam before saving it as a template.");
+        throw new Error("Select an assessment before saving it as a template.");
       }
       const name = templateName.trim();
       if (!name) {
@@ -81,10 +81,10 @@ export function ExamEditPanel({ examId }: { examId: number }) {
       setExamToSaveAsTemplate(null);
       setTemplateName("");
       setTemplateDescription("");
-      toast.success("Exam saved as template successfully");
+      toast.success("Assessment saved as template successfully");
     },
     onError: (error) =>
-        toast.error(getErrorMessage(error, "Failed to save exam as template")),
+        toast.error(getErrorMessage(error, "Failed to save assessment as template")),
   });
 
   const openSaveAsTemplate = (target: ExamDTO) => {
@@ -127,10 +127,10 @@ export function ExamEditPanel({ examId }: { examId: number }) {
   }, [dirty]);
 
   if (examQuery.isLoading) {
-    return <p className="py-10 text-center text-sm text-muted-foreground">Loading exam...</p>;
+    return <p className="py-10 text-center text-sm text-muted-foreground">Loading assessment...</p>;
   }
   if (!exam) {
-    return <p className="py-10 text-center text-sm text-destructive">Failed to load the exam.</p>;
+    return <p className="py-10 text-center text-sm text-destructive">Failed to load the assessment.</p>;
   }
 
   return (
@@ -139,12 +139,7 @@ export function ExamEditPanel({ examId }: { examId: number }) {
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          const problem = validateConfig(
-            Number(newDuration),
-            cfg,
-            exam.startTime ? toInputDateTime(exam.startTime) : undefined,
-            exam.endTime ? toInputDateTime(exam.endTime) : undefined,
-          );
+          const problem = validateConfig(Number(newDuration), cfg);
           if (problem) {
             toast.error(problem);
             return;
@@ -214,11 +209,11 @@ export function ExamEditPanel({ examId }: { examId: number }) {
                   }}
               >
                 <DialogHeader>
-                  <DialogTitle>Save Exam as Template</DialogTitle>
+                  <DialogTitle>Save Assessment as Template</DialogTitle>
                   <DialogDescription>
                     Save the configuration, questions, and answer options from
                     <strong className="text-foreground"> {examToSaveAsTemplate?.title}</strong>
-                    {" "}as a reusable template. The original exam will not be changed.
+                    {" "}as a reusable template. The original assessment will not be changed.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-5">
@@ -270,9 +265,9 @@ export function ExamEditPanel({ examId }: { examId: number }) {
           <Dialog open={Boolean(examToDelete)} onOpenChange={(open: boolean) => { if (!open) closeDeleteConfirm(); }}>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle className="text-destructive">Confirm Exam Deletion</DialogTitle>
+                <DialogTitle className="text-destructive">Confirm Assessment Deletion</DialogTitle>
                 <DialogDescription>
-                  This action cannot be undone. All attempts and data related to exam <strong className="text-foreground">{examToDelete?.title}</strong> will be permanently deleted.
+                  This action cannot be undone. All attempts and data related to assessment <strong className="text-foreground">{examToDelete?.title}</strong> will be permanently deleted.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-3 py-3">
@@ -295,7 +290,7 @@ export function ExamEditPanel({ examId }: { examId: number }) {
                     disabled={deleteConfirmInput !== "DELETE" || deleteExamMutation.isPending}
                     onClick={handleConfirmDelete}
                 >
-                  {deleteExamMutation.isPending ? "Deleting..." : "Delete Exam"}
+                  {deleteExamMutation.isPending ? "Deleting..." : "Delete Assessment"}
                 </Button>
               </DialogFooter>
             </DialogContent>

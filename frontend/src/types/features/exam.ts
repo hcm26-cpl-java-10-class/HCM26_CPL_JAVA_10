@@ -34,6 +34,8 @@ export interface CodeSpec {
   customMain?: boolean;
   /** Main class (custom or auto-generated). Only saved when customMain is true. */
   mainCode?: string | null;
+  /** Teacher's demo solution used to check the tests. Teacher-only; never sent to students. */
+  referenceCode?: string | null;
 }
 export type QuestionDifficulty = "EASY" | "MEDIUM" | "HARD";
 
@@ -63,6 +65,10 @@ export interface QuestionDTO {
   options: QuestionOptionDTO[];
   imageUrl?: string | null;
   code?: CodeSpec | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  createdBy?: number | null;
+  updatedBy?: number | null;
 }
 
 export interface QuestionFilter {
@@ -100,6 +106,7 @@ export interface ExamDTO {
   createdByName?: string | null;
   /** Submitted attempts waiting for the teacher to grade. */
   pendingGradingCount?: number;
+  hasAttempts?: boolean;
   title: string;
   durationMinutes: number;
   startTime?: string | null;
@@ -127,6 +134,8 @@ export interface ExamDTO {
   blockCopyPaste?: boolean;
   requireFullscreen?: boolean;
   singleSession?: boolean;
+  cameraProctoring?: boolean;
+  notifyOnViolation?: boolean;
 }
 
 export interface ExamFilter {

@@ -69,7 +69,7 @@ export default function ScoreAppealsPage() {
     const map = new Map<number, string>();
     appeals.forEach((a) => {
       if (a.examId != null) {
-        map.set(a.examId, a.examTitle || `Exam #${a.examId}`);
+        map.set(a.examId, a.examTitle || `Assessment #${a.examId}`);
       }
     });
     return Array.from(map.entries()).map(([id, title]) => ({ id, title }));
@@ -126,13 +126,13 @@ export default function ScoreAppealsPage() {
           </div>
 
           <div className="w-64">
-            <label className="mb-1.5 block text-sm font-medium">Exam</label>
+            <label className="mb-1.5 block text-sm font-medium">Assessment</label>
             <Select value={examFilter} onValueChange={setExamFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="All exams" />
+                <SelectValue placeholder="All assessments" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All exams</SelectItem>
+                <SelectItem value="all">All assessments</SelectItem>
                 {examOptions.map((opt) => (
                   <SelectItem key={opt.id} value={String(opt.id)}>
                     {opt.title}
@@ -168,7 +168,7 @@ export default function ScoreAppealsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Exam</TableHead>
+                    <TableHead>Assessment</TableHead>
                     <TableHead>Student</TableHead>
                     <TableHead>Reason</TableHead>
                     <TableHead>Current Score</TableHead>
@@ -182,7 +182,7 @@ export default function ScoreAppealsPage() {
                   {filtered.map((appeal) => (
                     <TableRow key={appeal.id}>
                       <TableCell className="font-medium">
-                        {appeal.examTitle || `Exam #${appeal.examId}`}
+                        {appeal.examTitle || `Assessment #${appeal.examId}`}
                         <p className="text-xs text-muted-foreground">Attempt #{appeal.attemptNumber}</p>
                       </TableCell>
                       <TableCell>{appeal.studentName || "-"}</TableCell>

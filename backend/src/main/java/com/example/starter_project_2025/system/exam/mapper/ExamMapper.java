@@ -45,6 +45,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setCreatedBy(e.getCreatedBy());
         d.setCreatedByName(creatorName(e.getCreatedBy()));
         d.setPendingGradingCount(pendingGrading(e.getId()));
+        d.setHasAttempts(e.getId() != null && attemptRepository.existsByExam_Id(e.getId()));
         d.setUpdatedBy(e.getUpdatedBy());
         d.setTitle(e.getTitle());
         d.setDurationMinutes(e.getDurationMinutes());
@@ -77,6 +78,8 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setBlockCopyPaste(Boolean.TRUE.equals(e.getBlockCopyPaste()));
         d.setRequireFullscreen(Boolean.TRUE.equals(e.getRequireFullscreen()));
         d.setSingleSession(Boolean.TRUE.equals(e.getSingleSession()));
+        d.setCameraProctoring(Boolean.TRUE.equals(e.getCameraProctoring()));
+        d.setNotifyOnViolation(Boolean.TRUE.equals(e.getNotifyOnViolation()));
         d.setHasPassword(e.getAccessCode() != null && !e.getAccessCode().trim().isEmpty());
         return d;
     }
@@ -145,6 +148,8 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getBlockCopyPaste() != null) e.setBlockCopyPaste(d.getBlockCopyPaste());
         if (d.getRequireFullscreen() != null) e.setRequireFullscreen(d.getRequireFullscreen());
         if (d.getSingleSession() != null) e.setSingleSession(d.getSingleSession());
+        if (d.getCameraProctoring() != null) e.setCameraProctoring(d.getCameraProctoring());
+        if (d.getNotifyOnViolation() != null) e.setNotifyOnViolation(d.getNotifyOnViolation());
         if (d.getAccessCode() != null) {
             String trimmed = d.getAccessCode().trim();
             e.setAccessCode(trimmed.isEmpty() ? null : trimmed);

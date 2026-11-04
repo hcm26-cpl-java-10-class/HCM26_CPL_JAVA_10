@@ -44,6 +44,7 @@ public class ExamAttemptService {
     private final QuestionTakerMapper questionTakerMapper;
     private final InvitationRepository invitationRepository;
     private final ExamResultAccessService resultAccessService;
+    private final ExamProctorImageRepository proctorImageRepository;
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId) {
         return startOrResume(examId, studentId, null);
@@ -657,8 +658,15 @@ public class ExamAttemptService {
         integrity.setBlockCopyPaste(integrity.isEnabled() && Boolean.TRUE.equals(ex.getBlockCopyPaste()));
         integrity.setRequireFullscreen(integrity.isEnabled() && Boolean.TRUE.equals(ex.getRequireFullscreen()));
         integrity.setSingleSession(integrity.isEnabled() && Boolean.TRUE.equals(ex.getSingleSession()));
+        integrity.setCameraProctoring(integrity.isEnabled() && Boolean.TRUE.equals(ex.getCameraProctoring()));
+        integrity.setNotifyOnViolation(integrity.isEnabled() && Boolean.TRUE.equals(ex.getNotifyOnViolation()));
+        integrity.setEntryPhotoDone(!integrity.isCameraProctoring() || attempt.getId() == null
+                || proctorImageRepository.existsByAttemptIdAndEventIdIsNull(attempt.getId()));
         response.setIntegrity(integrity);
-        response.setQuestions(attempt.getQuestions().stream()
+        // Chua chup anh vao thi thi chua duoc xem de (server tu giu lai noi dung cau hoi).
+        boolean hideQuestions = attempt.getStatus() == ExamAttemptStatus.IN_PROGRESS
+                && integrity.isCameraProctoring() && !integrity.isEntryPhotoDone();
+        response.setQuestions(hideQuestions ? List.of() : attempt.getQuestions().stream()
                 .map(questionTakerMapper::toTakerResponse)
                 .toList());
         response.setAnswers(attempt.getAnswers().stream()

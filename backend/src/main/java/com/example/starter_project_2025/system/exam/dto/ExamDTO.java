@@ -36,6 +36,10 @@ public class ExamDTO extends BaseDTO {
     @JsonProperty(access = READ_ONLY)
     private Long pendingGradingCount;
 
+    /** Da co sinh vien lam bai hay chua (dung de khoa sua/them/xoa cau hoi; chi de hien thi). */
+    @JsonProperty(access = READ_ONLY)
+    private Boolean hasAttempts;
+
     @NotBlank(groups = OnCreate.class)
     @Size(max = 200, groups = {OnCreate.class, OnUpdate.class})
     private String title;
@@ -96,6 +100,8 @@ public class ExamDTO extends BaseDTO {
     private Boolean blockCopyPaste;
     private Boolean requireFullscreen;
     private Boolean singleSession;
+    private Boolean cameraProctoring;
+    private Boolean notifyOnViolation;
 
     @JsonProperty(access = READ_ONLY)
     private Boolean hasPassword;
