@@ -32,22 +32,21 @@ function isExamOpen(exam: Exam, now: number) {
     return started && notClosed;
 }
 
-const compare = (x: number, y: number) => (x < y ? -1 : x > y ? 1 : 0);
-const timeOf = (value: string | null | undefined, fallback: number) =>
-    value ? new Date(value).getTime() : fallback;
-
+// CẬP NHẬT: Ưu tiên sắp xếp bài thi đang mở (Open) lên đầu,
+// tôn trọng thứ tự ID giảm dần do Backend (findAllExamsSortedByActive) trả về.
 function sortExams(exams: Exam[]) {
     const now = Date.now();
-    const rank = (exam: Exam) =>
-        isExamOpen(exam, now) ? 0 : exam.startTime != null && now < new Date(exam.startTime).getTime() ? 1 : 2;
+
     return [...exams].sort((a, b) => {
-        const byRank = compare(rank(a), rank(b));
-        if (byRank !== 0) return byRank;
-        if (rank(a) === 0) {
-            return compare(timeOf(a.endTime, Number.MAX_SAFE_INTEGER), timeOf(b.endTime, Number.MAX_SAFE_INTEGER));
-        }
-        if (rank(a) === 1) return compare(timeOf(a.startTime, 0), timeOf(b.startTime, 0));
-        return compare(timeOf(b.endTime, 0), timeOf(a.endTime, 0));
+        const aIsOpen = isExamOpen(a, now);
+        const bIsOpen = isExamOpen(b, now);
+
+        // Bài thi đang Open luôn đứng trên
+        if (aIsOpen && !bIsOpen) return -1;
+        if (!aIsOpen && bIsOpen) return 1;
+
+        // Nếu cùng trạng thái (cùng Open hoặc cùng không Open), giữ nguyên thứ tự Backend gửi về (ID giảm dần)
+        return 0;
     });
 }
 
@@ -82,8 +81,6 @@ function ExamCard({
     disabled: boolean;
 }) {
     const status = getAttemptStatus(attempt);
-    // De thi "Manually released by teacher": hoc sinh duoc xem bai lam cua minh
-    // ngay sau khi nop, chi thay cau da lam - chua co diem, chua biet dung/sai.
     const canReview = (attempt?.status === 'SUBMITTED' || attempt?.status === 'PENDING_REVIEW')
         && (exam.showAnswersAfterExam === true || exam.resultVisibility === 'MANUAL_RELEASE');
     const open = isExamOpen(exam, now);
@@ -91,7 +88,6 @@ function ExamCard({
     const afterClose = exam.endTime != null && now >= new Date(exam.endTime).getTime();
     const isInProgress = attempt?.status === 'IN_PROGRESS';
     const hasAttempts = (attempt?.attemptsUsed ?? 0) > 0;
-    // Diem chi duoc hien thi khi giao vien da cong bo ket qua (Publish Results).
     const isResultPublished = attempt?.resultPublished !== false;
     const outOfAttempts = hasAttempts && (attempt?.attemptsRemaining ?? 0) <= 0 && !isInProgress;
     const disabledBySchedule = (beforeOpen || afterClose) && !isInProgress;
@@ -128,7 +124,7 @@ function ExamCard({
                 <CardDescription>
                     Max Score:{' '}
                     <span className="font-medium text-slate-700">
-                        {formatScore(attempt?.maxScore ?? exam.maxScore ?? 10)} {}
+                        {formatScore(attempt?.maxScore ?? exam.maxScore ?? 10)}
                     </span>
                 </CardDescription>
             </CardHeader>

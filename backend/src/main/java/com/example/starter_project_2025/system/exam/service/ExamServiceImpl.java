@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -77,6 +79,8 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	protected String[] searchableFields() {
 		return new String[]{"title"};
 	}
+
+
 
 	/**
 	 * Tổng quan số lượng lời mời của các đề thi mà giáo viên sở hữu.
@@ -224,6 +228,11 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		Exam saved = examRepository.save(exam);
 		deleteExamCopies(before, exam.getQuestions());
 		return examMapper.toResponse(saved);
+	}
+
+	public Page<ExamDTO> getExamsSortedByOpenStatus(Pageable pageable) {
+		Page<Exam> examPage = examRepository.findAllExamsSortedByOpenStatus(pageable);
+		return examPage.map(examMapper::toResponse); // Dùng toResponse
 	}
 
 	public ExamDTO updateQuestion(Long examId, Long questionId, QuestionDTO request) {
