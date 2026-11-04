@@ -13,9 +13,9 @@ import java.util.regex.Pattern;
 /** Doc/ghi JSON, kiem tra hop le va sinh code khung cho bai lap trinh Java. */
 public final class CodeSpecSupport {
 
-    /** So test mac dinh khi seed du lieu mau (2 test dau hien thi). Giao vien co the them/bot va chon test hien thi. */
     public static final int VISIBLE_TESTS = 2;
-    public static final int MIN_TESTS = 1;
+    public static final int HIDDEN_TESTS = 8;
+    public static final int TOTAL_TESTS = VISIBLE_TESTS + HIDDEN_TESTS;
     public static final int MAX_PARAMS = 6;
     public static final int MAX_VALUE_LENGTH = 1000;
     public static final int MAX_MAIN_LENGTH = 20000;
@@ -54,8 +54,6 @@ public final class CodeSpecSupport {
             copy.setTimeLimitSeconds(spec.getTimeLimitSeconds());
             copy.setCustomMain(spec.isCustomMain());
             copy.setMainCode(spec.isCustomMain() ? spec.getMainCode() : null);
-            String ref = spec.getReferenceCode();
-            copy.setReferenceCode(ref == null || ref.isBlank() || ref.length() > MAX_MAIN_LENGTH ? null : ref);
             for (CodeSpecDTO.Param p : spec.getParams() == null ? List.<CodeSpecDTO.Param>of() : spec.getParams()) {
                 CodeSpecDTO.Param c = new CodeSpecDTO.Param();
                 c.setName(p.getName() == null ? null : p.getName().trim());
@@ -230,8 +228,11 @@ public final class CodeSpecSupport {
         List<CodeSpecDTO.Param> params = spec.getParams() == null ? List.of() : spec.getParams();
 
         List<CodeSpecDTO.TestCase> tests = spec.getTests() == null ? List.of() : spec.getTests();
-        if (tests.size() < MIN_TESTS) {
-            errors.add("Cần ít nhất " + MIN_TESTS + " test case");
+        long visible = tests.stream().filter(CodeSpecDTO.TestCase::isVisible).count();
+        long hidden = tests.size() - visible;
+        if (visible != VISIBLE_TESTS || hidden != HIDDEN_TESTS) {
+            errors.add("Cần đúng " + VISIBLE_TESTS + " test hiển thị và " + HIDDEN_TESTS
+                    + " test ẩn (hiện có " + visible + " hiển thị, " + hidden + " ẩn)");
         }
 
         boolean specOk = errors.isEmpty();

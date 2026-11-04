@@ -2,12 +2,10 @@ package com.example.starter_project_2025.system.exam.dto;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 
 public record PublishedExamScoreDTO(
         Long examId,
         String examTitle,
-        ExamCategory category,
         int attemptNumber,
         BigDecimal objectiveScore,
         BigDecimal finalScore,

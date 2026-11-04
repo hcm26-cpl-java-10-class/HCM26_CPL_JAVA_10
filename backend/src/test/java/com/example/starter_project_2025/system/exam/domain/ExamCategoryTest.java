@@ -10,7 +10,7 @@ class ExamCategoryTest {
 
     @Test
     void assessmentAndQuizShowAnswersByDefault() {
-        assertTrue(ExamCategory.ASSIGNMENT.isShowAnswersByDefault());
+        assertTrue(ExamCategory.ASSESSMENT.isShowAnswersByDefault());
         assertTrue(ExamCategory.QUIZ.isShowAnswersByDefault());
     }
 
@@ -22,6 +22,6 @@ class ExamCategoryTest {
 
     @Test
     void newExamDefaultsToAssessment() {
-        assertEquals(ExamCategory.ASSIGNMENT, new Exam().getCategory());
+        assertEquals(ExamCategory.ASSESSMENT, new Exam().getCategory());
     }
 }

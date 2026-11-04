@@ -13,8 +13,6 @@ public interface ExamAttemptRepository extends BaseCrudRepository<ExamAttempt, L
 
     boolean existsByExam_Id(Long examId);
 
-    long countByExam_IdAndStatusIn(Long examId, java.util.Collection<ExamAttemptStatus> statuses);
-
     boolean existsByExam_IdAndStatusIn(Long examId, java.util.Collection<ExamAttemptStatus> statuses);
 
     Optional<ExamAttempt> findByExam_IdAndStudent_Id(Long examId, Long studentId);

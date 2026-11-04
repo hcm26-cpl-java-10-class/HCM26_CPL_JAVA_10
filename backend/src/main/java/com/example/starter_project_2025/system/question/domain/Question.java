@@ -16,7 +16,7 @@ import java.util.List;
 @ResourcePermission("QUESTION")
 @ResourceMenu(
         title = "Questions",
-        group = "Assessment Management",
+        group = "Exam Management",
         icon = "help-circle",
         url = "/questions",
         order = 2,
