@@ -23,6 +23,26 @@ function formatSubmittedAt(value?: string | null): string {
   return date.toLocaleString();
 }
 
+const examCategories = [
+  { value: "ASSESSMENT", label: "Assessment" },
+  { value: "QUIZ", label: "Quiz" },
+  { value: "MIDTERM", label: "Midterm" },
+  { value: "FINAL_TEST", label: "Final Test" },
+] as const;
+
+const getScorePercentage = (score: PublishedExamScore): number | null => {
+  if (
+      !score.resultPublished ||
+      score.finalScore == null ||
+      score.maxScore == null ||
+      score.maxScore <= 0
+  ) {
+    return null;
+  }
+
+  return (score.finalScore / score.maxScore) * 100;
+};
+
 function ExamScoreCard({
   score,
   appealed,
@@ -137,10 +157,75 @@ export default function MyScoresPage() {
     (myAppealsQuery.data ?? []).map((a) => a.attemptId).filter((v): v is number => v != null)
   );
 
+  const publishedScores = examScores
+      .map((score) => ({
+        score,
+        percentage: getScorePercentage(score),
+      }))
+      .filter(
+          (item): item is {
+            score: PublishedExamScore;
+            percentage: number;
+          } => item.percentage !== null
+      );
+
+  const completedCount = publishedScores.length;
+
+  const averageScore =
+      completedCount > 0
+          ? publishedScores.reduce(
+          (total, item) => total + item.percentage,
+          0
+      ) / completedCount
+          : 0;
+
+  const highestScore =
+      completedCount > 0
+          ? Math.max(...publishedScores.map((item) => item.percentage))
+          : 0;
+
   return (
     <MainLayout pathName={{ "my-scores": "My Scores" }}>
       <div className="space-y-6 p-4">
         <h1 className="text-2xl font-bold">My Scores</h1>
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm text-muted-foreground">
+                Completed Exams
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">{completedCount}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm text-muted-foreground">
+                Average Score
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">
+                {completedCount > 0 ? `${averageScore.toFixed(1)}%` : "-"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm text-muted-foreground">
+                Highest Achievement
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">
+                {completedCount > 0 ? `${highestScore.toFixed(1)}%` : "-"}
+              </p>
+            </CardContent>
+          </Card>
+        </section>
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Exam Scores</h2>
@@ -151,14 +236,41 @@ export default function MyScoresPage() {
           {!isExamScoresLoading && !isExamScoresError && examScores.length === 0 && (
             <p className="text-muted-foreground">No graded exam attempts yet.</p>
           )}
-          {examScores.map((score) => (
-            <ExamScoreCard
-              key={`${score.examId}-${score.attemptNumber}`}
-              score={score}
-              appealed={appealedAttemptIds.has(score.attemptId)}
-              onAppeal={() => navigate(`/my-appeals?attemptId=${score.attemptId}`)}
-            />
-          ))}
+          {examCategories.map((category) => {
+            const categoryScores = examScores.filter(
+                (score) => score.category === category.value
+            );
+
+            return (
+                <div key={category.value} className="space-y-3">
+                  <h3 className="text-base font-semibold">
+                    {category.label}
+                    <Badge variant="secondary" className="ml-2">
+                      {categoryScores.length}
+                    </Badge>
+                  </h3>
+
+                  {categoryScores.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No exams in this category yet.
+                      </p>
+                  ) : (
+                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        {categoryScores.map((score) => (
+                            <ExamScoreCard
+                                key={`${score.examId}-${score.attemptNumber}`}
+                                score={score}
+                                appealed={appealedAttemptIds.has(score.attemptId)}
+                                onAppeal={() =>
+                                    navigate(`/my-appeals?attemptId=${score.attemptId}`)
+                                }
+                            />
+                        ))}
+                      </div>
+                  )}
+                </div>
+            );
+          })}
         </section>
 
         <section className="space-y-3">

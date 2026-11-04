@@ -1,15 +1,23 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+    Calendar,
+    Check,
+    ChevronUp,
+    Clock,
+    Eye,
+    EyeOff,
     Folder,
     FolderOpen,
-    Filter,
     FolderX,
     Layers,
     LayoutGrid,
+    Pencil,
     Plus,
     Search,
+    Table as TableIcon,
+    Trash2,
     X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +29,7 @@ import { ProTable } from "@/components/datatable/ProTable";
 import ActionButton from "@/components/datatable/common/ActionButton";
 import { PermissionGate } from "@/components/PermissionGate";
 import { useProTable } from "@/components/datatable/hook/useProTable";
+import { ToolbarActions } from "@/components/datatable/toolbar/ToolbarActions";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { normalizeEntityActionPath, resolveEntityActionPath } from "@/router/entity-action.utils";
@@ -36,63 +45,338 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import type { QuestionDTO, QuestionDifficulty, QuestionType } from "@/types";
+
+const TYPE_LABEL: Record<QuestionType, string> = {
+    MULTIPLE_CHOICE: "Multiple Choice",
+    ESSAY: "Essay",
+    CODING: "Coding",
+};
+
+const DIFFICULTY_LABEL: Record<QuestionDifficulty, string> = {
+    EASY: "Easy",
+    MEDIUM: "Medium",
+    HARD: "Hard",
+};
+
+const DIFFICULTY_STYLE: Record<QuestionDifficulty, { text: string; bg: string; border: string }> = {
+    EASY: { text: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" },
+    MEDIUM: { text: "text-amber-700 dark:text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" },
+    HARD: { text: "text-red-700 dark:text-red-400", bg: "bg-red-500/10", border: "border-red-500/30" },
+};
+
+function formatDateTime(value?: string | null): string {
+    if (!value) return "—";
+    try {
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return value;
+        const pad = (n: number) => String(n).padStart(2, "0");
+        return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    } catch {
+        return value;
+    }
+}
+
+/** Render question choices / answers preview when expanded */
+function QuestionAnswersPreview({ question }: { question: QuestionDTO }) {
+    if (question.type === "ESSAY") {
+        const criteria = question.gradingCriteria ?? [];
+        if (criteria.length === 0) {
+            return (
+                <div className="p-3 rounded-lg bg-muted/30 text-xs italic text-muted-foreground border">
+                    Tự luận — chấm điểm theo thang điểm và nội dung bài làm của thí sinh.
+                </div>
+            );
+        }
+        return (
+            <div className="p-3 rounded-lg bg-muted/20 border space-y-2">
+                <span className="text-xs font-semibold text-muted-foreground">Tiêu chí chấm điểm ({criteria.length}):</span>
+                <ul className="space-y-1.5 divide-y divide-border/60">
+                    {criteria.map((c, i) => (
+                        <li key={i} className="pt-1.5 flex items-start justify-between gap-2 text-xs">
+                            <div>
+                                <span className="font-medium text-foreground">{c.name}</span>
+                                {c.description && <p className="text-muted-foreground text-[11px] mt-0.5">{c.description}</p>}
+                            </div>
+                            <span className="font-semibold text-primary shrink-0">{c.weightPercentage}%</span>
+                        </li>
+                    ))}
+                </ul>
+            </div>
+        );
+    }
+
+    if (question.type === "CODING") {
+        const code = question.code;
+        if (!code) {
+            return (
+                <div className="p-3 rounded-lg bg-muted/20 border text-xs italic text-muted-foreground">
+                    Bài tập lập trình — chấm điểm tự động qua Test Cases (chưa có dữ liệu code).
+                </div>
+            );
+        }
+        const params = (code.params ?? []).map((p) => `${p.type} ${p.name}`).join(", ");
+        const signature = `public static ${code.returnType} ${code.functionName}(${params})`;
+        const tests = code.tests ?? [];
+        const codeBlock = (title: string, body?: string | null) => (
+            <div className="space-y-1">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{title}</span>
+                <pre className="p-2.5 rounded bg-muted/60 border font-mono text-[11px] leading-relaxed overflow-x-auto whitespace-pre max-h-80 overflow-y-auto">
+                    {body && body.trim() ? body : "(trống)"}
+                </pre>
+            </div>
+        );
+        return (
+            <div className="p-3 rounded-lg bg-muted/20 border space-y-3 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-muted-foreground">Bài tập lập trình (Coding Problem):</span>
+                    <code className="font-mono text-[11px] text-primary">{signature}</code>
+                    {code.timeLimitSeconds ? (
+                        <Badge variant="outline" className="h-4 px-1.5 text-[10px]">{code.timeLimitSeconds}s / test</Badge>
+                    ) : null}
+                </div>
+
+                {codeBlock("Class Solution (starter code)", code.starterCode)}
+                {codeBlock(code.customMain ? "Class Main (custom)" : "Class Main (auto-generated)", code.mainCode)}
+
+                <div className="space-y-1">
+                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                        Test cases ({tests.length})
+                    </span>
+                    {tests.length === 0 ? (
+                        <p className="text-muted-foreground italic">Chưa có test case.</p>
+                    ) : (
+                        <div className="rounded border overflow-x-auto">
+                            <table className="w-full text-[11px]">
+                                <thead className="bg-muted/50 text-muted-foreground">
+                                    <tr>
+                                        <th className="px-2 py-1 text-left font-medium w-8">#</th>
+                                        <th className="px-2 py-1 text-left font-medium">Input</th>
+                                        <th className="px-2 py-1 text-left font-medium">Expected</th>
+                                        <th className="px-2 py-1 text-left font-medium w-16">Loại</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/60 font-mono">
+                                    {tests.map((t, i) => (
+                                        <tr key={i}>
+                                            <td className="px-2 py-1 text-muted-foreground">{i + 1}</td>
+                                            <td className="px-2 py-1 whitespace-pre-wrap break-all">
+                                                {(code.params ?? []).map((p, k) => `${p.name} = ${t.inputs?.[k] ?? ""}`).join(", ")}
+                                            </td>
+                                            <td className="px-2 py-1 whitespace-pre-wrap break-all">{t.expected}</td>
+                                            <td className="px-2 py-1 font-sans">
+                                                <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+                                                    {t.visible ? "Visible" : "Hidden"}
+                                                </Badge>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // MULTIPLE_CHOICE
+    const options = question.options ?? [];
+    if (options.length === 0) {
+        return <p className="text-xs italic text-muted-foreground p-2">Chưa có phương án trả lời.</p>;
+    }
+
+    return (
+        <div className="p-3 rounded-lg bg-muted/20 border space-y-1.5">
+            <span className="text-xs font-semibold text-muted-foreground block mb-1">Các phương án trả lời:</span>
+            <ul className="grid gap-1.5">
+                {options.map((option, index) => {
+                    const letter = String.fromCharCode(65 + index);
+                    const isCorrect = Boolean(option.correct);
+                    return (
+                        <li
+                            key={option.id ?? index}
+                            className={`flex items-start gap-2 rounded px-2.5 py-1.5 text-xs transition-colors border ${isCorrect
+                                ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 font-medium border-emerald-500/30"
+                                : "bg-background/60 text-muted-foreground border-transparent"
+                                }`}
+                        >
+                            <span className={`font-semibold shrink-0 ${isCorrect ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/70"}`}>
+                                {letter}.
+                            </span>
+                            <span className="min-w-0 flex-1 break-words">{option.content}</span>
+                            {isCorrect && (
+                                <Badge variant="outline" className="h-4 px-1.5 text-[10px] text-emerald-600 border-emerald-500/40 dark:text-emerald-400 bg-emerald-500/15 shrink-0 flex items-center gap-0.5">
+                                    <Check className="size-2.5" /> Đúng
+                                </Badge>
+                            )}
+                        </li>
+                    );
+                })}
+            </ul>
+        </div>
+    );
+}
 
 export default function QuestionListPage() {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const [searchParams, setSearchParams] = useSearchParams();
     const { activeRole } = usePermissions();
 
+    // View Mode: 'card' (default) or 'table'
+    const [viewMode, setViewMode] = useState<"card" | "table">("card");
+
+    // Filters State
+    const [keyword, setKeyword] = useState("");
+    const [selectedTypes, setSelectedTypes] = useState<Set<QuestionType>>(new Set());
+    const [selectedDifficulties, setSelectedDifficulties] = useState<Set<QuestionDifficulty>>(new Set());
     const initialTopic = searchParams.get("topic") || "";
     const [selectedTopic, setSelectedTopic] = useState<string>(initialTopic);
     const [topicSearch, setTopicSearch] = useState("");
+
+    // Date range filters (yyyy-mm-dd)
+    const [createdFrom, setCreatedFrom] = useState("");
+    const [createdTo, setCreatedTo] = useState("");
+    const [updatedFrom, setUpdatedFrom] = useState("");
+    const [updatedTo, setUpdatedTo] = useState("");
+
+    // Pagination for Card View
+    const [cardPage, setCardPage] = useState(0);
+    const [cardPageSize, setCardPageSize] = useState(10);
+
+    // Expandable answer preview IDs
+    const [expandedIds, setExpandedIds] = useState<Set<number | string>>(new Set());
+
+    // Dialogs
     const [isNewTopicOpen, setIsNewTopicOpen] = useState(false);
     const [newTopicName, setNewTopicName] = useState("");
+    const [deleteTarget, setDeleteTarget] = useState<QuestionDTO | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
-    const { data: allQuestionsData, isLoading: isLoadingTopics } = useQuery({
-        queryKey: ["question", "topics-summary"],
+    // Fetch questions summary to build filter counts and populate card view
+    const { data: allQuestionsData, isLoading: isLoadingSummary, refetch: refetchQuestions } = useQuery({
+        queryKey: ["question", "all-summary"],
         queryFn: () => questionApi.getPage({ page: 0, size: 2000, sort: "id,desc" }),
         staleTime: 15_000,
     });
 
-    const { topics, topicCounts, totalCount } = useMemo(() => {
-        const list = allQuestionsData?.content || [];
-        const counts: Record<string, number> = {};
+    const allQuestions: QuestionDTO[] = allQuestionsData?.content || [];
 
-        for (const item of list) {
-            const rawTopic = (item.topic || "").trim();
-            const topicKey = rawTopic || "(No Topic)";
-            counts[topicKey] = (counts[topicKey] || 0) + 1;
+    // Compute distinct topics & counts across question bank
+    const { topics, topicCounts, typeCounts, difficultyCounts, noTopicCount } = useMemo(() => {
+        const tCounts: Record<string, number> = {};
+        const qTypeCounts: Record<string, number> = { MULTIPLE_CHOICE: 0, ESSAY: 0, CODING: 0 };
+        const dCounts: Record<string, number> = { EASY: 0, MEDIUM: 0, HARD: 0 };
+        let uncategorized = 0;
+
+        for (const q of allQuestions) {
+            // Type counts
+            if (q.type && qTypeCounts[q.type] !== undefined) {
+                qTypeCounts[q.type]++;
+            }
+            // Difficulty counts
+            if (q.difficulty && dCounts[q.difficulty] !== undefined) {
+                dCounts[q.difficulty]++;
+            }
+            // Topic counts
+            const rawTopic = (q.topic || "").trim();
+            if (!rawTopic) {
+                uncategorized++;
+                tCounts["Uncategorized"] = (tCounts["Uncategorized"] || 0) + 1;
+            } else {
+                tCounts[rawTopic] = (tCounts[rawTopic] || 0) + 1;
+            }
         }
 
-        const sorted = Object.keys(counts)
-            .filter((t) => t !== "(No Topic)")
+        const sortedTopics = Object.keys(tCounts)
+            .filter((t) => t && t !== "Uncategorized")
             .sort((a, b) => a.localeCompare(b));
 
-        if (counts["(No Topic)"]) {
-            sorted.push("(No Topic)");
+        return {
+            topics: sortedTopics,
+            topicCounts: tCounts,
+            typeCounts: qTypeCounts,
+            difficultyCounts: dCounts,
+            noTopicCount: uncategorized,
+        };
+    }, [allQuestions]);
+
+    // Multi-dimensional filtered questions
+    const filteredQuestions = useMemo(() => {
+        let list = allQuestions;
+
+        // 1. Keyword search (content)
+        if (keyword.trim()) {
+            const q = keyword.trim().toLowerCase();
+            list = list.filter((item) => (item.content || "").toLowerCase().includes(q));
         }
 
-        return {
-            topics: sorted,
-            topicCounts: counts,
-            totalCount: allQuestionsData?.totalElements ?? list.length,
+        // 2. Question type filter
+        if (selectedTypes.size > 0) {
+            list = list.filter((item) => item.type && selectedTypes.has(item.type));
+        }
+
+        // 3. Difficulty filter
+        if (selectedDifficulties.size > 0) {
+            list = list.filter((item) => item.difficulty && selectedDifficulties.has(item.difficulty));
+        }
+
+        // 4. Topic filter
+        if (selectedTopic === "Uncategorized") {
+            list = list.filter((item) => !(item.topic || "").trim());
+        } else if (selectedTopic) {
+            const topicLower = selectedTopic.toLowerCase();
+            list = list.filter((item) => (item.topic || "").trim().toLowerCase() === topicLower);
+        }
+
+        // 5. Created At / Updated At date ranges
+        const inRange = (value: string | null | undefined, from: string, to: string) => {
+            if (!from && !to) return true;
+            if (!value) return false;
+            const t = new Date(value).getTime();
+            if (isNaN(t)) return false;
+            if (from && t < new Date(`${from}T00:00:00`).getTime()) return false;
+            if (to && t > new Date(`${to}T23:59:59.999`).getTime()) return false;
+            return true;
         };
-    }, [allQuestionsData]);
+        if (createdFrom || createdTo) {
+            list = list.filter((item) => inRange(item.createdAt, createdFrom, createdTo));
+        }
+        if (updatedFrom || updatedTo) {
+            list = list.filter((item) => inRange(item.updatedAt || item.createdAt, updatedFrom, updatedTo));
+        }
 
+        return list;
+    }, [allQuestions, keyword, selectedTypes, selectedDifficulties, selectedTopic, createdFrom, createdTo, updatedFrom, updatedTo]);
+
+    // Reset pagination when filter criteria change
+    useEffect(() => {
+        setCardPage(0);
+    }, [keyword, selectedTypes, selectedDifficulties, selectedTopic, createdFrom, createdTo, updatedFrom, updatedTo]);
+
+    // Card View Paged Data
+    const cardTotalPages = Math.max(1, Math.ceil(filteredQuestions.length / cardPageSize));
+    const cardPagedData = useMemo(() => {
+        const start = cardPage * cardPageSize;
+        return filteredQuestions.slice(start, start + cardPageSize);
+    }, [filteredQuestions, cardPage, cardPageSize]);
+
+    // ProTable instance for Table View
     const dynamicSchema = useMemo(() => {
-        const topicOptions = topics
-            .filter((t) => t && t !== "(No Topic)")
-            .map((t) => ({ label: t, value: t }));
-
+        const topicOptions = topics.map((t) => ({ label: t, value: t }));
         return {
             ...entityConfig.schema,
-            fields: entityConfig.schema.fields.map((f) => {
+            fields: entityConfig.schema.fields.map((f: any) => {
                 if (f.name === "topic") {
-                    return {
-                        ...f,
-                        options: topicOptions,
-                        filterOptions: topicOptions,
-                    };
+                    return { ...f, options: topicOptions, filterOptions: topicOptions };
                 }
                 return f;
             }),
@@ -101,40 +385,52 @@ export default function QuestionListPage() {
 
     const table = useProTable(entityConfig.api, dynamicSchema);
 
-    useEffect(() => {
-        if (initialTopic) {
-            table.setFilters((prev: any) => ({ ...prev, topic: initialTopic }));
-            setSelectedTopic(initialTopic);
-        }
-    }, []);
+    // Sync table filters to effectiveTable for Table View
+    const effectiveTable = useMemo(() => {
+        const start = cardPage * cardPageSize;
+        const paged = filteredQuestions.slice(start, start + cardPageSize);
 
-    useEffect(() => {
-        const filterTopic = table.filters?.topic;
-        const current = Array.isArray(filterTopic)
-            ? (filterTopic[0] || "")
-            : (filterTopic || "");
-        if (current !== selectedTopic) {
-            setSelectedTopic(current);
-            const newParams = new URLSearchParams(searchParams);
-            if (current) {
-                newParams.set("topic", current);
-            } else {
-                newParams.delete("topic");
-            }
-            setSearchParams(newParams, { replace: true });
-        }
-    }, [table.filters?.topic]);
+        return {
+            ...table,
+            data: paged,
+            total: filteredQuestions.length,
+            page: cardPage,
+            size: cardPageSize,
+            setPage: (p: number) => setCardPage(p),
+            setSize: (s: number) => {
+                setCardPageSize(s);
+                setCardPage(0);
+            },
+            loading: isLoadingSummary,
+            isFetching: isLoadingSummary,
+            refetch: async () => {
+                await refetchQuestions();
+            },
+        };
+    }, [table, filteredQuestions, cardPage, cardPageSize, isLoadingSummary, refetchQuestions]);
 
-    const filteredTopics = useMemo(() => {
-        if (!topicSearch.trim()) return topics;
-        const q = topicSearch.trim().toLowerCase();
-        return topics.filter((t) => t.toLowerCase().includes(q));
-    }, [topics, topicSearch]);
+    // Toggle filter helpers
+    const toggleType = (t: QuestionType) => {
+        setSelectedTypes((prev) => {
+            const next = new Set(prev);
+            if (next.has(t)) next.delete(t);
+            else next.add(t);
+            return next;
+        });
+    };
+
+    const toggleDifficulty = (d: QuestionDifficulty) => {
+        setSelectedDifficulties((prev) => {
+            const next = new Set(prev);
+            if (next.has(d)) next.delete(d);
+            else next.add(d);
+            return next;
+        });
+    };
 
     const handleSelectTopic = (topic: string) => {
         const newTopic = selectedTopic === topic ? "" : topic;
         setSelectedTopic(newTopic);
-
         const newParams = new URLSearchParams(searchParams);
         if (newTopic) {
             newParams.set("topic", newTopic);
@@ -142,17 +438,86 @@ export default function QuestionListPage() {
             newParams.delete("topic");
         }
         setSearchParams(newParams, { replace: true });
+    };
 
-        table.setFilters((prev: any) => {
-            const updated = { ...prev };
-            if (newTopic) {
-                updated.topic = newTopic === "(No Topic)" ? "" : newTopic;
-            } else {
-                delete updated.topic;
-            }
-            return updated;
+    const handleClearAllFilters = () => {
+        setKeyword("");
+        setSelectedTypes(new Set());
+        setSelectedDifficulties(new Set());
+        setSelectedTopic("");
+        setCreatedFrom("");
+        setCreatedTo("");
+        setUpdatedFrom("");
+        setUpdatedTo("");
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete("topic");
+        setSearchParams(newParams, { replace: true });
+    };
+
+    const hasActiveFilters = Boolean(
+        keyword ||
+        selectedTypes.size > 0 ||
+        selectedDifficulties.size > 0 ||
+        selectedTopic ||
+        createdFrom ||
+        createdTo ||
+        updatedFrom ||
+        updatedTo
+    );
+
+    const togglePreview = (id: number | string) => {
+        setExpandedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
         });
-        table.setPage(0);
+    };
+
+    const allExpanded =
+        filteredQuestions.length > 0 && filteredQuestions.every((q) => expandedIds.has(q.id));
+    const toggleAllPreview = () => {
+        setExpandedIds(allExpanded ? new Set() : new Set(filteredQuestions.map((q) => q.id)));
+    };
+
+    // Toggle Active Status (update directly, card view data comes from the "all-summary" query)
+    const handleToggleStatus = async (id: number | string, currentActive: boolean) => {
+        const row = allQuestions.find((q) => q.id === id);
+        if (!row) return;
+        const nextActive = !currentActive;
+
+        queryClient.setQueryData(["question", "all-summary"], (old: any) =>
+            old?.content
+                ? { ...old, content: old.content.map((q: QuestionDTO) => (q.id === id ? { ...q, isActive: nextActive } : q)) }
+                : old
+        );
+
+        try {
+            const { createdAt, updatedAt, ...payload } = row as any;
+            await questionApi.update(id as any, { ...payload, isActive: nextActive } as any);
+            await queryClient.invalidateQueries({ queryKey: ["question"] });
+            toast.success(nextActive ? "Question activated." : "Question deactivated.");
+        } catch {
+            await refetchQuestions();
+            toast.error("Failed to update status.");
+        }
+    };
+
+    // Delete question handler
+    const handleDeleteConfirm = async () => {
+        if (!deleteTarget) return;
+        try {
+            setIsDeleting(true);
+            await table.remove(deleteTarget.id);
+            await refetchQuestions();
+            await queryClient.invalidateQueries({ queryKey: ["question"] });
+            setDeleteTarget(null);
+            toast.success("Question deleted successfully.");
+        } catch {
+            toast.error("Failed to delete question.");
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     const handleCreateWithNewTopic = () => {
@@ -166,27 +531,26 @@ export default function QuestionListPage() {
         navigate(`/questions/create?topic=${encodeURIComponent(trimmed)}`);
     };
 
+    // Routing actions
     const createPage = entityConfig.actionPages?.create;
     const editPage = entityConfig.actionPages?.edit;
-    const detailPage = entityConfig.actionPages?.detail;
 
     const createUrl = useMemo(() => {
         if (!createPage) return "";
         const base = normalizeEntityActionPath(entityConfig.path, createPage.path);
-        return selectedTopic && selectedTopic !== "(No Topic)"
+        return selectedTopic && selectedTopic !== "Uncategorized"
             ? `${base}?topic=${encodeURIComponent(selectedTopic)}`
             : base;
     }, [createPage, selectedTopic]);
 
     const headerActions = useMemo(() => {
         if (!createPage) return undefined;
-
         return (
             <PermissionGate permission={createPage.requiredPermission || table.permission?.keys?.create}>
                 <ActionButton
                     onClick={() => navigate(createUrl)}
                     tooltip={
-                        selectedTopic && selectedTopic !== "(No Topic)"
+                        selectedTopic && selectedTopic !== "Uncategorized"
                             ? `Create question in "${selectedTopic}"`
                             : "Create Question"
                     }
@@ -200,7 +564,6 @@ export default function QuestionListPage() {
 
     const onEdit = useMemo(() => {
         if (!editPage) return undefined;
-
         return (row: any) => {
             const pathTemplate = normalizeEntityActionPath(entityConfig.path, editPage.path);
             const path = resolveEntityActionPath(pathTemplate, row, entityConfig.schema.idField);
@@ -212,19 +575,27 @@ export default function QuestionListPage() {
         };
     }, [editPage, navigate]);
 
-    const onView = useMemo(() => {
-        if (!detailPage) return undefined;
-
-        return (row: any) => {
-            const pathTemplate = normalizeEntityActionPath(entityConfig.path, detailPage.path);
-            const path = resolveEntityActionPath(pathTemplate, row, entityConfig.schema.idField);
-            if (!path) {
-                toast.error("Unable to open detail page because row id is missing.");
-                return;
-            }
-            navigate(path);
-        };
-    }, [detailPage, navigate]);
+    // Table view: only Edit + Delete (no "view detail" eye)
+    const renderTableRowActions = (row: QuestionDTO) => (
+        <>
+            {onEdit && (
+                <PermissionGate permission={table.permission?.keys?.update}>
+                    <ActionButton
+                        onClick={() => onEdit(row)}
+                        tooltip="Edit"
+                        icon={<Pencil size={10} className="text-gray-500" />}
+                    />
+                </PermissionGate>
+            )}
+            <PermissionGate permission={table.permission?.keys?.delete}>
+                <ActionButton
+                    onClick={() => setDeleteTarget(row)}
+                    tooltip="Delete"
+                    icon={<Trash2 size={10} className="text-red-500" />}
+                />
+            </PermissionGate>
+        </>
+    );
 
     const isStudentRole = normalizeRole(activeRole) === STUDENT_ROLE;
     const isReadOnlyLikeRole =
@@ -354,120 +725,272 @@ export default function QuestionListPage() {
     return (
         <MainLayout pathName={{ questions: "Questions" }}>
             <div className="flex flex-1 min-h-0 gap-4 h-[calc(100vh-6.5rem)]">
+
+                {/* LEFT SIDEBAR: Full Multi-dimensional Filters */}
                 <aside className="w-64 xl:w-72 shrink-0 flex flex-col bg-card border rounded-xl overflow-hidden shadow-sm">
+                    {/* Header */}
                     <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
                         <div className="flex items-center gap-2">
                             <div className="p-1.5 rounded-md bg-primary/10 text-primary">
                                 <Layers className="w-4 h-4" />
                             </div>
-                            <span className="font-semibold text-sm">Topics</span>
-                            <Badge variant="secondary" className="px-1.5 py-0 text-xs font-medium">
-                                {topics.length}
-                            </Badge>
+                            <span className="font-semibold text-sm">Filters</span>
                         </div>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                            onClick={() => setIsNewTopicOpen(true)}
-                            title="New Topic"
-                        >
-                            <Plus className="w-4 h-4" />
-                        </Button>
-                    </div>
-
-                    <div className="p-3 pb-2">
-                        <div className="relative">
-                            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                            <Input
-                                placeholder="Filter topics..."
-                                value={topicSearch}
-                                onChange={(e) => setTopicSearch(e.target.value)}
-                                className="pl-8 pr-7 h-8 text-xs bg-muted/30 focus-visible:ring-1"
-                            />
-                            {topicSearch && (
-                                <button
-                                    onClick={() => setTopicSearch("")}
-                                    className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
-                                >
-                                    <X className="h-3.5 w-3.5" />
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto px-2 space-y-1 py-1">
-                        <button
-                            type="button"
-                            onClick={() => handleSelectTopic("")}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                                !selectedTopic
-                                    ? "bg-primary text-primary-foreground shadow-sm"
-                                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                            }`}
-                        >
-                            <div className="flex items-center gap-2 truncate">
-                                <LayoutGrid className="w-4 h-4 shrink-0" />
-                                <span className="truncate">All Questions</span>
-                            </div>
-                            <Badge
-                                variant="secondary"
-                                className={`text-[11px] px-1.5 py-0 font-normal ${
-                                    !selectedTopic ? "bg-primary-foreground/20 text-primary-foreground" : ""
-                                }`}
+                        {hasActiveFilters && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleClearAllFilters}
+                                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
                             >
-                                {totalCount}
-                            </Badge>
-                        </button>
-
-                        <div className="h-px bg-border my-1.5 mx-1" />
-
-                        {isLoadingTopics ? (
-                            <div className="py-6 text-center text-xs text-muted-foreground animate-pulse">
-                                Loading topics...
-                            </div>
-                        ) : filteredTopics.length > 0 ? (
-                            filteredTopics.map((topic) => {
-                                const isSelected = selectedTopic === topic;
-                                const count = topicCounts[topic] ?? 0;
-
-                                return (
-                                    <button
-                                        key={topic}
-                                        type="button"
-                                        onClick={() => handleSelectTopic(topic)}
-                                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors group ${
-                                            isSelected
-                                                ? "bg-primary/15 text-primary border border-primary/20 shadow-xs dark:bg-primary/20"
-                                                : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                                        }`}
-                                    >
-                                        <div className="flex items-center gap-2 truncate">
-                                            {isSelected ? (
-                                                <FolderOpen className="w-4 h-4 shrink-0 text-primary" />
-                                            ) : (
-                                                <Folder className="w-4 h-4 shrink-0 group-hover:text-foreground" />
-                                            )}
-                                            <span className="truncate capitalize">{topic}</span>
-                                        </div>
-                                        <Badge
-                                            variant="secondary"
-                                            className={`text-[11px] px-1.5 py-0 font-normal shrink-0 ${
-                                                isSelected ? "bg-primary/20 text-primary border border-primary/30" : ""
-                                            }`}
-                                        >
-                                            {count}
-                                        </Badge>
-                                    </button>
-                                );
-                            })
-                        ) : (
-                            <div className="py-6 text-center text-xs text-muted-foreground">
-                                No topics match "{topicSearch}"
-                            </div>
+                                Clear all
+                            </Button>
                         )}
                     </div>
 
+                    <div className="flex-1 overflow-y-auto p-3 space-y-4">
+                        {/* 1. Keyword search */}
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-muted-foreground block">Search Content</label>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search question text..."
+                                    value={keyword}
+                                    onChange={(e) => setKeyword(e.target.value)}
+                                    className="pl-8 pr-7 h-8 text-xs bg-muted/30 focus-visible:ring-1"
+                                />
+                                {keyword && (
+                                    <button
+                                        onClick={() => setKeyword("")}
+                                        className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* 2. Question Type Filter */}
+                        <div className="space-y-2 pt-2 border-t">
+                            <span className="text-xs font-semibold text-muted-foreground block">Question Type</span>
+                            <div className="space-y-1.5 pl-0.5">
+                                {(["MULTIPLE_CHOICE", "CODING", "ESSAY"] as QuestionType[]).map((t) => {
+                                    const isChecked = selectedTypes.has(t);
+                                    const count = typeCounts[t] ?? 0;
+                                    return (
+                                        <label
+                                            key={t}
+                                            className="flex items-center justify-between text-xs cursor-pointer hover:text-foreground transition-colors group"
+                                        >
+                                            <span className="flex items-center gap-2 text-muted-foreground group-hover:text-foreground">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => toggleType(t)}
+                                                    className="size-3.5 rounded border-input accent-primary cursor-pointer"
+                                                />
+                                                <span>{TYPE_LABEL[t]}</span>
+                                            </span>
+                                            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">
+                                                {count}
+                                            </Badge>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* 3. Difficulty Filter */}
+                        <div className="space-y-2 pt-2 border-t">
+                            <span className="text-xs font-semibold text-muted-foreground block">Difficulty</span>
+                            <div className="space-y-1.5 pl-0.5">
+                                {(["EASY", "MEDIUM", "HARD"] as QuestionDifficulty[]).map((d) => {
+                                    const isChecked = selectedDifficulties.has(d);
+                                    const count = difficultyCounts[d] ?? 0;
+                                    const style = DIFFICULTY_STYLE[d];
+                                    return (
+                                        <label
+                                            key={d}
+                                            className="flex items-center justify-between text-xs cursor-pointer hover:text-foreground transition-colors group"
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => toggleDifficulty(d)}
+                                                    className="size-3.5 rounded border-input accent-primary cursor-pointer"
+                                                />
+                                                <span className={`font-medium ${style.text}`}>{DIFFICULTY_LABEL[d]}</span>
+                                            </span>
+                                            <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">
+                                                {count}
+                                            </Badge>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* 3b. Created / Updated date range */}
+                        <div className="space-y-2 pt-2 border-t">
+                            <span className="text-xs font-semibold text-muted-foreground block">Created At</span>
+                            <div className="grid grid-cols-2 gap-1.5">
+                                <Input
+                                    type="date"
+                                    value={createdFrom}
+                                    max={createdTo || undefined}
+                                    onChange={(e) => setCreatedFrom(e.target.value)}
+                                    className="h-8 px-2 text-[11px] bg-muted/30 dark:[color-scheme:dark]"
+                                    aria-label="Created from"
+                                />
+                                <Input
+                                    type="date"
+                                    value={createdTo}
+                                    min={createdFrom || undefined}
+                                    onChange={(e) => setCreatedTo(e.target.value)}
+                                    className="h-8 px-2 text-[11px] bg-muted/30 dark:[color-scheme:dark]"
+                                    aria-label="Created to"
+                                />
+                            </div>
+
+                            <span className="text-xs font-semibold text-muted-foreground block pt-1">Updated At</span>
+                            <div className="grid grid-cols-2 gap-1.5">
+                                <Input
+                                    type="date"
+                                    value={updatedFrom}
+                                    max={updatedTo || undefined}
+                                    onChange={(e) => setUpdatedFrom(e.target.value)}
+                                    className="h-8 px-2 text-[11px] bg-muted/30 dark:[color-scheme:dark]"
+                                    aria-label="Updated from"
+                                />
+                                <Input
+                                    type="date"
+                                    value={updatedTo}
+                                    min={updatedFrom || undefined}
+                                    onChange={(e) => setUpdatedTo(e.target.value)}
+                                    className="h-8 px-2 text-[11px] bg-muted/30 dark:[color-scheme:dark]"
+                                    aria-label="Updated to"
+                                />
+                            </div>
+                        </div>
+
+                        {/* 4. Topics Filter */}
+                        <div className="space-y-2 pt-2 border-t">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold text-muted-foreground">Topics</span>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                    onClick={() => setIsNewTopicOpen(true)}
+                                    title="Add New Topic"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                </Button>
+                            </div>
+
+                            {/* Topic mini search */}
+                            {topics.length > 5 && (
+                                <Input
+                                    placeholder="Filter topics list..."
+                                    value={topicSearch}
+                                    onChange={(e) => setTopicSearch(e.target.value)}
+                                    className="h-7 text-[11px] bg-muted/20"
+                                />
+                            )}
+
+                            <div className="space-y-1 pt-1">
+                                {/* All Questions row */}
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelectTopic("")}
+                                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${!selectedTopic
+                                        ? "bg-primary text-primary-foreground shadow-xs"
+                                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2 truncate">
+                                        <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+                                        <span className="truncate">All Questions</span>
+                                    </div>
+                                    <Badge
+                                        variant="secondary"
+                                        className={`text-[10px] px-1.5 py-0 font-normal ${!selectedTopic ? "bg-primary-foreground/20 text-primary-foreground" : ""
+                                            }`}
+                                    >
+                                        {allQuestions.length}
+                                    </Badge>
+                                </button>
+
+                                {/* Named Topics */}
+                                {isLoadingSummary ? (
+                                    <div className="py-3 text-center text-xs text-muted-foreground animate-pulse">Loading topics...</div>
+                                ) : (
+                                    filteredTopicsList.map((topic) => {
+                                        const isSelected = selectedTopic === topic;
+                                        const count = topicCounts[topic] ?? 0;
+                                        return (
+                                            <button
+                                                key={topic}
+                                                type="button"
+                                                onClick={() => handleSelectTopic(topic)}
+                                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors group ${isSelected
+                                                    ? "bg-primary/15 text-primary border border-primary/20 shadow-xs dark:bg-primary/20"
+                                                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                    }`}
+                                            >
+                                                <div className="flex items-center gap-2 truncate">
+                                                    {isSelected ? (
+                                                        <FolderOpen className="w-3.5 h-3.5 shrink-0 text-primary" />
+                                                    ) : (
+                                                        <Folder className="w-3.5 h-3.5 shrink-0 group-hover:text-foreground" />
+                                                    )}
+                                                    <span className="truncate capitalize">{topic}</span>
+                                                </div>
+                                                <Badge
+                                                    variant="secondary"
+                                                    className={`text-[10px] px-1.5 py-0 font-normal shrink-0 ${isSelected ? "bg-primary/20 text-primary border border-primary/30" : ""
+                                                        }`}
+                                                >
+                                                    {count}
+                                                </Badge>
+                                            </button>
+                                        );
+                                    })
+                                )}
+
+                                {/* Uncategorized (bottom item) */}
+                                {noTopicCount > 0 && !topicSearch && (
+                                    <>
+                                        <div className="h-px bg-border my-1.5" />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSelectTopic("Uncategorized")}
+                                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors group ${selectedTopic === "Uncategorized"
+                                                ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shadow-xs"
+                                                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-2 truncate">
+                                                <FolderX className={`w-3.5 h-3.5 shrink-0 ${selectedTopic === "Uncategorized" ? "text-amber-600 dark:text-amber-400" : "text-amber-500"}`} />
+                                                <span className="truncate">Uncategorized</span>
+                                            </div>
+                                            <Badge
+                                                variant="secondary"
+                                                className={`text-[10px] px-1.5 py-0 font-normal shrink-0 ${selectedTopic === "Uncategorized" ? "bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30" : ""
+                                                    }`}
+                                            >
+                                                {noTopicCount}
+                                            </Badge>
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Sidebar Footer */}
                     <div className="p-3 border-t bg-muted/10">
                         <Button
                             variant="outline"
@@ -481,6 +1004,7 @@ export default function QuestionListPage() {
                     </div>
                 </aside>
 
+                {/* RIGHT COLUMN: Question Library Workspace */}
                 <main className="flex-1 min-w-0 flex flex-col bg-card border rounded-xl p-4 shadow-sm overflow-hidden">
 
                     {/* Single top bar shared by Card and Table view (same position in both) */}
@@ -718,6 +1242,7 @@ export default function QuestionListPage() {
                 </main>
             </div>
 
+            {/* Dialog: Create Question with New Topic */}
             <Dialog open={isNewTopicOpen} onOpenChange={setIsNewTopicOpen}>
                 <DialogContent className="sm:max-w-[420px]">
                     <DialogHeader>
@@ -751,6 +1276,37 @@ export default function QuestionListPage() {
                         </Button>
                         <Button onClick={handleCreateWithNewTopic}>
                             Continue to Create
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog: Confirm Delete Question */}
+            <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+                <DialogContent className="sm:max-w-[440px]">
+                    <DialogHeader>
+                        <DialogTitle>Delete Question</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete this question? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {deleteTarget && (
+                        <div className="p-3 my-2 rounded-lg bg-muted/30 border text-xs text-muted-foreground line-clamp-3">
+                            "{deleteTarget.content}"
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteConfirm}
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? "Deleting..." : "Delete Permanently"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -83,8 +83,6 @@ export default function ExamTemplatesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [activeFilter, setActiveFilter] = useState("all");
     const [examTitle, setExamTitle] = useState("");
-    const [startTime, setStartTime] = useState("");
-    const [endTime, setEndTime] = useState("");
 
     const {
         data: templates = [],
@@ -175,21 +173,16 @@ export default function ExamTemplatesPage() {
                 throw new Error("Please select a template");
             }
             if (!examTitle.trim()) {
-                throw new Error("Exam title is required");
-            }
-            if (startTime && endTime && endTime <= startTime) {
-                throw new Error("End time must be later than start time");
+                throw new Error("Assessment title is required");
             }
 
             return examTemplateApi.createExam(selectedTemplate.id, {
                 title: examTitle.trim(),
-                startTime: startTime || undefined,
-                endTime: endTime || undefined,
             });
         },
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ["exams"] });
-            toast.success("New exam created from template successfully");
+            toast.success("New assessment created from template successfully");
             closeCreateDialog();
             navigate("/exams");
         },
@@ -197,7 +190,7 @@ export default function ExamTemplatesPage() {
             toast.error(
                 error instanceof Error
                     ? error.message
-                    : "Failed to create exam from template",
+                    : "Failed to create assessment from template",
             );
         },
     });
@@ -216,16 +209,12 @@ export default function ExamTemplatesPage() {
     const openCreateDialog = (template: ExamTemplateDTO) => {
         setSelectedTemplate(template);
         setExamTitle(template.name.replace(/\s*-\s*Template\s*$/i, ""));
-        setStartTime("");
-        setEndTime("");
     };
 
     const closeCreateDialog = () => {
         if (createExamMutation.isPending) return;
         setSelectedTemplate(null);
         setExamTitle("");
-        setStartTime("");
-        setEndTime("");
     };
 
     const handleDeleteTemplate = (template: ExamTemplateDTO) => {
@@ -249,12 +238,12 @@ export default function ExamTemplatesPage() {
                 <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
                     <div>
                         <p className="text-sm text-muted-foreground">Assessment Management</p>
-                        <h1 className="mt-1 text-2xl font-semibold">Exam Templates</h1>
+                        <h1 className="mt-1 text-2xl font-semibold">Assessment Templates</h1>
                     </div>
 
                     <Button variant="outline" onClick={() => navigate("/exams")}>
                         <ArrowLeft className="mr-2 size-4" />
-                        Back to Exams
+                        Back to Assessments
                     </Button>
                 </header>
 
@@ -502,10 +491,10 @@ export default function ExamTemplatesPage() {
             >
                 <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>Create Exam from Template</DialogTitle>
+                        <DialogTitle>Create Assessment from Template</DialogTitle>
                         <DialogDescription>
                             The template configuration and question bank will be cloned
-                            into a new exam.
+                            into a new assessment.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -524,54 +513,16 @@ export default function ExamTemplatesPage() {
                                     htmlFor="new-exam-title"
                                     className="text-sm font-medium"
                                 >
-                                    New exam title
+                                    New assessment title
                                 </label>
                                 <Input
                                     id="new-exam-title"
                                     value={examTitle}
                                     onChange={(event) => setExamTitle(event.target.value)}
-                                    placeholder="Enter exam title"
+                                    placeholder="Enter assessment title"
                                     maxLength={200}
                                 />
                             </div>
-
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <div className="space-y-2">
-                                    <label
-                                        htmlFor="new-exam-start"
-                                        className="text-sm font-medium"
-                                    >
-                                        Start time (optional)
-                                    </label>
-                                    <Input
-                                        id="new-exam-start"
-                                        type="datetime-local"
-                                        value={startTime}
-                                        onChange={(event) => setStartTime(event.target.value)}
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label
-                                        htmlFor="new-exam-end"
-                                        className="text-sm font-medium"
-                                    >
-                                        End time (optional)
-                                    </label>
-                                    <Input
-                                        id="new-exam-end"
-                                        type="datetime-local"
-                                        value={endTime}
-                                        onChange={(event) => setEndTime(event.target.value)}
-                                    />
-                                </div>
-                            </div>
-
-                            {startTime && endTime && endTime <= startTime && (
-                                <p className="text-sm text-destructive">
-                                    End time must be later than start time.
-                                </p>
-                            )}
                         </div>
                     )}
 
@@ -586,14 +537,10 @@ export default function ExamTemplatesPage() {
                         </Button>
                         <Button
                             type="button"
-                            disabled={
-                                !examTitle.trim() ||
-                                createExamMutation.isPending ||
-                                (!!startTime && !!endTime && endTime <= startTime)
-                            }
+                            disabled={!examTitle.trim() || createExamMutation.isPending}
                             onClick={() => createExamMutation.mutate()}
                         >
-                            {createExamMutation.isPending ? "Creating..." : "Create Exam"}
+                            {createExamMutation.isPending ? "Creating..." : "Create Assessment"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

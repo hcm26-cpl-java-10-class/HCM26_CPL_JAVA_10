@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import axiosInstance from "@/api/axios";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -328,6 +330,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 export default function ResultStatisticsPage() {
+    const embedded = useContext(EmbeddedLayoutContext);
     const { examId: examIdParam } = useParams();
     const navigate = useNavigate();
     const examId = Number(examIdParam);
@@ -538,6 +541,7 @@ export default function ResultStatisticsPage() {
     return (
         <MainLayout>
             <div className="space-y-6 p-4 md:p-6">
+                {!embedded && (
                 <div>
                     <Button
                         variant="ghost"
@@ -554,17 +558,18 @@ export default function ResultStatisticsPage() {
                     </p>
 
                     <h1 className="mt-1 text-2xl font-bold text-foreground">
-                        Exam Result Statistics
+                        Assessment Result Statistics
                     </h1>
 
                     <p className="mt-1 text-sm text-muted-foreground">
                         Exam ID: {validExamId ? examId : "Invalid"}
                     </p>
                 </div>
+                )}
 
                 {!validExamId && (
                     <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-                        Invalid exam ID. Please open this page using the URL
+                        Invalid assessment ID. Please open this page using the URL
                         /exams/ID/result-statistics.
                     </div>
                 )}
@@ -581,8 +586,9 @@ export default function ResultStatisticsPage() {
                         {getErrorMessage(statisticsQuery.error)}
                     </div>
                 )}
+                <div className="flex flex-col gap-6 lg:flex-row">
                 {validExamId && (
-                    <div className="flex flex-wrap gap-1 rounded-lg border bg-muted/40 p-1" role="tablist" aria-label="Statistics sections">
+                    <nav className="flex shrink-0 gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1 lg:w-52 lg:flex-col lg:overflow-visible" role="tablist" aria-orientation="vertical" aria-label="Statistics sections">
                         {([
                             ["overview", "Overview"],
                             ["questions", "Questions"],
@@ -595,15 +601,16 @@ export default function ResultStatisticsPage() {
                                 role="tab"
                                 aria-selected={tab === key}
                                 onClick={() => setTab(key)}
-                                className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
+                                className={`whitespace-nowrap rounded-md px-4 py-2 text-left text-sm font-medium transition ${
                                     tab === key ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
                                 }`}
                             >
                                 {label}
                             </button>
                         ))}
-                    </div>
+                    </nav>
                 )}
+                <div className="min-w-0 flex-1 space-y-6">
 
                 {tab === "overview" && statistics && (
                     <>
@@ -652,7 +659,7 @@ export default function ResultStatisticsPage() {
                                 </DropdownMenu>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                                 <StatCard
                                     label="Total Attempts"
                                     value={statistics.totalAttempts}
@@ -720,7 +727,7 @@ export default function ResultStatisticsPage() {
                                 Student Attempt Results
                             </h2>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Each row represents one exam attempt.
+                                Each row represents one assessment attempt.
                             </p>
                         </div>
 
@@ -1132,9 +1139,6 @@ export default function ResultStatisticsPage() {
                     <h2 className="text-lg font-semibold">
                         Result Publication
                     </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        Only users with the EXAM_UPDATE permission can manage result publication.
-                    </p>
 
                     {publicationQuery.isLoading && (
                         <p className="mt-4 text-sm text-muted-foreground">
@@ -1243,6 +1247,8 @@ export default function ResultStatisticsPage() {
 
                 {/* NEW (anti-cheat): bao cao vi pham tung luot thi */}
                 {validExamId && tab === "integrity" && <IntegrityReportSection examId={examId} />}
+                </div>
+                </div>
             </div>
         </MainLayout>
     );

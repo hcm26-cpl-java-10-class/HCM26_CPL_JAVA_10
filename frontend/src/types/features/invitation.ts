@@ -16,7 +16,6 @@ export interface InvitationDTO extends BaseDTO {
     examTitle?: string;
     userEmail?: string;
     userFullName?: string;
-    token?: string;
     status?: InvitationStatus;
     sentAt?: string | null;
     acceptedAt?: string | null;
@@ -91,9 +90,6 @@ export interface AnonymousInvitationRequest {
 
 export interface AnonymousAccessResponse {
     valid: boolean;
-    accessCode?: string;
-    examTitle?: string;
-    studentName?: string;
     accessAttemptsRemaining?: number;
     message?: string;
 }
@@ -135,6 +131,7 @@ export interface ReminderDTO extends BaseDTO {
     status?: ReminderStatus;
     sendAttempts?: number;
     lastError?: string | null;
+    nextRetryAt?: string | null;
 }
 
 export interface ReminderRequest {
@@ -143,4 +140,42 @@ export interface ReminderRequest {
     scheduledAt?: string;
 
     invitationId?: number;
+}
+
+export type InvitationAuditAction =
+    | "CREATE"
+    | "BATCH_CREATE"
+    | "RESEND"
+    | "REVOKE"
+    | "EXPIRE"
+    | "DELETE";
+
+export interface InvitationAuditLog {
+    id: number;
+    invitationId?: number | null;
+    examId?: number | null;
+    targetUserId?: number | null;
+    action: InvitationAuditAction;
+    performedBy?: number | null;
+    details?: string | null;
+    createdAt: string;
+}
+
+/**
+ * Tổng quan lời mời theo đề thi (dùng cho trang danh sách của giáo viên).
+ */
+export interface ExamInvitationOverview {
+    examId: number;
+    examTitle?: string;
+    startTime?: string | null;
+    endTime?: string | null;
+    total?: number;
+    pending?: number;
+    sent?: number;
+    accepted?: number;
+    rejected?: number;
+    expired?: number;
+    revoked?: number;
+    completed?: number;
+    anonymous?: number;
 }

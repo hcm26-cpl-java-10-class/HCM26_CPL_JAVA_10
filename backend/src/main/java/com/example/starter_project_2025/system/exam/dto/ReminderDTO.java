@@ -49,5 +49,8 @@ public class ReminderDTO extends BaseDTO {
     @JsonProperty(access = READ_ONLY)
     private String lastError;
 
+    @JsonProperty(access = READ_ONLY)
+    private LocalDateTime nextRetryAt;
+
     private Boolean isActive;
 }

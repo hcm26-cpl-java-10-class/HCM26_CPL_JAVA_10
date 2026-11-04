@@ -10,13 +10,11 @@ import { Dashboard } from "@/pages/management/dashboard";
 import CurriculumManagementPage from "@/pages/management/demo/curriculum";
 import RolePermissionMatrixPage from "@/pages/management/rbac/permission/RolePermissionMatrixPage";
 import ExamManagementPage from "@/pages/management/exam";
+import ExamDetailPage from "@/pages/management/exam/ExamDetailPage";
 import ExamTemplatesPage from "@/pages/management/exam/templates";
-import ResultStatisticsPage from "@/pages/management/exam/ResultStatisticsPage";
-import EssayAttemptListPage from "@/pages/management/exam/grading/EssayAttemptListPage";
 import EssayAttemptDetailPage from "@/pages/management/exam/grading/EssayAttemptDetailPage";
 import ExamSimilarityPage from "@/pages/management/exam/similarity/ExamSimilarityPage";
 import ScoreAppealsPage from "@/pages/management/exam/appeals";
-import InvitationsPage from "@/pages/management/exam/invitation";
 import UnifiedInvitationsPage, {
   StudentInvitationsRedirect,
 } from "@/pages/invitations/InvitationsPage";
@@ -124,19 +122,32 @@ export const routes: RouteConfig[] = [
     requiredPermission: "INVITATION_READ",
   },
 
+  // One page per exam with 5 tabs: Edit, Questions, Grading, Invitations, Statistics.
+  {
+    path: "/exams/:examId",
+    component: ExamDetailPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
+  {
+    path: "/exams/:examId/questions",
+    component: ExamDetailPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
+  {
+    path: "/exams/:examId/grading",
+    component: ExamDetailPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
   {
     path: "/exams/:examId/invitations",
-    component: InvitationsPage,
+    component: ExamDetailPage,
     requiredPermission: "INVITATION_READ",
   },
 
   // EXAM GRADING / SIMILARITY / STATISTICS
-  {
-    path: "/exams/:examId/grading",
-    component: EssayAttemptListPage,
-    requiredPermission: "EXAM_UPDATE",
-  },
-
   {
     path: "/exams/:examId/grading/similarity",
     component: ExamSimilarityPage,
@@ -157,7 +168,7 @@ export const routes: RouteConfig[] = [
 
   {
     path: "/exams/:examId/result-statistics",
-    component: ResultStatisticsPage,
+    component: ExamDetailPage,
     requiredPermission: "EXAM_UPDATE",
   },
 

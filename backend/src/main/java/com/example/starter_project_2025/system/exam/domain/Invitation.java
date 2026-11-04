@@ -77,7 +77,7 @@ public class Invitation extends BaseEntity {
     @Column(name = "guest_user_id")
     private Long guestUserId;
 
-    @Column(length = 10)
+    @Column(length = 10, unique = true)
     private String accessCode;
 
     private LocalDateTime maxAccessTime;
