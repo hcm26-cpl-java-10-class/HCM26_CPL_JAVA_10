@@ -314,12 +314,7 @@ export function ExamIntegrityNotice({
             )}
 
             {state.cameraEnabled && !state.needEntryPhoto && cam.state === 'live' && (
-                <div className="pointer-events-none fixed bottom-3 right-3 z-[60] overflow-hidden rounded-lg border bg-black shadow-lg">
-                    <CameraVideo stream={cam.stream} className="h-24 w-32 -scale-x-100 object-cover" />
-                    <span className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
-                        <span className="size-1.5 animate-pulse rounded-full bg-red-500" /> LIVE
-                    </span>
-                </div>
+                <DraggableCameraPreview stream={cam.stream} />
             )}
 
             {config.notifyOnViolation && state.banner && (
@@ -348,6 +343,76 @@ export function ExamIntegrityNotice({
                 </div>
             )}
         </>
+    );
+}
+
+// Remembered between remounts (the notice is rendered by different page layouts).
+let savedCameraPos: { x: number; y: number } | null = null;
+let savedCameraWidth = 128;
+const CAMERA_MIN_W = 96;
+const CAMERA_MAX_W = 480;
+
+/** Live camera preview: drag it anywhere on the screen and zoom it in / out with the − / + buttons. */
+function DraggableCameraPreview({ stream }: { stream: MediaStream | null }) {
+    const [W, setW] = useState(savedCameraWidth);
+    const H = Math.round((W * 3) / 4);
+    const clamp = (x: number, y: number) => ({
+        x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - W)),
+        y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - H)),
+    });
+    const [pos, setPos] = useState(() =>
+        clamp(savedCameraPos?.x ?? window.innerWidth - W - 12, savedCameraPos?.y ?? window.innerHeight - H - 12));
+    const dragRef = useRef<{ dx: number; dy: number } | null>(null);
+
+    useEffect(() => {
+        const onResize = () => setPos((p) => clamp(p.x, p.y));
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [W]);
+
+    const resize = (next: number) => {
+        const w = Math.min(CAMERA_MAX_W, Math.max(CAMERA_MIN_W, next));
+        savedCameraWidth = w;
+        setW(w);
+        // keep the box inside the screen after growing
+        setPos((p) => ({
+            x: Math.min(p.x, Math.max(0, window.innerWidth - w)),
+            y: Math.min(p.y, Math.max(0, window.innerHeight - Math.round((w * 3) / 4))),
+        }));
+    };
+    const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+    const ctl = 'flex size-6 items-center justify-center rounded bg-black/60 text-white hover:bg-black/80 disabled:opacity-40';
+
+    return (
+        <div
+            className="fixed z-[60] cursor-grab touch-none select-none overflow-hidden rounded-lg border bg-black shadow-lg active:cursor-grabbing"
+            style={{ left: pos.x, top: pos.y, width: W, height: H }}
+            title="Drag to move"
+            onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                dragRef.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
+            }}
+            onPointerMove={(e) => {
+                if (!dragRef.current) return;
+                const next = clamp(e.clientX - dragRef.current.dx, e.clientY - dragRef.current.dy);
+                savedCameraPos = next;
+                setPos(next);
+            }}
+            onPointerUp={() => { dragRef.current = null; }}
+            onPointerCancel={() => { dragRef.current = null; }}
+        >
+            <CameraVideo stream={stream} className="pointer-events-none size-full -scale-x-100 object-cover" />
+            <span className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
+                <span className="size-1.5 animate-pulse rounded-full bg-red-500" /> LIVE
+            </span>
+            <div className="absolute bottom-1 right-1 flex gap-1" onPointerDown={stop}>
+                <button type="button" className={ctl} aria-label="Smaller camera" disabled={W <= CAMERA_MIN_W}
+                    onClick={() => resize(W - 32)}>−</button>
+                <button type="button" className={ctl} aria-label="Larger camera" disabled={W >= CAMERA_MAX_W}
+                    onClick={() => resize(W + 32)}>+</button>
+            </div>
+        </div>
     );
 }
 

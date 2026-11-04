@@ -235,7 +235,7 @@ export default function ExamManagementPage() {
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {EXAM_CATEGORY_LABEL[exam.category ?? "ASSESSMENT"]}
+                      {EXAM_CATEGORY_LABEL[exam.category ?? "ASSIGNMENT"]}
                       {" · "}
                       {EXAM_TYPE_LABEL[exam.examType ?? "MIXED"]}
                     </p>
