@@ -66,30 +66,32 @@ export function QuestionEditPage() {
 
     return (
         <MainLayout pathName={{ questions: "Questions", edit: "Edit" }}>
-            <Card className="w-full">
-                <CardHeader>
-                    <CardTitle>Edit Question</CardTitle>
-                    <CardDescription>Update question #{id}.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {questionQuery.isLoading ? (
-                        <p className="text-sm text-muted-foreground">Loading question data...</p>
-                    ) : questionQuery.isError ? (
-                        <p className="text-sm text-destructive">
-                            {getErrorMessage(questionQuery.error, "Unable to load question.")}
-                        </p>
-                    ) : (
-                        <QuestionForm
-                            form={form}
-                            setForm={setForm}
-                            onSubmit={(values) => updateMutation.mutate(values)}
-                            isSaving={updateMutation.isPending}
-                            submitLabel="Save changes"
-                            showActive
-                        />
-                    )}
-                </CardContent>
-            </Card>
+            <div className="flex flex-col h-[calc(100vh-6.5rem)]">
+                <Card className="flex flex-col flex-1 min-h-0 overflow-hidden shadow-sm">
+                    <CardHeader className="shrink-0 border-b pb-3 bg-muted/10">
+                        <CardTitle>Edit Question</CardTitle>
+                        <CardDescription>Update question #{id}.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
+                        {questionQuery.isLoading ? (
+                            <p className="text-sm text-muted-foreground">Loading question data...</p>
+                        ) : questionQuery.isError ? (
+                            <p className="text-sm text-destructive">
+                                {getErrorMessage(questionQuery.error, "Unable to load question.")}
+                            </p>
+                        ) : (
+                            <QuestionForm
+                                form={form}
+                                setForm={setForm}
+                                onSubmit={(values) => updateMutation.mutate(values)}
+                                isSaving={updateMutation.isPending}
+                                submitLabel="Save changes"
+                                showActive
+                            />
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
         </MainLayout>
     );
 }

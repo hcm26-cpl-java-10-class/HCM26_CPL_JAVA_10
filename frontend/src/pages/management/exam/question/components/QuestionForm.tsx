@@ -807,7 +807,7 @@ export function QuestionForm({
                 </p>
             </div>
 
-            <CardFooter className="flex items-center justify-between border-t px-0 pt-4">
+            <CardFooter className="sticky bottom-0 z-30 flex items-center justify-between border-t bg-card/95 backdrop-blur-md px-6 py-3.5 -mx-6 -mb-6 mt-6 shadow-[0_-4px_16px_rgba(0,0,0,0.25)]">
                 <div>
                     {showActive && (
                         <div className="flex items-center gap-3">
