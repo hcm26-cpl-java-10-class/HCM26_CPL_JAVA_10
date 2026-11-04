@@ -21,6 +21,7 @@ export interface WorkspaceResource {
   category?: string | null;
   orderIndex: number;
   updatedAt?: string | null;
+  updatedBy?: number | null;
   files: WorkspaceResourceFile[];
 }
 
@@ -29,7 +30,21 @@ export interface WorkspaceResourceCollection {
   projectId?: number | null;
   teamId: number;
   total: number;
+  /** US-RES-003 — true when the caller may add / edit / delete resources. */
+  canManage: boolean;
+  maxFileBytes: number;
+  allowedExtensions: string[];
   items: WorkspaceResource[];
+}
+
+/** Payload of the create / update form (US-RES-003 AC01/AC02). */
+export interface WorkspaceResourcePayload {
+  title: string;
+  description?: string | null;
+  kind: WorkspaceResourceKind;
+  url?: string | null;
+  category?: string | null;
+  orderIndex?: number | null;
 }
 
 export interface WorkspaceResourceDownloadTicket {

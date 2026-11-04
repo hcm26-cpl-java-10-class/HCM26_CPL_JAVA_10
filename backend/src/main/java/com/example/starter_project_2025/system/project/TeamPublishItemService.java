@@ -65,6 +65,14 @@ public class TeamPublishItemService {
             throw new TeamPublishValidationException(
                     "A team without members cannot be published");
         }
+        List<Long> pmIds = assignments.stream().filter(row ->
+                ProjectMemberRole.hasRole(row.getRole(), "PM"))
+                .map(row -> row.getClassMember().getId()).toList();
+        Long leaderId = team.getLeaderMemberId() != null ? team.getLeaderMemberId()
+                : pmIds.size() == 1 ? pmIds.get(0) : null;
+        if (leaderId == null || !pmIds.equals(List.of(leaderId))) {
+            throw new TeamPublishValidationException("Nhóm cần đúng một Leader/PM trước khi công bố");
+        }
         assignments.forEach(assignment -> {
             if (assignment.getRole() == null || assignment.getRole().isBlank()) {
                 assignment.setRole(ProjectMemberRole.DEV.name());
