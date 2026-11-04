@@ -1,11 +1,25 @@
-import { Eye, MoreVertical, Pencil, Search, UserMinus, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Eye, MoreVertical, Pencil, RotateCcw, Save, Search, Trash2, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import {
+    type TraineeBatchPayload,
+    type TraineeFormInput,
+    traineeService,
+} from "@/api/features/trainee.api";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -16,53 +30,167 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useClassTrainees } from "@/hooks/useExternalLookups";
+import { externalKeys, useClassTrainees } from "@/hooks/useExternalLookups";
 import { cn } from "@/lib/utils";
 import type { ExternalClass, Trainee } from "@/types";
-import { formatDate } from "@/utils/session.utils";
-
-function resolveStatusBadge(status?: string) {
-    const normalized = (status ?? "Active").trim().toLowerCase();
-
-    if (!normalized || normalized === "active" || normalized === "studying") {
-        return {
-            label: "Active",
-            className: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300",
-        };
-    }
-
-    if (normalized === "dropped" || normalized === "drop-out" || normalized === "inactive") {
-        return {
-            label: normalized === "dropped" ? "Dropped" : "Inactive",
-            className: "bg-rose-100 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300",
-        };
-    }
-
-    const raw = (status ?? "").trim();
-    return {
-        label: raw.charAt(0).toUpperCase() + raw.slice(1),
-        className: "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300",
-    };
-}
+import { formatDate, splitLocalDateTime } from "@/utils/session.utils";
+import {
+    normalizeTraineeGender,
+    normalizeTraineeStatus,
+    resolveTraineeStatusBadge,
+    TraineeModal,
+    type TraineeModalMode,
+} from "./TraineeModal";
 
 function formatDob(dob?: string) {
     if (!dob || !dob.trim()) return "";
     return formatDate(dob);
 }
 
-export function TraineeListTab({ classItem }: { classItem: ExternalClass }) {
-    const navigate = useNavigate();
-    const classId = String(classItem.id);
-    const { data: trainees = [], isPending, isError, error, refetch } = useClassTrainees(classId);
+function isSameTrainee(baseline: Trainee | undefined, candidate: Trainee): boolean {
+    if (!baseline) return false;
 
+    const baseDob = baseline.dob ? splitLocalDateTime(baseline.dob).date : "";
+    const candDob = candidate.dob ? splitLocalDateTime(candidate.dob).date : "";
+
+    return (
+        (baseline.fullName ?? "").trim() === (candidate.fullName ?? "").trim() &&
+        (baseline.fptAccount ?? baseline.code ?? "").trim() ===
+            (candidate.fptAccount ?? candidate.code ?? "").trim() &&
+        (baseline.personalEmail ?? baseline.email ?? "").trim() ===
+            (candidate.personalEmail ?? candidate.email ?? "").trim() &&
+        (baseline.nationalId ?? "").trim() === (candidate.nationalId ?? "").trim() &&
+        (baseline.employeeId ?? "").trim() === (candidate.employeeId ?? "").trim() &&
+        (baseline.accessCardId ?? "").trim() === (candidate.accessCardId ?? "").trim() &&
+        baseDob === candDob &&
+        normalizeTraineeGender(baseline.gender) === normalizeTraineeGender(candidate.gender) &&
+        normalizeTraineeStatus(baseline.status) === normalizeTraineeStatus(candidate.status)
+    );
+}
+
+function toFormInput(trainee: Trainee): TraineeFormInput {
+    return {
+        fullName: (trainee.fullName ?? "").trim(),
+        fptAccount: (trainee.fptAccount ?? trainee.code ?? "").trim(),
+        personalEmail: (trainee.personalEmail ?? trainee.email ?? "").trim(),
+        nationalId: (trainee.nationalId ?? "").trim(),
+        employeeId: (trainee.employeeId ?? "").trim(),
+        accessCardId: (trainee.accessCardId ?? "").trim(),
+        dob: trainee.dob ? splitLocalDateTime(trainee.dob).date : "",
+        gender: normalizeTraineeGender(trainee.gender),
+        status: normalizeTraineeStatus(trainee.status),
+    };
+}
+
+export interface TraineeListTabProps {
+    classItem: ExternalClass;
+    onDirtyChange?: (isDirty: boolean) => void;
+}
+
+export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps) {
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
+    const classId = String(classItem.id);
+    const { data: serverTrainees = [], isPending, isError, error, refetch } = useClassTrainees(classId);
+
+    // Local staging state: null means synchronized with serverTrainees
+    const [draftTrainees, setDraftTrainees] = useState<Trainee[] | null>(null);
     const [search, setSearch] = useState("");
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
+    // Modal state for Create / Edit / View Profile
+    const [modalState, setModalState] = useState<{
+        open: boolean;
+        mode: TraineeModalMode;
+        trainee: Trainee | null;
+    }>({
+        open: false,
+        mode: "create",
+        trainee: null,
+    });
+
+    // Confirmation dialog state for Delete
+    const [deleteTarget, setDeleteTarget] = useState<Trainee | null>(null);
+
+    const activeTrainees = draftTrainees ?? serverTrainees;
+
+    const pendingChanges = useMemo(() => {
+        if (draftTrainees === null) {
+            return {
+                created: [] as TraineeFormInput[],
+                updated: [] as Trainee[],
+                deletedIds: [] as number[],
+                updatedIdSet: new Set<number>(),
+                total: 0,
+            };
+        }
+
+        const baselineById = new Map(serverTrainees.map((item) => [item.id, item]));
+        const draftIdSet = new Set(draftTrainees.map((item) => item.id));
+
+        const created = draftTrainees.filter((item) => item.id < 0).map(toFormInput);
+        const updated = draftTrainees.filter(
+            (item) => item.id > 0 && !isSameTrainee(baselineById.get(item.id), item),
+        );
+        const deletedIds = serverTrainees
+            .filter((item) => !draftIdSet.has(item.id))
+            .map((item) => item.id);
+
+        return {
+            created,
+            updated,
+            deletedIds,
+            updatedIdSet: new Set(updated.map((item) => item.id)),
+            total: created.length + updated.length + deletedIds.length,
+        };
+    }, [draftTrainees, serverTrainees]);
+
+    const hasUnsavedChanges = pendingChanges.total > 0;
+
+    useEffect(() => {
+        onDirtyChange?.(hasUnsavedChanges);
+    }, [hasUnsavedChanges, onDirtyChange]);
+
+    useEffect(() => {
+        return () => {
+            onDirtyChange?.(false);
+        };
+    }, [onDirtyChange]);
+
+    useEffect(() => {
+        if (!hasUnsavedChanges) return;
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = "";
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [hasUnsavedChanges]);
+
+    const saveMutation = useMutation({
+        mutationFn: (payload: TraineeBatchPayload) => traineeService.batchUpdate(classId, payload),
+        onSuccess: (response) => {
+            queryClient.setQueryData(externalKeys.classTrainees(classId), response.trainees);
+            void queryClient.invalidateQueries({ queryKey: externalKeys.classTrainees(classId) });
+            void queryClient.invalidateQueries({ queryKey: externalKeys.class(classId) });
+            void queryClient.invalidateQueries({ queryKey: externalKeys.classes });
+            setDraftTrainees(null);
+            setSelectedIds(new Set());
+            toast.success("Trainee changes saved successfully!");
+        },
+        onError: (err: unknown) => {
+            const message =
+                (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+                "Failed to save trainee changes. Please try again.";
+            toast.error(message);
+        },
+    });
+
     const filteredTrainees = useMemo(() => {
         const keyword = search.trim().toLowerCase();
-        if (!keyword) return trainees;
+        if (!keyword) return activeTrainees;
 
-        return trainees.filter((trainee) =>
+        return activeTrainees.filter((trainee) =>
             [
                 trainee.fullName,
                 trainee.fptAccount ?? trainee.code,
@@ -72,9 +200,10 @@ export function TraineeListTab({ classItem }: { classItem: ExternalClass }) {
                 trainee.accessCardId,
                 formatDob(trainee.dob),
                 trainee.gender,
+                trainee.status,
             ].some((field) => String(field ?? "").toLowerCase().includes(keyword)),
         );
-    }, [trainees, search]);
+    }, [activeTrainees, search]);
 
     const selectedVisibleCount = useMemo(
         () => filteredTrainees.filter((trainee) => selectedIds.has(trainee.id)).length,
@@ -108,6 +237,102 @@ export function TraineeListTab({ classItem }: { classItem: ExternalClass }) {
         });
     };
 
+    const handleOpenCreate = () => {
+        setModalState({ open: true, mode: "create", trainee: null });
+    };
+
+    const handleOpenEdit = (trainee: Trainee) => {
+        setModalState({ open: true, mode: "edit", trainee });
+    };
+
+    const handleOpenView = (trainee: Trainee) => {
+        setModalState({ open: true, mode: "view", trainee });
+    };
+
+    const handleModalSubmit = (values: TraineeFormInput) => {
+        const currentList = draftTrainees ?? serverTrainees;
+
+        if (modalState.mode === "create") {
+            const tempId = Math.min(0, ...currentList.map((item) => item.id)) - 1;
+            const stagedTrainee: Trainee = {
+                id: tempId,
+                code: values.fptAccount,
+                fptAccount: values.fptAccount,
+                fullName: values.fullName,
+                personalEmail: values.personalEmail,
+                email: values.personalEmail,
+                nationalId: values.nationalId,
+                employeeId: values.employeeId ?? "",
+                accessCardId: values.accessCardId ?? "",
+                dob: values.dob ?? "",
+                gender: values.gender,
+                status: values.status,
+            };
+            setDraftTrainees([...currentList, stagedTrainee]);
+        } else if (modalState.mode === "edit" && modalState.trainee) {
+            const targetId = modalState.trainee.id;
+            setDraftTrainees(
+                currentList.map((item) =>
+                    item.id === targetId
+                        ? {
+                              ...item,
+                              code: values.fptAccount,
+                              fptAccount: values.fptAccount,
+                              fullName: values.fullName,
+                              personalEmail: values.personalEmail,
+                              email: values.personalEmail,
+                              nationalId: values.nationalId,
+                              employeeId: values.employeeId ?? "",
+                              accessCardId: values.accessCardId ?? "",
+                              dob: values.dob ?? "",
+                              gender: values.gender,
+                              status: values.status,
+                          }
+                        : item,
+                ),
+            );
+        }
+
+        setModalState((prev) => ({ ...prev, open: false }));
+    };
+
+    const handleConfirmDelete = () => {
+        if (!deleteTarget) return;
+        const currentList = draftTrainees ?? serverTrainees;
+        const removedId = deleteTarget.id;
+
+        setDraftTrainees(currentList.filter((item) => item.id !== removedId));
+        setSelectedIds((prev) => {
+            if (!prev.has(removedId)) return prev;
+            const next = new Set(prev);
+            next.delete(removedId);
+            return next;
+        });
+        setDeleteTarget(null);
+    };
+
+    const handleDiscardChanges = () => {
+        setDraftTrainees(null);
+        setSelectedIds((prev) => {
+            const validIds = new Set(serverTrainees.map((item) => item.id));
+            const next = new Set<number>();
+            for (const id of prev) {
+                if (validIds.has(id)) next.add(id);
+            }
+            return next;
+        });
+        toast.info("Unsaved trainee changes discarded.");
+    };
+
+    const handleSaveChanges = () => {
+        if (!hasUnsavedChanges || saveMutation.isPending) return;
+        saveMutation.mutate({
+            created: pendingChanges.created,
+            updated: pendingChanges.updated,
+            deletedIds: pendingChanges.deletedIds,
+        });
+    };
+
     const handleTopicMark = () => {
         const params = new URLSearchParams({
             classId,
@@ -122,10 +347,6 @@ export function TraineeListTab({ classItem }: { classItem: ExternalClass }) {
         );
     };
 
-    const handleRowAction = (action: string, trainee: Trainee) => {
-        toast.info(`${action}: ${trainee.fullName ?? trainee.fptAccount ?? `#${trainee.id}`} (API integration pending)`);
-    };
-
     if (isError) {
         return <ApiErrorState error={error} resource="trainee list" onRetry={() => void refetch()} />;
     }
@@ -133,26 +354,46 @@ export function TraineeListTab({ classItem }: { classItem: ExternalClass }) {
     return (
         <div className="space-y-4">
             {/* Top Action Bar */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="relative w-full sm:w-72">
-                    <Search
-                        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                        aria-hidden
-                    />
-                    <Input
-                        aria-label="Search trainees"
-                        placeholder="Search trainees"
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value)}
-                        className="pl-9"
-                    />
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap items-center gap-2.5">
+                    <div className="relative w-full sm:w-72">
+                        <Search
+                            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                            aria-hidden
+                        />
+                        <Input
+                            aria-label="Search trainees"
+                            placeholder="Search trainees"
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            className="pl-9"
+                        />
+                    </div>
+
+                    {hasUnsavedChanges ? (
+                        <Badge
+                            variant="secondary"
+                            className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                        >
+                            {pendingChanges.total} unsaved {pendingChanges.total === 1 ? "change" : "changes"}
+                        </Badge>
+                    ) : null}
                 </div>
 
-                <div className="flex items-center gap-2.5 self-end sm:self-auto">
-                    <Button variant="outline" onClick={handleTopicMark}>
+                <div className="flex flex-wrap items-center gap-2.5 self-end sm:self-auto">
+                    <Button
+                        type="button"
+                        onClick={handleOpenCreate}
+                        disabled={isPending || saveMutation.isPending}
+                        className="bg-[#283593] text-white hover:bg-[#1a237e] dark:bg-blue-600 dark:hover:bg-blue-500"
+                    >
+                        + Add Trainee
+                    </Button>
+
+                    <Button type="button" variant="outline" onClick={handleTopicMark}>
                         Topic Mark
                     </Button>
-                    <Button variant="outline" onClick={handleAttendance}>
+                    <Button type="button" variant="outline" onClick={handleAttendance}>
                         Attendance
                     </Button>
                 </div>
@@ -215,31 +456,52 @@ export function TraineeListTab({ classItem }: { classItem: ExternalClass }) {
                         ) : (
                             filteredTrainees.map((trainee, index) => {
                                 const isSelected = selectedIds.has(trainee.id);
+                                const isNewRow = trainee.id < 0;
+                                const isEditedRow = pendingChanges.updatedIdSet.has(trainee.id);
                                 const account = trainee.fptAccount || trainee.code || "";
                                 const personalEmail = trainee.personalEmail || trainee.email || "";
-                                const statusBadge = resolveStatusBadge(trainee.status);
+                                const statusBadge = resolveTraineeStatusBadge(trainee.status);
 
                                 return (
                                     <TableRow
                                         key={trainee.id}
                                         data-state={isSelected ? "selected" : undefined}
-                                        className="data-[state=selected]:bg-blue-50/50 dark:data-[state=selected]:bg-blue-950/20"
+                                        className={cn(
+                                            "data-[state=selected]:bg-blue-50/50 dark:data-[state=selected]:bg-blue-950/20",
+                                            isNewRow && "bg-emerald-50/40 dark:bg-emerald-950/15",
+                                            isEditedRow && "bg-amber-50/40 dark:bg-amber-950/15",
+                                        )}
                                     >
                                         <TableCell className="px-3 py-3 text-center">
                                             <Checkbox
                                                 aria-label={`Select ${trainee.fullName ?? account ?? trainee.id}`}
                                                 checked={isSelected}
-                                                onCheckedChange={(checked) => handleToggleRow(trainee.id, checked === true)}
+                                                onCheckedChange={(checked) =>
+                                                    handleToggleRow(trainee.id, checked === true)
+                                                }
                                             />
                                         </TableCell>
                                         <TableCell className="px-3 py-3 text-sm text-foreground">{index + 1}</TableCell>
                                         <TableCell className="px-3 py-3 text-sm font-medium text-[#3b4cb8] dark:text-blue-300">
-                                            {trainee.fullName || "—"}
+                                            <div className="flex items-center gap-2">
+                                                <span>{trainee.fullName || "—"}</span>
+                                                {isNewRow ? (
+                                                    <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                                                        New
+                                                    </span>
+                                                ) : isEditedRow ? (
+                                                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                                        Edited
+                                                    </span>
+                                                ) : null}
+                                            </div>
                                         </TableCell>
                                         <TableCell className="px-3 py-3 text-sm text-[#3b4cb8] dark:text-blue-300">
                                             {account}
                                         </TableCell>
-                                        <TableCell className="px-3 py-3 text-sm text-foreground">{personalEmail}</TableCell>
+                                        <TableCell className="px-3 py-3 text-sm text-foreground">
+                                            {personalEmail}
+                                        </TableCell>
                                         <TableCell className="px-3 py-3 text-sm text-foreground">
                                             {trainee.nationalId ?? ""}
                                         </TableCell>
@@ -258,7 +520,10 @@ export function TraineeListTab({ classItem }: { classItem: ExternalClass }) {
                                         <TableCell className="px-3 py-3">
                                             <Badge
                                                 variant="secondary"
-                                                className={cn("rounded-full px-3 py-0.5 text-xs font-medium", statusBadge.className)}
+                                                className={cn(
+                                                    "rounded-full px-3 py-0.5 text-xs font-medium",
+                                                    statusBadge.className,
+                                                )}
                                             >
                                                 {statusBadge.label}
                                             </Badge>
@@ -275,18 +540,18 @@ export function TraineeListTab({ classItem }: { classItem: ExternalClass }) {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-44">
-                                                    <DropdownMenuItem onClick={() => handleRowAction("View trainee profile", trainee)}>
+                                                    <DropdownMenuItem onClick={() => handleOpenView(trainee)}>
                                                         <Eye className="size-4" /> View Profile
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => handleRowAction("Edit trainee info", trainee)}>
-                                                        <Pencil className="size-4" /> Edit Trainee
+                                                    <DropdownMenuItem onClick={() => handleOpenEdit(trainee)}>
+                                                        <Pencil className="size-4" /> Edit
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem
                                                         variant="destructive"
-                                                        onClick={() => handleRowAction("Remove from class", trainee)}
+                                                        onClick={() => setDeleteTarget(trainee)}
                                                     >
-                                                        <UserMinus className="size-4" /> Remove from Class
+                                                        <Trash2 className="size-4" /> Delete
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
@@ -298,9 +563,87 @@ export function TraineeListTab({ classItem }: { classItem: ExternalClass }) {
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Bottom Actions Bar */}
+            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
+                {hasUnsavedChanges ? (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={saveMutation.isPending}
+                        onClick={handleDiscardChanges}
+                    >
+                        <RotateCcw className="size-4" aria-hidden /> Discard
+                    </Button>
+                ) : null}
+
+                <Button
+                    type="button"
+                    disabled={!hasUnsavedChanges || saveMutation.isPending}
+                    onClick={handleSaveChanges}
+                    className={cn(
+                        hasUnsavedChanges
+                            ? "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                            : "",
+                    )}
+                >
+                    <Save className="size-4" aria-hidden />
+                    <span>{saveMutation.isPending ? "Saving..." : "Save Changes"}</span>
+                    {hasUnsavedChanges ? (
+                        <span className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold">
+                            {pendingChanges.total}
+                        </span>
+                    ) : null}
+                </Button>
+            </div>
+
+            {/* Add / Edit / View Profile Modal */}
+            <TraineeModal
+                open={modalState.open}
+                mode={modalState.mode}
+                trainee={modalState.trainee}
+                existingTrainees={activeTrainees}
+                onOpenChange={(open) => setModalState((prev) => ({ ...prev, open }))}
+                onSubmit={handleModalSubmit}
+                onSwitchToEdit={
+                    modalState.trainee
+                        ? () => setModalState((prev) => ({ ...prev, mode: "edit" }))
+                        : undefined
+                }
+            />
+
+            {/* Delete Confirmation Modal */}
+            <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Remove Trainee</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to remove this trainee from class?
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {deleteTarget ? (
+                        <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                            <p className="font-medium text-foreground">{deleteTarget.fullName || "—"}</p>
+                            <p className="text-xs text-muted-foreground">
+                                {deleteTarget.fptAccount || deleteTarget.code || "—"} •{" "}
+                                {deleteTarget.personalEmail || deleteTarget.email || "—"}
+                            </p>
+                        </div>
+                    ) : null}
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
+                            Cancel
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={handleConfirmDelete}>
+                            Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
 
 export default TraineeListTab;
-

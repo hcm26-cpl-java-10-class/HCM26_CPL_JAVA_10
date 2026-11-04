@@ -456,6 +456,7 @@ const server = http.createServer(async (req, res) => {
   const classDetailMatch = pathname.match(/^\/api\/classes\/(\d+)$/);
   const classStatusMatch = pathname.match(/^\/api\/classes\/(\d+)\/status$/);
   const classTraineesMatch = pathname.match(/^\/api\/classes\/(\d+)\/trainees$/);
+  const classTraineesBatchMatch = pathname.match(/^\/api\/classes\/(\d+)\/trainees\/batch$/);
   const classTraineeItemMatch = pathname.match(/^\/api\/classes\/(\d+)\/trainees\/(\d+)$/);
   const classSessionsMatch = pathname.match(/^\/api\/classes\/(\d+)\/sessions$/);
   const classSessionItemMatch = pathname.match(/^\/api\/classes\/(\d+)\/sessions\/(\d+)$/);
@@ -482,30 +483,48 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, trainees);
   }
 
-  // POST /api/classes/:id/trainees  - Add trainee to class
+  // POST /api/classes/:id/trainees  - Add or create trainee in class
   if (req.method === 'POST' && classTraineesMatch) {
     const classId = parseInt(classTraineesMatch[1], 10);
     const cls = classes.find(c => c.id === classId);
     if (!cls) return json(res, 404, { message: `Class #${classId} not found` });
-    if (cls.status === 'completed' || cls.status === 'closed' || cls.status === 'cancelled') {
-      return json(res, 400, { message: `Không thể thêm học viên vào lớp có trạng thái '${STATUS_LABELS[cls.status] || cls.status}'` });
-    }
 
     const data = await readBody(req);
+    if (!enrollments[classId]) enrollments[classId] = [];
+
+    // Support creating a brand-new trainee record directly
+    if (!data.traineeId && data.fullName) {
+      const nextId = allTrainees.reduce((max, t) => Math.max(max, t.id), 100) + 1;
+      const account = (data.fptAccount || data.code || '').trim();
+      const email = (data.personalEmail || data.email || '').trim();
+      const newTrainee = {
+        id: nextId,
+        code: account,
+        fptAccount: account,
+        fullName: String(data.fullName).trim(),
+        personalEmail: email,
+        email,
+        nationalId: String(data.nationalId || '').trim(),
+        employeeId: String(data.employeeId || '').trim(),
+        accessCardId: String(data.accessCardId || '').trim(),
+        dob: data.dob || '',
+        gender: data.gender || 'Male',
+        status: data.status || 'Active',
+      };
+      allTrainees.push(newTrainee);
+      enrollments[classId].push(nextId);
+      cls.enrolledTrainees = enrollments[classId].length;
+      return json(res, 201, { message: 'Trainee added successfully', trainee: newTrainee });
+    }
+
     const traineeId = parseInt(data.traineeId, 10);
-    if (!traineeId) return json(res, 400, { message: 'traineeId is required' });
+    if (!traineeId) return json(res, 400, { message: 'traineeId or fullName is required' });
 
     const trainee = allTrainees.find(t => t.id === traineeId);
     if (!trainee) return json(res, 404, { message: `Trainee #${traineeId} not found` });
 
-    if (!enrollments[classId]) enrollments[classId] = [];
     if (enrollments[classId].includes(traineeId)) {
       return json(res, 400, { message: `Học viên '${trainee.fullName}' đã được đăng ký vào lớp này` });
-    }
-
-    const enrolled = enrollments[classId].length;
-    if (enrolled >= cls.plannedSize) {
-      return json(res, 400, { message: `Lớp đã đủ ${cls.plannedSize} học viên theo kế hoạch. Không thể thêm thêm.` });
     }
 
     enrollments[classId].push(traineeId);
@@ -513,18 +532,114 @@ const server = http.createServer(async (req, res) => {
     return json(res, 201, { message: `Đã thêm học viên '${trainee.fullName}' vào lớp`, trainee });
   }
 
+  // PUT /api/classes/:id/trainees/batch - Batch sync staged trainee CRUD changes
+  if (req.method === 'PUT' && classTraineesBatchMatch) {
+    const classId = parseInt(classTraineesBatchMatch[1], 10);
+    const cls = classes.find(c => c.id === classId);
+    if (!cls) return json(res, 404, { message: `Class #${classId} not found` });
+
+    const body = await readBody(req);
+    const created = Array.isArray(body.created) ? body.created : [];
+    const updated = Array.isArray(body.updated) ? body.updated : [];
+    const deletedIds = Array.isArray(body.deletedIds) ? body.deletedIds.map(Number) : [];
+
+    if (!enrollments[classId]) enrollments[classId] = [];
+
+    // 1. Apply deletions from class enrollment
+    if (deletedIds.length > 0) {
+      const deletedSet = new Set(deletedIds);
+      enrollments[classId] = enrollments[classId].filter(id => !deletedSet.has(id));
+    }
+
+    // 2. Apply updates to existing trainees
+    for (const item of updated) {
+      const target = allTrainees.find(t => t.id === Number(item.id));
+      if (target) {
+        const account = (item.fptAccount ?? item.code ?? target.fptAccount ?? '').trim();
+        const email = (item.personalEmail ?? item.email ?? target.personalEmail ?? '').trim();
+        Object.assign(target, {
+          fullName: item.fullName !== undefined ? String(item.fullName).trim() : target.fullName,
+          fptAccount: account,
+          code: account,
+          personalEmail: email,
+          email,
+          nationalId: item.nationalId !== undefined ? String(item.nationalId).trim() : target.nationalId,
+          employeeId: item.employeeId !== undefined ? String(item.employeeId).trim() : target.employeeId,
+          accessCardId: item.accessCardId !== undefined ? String(item.accessCardId).trim() : target.accessCardId,
+          dob: item.dob !== undefined ? item.dob : target.dob,
+          gender: item.gender !== undefined ? item.gender : target.gender,
+          status: item.status !== undefined ? item.status : target.status,
+        });
+      }
+    }
+
+    // 3. Apply creations
+    let nextId = allTrainees.reduce((max, t) => Math.max(max, t.id), 100);
+    for (const item of created) {
+      nextId += 1;
+      const account = (item.fptAccount || item.code || '').trim();
+      const email = (item.personalEmail || item.email || '').trim();
+      const newTrainee = {
+        id: nextId,
+        code: account,
+        fptAccount: account,
+        fullName: String(item.fullName || '').trim(),
+        personalEmail: email,
+        email,
+        nationalId: String(item.nationalId || '').trim(),
+        employeeId: String(item.employeeId || '').trim(),
+        accessCardId: String(item.accessCardId || '').trim(),
+        dob: item.dob || '',
+        gender: item.gender || 'Male',
+        status: item.status || 'Active',
+      };
+      allTrainees.push(newTrainee);
+      enrollments[classId].push(nextId);
+    }
+
+    cls.enrolledTrainees = enrollments[classId].length;
+    const syncedTrainees = getClassTrainees(classId, classSessions);
+    return json(res, 200, { message: 'Trainee changes saved successfully!', trainees: syncedTrainees });
+  }
+
+  // PUT /api/classes/:id/trainees/:traineeId - Update single trainee in class
+  if (req.method === 'PUT' && classTraineeItemMatch) {
+    const classId = parseInt(classTraineeItemMatch[1], 10);
+    const traineeId = parseInt(classTraineeItemMatch[2], 10);
+    const cls = classes.find(c => c.id === classId);
+    if (!cls) return json(res, 404, { message: `Class #${classId} not found` });
+
+    const target = allTrainees.find(t => t.id === traineeId);
+    if (!target) return json(res, 404, { message: `Trainee #${traineeId} not found` });
+
+    const item = await readBody(req);
+    const account = (item.fptAccount ?? item.code ?? target.fptAccount ?? '').trim();
+    const email = (item.personalEmail ?? item.email ?? target.personalEmail ?? '').trim();
+    Object.assign(target, {
+      fullName: item.fullName !== undefined ? String(item.fullName).trim() : target.fullName,
+      fptAccount: account,
+      code: account,
+      personalEmail: email,
+      email,
+      nationalId: item.nationalId !== undefined ? String(item.nationalId).trim() : target.nationalId,
+      employeeId: item.employeeId !== undefined ? String(item.employeeId).trim() : target.employeeId,
+      accessCardId: item.accessCardId !== undefined ? String(item.accessCardId).trim() : target.accessCardId,
+      dob: item.dob !== undefined ? item.dob : target.dob,
+      gender: item.gender !== undefined ? item.gender : target.gender,
+      status: item.status !== undefined ? item.status : target.status,
+    });
+    return json(res, 200, target);
+  }
+
   // DELETE /api/classes/:id/trainees/:traineeId - Remove trainee from class
   if (req.method === 'DELETE' && classTraineeItemMatch) {
     const classId = parseInt(classTraineeItemMatch[1], 10);
     const traineeId = parseInt(classTraineeItemMatch[2], 10);
     const data = await readBody(req).catch(() => ({}));
-    const reason = data.reason || 'Not specified';
+    const reason = data.reason || 'Removed from class';
 
     const cls = classes.find(c => c.id === classId);
     if (!cls) return json(res, 404, { message: `Class #${classId} not found` });
-    if (cls.status === 'completed' || cls.status === 'closed') {
-      return json(res, 400, { message: `Không thể xóa học viên khỏi lớp đã hoàn thành hoặc đóng` });
-    }
 
     if (!enrollments[classId]) enrollments[classId] = [];
     const idx = enrollments[classId].indexOf(traineeId);

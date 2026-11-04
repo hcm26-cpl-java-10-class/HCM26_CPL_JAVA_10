@@ -109,6 +109,23 @@ public class ExternalApiController {
         return ResponseEntity.status(HttpStatus.CREATED).body(externalApiService.addTraineeToClass(id, body));
     }
 
+    @PutMapping("/classes/{classId}/trainees/{traineeId}")
+    @Operation(summary = "Update trainee details in a class")
+    public ResponseEntity<Object> updateClassTrainee(
+            @PathVariable Long classId,
+            @PathVariable Long traineeId,
+            @RequestBody Object body) {
+        return ResponseEntity.ok(externalApiService.updateClassTrainee(classId, traineeId, body));
+    }
+
+    @PutMapping("/classes/{classId}/trainees/batch")
+    @Operation(summary = "Batch save staged trainee changes (create, update, delete) for a class")
+    public ResponseEntity<Object> batchSaveClassTrainees(
+            @PathVariable Long classId,
+            @RequestBody Object body) {
+        return ResponseEntity.ok(externalApiService.batchSaveClassTrainees(classId, body));
+    }
+
     @DeleteMapping("/classes/{classId}/trainees/{traineeId}")
     @Operation(summary = "Remove trainee from class")
     public ResponseEntity<Object> removeTraineeFromClass(

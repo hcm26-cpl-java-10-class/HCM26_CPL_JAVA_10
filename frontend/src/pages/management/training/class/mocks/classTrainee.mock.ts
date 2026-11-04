@@ -1,5 +1,17 @@
 import type { ClassBudget, ClassCalendarVersion, ExternalClass, Trainee } from "@/types";
 
+export interface MockTraineeMutationInput {
+    fullName: string;
+    fptAccount: string;
+    personalEmail: string;
+    nationalId: string;
+    employeeId?: string;
+    accessCardId?: string;
+    dob?: string;
+    gender?: string;
+    status?: string;
+}
+
 export const MOCK_TRAINING_CLASSES: ExternalClass[] = [
     {
         id: 2,
@@ -236,6 +248,18 @@ const MOCK_CLASS_TRAINEE_IDS: Record<number, number[]> = {
     3: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
 };
 
+function resolveClassId(idOrCode: string | number): number {
+    const classItem = findMockClass(idOrCode);
+    return classItem?.id ?? (Number(idOrCode) || 2);
+}
+
+function syncMockEnrolledCount(classId: number) {
+    const cls = MOCK_TRAINING_CLASSES.find((item) => item.id === classId);
+    if (cls && MOCK_CLASS_TRAINEE_IDS[classId]) {
+        cls.enrolledTrainees = MOCK_CLASS_TRAINEE_IDS[classId].length;
+    }
+}
+
 export function findMockClass(idOrCode: string | number): ExternalClass | undefined {
     const raw = String(idOrCode).trim();
     const normalized = raw.toLowerCase();
@@ -248,19 +272,129 @@ export function findMockClass(idOrCode: string | number): ExternalClass | undefi
 }
 
 export function getMockTraineesByClass(idOrCode: string | number): Trainee[] {
-    const classItem = findMockClass(idOrCode);
-    const classId = classItem?.id ?? Number(idOrCode);
+    const classId = resolveClassId(idOrCode);
     const ids = MOCK_CLASS_TRAINEE_IDS[classId];
     if (!ids) {
-        return MOCK_TRAINEES_POOL;
+        return MOCK_TRAINEES_POOL.map((trainee) => ({ ...trainee }));
     }
-    const idSet = new Set(ids);
-    return MOCK_TRAINEES_POOL.filter((trainee) => idSet.has(trainee.id));
+    const byId = new Map(MOCK_TRAINEES_POOL.map((trainee) => [trainee.id, trainee]));
+    return ids
+        .map((id) => byId.get(id))
+        .filter((trainee): trainee is Trainee => Boolean(trainee))
+        .map((trainee) => ({ ...trainee }));
+}
+
+export function createMockTrainee(idOrCode: string | number, input: MockTraineeMutationInput): Trainee {
+    const classId = resolveClassId(idOrCode);
+    const nextId = MOCK_TRAINEES_POOL.reduce((max, item) => Math.max(max, item.id), 100) + 1;
+    const account = input.fptAccount.trim();
+    const email = input.personalEmail.trim();
+    const created: Trainee = {
+        id: nextId,
+        code: account,
+        fptAccount: account,
+        fullName: input.fullName.trim(),
+        personalEmail: email,
+        email,
+        nationalId: input.nationalId.trim(),
+        employeeId: (input.employeeId ?? "").trim(),
+        accessCardId: (input.accessCardId ?? "").trim(),
+        dob: input.dob ?? "",
+        gender: input.gender ?? "Male",
+        status: input.status ?? "Active",
+    };
+
+    MOCK_TRAINEES_POOL.push(created);
+    if (!MOCK_CLASS_TRAINEE_IDS[classId]) {
+        MOCK_CLASS_TRAINEE_IDS[classId] = [];
+    }
+    MOCK_CLASS_TRAINEE_IDS[classId].push(nextId);
+    syncMockEnrolledCount(classId);
+    return { ...created };
+}
+
+export function updateMockTrainee(
+    _idOrCode: string | number,
+    traineeId: number,
+    input: Partial<MockTraineeMutationInput>,
+): Trainee {
+    const target = MOCK_TRAINEES_POOL.find((item) => item.id === traineeId);
+    if (!target) {
+        throw Object.assign(new Error(`Trainee #${traineeId} not found`), { response: { status: 404 } });
+    }
+
+    const account = (input.fptAccount ?? target.fptAccount ?? target.code ?? "").trim();
+    const email = (input.personalEmail ?? target.personalEmail ?? target.email ?? "").trim();
+
+    Object.assign(target, {
+        fullName: input.fullName !== undefined ? input.fullName.trim() : target.fullName,
+        fptAccount: account,
+        code: account,
+        personalEmail: email,
+        email,
+        nationalId: input.nationalId !== undefined ? input.nationalId.trim() : target.nationalId,
+        employeeId: input.employeeId !== undefined ? input.employeeId.trim() : target.employeeId,
+        accessCardId: input.accessCardId !== undefined ? input.accessCardId.trim() : target.accessCardId,
+        dob: input.dob !== undefined ? input.dob : target.dob,
+        gender: input.gender !== undefined ? input.gender : target.gender,
+        status: input.status !== undefined ? input.status : target.status,
+    });
+
+    return { ...target };
+}
+
+export function deleteMockTrainee(idOrCode: string | number, traineeId: number): void {
+    const classId = resolveClassId(idOrCode);
+    const current = MOCK_CLASS_TRAINEE_IDS[classId] ?? [];
+    MOCK_CLASS_TRAINEE_IDS[classId] = current.filter((id) => id !== traineeId);
+    syncMockEnrolledCount(classId);
+}
+
+export function batchSaveMockTrainees(
+    idOrCode: string | number,
+    payload: {
+        created: MockTraineeMutationInput[];
+        updated: Trainee[];
+        deletedIds: number[];
+    },
+): { message: string; trainees: Trainee[] } {
+    const classId = resolveClassId(idOrCode);
+    if (!MOCK_CLASS_TRAINEE_IDS[classId]) {
+        MOCK_CLASS_TRAINEE_IDS[classId] = [];
+    }
+
+    if (payload.deletedIds.length > 0) {
+        const deletedSet = new Set(payload.deletedIds);
+        MOCK_CLASS_TRAINEE_IDS[classId] = MOCK_CLASS_TRAINEE_IDS[classId].filter((id) => !deletedSet.has(id));
+    }
+
+    for (const item of payload.updated) {
+        updateMockTrainee(classId, item.id, {
+            fullName: item.fullName,
+            fptAccount: item.fptAccount ?? item.code,
+            personalEmail: item.personalEmail ?? item.email,
+            nationalId: item.nationalId,
+            employeeId: item.employeeId,
+            accessCardId: item.accessCardId,
+            dob: item.dob,
+            gender: item.gender,
+            status: item.status,
+        });
+    }
+
+    for (const item of payload.created) {
+        createMockTrainee(classId, item);
+    }
+
+    syncMockEnrolledCount(classId);
+    return {
+        message: "Trainee changes saved successfully!",
+        trainees: getMockTraineesByClass(classId),
+    };
 }
 
 export function getMockBudgetByClass(idOrCode: string | number): ClassBudget {
-    const classItem = findMockClass(idOrCode);
-    const classId = classItem?.id ?? (Number(idOrCode) || 2);
+    const classId = resolveClassId(idOrCode);
     return {
         classId,
         plannedRevenue: 0,
@@ -314,4 +448,3 @@ export function getMockCalendarsByClass(idOrCode: string | number): ClassCalenda
         },
     ];
 }
-

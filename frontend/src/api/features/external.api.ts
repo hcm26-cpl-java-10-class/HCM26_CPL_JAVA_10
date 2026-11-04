@@ -11,12 +11,12 @@ import type {
     TrainingAnalytics,
 } from "@/types";
 import axiosInstance from "../axios";
+import { traineeService } from "./trainee.api";
 import type { ClassCalendarVersion } from "@/types/features/external";
 import {
     findMockClass,
     getMockBudgetByClass,
     getMockCalendarsByClass,
-    getMockTraineesByClass,
     MOCK_TRAINEES_POOL,
     MOCK_TRAINING_CLASSES,
 } from "@/pages/management/training/class/mocks/classTrainee.mock";
@@ -134,10 +134,7 @@ export const externalApi = {
 
     // ===================== TRAINEES =====================
     getClassTrainees: async (classId: string | number): Promise<Trainee[]> => {
-        return withFallback(
-            async () => (await axiosInstance.get<Trainee[]>(`/external/classes/${classId}/trainees`)).data,
-            () => getMockTraineesByClass(classId),
-        );
+        return traineeService.getByClassId(classId);
     },
 
     getAllTrainees: async (): Promise<Trainee[]> => {

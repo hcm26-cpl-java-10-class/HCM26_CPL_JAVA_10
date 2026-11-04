@@ -1,9 +1,19 @@
 import { Activity, ArrowLeft, HelpCircle } from "lucide-react";
-import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
+import { type MouseEvent, useState } from "react";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
 import { NotIntegratedPanel } from "@/components/common/NotIntegratedPanel";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useExternalClass } from "@/hooks/useExternalLookups";
@@ -31,6 +41,11 @@ const isValidTab = (value: string | null): value is ClassDetailTabValue =>
 
 const CLASS_LIST_PATH = "/classes";
 
+type PendingNavigation =
+    | { type: "tab"; tab: ClassDetailTabValue }
+    | { type: "route"; to: string }
+    | null;
+
 function DetailsSkeleton() {
     return (
         <div role="status" aria-busy="true" aria-label="Loading class" className="space-y-5 p-5">
@@ -51,10 +66,14 @@ export function ClassDetailView() {
     const rawIdentifier = (params.classCode ?? params.classId ?? "").trim();
     const identifier = /^[A-Za-z0-9_-]{1,64}$/.test(rawIdentifier) ? rawIdentifier : undefined;
 
+    const navigate = useNavigate();
     const location = useLocation();
     const [searchParams, setSearchParams] = useSearchParams();
     const requestedTab = searchParams.get("tab");
     const activeTab: ClassDetailTabValue = isValidTab(requestedTab) ? requestedTab : DEFAULT_TAB;
+
+    const [hasUnsavedTraineeChanges, setHasUnsavedTraineeChanges] = useState(false);
+    const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation>(null);
 
     const query = useExternalClass(identifier);
     const classItem = query.data;
@@ -63,6 +82,37 @@ export function ClassDetailView() {
     const backTo = listSearch ? `${CLASS_LIST_PATH}?${listSearch}` : CLASS_LIST_PATH;
 
     const resolvedName = classItem ? classTitle(classItem) : rawIdentifier;
+
+    const handleTabChange = (nextValue: string) => {
+        if (!isValidTab(nextValue) || nextValue === activeTab) return;
+
+        if (activeTab === "trainees" && hasUnsavedTraineeChanges) {
+            setPendingNavigation({ type: "tab", tab: nextValue });
+            return;
+        }
+
+        setSearchParams({ tab: nextValue }, { replace: true, state: location.state });
+    };
+
+    const handleBackLinkClick = (event: MouseEvent<HTMLAnchorElement>) => {
+        if (activeTab === "trainees" && hasUnsavedTraineeChanges) {
+            event.preventDefault();
+            setPendingNavigation({ type: "route", to: backTo });
+        }
+    };
+
+    const handleConfirmLeave = () => {
+        if (!pendingNavigation) return;
+        const target = pendingNavigation;
+        setPendingNavigation(null);
+        setHasUnsavedTraineeChanges(false);
+
+        if (target.type === "tab") {
+            setSearchParams({ tab: target.tab }, { replace: true, state: location.state });
+        } else {
+            navigate(target.to);
+        }
+    };
 
     return (
         <MainLayout
@@ -114,6 +164,7 @@ export function ClassDetailView() {
 
                             <Link
                                 to={backTo}
+                                onClick={handleBackLinkClick}
                                 className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-blue-800 dark:hover:text-blue-300"
                             >
                                 <ArrowLeft className="size-3.5" aria-hidden /> Back to Class List
@@ -121,13 +172,7 @@ export function ClassDetailView() {
                         </header>
 
                         {/* Tabs Navigation */}
-                        <Tabs
-                            value={activeTab}
-                            onValueChange={(value) =>
-                                setSearchParams({ tab: value }, { replace: true, state: location.state })
-                            }
-                            className="gap-0"
-                        >
+                        <Tabs value={activeTab} onValueChange={handleTabChange} className="gap-0">
                             <TabsList
                                 variant="line"
                                 className="group-data-[orientation=horizontal]/tabs:h-11 w-full justify-start gap-4 overflow-x-auto overflow-y-hidden rounded-none border-b px-5 sm:gap-6"
@@ -149,7 +194,11 @@ export function ClassDetailView() {
                                 </TabsContent>
 
                                 <TabsContent value="trainees">
-                                    <TraineeListTab classItem={classItem} />
+                                    <TraineeListTab
+                                        key={classItem.id}
+                                        classItem={classItem}
+                                        onDirtyChange={setHasUnsavedTraineeChanges}
+                                    />
                                 </TabsContent>
 
                                 <TabsContent value="calendar">
@@ -170,6 +219,33 @@ export function ClassDetailView() {
                                 </TabsContent>
                             </div>
                         </Tabs>
+
+                        {/* Unsaved Changes Leave Guard Modal */}
+                        <Dialog
+                            open={pendingNavigation !== null}
+                            onOpenChange={(open) => !open && setPendingNavigation(null)}
+                        >
+                            <DialogContent className="sm:max-w-md">
+                                <DialogHeader>
+                                    <DialogTitle>Unsaved Changes</DialogTitle>
+                                    <DialogDescription>
+                                        You have unsaved changes. Are you sure you want to leave?
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <DialogFooter>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setPendingNavigation(null)}
+                                    >
+                                        Stay
+                                    </Button>
+                                    <Button type="button" variant="destructive" onClick={handleConfirmLeave}>
+                                        Leave
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
                     </>
                 ) : null}
             </section>
@@ -178,4 +254,3 @@ export function ClassDetailView() {
 }
 
 export default ClassDetailView;
-

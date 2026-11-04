@@ -171,6 +171,22 @@ public class ExternalApiServiceImpl implements ExternalApiService {
     }
 
     @Override
+    public Object updateClassTrainee(Long classId, Long traineeId, Object body) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{classId}/trainees/{traineeId}")
+                .buildAndExpand(classId, traineeId).toUriString();
+        return executePutGeneric(url, body, "update trainee");
+    }
+
+    @Override
+    public Object batchSaveClassTrainees(Long classId, Object body) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+                .path("/api/classes/{classId}/trainees/batch")
+                .buildAndExpand(classId).toUriString();
+        return executePutGeneric(url, body, "batch save trainees");
+    }
+
+    @Override
     public Object removeTraineeFromClass(Long classId, Long traineeId, Object body) {
         String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
                 .path("/api/classes/{classId}/trainees/{traineeId}")

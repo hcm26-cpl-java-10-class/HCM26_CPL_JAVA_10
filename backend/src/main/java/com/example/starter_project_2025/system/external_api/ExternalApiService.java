@@ -86,6 +86,12 @@ public interface ExternalApiService {
     /** Add a trainee to a class. */
     Object addTraineeToClass(Long classId, Object body);
 
+    /** Update trainee details in a class. */
+    Object updateClassTrainee(Long classId, Long traineeId, Object body);
+
+    /** Batch save staged trainee changes (create, update, delete) for a class. */
+    Object batchSaveClassTrainees(Long classId, Object body);
+
     /** Remove a trainee from a class. */
     Object removeTraineeFromClass(Long classId, Long traineeId, Object body);
 
