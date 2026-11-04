@@ -9,6 +9,8 @@ public class AuditLogFilterDTO {
     private String search;
     private String status;
     private String source;
+    private Long departmentId;
+    private Long courseId;
     private LocalDate fromDate;
     private LocalDate toDate;
 }
