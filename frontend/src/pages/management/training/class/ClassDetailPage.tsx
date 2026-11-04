@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
     ArrowLeft,
     CalendarDays,
@@ -50,6 +51,7 @@ function DetailsSkeleton() {
 }
 
 export default function ClassDetailPage() {
+    const [calendarDirty, setCalendarDirty] = useState(false);
     const { classId } = useParams();
     const id = classId && /^[1-9]\d{0,14}$/.test(classId) ? classId : undefined;
 
@@ -102,9 +104,11 @@ export default function ClassDetailPage() {
 
                         <Tabs
                             value={tab}
-                            onValueChange={(value) =>
-                                setSearchParams({ tab: value }, { replace: true, state: location.state })
-                            }
+                            activationMode="manual"
+                            onValueChange={(value) => {
+                                if (value !== tab && calendarDirty && !window.confirm("You have unsaved calendar changes. Leave and discard them?")) return;
+                                setSearchParams({ tab: value }, { replace: true, state: location.state });
+                            }}
                             className="gap-0"
                         >
                             <TabsList
@@ -136,7 +140,7 @@ export default function ClassDetailPage() {
                                 </TabsContent>
 
                                 <TabsContent value="calendar">
-                                    <ClassCalendarTab classItem={classItem} />
+                                    <ClassCalendarTab key={classItem.id} classItem={classItem} onDirtyChange={setCalendarDirty} />
                                 </TabsContent>
 
                                 <TabsContent value="budget">

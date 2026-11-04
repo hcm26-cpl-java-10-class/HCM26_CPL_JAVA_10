@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, ChevronDown, GripHorizontal, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, ChevronDown, GripHorizontal, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { externalApi } from "@/api/features/external.api";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,19 @@ export function CalendarAdjustView({ calendar, classItem, onBack }: {
     };
     return (
         <section aria-label="Adjust calendar" className="overflow-hidden rounded-xl border bg-card shadow-sm">
-            <header className="border-b px-5 py-4"><h2 className="text-lg font-semibold">Adjust calendar : {classTitle(classItem)}</h2></header>
+            <header className="space-y-2 border-b px-5 py-4">
+                <div>
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        disabled={save.isPending}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-800 hover:underline disabled:opacity-50 dark:text-blue-300"
+                    >
+                        <ArrowLeft className="size-4" /> Back to Calendar
+                    </button>
+                </div>
+                <h2 className="text-lg font-semibold">Adjust calendar : {classTitle(classItem)}</h2>
+            </header>
             <fieldset disabled={save.isPending} className="max-h-[62dvh] space-y-5 overflow-y-auto p-4 sm:p-5">
                 <div className="flex flex-wrap items-end gap-4">
                     <label className="min-w-52 flex-1 space-y-2 text-sm font-medium">Class Start Date<span className="text-red-600"> *</span><Input aria-label="Class Start Date" type="date" required value={classStart} onChange={event => setClassStart(event.target.value)} /></label>
