@@ -11,12 +11,17 @@ import type {
     TrainingAnalytics,
 } from "@/types";
 import axiosInstance from "../axios";
+import type { ClassCalendarVersion } from "@/types/features/external";
 
 /** Asks the backend for records of every status instead of its default ("active"). */
 export const ALL_STATUSES = "all";
 
 /** Access to the master training system, proxied by the backend under /api/external. */
 export const externalApi = {
+    getClassCalendars: async (classId: number): Promise<ClassCalendarVersion[]> => {
+        const response = await axiosInstance.get<ClassCalendarVersion[]>(`/external/classes/${classId}/calendars`);
+        return response.data;
+    },
     // ===================== CLASSES =====================
     getClasses: async (status: string = ALL_STATUSES): Promise<ExternalClass[]> => {
         const response = await axiosInstance.get<ExternalClass[]>("/external/classes", { params: { status } });

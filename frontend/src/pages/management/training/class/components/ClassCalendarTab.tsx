@@ -1,186 +1,134 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Info, ListChecks, Plus } from "lucide-react";
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
-import { sessionApi } from "@/api/features/demo/session.api";
+import { CalendarDays, ChevronDown, Eye, MoreVertical } from "lucide-react";
+import { useMemo, useState } from "react";
+import { externalApi } from "@/api/features/external.api";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
-import { useSessionActionController } from "@/components/session/session-actions";
-import { SessionActionsMenu } from "@/components/session/SessionActionsMenu";
-import { SessionDialogs } from "@/components/session/SessionDialogs";
-import { SessionStatusBadge } from "@/components/session/SessionStatusBadge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useExternalTrainers } from "@/hooks/useExternalLookups";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ExternalClass } from "@/types";
+import type { ClassCalendarVersion } from "@/types/features/external";
 import { retryUnlessClientError } from "@/utils/query.utils";
-import {
-    compareSessions,
-    formatDate,
-    formatTime,
-    formatWeekday,
-    SESSION_QUERY_KEY,
-    trainerLabel,
-} from "@/utils/session.utils";
 
-function SessionsSkeleton() {
-    return (
-        <div role="status" aria-busy="true" aria-label="Loading sessions" className="divide-y">
-            {Array.from({ length: 4 }, (_, row) => (
-                <div key={row} className="flex items-center gap-6 px-4 py-4">
-                    <Skeleton className="h-5 w-8" />
-                    <Skeleton className="h-5 w-48" />
-                    <Skeleton className="h-5 w-24" />
-                    <Skeleton className="h-5 w-16" />
-                    <Skeleton className="h-5 w-28" />
-                    <Skeleton className="ml-auto h-6 w-24 rounded-full" />
-                </div>
-            ))}
-        </div>
-    );
+const STATUSES = [
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+    { value: "draft", label: "Draft" },
+] as const;
+type CalendarStatus = ClassCalendarVersion["status"];
+
+function modifiedDate(value: string) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    const day = date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).replace(/ /g, "-");
+    return `${day} ${date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
 }
 
-/**
- * Class Details > Calendar. Class -> sessions is the only verified link in this application: a session stores
- * the id of its class. The Subject level (Program -> Subject -> Teaching Assignment) has no API yet, so no session
- * can be proven to belong to a Subject and every one is listed as unresolved rather than guessed into a Subject.
- */
+function StatusBadge({ status }: { status: CalendarStatus }) {
+    return <Badge variant="secondary" className={`rounded-full px-3 py-1 font-medium ${status === "active"
+        ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200"
+        : status === "inactive" ? "bg-pink-100 text-pink-800 dark:bg-pink-950 dark:text-pink-200"
+        : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"}`}>
+        {STATUSES.find((item) => item.value === status)?.label ?? status}
+    </Badge>;
+}
+
 export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
     const { hasPermission } = usePermissions();
-    const controller = useSessionActionController();
     const canRead = hasPermission("SESSION_READ");
-    const canCreate = hasPermission("SESSION_CREATE");
-
-    const sessionsQuery = useQuery({
-        queryKey: [...SESSION_QUERY_KEY, "class", classItem.id],
-        queryFn: () => sessionApi.getAllByClass(classItem.id),
+    const [statuses, setStatuses] = useState<CalendarStatus[]>(STATUSES.map((item) => item.value));
+    const [detail, setDetail] = useState<ClassCalendarVersion | null>(null);
+    const query = useQuery({
+        queryKey: ["class-calendars", classItem.id],
+        queryFn: () => externalApi.getClassCalendars(classItem.id),
         enabled: canRead,
         retry: retryUnlessClientError,
     });
-    const hasSessions = (sessionsQuery.data?.length ?? 0) > 0;
-    const trainers = useExternalTrainers(hasSessions);
+    const rows = useMemo(() => [...(query.data ?? [])]
+        .filter((item) => statuses.includes(item.status))
+        .sort((a, b) => b.lastModifiedDate.localeCompare(a.lastModifiedDate) || b.id - a.id), [query.data, statuses]);
 
-    const sessions = useMemo(() => [...(sessionsQuery.data ?? [])].sort(compareSessions), [sessionsQuery.data]);
-    const summary = useMemo(() => {
-        const count = (status: string) => sessions.filter((session) => session.status === status).length;
-        return `${sessions.length} ${sessions.length === 1 ? "session" : "sessions"} · ${count("SCHEDULED")} scheduled · ${count("COMPLETED")} completed · ${count("CANCELLED")} cancelled`;
-    }, [sessions]);
-
-    if (!canRead) {
-        return <ApiErrorState error={undefined} kind="forbidden" resource="session" />;
-    }
+    if (!canRead) return <ApiErrorState error={undefined} kind="forbidden" resource="calendar history" />;
 
     return (
-        <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h2 className="text-base font-semibold">Class schedule</h2>
-                    <p className="text-sm text-muted-foreground" aria-live="polite">
-                        {sessionsQuery.isPending ? "Loading sessions…" : sessionsQuery.isError ? "Could not load sessions" : summary}
-                    </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <Button asChild variant="outline">
-                        <Link to={`/sessions?classId=${classItem.id}`}>
-                            <ListChecks /> Open in Sessions
-                        </Link>
+        <div className="min-w-0 space-y-5">
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-10 w-full justify-between font-normal sm:w-64" aria-label="Filter calendar status">
+                        {statuses.length === STATUSES.length ? "All (3 options selected)" : statuses.length === 0 ? "No status selected" : statuses.length === 1 ? STATUSES.find((item) => item.value === statuses[0])?.label : `${statuses.length} options selected`}
+                        <ChevronDown className="size-4 text-muted-foreground" />
                     </Button>
-                    {canCreate && (
-                        <Button onClick={() => controller.open({ type: "create", classId: classItem.id })}>
-                            <Plus /> Add session
-                        </Button>
-                    )}
-                </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                    <DropdownMenuCheckboxItem checked={statuses.length === 3 ? true : statuses.length ? "indeterminate" : false}
+                        onSelect={(event) => event.preventDefault()}
+                        onCheckedChange={(checked) => setStatuses(checked ? STATUSES.map((item) => item.value) : [])}>All</DropdownMenuCheckboxItem>
+                    {STATUSES.map((item) => <DropdownMenuCheckboxItem key={item.value} checked={statuses.includes(item.value)}
+                        onSelect={(event) => event.preventDefault()}
+                        onCheckedChange={(checked) => setStatuses((current) => checked ? [...current, item.value] : current.filter((value) => value !== item.value))}>
+                        {item.label}
+                    </DropdownMenuCheckboxItem>)}
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="overflow-hidden rounded-lg border">
+                <Table aria-label="Calendar version history" className="min-w-[1050px] [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:h-14">
+                    <TableHeader className="bg-muted/50">
+                        <TableRow>
+                            <TableHead className="w-14">No.</TableHead>
+                            <TableHead>Calendar Name</TableHead>
+                            <TableHead>History Change</TableHead>
+                            <TableHead>Last Modified Date</TableHead>
+                            <TableHead>Last Modified By</TableHead>
+                            <TableHead className="text-center">Status</TableHead>
+                            <TableHead className="w-20 text-center">Action</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {query.isPending ? Array.from({ length: 5 }, (_, index) => <TableRow key={index}>
+                            <TableCell colSpan={7}><Skeleton className="h-7 w-full" /></TableCell>
+                        </TableRow>) : query.isError ? (
+                            <TableRow><TableCell colSpan={7} className="whitespace-normal"><ApiErrorState error={query.error} resource="calendar history" onRetry={() => void query.refetch()} /></TableCell></TableRow>
+                        ) : rows.length === 0 ? (
+                            <TableRow><TableCell colSpan={7} className="h-40 text-center">
+                                <CalendarDays className="mx-auto mb-3 size-8 text-muted-foreground" />
+                                <p className="text-sm text-muted-foreground">{query.data?.length ? "No calendars match the selected statuses." : "No calendar versions available for this class yet."}</p>
+                            </TableCell></TableRow>
+                        ) : rows.map((item, index) => (
+                            <TableRow key={item.id}>
+                                <TableCell>{index + 1}</TableCell>
+                                <TableCell><button type="button" onClick={() => setDetail(item)} className="text-left font-medium text-blue-800 hover:underline focus-visible:outline-2 dark:text-blue-300">{item.name}</button></TableCell>
+                                <TableCell className="min-w-56 max-w-80 whitespace-normal">{item.historyChange || "—"}</TableCell>
+                                <TableCell>{modifiedDate(item.lastModifiedDate)}</TableCell>
+                                <TableCell>{item.lastModifiedBy || "—"}</TableCell>
+                                <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
+                                <TableCell className="text-center">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label={`Actions for calendar version ${item.version}`}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => setDetail(item)}><Eye className="size-4" /> View details</DropdownMenuItem></DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
             </div>
 
-            <Alert>
-                <Info />
-                <AlertTitle>Subjects are not available yet</AlertTitle>
-                <AlertDescription>
-                    <p>
-                        The current API has no Training Program → Subject → Teaching Assignment contract, so a session cannot be verified against a
-                        Subject. Until it exists, every session of this class is listed below as <strong>unresolved</strong>; nothing is guessed or
-                        assigned to a Subject. Calendar versions are not exposed either, so this shows the live sessions.
-                    </p>
-                </AlertDescription>
-            </Alert>
-
-            <section aria-labelledby="unresolved-sessions-title" className="overflow-hidden rounded-lg border">
-                <header className="flex items-center gap-2 border-b bg-muted/30 px-4 py-3">
-                    <h3 id="unresolved-sessions-title" className="text-sm font-semibold">
-                        Unresolved sessions
-                    </h3>
-                    <Badge variant="secondary">{sessions.length}</Badge>
-                </header>
-
-                {sessionsQuery.isPending ? (
-                    <SessionsSkeleton />
-                ) : sessionsQuery.isError ? (
-                    <ApiErrorState error={sessionsQuery.error} resource="session list" onRetry={() => void sessionsQuery.refetch()} />
-                ) : sessions.length === 0 ? (
-                    <div className="flex flex-col items-center gap-3 px-6 py-12 text-center text-muted-foreground">
-                        <CalendarDays className="size-8" aria-hidden />
-                        <p className="text-sm">No sessions are scheduled for this class yet.</p>
-                        {canCreate && (
-                            <Button variant="outline" onClick={() => controller.open({ type: "create", classId: classItem.id })}>
-                                <Plus /> Add the first session
-                            </Button>
-                        )}
-                    </div>
-                ) : (
-                    <Table aria-label="Sessions of this class" className="min-w-[960px] [&_td]:px-4 [&_td]:py-3 [&_th]:px-4">
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-14">No.</TableHead>
-                                <TableHead>Session</TableHead>
-                                <TableHead>Date</TableHead>
-                                <TableHead>Day</TableHead>
-                                <TableHead>Start</TableHead>
-                                <TableHead>End</TableHead>
-                                <TableHead>Trainer</TableHead>
-                                <TableHead>Room</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="w-20 text-center">Action</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {sessions.map((session, index) => (
-                                <TableRow key={session.id} className={session.status === "CANCELLED" ? "text-muted-foreground" : undefined}>
-                                    <TableCell className="text-muted-foreground">{index + 1}</TableCell>
-                                    <TableCell className="max-w-72 truncate">
-                                        <Link
-                                            to={`/sessions/${session.id}`}
-                                            className="font-medium text-blue-800 hover:underline dark:text-blue-300"
-                                        >
-                                            {session.title}
-                                        </Link>
-                                    </TableCell>
-                                    <TableCell>{formatDate(session.startTime)}</TableCell>
-                                    <TableCell>{formatWeekday(session.startTime)}</TableCell>
-                                    <TableCell>{formatTime(session.startTime)}</TableCell>
-                                    <TableCell>{formatTime(session.endTime)}</TableCell>
-                                    <TableCell>{trainerLabel(trainers.data, session.trainerId)}</TableCell>
-                                    <TableCell>{session.location || "—"}</TableCell>
-                                    <TableCell>
-                                        <SessionStatusBadge
-                                            status={session.status}
-                                            title={session.status === "CANCELLED" && session.cancelReason ? `Cancelled: ${session.cancelReason}` : undefined}
-                                        />
-                                    </TableCell>
-                                    <TableCell className="text-center">
-                                        <SessionActionsMenu session={session} controller={controller} />
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                )}
-            </section>
-
-            <SessionDialogs controller={controller} />
+            <Dialog open={!!detail} onOpenChange={(open) => { if (!open) setDetail(null); }}>
+                <DialogContent className="sm:max-w-xl">
+                    <DialogHeader><DialogTitle>Calendar version {detail?.version}</DialogTitle><DialogDescription className="break-all">{detail?.name}</DialogDescription></DialogHeader>
+                    {detail && <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-4 text-sm">
+                        <dt className="text-muted-foreground">History Change</dt><dd className="break-words">{detail.historyChange}</dd>
+                        <dt className="text-muted-foreground">Last Modified Date</dt><dd>{modifiedDate(detail.lastModifiedDate)}</dd>
+                        <dt className="text-muted-foreground">Last Modified By</dt><dd>{detail.lastModifiedBy}</dd>
+                        <dt className="text-muted-foreground">Status</dt><dd><StatusBadge status={detail.status} /></dd>
+                    </dl>}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

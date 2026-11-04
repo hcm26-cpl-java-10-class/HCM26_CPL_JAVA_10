@@ -102,6 +102,8 @@ public interface ExternalApiService {
     /** Fetch sessions for a class. */
     Object fetchClassSessions(Long classId);
 
+    Object fetchClassCalendars(Long classId);
+
     /** Create a session for a class. */
     Object createClassSession(Long classId, Object body);
 

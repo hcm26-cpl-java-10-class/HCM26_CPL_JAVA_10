@@ -59,6 +59,23 @@ class ExternalApiControllerTest {
     }
 
     @Test
+    void calendars_RequireSessionReadAndReturnClassHistory() throws Exception {
+        mockMvc.perform(get("/api/external/classes/1/calendars").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+
+        String adminToken = transactionTemplate.execute(status -> {
+            UserDetails admin = userDetailsService.loadUserByUsername("admin@example.com");
+            return refreshTokenService.generateAccessToken(
+                    new UsernamePasswordAuthenticationToken(admin, null, admin.getAuthorities()));
+        });
+        when(externalApiService.fetchClassCalendars(1L)).thenReturn(List.of(java.util.Map.of("id", 109, "status", "active")));
+        mockMvc.perform(get("/api/external/classes/1/calendars").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(109));
+        verify(externalApiService).fetchClassCalendars(1L);
+    }
+
+    @Test
     @DisplayName("GET /api/external/classes - defaults to active classes")
     void classes_DefaultsToActive() throws Exception {
         when(externalApiService.fetchClasses("active")).thenReturn(List.of(ExternalClassDTO.builder().id(1L).code("A").build()));

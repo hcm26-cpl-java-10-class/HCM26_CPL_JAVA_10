@@ -317,6 +317,35 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const pathname = url.pathname;
 
+  // Calendar version history is sample data owned by this development service.
+  const calendarsMatch = pathname.match(/^\/api\/classes\/(\d+)\/calendars$/);
+  if (req.method === 'GET' && calendarsMatch) {
+    const classId = Number(calendarsMatch[1]);
+    const cls = classes.find(item => item.id === classId);
+    if (!cls) return json(res, 404, { message: `Class #${classId} not found` });
+    const changes = [
+      ['Update plan', '2026-07-09T13:46:00', 'UyenHTM'],
+      ['Extend calendar', '2026-07-09T13:46:00', 'UyenHTM'],
+      ['Update Final Theory for React', '2026-07-02T11:44:00', 'UyenHTM'],
+      ['Update plan CIS 2 session', '2026-06-24T14:28:00', 'NgaTTT45'],
+      ['Update trainer', '2026-05-27T09:09:00', 'UyenHTM'],
+      ['Update KOR.IM subject', '2026-05-25T15:52:00', 'UyenHTM'],
+      ['Divide Mock Project to new module', '2026-05-07T14:36:00', 'UyenHTM'],
+      ['Update plan', '2026-03-17T13:56:00', 'UyenHTM'],
+      ['Initial training calendar', '2026-01-20T09:00:00', 'NgaTTT45'],
+    ];
+    return json(res, 200, changes.map(([historyChange, lastModifiedDate, lastModifiedBy], index) => ({
+      id: classId * 100 + 9 - index,
+      classId,
+      name: `${cls.code || cls.name}_TrainingCalendar_version_1.${9 - index}`,
+      version: `1.${9 - index}`,
+      historyChange,
+      lastModifiedDate,
+      lastModifiedBy,
+      status: index === 0 ? 'active' : 'inactive',
+    })));
+  }
+
   // ======== CLASSES ========
 
   // GET /api/classes

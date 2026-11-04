@@ -19,6 +19,17 @@ export interface Trainee {
 
 // ===================== CLASS SESSION =====================
 
+export interface ClassCalendarVersion {
+    id: number;
+    classId: number;
+    name: string;
+    version: string;
+    historyChange: string;
+    lastModifiedDate: string;
+    lastModifiedBy: string;
+    status: "active" | "inactive" | "draft";
+}
+
 export interface ClassSession {
     id: number;
     classId: number;
