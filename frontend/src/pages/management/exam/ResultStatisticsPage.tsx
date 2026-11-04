@@ -546,11 +546,11 @@ export default function ResultStatisticsPage() {
                         onClick={() => navigate("/exams")}
                     >
                         <ChevronLeft className="size-4" />
-                        Back to Exam Management
+                        Back to Assessment Management
                     </Button>
 
                     <p className="text-sm text-muted-foreground">
-                        Exam Management / Result Statistics
+                        Assessment Management / Result Statistics
                     </p>
 
                     <h1 className="mt-1 text-2xl font-bold text-foreground">

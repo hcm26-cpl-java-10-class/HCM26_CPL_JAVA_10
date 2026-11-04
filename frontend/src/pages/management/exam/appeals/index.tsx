@@ -91,7 +91,7 @@ export default function ScoreAppealsPage() {
   const pendingCount = appeals.filter((a) => a.status === "PENDING").length;
 
   return (
-    <MainLayout pathName={{ exams: "Exam Management", appeals: "Score Appeals" }}>
+    <MainLayout pathName={{ exams: "Assessment Management", appeals: "Score Appeals" }}>
       <div className="space-y-5 p-4">
         <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
           <div>

@@ -218,7 +218,7 @@ export default function EssayAttemptDetailPage() {
         selectedTab ?? (detail && detail.essays.length === 0 && codings.length > 0 ? "coding" : "essay");
 
     return (
-        <MainLayout pathName={{ exams: "Exam Management", grading: "Essay Grading", detail: "Submission Review" }}>
+        <MainLayout pathName={{ exams: "Assessment Management", grading: "Essay Grading", detail: "Submission Review" }}>
             <section className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-12">
                 {/* Top Action & Navigation Bar */}
                 <div className="flex flex-wrap items-center justify-between gap-4">

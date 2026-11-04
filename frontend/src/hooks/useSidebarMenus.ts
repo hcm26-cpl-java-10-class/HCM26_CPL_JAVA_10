@@ -84,8 +84,8 @@ export function useActiveModuleGroups(enabled = true) {
                 if (!examGroup) {
                     const fallbackGroup: ModuleGroupDTO = {
                         id: 9999,
-                        name: "Exam Management",
-                        description: "Exam Management Group",
+                        name: "Assessment Management",
+                        description: "Assessment Management Group",
                         displayOrder: 1,
                         isActive: true,
                     };

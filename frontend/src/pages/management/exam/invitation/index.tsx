@@ -144,7 +144,7 @@ export default function InvitationsPage() {
     }
 
     return (
-        <MainLayout pathName={{ exams: "Exam Management", invitations: "Invitations" }}>
+        <MainLayout pathName={{ exams: "Assessment Management", invitations: "Invitations" }}>
             <section className="flex flex-col gap-5">
                 <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
                     <div>
@@ -153,7 +153,7 @@ export default function InvitationsPage() {
                                 className="mr-1 inline size-3.5 cursor-pointer"
                                 onClick={() => navigate("/exams")}
                             />{" "}
-                            Exam Management
+                            Assessment Management
                         </p>
                         <h1 className="mt-1 text-2xl font-semibold">
                             Exam Invitations: <span className="text-primary">{examTitle}</span>

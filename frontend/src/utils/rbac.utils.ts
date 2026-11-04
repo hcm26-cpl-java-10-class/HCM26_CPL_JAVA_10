@@ -192,7 +192,7 @@ export const ROLE_HIDDEN_MODULE_URLS: Record<string, string[]> = {
 };
 
 export const ROLE_HIDDEN_MENU_GROUP_NAMES: Record<string, string[]> = {
-  [STUDENT_ROLE]: ["Exam Management"],
+  [STUDENT_ROLE]: ["Assessment Management"],
 };
 
 export const ROLE_MOVED_MENU_MODULES: Record<string, Record<string, string>> = {
