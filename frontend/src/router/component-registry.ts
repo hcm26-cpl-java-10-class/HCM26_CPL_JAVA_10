@@ -43,11 +43,13 @@ import StudentSyllabusListPage from "@/pages/student/StudentSyllabusListPage";
 import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
 
 import CourseReportPage from "@/pages/management/demo/report";
+import { CourseEnrollmentDetailPage } from "@/pages/management/demo/course/pages/CourseEnrollmentDetailPage";
 import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-questions";
 import LessonReportsPage from "@/pages/management/demo/lesson-reports";
 import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
 import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
 import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage.tsx";
+import DepartmentManagementPage from "@/pages/management/demo/department";
 
 export interface RouteConfig {
   path: string;
@@ -349,6 +351,12 @@ export const routes: RouteConfig[] = [
     requiredPermission: "COURSE_REPORT_READ",
     isModuleDriven: true,
   },
+  {
+    path: "/course-enrollments/:id",
+    component: CourseEnrollmentDetailPage,
+    requiredPermission: "COURSE_REPORT_READ",
+    isModuleDriven: false,
+  },
 
   // Q&A
   {
@@ -370,6 +378,14 @@ export const routes: RouteConfig[] = [
   {
     path: "/enrollment-logs",
     component: EnrollmentLogPage,
+    isModuleDriven: true,
+  },
+
+  // MANAGE STUDENT
+  {
+    path: "/manage-students",
+    component: DepartmentManagementPage,
+    requiredPermission: "DEPARTMENT_READ",
     isModuleDriven: true,
   },
 ];

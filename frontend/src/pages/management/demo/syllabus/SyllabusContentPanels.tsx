@@ -384,7 +384,7 @@ export function CloPanel({
                             </p>
                         )}
                         <p className="text-xs text-muted-foreground">
-                            {details.trim().length}/2000 characters ? CLO code is generated automatically.
+                            {details.trim().length}/2000 characters · CLO code is generated automatically.
                         </p>
                     </div>
 

@@ -136,7 +136,6 @@ export interface RelationConfig {
   labelField: string;
 
   multiple?: boolean;
-  searchable?: boolean;
 
   /**
    * Lọc danh sách lựa chọn trong form trước khi hiển thị

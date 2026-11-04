@@ -20,11 +20,11 @@ import lombok.experimental.SuperBuilder;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("DEPARTMENT")
 @ResourceMenu(
-        title = "Departments",
-        group = "Course Management",
-        icon = "building-2",
+        title = "Department",
+        group = "RBAC Management",
+        icon = "building",
         url = "/departments",
-        order = 3,
+        order = 4,
         permission = "DEPARTMENT_READ"
 )
 public class Department extends BaseEntity {

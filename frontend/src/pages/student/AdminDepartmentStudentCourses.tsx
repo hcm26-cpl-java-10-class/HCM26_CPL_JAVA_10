@@ -15,7 +15,6 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { EnrollmentProgressBar } from "../management/demo/progress/EnrollmentProgressBar";
 import type { DepartmentMember } from "@/types";
-import { useAdminStudentPreview } from "./useAdminStudentPreview";
 import { StudentCheckboxList, studentFullName } from "./StudentCheckboxList";
 
 const formatEnrollmentDate = (value: string) => {
@@ -66,7 +65,6 @@ function CourseCards({ enrollments }: { enrollments: Enrollment[] }) {
 }
 
 export function AdminDepartmentStudentCourses() {
-  const isAdminStudentPreview = useAdminStudentPreview();
   const [selectionMode, setSelectionMode] = useState<"student" | "department">("student");
   const [departmentId, setDepartmentId] = useState("");
   const [selectedStudents, setSelectedStudents] = useState<DepartmentMember[]>([]);
@@ -76,19 +74,18 @@ export function AdminDepartmentStudentCourses() {
   const departmentsQuery = useQuery({
     queryKey: ["admin-student-preview-departments"],
     queryFn: () => departmentApi.getPage({ page: 0, size: 100, sort: "name,asc" }),
-    enabled: isAdminStudentPreview,
   });
 
   const studentsQuery = useQuery({
     queryKey: ["admin-student-preview-members", departmentId, studentPage],
     queryFn: () => departmentApi.getMembers(Number(departmentId), studentPage, ""),
-    enabled: isAdminStudentPreview && selectionMode === "department" && Boolean(departmentId),
+    enabled: selectionMode === "department" && Boolean(departmentId),
   });
 
   const allStudentsQuery = useQuery({
     queryKey: ["admin-student-preview-students", studentSearch, studentPage],
     queryFn: () => enrollmentApi.searchStudents(studentPage, studentSearch.trim()),
-    enabled: isAdminStudentPreview && selectionMode === "student",
+    enabled: selectionMode === "student",
   });
 
   const coursesQueries = useQueries({
@@ -98,13 +95,9 @@ export function AdminDepartmentStudentCourses() {
         selectionMode === "department"
           ? enrollmentApi.getDepartmentStudentCourses(Number(departmentId), student.id)
           : enrollmentApi.getStudentCourses(student.id),
-      enabled: isAdminStudentPreview && (selectionMode === "student" || Boolean(departmentId)),
+      enabled: (selectionMode === "student" || Boolean(departmentId)),
     })),
   });
-
-  if (!isAdminStudentPreview) {
-    return null;
-  }
 
   const departments = departmentsQuery.data?.content ?? [];
   const studentPageResult =

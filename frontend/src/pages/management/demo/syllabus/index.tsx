@@ -163,7 +163,8 @@ export default function SyllabusesPage() {
         useState<SyllabusSummary | null>(null);
 
     const [busy, setBusy] = useState(false);
-const query = useQuery({
+
+    const query = useQuery({
         queryKey: ["syllabuses", debouncedSearch],
         queryFn: () =>
             syllabusApi.list(debouncedSearch),
@@ -538,7 +539,7 @@ const query = useQuery({
                     />
                 )}
 
-{/* CREATE / EDIT: shared Base validation */}
+                {/* CREATE / EDIT: shared field-level validation */}
                 <FormModal
                     open={formOpen}
                     onClose={(open) => {

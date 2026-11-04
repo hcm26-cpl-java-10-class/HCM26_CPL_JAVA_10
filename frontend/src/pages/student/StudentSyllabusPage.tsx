@@ -11,6 +11,7 @@ import {
     ChevronDown,
     Copy,
     Download,
+    FileText,
     LayoutGrid,
     Table2,
     Layers3,
@@ -76,23 +77,6 @@ function topicName(topic: Topic): string {
     }`;
 }
 
-function httpUrl(
-    value: string | null | undefined
-): string | null {
-    if (!value) return null;
-
-    try {
-        const url = new URL(value.trim());
-
-        return url.protocol === "https:" ||
-        url.protocol === "http:"
-            ? url.href
-            : null;
-    } catch {
-        return null;
-    }
-}
-
 function InfoField({
                        label,
                        value,
@@ -131,8 +115,6 @@ function MaterialList({
     return (
         <div className="grid gap-3 sm:grid-cols-2">
             {items.map((material) => {
-                const link = httpUrl(material.url);
-
                 return (
                     <article
                         key={material.id}
@@ -175,13 +157,11 @@ function MaterialList({
                             </p>
                         )}
 
-                        {link ? (
-                            <ResourceAction material={material} syllabusId={syllabusId} onDownload={onDownload} />
-                        ) : (
-                            <p className="mt-3 text-xs text-muted-foreground">
-                                Resource link unavailable.
-                            </p>
-                        )}
+                        <ResourceAction
+                            material={material}
+                            syllabusId={syllabusId}
+                            onDownload={onDownload}
+                        />
                     </article>
                 );
             })}
@@ -262,10 +242,14 @@ export default function StudentSyllabusPage() {
         (m) => m.topicId == null
     );
 
-    const firstSectionId = sections[0]?.id;
-    const firstTopicId = sections[0]?.topics[0]?.id;
-
     const searchText = search.trim().toLocaleLowerCase();
+    const visibleGeneralMaterials = generalMaterials.filter(
+        (material) =>
+            !searchText ||
+            `${material.title} ${material.note ?? ""}`
+                .toLocaleLowerCase()
+                .includes(searchText)
+    );
     const topicMatchesClo = (topic: Topic) => (topic.cloIds ?? []).some((cloId) => {
         const clo = cloById.get(cloId);
         return clo != null &&
@@ -281,10 +265,6 @@ export default function StudentSyllabusPage() {
             (section.mission ?? "")
                 .toLocaleLowerCase()
                 .includes(searchText) ||
-            (section.id === firstSectionId &&
-             generalMaterials.some((material) =>
-                 material.title.toLocaleLowerCase().includes(searchText)
-             )) ||
             section.topics.some(
                 (topic) =>
                     topicName(topic)
@@ -293,10 +273,7 @@ export default function StudentSyllabusPage() {
                     topicMatchesClo(topic) ||
                     materials.some(
                         (material) =>
-                            (material.topicId === topic.id ||
-                             (section.id === firstSectionId &&
-                              topic.id === firstTopicId &&
-                              material.topicId == null)) &&
+                            material.topicId === topic.id &&
                             material.title
                                 .toLocaleLowerCase()
                                 .includes(searchText)
@@ -645,6 +622,21 @@ export default function StudentSyllabusPage() {
                                         </div>
                                     </section>
 
+                                    {/* GENERAL MATERIALS: shared at Syllabus level, not assigned to the first Topic */}
+                                    {visibleGeneralMaterials.length > 0 && (
+                                        <section className="rounded-2xl border bg-card p-5">
+                                            <h3 className="mb-4 flex items-center gap-2 font-semibold">
+                                                <FileText className="size-4" />
+                                                General Learning Materials
+                                            </h3>
+                                            <MaterialList
+                                                items={visibleGeneralMaterials}
+                                                syllabusId={syllabusId}
+                                                onDownload={downloadFile}
+                                            />
+                                        </section>
+                                    )}
+
                                     {planView === "table" ? (
                                         <SyllabusLearningPlanTable sections={sections} clos={clos} materials={materials}
                                             syllabusId={syllabusId} search={search} onDownload={downloadFile} />
@@ -686,10 +678,7 @@ export default function StudentSyllabusPage() {
                                                     topicMatchesClo(topic) ||
                                                     materials.some(
                                                         (m) =>
-                                                            (m.topicId === topic.id ||
-                                                             (section.id === firstSectionId &&
-                                                              topic.id === firstTopicId &&
-                                                              m.topicId == null)) &&
+                                                            m.topicId === topic.id &&
                                                             m.title
                                                                 .toLocaleLowerCase()
                                                                 .includes(searchText)
@@ -783,10 +772,7 @@ export default function StudentSyllabusPage() {
                                                                 onDownload={downloadFile}
                                                                 items={materials.filter(
                                                                     (m) =>
-                                                                        m.topicId === topic.id ||
-                                                                        (m.topicId == null &&
-                                                                         section.id === firstSectionId &&
-                                                                         topic.id === firstTopicId)
+                                                                        m.topicId === topic.id
                                                                 )}
                                                             />
                                                         </article>
@@ -802,7 +788,7 @@ export default function StudentSyllabusPage() {
                                         );
                                     })}
 
-                                    {!filteredSections.length && (
+                                    {!filteredSections.length && visibleGeneralMaterials.length === 0 && (
                                         <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
                                             {searchText
                                                 ? "No matching sections or topics."

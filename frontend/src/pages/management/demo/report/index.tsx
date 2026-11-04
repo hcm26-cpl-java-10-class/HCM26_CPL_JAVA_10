@@ -7,7 +7,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Activity, Award, BarChart3, BookOpen, CheckCircle2, Download, Users } from "lucide-react";
 import { useMemo } from "react";
 import { Navigate } from "react-router-dom";
-import { Link } from "react-router-dom";
 import { CourseCatalogPage } from "@/pages/management/demo/course/components/CourseCatalogPage";
 
 const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
@@ -66,9 +65,6 @@ export default function CourseReportPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div><p className="text-sm font-medium text-blue-600">COURSE OVERVIEW</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Enrollments</h1></div>
           <div className="flex items-center gap-2">
-            <Button asChild variant="outline">
-              <Link to="/departments">Department</Link>
-            </Button>
             <Button variant="outline" onClick={() => downloadCsv(data)} disabled={!data.length}><Download className="size-4" /> Export CSV</Button>
           </div>
         </div>

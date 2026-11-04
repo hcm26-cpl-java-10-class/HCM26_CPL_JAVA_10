@@ -80,15 +80,6 @@ export default function SyllabusWorkflowPanel({
 
     const progress = query.data;
 
-    const progressTargets: Record<string, string> = {
-        information: "syllabus-information",
-        clos: "syllabus-clos",
-        sections: "syllabus-sections",
-        topics: "syllabus-sections",
-        missions: "syllabus-sections",
-        materials: "syllabus-sections",
-    };
-
     async function refreshAfterStatusChange() {
         await Promise.all([
             qc.invalidateQueries({
@@ -251,24 +242,6 @@ export default function SyllabusWorkflowPanel({
                                     ? "Completed"
                                     : "Needs attention"}
                             </p>
-
-                            {!check.complete && (
-                                <button
-                                    type="button"
-                                    className="mt-1 text-xs font-medium text-primary underline-offset-4 hover:underline"
-                                    onClick={() => {
-                                        document.getElementById(
-                                            progressTargets[check.key] ??
-                                            "syllabus-sections"
-                                        )?.scrollIntoView({
-                                            behavior: "smooth",
-                                            block: "start"
-                                        });
-                                    }}
-                                >
-                                    Go to section
-                                </button>
-                            )}
                         </div>
                     </div>
                 ))}
