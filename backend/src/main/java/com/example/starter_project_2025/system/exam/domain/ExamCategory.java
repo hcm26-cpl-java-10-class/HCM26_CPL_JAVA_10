@@ -1,7 +1,7 @@
 package com.example.starter_project_2025.system.exam.domain;
 
 public enum ExamCategory {
-    ASSESSMENT(true),
+    ASSIGNMENT(true),
     QUIZ(true),
     MIDTERM(false),
     FINAL_TEST(false);
