@@ -18,6 +18,9 @@ export const ALL_STATUSES = "all";
 
 /** Access to the master training system, proxied by the backend under /api/external. */
 export const externalApi = {
+    saveClassCalendars: async (classId: number, updates: Array<{ id: number; name: string; historyChange: string }>): Promise<void> => {
+        await axiosInstance.put(`/external/classes/${classId}/calendars`, { updates });
+    },
     getClassCalendars: async (classId: number): Promise<ClassCalendarVersion[]> => {
         const response = await axiosInstance.get<ClassCalendarVersion[]>(`/external/classes/${classId}/calendars`);
         return response.data;

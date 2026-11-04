@@ -167,6 +167,12 @@ public class ExternalApiController {
         return ResponseEntity.ok(externalApiService.fetchClassCalendars(id));
     }
 
+    @PutMapping("/classes/{id}/calendars")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_UPDATE')")
+    public ResponseEntity<Object> saveClassCalendars(@PathVariable Long id, @RequestBody Object body) {
+        return ResponseEntity.ok(externalApiService.saveClassCalendars(id, body));
+    }
+
     // ======================== BUDGET ========================
 
     @GetMapping("/classes/{id}/budget")

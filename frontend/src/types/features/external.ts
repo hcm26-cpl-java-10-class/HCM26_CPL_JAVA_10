@@ -28,6 +28,7 @@ export interface ClassCalendarVersion {
     lastModifiedDate: string;
     lastModifiedBy: string;
     status: "active" | "inactive" | "draft";
+    sessions?: ClassSession[];
 }
 
 export interface ClassSession {

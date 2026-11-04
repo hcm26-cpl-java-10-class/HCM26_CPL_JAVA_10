@@ -1,4 +1,5 @@
-import { screen, within } from "@testing-library/react";
+import { screen, within, waitFor } from "@testing-library/react";
+import { writeFile } from "xlsx";
 import { beforeEach, expect, it, vi } from "vitest";
 import { fakeHttp, httpError } from "@/test/fake-http";
 import { grant } from "@/test/mocks";
@@ -7,6 +8,7 @@ import { ClassCalendarTab } from "./ClassCalendarTab";
 
 vi.mock("@/api/axios", () => import("@/test/mocks").then((m) => m.axiosModule()));
 vi.mock("@/hooks/usePermissions", () => import("@/test/mocks").then((m) => m.permissionsModule()));
+vi.mock("xlsx", async (importOriginal) => ({ ...await importOriginal<typeof import("xlsx")>(), writeFile: vi.fn() }));
 
 const records = [
     { id: 1, classId: 1, name: "Java_Calendar_1.1", version: "1.1", historyChange: "Initial plan", lastModifiedDate: "2026-01-01T09:00:00", lastModifiedBy: "Trainer", status: "inactive" },
@@ -44,4 +46,26 @@ it("does not request calendar data without read permission", async () => {
     grant();
     renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
     expect(fakeHttp.callsTo("get", "/external/classes/1/calendars")).toHaveLength(0);
+});
+
+it("offers all five actions, downloads a workbook and saves staged adjustments", async () => {
+    grant("SESSION_READ", "SESSION_UPDATE");
+    fakeHttp.on("put", "/external/classes/1/calendars", {});
+    const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
+    await screen.findByRole("button", { name: "Java_Calendar_1.2" });
+    await user.click(screen.getByRole("button", { name: "Actions for calendar version 1.2" }));
+    for (const name of ["Detail", "Download", "Download with detailed time", "Overview", "Adjust"]) {
+        expect(screen.getByRole("menuitem", { name: new RegExp(`^${name}$`) })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole("menuitem", { name: /^Download$/ }));
+    expect(writeFile).toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Actions for calendar version 1.2" }));
+    await user.click(screen.getByRole("menuitem", { name: "Adjust" }));
+    await user.clear(screen.getByRole("textbox", { name: "History Change" }));
+    await user.type(screen.getByRole("textbox", { name: "History Change" }), "Updated calendar plan");
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+    expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")).toHaveLength(1));
+    expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")[0].data).toEqual({ updates: [{ id: 2, name: "Java_Calendar_1.2", historyChange: "Updated calendar plan" }] });
 });

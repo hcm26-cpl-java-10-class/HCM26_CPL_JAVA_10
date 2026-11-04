@@ -307,6 +307,7 @@ const STATUS_LABELS = {
 
 // ======================== SERVER ========================
 
+const calendarVersions = new Map();
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -319,7 +320,7 @@ const server = http.createServer(async (req, res) => {
 
   // Calendar version history is sample data owned by this development service.
   const calendarsMatch = pathname.match(/^\/api\/classes\/(\d+)\/calendars$/);
-  if (req.method === 'GET' && calendarsMatch) {
+  if (['GET', 'PUT'].includes(req.method) && calendarsMatch) {
     const classId = Number(calendarsMatch[1]);
     const cls = classes.find(item => item.id === classId);
     if (!cls) return json(res, 404, { message: `Class #${classId} not found` });
@@ -334,16 +335,38 @@ const server = http.createServer(async (req, res) => {
       ['Update plan', '2026-03-17T13:56:00', 'UyenHTM'],
       ['Initial training calendar', '2026-01-20T09:00:00', 'NgaTTT45'],
     ];
-    return json(res, 200, changes.map(([historyChange, lastModifiedDate, lastModifiedBy], index) => ({
+    if (!calendarVersions.has(classId)) calendarVersions.set(classId, changes.map(([historyChange, lastModifiedDate, lastModifiedBy], index) => ({
       id: classId * 100 + 9 - index,
       classId,
-      name: `${cls.code || cls.name}_TrainingCalendar_version_1.${9 - index}`,
+      name: `${cls.code || cls.name}_TrainingCalendar_${index === 1 ? 'DRAFT_' : ''}version_1.${9 - index}`,
       version: `1.${9 - index}`,
       historyChange,
       lastModifiedDate,
       lastModifiedBy,
-      status: index === 0 ? 'active' : 'inactive',
+      status: index === 0 ? 'active' : index === 1 ? 'draft' : 'inactive',
+      sessions: JSON.parse(JSON.stringify(classSessions.filter(session => session.classId === classId))),
     })));
+    const versions = calendarVersions.get(classId);
+    if (req.method === 'PUT') {
+      const body = await readBody(req);
+      if (!Array.isArray(body?.updates) || body.updates.length === 0) return json(res, 400, { message: 'No calendar updates provided' });
+      const ids = new Set();
+      for (const update of body.updates) {
+        if (!versions.some(item => item.id === update.id) || ids.has(update.id) ||
+            typeof update.name !== 'string' || !update.name.trim() || update.name.length > 255 ||
+            typeof update.historyChange !== 'string' || !update.historyChange.trim() || update.historyChange.length > 1000) {
+          return json(res, 400, { message: 'Invalid calendar update' });
+        }
+        ids.add(update.id);
+      }
+      for (const update of body.updates) {
+        Object.assign(versions.find(item => item.id === update.id), {
+          name: update.name.trim(), historyChange: update.historyChange.trim(),
+          lastModifiedDate: new Date().toISOString(), lastModifiedBy: 'Demo Admin',
+        });
+      }
+    }
+    return json(res, 200, versions);
   }
 
   // ======== CLASSES ========

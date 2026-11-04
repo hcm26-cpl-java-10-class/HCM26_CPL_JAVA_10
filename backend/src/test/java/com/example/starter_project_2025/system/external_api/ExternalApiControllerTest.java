@@ -24,6 +24,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -73,6 +74,15 @@ class ExternalApiControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(109));
         verify(externalApiService).fetchClassCalendars(1L);
+
+        String updates = "{\"updates\":[{\"id\":109,\"name\":\"Calendar 1.9\",\"historyChange\":\"Update plan\"}]}";
+        mockMvc.perform(put("/api/external/classes/1/calendars").contentType("application/json").content(updates)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/external/classes/1/calendars").contentType("application/json").content(updates)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+        verify(externalApiService).saveClassCalendars(org.mockito.ArgumentMatchers.eq(1L), any());
     }
 
     @Test
