@@ -3,13 +3,13 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/usePermissions";
+import { usePendingInvitations } from "@/hooks/usePendingInvitations";
 import { EnrollmentProgressBar } from "@/pages/management/demo/progress/EnrollmentProgressBar";
 import { formatRoleLabel } from "@/utils/rbac.utils";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { ArrowRight, BookOpen, CalendarDays, CheckCircle2, GraduationCap, UserRound } from "lucide-react";
 import { Link } from "react-router-dom";
-import { AdminDepartmentStudentCourses } from "./AdminDepartmentStudentCourses";
 import { useAdminStudentPreview } from "./useAdminStudentPreview";
 
 const checklistItems = [
@@ -30,6 +30,7 @@ const formatEnrollmentDate = (value: string) => {
 
 export default function StudentLandingPage() {
   const { user, activeRole, hasPermission } = usePermissions();
+  const { count: pendingInvitationCount } = usePendingInvitations();
   const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
   const canReadBooks = hasPermission("BOOK_READ");
   const canReadEnrollments = hasPermission("ENROLLMENT_READ");
@@ -73,6 +74,20 @@ export default function StudentLandingPage() {
                 Xem lich thi
               </Link>
             </Button>
+            <Button asChild variant="outline" className="border-slate-300 bg-white/80">
+              <Link to="/invitations">
+                <CalendarDays className="mr-2 size-4" />
+                Loi moi thi
+                {pendingInvitationCount > 0 && (
+                    <span
+                        aria-hidden="true"
+                        className="ml-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-none text-white"
+                    >
+                      {pendingInvitationCount > 9 ? "9+" : pendingInvitationCount}
+                    </span>
+                )}
+              </Link>
+            </Button>
             {canReadBooks ? (
               <Button asChild className="bg-slate-900 text-white hover:bg-slate-800">
                 <Link to="/books">
@@ -88,12 +103,6 @@ export default function StudentLandingPage() {
           </div>
         </motion.div>
       </section>
-
-      {isAdminStudentPreview && (
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
-          <AdminDepartmentStudentCourses />
-        </div>
-      )}
 
       {canReadEnrollments && !isAdminStudentPreview && (
         <section className="mt-6 space-y-4">

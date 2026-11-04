@@ -1,6 +1,5 @@
 import { courseApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,17 +13,26 @@ import {
 import {
   COURSE_LEVEL_OPTIONS,
   type CatalogSort,
+  type CatalogCourse,
   type CategoryTreeDTO,
   type CourseLevel,
 } from "@/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { GraduationCap, Search, SearchX, X } from "lucide-react";
+import {
+  GraduationCap,
+  LoaderCircle,
+  Search,
+  SearchX,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { CatalogPagination } from "./CatalogPagination.tsx";
 import { CourseCard, CourseCardSkeleton } from "./CourseCard.tsx";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { CourseDetailContent } from "../pages/CourseDetailPage";
 
 const PAGE_SIZE = 12;
 const ALL = "all";
@@ -63,9 +71,8 @@ function flattenCategories(nodes: CategoryTreeDTO[], depth = 0): CategoryOption[
  * Trang Catalog cho người học. Bộ lọc/phân trang được lưu trên URL (?q=&category=&level=&sort=&page=)
  * nên quay lại từ trang chi tiết vẫn giữ nguyên kết quả đang xem.
  */
-export function CourseCatalogPage() {
+export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const canAssignToStudents = useAdminStudentPreview();
 
   const urlSearch = searchParams.get("q") ?? "";
   const categoryParam = Number(searchParams.get("category"));
@@ -168,10 +175,11 @@ export function CourseCatalogPage() {
 
   const showSkeleton = coursesQuery.isLoading;
   const enrollingCourseId = enrollMutation.isPending ? enrollMutation.variables : undefined;
+  const [selectedCourse, setSelectedCourse] = useState<CatalogCourse | null>(null);
 
-  return (
-    <MainLayout pathName={{ courses: "Courses" }}>
-      <div className="mx-auto w-full max-w-7xl space-y-8">
+  const content = (
+    <div className={embedded ? "space-y-5" : "mx-auto w-full max-w-7xl space-y-8"}>
+      {!embedded && (
         <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-10 text-white sm:px-10 sm:py-12">
           <div className="pointer-events-none absolute -right-16 -top-24 size-80 rounded-full bg-blue-500/30 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-32 right-1/3 size-72 rounded-full bg-violet-500/20 blur-3xl" />
@@ -186,160 +194,212 @@ export function CourseCatalogPage() {
           </div>
           <GraduationCap className="absolute bottom-6 right-10 hidden size-28 text-white/10 sm:block" />
         </section>
+      )}
 
-        <section className="space-y-5">
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_200px_170px_170px]">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                aria-label="Search courses"
-                className="pl-9 pr-9"
-                placeholder="Search by name, description or instructor"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-              />
-              {searchInput && (
-                <button
-                  type="button"
-                  aria-label="Clear search"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                  onClick={() => setSearchInput("")}
-                >
-                  <X className="size-4" />
-                </button>
-              )}
-            </div>
-
-            <Select
-              value={categoryId ? String(categoryId) : ALL}
-              onValueChange={(value) => updateParams({ category: value === ALL ? undefined : value })}
-            >
-              <SelectTrigger aria-label="Filter by category" className="w-full">
-                <SelectValue placeholder="All categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All categories</SelectItem>
-                {categoryOptions.map((option) => (
-                  <SelectItem key={option.id} value={String(option.id)}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={level ?? ALL}
-              onValueChange={(value) => updateParams({ level: value === ALL ? undefined : value })}
-            >
-              <SelectTrigger aria-label="Filter by level" className="w-full">
-                <SelectValue placeholder="All levels" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All levels</SelectItem>
-                {COURSE_LEVEL_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={sort}
-              onValueChange={(value) => updateParams({ sort: value === "createdAt,desc" ? undefined : value })}
-            >
-              <SelectTrigger aria-label="Sort courses" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SORT_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex min-h-8 flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-            <p role="status" aria-live="polite">
-              {showSkeleton
-                ? "Loading courses..."
-                : coursesQuery.isError
-                  ? ""
-                  : `${totalElements} ${totalElements === 1 ? "course" : "courses"} found`}
-            </p>
-            {hasFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                <X className="size-4" /> Clear filters
-              </Button>
+      <section className="space-y-5">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_200px_170px_170px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Search courses"
+              className="pl-9 pr-9"
+              placeholder="Search by name, description or instructor"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+            />
+            {searchInput && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                onClick={() => setSearchInput("")}
+              >
+                <X className="size-4" />
+              </button>
             )}
           </div>
 
-          {coursesQuery.isError ? (
-            <div role="alert" className="space-y-3 rounded-2xl border border-destructive/30 p-6">
-              <p className="text-sm text-destructive">
-                Could not load the course catalog. Please check your connection and try again.
-              </p>
-              <Button variant="outline" onClick={() => void coursesQuery.refetch()}>
-                Try again
-              </Button>
-            </div>
-          ) : showSkeleton ? (
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {Array.from({ length: 6 }, (_, i) => (
-                <CourseCardSkeleton key={i} />
+          <Select
+            value={categoryId ? String(categoryId) : ALL}
+            onValueChange={(value) => updateParams({ category: value === ALL ? undefined : value })}
+          >
+            <SelectTrigger aria-label="Filter by category" className="w-full">
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All categories</SelectItem>
+              {categoryOptions.map((option) => (
+                <SelectItem key={option.id} value={String(option.id)}>
+                  {option.label}
+                </SelectItem>
               ))}
-            </div>
-          ) : courses.length === 0 ? (
-            <div className="rounded-2xl border border-dashed p-10 text-center">
-              {hasFilters ? (
-                <SearchX className="mx-auto size-9 text-muted-foreground" />
-              ) : (
-                <GraduationCap className="mx-auto size-9 text-muted-foreground" />
-              )}
-              <h3 className="mt-3 font-semibold">No courses found</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {hasFilters
-                  ? "Try a different keyword or clear some filters."
-                  : "No courses have been published yet."}
-              </p>
-              {hasFilters && (
-                <Button variant="outline" className="mt-4" onClick={clearFilters}>
-                  Clear filters
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div
-              className={`grid gap-5 transition-opacity sm:grid-cols-2 xl:grid-cols-3 ${
-                coursesQuery.isPlaceholderData ? "opacity-60" : ""
-              }`}
-              aria-busy={coursesQuery.isPlaceholderData}
-            >
-              {courses.map((course) => (
-                <CourseCard
-                  key={course.id}
-                  course={course}
-                  enrollmentId={enrollmentByCourseId.get(course.id)?.id}
-                  canEnroll={canEnroll}
-                  isEnrolling={enrollingCourseId === course.id}
-                  canAssign={canAssignToStudents}
-                  onEnroll={(courseId) => enrollMutation.mutate(courseId)}
-                />
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={level ?? ALL}
+            onValueChange={(value) => updateParams({ level: value === ALL ? undefined : value })}
+          >
+            <SelectTrigger aria-label="Filter by level" className="w-full">
+              <SelectValue placeholder="All levels" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All levels</SelectItem>
+              {COURSE_LEVEL_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
               ))}
-            </div>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={sort}
+            onValueChange={(value) => updateParams({ sort: value === "createdAt,desc" ? undefined : value })}
+          >
+            <SelectTrigger aria-label="Sort courses" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex min-h-8 flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+          <p role="status" aria-live="polite">
+            {showSkeleton
+              ? "Loading courses..."
+              : coursesQuery.isError
+                ? ""
+                : `${totalElements} ${totalElements === 1 ? "course" : "courses"} found`}
+          </p>
+          {hasFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="size-4" /> Clear filters
+            </Button>
           )}
+        </div>
 
-          <CatalogPagination page={page} totalPages={totalPages} onPageChange={changePage} />
-
-          {enrollmentsQuery.isError && (
-            <p className="text-center text-xs text-muted-foreground">
-              Could not load your enrollments, so “Continue learning” shortcuts may be missing.
+        {coursesQuery.isError ? (
+          <div role="alert" className="space-y-3 rounded-2xl border border-destructive/30 p-6">
+            <p className="text-sm text-destructive">
+              Could not load the course catalog. Please check your connection and try again.
             </p>
+            <Button variant="outline" onClick={() => void coursesQuery.refetch()}>
+              Try again
+            </Button>
+          </div>
+        ) : showSkeleton ? (
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }, (_, i) => (
+              <CourseCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : courses.length === 0 ? (
+          <div className="rounded-2xl border border-dashed p-10 text-center">
+            {hasFilters ? (
+              <SearchX className="mx-auto size-9 text-muted-foreground" />
+            ) : (
+              <GraduationCap className="mx-auto size-9 text-muted-foreground" />
+            )}
+            <h3 className="mt-3 font-semibold">No courses found</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {hasFilters
+                ? "Try a different keyword or clear some filters."
+                : "No courses have been published yet."}
+            </p>
+            {hasFilters && (
+              <Button variant="outline" className="mt-4" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div
+            className={`grid gap-5 transition-opacity sm:grid-cols-2 xl:grid-cols-3 ${
+              coursesQuery.isPlaceholderData ? "opacity-60" : ""
+            }`}
+            aria-busy={coursesQuery.isPlaceholderData}
+          >
+            {courses.map((course) => (
+              <CourseCard
+                key={course.id}
+                course={course}
+                enrollmentId={enrollmentByCourseId.get(course.id)?.id}
+                canEnroll={canEnroll}
+                isEnrolling={enrollingCourseId === course.id}
+                canAssign={embedded}
+                showEnrollmentAction={!embedded}
+                showDetailAction={embedded}
+                onEnroll={(courseId) => enrollMutation.mutate(courseId)}
+                disableNavigation={embedded}
+                onSelect={embedded ? setSelectedCourse : undefined}
+              />
+            ))}
+          </div>
+        )}
+
+        <CatalogPagination page={page} totalPages={totalPages} onPageChange={changePage} />
+
+        {enrollmentsQuery.isError && (
+          <p className="text-center text-xs text-muted-foreground">
+            Could not load your enrollments, so “Continue learning” shortcuts may be missing.
+          </p>
+        )}
+      </section>
+
+      {embedded && (
+        <EmbeddedCourseDetailSheet
+          course={selectedCourse}
+          open={Boolean(selectedCourse)}
+          onOpenChange={(open) => !open && setSelectedCourse(null)}
+        />
+      )}
+    </div>
+  );
+
+  if (embedded) return content;
+
+  return <MainLayout pathName={{ courses: "Courses" }}>{content}</MainLayout>;
+}
+
+function EmbeddedCourseDetailSheet({
+  course,
+  open,
+  onOpenChange,
+}: {
+  course: CatalogCourse | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const detailQuery = useQuery({
+    queryKey: ["course-detail", course?.id],
+    queryFn: () => courseApi.getCatalogDetail(course!.id),
+    enabled: open && Boolean(course),
+  });
+
+  if (!course) return null;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-5xl">
+        <div className="p-6">
+          {detailQuery.isLoading ? (
+            <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
+              <LoaderCircle className="mr-2 size-5 animate-spin" /> Loading course details...
+            </div>
+          ) : detailQuery.isError || !detailQuery.data ? (
+            <div className="py-12 text-center text-sm text-destructive">Could not load this course.</div>
+          ) : (
+            <CourseDetailContent course={detailQuery.data} enrollmentManagement />
           )}
-        </section>
-      </div>
-    </MainLayout>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

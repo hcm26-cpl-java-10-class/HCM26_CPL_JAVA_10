@@ -7,6 +7,8 @@ import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseLevel;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.system.demo.course.CourseStatus;
+import com.example.starter_project_2025.system.demo.syllabus.Syllabus;
+import com.example.starter_project_2025.system.demo.syllabus.SyllabusStatus;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
 import com.example.starter_project_2025.system.demo.section.Section;
@@ -221,8 +223,18 @@ public class CourseCatalogService {
                 unlocked,
                 lessonCount,
                 totalDuration,
-                sectionItems
+                sectionItems,
+                syllabusInfo(course)
         );
+    }
+
+    private static CourseDetailDTO.SyllabusInfo syllabusInfo(Course course) {
+        Syllabus s = course.getSyllabus();
+        if (s == null || s.getStatus() != SyllabusStatus.PUBLISHED
+                || !Boolean.TRUE.equals(s.getIsActive())) {
+            return null;
+        }
+        return new CourseDetailDTO.SyllabusInfo(s.getId(), s.getCode(), s.getName());
     }
 
     private static List<Category> sortedCategories(Course course) {

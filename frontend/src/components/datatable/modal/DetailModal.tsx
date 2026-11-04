@@ -109,43 +109,29 @@ export function DetailModal({
         return matched ? matched[rel.labelField] : String(value);
       }
 
-      case "select": {
-        const option = field.options?.find(
-          (item) => String(item.value) === String(value)
-        );
-        return option?.label ?? String(value);
-      }
-
       case "date": {
-        // LocalDate from Spring is a date-only value (yyyy-MM-dd), not a timestamp.
-        // Parse its components locally to avoid timezone conversion adding a time.
-        const raw = String(value);
-        const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
-        if (dateOnly) {
-          const [, year, month, day] = dateOnly;
-          return `${day}/${month}/${year}`;
+        try {
+          const date = new Date(value);
+          return date.toLocaleDateString("vi-VN", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        } catch {
+          return String(value);
         }
-        const date = new Date(raw);
-        return Number.isNaN(date.getTime())
-          ? raw
-          : date.toLocaleDateString("vi-VN", {
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-            });
       }
 
       default: {
-        // Handle arrays of objects (like question options)
         if (Array.isArray(value)) {
           if (value.length === 0) {
             return <span className="text-muted-foreground">—</span>;
           }
 
-          // Check if array items are objects with known structure
           const firstItem = value[0];
           if (typeof firstItem === "object" && firstItem !== null) {
-            // Special handling for question options
             if ("content" in firstItem && "correct" in firstItem) {
               return (
                 <div className="flex flex-col gap-2 w-full">
@@ -166,7 +152,6 @@ export function DetailModal({
                 </div>
               );
             }
-            // Generic object array
             return (
               <div className="flex flex-col gap-1">
                 {value.map((item: any, idx: number) => (
@@ -178,7 +163,6 @@ export function DetailModal({
             );
           }
 
-          // Array of primitives
           return (
             <div className="flex flex-wrap gap-1">
               {value.map((item: any, idx: number) => (

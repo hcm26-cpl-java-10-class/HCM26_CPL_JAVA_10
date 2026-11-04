@@ -14,6 +14,7 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Map;
 
 import static com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY;
@@ -42,4 +43,19 @@ public class StudentScoreDTO extends BaseDTO {
 
     @JsonProperty(access = READ_ONLY)
     BigDecimal overallScore;
+
+    @Size(max = 120, message = "Student email must not exceed 120 characters")
+    String studentEmail;
+
+    @JsonProperty(access = READ_ONLY)
+    StudentScore.Status status;
+
+    @JsonProperty(access = READ_ONLY)
+    LocalDateTime releasedAt;
+
+    @JsonProperty(access = READ_ONLY)
+    String approvedBy;
+
+    @JsonProperty(access = READ_ONLY)
+    String adjustmentLog;
 }

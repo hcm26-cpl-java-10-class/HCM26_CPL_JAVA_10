@@ -25,15 +25,20 @@ public class LessonQnaController {
 
     private final LessonQnaService qnaService;
 
+    /**
+     * @param keyword từ khóa tìm kiếm (khớp câu hỏi hoặc câu trả lời)
+     * @param sort    {@code newest} (mặc định) hoặc {@code votes}; câu hỏi được ghim luôn đứng đầu
+     */
     @GetMapping
     @PreAuthorize("hasAuthority('LESSON_QUESTION_READ')")
     public ResponseEntity<Page<LessonQuestionDTO>> getQuestions(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long lessonId,
             @RequestParam(name = "q", required = false) String keyword,
+            @RequestParam(name = "sort", required = false, defaultValue = "newest") String sort,
             @PageableDefault(size = 10) Pageable pageable
     ) {
-        return ResponseEntity.ok(qnaService.getQuestions(viewer(principal), lessonId, keyword, pageable));
+        return ResponseEntity.ok(qnaService.getQuestions(viewer(principal), lessonId, keyword, sort, pageable));
     }
 
     @PostMapping
@@ -69,6 +74,53 @@ public class LessonQnaController {
         qnaService.deleteQuestion(viewer(principal), lessonId, questionId);
         return ResponseEntity.noContent().build();
     }
+
+    // ---------------------------------------------------------------- upvote
+
+    @PutMapping("/{questionId}/upvote")
+    @PreAuthorize("hasAuthority('LESSON_QUESTION_READ')")
+    public ResponseEntity<LessonQuestionDTO> upvote(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long lessonId,
+            @PathVariable Long questionId
+    ) {
+        return ResponseEntity.ok(qnaService.upvote(viewer(principal), lessonId, questionId));
+    }
+
+    @DeleteMapping("/{questionId}/upvote")
+    @PreAuthorize("hasAuthority('LESSON_QUESTION_READ')")
+    public ResponseEntity<LessonQuestionDTO> removeUpvote(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long lessonId,
+            @PathVariable Long questionId
+    ) {
+        return ResponseEntity.ok(qnaService.removeUpvote(viewer(principal), lessonId, questionId));
+    }
+
+    // ------------------------------------------------------------------- pin
+
+    /** Quyền ghim = quyền trả lời (giảng viên / admin); học viên không có. */
+    @PutMapping("/{questionId}/pin")
+    @PreAuthorize("hasAuthority('LESSON_ANSWER_CREATE')")
+    public ResponseEntity<LessonQuestionDTO> pin(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long lessonId,
+            @PathVariable Long questionId
+    ) {
+        return ResponseEntity.ok(qnaService.pin(viewer(principal), lessonId, questionId));
+    }
+
+    @DeleteMapping("/{questionId}/pin")
+    @PreAuthorize("hasAuthority('LESSON_ANSWER_CREATE')")
+    public ResponseEntity<LessonQuestionDTO> unpin(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long lessonId,
+            @PathVariable Long questionId
+    ) {
+        return ResponseEntity.ok(qnaService.unpin(viewer(principal), lessonId, questionId));
+    }
+
+    // --------------------------------------------------------------- answers
 
     @PostMapping("/{questionId}/answers")
     @PreAuthorize("hasAuthority('LESSON_ANSWER_CREATE')")
@@ -106,6 +158,30 @@ public class LessonQnaController {
     ) {
         return ResponseEntity.ok(
                 qnaService.deleteAnswer(viewer(principal), lessonId, questionId, answerId));
+    }
+
+    // -------------------------------------------------------- accepted answer
+
+    /** Người hỏi cũng đánh dấu được, nên dùng quyền đọc (service tự kiểm tra tác giả / giảng viên / admin). */
+    @PutMapping("/{questionId}/accepted-answer/{answerId}")
+    @PreAuthorize("hasAuthority('LESSON_QUESTION_READ')")
+    public ResponseEntity<LessonQuestionDTO> acceptAnswer(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long lessonId,
+            @PathVariable Long questionId,
+            @PathVariable Long answerId
+    ) {
+        return ResponseEntity.ok(qnaService.acceptAnswer(viewer(principal), lessonId, questionId, answerId));
+    }
+
+    @DeleteMapping("/{questionId}/accepted-answer")
+    @PreAuthorize("hasAuthority('LESSON_QUESTION_READ')")
+    public ResponseEntity<LessonQuestionDTO> unacceptAnswer(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long lessonId,
+            @PathVariable Long questionId
+    ) {
+        return ResponseEntity.ok(qnaService.unacceptAnswer(viewer(principal), lessonId, questionId));
     }
 
     private LessonQnaService.Viewer viewer(UserPrincipal principal) {

@@ -18,47 +18,18 @@ function AppRoutes() {
 
     const homePath = isAuthenticated ? getHomePathByRole(activeRole) : "/login";
 
-    // Create component lookup map from module-driven routes
     const componentRegistry = Object.fromEntries(
         routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
     );
 
-    // Get non-module routes (frontend-controlled)
     const staticRoutes = routes.filter((r) => !r.isModuleDriven);
+
+    const staticRoutePaths = new Set(staticRoutes.map((r) => r.path));
 
     return (
         <Routes>
-            {/* Root redirect */}
             <Route path="/" element={<Navigate to={homePath} replace />} />
 
-            {/* Dynamic routes from backend Module table */}
-            {moduleGroups.flatMap((group) =>
-                group.modules.map((m) => {
-                    if (!m.url) return null;
-                    if ((ROLE_HOME_PATHS as readonly string[]).includes(m.url)) {
-                        return null;
-                    }
-                    const Component = componentRegistry[m.url];
-
-                    if (!Component) {
-                        return <Route key={`missing-${m.id ?? m.url}`} path={m.url} element={<Navigate to="/not-found-page" replace />} />;
-                    }
-
-                    return (
-                        <Route
-                            key={m.id}
-                            path={m.url}
-                            element={
-                                <ProtectedRoute requiredPermission={m.requiredPermission}>
-                                    <Component />
-                                </ProtectedRoute>
-                            }
-                        />
-                    );
-                }),
-            )}
-
-            {/* Static routes from componentRegistry */}
             {staticRoutes.map((route, index) => {
                 const Component = route.component;
 
@@ -79,7 +50,54 @@ function AppRoutes() {
                 );
             })}
 
-            {/* Catch all */}
+            {moduleGroups.flatMap((group) =>
+                group.modules.map((m) => {
+                    if (!m.url) return null;
+                    if (staticRoutePaths.has(m.url)) return null;
+                    if ((ROLE_HOME_PATHS as readonly string[]).includes(m.url)) {
+                        return null;
+                    }
+                    const Component = componentRegistry[m.url];
+
+                    if (!Component) {
+                        return <Route key={`missing-${m.id ?? m.url}`} path={m.url} element={<Navigate to="/not-found-page" replace />} />;
+                        return null;
+                    }
+
+                    return (
+                        <Route
+                            key={m.id}
+                            path={m.url}
+                            element={
+                                <ProtectedRoute requiredPermission={m.requiredPermission}>
+                                    <Component />
+                                </ProtectedRoute>
+                            }
+                        />
+                    );
+                }),
+            )}
+
+            {staticRoutes.map((route, index) => {
+                const Component = route.component;
+
+                if (route.isPublic) {
+                    return <Route key={index} path={route.path} element={<Component />} />;
+                }
+
+                return (
+                    <Route
+                        key={index}
+                        path={route.path}
+                        element={
+                            <ProtectedRoute requiredPermission={route.requiredPermission}>
+                                <Component />
+                            </ProtectedRoute>
+                        }
+                    />
+                );
+            })}
+
             <Route path="*" element={<NotFoundRedirect />} />
         </Routes>
     );

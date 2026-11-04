@@ -206,11 +206,13 @@ export default function DepartmentManagementPage() {
                             Manage department members and enroll all students in a course at once.
                         </p>
                     </div>
-                    <PermissionGate permission="DEPARTMENT_CREATE">
-                        <Button onClick={openCreateDialog}>
-                            <Plus className="size-4" /> Create Department
-                        </Button>
-                    </PermissionGate>
+                    <div className="flex items-center gap-2">
+                        <PermissionGate permission="DEPARTMENT_CREATE">
+                            <Button onClick={openCreateDialog}>
+                                <Plus className="size-4" /> Create Department
+                            </Button>
+                        </PermissionGate>
+                    </div>
                 </div>
 
                 <div className="relative max-w-md">
@@ -264,7 +266,7 @@ export default function DepartmentManagementPage() {
                                         </p>
                                         <p className="mt-1 text-xs text-muted-foreground">Code: {department.code}</p>
                                     </div>
-                                    <PermissionGate permission="DEPARTMENT_UPDATE">
+                                    <PermissionGate permission="DEPARTMENT_CREATE">
                                         <Button
                                             variant="ghost"
                                             size="icon"
@@ -274,7 +276,7 @@ export default function DepartmentManagementPage() {
                                             <Pencil className="size-4" />
                                         </Button>
                                     </PermissionGate>
-                                    <PermissionGate permission="DEPARTMENT_UPDATE">
+                                    <PermissionGate permission="DEPARTMENT_CREATE">
                                         <Button
                                             variant="ghost"
                                             size="icon"
@@ -312,7 +314,7 @@ export default function DepartmentManagementPage() {
                                     </div>
 
                                     <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                                        <PermissionGate permission="USER_UPDATE">
+                                        <PermissionGate permission="DEPARTMENT_UPDATE">
                                             <Button
                                                 variant="outline"
                                                 className="w-full"
@@ -382,9 +384,9 @@ export default function DepartmentManagementPage() {
                             Add the department name, unique code, and an optional description.
                         </DialogDescription>
                     </DialogHeader>
-                    <form className="space-y-4" onSubmit={submitDepartment} noValidate>
+                    <form className="min-w-0 space-y-4" onSubmit={submitDepartment} noValidate>
                         <div className="space-y-2">
-                            <label htmlFor="department-name" className="text-sm font-medium">Name</label>
+                            <label htmlFor="department-name" className="text-sm font-medium">Name <span className="text-destructive" aria-hidden="true">*</span></label>
                             <Input
                                 id="department-name"
                                 value={name}
@@ -399,7 +401,7 @@ export default function DepartmentManagementPage() {
                             {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                         </div>
                         <div className="space-y-2">
-                            <label htmlFor="department-code" className="text-sm font-medium">Code</label>
+                            <label htmlFor="department-code" className="text-sm font-medium">Code <span className="text-destructive" aria-hidden="true">*</span></label>
                             <Input
                                 id="department-code"
                                 value={code}
@@ -423,6 +425,8 @@ export default function DepartmentManagementPage() {
                                     setErrors((prev) => ({ ...prev, description: undefined }));
                                 }}
                                 maxLength={500}
+                                rows={4}
+                                className="min-h-24 resize-y [field-sizing:fixed] [overflow-wrap:anywhere]"
                                 aria-invalid={!!errors.description}
                             />
                             <p className="text-xs text-muted-foreground">Optional · {description.length}/500 characters</p>

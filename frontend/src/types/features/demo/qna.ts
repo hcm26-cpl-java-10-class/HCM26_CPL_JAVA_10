@@ -5,6 +5,8 @@ export interface LessonAnswer {
   authorId: number;
   authorName: string;
   byInstructor: boolean;
+  /** This answer is marked as the accepted (correct) answer of its question. */
+  accepted: boolean;
   createdAt?: string | null;
   updatedAt?: string | null;
   canEdit: boolean;
@@ -23,8 +25,23 @@ export interface LessonQuestion {
   canEdit: boolean;
   canDelete: boolean;
   canAnswer: boolean;
+  /** Pinned by the instructor: always listed first. */
+  pinned: boolean;
+  pinnedAt?: string | null;
+  upvoteCount: number;
+  upvotedByMe: boolean;
+  /** False for the viewer's own question. */
+  canUpvote: boolean;
+  /** Instructor / admin only. */
+  canPin: boolean;
+  /** Asker, instructor or admin (and the question has at least one answer). */
+  canAccept: boolean;
+  acceptedAnswerId?: number | null;
+  /** The accepted answer (if any) comes first. */
   answers: LessonAnswer[];
 }
+
+export type QuestionSort = "newest" | "votes";
 
 export interface LessonQuestionPage {
   content: LessonQuestion[];

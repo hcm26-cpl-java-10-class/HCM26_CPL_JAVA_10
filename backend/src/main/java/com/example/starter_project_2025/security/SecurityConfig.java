@@ -53,6 +53,7 @@ public class SecurityConfig {
             "/actuator/health",
             "/swagger-ui.html",
             "/swagger-ui/**",
+            "/uploads/**",
             "/v3/api-docs/**",
             "/ws/**",
             "/public/**",
@@ -62,8 +63,10 @@ public class SecurityConfig {
             "/verify/**",
             "/api/auth/**",
             "/h2-console/**",
-            // Public certificate verification API
-            "/api/certificates/verify/**",
+            "/api/exams/verify-access/**",
+            "/api/exams/anonymous-session",
+            "/api/exams/anonymous/**",
+            "/h2-console/**"
     };
 
     @Bean
@@ -85,11 +88,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/api/lesson-audio/**").permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/api/lesson-documents/**").permitAll();
                     auth.anyRequest().authenticated();
                 })
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)   // 401
-                        .accessDeniedHandler(jwtAccessDeniedHandler)             // 403
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler)
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oAuth2AuthenticationSuccessHandler)

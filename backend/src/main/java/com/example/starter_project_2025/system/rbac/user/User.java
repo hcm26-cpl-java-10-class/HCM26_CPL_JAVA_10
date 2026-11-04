@@ -44,6 +44,19 @@ public class User extends BaseEntity {
     @ExportField(name = "Email")
     String email;
 
+    /**
+     * Export-only column. It is deliberately transient and always null, so the exported file has an
+     * empty "Password" column that an administrator can fill in and import again. The password hash
+     * is never exported.
+     */
+    @Transient
+    @ExportField(name = "Password")
+    String password;
+
+    /**
+     * Import: the "Password" column is optional. When it is empty the account is created with a random
+     * password and the user receives an email to set their own. Passwords are never exported.
+     */
     @Column(nullable = false)
     @ImportHash
     @ImportField(name = "Password", required = true)
@@ -57,9 +70,33 @@ public class User extends BaseEntity {
     @Column(length = 100)
     String lastName;
 
+    @Column(unique = true, length = 50)
+    @ImportField(name = "Username")
+    @ExportField(name = "Username")
+    String username;
+
+    @Column(name = "employee_code", unique = true, length = 50)
+    @ImportField(name = "Employee Code")
+    @ExportField(name = "Employee Code")
+    String employeeCode;
+
+    @Column(length = 20)
+    @ImportField(name = "Phone")
+    @ExportField(name = "Phone")
+    String phone;
+
+    @Column(length = 500)
+    @ImportField(name = "Description")
+    @ExportField(name = "Description")
+    String description;
+
     @Builder.Default
     @Column(nullable = false)
     Boolean locked = false;
+
+    @Builder.Default
+    @Column(name = "is_guest", nullable = false)
+    Boolean isGuest = false;
 
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)

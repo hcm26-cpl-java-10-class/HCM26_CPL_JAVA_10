@@ -44,10 +44,9 @@ export function FilterPopover({
           </TooltipWrapper>
         </div>
       </PopoverTrigger>
-      <PopoverContent className="w-80 max-h-[min(80vh,800px)] overflow-hidden p-0 flex flex-col" align="start">
+      <PopoverContent className="w-80 p-0" align="start">
         {hasFilters ? (
           <>
-            {/* Header */}
             <div className="px-3 py-2.5 border-b flex items-center justify-between">
               <span className="text-sm font-medium flex items-center gap-2">
                 <Filter size={14} />
@@ -83,8 +82,7 @@ export function FilterPopover({
               </div>
             </div>
 
-            {/* Filter fields */}
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+            <div className="p-3">
               <Filters table={table} />
             </div>
           </>

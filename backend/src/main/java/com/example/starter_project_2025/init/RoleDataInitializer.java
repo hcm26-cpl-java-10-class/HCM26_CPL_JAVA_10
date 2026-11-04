@@ -39,6 +39,13 @@ public class RoleDataInitializer implements CommandLineRunner {
     public void run(String... args) {
         ensurePermission("COURSE_REPORT", "READ");
         ensurePermission("EXAM", "TAKE");
+        ensurePermission("STUDENT_SCORE", "RELEASE");
+        ensurePermission("STUDENT_SCORE", "VIEW_OWN");
+        ensurePermission("SCORE_APPEAL", "CREATE");
+        ensurePermission("SCORE_APPEAL", "VIEW_OWN");
+        ensurePermission("SCORE_APPEAL", "READ");
+        ensurePermission("SCORE_APPEAL", "REVIEW");
+        List<Permission> allPermissions = permissionRepository.findAll();
 
         upsertRole(ADMIN_ROLE, "Administrator with full system access", permissionRepository.findAll());
         upsertRole(
@@ -59,6 +66,13 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "LESSON_QUESTION_CREATE",
                         "LESSON_QUESTION_UPDATE",
                         "LESSON_QUESTION_DELETE",
+                        "LESSON_REPORT_CREATE",
+                        "EXAM_READ",
+                        "EXAM_TAKE",
+                        "INVITATION_READ",
+                        "STUDENT_SCORE_VIEW_OWN",
+                        "SCORE_APPEAL_CREATE",
+                        "SCORE_APPEAL_VIEW_OWN",
                         "EXAM_TAKE"
                 )
         );
@@ -67,21 +81,46 @@ public class RoleDataInitializer implements CommandLineRunner {
                 "Teacher with book, course, section, syllabus and exam management permissions",
                 findPermissions(
                         "MENU_READ",
-                        "BOOK_CREATE", "BOOK_READ", "BOOK_UPDATE", "BOOK_DELETE",
-                        "COURSE_CREATE", "COURSE_READ", "COURSE_UPDATE", "COURSE_DELETE",
+                        "BOOK_CREATE",
+                        "BOOK_READ",
+                        "BOOK_UPDATE",
+                        "BOOK_DELETE",
+                        "EXAM_CREATE",
+                        "EXAM_READ",
+                        "EXAM_UPDATE",
+                        "EXAM_DELETE",
+                        "QUESTION_CREATE",
+                        "QUESTION_READ",
+                        "QUESTION_UPDATE",
+                        "QUESTION_DELETE",
+                        "INVITATION_CREATE",
+                        "INVITATION_READ",
+                        "INVITATION_UPDATE",
+                        "INVITATION_DELETE",
+                        "SCORE_APPEAL_READ",
+                        "SCORE_APPEAL_REVIEW",
+                        "USER_READ",
+                        "DEPARTMENT_READ",
+                        "DEPARTMENT_UPDATE",
+                        "DEPARTMENT_DELETE",
+                        "DEPARTMENT_CREATE",
+                        "COURSE_CREATE",
+                        "COURSE_READ",
+                        "COURSE_UPDATE",
+                        "COURSE_DELETE",
+                        "LESSON_CREATE",
+                        "LESSON_READ",
+                        "LESSON_UPDATE",
+                        "LESSON_DELETE",
                         "CATEGORY_CREATE", "CATEGORY_READ", "CATEGORY_UPDATE", "CATEGORY_DELETE",
                         "COURSE_REPORT_READ",
                         "SECTION_CREATE", "SECTION_READ", "SECTION_UPDATE", "SECTION_DELETE",
                         "SYLLABUS_CREATE", "SYLLABUS_READ", "SYLLABUS_UPDATE", "SYLLABUS_DELETE",
-                        "LESSON_CREATE", "LESSON_READ", "LESSON_UPDATE", "LESSON_DELETE",
                         "LESSON_QUESTION_READ", "LESSON_QUESTION_DELETE",
                         "LESSON_ANSWER_CREATE", "LESSON_ANSWER_READ",
                         "LESSON_ANSWER_UPDATE", "LESSON_ANSWER_DELETE",
-                        "EXAM_CREATE", "EXAM_READ", "EXAM_UPDATE", "EXAM_DELETE",
-                        "EXAM_TAKE",
-                        "QUESTION_CREATE", "QUESTION_READ", "QUESTION_UPDATE", "QUESTION_DELETE",
-                        "INVITATION_CREATE", "INVITATION_READ",
-                        "INVITATION_UPDATE", "INVITATION_DELETE"
+                        "LESSON_REPORT_READ", "LESSON_REPORT_UPDATE",
+                        "EXAM_TAKE"
                 )
         );
 
@@ -106,8 +145,8 @@ public class RoleDataInitializer implements CommandLineRunner {
         Role role = roleRepository.findByName(roleName).orElseGet(Role::new);
         role.setName(roleName);
         role.setDescription(description);
-        role.setIsActive(true);
         role.setIsSystem(true);
+        role.setIsActive(true);
         role.setPermissions(new HashSet<>(permissions));
         roleRepository.save(role);
     }

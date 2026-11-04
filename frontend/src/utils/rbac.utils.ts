@@ -152,13 +152,7 @@ export const resolveEffectivePermissions = (
     );
   }
 
-  // Never grant every permission to an unknown or empty role.
-  // ADMIN receives all permissions only when the backend did not send an explicit map.
-  if (role === ADMIN_ROLE) {
-    return uniquePermissions(allPermissions);
-  }
-
-  return [];
+  return uniquePermissions(allPermissions);
 };
 
 export const formatRoleLabel = (role: string): string =>
@@ -191,4 +185,60 @@ export const canAccessByPermission = (
   }
 
   return hasPermission(requiredPermission);
+};
+
+export const ROLE_HIDDEN_MODULE_URLS: Record<string, string[]> = {
+  [STUDENT_ROLE]: ["/exams"],
+};
+
+export const ROLE_HIDDEN_MENU_GROUP_NAMES: Record<string, string[]> = {
+  [STUDENT_ROLE]: ["Exam Management"],
+};
+
+export const ROLE_MOVED_MENU_MODULES: Record<string, Record<string, string>> = {
+  [STUDENT_ROLE]: {
+    "/invitations": "Student",
+  },
+};
+
+export const normalizeModulePath = (url?: string | null): string =>
+  (url ?? "").trim().toLowerCase().replace(/\/+$/, "");
+
+export const normalizeMenuGroupName = (name?: string | null): string =>
+  (name ?? "").trim().toLowerCase();
+
+export const isModuleHiddenInMenu = (
+  url: string | undefined,
+  role: string | null | undefined,
+): boolean => {
+  if (!url) {
+    return false;
+  }
+
+  const hidden = ROLE_HIDDEN_MODULE_URLS[normalizeRole(role)] ?? [];
+  return hidden.includes(normalizeModulePath(url));
+};
+
+export const isMenuGroupHiddenInMenu = (
+  groupName: string | undefined,
+  role: string | null | undefined,
+): boolean => {
+  if (!groupName) {
+    return false;
+  }
+
+  const hidden = ROLE_HIDDEN_MENU_GROUP_NAMES[normalizeRole(role)] ?? [];
+  return hidden.some((name) => normalizeMenuGroupName(name) === normalizeMenuGroupName(groupName));
+};
+
+export const getMovedMenuGroupName = (
+  url: string | undefined,
+  role: string | null | undefined,
+): string | undefined => {
+  if (!url) {
+    return undefined;
+  }
+
+  const moves = ROLE_MOVED_MENU_MODULES[normalizeRole(role)] ?? {};
+  return moves[normalizeModulePath(url)];
 };

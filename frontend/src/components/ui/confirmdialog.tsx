@@ -1,4 +1,3 @@
-// src/components/ui/ConfirmDialog.tsx
 import React from "react";
 import { Modal } from "./modal";
 

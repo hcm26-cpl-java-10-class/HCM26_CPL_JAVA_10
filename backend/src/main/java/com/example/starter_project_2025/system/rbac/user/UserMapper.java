@@ -45,6 +45,16 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
                 .collect(Collectors.toSet());
     }
 
+    default String mapStatus(User user) {
+        if (Boolean.FALSE.equals(user.getIsActive())) {
+            return "INACTIVE";
+        }
+        if (Boolean.TRUE.equals(user.getLocked())) {
+            return "LOCKED";
+        }
+        return "ACTIVE";
+    }
+
     default Set<Long> mapDepartmentIds(User user) {
         return user.getDepartments()
                 .stream()
