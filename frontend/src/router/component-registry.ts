@@ -41,6 +41,8 @@ export const routes: RouteConfig[] = [
   // Class List is a sidebar module (registered by the backend as /classes); the detail pages are reached from it
   { path: "/classes", component: ClassListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/classes/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/training-operations/class-details/:classCode", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/class-details/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/sessions/:sessionId", component: SessionDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },

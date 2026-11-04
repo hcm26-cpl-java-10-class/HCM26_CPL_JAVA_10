@@ -6,11 +6,25 @@ export interface Trainee {
     id: number;
     code?: string;
     fullName?: string;
+    /** FPT Student / internal account (e.g. "binhhp1", "anhtv68") */
+    fptAccount?: string;
+    /** Personal email (e.g. "phuongbinh.conan@gmail.com") */
+    personalEmail?: string;
     email?: string;
+    /** Citizen / National ID (CCCD/CMND) */
+    nationalId?: string;
+    /** Employee ID */
+    employeeId?: string;
+    /** Access Card ID */
+    accessCardId?: string;
+    /** Date of birth (ISO "YYYY-MM-DD" or "dd-MMM-yyyy") */
+    dob?: string;
+    /** Gender: "Male" | "Female" | "Other" */
+    gender?: string;
     phone?: string;
     university?: string;
     gpa?: number;
-    /** studying | dropped | graduated */
+    /** Active | Inactive | studying | dropped | graduated */
     status?: string;
     /** attendance % (0-100), null if not calculated yet */
     attendance?: number | null;

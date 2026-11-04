@@ -130,26 +130,26 @@ const rooms = [
 
 // Trainee pool
 let allTrainees = [
-  { id: 101, code: "HV001", fullName: "Nguyen Van An", email: "anvn@fsoft.com.vn", phone: "0901234567", university: "HCMUT", gpa: 3.5, status: "studying" },
-  { id: 102, code: "HV002", fullName: "Tran Thi Bich", email: "bichtt@fsoft.com.vn", phone: "0902345678", university: "HCMUS", gpa: 3.2, status: "studying" },
-  { id: 103, code: "HV003", fullName: "Le Minh Duc", email: "duclm@fsoft.com.vn", phone: "0903456789", university: "UIT", gpa: 3.8, status: "studying" },
-  { id: 104, code: "HV004", fullName: "Pham Thi Em", email: "empth@fsoft.com.vn", phone: "0904567890", university: "HCMUT", gpa: 3.1, status: "studying" },
-  { id: 105, code: "HV005", fullName: "Hoang Van Phuc", email: "phuchv@fsoft.com.vn", phone: "0905678901", university: "RMIT", gpa: 3.6, status: "studying" },
-  { id: 106, code: "HV006", fullName: "Nguyen Thi Giang", email: "giangnt@fsoft.com.vn", phone: "0906789012", university: "HCMUS", gpa: 3.4, status: "studying" },
-  { id: 107, code: "HV007", fullName: "Do Van Hai", email: "haidv@fsoft.com.vn", phone: "0907890123", university: "TDTU", gpa: 3.0, status: "studying" },
-  { id: 108, code: "HV008", fullName: "Vo Thi Lan", email: "lanvt@fsoft.com.vn", phone: "0908901234", university: "UEH", gpa: 3.7, status: "studying" },
-  { id: 109, code: "HV009", fullName: "Bui Quoc Minh", email: "minhbq@fsoft.com.vn", phone: "0909012345", university: "VGU", gpa: 3.3, status: "studying" },
-  { id: 110, code: "HV010", fullName: "Dang Thi Nga", email: "ngadt@fsoft.com.vn", phone: "0900123456", university: "HCMUTE", gpa: 3.9, status: "studying" },
-  { id: 111, code: "HV011", fullName: "Ly Thanh Phong", email: "phonglt@fsoft.com.vn", phone: "0901234560", university: "HCMUT", gpa: 3.5, status: "studying" },
-  { id: 112, code: "HV012", fullName: "Truong Minh Quan", email: "quantm@fsoft.com.vn", phone: "0902345670", university: "HUTECH", gpa: 2.9, status: "dropped" }
+  { id: 101, code: "binhhp1", fptAccount: "binhhp1", fullName: "Hoàng Phương Bình", personalEmail: "phuongbinh.conan@gmail.com", email: "phuongbinh.conan@gmail.com", nationalId: "075204005839", employeeId: "", accessCardId: "", dob: "2004-08-23", gender: "Male", phone: "0901234567", university: "FPTU", gpa: 3.5, status: "Active" },
+  { id: 102, code: "anhtv68", fptAccount: "anhtv68", fullName: "Trần Việt Anh", personalEmail: "anhviettran357@gmail.com", email: "anhviettran357@gmail.com", nationalId: "091204006506", employeeId: "", accessCardId: "", dob: "2004-01-28", gender: "Male", phone: "0902345678", university: "FPTU", gpa: 3.4, status: "Active" },
+  { id: 103, code: "baotvg", fptAccount: "baotvg", fullName: "Trần Vũ Gia Bảo", personalEmail: "baohse321@gmail.com", email: "baohse321@gmail.com", nationalId: "052203001644", employeeId: "", accessCardId: "", dob: "2003-09-23", gender: "Male", phone: "0903456789", university: "UIT", gpa: 3.8, status: "Active" },
+  { id: 104, code: "huydg15", fptAccount: "huydg15", fullName: "Đỗ Gia Huy", personalEmail: "dogiahuy2252004@gmail.com", email: "dogiahuy2252004@gmail.com", nationalId: "079204001295", employeeId: "", accessCardId: "", dob: "2004-05-22", gender: "Male", phone: "0904567890", university: "HCMUT", gpa: 3.6, status: "Active" },
+  { id: 105, code: "huyptq2", fptAccount: "huyptq2", fullName: "Phan Thành Quang Huy", personalEmail: "ptqhuy1606@gmail.com", email: "ptqhuy1606@gmail.com", nationalId: "046204000175", employeeId: "", accessCardId: "", dob: "2004-06-16", gender: "Male", phone: "0905678901", university: "HCMUS", gpa: 3.6, status: "Active" },
+  { id: 106, code: "khoild3", fptAccount: "khoild3", fullName: "Lê Đình Khôi", personalEmail: "koledinleko@gmail.com", email: "koledinleko@gmail.com", nationalId: "079202004580", employeeId: "", accessCardId: "", dob: "2002-09-27", gender: "Male", phone: "0906789012", university: "HCMUS", gpa: 3.4, status: "Active" },
+  { id: 107, code: "namdx5", fptAccount: "namdx5", fullName: "Đặng Xuân Nam", personalEmail: "dangxuannam32@gmail.com", email: "dangxuannam32@gmail.com", nationalId: "052204002602", employeeId: "", accessCardId: "", dob: "2004-03-12", gender: "Male", phone: "0907890123", university: "TDTU", gpa: 3.5, status: "Active" },
+  { id: 108, code: "thuntm12", fptAccount: "thuntm12", fullName: "Nguyễn Thị Minh Thư", personalEmail: "minhthu.nguyen04@gmail.com", email: "minhthu.nguyen04@gmail.com", nationalId: "079304008112", employeeId: "FPT26081", accessCardId: "AC-88201", dob: "2004-11-05", gender: "Female", phone: "0908901234", university: "UEH", gpa: 3.7, status: "Active" },
+  { id: 109, code: "tuanpq19", fptAccount: "tuanpq19", fullName: "Phạm Quốc Tuấn", personalEmail: "quoctuan.pham@gmail.com", email: "quoctuan.pham@gmail.com", nationalId: "075203009421", employeeId: "FPT26082", accessCardId: "AC-88202", dob: "2003-07-19", gender: "Male", phone: "0909012345", university: "VGU", gpa: 3.3, status: "Active" },
+  { id: 110, code: "linhvnk3", fptAccount: "linhvnk3", fullName: "Võ Ngọc Khánh Linh", personalEmail: "khanhlinh.vo04@gmail.com", email: "khanhlinh.vo04@gmail.com", nationalId: "048304003519", employeeId: "", accessCardId: "", dob: "2004-02-14", gender: "Female", phone: "0900123456", university: "HCMUTE", gpa: 3.9, status: "Active" },
+  { id: 111, code: "phonglt9", fptAccount: "phonglt9", fullName: "Lý Thanh Phong", personalEmail: "phonglt9@gmail.com", email: "phonglt9@gmail.com", nationalId: "079204005110", employeeId: "", accessCardId: "", dob: "2004-04-18", gender: "Male", phone: "0901234560", university: "HCMUT", gpa: 3.5, status: "Active" },
+  { id: 112, code: "quantm4", fptAccount: "quantm4", fullName: "Trương Minh Quân", personalEmail: "quantm4@gmail.com", email: "quantm4@gmail.com", nationalId: "079204006224", employeeId: "", accessCardId: "", dob: "2004-10-09", gender: "Male", phone: "0902345670", university: "HUTECH", gpa: 2.9, status: "Inactive" }
 ];
 
 // Class-trainee enrollment mapping (classId -> traineeIds[])
 let enrollments = {
-  1: [101,102,103,104,105,106,107,108,109,110,111,112, 101,102,103,104,105,106,107,108,109,110,111],
-  2: [103,104,105,106,107,108,109,110],
+  1: [101,102,103,104,105,106,107,108,109,110,111,112],
+  2: [101,102,103,104,105,106,107,108,109,110],
   3: [101,102,103,104,105,106,107,108,109,110,111],
-  4: [101,103,105,107,109,111,102,104,106,108,110,112, 101,103,105,107,109,111]
+  4: [101,103,105,107,109,111,102,104,106,108,110,112]
 };
 // Deduplicate
 Object.keys(enrollments).forEach(k => {
