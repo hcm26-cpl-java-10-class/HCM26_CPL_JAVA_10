@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -29,8 +30,21 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     Long countByIsActive(Boolean isActive);
 
-    
+    /** Number of ACTIVE accounts: active and not locked. */
     Long countByIsActiveAndLocked(Boolean isActive, Boolean locked);
 
     long countByRolesId(Long roleId);
+
+    @Query("""
+    SELECT u.id
+    FROM User u
+    WHERE LOWER(CONCAT(
+        COALESCE(u.firstName, ''), ' ',
+        COALESCE(u.lastName, '')
+    )) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+    """)
+    List<Long> findIdsByActorName(@Param("keyword") String keyword);
 }

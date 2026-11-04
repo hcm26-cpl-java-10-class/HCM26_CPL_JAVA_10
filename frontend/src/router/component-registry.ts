@@ -22,6 +22,8 @@ import CourseDetailPage from "@/pages/management/demo/course/CourseDetailPage";
 import CourseEnrollmentsPage from "@/pages/management/demo/enrollment/CourseEnrollmentsPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+import { LocationPage } from "@/pages/management/rbac/location";
+import AuditLogPage from "@/pages/management/audit-log";
 
 
 export interface RouteConfig {
@@ -62,6 +64,16 @@ export const routes: RouteConfig[] = [
 
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
+ {
+    path: "/locations",
+    component: LocationPage,
+    isPublic: true
+  },
+  {
+    path: "/management/rbac/locations",
+    component: LocationPage,
+    isPublic: true
+  },
   {
     path: "/invitations",
     component: InvitationManagementPage,
@@ -86,4 +98,5 @@ export const routes: RouteConfig[] = [
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
+  {path: "/admin/audit-log", component: AuditLogPage, isModuleDriven: true },
 ];

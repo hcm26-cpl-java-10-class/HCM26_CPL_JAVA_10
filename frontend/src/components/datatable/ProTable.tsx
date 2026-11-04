@@ -410,7 +410,7 @@ export function ProTable<TData = any>({
                                                             }}
                                                             dateFormat={
                                                                 f.type === "date"
-                                                                    ? (dateFormats[f.name] ?? "datetime")
+                                                                    ? (dateFormats[f.name] ?? "date")
                                                                     : undefined
                                                             }
                                                         />

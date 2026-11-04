@@ -8,7 +8,7 @@ import com.example.starter_project_2025.base.dataio.importer.annotation.ImportHa
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-// import com.example.starter_project_2025.system.rbac.department.Department;
+import com.example.starter_project_2025.system.rbac.department.Department;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import jakarta.persistence.*;
 import lombok.*;
@@ -16,6 +16,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -98,6 +99,17 @@ public class User extends BaseEntity {
     @ExportField(name = "Description")
     String description;
 
+    @Column(name = "date_of_birth")
+    @ImportField(name = "Date of Birth", required = true)
+    @ExportField(name = "Date of Birth", hint = "Enter a date as yyyy-mm-dd, for example 2000-01-31.")
+    LocalDate dateOfBirth;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    @ImportField(name = "Gender", required = true)
+    @ExportField(name = "Gender")
+    Gender gender;
+
     @Builder.Default
     @Column(nullable = false)
     Boolean locked = false;
@@ -120,14 +132,14 @@ public class User extends BaseEntity {
                 inverseJoinColumns = @JoinColumn(name = "role_id"))
     Set<Role> roles = new HashSet<>();
 
-    // @Builder.Default
-    // @ManyToMany(fetch = FetchType.LAZY)
-    // @ExportField(name = "Departments", relation = true, path = "code")
-    // @ImportField(name = "Departments", lookupEntity = Department.class, lookupField = "code", separator = ",")
-    // @JoinTable( name = "user_departments",
-    //             joinColumns = @JoinColumn(name = "user_id"),
-    //             inverseJoinColumns = @JoinColumn(name = "department_id"))
-    // Set<Department> departments = new HashSet<>();
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.LAZY)
+    @ExportField(name = "Departments", relation = true, path = "code")
+    @ImportField(name = "Departments", lookupEntity = Department.class, lookupField = "code", separator = ",")
+    @JoinTable( name = "user_departments",
+                joinColumns = @JoinColumn(name = "user_id"),
+                inverseJoinColumns = @JoinColumn(name = "department_id"))
+    Set<Department> departments = new HashSet<>();
 
     public String getFullName() {
         return firstName + (lastName != null && !lastName.isBlank() ? " " + lastName : "");
