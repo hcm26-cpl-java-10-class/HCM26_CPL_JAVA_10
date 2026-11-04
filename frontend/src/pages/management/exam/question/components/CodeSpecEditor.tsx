@@ -566,7 +566,7 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
                 <Label>Function declaration (Coderbyte style, Java only)</Label>
                 <p className="text-xs text-muted-foreground">
                     The system generates the starter code for students. Add as many test cases as you need (at least {MIN_TESTS});
-                    tick the ones students may see during the exam, the others are used for grading only. Every test is worth the
+                    tick the ones students may see during the assessment, the others are used for grading only. Every test is worth the
                     same share of the question&apos;s score.
                 </p>
             </div>

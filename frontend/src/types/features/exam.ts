@@ -65,6 +65,10 @@ export interface QuestionDTO {
   options: QuestionOptionDTO[];
   imageUrl?: string | null;
   code?: CodeSpec | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  createdBy?: number | null;
+  updatedBy?: number | null;
 }
 
 export interface QuestionFilter {
@@ -102,6 +106,7 @@ export interface ExamDTO {
   createdByName?: string | null;
   /** Submitted attempts waiting for the teacher to grade. */
   pendingGradingCount?: number;
+  hasAttempts?: boolean;
   title: string;
   durationMinutes: number;
   startTime?: string | null;

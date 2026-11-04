@@ -21,7 +21,8 @@ function getErrorMessage(error: any, fallback: string): string {
 }
 
 export function isExamStarted(exam: ExamDTO | null | undefined): boolean {
-  return Boolean(exam?.startTime && new Date(exam.startTime).getTime() <= Date.now());
+  // Locked once a student has started an attempt (the start-time schedule no longer exists).
+  return Boolean(exam?.hasAttempts);
 }
 
 function CodeBlock({ title, code }: { title: string; code: string }) {
@@ -107,7 +108,10 @@ export function QuestionAnswers({ question }: { question: QuestionDTO }) {
             <span className={`font-semibold shrink-0 ${isCorrect ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/70"}`}>
               {optionLetter}.
             </span>
-            <span className="min-w-0 flex-1 break-words">{option.content}</span>
+            <span className="min-w-0 flex-1 break-words">
+              {option.content}
+              {option.imageUrl && <img src={option.imageUrl} alt="" className="mt-1 max-h-40 rounded border object-contain" />}
+            </span>
             {isCorrect && (
               <Badge variant="outline" className="h-4 px-1 text-[10px] text-emerald-600 border-emerald-500/40 dark:text-emerald-400 bg-emerald-500/15 shrink-0 flex items-center gap-0.5">
                 <Check className="size-2.5" /> Đúng

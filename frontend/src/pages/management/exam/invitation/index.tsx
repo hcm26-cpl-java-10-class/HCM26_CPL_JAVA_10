@@ -100,7 +100,7 @@ export default function InvitationsPage() {
     const invitationsQuery = useQuery({
         queryKey,
         queryFn: () => {
-            if (!isValidExamId) throw new Error("Invalid exam ID");
+            if (!isValidExamId) throw new Error("Invalid assessment ID");
             return invitationApi.getByExam(numericExamId, {
                 status: statusFilter === "ALL" ? undefined : statusFilter,
                 anonymous: typeFilter === "ALL" ? undefined : typeFilter === "anonymous",
@@ -176,7 +176,7 @@ export default function InvitationsPage() {
                             Assessment Management
                         </p>
                         <h1 className="mt-1 text-2xl font-semibold">
-                            Exam Invitations: <span className="text-primary">{examTitle}</span>
+                            Assessment Invitations: <span className="text-primary">{examTitle}</span>
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
                             {total} invitation(s)
@@ -443,7 +443,7 @@ export default function InvitationsPage() {
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Reason (optional)</label>
                         <Input
-                            placeholder="e.g., Exam rescheduled..."
+                            placeholder="e.g., Assessment rescheduled..."
                             value={revokeReason}
                             onChange={(e) => setRevokeReason(e.target.value)}
                         />

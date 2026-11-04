@@ -79,7 +79,7 @@ export default function ExamDetailPage() {
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
-        <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/40 p-1 sm:grid-cols-5" role="tablist" aria-label="Exam sections">
+        <div className="grid grid-cols-2 gap-1 rounded-lg border bg-muted/40 p-1 sm:grid-cols-5" role="tablist" aria-label="Assessment sections">
           {TABS.map(({ key, label, segment, icon: Icon }) => (
             <button
               key={key}

@@ -203,8 +203,8 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		checkPermission(CrudAction.UPDATE);
 		ValidationContext context = new ValidationContext();
 		Exam exam = findExam(examId);
-		if (exam.getStartTime() != null && !LocalDateTime.now().isBefore(exam.getStartTime())) {
-			throw new BadRequestException("Đề thi đã bắt đầu, không thể thêm câu hỏi");
+		if (examAttemptRepository.existsByExam_Id(exam.getId())) {
+			throw new BadRequestException("Đề thi đã có sinh viên làm bài, không thể thêm câu hỏi");
 		}
 		Set<Question> questions = resolveQuestions(exam, questionIds, context, exam.getExamType());
 		context.throwIfErrors();
@@ -216,8 +216,8 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	public ExamDTO removeQuestion(Long examId, Long questionId) {
 		checkPermission(CrudAction.UPDATE);
 		Exam exam = findExam(examId);
-		if (exam.getStartTime() != null && !LocalDateTime.now().isBefore(exam.getStartTime())) {
-			throw new BadRequestException("Đề thi đã bắt đầu, không thể xóa câu hỏi");
+		if (examAttemptRepository.existsByExam_Id(exam.getId())) {
+			throw new BadRequestException("Đề thi đã có sinh viên làm bài, không thể xóa câu hỏi");
 		}
 		Set<Question> before = new LinkedHashSet<>(exam.getQuestions());
 		exam.getQuestions().removeIf(question -> question.getId().equals(questionId));
@@ -236,8 +236,8 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		if (copy.getSourceQuestionId() == null) {
 			throw new BadRequestException("Đây không phải bản sao của đề thi, không thể sửa trong đề");
 		}
-		if (exam.getStartTime() != null && !LocalDateTime.now().isBefore(exam.getStartTime())) {
-			throw new BadRequestException("Đề thi đã bắt đầu, không thể sửa câu hỏi");
+		if (examAttemptRepository.existsByExam_Id(exam.getId())) {
+			throw new BadRequestException("Đề thi đã có sinh viên làm bài, không thể sửa câu hỏi");
 		}
 
 		ValidationContext context = new ValidationContext();

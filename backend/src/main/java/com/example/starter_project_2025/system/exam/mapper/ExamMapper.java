@@ -45,6 +45,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setCreatedBy(e.getCreatedBy());
         d.setCreatedByName(creatorName(e.getCreatedBy()));
         d.setPendingGradingCount(pendingGrading(e.getId()));
+        d.setHasAttempts(e.getId() != null && attemptRepository.existsByExam_Id(e.getId()));
         d.setUpdatedBy(e.getUpdatedBy());
         d.setTitle(e.getTitle());
         d.setDurationMinutes(e.getDurationMinutes());

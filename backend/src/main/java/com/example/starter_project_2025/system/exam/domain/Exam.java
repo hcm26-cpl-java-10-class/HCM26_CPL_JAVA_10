@@ -19,7 +19,7 @@ import lombok.Setter;
 @Table(name = "exam")
 @ResourcePermission("EXAM")
 @ResourceMenu(
-        title = "Exams",
+        title = "Assessments",
         group = "Assessment Management",
         icon = "book-open",
         url = "/exams",
@@ -38,6 +38,15 @@ public class Exam extends BaseEntity {
     private LocalDateTime startTime;
 
     private LocalDateTime endTime;
+
+    /** Tinh nang dat lich (start/end) da bi go bo: luon tra ve null de moi noi coi nhu "mo tu do". Gia tri cu van nam trong DB. */
+    public LocalDateTime getStartTime() {
+        return null;
+    }
+
+    public LocalDateTime getEndTime() {
+        return null;
+    }
 
     @Column(nullable = false)
     private Integer maxAttempts = 1;
