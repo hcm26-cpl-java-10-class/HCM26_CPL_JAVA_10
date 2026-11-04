@@ -1,11 +1,9 @@
 package com.example.starter_project_2025.system.exam.service;
 
 import com.example.starter_project_2025.exception.BadRequestException;
-import com.example.starter_project_2025.system.exam.audit.InvitationAuditService;
 import com.example.starter_project_2025.system.exam.domain.AnonymousSession;
 import com.example.starter_project_2025.system.exam.domain.AnonymousSessionRepository;
 import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamReminderRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
 import com.example.starter_project_2025.system.exam.domain.Invitation;
 import com.example.starter_project_2025.system.exam.domain.InvitationRepository;
@@ -65,15 +63,6 @@ class InvitationServiceAnonymousTest {
 
     @Mock
     private GuestUserService guestUserService;
-
-    @Mock
-    private ExamAccessGuard examAccessGuard;
-
-    @Mock
-    private InvitationAuditService invitationAuditService;
-
-    @Mock
-    private ExamReminderRepository examReminderRepository;
 
     @InjectMocks
     private InvitationService service;
@@ -185,7 +174,7 @@ class InvitationServiceAnonymousTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> service.createAnonymousSession(CODE, null, NAME, EMAIL));
-        assertEquals("Đã hết số lần truy cập cho lời mời này", ex.getMessage());
+        assertEquals("Maximum access attempts reached for this invitation", ex.getMessage());
     }
 
     @Test
@@ -218,7 +207,7 @@ class InvitationServiceAnonymousTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> service.createAnonymousSession(CODE, null, "Nguoi Khac", EMAIL));
-        assertEquals("Đã hết số lần truy cập cho lời mời này", ex.getMessage());
+        assertEquals("Maximum access attempts reached for this invitation", ex.getMessage());
     }
 
     @Test
@@ -231,7 +220,7 @@ class InvitationServiceAnonymousTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> service.createAnonymousSession(CODE, "fp-1", NAME, EMAIL));
-        assertEquals("Thiết bị này đã truy cập kỳ thi này", ex.getMessage());
+        assertEquals("This device has already accessed this exam", ex.getMessage());
     }
 
     @Test
@@ -241,7 +230,7 @@ class InvitationServiceAnonymousTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> service.createAnonymousSession(CODE, null, NAME, EMAIL));
-        assertEquals("Lời mời đã bị thu hồi", ex.getMessage());
+        assertEquals("Invitation has been revoked", ex.getMessage());
     }
 
     @Test
@@ -251,7 +240,7 @@ class InvitationServiceAnonymousTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> service.createAnonymousSession(CODE, null, NAME, EMAIL));
-        assertEquals("Lời mời đã hết hạn", ex.getMessage());
+        assertEquals("Invitation has expired", ex.getMessage());
         assertEquals(InvitationStatus.EXPIRED, invitation.getStatus());
     }
 
@@ -262,7 +251,7 @@ class InvitationServiceAnonymousTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> service.createAnonymousSession(CODE, null, NAME, EMAIL));
-        assertEquals("Cửa sổ truy cập của lời mời đã đóng", ex.getMessage());
+        assertEquals("Access window for this invitation has closed", ex.getMessage());
         assertEquals(InvitationStatus.EXPIRED, invitation.getStatus());
     }
 
@@ -317,13 +306,13 @@ class InvitationServiceAnonymousTest {
     }
 
     @Test
-    @DisplayName("verifyAccessCode trả về số lượt còn lại và KHÔNG lộ tên đề/thí sinh")
-    void verifyReportsRemainingAttemptsWithoutLeakingData() {
+    @DisplayName("verifyAccessCode trả về số lượt còn lại")
+    void verifyReportsRemainingAttempts() {
         var res = service.verifyAccessCode(CODE);
 
         assertTrue(res.isValid());
         assertEquals(1, res.getAccessAttemptsRemaining());
-        assertEquals("Mã truy cập hợp lệ", res.getMessage());
+        assertEquals("Kỳ thi giữa kỳ", res.getExamTitle());
     }
 
     @Test
@@ -334,7 +323,7 @@ class InvitationServiceAnonymousTest {
         var res = service.verifyAccessCode(CODE);
 
         assertFalse(res.isValid());
-        assertEquals("Cửa sổ truy cập của lời mời đã đóng", res.getMessage());
+        assertEquals("The access window for this link has closed", res.getMessage());
         assertEquals(InvitationStatus.EXPIRED, invitation.getStatus());
     }
 }

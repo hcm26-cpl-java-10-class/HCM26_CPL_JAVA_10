@@ -64,7 +64,7 @@ public class ExamTemplate extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private ExamCategory category = ExamCategory.ASSIGNMENT;
+    private ExamCategory category = ExamCategory.ASSESSMENT;
 
     @OneToMany(
             mappedBy = "template",

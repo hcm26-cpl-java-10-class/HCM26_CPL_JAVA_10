@@ -37,6 +37,7 @@ public class RoleDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        ensurePermission("COURSE_REPORT", "READ");
         ensurePermission("EXAM", "TAKE");
         ensurePermission("STUDENT_SCORE", "RELEASE");
         ensurePermission("STUDENT_SCORE", "VIEW_OWN");
@@ -46,22 +47,26 @@ public class RoleDataInitializer implements CommandLineRunner {
         ensurePermission("SCORE_APPEAL", "REVIEW");
         List<Permission> allPermissions = permissionRepository.findAll();
 
-        upsertRole(
-                ADMIN_ROLE,
-                "Administrator with full system access",
-                allPermissions
-        );
-
+        upsertRole(ADMIN_ROLE, "Administrator with full system access", permissionRepository.findAll());
         upsertRole(
                 STUDENT_ROLE,
-                "Student with read-only access to books and courses",
+                "Student with access to books, courses and exams",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_READ",
                         "COURSE_READ",
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE",
+                        "ENROLLMENT_DELETE",
                         "LESSON_READ",
+                        "LESSON_PROGRESS_READ",
+                        "LESSON_PROGRESS_UPDATE",
+                        "CERTIFICATE_READ",
+                        "LESSON_QUESTION_READ",
+                        "LESSON_QUESTION_CREATE",
+                        "LESSON_QUESTION_UPDATE",
+                        "LESSON_QUESTION_DELETE",
+                        "LESSON_REPORT_CREATE",
                         "EXAM_READ",
                         "EXAM_TAKE",
                         "INVITATION_READ",
@@ -71,10 +76,9 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "EXAM_TAKE"
                 )
         );
-
         upsertRole(
                 TEACHER_ROLE,
-                "Teacher with book, course, and exam management permissions",
+                "Teacher with book, course, section, syllabus and exam management permissions",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_CREATE",
@@ -96,6 +100,10 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "SCORE_APPEAL_READ",
                         "SCORE_APPEAL_REVIEW",
                         "USER_READ",
+                        "DEPARTMENT_READ",
+                        "DEPARTMENT_UPDATE",
+                        "DEPARTMENT_DELETE",
+                        "DEPARTMENT_CREATE",
                         "COURSE_CREATE",
                         "COURSE_READ",
                         "COURSE_UPDATE",
@@ -103,40 +111,51 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "LESSON_CREATE",
                         "LESSON_READ",
                         "LESSON_UPDATE",
-                        "LESSON_DELETE"
+                        "LESSON_DELETE",
+                        "CATEGORY_CREATE", "CATEGORY_READ", "CATEGORY_UPDATE", "CATEGORY_DELETE",
+                        "COURSE_REPORT_READ",
+                        "SECTION_CREATE", "SECTION_READ", "SECTION_UPDATE", "SECTION_DELETE",
+                        "SYLLABUS_CREATE", "SYLLABUS_READ", "SYLLABUS_UPDATE", "SYLLABUS_DELETE",
+                        "LESSON_QUESTION_READ", "LESSON_QUESTION_DELETE",
+                        "LESSON_ANSWER_CREATE", "LESSON_ANSWER_READ",
+                        "LESSON_ANSWER_UPDATE", "LESSON_ANSWER_DELETE",
+                        "LESSON_REPORT_READ", "LESSON_REPORT_UPDATE",
+                        "EXAM_TAKE"
                 )
         );
 
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");
     }
 
+    private void ensurePermission(String resource, String action) {
+        String name = resource + "_" + action;
+        if (permissionRepository.existsByName(name)) {
+            return;
+        }
+
+        permissionRepository.save(Permission.builder()
+                .name(name)
+                .resource(resource)
+                .action(action)
+                .description("Manually defined permission")
+                .build());
+    }
+
     private void upsertRole(String roleName, String description, Collection<Permission> permissions) {
         Role role = roleRepository.findByName(roleName).orElseGet(Role::new);
-
         role.setName(roleName);
         role.setDescription(description);
         role.setIsSystem(true);
         role.setIsActive(true);
         role.setPermissions(new HashSet<>(permissions));
-
         roleRepository.save(role);
     }
 
     private List<Permission> findPermissions(String... permissionNames) {
         List<Permission> permissions = new ArrayList<>();
-
         for (String permissionName : permissionNames) {
             permissionRepository.findByName(permissionName).ifPresent(permissions::add);
         }
-
         return permissions;
-    }
-
-    private void ensurePermission(String resource, String action) {
-        String name = resource + "_" + action;
-        if (permissionRepository.existsByName(name)) return;
-        permissionRepository.save(Permission.builder()
-                .name(name).resource(resource).action(action)
-                .description("Manually defined permission").build());
     }
 }
