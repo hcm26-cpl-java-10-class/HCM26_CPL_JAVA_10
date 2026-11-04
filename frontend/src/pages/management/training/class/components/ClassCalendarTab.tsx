@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlignLeft, CalendarDays, Check, ChevronDown, Download, Eye, Loader2, MoreVertical, Pencil, Save, Settings } from "lucide-react";
+import { AlignLeft, CalendarDays, ChevronDown, Download, Eye, Loader2, MoreVertical, Pencil, Save, Settings, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { utils, writeFile } from "xlsx";
@@ -44,7 +44,7 @@ function StatusBadge({ status }: { status: CalendarStatus }) {
     </Badge>;
 }
 
-export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
+export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: ExternalClass; onDirtyChange?: (dirty: boolean) => void }) {
     const { hasPermission } = usePermissions();
     const canRead = hasPermission("SESSION_READ");
     const canUpdate = hasPermission("SESSION_UPDATE");
@@ -53,35 +53,49 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
     const [detail, setDetail] = useState<ClassCalendarVersion | null>(null);
     const [mode, setMode] = useState<"detail" | "overview" | "adjust">("detail");
     const [pending, setPending] = useState<Record<number, ClassCalendarVersion>>({});
-    const [editingNameId, setEditingNameId] = useState<number | null>(null);
+    const [editingIds, setEditingIds] = useState<number[]>([]);
+    const cancelEdit = (id: number) => {
+        setPending((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setEditingIds((prev) => prev.filter((value) => value !== id));
+    };
 
     const updatePendingField = (item: ClassCalendarVersion, field: "name" | "historyChange", value: string) => {
         const original = query.data?.find((d) => d.id === item.id);
-        const currentPending = pending[item.id] ?? original ?? item;
-        const updated = { ...currentPending, [field]: value };
-        if (original && updated.name === original.name && (updated.historyChange || "") === (original.historyChange || "")) {
-            setPending((prev) => {
-                const next = { ...prev };
+        setPending((prev) => {
+            const updated = { ...(prev[item.id] ?? original ?? item), [field]: value };
+            const next = { ...prev };
+            if (original && updated.name.trim() === original.name.trim() && updated.historyChange.trim() === (original.historyChange ?? "").trim()) {
                 delete next[item.id];
-                return next;
-            });
-        } else {
-            setPending((prev) => ({ ...prev, [item.id]: updated }));
-        }
+            } else {
+                next[item.id] = updated;
+            }
+            return next;
+        });
     };
+
     const tableViewport = useRef<HTMLDivElement>(null);
     const horizontalScrollbar = useRef<HTMLDivElement>(null);
     const [tableWidth, setTableWidth] = useState(1050);
     const save = useMutation({
-        mutationFn: () => externalApi.saveClassCalendars(classItem.id, Object.values(pending).map(({ id, name, historyChange }) => ({ id, name, historyChange }))),
+        mutationFn: (updates: Array<{ id: number; name: string; historyChange: string }>) => externalApi.saveClassCalendars(classItem.id, updates),
         onSuccess: async () => {
-            setPending({});
             await queryClient.invalidateQueries({ queryKey: ["class-calendars", classItem.id] });
+            setPending({});
+            setEditingIds([]);
             toast.success("Calendar changes saved.");
         },
         onError: () => toast.error("Could not save calendar changes. Please try again."),
     });
     const open = (item: ClassCalendarVersion, view: typeof mode) => {
+        if (save.isPending) return;
+        if (view === "adjust" && Object.keys(pending).length > 0) {
+            toast.error("Save or cancel your calendar changes before adjusting the schedule.");
+            return;
+        }
         setDetail(item);
         setMode(view);
     };
@@ -117,7 +131,37 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
         .filter((item) => statuses.includes(item.status))
         .sort((a, b) => b.lastModifiedDate.localeCompare(a.lastModifiedDate) || b.id - a.id), [query.data, statuses, pending]);
     const pendingCount = Object.keys(pending).length;
-    const canSave = canUpdate && pendingCount > 0 && !save.isPending;
+    const fieldError = (value: string, label: string, max: number) => !value.trim()
+        ? `${label} is required.` : value.length > max ? `${label} must be ${max} characters or fewer.` : undefined;
+    const invalidPending = Object.values(pending).some((item) => fieldError(item.name, "Calendar name", 100) || fieldError(item.historyChange, "History change note", 200));
+    const canSave = canUpdate && pendingCount > 0 && !invalidPending && !save.isPending;
+
+    useEffect(() => {
+        onDirtyChange?.(pendingCount > 0);
+        return () => onDirtyChange?.(false);
+    }, [pendingCount, onDirtyChange]);
+
+    useEffect(() => {
+        if (!pendingCount) return;
+        const beforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = "";
+        };
+        const confirmLink = (event: MouseEvent) => {
+            const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+            if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || link.getAttribute("target") === "_blank") return;
+            if (save.isPending || !window.confirm("You have unsaved calendar changes. Leave and discard them?")) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        };
+        window.addEventListener("beforeunload", beforeUnload);
+        document.addEventListener("click", confirmLink, true);
+        return () => {
+            window.removeEventListener("beforeunload", beforeUnload);
+            document.removeEventListener("click", confirmLink, true);
+        };
+    }, [pendingCount, save.isPending]);
 
     useEffect(() => {
         const viewport = tableViewport.current;
@@ -190,74 +234,64 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
                             <TableRow key={item.id} className={pending[item.id] ? "bg-amber-50/50 dark:bg-amber-950/20" : ""}>
                                 <TableCell>{index + 1}</TableCell>
                                 <TableCell className="min-w-64">
-                                    {editingNameId === item.id ? (
-                                        <div className="flex items-center gap-1">
-                                            <input
-                                                type="text"
-                                                autoFocus
+                                    {canUpdate && editingIds.includes(item.id) ? (
+                                        <div className="space-y-1">
+                                            <input type="text" autoFocus disabled={save.isPending}
                                                 aria-label={`Calendar name for version ${item.version}`}
+                                                aria-invalid={!!fieldError(item.name, "Calendar name", 100)}
+                                                aria-describedby={fieldError(item.name, "Calendar name", 100) ? `calendar-name-error-${item.id}` : undefined}
                                                 value={item.name}
-                                                className="h-8 w-full rounded border border-blue-400 bg-background px-2 py-1 text-sm font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                                onChange={(e) => updatePendingField(item, "name", e.target.value)}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === "Enter" || e.key === "Escape") setEditingNameId(null);
-                                                }}
-                                                onBlur={() => setEditingNameId(null)}
-                                            />
-                                            <Button size="icon" variant="ghost" className="size-8 shrink-0 text-green-600 hover:text-green-700" onClick={() => setEditingNameId(null)} aria-label="Confirm name">
-                                                <Check className="size-4" />
-                                            </Button>
+                                                className="h-9 w-full rounded border bg-background px-2 text-sm disabled:opacity-60"
+                                                onChange={(event) => updatePendingField(item, "name", event.target.value)}
+                                                onKeyDown={(event) => { if (event.key === "Escape" && !save.isPending) cancelEdit(item.id); }} />
+                                            <p className={`text-right text-xs ${item.name.length > 100 ? "text-red-600" : "text-muted-foreground"}`} aria-label={`Calendar name character count for version ${item.version}`}>{item.name.length}/100</p>
+                                            {fieldError(item.name, "Calendar name", 100) && <p id={`calendar-name-error-${item.id}`} className="text-xs text-red-600">{fieldError(item.name, "Calendar name", 100)}</p>}
                                         </div>
                                     ) : (
-                                        <div className="flex items-center gap-1.5">
-                                            <button type="button" onClick={() => open(item, "detail")} className="text-left font-medium text-blue-800 hover:underline focus-visible:outline-2 dark:text-blue-300">
-                                                {item.name}
-                                            </button>
-                                            {canUpdate && (
-                                                <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    type="button"
-                                                    onClick={() => setEditingNameId(item.id)}
-                                                    className="size-6 text-muted-foreground opacity-60 transition-opacity hover:opacity-100 hover:text-foreground"
-                                                    title="Click to rename"
-                                                    aria-label={`Rename ${item.name}`}
-                                                >
-                                                    <Pencil className="size-3" />
-                                                </Button>
-                                            )}
-                                            {pending[item.id] && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">Unsaved</span>}
-                                        </div>
+                                        <button type="button" disabled={save.isPending} onClick={() => open(item, "detail")} className="text-left font-medium text-blue-800 hover:underline focus-visible:outline-2 dark:text-blue-300">
+                                            {item.name}
+                                        </button>
                                     )}
+                                    {pending[item.id] && <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">Unsaved</span>}
                                 </TableCell>
                                 <TableCell className="min-w-56 max-w-80">
-                                    {canUpdate ? (
-                                        <input
-                                            type="text"
-                                            aria-label={`History change note for version ${item.version}`}
-                                            value={item.historyChange ?? ""}
-                                            placeholder="Add change note…"
-                                            className="w-full rounded border border-transparent bg-transparent px-2 py-1 text-sm text-foreground transition-colors hover:border-input focus:border-blue-400 focus:bg-background focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder:text-muted-foreground/60"
-                                            onChange={(e) => updatePendingField(item, "historyChange", e.target.value)}
-                                        />
-                                    ) : (
-                                        <span className="whitespace-normal">{item.historyChange || "—"}</span>
-                                    )}
+                                    {canUpdate && editingIds.includes(item.id) ? (
+                                        <div className="space-y-1">
+                                            <input type="text" disabled={save.isPending}
+                                                aria-label={`History change note for version ${item.version}`}
+                                                aria-invalid={!!fieldError(item.historyChange, "History change note", 200)}
+                                                aria-describedby={fieldError(item.historyChange, "History change note", 200) ? `calendar-note-error-${item.id}` : undefined}
+                                                value={item.historyChange ?? ""}
+                                                className="h-9 w-full rounded border bg-background px-2 text-sm disabled:opacity-60"
+                                                onChange={(event) => updatePendingField(item, "historyChange", event.target.value)}
+                                                onKeyDown={(event) => { if (event.key === "Escape" && !save.isPending) cancelEdit(item.id); }} />
+                                            <p className={`text-right text-xs ${(item.historyChange ?? "").length > 200 ? "text-red-600" : "text-muted-foreground"}`} aria-label={`History change character count for version ${item.version}`}>{(item.historyChange ?? "").length}/200</p>
+                                            {fieldError(item.historyChange, "History change note", 200) && <p id={`calendar-note-error-${item.id}`} className="text-xs text-red-600">{fieldError(item.historyChange, "History change note", 200)}</p>}
+                                        </div>
+                                    ) : <span className="whitespace-normal">{item.historyChange || "—"}</span>}
+                                    {pending[item.id] && <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">Unsaved</span>}
                                 </TableCell>
                                 <TableCell>{modifiedDate(item.lastModifiedDate)}</TableCell>
                                 <TableCell>{item.lastModifiedBy || "—"}</TableCell>
                                 <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
                                 <TableCell className="text-center">
+                                    <div className="flex items-center justify-center gap-1">
+                                    {canUpdate && (editingIds.includes(item.id) ? (
+                                        <Button type="button" size="sm" variant="outline" disabled={save.isPending} aria-label={`Cancel editing version ${item.version}`} onClick={() => cancelEdit(item.id)}><X className="size-3" /> Cancel</Button>
+                                    ) : (
+                                        <Button type="button" size="sm" variant="outline" disabled={save.isPending} aria-label={`Edit calendar version ${item.version}`} onClick={() => setEditingIds((prev) => [...prev, item.id])}><Pencil className="size-3" /> Edit</Button>
+                                    ))}
                                     <DropdownMenu>
-                                        <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label={`Actions for calendar version ${item.version}`}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
+                                        <DropdownMenuTrigger asChild><Button disabled={save.isPending} size="icon" variant="ghost" aria-label={`Actions for calendar version ${item.version}`}><MoreVertical className="size-4" /></Button></DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-72 p-2 shadow-lg">
                                             <DropdownMenuItem className="gap-3 px-3 py-3" onSelect={() => open(item, "detail")}><Eye /> Detail</DropdownMenuItem>
                                             <DropdownMenuItem className="gap-3 px-3 py-3" onSelect={() => download(item, false)}><Download /> Download</DropdownMenuItem>
                                             <DropdownMenuItem className="gap-3 px-3 py-3" onSelect={() => download(item, true)}><Download /> Download with detailed time</DropdownMenuItem>
                                             <DropdownMenuItem className="gap-3 px-3 py-3" onSelect={() => open(item, "overview")}><AlignLeft /> Overview</DropdownMenuItem>
-                                            <DropdownMenuItem disabled={!canUpdate || save.isPending} className="gap-3 px-3 py-3 text-amber-600 focus:text-amber-700 [&>svg]:text-amber-500" onSelect={() => open(item, "adjust")}><Settings /> Adjust</DropdownMenuItem>
+                                            <DropdownMenuItem disabled={!canUpdate || save.isPending || pendingCount > 0} className="gap-3 px-3 py-3 text-amber-600 focus:text-amber-700 [&>svg]:text-amber-500" onSelect={() => open(item, "adjust")}><Settings /> Adjust</DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -280,7 +314,7 @@ export function ClassCalendarTab({ classItem }: { classItem: ExternalClass }) {
                     </p>
                     <Button type="button" className="min-w-36 bg-blue-800 text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 disabled:opacity-100 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500" disabled={!canSave}
                         aria-describedby="calendar-save-status" aria-busy={save.isPending}
-                        onClick={() => { if (canSave) save.mutate(); }}>
+                        onClick={() => { if (canSave) save.mutate(Object.values(pending).map(({ id, name, historyChange }) => ({ id, name: name.trim(), historyChange: historyChange.trim() }))); }}>
                         {save.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Save className="size-4" aria-hidden />}
                         {save.isPending ? "Saving…" : "Save changes"}
                     </Button>

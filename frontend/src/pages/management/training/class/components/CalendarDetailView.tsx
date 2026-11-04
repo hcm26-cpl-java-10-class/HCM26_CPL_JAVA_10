@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, CalendarDays } from "lucide-react";
+import { ArrowLeft, ChevronDown, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -62,9 +62,20 @@ export function CalendarDetailView({ calendar, classItem, onBack }: {
 
     return (
         <section aria-label="Calendar Detail" className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
-            <header className="border-b px-4 py-4 sm:px-5">
-                <h2 className="text-lg font-semibold">Calendar Detail : {classTitle(classItem)}</h2>
-                <p className="mt-1 break-all text-xs text-muted-foreground">{calendar.name}</p>
+            <header className="space-y-2 border-b px-4 py-4 sm:px-5">
+                <div>
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-800 hover:underline dark:text-blue-300"
+                    >
+                        <ArrowLeft className="size-4" /> Back to Calendar
+                    </button>
+                </div>
+                <div>
+                    <h2 className="text-lg font-semibold">Calendar Detail : {classTitle(classItem)}</h2>
+                    <p className="mt-1 break-all text-xs text-muted-foreground">{calendar.name}</p>
+                </div>
             </header>
             <div className="max-h-[62dvh] min-h-48 space-y-3 overflow-y-auto p-3 sm:p-5">
                 <div className="flex flex-wrap gap-x-12 gap-y-2 pb-2 text-sm">
