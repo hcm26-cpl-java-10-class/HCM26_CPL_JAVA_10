@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react"
-import { ClipboardList, Flag } from "lucide-react";
+
 import {
     Activity,
     AlertTriangle,
@@ -51,10 +51,13 @@ import {
     MessageCircle,
     Mic,
     Minus,
+    Monitor,
     Music,
+    Package,
     Pause,
     Pencil,
     Phone,
+    PieChart,
     Play,
     Plus,
     RefreshCw,
@@ -63,15 +66,17 @@ import {
     Search,
     Server,
     Settings,
-    Share2,
     Shield,
     ShieldAlert,
     ShieldCheck,
+    ShoppingCart,
     Smartphone,
     Star,
     Tag,
+    Tags,
     Terminal,
     Trash2,
+    TrendingDown,
     TrendingUp,
     Unlock,
     Upload,
@@ -86,7 +91,6 @@ import {
 } from "lucide-react"
 
 export const iconMap = {
-    // Navigation
     home: Home,
     dashboard: LayoutDashboard,
     menu: List,
@@ -102,7 +106,6 @@ export const iconMap = {
     filter: Filter,
     "map-pin": MapPin,
 
-    // User / Auth / Security
     users: Users,
     user: User,
     person: User,
@@ -121,7 +124,6 @@ export const iconMap = {
     lock: Lock,
     unlock: Unlock,
 
-    // Common actions
     plus: Plus,
     minus: Minus,
     check: Check,
@@ -138,24 +140,20 @@ export const iconMap = {
     eye: Eye,
     "eye-off": EyeOff,
 
-    // Communication / Link
     bell: Bell,
     mail: Mail,
     message: MessageCircle,
-    flag: Flag,
     phone: Phone,
     globe: Globe,
     link: Link,
     "external-link": ExternalLink,
 
-    // Time / Info
     calendar: Calendar,
     "calendar-days": CalendarDays,
     info: Info,
     help: HelpCircle,
     "alert-triangle": AlertTriangle,
 
-    // Business / Commerce
     building: Building,
     briefcase: Briefcase,
     books: BookOpen,
@@ -164,51 +162,44 @@ export const iconMap = {
     "clipboard-check": ClipboardCheck,
     bookmark: Bookmark,
     tag: Tag,
-    wallet: Wallet,
+    tags: Tags,
+    star: Star,
+    "shopping-cart": ShoppingCart,
     "credit-card": CreditCard,
     "dollar-sign": DollarSign,
+    wallet: Wallet,
+    package: Package,
+    "graduation-cap": GraduationCap,
 
-    // Media
-    image: Image,
-    camera: Camera,
-    video: Video,
-    music: Music,
-    mic: Mic,
-
-    // Tech / Infrastructure
     database: Database,
     server: Server,
     "hard-drive": HardDrive,
     cloud: Cloud,
     "cloud-upload": CloudUpload,
     "cloud-download": CloudDownload,
+    "bar-chart": BarChart3,
+    "pie-chart": PieChart,
+    activity: Activity,
+    "trending-up": TrendingUp,
+    "trending-down": TrendingDown,
+
+    monitor: Monitor,
     laptop: Laptop,
     smartphone: Smartphone,
-
-    // Learning / Education
-    "graduation-cap": GraduationCap,
-
-    // Status / Misc
-    activity: Activity,
-    "bar-chart": BarChart3,
-    "trending-up": TrendingUp,
-    star: Star,
-    share: Share2,
+    image: Image,
+    camera: Camera,
+    video: Video,
     play: Play,
     pause: Pause,
+    music: Music,
+    mic: Mic,
 
-    // Tech / Dev
     settings: Settings,
     code: Code,
     terminal: Terminal,
     bug: Bug,
     rocket: Rocket,
     cpu: Cpu,
-
-    EnrollmentLogs: ClipboardList,
-    "enrollment-logs": ClipboardList,
-    ClipboardList: ClipboardList,
-    "clipboard-list": ClipboardList,
 } satisfies Record<string, LucideIcon>
 
 export type IconKey = keyof typeof iconMap

@@ -9,9 +9,9 @@ export const NotFoundRedirect = () => {
     (state: RootState) => state.auth
   );
 
-  const { isLoading, isFetching, isPlaceholderData } = useActiveModuleGroups(isAuthenticated);
+  const { isLoading } = useActiveModuleGroups(isAuthenticated);
 
-  if (isLoading || (isFetching && isPlaceholderData)) {
+  if (isLoading) {
     return null;
   }
 

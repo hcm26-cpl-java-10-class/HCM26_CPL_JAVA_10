@@ -1,4 +1,3 @@
-
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -7,8 +6,6 @@ import RegisterPage from "@/pages/auth/RegisterPage";
 import NotFoundPage from "@/pages/error/NotFoundPage";
 import { Unauthorized } from "@/pages/error/Unauthorized";
 import { Dashboard } from "@/pages/management/dashboard";
-import CurriculumManagementPage from "@/pages/management/demo/curriculum";
-import RolePermissionMatrixPage from "@/pages/management/rbac/permission/RolePermissionMatrixPage";
 import ExamManagementPage from "@/pages/management/exam";
 import ExamDetailPage from "@/pages/management/exam/ExamDetailPage";
 import ExamTemplatesPage from "@/pages/management/exam/templates";
@@ -30,21 +27,6 @@ import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModule
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 
-import SyllabusesPage from "@/pages/management/demo/syllabus";
-import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
-
-import StudentSyllabusListPage from "@/pages/student/StudentSyllabusListPage";
-import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
-
-import CourseReportPage from "@/pages/management/demo/report";
-import { CourseEnrollmentDetailPage } from "@/pages/management/demo/course/pages/CourseEnrollmentDetailPage";
-import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-questions";
-import LessonReportsPage from "@/pages/management/demo/lesson-reports";
-import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
-import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
-import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage.tsx";
-import DepartmentManagementPage from "@/pages/management/demo/department";
-
 export interface RouteConfig {
   path: string;
   component: ComponentType<any>;
@@ -53,59 +35,13 @@ export interface RouteConfig {
   isModuleDriven?: boolean;
 }
 
-export const ROLE_HOME_PATHS = [
-  "/dashboard",
-  "/student",
-  "/teacher",
-] as const;
-
 export const routes: RouteConfig[] = [
-  // FAMS MODULE GROUP MODULE
-  {
-    path: "/fams/module-group-module",
-    component: ModuleGroupModulePage,
-    isPublic: true,
-  },
-  {
-    path: "/module-group-module",
-    component: ModuleGroupModulePage,
-    isPublic: true,
-  },
+  { path: "/fams/module-group-module", component: ModuleGroupModulePage, isPublic: true },
+  { path: "/module-group-module", component: ModuleGroupModulePage, isPublic: true },
 
-  // ROLE HOME
-  {
-    path: "/dashboard",
-    component: Dashboard,
-  },
-  {
-    path: "/student",
-    component: StudentLandingPage,
-  },
-  {
-    path: "/teacher",
-    component: TeacherLandingPage,
-  },
+  { path: "/dashboard", component: Dashboard, isModuleDriven: true },
 
-  // DASHBOARD
-  {
-    path: "/dashboard",
-    component: Dashboard,
-    isModuleDriven: true,
-  },
-
-  // RBAC
-  {
-    path: "/role-permissions",
-    component: RolePermissionMatrixPage,
-    requiredPermission: "ROLE_UPDATE",
-  },
-
-  // EXAMS
-  {
-    path: "/exams",
-    component: ExamManagementPage,
-    isModuleDriven: true,
-  },
+  { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
 
   {
     path: "/management/exam/templates",
@@ -113,30 +49,13 @@ export const routes: RouteConfig[] = [
     requiredPermission: "EXAM_UPDATE",
   },
 
-  // INVITATIONS
-  {
-    path: "/invitations",
-    component: UnifiedInvitationsPage,
-    requiredPermission: "INVITATION_READ",
-  },
+  { path: "/invitations", component: UnifiedInvitationsPage, requiredPermission: "INVITATION_READ" },
 
   // One page per exam with 5 tabs: Edit, Questions, Grading, Invitations, Statistics.
   { path: "/exams/:examId", component: ExamDetailPage, requiredPermission: "EXAM_UPDATE" },
   { path: "/exams/:examId/questions", component: ExamDetailPage, requiredPermission: "EXAM_UPDATE" },
   { path: "/exams/:examId/grading", component: ExamDetailPage, requiredPermission: "EXAM_UPDATE" },
   { path: "/exams/:examId/invitations", component: ExamDetailPage, requiredPermission: "INVITATION_READ" },
-  {
-    path: "/exams/:examId/invitations",
-    component: InvitationsPage,
-    requiredPermission: "INVITATION_READ",
-  },
-
-  // EXAM GRADING / SIMILARITY / STATISTICS
-  {
-    path: "/exams/:examId/grading",
-    component: EssayAttemptListPage,
-    requiredPermission: "EXAM_UPDATE",
-  },
 
   {
     path: "/exams/:examId/grading/similarity",
@@ -156,39 +75,27 @@ export const routes: RouteConfig[] = [
     requiredPermission: "EXAM_UPDATE",
   },
 
-  {
-    path: "/exams/:examId/result-statistics",
-    component: ExamDetailPage,
-    requiredPermission: "EXAM_UPDATE",
-  },
+  { path: "/anonymous-exam", component: AnonymousAccessPage, isPublic: true },
+  { path: "/anonymous-exam/take", component: AnonymousExamTakingPage, isPublic: true },
 
-  // SCORE APPEALS
-  {
-    path: "/exams/appeals",
-    component: ScoreAppealsPage,
-    requiredPermission: "SCORE_APPEAL_READ",
-  },
-
-  // ANONYMOUS EXAM ACCESS
-  {
-    path: "/anonymous-exam",
-    component: AnonymousAccessPage,
-    isPublic: true,
-  },
-  {
-    path: "/anonymous-exam/take",
-    component: AnonymousExamTakingPage,
-    isPublic: true,
-  },
-
-  // STUDENT INVITATIONS
   {
     path: "/student/invitations",
     component: StudentInvitationsRedirect,
     requiredPermission: "INVITATION_READ",
   },
 
-  // TOPIC MARKS
+  {
+    path: "/exams/:examId/result-statistics",
+    component: ExamDetailPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+
+  {
+    path: "/exams/appeals",
+    component: ScoreAppealsPage,
+    requiredPermission: "SCORE_APPEAL_READ",
+  },
+
   {
     path: "/topic-marks/gradebook-demo",
     component: TopicMarkGradebookDemoPage,
@@ -196,53 +103,8 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
 
-  // M3 ADMIN / TEACHER
-  {
-    path: "/syllabuses",
-    component: SyllabusesPage,
-    requiredPermission: "SYLLABUS_READ",
-    isModuleDriven: true,
-  },
-  {
-    path: "/syllabuses/:id",
-    component: SyllabusDetailPage,
-    requiredPermission: "SYLLABUS_READ",
-    isModuleDriven: false,
-  },
+  { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
 
-  // M3 STUDENT VIEW
-  {
-    path: "/student/syllabuses",
-    component: StudentSyllabusListPage,
-    requiredPermission: "COURSE_READ",
-    isModuleDriven: false,
-  },
-  {
-    path: "/student/syllabuses/:id",
-    component: StudentSyllabusPage,
-    requiredPermission: "COURSE_READ",
-    isModuleDriven: false,
-  },
-
-  // CERTIFICATES
-  {
-    path: "/my-certificates/:verificationToken",
-    component: CertificateDetailPage,
-    isModuleDriven: false,
-  },
-  {
-    path: "/verify-certificate/:verificationToken",
-    component: VerifyCertificatePage,
-    isPublic: true,
-    isModuleDriven: false,
-  },
-
-  // STUDENT
-  {
-    path: "/student",
-    component: StudentLandingPage,
-    requiredPermission: "BOOK_READ",
-  },
   {
     path: "/student/exams",
     component: StudentExamList,
@@ -262,7 +124,6 @@ export const routes: RouteConfig[] = [
     requiredPermission: "EXAM_TAKE",
   },
 
-  // MY SCORES / MY APPEALS
   {
     path: "/my-scores",
     component: MyScoresPage,
@@ -276,103 +137,15 @@ export const routes: RouteConfig[] = [
     requiredPermission: "SCORE_APPEAL_VIEW_OWN",
   },
 
-  // TEACHER
-  {
-    path: "/teacher",
-    component: TeacherLandingPage,
-    requiredPermission: "BOOK_UPDATE",
-  },
+  { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
 
-  // DYNAMIC ENTITY ROUTES
   ...buildEntityRoutes(),
 
-  // AUTHENTICATION
-  {
-    path: "/not-found-page",
-    component: NotFoundPage,
-    isPublic: true,
-  },
-  {
-    path: "/login",
-    component: Login,
-    isPublic: true,
-  },
-  {
-    path: "/logout",
-    component: Logout,
-    isPublic: true,
-  },
-  {
-    path: "/register",
-    component: RegisterPage,
-    isPublic: true,
-  },
-  {
-    path: "/forgot-password",
-    component: ForgotPasswordPage,
-    isPublic: true,
-  },
-  {
-    path: "/oauth2/redirect",
-    component: OAuth2RedirectHandler,
-    isPublic: true,
-  },
-  {
-    path: "/unauthorized",
-    component: Unauthorized,
-    isPublic: true,
-  },
-
-  // CURRICULUM
-  {
-    path: "/curriculum",
-    component: CurriculumManagementPage,
-    requiredPermission: "SECTION_READ",
-    isModuleDriven: true,
-  },
-
-  // COURSE REPORT
-  {
-    path: "/course-enrollments",
-    component: CourseReportPage,
-    requiredPermission: "COURSE_REPORT_READ",
-    isModuleDriven: true,
-  },
-  {
-    path: "/course-enrollments/:id",
-    component: CourseEnrollmentDetailPage,
-    requiredPermission: "COURSE_REPORT_READ",
-    isModuleDriven: false,
-  },
-
-  // Q&A
-  {
-    path: "/unanswered-questions",
-    component: UnansweredQuestionsPage,
-    requiredPermission: "LESSON_ANSWER_CREATE",
-    isModuleDriven: true,
-  },
-
-  // LESSON REPORTS
-  {
-    path: "/lesson-reports",
-    component: LessonReportsPage,
-    requiredPermission: "LESSON_REPORT_READ",
-    isModuleDriven: true,
-  },
-
-  // ENROLLMENT LOGS
-  {
-    path: "/enrollment-logs",
-    component: EnrollmentLogPage,
-    isModuleDriven: true,
-  },
-
-  // MANAGE STUDENT
-  {
-    path: "/manage-students",
-    component: DepartmentManagementPage,
-    requiredPermission: "DEPARTMENT_READ",
-    isModuleDriven: true,
-  },
+  { path: "/not-found-page", component: NotFoundPage, isPublic: true },
+  { path: "/login", component: Login, isPublic: true },
+  { path: "/logout", component: Logout, isPublic: true },
+  { path: "/register", component: RegisterPage, isPublic: true },
+  { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
+  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
+  { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];

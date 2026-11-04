@@ -51,18 +51,10 @@ public class UserDTO extends BaseDTO {
 
     String lastName;
 
-    Long departmentId;
-
-    String departmentName;
-
-    Set<Long> departmentIds;
-
-    Set<String> departmentNames;
-
-    boolean clearDepartment;
-
     @NotEmpty(groups = OnCreate.class, message = "At least one role is required")
     Set<Long> roleIds;
+
+    Set<Long> departmentIds;
 
     @JsonProperty(access = READ_ONLY)
     String status;
