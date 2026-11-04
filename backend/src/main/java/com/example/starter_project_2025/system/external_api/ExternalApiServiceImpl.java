@@ -3,17 +3,20 @@ package com.example.starter_project_2025.system.external_api;
 import com.example.starter_project_2025.system.external_api.dto.ExternalClassDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalRoomDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerDTO;
+import com.example.starter_project_2025.system.external_api.dto.ExternalClassRequest;
 import com.example.starter_project_2025.system.external_api.exception.ExternalApiException;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -21,6 +24,7 @@ import java.util.List;
 
 @Slf4j
 @Service
+@Profile("!local")
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ExternalApiServiceImpl implements ExternalApiService {
 
@@ -52,7 +56,8 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         }
 
         String url = uriBuilder.toUriString();
-        return executeGetList(url, new ParameterizedTypeReference<>() {}, "classes");
+        return executeGetList(url, new ParameterizedTypeReference<>() {
+        }, "classes");
     }
 
     @Override
@@ -69,6 +74,33 @@ public class ExternalApiServiceImpl implements ExternalApiService {
     }
 
     @Override
+    public ExternalClassDTO createClass(ExternalClassRequest request) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl).path("/api/classes").toUriString();
+        return executeClassWrite(url, HttpMethod.POST, request, "class");
+    }
+
+    @Override
+    public ExternalClassDTO updateClass(Long id, ExternalClassRequest request) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl).path("/api/classes/{id}")
+                .buildAndExpand(id).toUriString();
+        return executeClassWrite(url, HttpMethod.PUT, request, "class (id=" + id + ")");
+    }
+
+    @Override
+    public void deleteClass(Long id) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl).path("/api/classes/{id}")
+                .buildAndExpand(id).toUriString();
+        try {
+            restTemplate.exchange(url, HttpMethod.DELETE, new HttpEntity<Void>(buildHeaders()), Void.class);
+        } catch (RestClientResponseException exception) {
+            throw new ExternalApiException("External API error deleting class (id=" + id + ")",
+                    exception.getStatusCode().value(), exception.getResponseBodyAsString());
+        } catch (ResourceAccessException exception) {
+            throw new ExternalApiException("External API is unreachable while deleting class (id=" + id + ")", exception);
+        }
+    }
+
+    @Override
     public List<ExternalTrainerDTO> fetchTrainers(String status) {
         log.info("Fetching trainers from external API with status={}", status);
 
@@ -81,7 +113,8 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         }
 
         String url = uriBuilder.toUriString();
-        return executeGetList(url, new ParameterizedTypeReference<>() {}, "trainers");
+        return executeGetList(url, new ParameterizedTypeReference<>() {
+        }, "trainers");
     }
 
     @Override
@@ -93,7 +126,8 @@ public class ExternalApiServiceImpl implements ExternalApiService {
                 .path("/api/rooms")
                 .toUriString();
 
-        return executeGetList(url, new ParameterizedTypeReference<>() {}, "rooms");
+        return executeGetList(url, new ParameterizedTypeReference<>() {
+        }, "rooms");
     }
 
     // ======================== PRIVATE HELPERS ========================
@@ -111,6 +145,23 @@ public class ExternalApiServiceImpl implements ExternalApiService {
         }
 
         return headers;
+    }
+
+    private ExternalClassDTO executeClassWrite(String url, HttpMethod method, ExternalClassRequest request,
+                                                String resourceName) {
+        try {
+            ResponseEntity<ExternalClassDTO> response = restTemplate.exchange(url, method,
+                    new HttpEntity<>(request, buildHeaders()), ExternalClassDTO.class);
+            if (response.getBody() == null) {
+                throw new ExternalApiException("External API returned empty body for " + resourceName);
+            }
+            return response.getBody();
+        } catch (RestClientResponseException exception) {
+            throw new ExternalApiException("External API error saving " + resourceName,
+                    exception.getStatusCode().value(), exception.getResponseBodyAsString());
+        } catch (ResourceAccessException exception) {
+            throw new ExternalApiException("External API is unreachable while saving " + resourceName, exception);
+        }
     }
 
     /**
@@ -159,8 +210,8 @@ public class ExternalApiServiceImpl implements ExternalApiService {
      * Execute a GET request that returns a list of objects.
      */
     private <T> List<T> executeGetList(String url,
-                                       ParameterizedTypeReference<List<T>> typeRef,
-                                       String resourceName) {
+            ParameterizedTypeReference<List<T>> typeRef,
+            String resourceName) {
         try {
             HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
 
