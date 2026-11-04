@@ -14,9 +14,8 @@ import axios from "axios";
 import { CheckCircle2, Loader2, Play, Plus, Trash2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
-export const DEFAULT_TEST_COUNT = 5;
-export const DEFAULT_VISIBLE_TESTS = 2;
-export const MIN_TESTS = 1;
+export const VISIBLE_TESTS = 2;
+export const HIDDEN_TESTS = 8;
 export const DEFAULT_TIME_LIMIT = 5;
 export const MIN_TIME_LIMIT = 1;
 export const MAX_TIME_LIMIT = 10;
@@ -43,51 +42,11 @@ const normalizeValue = (type: string, raw: string) => (keepsSpaces(type) ? raw ?
 /** Return types whose expected value may legitimately be empty (empty string / empty array). */
 const MAY_BE_EMPTY = new Set(["int[]", "boolean[]", "String", "String[]"]);
 
-export interface DetectedDeclaration {
-    fn: string;
-    ret: string;
-    params: { name: string; type: string }[];
-}
-
-/**
- * Reads the function declaration from a reference solution: the first `static <type> name(<params>)`
- * whose types are all supported. If a method with `preferredName` exists, that one wins.
- */
-export function detectDeclaration(code: string, preferredName?: string): DetectedDeclaration | null {
-    const clean = code.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
-    const re = /\bstatic\s+(?:final\s+)?([A-Za-z]+(?:\s*\[\s*\])?)\s+([A-Za-z_]\w*)\s*\(([^)]*)\)/g;
-    const supported = (t: string) => (CODE_TYPES as readonly string[]).includes(t);
-    const found: DetectedDeclaration[] = [];
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(clean))) {
-        const ret = m[1].replace(/\s+/g, "");
-        const fn = m[2];
-        if (!supported(ret) || !isIdent(fn)) continue;
-        const raw = m[3].trim();
-        const params: DetectedDeclaration["params"] = [];
-        let ok = raw === "" || raw.split(",").length <= MAX_PARAMS;
-        if (raw !== "" && ok) {
-            for (const part of raw.split(",")) {
-                const tokens = part.replace(/\bfinal\b/g, " ").replace(/\s*\[\s*\]/g, "[]").trim().split(/\s+/);
-                const type = tokens.slice(0, -1).join("");
-                const name = tokens[tokens.length - 1];
-                if (tokens.length < 2 || !supported(type) || !isIdent(name)) {
-                    ok = false;
-                    break;
-                }
-                params.push({ type, name });
-            }
-        }
-        if (ok) found.push({ fn, ret, params });
-    }
-    return found.find((d) => d.fn === preferredName) ?? found[0] ?? null;
-}
-
 export function emptyTests(paramCount: number): CodeTestCase[] {
-    return Array.from({ length: DEFAULT_TEST_COUNT }, (_, i) => ({
+    return Array.from({ length: VISIBLE_TESTS + HIDDEN_TESTS }, (_, i) => ({
         inputs: Array.from({ length: paramCount }, () => ""),
         expected: "",
-        visible: i < DEFAULT_VISIBLE_TESTS,
+        visible: i < VISIBLE_TESTS,
     }));
 }
 
@@ -113,7 +72,6 @@ export function normalizeSpecForSave(spec: CodeSpec): CodeSpec {
         timeLimitSeconds: spec.timeLimitSeconds ?? DEFAULT_TIME_LIMIT,
         customMain: !!spec.customMain,
         mainCode: spec.customMain ? spec.mainCode ?? "" : null,
-        referenceCode: spec.referenceCode?.trim() ? spec.referenceCode : null,
         tests: spec.tests.map((t) => ({
             inputs: params.map((p, k) => normalizeValue(p.type, t.inputs[k] ?? "")),
             expected: normalizeValue(spec.returnType, t.expected),
@@ -194,7 +152,6 @@ export function codeSpecIssues(spec: CodeSpec | null | undefined): CodeSpecIssue
     });
     if (issues.some((x) => x.field === "fn" || x.field === "ret" || x.field.startsWith("param"))) return issues;
 
-    if (spec.tests.length < MIN_TESTS) issues.push({ message: "Add at least one test case.", field: "tests" });
     spec.tests.forEach((t, i) => {
         const label = `Test ${i + 1} (${t.visible ? "visible" : "hidden"})`;
         spec.params.forEach((p, k) => {
@@ -235,76 +192,13 @@ const STATUS_LABEL: Record<string, string> = {
     SKIPPED: "Skipped (fix the inputs first)",
 };
 
-/** Small beginner-style example solutions, keyed by "<return type>|<type of the first parameter>". */
-const EXAMPLE_BODIES: Record<string, (x: string) => string> = {
-    "boolean|int": (n) =>
-        `        // Prime check: true when ${n} has no divisor from 2 up to its square root.\n` +
-        `        if (${n} < 2) return false;\n` +
-        `        for (int i = 2; i * i <= ${n}; i++) {\n` +
-        `            if (${n} % i == 0) return false;\n` +
-        `        }\n` +
-        `        return true;`,
-    "boolean|String": (s) =>
-        `        // Palindrome check.\n` +
-        `        return new StringBuilder(${s}).reverse().toString().equals(${s});`,
-    "int|int": (n) => `        // Square of the number.\n        return ${n} * ${n};`,
-    "int|int[]": (a) =>
-        `        // Sum of all elements.\n` +
-        `        int sum = 0;\n` +
-        `        for (int v : ${a}) sum += v;\n` +
-        `        return sum;`,
-    "int|String": (s) => `        // Length of the text.\n        return ${s}.length();`,
-    "long|int": (n) =>
-        `        // Factorial of the number.\n` +
-        `        long result = 1;\n` +
-        `        for (int i = 2; i <= ${n}; i++) result *= i;\n` +
-        `        return result;`,
-    "long|int[]": (a) =>
-        `        // Sum of all elements (as long).\n` +
-        `        long sum = 0;\n` +
-        `        for (int v : ${a}) sum += v;\n` +
-        `        return sum;`,
-    "double|int[]": (a) =>
-        `        // Average of the elements (0 for an empty array).\n` +
-        `        if (${a}.length == 0) return 0;\n` +
-        `        double sum = 0;\n` +
-        `        for (int v : ${a}) sum += v;\n` +
-        `        return sum / ${a}.length;`,
-    "double|int": (n) => `        // Half of the number.\n        return ${n} / 2.0;`,
-    "char|String": (s) =>
-        `        // First character (a space for an empty text).\n` +
-        `        return ${s}.isEmpty() ? ' ' : ${s}.charAt(0);`,
-    "String|String": (s) =>
-        `        // Reverse the text.\n` +
-        `        return new StringBuilder(${s}).reverse().toString();`,
-    "String|int": (n) => `        // The number as text.\n        return String.valueOf(${n});`,
-    "int[]|int[]": (a) =>
-        `        // Sort ascending.\n` +
-        `        int[] result = ${a}.clone();\n` +
-        `        Arrays.sort(result);\n` +
-        `        return result;`,
-    "boolean[]|int[]": (a) =>
-        `        // true for every even element.\n` +
-        `        boolean[] result = new boolean[${a}.length];\n` +
-        `        for (int i = 0; i < ${a}.length; i++) result[i] = ${a}[i] % 2 == 0;\n` +
-        `        return result;`,
-    "String[]|String": (s) =>
-        `        // Split the text into words.\n` +
-        `        return ${s}.trim().isEmpty() ? new String[0] : ${s}.trim().split("\\\\s+");`,
-};
-
 function starterTemplate(spec: CodeSpec): string {
     const dflt: Record<string, string> = {
         int: "0", long: "0L", double: "0.0", boolean: "false", char: "' '", String: '""',
         "int[]": "new int[0]", "boolean[]": "new boolean[0]", "String[]": "new String[0]",
     };
     const params = spec.params.map((p) => `${p.type} ${p.name}`).join(", ");
-    const first = spec.params[0];
-    const example = first ? EXAMPLE_BODIES[`${spec.returnType}|${first.type}`] : undefined;
-    const body = example
-        ? example(first.name)
-        : `        // TODO: write your solution here.\n        return ${dflt[spec.returnType] ?? "null"};`;
-    return `class Solution {\n    public static ${spec.returnType} ${spec.functionName || "solve"}(${params}) {\n${body}\n    }\n}\n`;
+    return `class Solution {\n    public static ${spec.returnType} ${spec.functionName || "solve"}(${params}) {\n        return ${dflt[spec.returnType] ?? "null"};\n    }\n}\n`;
 }
 
 const requestError = (error: unknown): string => {
@@ -322,15 +216,9 @@ interface Props {
     disabled?: boolean;
     /** Show the list of problems and highlight invalid cells (turn on after the first failed save). */
     showErrors?: boolean;
-    /**
-     * Gives the parent a function to call when Save is pressed. It compares the declaration in the form with the
-     * reference solution and the custom main and returns the problems (the parent blocks saving; nothing is changed,
-     * main is never reset).
-     */
-    onRegisterSaveCheck?: (check: () => string[]) => void;
 }
 
-export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegisterSaveCheck }: Props) {
+export function CodeSpecEditor({ value, onChange, disabled, showErrors }: Props) {
     const declSig = JSON.stringify([
         value.functionName.trim(),
         value.returnType,
@@ -340,11 +228,7 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
     const [mainError, setMainError] = useState<string | null>(null);
     /** Declaration the custom main was written for (to warn when it changes afterwards). */
     const [mainBase, setMainBase] = useState<string | null>(() => (value.customMain ? declSig : null));
-    // The teacher's demo solution is saved with the question, so it lives in the spec (not in local state).
-    const refCode = value.referenceCode ?? "";
-    const setRefCode = (next: string) => onChange({ ...value, referenceCode: next });
-    const [resetting, setResetting] = useState(false);
-    const [resetNote, setResetNote] = useState<string | null>(null);
+    const [refCode, setRefCode] = useState("");
     const [running, setRunning] = useState(false);
     const [refError, setRefError] = useState<string | null>(null);
     const [result, setResult] = useState<CodeVerifyResponse | null>(null);
@@ -353,23 +237,6 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
     const issues = codeSpecIssues(value);
     const bad = new Set(showErrors ? issues.map((i) => i.field) : []);
     const invalid = (field: string) => (bad.has(field) ? "border-destructive focus-visible:ring-destructive" : "");
-
-    // Tests with exactly the same inputs: their input cells get a red border (visual hint only, nothing blocks saving).
-    const duplicateRows = new Set<number>();
-    if (value.params.length > 0) {
-        const seen = new Map<string, number>();
-        value.tests.forEach((t, i) => {
-            const raw = value.params.map((_, k) => t.inputs[k] ?? "");
-            if (raw.every((v) => v === "")) return; // rows that are still blank
-            const key = JSON.stringify(value.params.map((p, k) => normalizeValue(p.type, raw[k])));
-            const first = seen.get(key);
-            if (first === undefined) seen.set(key, i);
-            else {
-                duplicateRows.add(first);
-                duplicateRows.add(i);
-            }
-        });
-    }
 
     const setParams = (params: CodeSpec["params"]) =>
         onChange({
@@ -385,16 +252,6 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
             ...value,
             tests: value.tests.map((t, i) => (i === index ? { ...t, ...patch } : t)),
         });
-
-    const addTest = () =>
-        onChange({
-            ...value,
-            tests: [...value.tests, { inputs: value.params.map(() => ""), expected: "", visible: false }],
-        });
-    const removeTest = (index: number) => {
-        if (value.tests.length <= MIN_TESTS) return;
-        onChange({ ...value, tests: value.tests.filter((_, i) => i !== index) });
-    };
 
     const signature = `public static ${value.returnType} ${value.functionName || "..."}(${value.params
         .map((p) => `${p.type} ${p.name}`)
@@ -439,90 +296,12 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
         onChange({ ...value, customMain: false, mainCode: null });
         setMainBase(null);
     };
-    const declSigOf = (spec: CodeSpec) =>
-        JSON.stringify([spec.functionName.trim(), spec.returnType, spec.params.map((p) => [p.name.trim(), p.type])]);
-
-    /**
-     * "Reset to generated": if a reference solution is pasted below, first read the function declaration
-     * from it (name, return type, parameters), then rebuild main for that declaration.
-     */
-    const resetMain = async () => {
-        if (resetting) return;
-        setResetNote(null);
-        let next = value;
-        if (refCode.trim() !== "") {
-            const found = detectDeclaration(refCode, value.functionName);
-            if (!found) {
-                setResetNote(
-                    "No function with supported types found in the reference solution, so the declaration was left unchanged.",
-                );
-            } else {
-                next = {
-                    ...value,
-                    functionName: found.fn,
-                    returnType: found.ret,
-                    params: found.params,
-                    tests: value.tests.map((t) => ({ ...t, inputs: found.params.map((_, i) => t.inputs[i] ?? "") })),
-                };
-                setResetNote(
-                    `Declaration read from the reference solution: public static ${found.ret} ${found.fn}(${found.params
-                        .map((p) => `${p.type} ${p.name}`)
-                        .join(", ")})`,
-                );
-            }
-        }
-        if (!next.customMain) {
-            onChange(next);
-            return;
-        }
-        setResetting(true);
-        try {
-            const main = await previewMain(normalizeSpecForSave(next));
-            onChange({ ...next, mainCode: main });
-            setMainBase(declSigOf(next));
-        } catch (error) {
-            onChange(next);
-            setResetNote(requestError(error));
-        } finally {
-            setResetting(false);
-        }
+    const resetMain = () => {
+        if (!generatedMain) return;
+        onChange({ ...value, mainCode: generatedMain });
+        setMainBase(declSig);
     };
     const mainOutdated = !!value.customMain && mainBase != null && mainBase !== declSig;
-
-    const [saveNotes, setSaveNotes] = useState<string[]>([]);
-    useEffect(() => setSaveNotes([]), [declSig, refCode, value.mainCode, value.customMain]);
-
-    /** Warnings shown when saving. Read-only: it never edits the declaration, tests or main. */
-    const saveWarnings = (): string[] => {
-        const notes: string[] = [];
-        const fn = value.functionName.trim();
-        const sigOf = (ret: string, name: string, params: { type: string; name: string }[]) =>
-            `public static ${ret} ${name}(${params.map((p) => `${p.type} ${p.name}`).join(", ")})`;
-        if (refCode.trim() !== "") {
-            const found = detectDeclaration(refCode, fn);
-            if (!found) {
-                notes.push("The reference solution has no function with supported types, so its declaration could not be compared with the form.");
-            } else {
-                const formSig = sigOf(value.returnType, fn, value.params.map((p) => ({ type: p.type, name: p.name.trim() })));
-                const codeSig = sigOf(found.ret, found.fn, found.params);
-                if (formSig !== codeSig) {
-                    notes.push(`The declaration in the form does not match the reference solution. Form: ${formSig}. Reference solution: ${codeSig}.`);
-                }
-            }
-        }
-        if (value.customMain) {
-            if (mainOutdated) {
-                notes.push("The function declaration changed after your custom main was written. Check that main still matches it. Main was not changed.");
-            } else if (fn && !new RegExp(`\\bSolution\\s*\\.\\s*${fn}\\s*\\(`).test(value.mainCode ?? "")) {
-                notes.push(`Your custom main does not call Solution.${fn}(...). Main was not changed.`);
-            }
-        }
-        setSaveNotes(notes);
-        return notes;
-    };
-    useEffect(() => {
-        onRegisterSaveCheck?.(saveWarnings);
-    });
 
     const stale = result != null && ranWith !== JSON.stringify(value);
     const fillable = result ? result.tests.filter((t) => t.status === "WRONG_ANSWER" && t.actual != null).map((t) => t.index) : [];
@@ -565,9 +344,8 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
             <div className="grid gap-1">
                 <Label>Function declaration (Coderbyte style, Java only)</Label>
                 <p className="text-xs text-muted-foreground">
-                    The system generates the starter code for students. Add as many test cases as you need (at least {MIN_TESTS});
-                    tick the ones students may see during the assessment, the others are used for grading only. Every test is worth the
-                    same share of the question&apos;s score.
+                    The system generates the starter code for students. Exactly {VISIBLE_TESTS} visible and {HIDDEN_TESTS} hidden
+                    tests are required; every passed test is worth 10% of the question&apos;s score.
                 </p>
             </div>
 
@@ -693,6 +471,107 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
                 <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{signature}</code>
             </div>
 
+            <div className="grid gap-2">
+                <Label>Test cases</Label>
+                <p className="text-xs text-muted-foreground">
+                    Values are trimmed, except for String and char which keep their spaces. Array items must not contain commas.
+                </p>
+                <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full min-w-[640px] text-left text-sm">
+                        <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
+                            <tr>
+                                <th className="w-10 px-2 py-2">#</th>
+                                <th className="w-24 px-2 py-2">Shown to</th>
+                                {value.params.map((p, k) => (
+                                    <th key={k} className="px-2 py-2" title={hint(p.type)}>
+                                        {p.name || `p${k + 1}`} <span className="font-normal">({p.type})</span>
+                                    </th>
+                                ))}
+                                <th className="px-2 py-2" title={hint(value.returnType)}>
+                                    Expected <span className="font-normal">({value.returnType})</span>
+                                </th>
+                                {result && <th className="px-2 py-2">Reference output</th>}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {value.tests.map((t, i) => {
+                                const r = result?.tests[i];
+                                return (
+                                    <tr key={i} className={`border-b last:border-b-0 ${t.visible ? "bg-blue-50/40 dark:bg-blue-950/20" : ""}`}>
+                                        <td className="px-2 py-1.5 text-xs font-medium">{i + 1}</td>
+                                        <td className="px-2 py-1.5 text-xs">{t.visible ? "Students" : "Grading only"}</td>
+                                        {value.params.map((p, k) => (
+                                            <td key={k} className="px-2 py-1.5">
+                                                <Input
+                                                    aria-label={`Test ${i + 1} ${p.name}`}
+                                                    aria-invalid={bad.has(`in-${i}-${k}`)}
+                                                    className={`h-8 min-w-[7rem] font-mono text-xs ${invalid(`in-${i}-${k}`)}`}
+                                                    value={t.inputs[k] ?? ""}
+                                                    disabled={disabled}
+                                                    onChange={(e) =>
+                                                        setTest(i, {
+                                                            inputs: value.params.map((_, j) =>
+                                                                j === k ? e.target.value : t.inputs[j] ?? "",
+                                                            ),
+                                                        })
+                                                    }
+                                                />
+                                            </td>
+                                        ))}
+                                        <td className="px-2 py-1.5">
+                                            <Input
+                                                aria-label={`Test ${i + 1} expected result`}
+                                                aria-invalid={bad.has(`exp-${i}`)}
+                                                className={`h-8 min-w-[7rem] font-mono text-xs ${invalid(`exp-${i}`)}`}
+                                                value={t.expected}
+                                                disabled={disabled}
+                                                onChange={(e) => setTest(i, { expected: e.target.value })}
+                                            />
+                                        </td>
+                                        {result && (
+                                            <td className="px-2 py-1.5">
+                                                {r ? (
+                                                    <div className="flex items-center gap-2">
+                                                        {r.status === "OK" ? (
+                                                            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                                                        ) : (
+                                                            <XCircle className="h-4 w-4 shrink-0 text-red-600" />
+                                                        )}
+                                                        <span
+                                                            className="max-w-[10rem] truncate font-mono text-xs"
+                                                            title={r.error ?? r.actual ?? ""}
+                                                        >
+                                                            {r.status === "OK" || r.status === "WRONG_ANSWER"
+                                                                ? r.actual === ""
+                                                                    ? "(empty)"
+                                                                    : r.actual
+                                                                : STATUS_LABEL[r.status] ?? r.status}
+                                                        </span>
+                                                        {r.status === "WRONG_ANSWER" && !disabled && (
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-6 px-2 text-xs"
+                                                                onClick={() => fillExpected([i])}
+                                                            >
+                                                                Use
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">-</span>
+                                                )}
+                                            </td>
+                                        )}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div className="grid gap-3 rounded-md border p-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="grid gap-1">
@@ -728,36 +607,15 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
                     value={value.customMain ? value.mainCode ?? "" : generatedMain ?? ""}
                     onChange={(e) => onChange({ ...value, mainCode: e.target.value })}
                 />
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={disabled || resetting || (!value.customMain && refCode.trim() === "")}
-                        onClick={() => void resetMain()}
-                    >
-                        {resetting && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                        Reset to generated
-                    </Button>
-                    <span className="text-muted-foreground">
-                        {refCode.trim() !== ""
-                            ? "Reads the function declaration from the reference solution below, then rebuilds main."
-                            : "Paste a reference solution below to read the declaration from it automatically."}
-                        {value.customMain &&
-                            " Keep reading one parameter per line from stdin and print only the result; it is still compared with the expected value by the return type."}
-                    </span>
-                </div>
-                {resetNote && <p className="text-xs text-muted-foreground">{resetNote}</p>}
-                {saveNotes.length > 0 && (
-                    <div id="code-save-notes" role="alert" className="grid gap-1 rounded-md border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                        <p className="font-medium">Not saved. Please fix this first:</p>
-                        {saveNotes.map((n) => (
-                            <p key={n}>{n}</p>
-                        ))}
-                        <p className="text-muted-foreground">
-                            Edit the form or the reference solution so they match, or press &quot;Reset to generated&quot; to copy the
-                            declaration from the reference solution. Your main is never changed by saving.
-                        </p>
+                {value.customMain && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <Button type="button" size="sm" variant="outline" disabled={disabled || !generatedMain} onClick={resetMain}>
+                            Reset to generated
+                        </Button>
+                        <span className="text-muted-foreground">
+                            Keep reading one parameter per line from stdin and print only the result. The result is still compared
+                            with the expected value by the return type.
+                        </span>
                     </div>
                 )}
                 {mainOutdated && (
@@ -770,15 +628,15 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
             <div className="grid gap-3 rounded-md border border-dashed p-3">
                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
                     Check the tests with a reference solution
-                    <span className="text-xs font-normal text-muted-foreground">(saved with the question, students never see it)</span>
+                    <span className="text-xs font-normal text-muted-foreground">(not saved, students never see it)</span>
                 </div>
                 {(
                     <div className="grid gap-3">
                         <p className="text-xs text-muted-foreground">
                             Paste your own Java solution (class <code>Solution</code> with the function above). It runs on all{" "}
                             {value.tests.length} tests, hidden ones included. Tests whose output differs from the expected result
-                            are marked, and you can copy the reference output into the expected column. The code is saved with the question
-                            for teachers only.
+                            are marked, and you can copy the reference output into the expected column. The code is kept only while this
+                            form is open.
                         </p>
                         <textarea
                             aria-label="Reference solution"
@@ -844,139 +702,6 @@ export function CodeSpecEditor({ value, onChange, disabled, showErrors, onRegist
                         )}
                     </div>
                 )}
-            </div>
-            <div className="grid gap-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <Label>
-                        Test cases ({value.tests.length}) - {value.tests.filter((t) => t.visible).length} shown to students
-                    </Label>
-                    <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={addTest}>
-                        <Plus className="mr-1 h-4 w-4" /> Add test case
-                    </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                    Tick &quot;Show to students&quot; for the tests students can see while taking the exam. Values are trimmed, except for String and char which keep their spaces. Array items must not contain commas.
-                </p>
-                <div className="overflow-x-auto rounded-md border">
-                    <table className="w-full min-w-[640px] text-left text-sm">
-                        <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
-                            <tr>
-                                <th className="w-10 px-2 py-2">#</th>
-                                <th className="w-28 px-2 py-2">Show to students</th>
-                                {value.params.map((p, k) => (
-                                    <th key={k} className="px-2 py-2" title={hint(p.type)}>
-                                        {p.name || `p${k + 1}`} <span className="font-normal">({p.type})</span>
-                                    </th>
-                                ))}
-                                <th className="px-2 py-2" title={hint(value.returnType)}>
-                                    Expected <span className="font-normal">({value.returnType})</span>
-                                </th>
-                                {result && <th className="px-2 py-2">Reference output</th>}
-                                <th className="w-10 px-2 py-2"><span className="sr-only">Remove</span></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {value.tests.map((t, i) => {
-                                const r = result?.tests[i];
-                                return (
-                                    <tr key={i} className={`border-b last:border-b-0 ${t.visible ? "bg-blue-50/40 dark:bg-blue-950/20" : ""}`}>
-                                        <td className="px-2 py-1.5 text-xs font-medium">{i + 1}</td>
-                                        <td className="px-2 py-1.5">
-                                            <label className="flex items-center gap-2 text-xs">
-                                                <input
-                                                    type="checkbox"
-                                                    aria-label={`Show test ${i + 1} to students`}
-                                                    checked={t.visible}
-                                                    disabled={disabled}
-                                                    onChange={(e) => setTest(i, { visible: e.target.checked })}
-                                                />
-                                                {t.visible ? "Shown" : "Hidden"}
-                                            </label>
-                                        </td>
-                                        {value.params.map((p, k) => (
-                                            <td key={k} className="px-2 py-1.5">
-                                                <Input
-                                                    aria-label={`Test ${i + 1} ${p.name}`}
-                                                    aria-invalid={bad.has(`in-${i}-${k}`) || duplicateRows.has(i)}
-                                                    className={`h-8 min-w-[7rem] font-mono text-xs ${invalid(`in-${i}-${k}`)} ${
-                                                        duplicateRows.has(i) ? "border-destructive focus-visible:ring-destructive" : ""
-                                                    }`}
-                                                    value={t.inputs[k] ?? ""}
-                                                    disabled={disabled}
-                                                    onChange={(e) =>
-                                                        setTest(i, {
-                                                            inputs: value.params.map((_, j) =>
-                                                                j === k ? e.target.value : t.inputs[j] ?? "",
-                                                            ),
-                                                        })
-                                                    }
-                                                />
-                                            </td>
-                                        ))}
-                                        <td className="px-2 py-1.5">
-                                            <Input
-                                                aria-label={`Test ${i + 1} expected result`}
-                                                aria-invalid={bad.has(`exp-${i}`)}
-                                                className={`h-8 min-w-[7rem] font-mono text-xs ${invalid(`exp-${i}`)}`}
-                                                value={t.expected}
-                                                disabled={disabled}
-                                                onChange={(e) => setTest(i, { expected: e.target.value })}
-                                            />
-                                        </td>
-                                        {result && (
-                                            <td className="px-2 py-1.5">
-                                                {r ? (
-                                                    <div className="flex items-center gap-2">
-                                                        {r.status === "OK" ? (
-                                                            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
-                                                        ) : (
-                                                            <XCircle className="h-4 w-4 shrink-0 text-red-600" />
-                                                        )}
-                                                        <span
-                                                            className="max-w-[10rem] truncate font-mono text-xs"
-                                                            title={r.error ?? r.actual ?? ""}
-                                                        >
-                                                            {r.status === "OK" || r.status === "WRONG_ANSWER"
-                                                                ? r.actual === ""
-                                                                    ? "(empty)"
-                                                                    : r.actual
-                                                                : STATUS_LABEL[r.status] ?? r.status}
-                                                        </span>
-                                                        {r.status === "WRONG_ANSWER" && !disabled && (
-                                                            <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                variant="outline"
-                                                                className="h-6 px-2 text-xs"
-                                                                onClick={() => fillExpected([i])}
-                                                            >
-                                                                Use
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-xs text-muted-foreground">-</span>
-                                                )}
-                                            </td>
-                                        )}
-                                        <td className="px-2 py-1.5">
-                                            <Button
-                                                type="button"
-                                                size="icon"
-                                                variant="ghost"
-                                                aria-label={`Remove test ${i + 1}`}
-                                                disabled={disabled || value.tests.length <= MIN_TESTS}
-                                                onClick={() => removeTest(i)}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
             </div>
         </section>
     );

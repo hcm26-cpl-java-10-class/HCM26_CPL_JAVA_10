@@ -2,7 +2,6 @@ package com.example.starter_project_2025.system.exam.service;
 
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.exam.domain.*;
 import com.example.starter_project_2025.system.exam.dto.ReminderDTO;
 import com.example.starter_project_2025.system.exam.dto.ReminderRequest;
@@ -21,31 +20,21 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ReminderService {
 
-    /** Số lần tối đa được thử gửi lại một reminder. */
-    private static final int MAX_SEND_ATTEMPTS = 3;
-
-    /** Cơ sở backoff (giây) giữa các lần thử lại. */
-    private static final long RETRY_BACKOFF_SECONDS = 60L;
-
     private final ExamReminderRepository reminderRepository;
     private final InvitationRepository invitationRepository;
     private final ExamRepository examRepository;
     private final EmailService emailService;
-    private final ExamAccessGuard examAccessGuard;
 
     @Transactional
-    public List<ReminderDTO> scheduleReminder(Long examId, ReminderRequest request,
-                                              UserPrincipal principal) {
+    public List<ReminderDTO> scheduleReminder(Long examId, ReminderRequest request) {
         Exam exam = examRepository.findById(examId)
                 .filter(e -> Boolean.TRUE.equals(e.getIsActive()))
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đề thi với id: " + examId));
-
-        examAccessGuard.checkCanManage(exam, principal);
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found with id: " + examId));
 
         LocalDateTime scheduledAt = resolveScheduledAt(exam, request);
 
         if (scheduledAt.isBefore(LocalDateTime.now())) {
-            throw new BadRequestException("Thời gian nhắc nhở phải nằm trong tương lai");
+            throw new BadRequestException("Reminder time must be in the future");
         }
 
         List<Invitation> targets;
@@ -56,10 +45,10 @@ public class ReminderService {
                             "Invitation not found with id: " + request.getInvitationId()));
 
             if (!invitation.getExam().getId().equals(examId)) {
-                throw new BadRequestException("Lời mời không thuộc đề thi này");
+                throw new BadRequestException("Invitation does not belong to this exam");
             }
             if (!isRemindable(invitation)) {
-                throw new BadRequestException("Trạng thái lời mời không thể nhắc nhở: " + invitation.getStatus());
+                throw new BadRequestException("Invitation status is not remindable: " + invitation.getStatus());
             }
             targets = List.of(invitation);
         } else {
@@ -68,7 +57,7 @@ public class ReminderService {
                     .toList();
 
             if (targets.isEmpty()) {
-                throw new BadRequestException("Không tìm thấy lời mời nào có thể nhắc nhở cho đề thi này");
+                throw new BadRequestException("No remindable invitations found for this exam");
             }
         }
 
@@ -98,54 +87,43 @@ public class ReminderService {
         }
 
         if (created.isEmpty()) {
-            throw new BadRequestException("Đã tồn tại nhắc nhở cùng thời điểm " + scheduledAt);
+            throw new BadRequestException("Duplicate reminder already scheduled at " + scheduledAt);
         }
 
         return created;
     }
 
     @Transactional(readOnly = true)
-    public List<ReminderDTO> getRemindersByExam(Long examId, UserPrincipal principal) {
-        Exam exam = examRepository.findById(examId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đề thi với id: " + examId));
-        examAccessGuard.checkCanManage(exam, principal);
-
+    public List<ReminderDTO> getRemindersByExam(Long examId) {
         return reminderRepository.findByExamId(examId).stream()
                 .map(this::toDTO)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public ReminderDTO getById(Long id, UserPrincipal principal) {
-        ExamReminder reminder = reminderRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhắc nhở với id: " + id));
-        examAccessGuard.checkCanManage(reminder.getExam(), principal);
-
-        return toDTO(reminder);
+    public ReminderDTO getById(Long id) {
+        return toDTO(reminderRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Reminder not found with id: " + id)));
     }
 
     @Transactional
-    public void cancelReminder(Long reminderId, UserPrincipal principal) {
+    public void cancelReminder(Long reminderId) {
         ExamReminder reminder = reminderRepository.findById(reminderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy nhắc nhở với id: " + reminderId));
-
-        examAccessGuard.checkCanManage(reminder.getExam(), principal);
+                .orElseThrow(() -> new ResourceNotFoundException("Reminder not found with id: " + reminderId));
 
         if (reminder.getStatus() == ReminderStatus.SENT) {
-            throw new BadRequestException("Không thể huỷ nhắc nhở đã gửi");
+            throw new BadRequestException("Cannot cancel a reminder that has already been sent");
         }
 
         reminder.setStatus(ReminderStatus.CANCELLED);
         reminder.setIsActive(false);
-        reminder.setNextRetryAt(null);
         reminderRepository.save(reminder);
     }
 
     @Transactional
     public int sendPendingReminders() {
         LocalDateTime now = LocalDateTime.now();
-        List<ExamReminder> due = new ArrayList<>(reminderRepository.findPendingRemindersToSend(now));
-        due.addAll(reminderRepository.findRetryableReminders(now, MAX_SEND_ATTEMPTS));
+        List<ExamReminder> due = reminderRepository.findPendingRemindersToSend(now);
 
         if (due.isEmpty()) {
             return 0;
@@ -159,7 +137,7 @@ public class ReminderService {
             if (invitation == null || !isRemindable(invitation)) {
                 reminder.setStatus(ReminderStatus.CANCELLED);
                 reminder.setIsActive(false);
-                reminder.setLastError("Lời mời không còn nhận được nhắc nhở");
+                reminder.setLastError("Invitation is no longer remindable");
                 reminderRepository.save(reminder);
                 continue;
             }
@@ -175,28 +153,15 @@ public class ReminderService {
                 reminder.setSentAt(now);
                 reminder.setSendAttempts(reminder.getSendAttempts() + 1);
                 reminder.setLastError(null);
-                reminder.setNextRetryAt(null);
                 reminderRepository.save(reminder);
                 sent++;
             } catch (Exception e) {
-                int attempts = reminder.getSendAttempts() + 1;
-                reminder.setSendAttempts(attempts);
+                reminder.setSendAttempts(reminder.getSendAttempts() + 1);
                 reminder.setLastError(e.getMessage());
-
-                if (attempts < MAX_SEND_ATTEMPTS) {
-                    // Còn lượt thử lại: giữ PENDING và hẹn thời điểm thử lại (backoff).
-                    reminder.setStatus(ReminderStatus.PENDING);
-                    reminder.setIsActive(true);
-                    reminder.setNextRetryAt(now.plusSeconds(RETRY_BACKOFF_SECONDS * attempts));
-                } else {
-                    reminder.setStatus(ReminderStatus.FAILED);
-                    reminder.setIsActive(false);
-                    reminder.setNextRetryAt(null);
-                }
-
+                reminder.setStatus(ReminderStatus.FAILED);
+                reminder.setIsActive(false);
                 reminderRepository.save(reminder);
-                log.error("Failed to send reminder id={} (attempt {}/{}): {}",
-                        reminder.getId(), attempts, MAX_SEND_ATTEMPTS, e.getMessage());
+                log.error("Failed to send reminder id={}: {}", reminder.getId(), e.getMessage());
             }
         }
 
@@ -207,13 +172,13 @@ public class ReminderService {
     private LocalDateTime resolveScheduledAt(Exam exam, ReminderRequest request) {
         if (request.getReminderType() == ReminderType.CUSTOM) {
             if (request.getScheduledAt() == null) {
-                throw new BadRequestException("Cần có scheduledAt cho nhắc nhở tùy chỉnh");
+                throw new BadRequestException("scheduledAt is required for CUSTOM reminder");
             }
             return request.getScheduledAt();
         }
 
         if (exam.getStartTime() == null) {
-                throw new BadRequestException("Đề thi chưa có thời gian bắt đầu, không thể tự động đặt nhắc nhở");
+            throw new BadRequestException("Exam has no start time, cannot auto-schedule reminder");
         }
 
         return switch (request.getReminderType()) {
@@ -267,7 +232,6 @@ public class ReminderService {
         dto.setStatus(reminder.getStatus());
         dto.setSendAttempts(reminder.getSendAttempts());
         dto.setLastError(reminder.getLastError());
-        dto.setNextRetryAt(reminder.getNextRetryAt());
 
         return dto;
     }

@@ -69,7 +69,7 @@ export default function ScoreAppealsPage() {
     const map = new Map<number, string>();
     appeals.forEach((a) => {
       if (a.examId != null) {
-        map.set(a.examId, a.examTitle || `Assessment #${a.examId}`);
+        map.set(a.examId, a.examTitle || `Exam #${a.examId}`);
       }
     });
     return Array.from(map.entries()).map(([id, title]) => ({ id, title }));
@@ -91,7 +91,7 @@ export default function ScoreAppealsPage() {
   const pendingCount = appeals.filter((a) => a.status === "PENDING").length;
 
   return (
-    <MainLayout pathName={{ exams: "Assessment Management", appeals: "Score Appeals" }}>
+    <MainLayout pathName={{ exams: "Exam Management", appeals: "Score Appeals" }}>
       <div className="space-y-5 p-4">
         <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
           <div>
@@ -126,13 +126,13 @@ export default function ScoreAppealsPage() {
           </div>
 
           <div className="w-64">
-            <label className="mb-1.5 block text-sm font-medium">Assessment</label>
+            <label className="mb-1.5 block text-sm font-medium">Exam</label>
             <Select value={examFilter} onValueChange={setExamFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="All assessments" />
+                <SelectValue placeholder="All exams" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All assessments</SelectItem>
+                <SelectItem value="all">All exams</SelectItem>
                 {examOptions.map((opt) => (
                   <SelectItem key={opt.id} value={String(opt.id)}>
                     {opt.title}
@@ -168,7 +168,7 @@ export default function ScoreAppealsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Assessment</TableHead>
+                    <TableHead>Exam</TableHead>
                     <TableHead>Student</TableHead>
                     <TableHead>Reason</TableHead>
                     <TableHead>Current Score</TableHead>
@@ -182,7 +182,7 @@ export default function ScoreAppealsPage() {
                   {filtered.map((appeal) => (
                     <TableRow key={appeal.id}>
                       <TableCell className="font-medium">
-                        {appeal.examTitle || `Assessment #${appeal.examId}`}
+                        {appeal.examTitle || `Exam #${appeal.examId}`}
                         <p className="text-xs text-muted-foreground">Attempt #{appeal.attemptNumber}</p>
                       </TableCell>
                       <TableCell>{appeal.studentName || "-"}</TableCell>

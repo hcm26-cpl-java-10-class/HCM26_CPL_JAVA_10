@@ -15,10 +15,6 @@ interface ToolbarProps {
   showViewModeToggle?: boolean;
   showActions?: boolean;
   showCardColumnToggle?: boolean;
-  /** Rendered first in the left group (e.g. count + Card/Table switcher). */
-  leadingSlot?: React.ReactNode;
-  /** Hides search, filters and the small view-mode button (page already provides them). */
-  compact?: boolean;
 }
 
 export function Toolbar({
@@ -29,8 +25,6 @@ export function Toolbar({
   showViewModeToggle = true,
   showActions = true,
   showCardColumnToggle = true,
-  leadingSlot,
-  compact = false,
 }: ToolbarProps) {
   const { schema } = table;
 
@@ -46,8 +40,6 @@ export function Toolbar({
       className={`grid ${showActions ? "lg:grid-cols-[1fr_auto]" : "grid-cols-1"} items-center gap-2 w-full`}
     >
       <div className="flex flex-col lg:flex-row justify-start items-center gap-2">
-        {leadingSlot}
-
         {viewMode === "card" && showCardColumnToggle && (
           <ColumnToggle
             schema={schema}
@@ -56,15 +48,13 @@ export function Toolbar({
           />
         )}
 
-        {!compact && (
-          <FilterPopover
-            table={table}
-            hasFilters={hasFilters}
-            activeFilterCount={activeFilterCount}
-          />
-        )}
+        <FilterPopover
+          table={table}
+          hasFilters={hasFilters}
+          activeFilterCount={activeFilterCount}
+        />
 
-        {!compact && <SearchInput search={table.search} onSearchChange={table.setSearch} />}
+        <SearchInput search={table.search} onSearchChange={table.setSearch} />
 
         {hasSorts && (
           <ActionButton
@@ -76,7 +66,7 @@ export function Toolbar({
           />
         )}
 
-        {showViewModeToggle && !compact && (
+        {showViewModeToggle && (
           <ActionButton
             onClick={() => onViewModeChange?.(viewMode === "table" ? "card" : "table")}
             tooltip={viewMode === "table" ? "Switch to card view" : "Switch to table view"}
