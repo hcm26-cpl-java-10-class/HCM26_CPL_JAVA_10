@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @ResourcePermission("INVITATION")
 @ResourceMenu(
         title = "Invitations",
-        group = "Assessment Management",
+        group = "Exam Management",
         icon = "mail",
         url = "/invitations",
         order = 2,
@@ -77,7 +77,7 @@ public class Invitation extends BaseEntity {
     @Column(name = "guest_user_id")
     private Long guestUserId;
 
-    @Column(length = 10, unique = true)
+    @Column(length = 10)
     private String accessCode;
 
     private LocalDateTime maxAccessTime;

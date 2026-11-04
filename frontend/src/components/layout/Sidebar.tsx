@@ -28,7 +28,14 @@ export function SidebarMenu() {
                 name: group.name ?? "Menu",
                 hiddenInMenu: group.hiddenInMenu,
                 items: group.modules
-                    .filter((module) => !!module.url && !module.hiddenInMenu)
+                    .filter((module) => {
+                        const url = module.url?.replace(/\/+$/, "") ?? "";
+                        return (
+                            !!module.url &&
+                            !module.hiddenInMenu &&
+                            url !== "/enrollments"
+                        );
+                    })
                     .map((module) => ({
                         title: module.title ?? "Untitled",
                         url: module.url ?? "#",

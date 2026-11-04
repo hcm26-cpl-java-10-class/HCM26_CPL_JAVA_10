@@ -141,6 +141,10 @@ export const resolveEffectivePermissions = (
       "EXAM_READ",
       "EXAM_UPDATE",
       "EXAM_DELETE",
+      "COURSE_CREATE",
+      "COURSE_READ",
+      "COURSE_UPDATE",
+      "COURSE_DELETE",
     ]);
 
     return uniquePermissions(
@@ -188,7 +192,7 @@ export const ROLE_HIDDEN_MODULE_URLS: Record<string, string[]> = {
 };
 
 export const ROLE_HIDDEN_MENU_GROUP_NAMES: Record<string, string[]> = {
-  [STUDENT_ROLE]: ["Assessment Management"],
+  [STUDENT_ROLE]: ["Exam Management"],
 };
 
 export const ROLE_MOVED_MENU_MODULES: Record<string, Record<string, string>> = {

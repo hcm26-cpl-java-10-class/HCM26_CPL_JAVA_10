@@ -59,6 +59,19 @@ public class EmailService {
         send("[Lời mời] " + examTitle, recipient.getEmail(), EXAM_INVITATION_EMAIL, vars);
     }
 
+    public void sendBatchExamInvitations(List<Invitation> invitations) {
+        for (Invitation invitation : invitations) {
+            if (invitation.getUser() != null) {
+                try {
+                    sendExamInvitation(invitation, invitation.getUser());
+                } catch (Exception e) {
+                    log.error("Failed to send batch invitation email to userId={}: {}",
+                            invitation.getUser().getId(), e.getMessage());
+                }
+            }
+        }
+    }
+
     public void sendExamAcceptance(Invitation invitation) {
         if (invitation.getUser() == null) {
             return;
