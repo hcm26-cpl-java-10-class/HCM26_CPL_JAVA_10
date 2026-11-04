@@ -85,7 +85,7 @@ export default function TopicMarkGradebookDemoPage() {
   });
 
   return (
-    <MainLayout pathName={{ "topic-marks": "Topic Marks", "gradebook-demo": "Gradebook Demo" }}>
+    <MainLayout pathName={{ "topic-marks": "Topic Marks", "gradebook-demo": "Topic Marks" }}>
       <ProTable table={table} hideActions headerActions={<></>} />
     </MainLayout>
   );

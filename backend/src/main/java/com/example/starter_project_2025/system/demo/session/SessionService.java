@@ -9,4 +9,16 @@ import org.springframework.stereotype.Service;
 public interface SessionService extends BaseCrudService<Long, SessionDTO, SessionFilter> {
 
     SessionDTO cancelSession(Long id, SessionCancelDTO cancelDTO);
+
+    SessionDTO completeSession(Long id);
+
+    SessionDTO rescheduleSession(Long id, SessionRescheduleDTO rescheduleDTO);
+
+    SessionDTO duplicateSession(Long id, SessionDuplicateDTO duplicateDTO);
+
+    /**
+     * Validates one row of a file import like a newly created session and normalises it in place
+     * (status SCHEDULED, trimmed text). Throws when the row must be rejected.
+     */
+    void validateImportRow(Session session, SessionContextVerifier.Memo memo);
 }

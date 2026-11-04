@@ -25,6 +25,8 @@ import { toast } from "sonner";
 const DYNAMIC_FIELD_PREFIX = "__dynamic__";
 
 interface UseProTableOptions {
+  /** Filters applied from the very first request (e.g. a class chosen on another page). */
+  initialFilters?: Record<string, unknown>;
   permissionOverrides?: Partial<{
     canRead: boolean;
     canCreate: boolean;
@@ -156,7 +158,7 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
 
   const [pagination, setPagination] = useState<Pagination>(DefaultPagination);
   const [sortState, setSortState] = useState<SortEntry[]>([]);
-  const [filters, setFilters] = useState<any>({});
+  const [filters, setFilters] = useState<any>(options.initialFilters ?? {});
   const [search, setSearch] = useState<string>("");
 
   const [selected, setSelected] = useState<any[]>([]);
