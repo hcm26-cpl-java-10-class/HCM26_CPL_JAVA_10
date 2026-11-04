@@ -61,6 +61,22 @@ public class StudentScoreDataInitializer implements CommandLineRunner {
                 entry("final", 8.8)
         ));
 
+        // Demo scores for the external trainee pool, keyed by FPT Student ID so the
+        // class-scoped Topic Marks gradebook can join them with each class's Trainee List.
+        String poolClass = "HCM26_FR_FU_KS_JAVA_01";
+        upsertScore("SE180101", "Hoàng Phương Bình", poolClass, traineeScores(8.5, 8.0, 9.0, 10.0, 8.2, 8.8, 9.0, 8.6));
+        upsertScore("SS180102", "Trần Việt Anh", poolClass, traineeScores(7.0, 7.5, 8.0, 9.5, 7.2, 7.8, 8.0, 7.6));
+        upsertScore("AI180103", "Trần Vũ Gia Bảo", poolClass, traineeScores(9.0, 9.5, 9.2, 10.0, 9.0, 9.4, 9.6, 9.3));
+        upsertScore("IA180104", "Đỗ Gia Huy", poolClass, traineeScores(6.5, 7.0, 7.5, 9.0, 6.8, 7.2, 7.4, 7.0));
+        upsertScore("SE180105", "Phan Thành Quang Huy", poolClass, traineeScores(8.0, 8.2, 8.5, 9.5, 7.9, 8.4, 8.6, 8.1));
+        upsertScore("SS180106", "Lê Đình Khôi", poolClass, traineeScores(5.5, 6.0, 6.5, 8.0, 5.8, 6.2, 6.4, 6.0));
+        upsertScore("AI180107", "Đặng Xuân Nam", poolClass, traineeScores(7.8, 8.0, 7.5, 9.0, 7.6, 8.1, 7.9, 7.7));
+        upsertScore("IA180108", "Nguyễn Thị Minh Thư", poolClass, traineeScores(9.2, 9.0, 9.4, 10.0, 8.9, 9.1, 9.5, 9.2));
+        upsertScore("SE180109", "Phạm Quốc Tuấn", poolClass, traineeScores(6.0, 6.5, 7.0, 8.5, 6.2, 6.8, 7.0, 6.4));
+        upsertScore("SS180110", "Võ Ngọc Khánh Linh", poolClass, traineeScores(9.5, 9.2, 9.6, 10.0, 9.4, 9.7, 9.8, 9.5));
+        upsertScore("AI180111", "Lý Thanh Phong", poolClass, traineeScores(7.2, 7.0, 7.6, 9.0, 7.1, 7.5, 7.8, 7.3));
+        upsertScore("IA180112", "Trương Minh Quân", poolClass, traineeScores(3.5, 4.0, 4.5, 6.0, 3.8, 4.2, 4.0, 3.6));
+
         log.info("Ensured sample student score data.");
     }
 
@@ -76,6 +92,28 @@ public class StudentScoreDataInitializer implements CommandLineRunner {
         entity.setIsActive(true);
 
         studentScoreRepository.save(entity);
+    }
+
+    private Map<String, BigDecimal> traineeScores(
+            double quiz1,
+            double quiz2,
+            double assignment,
+            double attendance,
+            double midterm,
+            double practice,
+            double project,
+            double finalExam
+    ) {
+        return scoreMap(
+                entry("quiz1", quiz1),
+                entry("quiz2", quiz2),
+                entry("assignment", assignment),
+                entry("attendance", attendance),
+                entry("midterm", midterm),
+                entry("practice", practice),
+                entry("project", project),
+                entry("final", finalExam)
+        );
     }
 
     @SafeVarargs

@@ -9,6 +9,7 @@ import ClassDetailPage from "../ClassDetailPage";
 import ClassListPage from "../ClassListPage";
 import { getMockTraineesByClass, MOCK_TRAINING_CLASSES } from "../mocks/classTrainee.mock";
 import { formatFptStudentIdForSite, getFptStudentIdRuleBySite } from "./TraineeModal";
+import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 
 vi.mock("@/api/axios", () => import("@/test/mocks").then((m) => m.axiosModule()));
 vi.mock("@/components/layout/MainLayout", () => import("@/test/mocks").then((m) => m.layoutModule()));
@@ -20,7 +21,7 @@ function renderClassFlow(route = "/classes/2") {
             { path: "/classes", element: <ClassListPage /> },
             { path: "/classes/:classId", element: <ClassDetailPage /> },
             { path: "/training-operations/class-details/:classCode", element: <ClassDetailPage /> },
-            { path: "/topic-marks", element: <div>Topic Marks Page</div> },
+            { path: "/topic-marks", element: <TopicMarkGradebookDemoPage /> },
         ],
         { route },
     );
@@ -30,11 +31,35 @@ let serverTraineesState: Trainee[] = [];
 
 beforeEach(() => {
     fakeHttp.reset();
-    grant("SESSION_READ");
+    grant("SESSION_READ", "STUDENT_SCORE_READ");
     serverTraineesState = getMockTraineesByClass(2);
     fakeHttp.on("get", "/external/classes", MOCK_TRAINING_CLASSES);
     fakeHttp.on("get", "/external/classes/2", MOCK_TRAINING_CLASSES[0]);
     fakeHttp.on("get", "/external/classes/2/trainees", () => serverTraineesState);
+    fakeHttp.on("get", "/topic-marks/gradebook/search", () => {
+        return {
+            columns: [
+                { key: "quiz1", label: "Quiz 1" },
+                { key: "assignment", label: "Assignment" },
+                { key: "FINAL_SCORE", label: "Final Score" },
+                { key: "IS_PASSED", label: "Is Passed" },
+            ],
+            rows: {
+                content: [
+                    {
+                        userId: "stu-101",
+                        fullName: "Hoàng Phương Bình",
+                        email: "phuongbinh.conan@gmail.com",
+                        values: { quiz1: 8.5, assignment: 9.0, FINAL_SCORE: 8.75, IS_PASSED: true },
+                    },
+                ],
+                page: 0,
+                size: 10,
+                totalElements: 1,
+                totalPages: 1,
+            },
+        };
+    });
     fakeHttp.on("put", "/external/classes/2/trainees/batch", (call: RecordedCall) => {
         const payload = call.data as TraineeBatchPayload;
         const deletedSet = new Set(payload.deletedIds);
@@ -148,9 +173,24 @@ describe("ClassDetailView & TraineeListTab", () => {
         expect(within(menu).getByRole("menuitem", { name: /^edit$/i })).toBeInTheDocument();
         expect(within(menu).getByRole("menuitem", { name: /^delete$/i })).toBeInTheDocument();
 
-        // Topic Mark navigation
+        // Topic Mark navigation passes classId and classCode, displays Back to Class Detail, and returns
         await user.click(screen.getByRole("button", { name: "Topic Mark" }));
-        expect(await screen.findByText("Topic Marks Page")).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: "Topic Marks : HCM26_FR_JAVA_03" })).toBeInTheDocument();
+
+        // Verify gradebook search received classId and classCode
+        await waitFor(() => {
+            const calls = fakeHttp.callsTo("get", "/topic-marks/gradebook/search");
+            expect(calls.length).toBeGreaterThanOrEqual(1);
+            const params = calls[calls.length - 1].params as Record<string, string>;
+            expect(params.classId).toBe("2");
+            expect(params.classCode).toBe("HCM26_FR_JAVA_03");
+        });
+
+        // Click "Back to Class Detail" navigates back to Class Details
+        const backLink = screen.getByRole("link", { name: /back to class detail/i });
+        expect(backLink).toBeInTheDocument();
+        await user.click(backLink);
+        expect(await screen.findByRole("heading", { name: "Class Details : HCM26_FR_JAVA_03" })).toBeInTheDocument();
     });
 
     it("enforces site-specific FPT Student ID rules (HCM: SE/SS/AI/IA, HN: HE/HS/AI/IA, Other: DE + 6 digits)", () => {
@@ -246,7 +286,7 @@ describe("ClassDetailView & TraineeListTab", () => {
         await user.click(within(editDialog).getByRole("button", { name: "Update Trainee" }));
 
         expect(await screen.findByText("Trần Việt Anh Updated")).toBeInTheDocument();
-        expect(screen.getByText("Inactive")).toBeInTheDocument();
+        expect(within(table).getByText("Inactive")).toBeInTheDocument();
 
         // 3. Delete an existing trainee ("Đỗ Gia Huy") with confirmation modal
         await user.click(screen.getByRole("button", { name: "Actions for Đỗ Gia Huy" }));
@@ -383,4 +423,73 @@ describe("ClassDetailView & TraineeListTab", () => {
             expect(term.nextElementSibling).toHaveTextContent(value);
         }
     });
+
+    it("supports extended Bulk Actions: selection count badge, Change Status, Move to Class, and Send Email", async () => {
+        const { user } = renderClassFlow("/classes/2");
+        await screen.findByText("Hoàng Phương Bình");
+
+        const changeStatusBtn = screen.getByRole("button", { name: /change status/i });
+        const moveClassBtn = screen.getByRole("button", { name: /move to class/i });
+        const sendEmailBtn = screen.getByRole("button", { name: /send email/i });
+
+        expect(changeStatusBtn).toBeDisabled();
+        expect(moveClassBtn).toBeDisabled();
+        expect(sendEmailBtn).toBeDisabled();
+
+        // 1. Select two trainees
+        await user.click(screen.getByRole("checkbox", { name: "Select Hoàng Phương Bình" }));
+        await user.click(screen.getByRole("checkbox", { name: "Select Trần Việt Anh" }));
+
+        // Selection badge appears
+        expect(screen.getByText("2 Trainees Selected")).toBeInTheDocument();
+        expect(changeStatusBtn).toBeEnabled();
+        expect(moveClassBtn).toBeEnabled();
+        expect(sendEmailBtn).toBeEnabled();
+
+        // 2. Change Status in bulk to "Inactive"
+        await user.click(changeStatusBtn);
+        const inactiveItem = await screen.findByRole("menuitem", { name: /inactive/i });
+        await user.click(inactiveItem);
+
+        // Status badges for both trainees should now reflect "Inactive"
+        const traineeTable = screen.getByRole("table", { name: "Trainee List" });
+        const inactiveBadges = within(traineeTable).getAllByText("Inactive");
+        expect(inactiveBadges.length).toBeGreaterThanOrEqual(2);
+        expect(screen.getByText("2 unsaved changes")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /save changes/i })).toBeEnabled();
+
+        // 3. Send Email Notification
+        await user.click(sendEmailBtn);
+        const emailDialog = await screen.findByRole("dialog", { name: "Send Email Notification" });
+        expect(within(emailDialog).getByText(/Recipients \(2\)/i)).toBeInTheDocument();
+
+        const subjectInput = within(emailDialog).getByLabelText(/Subject/i);
+        const bodyInput = within(emailDialog).getByLabelText(/Message Body/i);
+        await user.type(subjectInput, "Class Update Notice");
+        await user.type(bodyInput, "Please review the updated class schedule.");
+        await user.click(within(emailDialog).getByRole("button", { name: /send notification/i }));
+
+        await waitFor(() => {
+            expect(screen.queryByRole("dialog", { name: "Send Email Notification" })).not.toBeInTheDocument();
+        });
+
+        // 4. Move to Class
+        await user.click(moveClassBtn);
+        const moveDialog = await screen.findByRole("dialog", { name: "Move Trainees to Another Class" });
+        expect(within(moveDialog).getByText(/Selected Trainees \(2\)/i)).toBeInTheDocument();
+
+        const destinationSelect = within(moveDialog).getByLabelText(/Destination Class/i);
+        const targetOption = within(destinationSelect).getAllByRole("option")[1];
+        await user.selectOptions(destinationSelect, targetOption.getAttribute("value")!);
+
+        await user.click(within(moveDialog).getByRole("button", { name: /move trainees/i }));
+
+        await waitFor(() => {
+            expect(screen.queryByRole("dialog", { name: "Move Trainees to Another Class" })).not.toBeInTheDocument();
+        });
+
+        // The moved trainees should be removed from the current class list
+        expect(screen.queryByText("Hoàng Phương Bình")).not.toBeInTheDocument();
+        expect(screen.queryByText("Trần Việt Anh")).not.toBeInTheDocument();
+    }, 15000);
 });

@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.topic_mark;
 
 import com.example.starter_project_2025.system.demo.student_score.StudentScore;
 import com.example.starter_project_2025.system.demo.student_score.StudentScoreRepository;
+import com.example.starter_project_2025.system.external_api.ExternalApiService;
+import com.example.starter_project_2025.system.external_api.dto.ExternalClassDTO;
 import com.example.starter_project_2025.system.topic_mark.dto.ScoreHistoryResponse;
 import com.example.starter_project_2025.system.topic_mark.dto.TopicMarkDetailResponse;
 import com.example.starter_project_2025.system.topic_mark.dto.TopicMarkGradebookResponse;
@@ -42,9 +44,35 @@ public class TopicMarkDemoService {
     static final String FINAL_SCORE_KEY = "FINAL_SCORE";
     static final String IS_PASSED_KEY = "IS_PASSED";
 
+    static final Set<String> MANDATORY_COMPONENT_KEYS = Set.of(
+            "quiz1", "quiz2", "assignment", "practice", "project", "midterm", "final"
+    );
+
+    private static boolean isPassedWithNoZeroScores(Double finalScore, Map<String, Object> values) {
+        if (finalScore == null || finalScore < 5.0) {
+            return false;
+        }
+        for (Map.Entry<String, Object> entry : values.entrySet()) {
+            String key = entry.getKey().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+            if (MANDATORY_COMPONENT_KEYS.contains(key)) {
+                Object val = entry.getValue();
+                if (val instanceof Number n) {
+                    if (n.doubleValue() == 0.0) {
+                        return false;
+                    }
+                    if (key.equals("final") && n.doubleValue() < 4.0) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
     static final Pattern KEY_WITH_INDEX_PATTERN = Pattern.compile("^(.*?)(\\d+)$");
 
     StudentScoreRepository studentScoreRepository;
+    ExternalApiService externalApiService;
 
     List<ScoreHistoryResponse.HistoryItem> historyStore = new CopyOnWriteArrayList<>();
 
@@ -59,10 +87,36 @@ public class TopicMarkDemoService {
     }
 
     public TopicMarkGradebookSearchResponse searchGradebook(String keyword, int page, int size, String sort) {
+        return searchGradebook(keyword, page, size, sort, null);
+    }
+
+    /**
+     * Search the gradebook. When {@code classId} is provided, rows are the trainees enrolled in that class
+     * (fetched from the external system) joined with their stored scores by FPT Student ID.
+     */
+    public TopicMarkGradebookSearchResponse searchGradebook(String keyword, int page, int size, String sort, Long classId) {
+        return searchGradebook(keyword, page, size, sort, classId, null);
+    }
+
+    public TopicMarkGradebookSearchResponse searchGradebook(
+            String keyword,
+            int page,
+            int size,
+            String sort,
+            Long classId,
+            String classCode
+    ) {
+        Long resolvedClassId = classId;
+        if (resolvedClassId == null && classCode != null && !classCode.isBlank()) {
+            resolvedClassId = resolveClassIdByCode(classCode);
+        }
+
         List<StudentScore> students = getAllStudents();
         List<ComponentDef> components = buildComponentDefs(students);
 
-        List<TopicMarkGradebookResponse.Row> allRows = buildRows(students, components);
+        List<TopicMarkGradebookResponse.Row> allRows = resolvedClassId == null
+                ? buildRows(students, components)
+                : buildClassRows(resolvedClassId, students, components);
 
         List<TopicMarkGradebookResponse.Row> filtered = filterRows(allRows, keyword);
         filtered.sort(resolveRowComparator(sort));
@@ -251,7 +305,7 @@ public class TopicMarkDemoService {
                             : student.getOverallScore().doubleValue();
 
                     values.put(FINAL_SCORE_KEY, finalScore);
-                    values.put(IS_PASSED_KEY, finalScore != null && finalScore >= 5);
+                    values.put(IS_PASSED_KEY, isPassedWithNoZeroScores(finalScore, values));
 
                     return TopicMarkGradebookResponse.Row.builder()
                             .userId(toUserId(student))
@@ -261,6 +315,99 @@ public class TopicMarkDemoService {
                             .build();
                 })
                 .toList();
+    }
+
+    private Long resolveClassIdByCode(String classCode) {
+        if (classCode == null || classCode.isBlank()) {
+            return null;
+        }
+        try {
+            List<ExternalClassDTO> classes = externalApiService.fetchClasses(null);
+            if (classes != null) {
+                for (ExternalClassDTO item : classes) {
+                    if (item.getCode() != null && item.getCode().equalsIgnoreCase(classCode.trim())) {
+                        return item.getId();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private List<TopicMarkGradebookResponse.Row> buildClassRows(
+            Long classId,
+            List<StudentScore> students,
+            List<ComponentDef> components
+    ) {
+        Map<String, StudentScore> scoresByCode = students.stream()
+                .filter(student -> student.getStudentCode() != null)
+                .collect(Collectors.toMap(
+                        student -> student.getStudentCode().trim().toUpperCase(Locale.ROOT),
+                        student -> student,
+                        (first, second) -> first
+                ));
+
+        List<TopicMarkGradebookResponse.Row> rows = new ArrayList<>();
+
+        for (Map<?, ?> trainee : toTraineeList(externalApiService.fetchClassTrainees(classId))) {
+            String studentCode = firstNonBlank(asText(trainee.get("fptAccount")), asText(trainee.get("code")));
+            StudentScore score = studentCode == null ? null : scoresByCode.get(studentCode.toUpperCase(Locale.ROOT));
+
+            Map<String, BigDecimal> scoreMap = score == null ? null : score.getScores();
+            Map<String, Object> values = new LinkedHashMap<>();
+
+            for (ComponentDef component : components) {
+                values.put(component.columnKey(), getScoreValue(scoreMap, component.sourceKey()));
+            }
+
+            Double finalScore = score == null || score.getOverallScore() == null
+                    ? null
+                    : score.getOverallScore().doubleValue();
+
+            values.put(FINAL_SCORE_KEY, finalScore);
+            values.put(IS_PASSED_KEY, isPassedWithNoZeroScores(finalScore, values));
+
+            String identity = studentCode != null ? studentCode : "trainee-" + trainee.get("id");
+
+            rows.add(TopicMarkGradebookResponse.Row.builder()
+                    .userId(score != null
+                            ? toUserId(score)
+                            : UUID.nameUUIDFromBytes(("student:" + identity).getBytes(StandardCharsets.UTF_8)))
+                    .fullName(asText(trainee.get("fullName")))
+                    .email(firstNonBlank(asText(trainee.get("personalEmail")), asText(trainee.get("email"))))
+                    .values(values)
+                    .build());
+        }
+
+        return rows;
+    }
+
+    private List<Map<?, ?>> toTraineeList(Object payload) {
+        if (!(payload instanceof List<?> items)) {
+            return List.of();
+        }
+
+        List<Map<?, ?>> trainees = new ArrayList<>();
+        for (Object item : items) {
+            if (item instanceof Map<?, ?> trainee) {
+                trainees.add(trainee);
+            }
+        }
+        return trainees;
+    }
+
+    private String asText(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private String firstNonBlank(String first, String second) {
+        return first != null ? first : second;
     }
 
     private List<TopicMarkGradebookResponse.Row> filterRows(List<TopicMarkGradebookResponse.Row> rows, String keyword) {
