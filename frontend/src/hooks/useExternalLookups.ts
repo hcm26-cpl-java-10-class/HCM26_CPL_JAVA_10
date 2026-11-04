@@ -16,7 +16,6 @@ export const externalKeys = {
     classBudget: (id: string | number) => ["external", "class", String(id), "budget"] as const,
     classAudits: (id: string | number) => ["external", "class", String(id), "audits"] as const,
     allAudits: ["external", "audits"] as const,
-    analytics: ["external", "analytics"] as const,
     allTrainees: ["external", "trainees"] as const,
     trainers: ["external", "trainers"] as const,
     activeTrainers: ["external", "trainers", "active"] as const,
@@ -222,18 +221,6 @@ export function useCreateAudit() {
                 void qc.invalidateQueries({ queryKey: externalKeys.classAudits(variables.classId) });
             }
         },
-    });
-}
-
-// ===================== ANALYTICS =====================
-
-export function useTrainingAnalytics(enabled = true) {
-    return useQuery({
-        queryKey: externalKeys.analytics,
-        queryFn: () => externalApi.getAnalytics(),
-        enabled,
-        staleTime: 30_000,
-        retry: retryUnlessClientError,
     });
 }
 

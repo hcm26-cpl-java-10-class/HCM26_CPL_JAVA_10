@@ -11,7 +11,6 @@ import type {
         StatusTransitionInfo,
         TopicAssessment,
         Trainee,
-        TrainingAnalytics,
 } from "@/types";
 import axiosInstance from "../axios";
 import { traineeService } from "./trainee.api";
@@ -238,12 +237,6 @@ export const externalApi = {
 
     createAudit: async (data: Partial<AuditRecord>): Promise<AuditRecord> => {
         const response = await axiosInstance.post<AuditRecord>("/external/audits", data);
-        return response.data;
-    },
-
-    // ===================== ANALYTICS =====================
-    getAnalytics: async (): Promise<TrainingAnalytics> => {
-        const response = await axiosInstance.get<TrainingAnalytics>("/external/analytics");
         return response.data;
     },
 
