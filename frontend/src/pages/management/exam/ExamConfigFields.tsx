@@ -1,4 +1,5 @@
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -7,7 +8,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EXAM_CATEGORY_LABEL, EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type ResultVisibility } from "@/types";
-import type { Dispatch, SetStateAction } from "react";
+import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
+import { CalendarClock } from "lucide-react";
 import {
   EXAM_CATEGORY_OPTIONS,
   EXAM_TYPE_LABEL,
@@ -37,8 +39,17 @@ function SectionTitle({ children }: { children: string }) {
 
 /** All fields of the exam form (shared by the Create dialog and the Edit tab). */
 export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, duration: newDuration, setDuration: setNewDuration, cfg, setCfg, editingExam }: Props) {
+  const hasSchedule = Boolean(cfg.startTime || cfg.endTime);
+  const [scheduleEnabled, setScheduleEnabled] = useState(() => hasSchedule);
+
+  useEffect(() => {
+    if (hasSchedule && !scheduleEnabled) {
+      setScheduleEnabled(true);
+    }
+  }, [hasSchedule]);
+
   return (
-<div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-2">
       <SectionTitle>Basic</SectionTitle>
       <label className="grid gap-2 text-sm font-medium sm:col-span-2">
         Exam Title
@@ -100,87 +111,194 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
 
       <div className="grid gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
         <SectionTitle>Schedule &amp; attempts</SectionTitle>
-        <div className="grid gap-2 text-sm font-medium">
-          <div className="flex flex-wrap items-center justify-between gap-1">
-            <span>Start Time</span>
-            <div className="flex items-center gap-1 font-normal">
-              <button
+
+        {!scheduleEnabled ? (
+          <div className="sm:col-span-2 rounded-lg border border-dashed border-border/80 bg-muted/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="size-4 text-emerald-500" />
+                <span className="text-sm font-semibold">Exam Schedule</span>
+                <span className="text-[11px] font-medium rounded-full px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  No time limits (Mở tự do)
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Exam has no fixed start or end deadline. Students can take it anytime once published, or you can set a schedule later.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 text-xs gap-1.5 h-8 font-medium hover:bg-background"
+              onClick={() => {
+                setScheduleEnabled(true);
+                const durationMinutes = Number(newDuration) || 60;
+                setCfg((c) => ({
+                  ...c,
+                  startTime: getFutureDatetimeString(2),
+                  endTime: getFutureDatetimeString(2 + durationMinutes),
+                }));
+              }}
+            >
+              <CalendarClock className="size-3.5" />
+              Set Schedule (Đặt lịch thi)
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="sm:col-span-2 flex items-center justify-between border-b pb-2">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="size-4 text-primary" />
+                <span className="text-sm font-semibold">Scheduled Window</span>
+              </div>
+              <Button
                 type="button"
-                className="text-[11px] text-primary hover:underline cursor-pointer"
-                onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(2) }))}
+                variant="ghost"
+                size="sm"
+                className="text-xs text-destructive hover:text-destructive h-7 px-2 font-normal"
+                onClick={() => {
+                  setScheduleEnabled(false);
+                  setCfg((c) => ({ ...c, startTime: "", endTime: "" }));
+                }}
               >
-                Now +2m
-              </button>
-              <span className="text-[10px] text-muted-foreground">·</span>
-              <button
-                type="button"
-                className="text-[11px] text-primary hover:underline cursor-pointer"
-                onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(15) }))}
-              >
-                +15m
-              </button>
-              <span className="text-[10px] text-muted-foreground">·</span>
-              <button
-                type="button"
-                className="text-[11px] text-primary hover:underline cursor-pointer"
-                onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(60) }))}
-              >
-                +1h
-              </button>
-              {cfg.startTime && (
-                <>
+                Clear schedule (Hủy lịch, mở tự do)
+              </Button>
+            </div>
+
+            <div className="grid gap-2 text-sm font-medium">
+              <div className="flex flex-wrap items-center justify-between gap-1">
+                <span>Start Time</span>
+                <div className="flex items-center gap-1 font-normal">
+                  <button
+                    type="button"
+                    className="text-[11px] text-primary hover:underline cursor-pointer"
+                    onClick={() => setCfg((c) => ({ ...c, startTime: getLocalDatetimeString() }))}
+                  >
+                    Now
+                  </button>
                   <span className="text-[10px] text-muted-foreground">·</span>
                   <button
                     type="button"
-                    className="text-[11px] text-destructive hover:underline cursor-pointer"
-                    onClick={() => setCfg((c) => ({ ...c, startTime: "" }))}
+                    className="text-[11px] text-primary hover:underline cursor-pointer"
+                    onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(15) }))}
                   >
-                    Clear
+                    +15m
                   </button>
-                </>
-              )}
+                  <span className="text-[10px] text-muted-foreground">·</span>
+                  <button
+                    type="button"
+                    className="text-[11px] text-primary hover:underline cursor-pointer"
+                    onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(60) }))}
+                  >
+                    +1h
+                  </button>
+                  <span className="text-[10px] text-muted-foreground">·</span>
+                  <button
+                    type="button"
+                    className="text-[11px] text-primary hover:underline cursor-pointer"
+                    onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(1440) }))}
+                  >
+                    +1d
+                  </button>
+                  {cfg.startTime && (
+                    <>
+                      <span className="text-[10px] text-muted-foreground">·</span>
+                      <button
+                        type="button"
+                        className="text-[11px] text-destructive hover:underline cursor-pointer"
+                        onClick={() => setCfg((c) => ({ ...c, startTime: "" }))}
+                      >
+                        Clear
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <Input
+                type="datetime-local"
+                min={editingExam?.startTime && new Date(editingExam.startTime).getTime() < Date.now()
+                  ? undefined
+                  : getLocalDatetimeString()}
+                value={cfg.startTime}
+                onChange={(event) => setCfg((c) => ({ ...c, startTime: event.target.value }))}
+              />
+              <p className="text-[11px] font-normal text-muted-foreground">
+                {cfg.startTime
+                  ? "Must be current time or later (rec: at least 1–2 min ahead)."
+                  : "Leave blank = no open limit (students can start anytime)."}
+              </p>
             </div>
-          </div>
-          <Input
-              type="datetime-local"
-              min={editingExam?.startTime && new Date(editingExam.startTime).getTime() < Date.now()
-                ? undefined
-                : getLocalDatetimeString()}
-              value={cfg.startTime}
-              onChange={(event) => setCfg((c) => ({ ...c, startTime: event.target.value }))}
-          />
-          <p className="text-[11px] font-normal text-muted-foreground">
-            {cfg.startTime
-              ? "Must be current time or later (rec: at least 1–2 min ahead)."
-              : "Leave blank = no open limit (students can start anytime)."}
-          </p>
-        </div>
 
-        <div className="grid gap-2 text-sm font-medium">
-          <div className="flex flex-wrap items-center justify-between gap-1">
-            <span>End Time</span>
-            {cfg.endTime && (
-              <button
-                type="button"
-                className="text-[11px] text-destructive hover:underline cursor-pointer font-normal"
-                onClick={() => setCfg((c) => ({ ...c, endTime: "" }))}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          <Input
-              type="datetime-local"
-              min={cfg.startTime || (editingExam?.endTime && new Date(editingExam.endTime).getTime() < Date.now() ? undefined : getLocalDatetimeString())}
-              value={cfg.endTime}
-              onChange={(event) => setCfg((c) => ({ ...c, endTime: event.target.value }))}
-          />
-          <p className="text-[11px] font-normal text-muted-foreground">
-            {cfg.endTime
-              ? "Exam will automatically close at this time."
-              : "Leave blank = no closing deadline."}
-          </p>
-        </div>
+            <div className="grid gap-2 text-sm font-medium">
+              <div className="flex flex-wrap items-center justify-between gap-1">
+                <span>End Time</span>
+                <div className="flex items-center gap-1 font-normal">
+                  {cfg.startTime && (
+                    <>
+                      <button
+                        type="button"
+                        className="text-[11px] text-primary hover:underline cursor-pointer"
+                        onClick={() => {
+                          const start = new Date(cfg.startTime).getTime();
+                          const dur = (Number(newDuration) || 60) * 60000;
+                          setCfg((c) => ({ ...c, endTime: getLocalDatetimeString(new Date(start + dur)) }));
+                        }}
+                      >
+                        +{newDuration || "60"}m
+                      </button>
+                      <span className="text-[10px] text-muted-foreground">·</span>
+                      <button
+                        type="button"
+                        className="text-[11px] text-primary hover:underline cursor-pointer"
+                        onClick={() => {
+                          const start = new Date(cfg.startTime).getTime();
+                          setCfg((c) => ({ ...c, endTime: getLocalDatetimeString(new Date(start + 2 * 3600000)) }));
+                        }}
+                      >
+                        +2h
+                      </button>
+                      <span className="text-[10px] text-muted-foreground">·</span>
+                      <button
+                        type="button"
+                        className="text-[11px] text-primary hover:underline cursor-pointer"
+                        onClick={() => {
+                          const start = new Date(cfg.startTime).getTime();
+                          setCfg((c) => ({ ...c, endTime: getLocalDatetimeString(new Date(start + 24 * 3600000)) }));
+                        }}
+                      >
+                        +1d
+                      </button>
+                    </>
+                  )}
+                  {cfg.endTime && (
+                    <>
+                      {cfg.startTime && <span className="text-[10px] text-muted-foreground">·</span>}
+                      <button
+                        type="button"
+                        className="text-[11px] text-destructive hover:underline cursor-pointer font-normal"
+                        onClick={() => setCfg((c) => ({ ...c, endTime: "" }))}
+                      >
+                        Clear
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <Input
+                type="datetime-local"
+                min={cfg.startTime || (editingExam?.endTime && new Date(editingExam.endTime).getTime() < Date.now() ? undefined : getLocalDatetimeString())}
+                value={cfg.endTime}
+                onChange={(event) => setCfg((c) => ({ ...c, endTime: event.target.value }))}
+              />
+              <p className="text-[11px] font-normal text-muted-foreground">
+                {cfg.endTime
+                  ? "Exam will automatically close at this time."
+                  : "Leave blank = no closing deadline."}
+              </p>
+            </div>
+          </>
+        )}
 
         <label className="grid gap-2 text-sm font-medium">
           Maximum Attempts
