@@ -1,6 +1,7 @@
 import {
     runAnonymousCode,
     saveAnonymousAnswers,
+    sendAnonymousEntryPhoto,
     sendAnonymousIntegrityEvents, // NEW (anti-cheat)
     startAnonymousExam,
     submitAnonymousExam,
@@ -96,6 +97,8 @@ export default function AnonymousExamTakingPage() {
         config: attempt?.integrity,
         active: attempt?.status === 'IN_PROGRESS',
         send: (id, payload) => sendAnonymousIntegrityEvents(id, sessionToken, payload),
+        sendEntryPhoto: (id, imageData) => sendAnonymousEntryPhoto(id, sessionToken, imageData),
+        onEntryPhotoSaved: () => void attemptQuery.refetch(),
     });
     const questionFont = useQuestionFontSize();
     const [confirmOpen, setConfirmOpen] = useState(false);
@@ -640,6 +643,8 @@ export default function AnonymousExamTakingPage() {
                             </section>
                         )}
 
+                        <FontSizeControl font={questionFont} />
+
                         {attempt.questions.map((question, index) => {
                             if (question.type === 'CODING') return null;
                             const answer = answers[question.id] ?? {
@@ -664,7 +669,7 @@ export default function AnonymousExamTakingPage() {
                                         {starButton(question.id, index + 1)}
                                     </div>
 
-                                    <p className="mt-3 whitespace-pre-wrap">{question.content}</p>
+                                    <p className="mt-3 whitespace-pre-wrap" style={questionFont.style}>{question.content}</p>
 
                                     {question.imageUrl?.trim() && (
                                         <div className="mt-3">
@@ -728,7 +733,7 @@ export default function AnonymousExamTakingPage() {
                                                             className="mt-1"
                                                         />
                                                         <div className="flex flex-col gap-2">
-                                                            <span>{option.content}</span>
+                                                            <span style={questionFont.style}>{option.content}</span>
                                                             {option.imageUrl?.trim() && (
                                                                 <img
                                                                     src={option.imageUrl}
