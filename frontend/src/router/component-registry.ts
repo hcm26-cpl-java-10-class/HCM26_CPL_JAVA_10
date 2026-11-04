@@ -16,6 +16,8 @@ import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModule
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 import { LocationPage } from "@/pages/management/rbac/location";
+import AuditLogPage from "@/pages/management/audit-log";
+
 
 export interface RouteConfig {
   path: string;
@@ -30,14 +32,14 @@ export const routes: RouteConfig[] = [
   { path: "/module-group-module", component: ModuleGroupModulePage, isPublic: true },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
- { 
-    path: "/locations", 
-    component: LocationPage, 
+ {
+    path: "/locations",
+    component: LocationPage,
     isPublic: true
   },
-  { 
-    path: "/management/rbac/locations", 
-    component: LocationPage, 
+  {
+    path: "/management/rbac/locations",
+    component: LocationPage,
     isPublic: true
   },
   {
@@ -65,4 +67,5 @@ export const routes: RouteConfig[] = [
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
+  {path: "/admin/audit-log", component: AuditLogPage, isModuleDriven: true },
 ];

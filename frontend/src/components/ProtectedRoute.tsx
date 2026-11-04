@@ -19,7 +19,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAll = false,
 }) => {
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const { hasPermission, hasAnyPermission, hasAllPermissions } = usePermissions();
+  const { hasPermission, hasAnyPermission, hasAllPermissions,activeRole, } = usePermissions();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -37,6 +37,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     if (!hasAccess) {
       return <Navigate to="/unauthorized" replace />;
     }
+  }
+  if (
+      window.location.pathname === "/admin/audit-log" &&
+      activeRole?.toUpperCase() !== "ADMIN"
+  ) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return <>{children}</>;
