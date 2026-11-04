@@ -41,20 +41,38 @@ export function SidebarMenu() {
                         }
                         return true;
                     })
-                    .map((module) => ({
-                        title: module.title ?? "Untitled",
-                        url: module.url ?? "#",
-                        icon: resolveIcon(module.icon),
-                        isActive:
-                            !!module.url &&
-                            (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
-                    })),
+                    .map((module) => {
+                        const moduleUrl = module.url?.replace(/\/+$/, "");
+                        const normalizedTitle = (module.title ?? "").trim().toLocaleLowerCase();
+                        const isRoleManagement =
+                            moduleUrl === "/roles" ||
+                            moduleUrl === "/role" ||
+                            normalizedTitle === "roles" ||
+                            normalizedTitle === "quản lý vai trò" ||
+                            normalizedTitle === "role management";
+                        const url = isRoleManagement
+                            ? "/fams/role-permission-matrix"
+                            : module.url ?? "#";
+
+                        return {
+                            title: module.title ?? "Untitled",
+                            url,
+                            icon: resolveIcon(module.icon),
+                            isActive:
+                                location.pathname === url ||
+                                location.pathname.startsWith(`${url}/`),
+                        };
+                    }),
             }))
             .filter((group) => group.items.length > 0);
     }, [location.pathname, moduleGroups]);
 
     return (
-        <Sidebar variant="inset" collapsible="icon">
+        <Sidebar
+            variant="inset"
+            collapsible="icon"
+            className="[--sidebar:#0F172A] [--sidebar-foreground:#F8FAFC] [--sidebar-accent:#1E293B] [--sidebar-accent-foreground:#F8FAFC] [--sidebar-border:#334155] [--sidebar-ring:#EA580C] [&_[data-slot=sidebar-inner]]:!bg-slate-900"
+        >
             {/* Header */}
             <SidebarHeader className="py-3 px-0">
                 <Button
@@ -67,12 +85,12 @@ export function SidebarMenu() {
             group-data-[collapsible=icon]:px-0
           "
                 >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-blue-800 text-sm font-semibold text-white">
-                        RB
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-600 text-sm font-semibold text-white">
+                        F
                     </div>
 
                     {state === "expanded" && (
-                        <span className="text-lg font-bold text-blue-800 truncate">RBAC System</span>
+                        <span className="truncate text-lg font-bold text-white">FAMS</span>
                     )}
                 </Button>
             </SidebarHeader>
@@ -87,8 +105,12 @@ export function SidebarMenu() {
             </SidebarContent>
 
             {/* Footer */}
-            <SidebarFooter className="p-4 text-xs flex flex-row items-center gap-2 text-muted-foreground group-data-[collapsible=icon]:justify-center">
-                {state === "expanded" && <span className="flex-1 truncate">RBAC System v1.0</span>}
+            <SidebarFooter className="flex flex-col items-start gap-1 p-4 text-xs text-slate-400 group-data-[collapsible=icon]:items-center">
+                {state === "expanded" && (
+                    <span className="flex-1 truncate">
+                        FAMS v2.4.0 / Training Operations
+                    </span>
+                )}
 
                 <TooltipWrapper content="Logout">
                     <Button

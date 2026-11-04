@@ -2,18 +2,11 @@ import { ProTable } from "@/components/datatable/ProTable";
 import ActionButton from "@/components/datatable/common/ActionButton";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PermissionGate } from "@/components/PermissionGate";
-import {
-    normalizeEntityActionPath,
-    resolveEntityActionPath,
-} from "@/router/entity-action.utils";
+import { normalizeEntityActionPath, resolveEntityActionPath } from "@/router/entity-action.utils";
 import type { EntityConfig } from "@/types";
 import { useProTable } from "@/components/datatable/hook/useProTable";
 import { usePermissions } from "@/hooks/usePermissions";
-import {
-    ADMIN_ROLE,
-    normalizeRole,
-    STUDENT_ROLE,
-} from "@/utils/rbac.utils";
+import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { Plus } from "lucide-react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -34,44 +27,15 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
     const editPage = entity.actionPages?.edit;
     const detailPage = entity.actionPages?.detail;
 
-    // Khai báo trước khi sử dụng trong useMemo
-    const normalizedActiveRole = normalizeRole(activeRole);
-    const isAdminRole = normalizedActiveRole === ADMIN_ROLE;
-    const isUserManagement = entity.path === "/users";
-    const isStudentRole = normalizedActiveRole === STUDENT_ROLE;
-
     const headerActions = useMemo(() => {
         if (!createPage) {
             return undefined;
         }
 
-        const createPath = normalizeEntityActionPath(
-            entity.path,
-            createPage.path
-        );
-
-        // Ưu tiên hiển thị nút tạo tài khoản ở trang Users cho Admin
-        if (isUserManagement && isAdminRole) {
-            return (
-                <ActionButton
-                    onClick={() => navigate(createPath)}
-                    tooltip="Tạo tài khoản học sinh / giáo viên"
-                    title="Tạo tài khoản"
-                    variant="default"
-                    icon={<Plus size={16} />}
-                />
-            );
-        }
-
         return (
-            <PermissionGate
-                permission={
-                    createPage.requiredPermission ||
-                    table.permission?.keys?.create
-                }
-            >
+            <PermissionGate permission={createPage.requiredPermission || table.permission?.keys?.create}>
                 <ActionButton
-                    onClick={() => navigate(createPath)}
+                    onClick={() => navigate(normalizeEntityActionPath(entity.path, createPage.path))}
                     tooltip={`Create ${entity.name}`}
                     title="Create"
                     variant="default"
@@ -79,15 +43,7 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
                 />
             </PermissionGate>
         );
-    }, [
-        createPage,
-        entity.name,
-        entity.path,
-        isAdminRole,
-        isUserManagement,
-        navigate,
-        table.permission?.keys?.create,
-    ]);
+    }, [createPage, entity.name, navigate, table.permission?.keys?.create]);
 
     const onEdit = useMemo(() => {
         if (!editPage) {
@@ -95,26 +51,17 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
         }
 
         return (row: any) => {
-            const pathTemplate = normalizeEntityActionPath(
-                entity.path,
-                editPage.path
-            );
-            const path = resolveEntityActionPath(
-                pathTemplate,
-                row,
-                entity.schema.idField
-            );
+            const pathTemplate = normalizeEntityActionPath(entity.path, editPage.path);
+            const path = resolveEntityActionPath(pathTemplate, row, entity.schema.idField);
 
             if (!path) {
-                toast.error(
-                    "Unable to open edit page because row id is missing."
-                );
+                toast.error("Unable to open edit page because row id is missing.");
                 return;
             }
 
             navigate(path);
         };
-    }, [editPage, entity.path, entity.schema.idField, navigate]);
+    }, [editPage, entity.schema.idField, navigate]);
 
     const onView = useMemo(() => {
         if (!detailPage) {
@@ -122,27 +69,19 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
         }
 
         return (row: any) => {
-            const pathTemplate = normalizeEntityActionPath(
-                entity.path,
-                detailPage.path
-            );
-            const path = resolveEntityActionPath(
-                pathTemplate,
-                row,
-                entity.schema.idField
-            );
+            const pathTemplate = normalizeEntityActionPath(entity.path, detailPage.path);
+            const path = resolveEntityActionPath(pathTemplate, row, entity.schema.idField);
 
             if (!path) {
-                toast.error(
-                    "Unable to open detail page because row id is missing."
-                );
+                toast.error("Unable to open detail page because row id is missing.");
                 return;
             }
 
             navigate(path);
         };
-    }, [detailPage, entity.path, entity.schema.idField, navigate]);
+    }, [detailPage, entity.schema.idField, navigate]);
 
+    const isStudentRole = normalizeRole(activeRole) === STUDENT_ROLE;
     const isReadOnlyLikeRole =
         !!table.permission?.canRead &&
         !table.permission?.canCreate &&
@@ -151,9 +90,7 @@ export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
         !table.permission?.canImport &&
         !table.permission?.canExport;
 
-    const browseMode =
-        isStudentRole ||
-        (isReadOnlyLikeRole && !(isUserManagement && isAdminRole));
+    const browseMode = isStudentRole || isReadOnlyLikeRole;
 
     return (
         <MainLayout pathName={{ [breadcrumbKey]: entity.name }}>

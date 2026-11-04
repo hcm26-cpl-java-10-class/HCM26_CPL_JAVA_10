@@ -1,10 +1,11 @@
 import ToggleTheme from "@/components/ToggleTheme";
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge.tsx";
 import type { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
 import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 import { ChevronDown, ShieldCheck, GraduationCap } from "lucide-react";
+import { HeaderUserControls } from "@/components/layout/HeaderUserControls";
 import {
   formatRoleLabel,
   getHomePathByRole,
@@ -20,12 +21,11 @@ export default function HeaderRight() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const primaryRole = normalizeRole(role);
+  const primaryRole = normalizeRole(role || roles[0]);
   const assignedRoles = uniqueRoles(roles, primaryRole);
   const canSwitchRole = availableRoles.length > 1;
   const currentRole = activeRole ?? primaryRole;
   const isStudentRole = currentRole === "STUDENT";
-
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -39,34 +39,35 @@ export default function HeaderRight() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  if (!role) {
-    return (
-      <div className="flex items-center gap-3">
-        <ToggleTheme />
-      </div>
-    );
-  }
-
   if (!canSwitchRole) {
     return (
       <div className="flex items-center gap-3">
-        <Badge
-          variant="secondary"
-          className="text-sm text-blue-500 bg-blue-100"
-        >
-          {formatRoleLabel(currentRole)}
-        </Badge>
+        {primaryRole && (
+          <Badge
+            variant="secondary"
+            className="text-sm text-blue-500 bg-blue-100"
+          >
+            {formatRoleLabel(primaryRole)}
+          </Badge>
+        )}
 
         <ToggleTheme />
+        <HeaderUserControls />
       </div>
     );
   }
 
   const switchRole = (nextRole: string) => {
     const normalizedRole = normalizeRole(nextRole);
-    setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
     setOpen(false);
-    navigate(getHomePathByRole(normalizedRole));
+
+    // Đổi role và đổi trang trong CÙNG một lần cập nhật. Nếu tách ra, React có một lượt render
+    // mà role mới đã có hiệu lực nhưng URL vẫn là trang cũ -> trang cũ bị coi là không có quyền
+    // (403) hoặc không tồn tại với role mới (404) và bị đẩy sang trang lỗi.
+    startTransition(() => {
+      setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
+      navigate(getHomePathByRole(normalizedRole), { replace: true });
+    });
   };
 
   return (
@@ -139,6 +140,7 @@ export default function HeaderRight() {
       )}
 
       <ToggleTheme />
+      <HeaderUserControls />
     </div >
   );
 }

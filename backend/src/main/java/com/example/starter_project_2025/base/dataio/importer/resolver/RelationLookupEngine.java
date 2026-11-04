@@ -51,24 +51,30 @@ public class RelationLookupEngine {
 
     private Object findEntity(JpaRepository<?, ?> repo, String field, String value) {
 
+        String methodName = "findBy" + capitalize(field);
+        Object result;
+
         try {
-            String method = "findBy" + capitalize(field);
-
-            Method m = repo.getClass().getMethod(method, String.class);
-
-            Object result = m.invoke(repo, value);
-
-            if (result instanceof Optional<?> opt)
-                return opt.orElseThrow(() -> new RuntimeException("Not found: " + value));
-
-            if (result == null)
-                throw new RuntimeException("Not found: " + value);
-
-            return result;
-
+            Method m = repo.getClass().getMethod(methodName, String.class);
+            result = m.invoke(repo, value);
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(
+                    "Repository is missing method " + methodName + "(String)", e);
         } catch (Exception e) {
             throw new RuntimeException("Lookup failed: " + value, e);
         }
+
+        if (result instanceof Optional<?> opt) {
+            return opt.orElseThrow(() -> new RuntimeException(
+                    "Not found: " + field + " = '" + value + "'"));
+        }
+
+        if (result == null) {
+            throw new RuntimeException(
+                    "Not found: " + field + " = '" + value + "'");
+        }
+
+        return result;
     }
 
     private JpaRepository<?, ?> getRepository(Class<?> entity) {

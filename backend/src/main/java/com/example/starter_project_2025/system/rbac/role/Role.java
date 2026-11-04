@@ -42,7 +42,7 @@ public class Role extends BaseEntity {
     @ExportField(name = "Name")
     String name;
 
-    @Column
+    @Column(length = 1000)
     @ImportField(name = "Description")
     @ExportField(name = "Description")
     String description;

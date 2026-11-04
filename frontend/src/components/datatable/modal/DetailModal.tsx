@@ -112,6 +112,13 @@ export function DetailModal({
       case "date": {
         try {
           const date = new Date(value);
+          if (field.name === "dateOfBirth") {
+            return date.toLocaleDateString("vi-VN", {
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+            });
+          }
           return date.toLocaleDateString("vi-VN", {
             year: "numeric",
             month: "2-digit",

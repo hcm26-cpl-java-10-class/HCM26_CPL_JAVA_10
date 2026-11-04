@@ -1,8 +1,5 @@
 package com.example.starter_project_2025.system.auth.verify;
 
-import com.example.starter_project_2025.system.audit.AuditAction;
-import com.example.starter_project_2025.system.audit.AuditLogService;
-import com.example.starter_project_2025.system.audit.AuditSupport;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.system.auth.token.onetime.OneTimeToken;
 import com.example.starter_project_2025.system.auth.token.onetime.OneTimeTokenService;
@@ -30,7 +27,6 @@ public class VerificationServiceImpl implements VerificationService {
     OneTimeTokenService oneTimeTokenService;
     UserRepository userRepository;
     MailUtil mailUtil;
-    AuditLogService auditLogService;
 
     private static final String VERIFICATION_EMAIL = "email/verification_email";
     private static final String RESET_PASSWORD_EMAIL = "email/reset_password_email";
@@ -85,17 +81,6 @@ public class VerificationServiceImpl implements VerificationService {
 
         user.setIsActive(true);
         userRepository.save(user);
-
-        auditLogService.logEventAs(
-                user.getId(),
-                user.getEmail(),
-                AuditAction.VERIFY_EMAIL,
-                "USER",
-                String.valueOf(user.getId()),
-                null,
-                null
-        );
-
         return true;
     }
 
@@ -113,16 +98,6 @@ public class VerificationServiceImpl implements VerificationService {
         String verificationLink = String.format("%s/forgot-password?token=%s", frontendUrl, token);
 
         sendResetPasswordMail(user.getEmail(), user.getFullName(), verificationLink);
-
-        auditLogService.logEventAs(
-                user.getId(),
-                user.getEmail(),
-                AuditAction.FORGOT_PASSWORD,
-                "USER",
-                String.valueOf(user.getId()),
-                null,
-                null
-        );
     }
 
     public void sendVerificationEmail(String to, String username, String verificationLink) {

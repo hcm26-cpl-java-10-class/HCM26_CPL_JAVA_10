@@ -34,7 +34,6 @@ function AppRoutes() {
             {/* Dynamic routes from backend Module table */}
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
-
                     if (!m.url) return null;
                     const Component = componentRegistry[m.url];
 
