@@ -30,8 +30,10 @@ type EnrollmentTarget = "department" | "student";
 
 export function CourseEnrollmentAssignmentDialog({
   course,
+  prominent = false,
 }: {
-  course: CatalogCourse;
+  course: Pick<CatalogCourse, "id" | "name">;
+  prominent?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<EnrollmentTarget>("department");
@@ -232,9 +234,15 @@ export function CourseEnrollmentAssignmentDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" className="flex-1">
-          Enroll
-        </Button>
+        {prominent ? (
+          <Button type="button" variant="default">
+            Enroll
+          </Button>
+        ) : (
+          <Button type="button" variant="outline" className="flex-1">
+            Enroll
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>

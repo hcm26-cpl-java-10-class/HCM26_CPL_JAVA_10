@@ -41,6 +41,7 @@ import StudentSyllabusListPage from "@/pages/student/StudentSyllabusListPage";
 import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
 
 import CourseReportPage from "@/pages/management/demo/report";
+import { CourseEnrollmentDetailPage } from "@/pages/management/demo/course/pages/CourseEnrollmentDetailPage";
 import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-questions";
 import LessonReportsPage from "@/pages/management/demo/lesson-reports";
 import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
@@ -335,6 +336,12 @@ export const routes: RouteConfig[] = [
     component: CourseReportPage,
     requiredPermission: "COURSE_REPORT_READ",
     isModuleDriven: true,
+  },
+  {
+    path: "/course-enrollments/:id",
+    component: CourseEnrollmentDetailPage,
+    requiredPermission: "COURSE_REPORT_READ",
+    isModuleDriven: false,
   },
 
   // Q&A

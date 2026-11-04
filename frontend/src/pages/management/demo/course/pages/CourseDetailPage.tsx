@@ -9,6 +9,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { usePermissions } from "@/hooks/usePermissions";
+import { STUDENT_ROLE, normalizeRole } from "@/utils/rbac.utils";
+import { CourseEnrollmentAssignmentDialog } from "../components/CourseEnrollmentAssignmentDialog";
 import { DepartmentMemberPicker } from "@/pages/student/DepartmentMemberPicker";
 import { StudentCheckboxList } from "@/pages/student/StudentCheckboxList";
 import {
@@ -62,10 +65,15 @@ const CONTENT_ICON: Record<LessonContentType, LucideIcon> = {
   LINK: Link2,
 };
 
-export function CourseDetailPage() {
+export function CourseDetailPage({ forceEnrollmentManagement = false }: { forceEnrollmentManagement?: boolean } = {}) {
   const { id } = useParams();
+  const { activeRole } = usePermissions();
   const courseId = Number(id);
   const validId = Number.isInteger(courseId) && courseId > 0;
+  const enrollmentManagement =
+    forceEnrollmentManagement || normalizeRole(activeRole) !== STUDENT_ROLE;
+  const listPath = forceEnrollmentManagement ? "/course-enrollments" : "/courses";
+  const listLabel = forceEnrollmentManagement ? "Back to enrollments" : "Back to courses";
 
   const detailQuery = useQuery({
     queryKey: ["course-detail", courseId],
@@ -75,17 +83,26 @@ export function CourseDetailPage() {
   });
 
   const course = detailQuery.data;
-  const breadcrumbTitles: Record<string, string> = { courses: "Courses" };
+  const breadcrumbTitles: Record<string, string> = forceEnrollmentManagement
+    ? { "course-enrollments": "Enrollments" }
+    : { courses: "Courses" };
   if (id && course?.name) breadcrumbTitles[id] = course.name;
 
   return (
     <MainLayout pathName={breadcrumbTitles}>
       <div className="mx-auto w-full max-w-6xl space-y-6">
-        <Button asChild variant="ghost" className="-ml-3">
-          <Link to="/courses">
-            <ArrowLeft className="size-4" /> Back to courses
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button asChild variant="ghost" className="-ml-3">
+            <Link to={listPath}>
+              <ArrowLeft className="size-4" /> {listLabel}
+            </Link>
+          </Button>
+          {enrollmentManagement && course && (
+            <PermissionGate permissions={["DEPARTMENT_READ", "DEPARTMENT_UPDATE"]} requireAll>
+              <CourseEnrollmentAssignmentDialog course={course} prominent />
+            </PermissionGate>
+          )}
+        </div>
 
         {!validId || (detailQuery.isError && getErrorStatus(detailQuery.error) === 404) ? (
           <StateCard
@@ -93,7 +110,7 @@ export function CourseDetailPage() {
             text="This course does not exist or is no longer available."
             action={
               <Button asChild>
-                <Link to="/courses">Browse courses</Link>
+                <Link to={listPath}>{forceEnrollmentManagement ? "Back to enrollments" : "Browse courses"}</Link>
               </Button>
             }
           />
@@ -107,7 +124,7 @@ export function CourseDetailPage() {
             </Button>
           </div>
         ) : (
-          <CourseDetailContent course={course} />
+          <CourseDetailContent course={course} enrollmentManagement={enrollmentManagement} />
         )}
       </div>
     </MainLayout>
