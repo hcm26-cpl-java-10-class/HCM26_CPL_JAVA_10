@@ -5,16 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { BookOpen, CalendarDays, GraduationCap, UserRound } from "lucide-react";
 import type { EntityConfig } from "@/types";
 import { Link } from "react-router-dom";
-import { CourseLearningPage } from "../progress/CourseLearningPage";
-import { EnrollmentProgressBar } from "../progress/EnrollmentProgressBar";
 
 const formatEnrollmentDate = (value: string) => {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("vi-VN");
 };
 
-// The router discovers this configuration as a named export.
-// eslint-disable-next-line react-refresh/only-export-components
 export const entityConfig: EntityConfig = {
     name: "Enrollments",
     path: "/enrollments",
@@ -31,13 +27,6 @@ export const entityConfig: EntityConfig = {
             { name: "enrolledAt", label: "Enrolled At", type: "text" },
         ],
     },
-    actionPages: {
-        detail: {
-            path: "/enrollments/:id/learn",
-            component: CourseLearningPage,
-            requiredPermission: "LESSON_PROGRESS_READ",
-        },
-    },
 };
 
 export default function EnrollmentManagementPage() {
@@ -53,7 +42,7 @@ export default function EnrollmentManagementPage() {
                     <div className="flex flex-wrap items-end justify-between gap-4">
                         <div>
                             <p className="text-sm font-medium text-blue-700">YOUR LEARNING SPACE</p>
-                            <h1 className="mt-1 text-3xl font-bold tracking-tight">Enrollment</h1>
+                            <h1 className="mt-1 text-3xl font-bold tracking-tight">My learning</h1>
                         </div>
                         <Button asChild>
                             <Link to="/courses">
@@ -116,49 +105,46 @@ export default function EnrollmentManagementPage() {
                                 </p>
                             </div>
                             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                                {enrollments.map((enrollment) => {
-                                    return (
-                                        <article key={enrollment.id} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-                                            <div className="h-44 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100">
-                                                {enrollment.thumbnailUrl ? (
-                                                    <img
-                                                        src={enrollment.thumbnailUrl}
-                                                        alt=""
-                                                        className="h-full w-full object-cover"
-                                                    />
-                                                ) : (
-                                                    <div className="flex h-full items-center justify-center">
-                                                        <GraduationCap className="size-16 text-blue-900/25" />
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="space-y-4 p-5">
-                                                <div>
-                                                    <h3 className="line-clamp-2 min-h-12 text-lg font-semibold">
-                                                        {enrollment.courseName}
-                                                    </h3>
-                                                    {enrollment.instructor && (
-                                                        <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                                                            <UserRound className="size-4" /> {enrollment.instructor}
-                                                        </p>
-                                                    )}
+                                {enrollments.map((enrollment) => (
+                                    <article key={enrollment.id} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+                                        <div className="h-44 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100">
+                                            {enrollment.thumbnailUrl ? (
+                                                <img
+                                                    src={enrollment.thumbnailUrl}
+                                                    alt=""
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="flex h-full items-center justify-center">
+                                                    <GraduationCap className="size-16 text-blue-900/25" />
                                                 </div>
-                                                {enrollment.enrolledAt && (
-                                                    <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                        <CalendarDays className="size-4" />
-                                                        Enrolled {formatEnrollmentDate(enrollment.enrolledAt)}
+                                            )}
+                                        </div>
+                                        <div className="space-y-4 p-5">
+                                            <div>
+                                                <h3 className="line-clamp-2 min-h-12 text-lg font-semibold">
+                                                    {enrollment.courseName}
+                                                </h3>
+                                                {enrollment.instructor && (
+                                                    <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                                                        <UserRound className="size-4" /> {enrollment.instructor}
                                                     </p>
                                                 )}
-                                                <EnrollmentProgressBar enrollmentId={enrollment.id} />
-                                                <Button asChild className="w-full">
-                                                    <Link to={`/enrollments/${enrollment.id}/learn`}>
-                                                        <BookOpen className="size-4" /> Continue learning
-                                                    </Link>
-                                                </Button>
                                             </div>
-                                        </article>
-                                    );
-                                })}
+                                            {enrollment.enrolledAt && (
+                                                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                    <CalendarDays className="size-4" />
+                                                    Enrolled {formatEnrollmentDate(enrollment.enrolledAt)}
+                                                </p>
+                                            )}
+                                            <Button asChild className="w-full">
+                                                <Link to="/courses">
+                                                    <BookOpen className="size-4" /> Browse catalog
+                                                </Link>
+                                            </Button>
+                                        </div>
+                                    </article>
+                                ))}
                             </div>
                         </section>
                     </>

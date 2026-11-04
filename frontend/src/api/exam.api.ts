@@ -25,7 +25,8 @@ export interface Exam {
 // NEW (anti-cheat)
 export type IntegrityEventType =
     | 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'FULLSCREEN_EXIT' | 'COPY' | 'CUT' | 'PASTE'
-    | 'CONTEXT_MENU' | 'DEVTOOLS_KEY' | 'PRINT_ATTEMPT' | 'MULTI_SESSION';
+    | 'CONTEXT_MENU' | 'DEVTOOLS_KEY' | 'PRINT_ATTEMPT' | 'MULTI_SESSION'
+    | 'CAMERA_OFF' | 'CAMERA_COVERED' | 'FACE_MISSING' | 'MULTIPLE_FACES';
 
 export interface ExamIntegrityConfig {
     enabled: boolean;
@@ -33,6 +34,10 @@ export interface ExamIntegrityConfig {
     blockCopyPaste: boolean;
     requireFullscreen: boolean;
     singleSession: boolean;
+    cameraProctoring?: boolean;
+    notifyOnViolation?: boolean;
+    /** Entry photo already taken (questions stay hidden until then). */
+    entryPhotoDone?: boolean;
 }
 
 export type ExamAttemptStatus =
@@ -349,8 +354,18 @@ export const submitAnonymousExam = async (
 // ===== NEW (anti-cheat) =====
 export interface IntegrityEventsPayload {
     clientId: string;
-    events: { type: IntegrityEventType; durationSeconds?: number; detail?: string }[];
+    events: { type: IntegrityEventType; durationSeconds?: number; detail?: string; snapshot?: string }[];
 }
+
+export const sendEntryPhoto = async (attemptId: number, imageData: string) => {
+    await api.post(`/exams/attempts/${attemptId}/proctor-photo`, { imageData });
+};
+
+export const sendAnonymousEntryPhoto = async (attemptId: number, sessionToken: string, imageData: string) => {
+    await api.post(`/exams/anonymous/attempts/${attemptId}/proctor-photo`, { imageData }, {
+        headers: { 'X-Anonymous-Session': sessionToken },
+    });
+};
 
 export const sendIntegrityEvents = async (attemptId: number, payload: IntegrityEventsPayload) => {
     await api.post(`/exams/attempts/${attemptId}/integrity-events`, payload);
@@ -391,6 +406,11 @@ export interface IntegrityReportRow {
     contextMenuCount: number;
     shortcutCount: number;
     multiSessionCount: number;
+    cameraOffCount: number;
+    cameraCoveredCount: number;
+    faceMissingCount: number;
+    multipleFacesCount: number;
+    hasEntryPhoto: boolean;
     totalAwaySeconds: number;
     lastViolationAt: string | null;
     flagged: boolean;
@@ -416,7 +436,21 @@ export interface IntegrityEventRecord {
     detail: string | null;
     userAgent: string | null;
     ipAddress: string | null;
+    /** Evidence photo (data URL) for camera violations. */
+    snapshot: string | null;
 }
+
+export interface EntryPhoto {
+    imageData: string | null;
+    capturedAt: string | null;
+}
+
+export const getEntryPhoto = async (examId: number, attemptId: number) => {
+    const response = await api.get<EntryPhoto>(
+        `/exams/${examId}/integrity-report/attempts/${attemptId}/entry-photo`,
+    );
+    return response.data;
+};
 
 export const getIntegrityReport = async (examId: number) => {
     const response = await api.get<IntegrityReport>(`/exams/${examId}/integrity-report`);

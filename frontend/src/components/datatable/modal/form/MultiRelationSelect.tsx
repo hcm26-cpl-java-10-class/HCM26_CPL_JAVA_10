@@ -38,20 +38,15 @@ export function MultiRelationSelect({
   const [search, setSearch] = useState("");
   const selectedValues: any[] = Array.isArray(value) ? value : [];
 
-  const selectedItems = useMemo(() => {
-    if (items.length === 0 && selectedValues.length > 0) {
-      return selectedValues.map((v) => ({
-        [rel.valueField]: v,
-        [rel.labelField]: v,
-      }));
-    }
-
-    return items.filter((item) =>
+  const selectedItems = useMemo(
+    () =>
+      items.filter((item) =>
         selectedValues.some(
-            (v) => v?.toString() === item[rel.valueField]?.toString()
+          (v) => v?.toString() === item[rel.valueField]?.toString()
         )
-    );
-  }, [items, selectedValues, rel.valueField, rel.labelField]);
+      ),
+    [items, selectedValues, rel.valueField]
+  );
 
   const filteredItems = useMemo(
     () =>
@@ -114,18 +109,22 @@ export function MultiRelationSelect({
             <div className="flex flex-wrap gap-1 flex-1 overflow-hidden">
               {selectedItems.length > 0 ? (
                 <>
-                  {selectedItems.map((item) => (
-                      <Badge key={item[rel.valueField]} variant="secondary" className="text-xs gap-1">
-                        {item[rel.labelField]}
-                        <X
-                            size={12}
-                            className="cursor-pointer hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleItem(item[rel.valueField]);
-                            }}
-                        />
-                      </Badge>
+                  {selectedItems.slice(0, MAX_VISIBLE_BADGES).map((item) => (
+                    <Badge
+                      key={item[rel.valueField]}
+                      variant="secondary"
+                      className="text-xs gap-1"
+                    >
+                      {item[rel.labelField]}
+                      <X
+                        size={12}
+                        className="cursor-pointer hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleItem(item[rel.valueField]);
+                        }}
+                      />
+                    </Badge>
                   ))}
                   {selectedItems.length > MAX_VISIBLE_BADGES && (
                     <Badge variant="outline" className="text-xs">

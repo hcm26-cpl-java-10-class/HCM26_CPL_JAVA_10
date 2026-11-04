@@ -24,7 +24,7 @@ import java.util.List;
 @AllArgsConstructor
 @Table(name = "module_groups")
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ImportEntity("module-group")
+@ImportEntity("module_group")
 @ExportEntity(fileName = "module_groups", sheetName = "Module Groups")
 @ResourcePermission("MENU")
 @ResourceMenu(

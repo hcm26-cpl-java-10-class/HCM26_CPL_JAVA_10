@@ -50,6 +50,12 @@ public class ExamAttemptDTO {
         private boolean blockCopyPaste;
         private boolean requireFullscreen;
         private boolean singleSession;
+        /** Bat camera giam sat (chup anh vao thi + phat hien tat/che/roi camera, nhieu nguoi). */
+        private boolean cameraProctoring;
+        /** Hien thong bao cho nguoi thi khi vi pham. */
+        private boolean notifyOnViolation;
+        /** Da chup anh vao thi chua (chua co thi chua duoc xem de). */
+        private boolean entryPhotoDone;
     }
 
     @Getter

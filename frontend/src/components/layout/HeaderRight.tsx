@@ -1,5 +1,5 @@
 import ToggleTheme from "@/components/ToggleTheme";
-import { startTransition, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge.tsx";
 import type { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
@@ -12,7 +12,6 @@ import {
   uniqueRoles,
 } from "@/utils/rbac.utils";
 import { useNavigate } from "react-router-dom";
-import { NotificationBell } from "@/components/layout/NotificationBell";
 
 export default function HeaderRight() {
   const { role, roles } = useSelector((state: RootState) => state.auth);
@@ -58,7 +57,6 @@ export default function HeaderRight() {
           {formatRoleLabel(currentRole)}
         </Badge>
 
-        <NotificationBell />
         <ToggleTheme />
       </div>
     );
@@ -66,12 +64,9 @@ export default function HeaderRight() {
 
   const switchRole = (nextRole: string) => {
     const normalizedRole = normalizeRole(nextRole);
-    const homePath = getHomePathByRole(normalizedRole);
+    setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
     setOpen(false);
-    startTransition(() => {
-      navigate(homePath, { replace: true });
-      setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
-    });
+    navigate(getHomePathByRole(normalizedRole));
   };
 
   return (
@@ -143,7 +138,6 @@ export default function HeaderRight() {
         </Badge>
       )}
 
-      <NotificationBell />
       <ToggleTheme />
     </div >
   );

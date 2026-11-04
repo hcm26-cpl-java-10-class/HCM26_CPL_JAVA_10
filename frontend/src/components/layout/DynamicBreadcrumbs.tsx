@@ -15,7 +15,6 @@ import { iconMap } from "@/components/datatable/iconMap";
 
 type Props = {
     pathTitles?: Record<string, string>;
-    pathLinks?: Record<string, string>;
     hasPage?: boolean;
     ignorePaths?: string[];
     variant?: "default" | "student";
@@ -70,7 +69,6 @@ function resolveTitle(
 
 export default function DynamicBreadcrumbs({
     pathTitles,
-    pathLinks,
     hasPage = true,
     ignorePaths = [],
     variant = "default",
@@ -114,10 +112,9 @@ export default function DynamicBreadcrumbs({
             : pathnameSegments;
 
     const crumbs: BreadcrumbNode[] = rawSegments.flatMap((segment, index) => {
-        const routeHref = `/${rawSegments.slice(0, index + 1).join("/")}`;
-        const href = pathLinks?.[segment] || pathLinks?.[routeHref] || routeHref;
-        const title = resolveTitle(segment, routeHref, pathTitles, moduleTitleByPath);
-        const hasCustomTitle = Boolean(pathTitles?.[segment] || pathTitles?.[routeHref]);
+        const href = `/${rawSegments.slice(0, index + 1).join("/")}`;
+        const title = resolveTitle(segment, href, pathTitles, moduleTitleByPath);
+        const hasCustomTitle = Boolean(pathTitles?.[segment] || pathTitles?.[href]);
 
         if (!hasCustomTitle && isLikelyIdentifier(segment)) {
             return [];

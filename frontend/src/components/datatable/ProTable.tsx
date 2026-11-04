@@ -51,6 +51,14 @@ interface ProTableProps<TData = any> {
 
     hideActions?: boolean;
 
+    /** Single-bar toolbar: hide search/filters, show `toolbarLeading` first. */
+    compactToolbar?: boolean;
+
+    /** Do not render the built-in toolbar (the page provides its own bar). */
+    hideToolbar?: boolean;
+
+    toolbarLeading?: React.ReactNode;
+
     mode?: "default" | "browse";
 
     expandable?: {
@@ -72,6 +80,9 @@ export function ProTable<TData = any>({
     autoPageSize = true,
     rowHeight = 49,
     hideActions = false,
+    compactToolbar = false,
+    hideToolbar = false,
+    toolbarLeading,
     mode = "default",
     expandable,
 }: ProTableProps<TData>) {
@@ -200,22 +211,28 @@ export function ProTable<TData = any>({
         onRowClick || (isBrowseMode ? ((onView || setDetailRow) as (row: TData) => void) : undefined);
 
     return (
-        <div className="grid gap-4 h-full font-inter grid-rows-[auto_1fr_auto]">
-            <Toolbar
-                table={table}
-                headerActions={headerActions}
-                viewMode={effectiveViewMode}
-                onViewModeChange={setViewMode}
-                showViewModeToggle={!isBrowseMode}
-                showActions={!isBrowseMode}
-                showCardColumnToggle={!isBrowseMode}
-            />
+        <div
+            className={`grid gap-4 h-full font-inter ${hideToolbar ? "grid-rows-[1fr_auto]" : "grid-rows-[auto_1fr_auto]"
+                }`}
+        >
+            {!hideToolbar && (
+                <Toolbar
+                    table={table}
+                    headerActions={headerActions}
+                    viewMode={effectiveViewMode}
+                    onViewModeChange={setViewMode}
+                    showViewModeToggle={!isBrowseMode}
+                    showActions={!isBrowseMode}
+                    showCardColumnToggle={!isBrowseMode}
+                    compact={compactToolbar}
+                    leadingSlot={toolbarLeading}
+                />
+            )}
 
             <div
                 ref={containerRef}
-                className={`h-full rounded-md bg-card text-foreground flex flex-col overflow-hidden w-full ${
-                    effectiveViewMode === "card" ? "border-0" : "border"
-                }`}
+                className={`h-full rounded-md bg-card text-foreground flex flex-col overflow-hidden w-full ${effectiveViewMode === "card" ? "border-0" : "border"
+                    }`}
             >
                 {effectiveViewMode === "table" ? (
                     <>
@@ -229,7 +246,7 @@ export function ProTable<TData = any>({
                                 ))}
                                 {showActionsColumn && <col style={{ width: ACTION_COLUMN_WIDTH }} />}
                             </colgroup>
-                            <TableHeader className="bg-background z-40 sticky top-0 shadow-xs">
+                            <TableHeader className="bg-background z-10 sticky top-0 shadow-xs">
                                 <TableRow>
                                     {isExpandable && <TableHead style={{ width: 40 }} />}
                                     <TableHead style={{ width: 20 }}>
@@ -253,7 +270,7 @@ export function ProTable<TData = any>({
                                     {showActionsColumn && (
                                         <TableHead
                                             style={{ width: ACTION_COLUMN_WIDTH }}
-                                            className="sticky right-0 z-50 bg-background border-l border-border/70 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.45)]"
+                                            className="sticky right-0 z-30 bg-background border-l border-border/70 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.45)]"
                                         >
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className="whitespace-nowrap">Actions</span>
@@ -357,9 +374,8 @@ export function ProTable<TData = any>({
                                                     {showActionsColumn && (
                                                         <TableCell
                                                             style={{ width: ACTION_COLUMN_WIDTH }}
-                                                            className={`sticky right-0 z-20 border-l border-border/70 ${
-                                                                index % 2 === 0 ? "bg-accent" : "bg-background"
-                                                            } group-hover:bg-muted shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.35)]`}
+                                                            className={`sticky right-0 z-20 border-l border-border/70 ${index % 2 === 0 ? "bg-accent" : "bg-background"
+                                                                } group-hover:bg-muted/50 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.35)]`}
                                                         >
                                                             <div className="flex items-center gap-1 overflow-hidden">
                                                                 {finalRenderRowActions(row)}
@@ -377,50 +393,50 @@ export function ProTable<TData = any>({
                                                             {expandable?.renderExpandedRow
                                                                 ? expandable.renderExpandedRow(row)
                                                                 : schema.fields
-                                                                      .filter((f: any) => f.expandable)
-                                                                      .map((f: any) =>
-                                                                          f.renderExpanded ? (
-                                                                              f.renderExpanded(row[f.name], row)
-                                                                          ) : (
-                                                                              <div key={f.name} className="p-3">
-                                                                                  <CellRenderer
-                                                                                      field={f}
-                                                                                      value={row[f.name]}
-                                                                                      relationOptions={
-                                                                                          table.relationOptions
-                                                                                      }
-                                                                                      disableBooleanToggle={
-                                                                                          !(table.permission?.canUpdate ??
-                                                                                              true)
-                                                                                      }
-                                                                                      onBooleanToggle={(
-                                                                                          fieldName,
-                                                                                          newValue,
-                                                                                      ) => {
-                                                                                          if (
-                                                                                              !(table.permission?.canUpdate ??
-                                                                                                  true)
-                                                                                          ) {
-                                                                                              return;
-                                                                                          }
+                                                                    .filter((f: any) => f.expandable)
+                                                                    .map((f: any) =>
+                                                                        f.renderExpanded ? (
+                                                                            f.renderExpanded(row[f.name], row)
+                                                                        ) : (
+                                                                            <div key={f.name} className="p-3">
+                                                                                <CellRenderer
+                                                                                    field={f}
+                                                                                    value={row[f.name]}
+                                                                                    relationOptions={
+                                                                                        table.relationOptions
+                                                                                    }
+                                                                                    disableBooleanToggle={
+                                                                                        !(table.permission?.canUpdate ??
+                                                                                            true)
+                                                                                    }
+                                                                                    onBooleanToggle={(
+                                                                                        fieldName,
+                                                                                        newValue,
+                                                                                    ) => {
+                                                                                        if (
+                                                                                            !(table.permission?.canUpdate ??
+                                                                                                true)
+                                                                                        ) {
+                                                                                            return;
+                                                                                        }
 
-                                                                                          table.patchField(
-                                                                                              id,
-                                                                                              fieldName,
-                                                                                              newValue,
-                                                                                          );
-                                                                                      }
-                                                                                      }
-                                                                                      dateFormat={
-                                                                                          f.type === "date"
-                                                                                              ? (dateFormats[f.name] ??
+                                                                                        table.patchField(
+                                                                                            id,
+                                                                                            fieldName,
+                                                                                            newValue,
+                                                                                        );
+                                                                                    }
+                                                                                    }
+                                                                                    dateFormat={
+                                                                                        f.type === "date"
+                                                                                            ? (dateFormats[f.name] ??
                                                                                                 "datetime")
-                                                                                              : undefined
-                                                                                      }
-                                                                                  />
-                                                                              </div>
-                                                                          ),
-                                                                      )}
+                                                                                            : undefined
+                                                                                    }
+                                                                                />
+                                                                            </div>
+                                                                        ),
+                                                                    )}
                                                         </TableCell>
                                                     </TableRow>
                                                 )}

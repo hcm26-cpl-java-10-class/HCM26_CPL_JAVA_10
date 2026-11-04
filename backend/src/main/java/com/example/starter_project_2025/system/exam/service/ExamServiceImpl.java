@@ -3,13 +3,20 @@ package com.example.starter_project_2025.system.exam.service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +27,7 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
@@ -32,6 +40,7 @@ import com.example.starter_project_2025.system.exam.domain.InvitationRepository;
 import com.example.starter_project_2025.system.exam.domain.InvitationStatus;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamFilter;
+import com.example.starter_project_2025.system.exam.dto.ExamInvitationOverviewDTO;
 import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
@@ -57,6 +66,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	private final ExamReminderRepository examReminderRepository;
 	private final QuestionMapper questionMapper;
 	private final QuestionValidator questionValidator;
+	private final ExamAccessGuard examAccessGuard;
 
 	@Override
 	protected BaseCrudRepository<Exam, Long> getRepository() {
@@ -73,12 +83,53 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		return new String[]{"title"};
 	}
 
+	/**
+	 * Tổng quan số lượng lời mời của các đề thi mà giáo viên sở hữu.
+	 * Dùng cho trang "/invitations" của giáo viên (admin thấy tất cả).
+	 */
+	public List<ExamInvitationOverviewDTO> listInvitationOverviews(UserPrincipal principal) {
+		List<Exam> exams = examRepository.findAll().stream()
+				.filter(exam -> examAccessGuard.canManage(exam, principal))
+				.toList();
+
+		return exams.stream()
+				.map(exam -> {
+					List<Invitation> invitations = invitationRepository.findByExamId(exam.getId());
+					Map<InvitationStatus, Long> counts = invitations.stream()
+							.collect(Collectors.groupingBy(Invitation::getStatus, Collectors.counting()));
+					long anonymous = invitations.stream()
+							.filter(i -> Boolean.TRUE.equals(i.getAnonymous()))
+							.count();
+
+					return ExamInvitationOverviewDTO.builder()
+							.examId(exam.getId())
+							.examTitle(exam.getTitle())
+							.startTime(exam.getStartTime())
+							.endTime(exam.getEndTime())
+							.total(invitations.size())
+							.pending(counts.getOrDefault(InvitationStatus.PENDING, 0L).intValue())
+							.sent(counts.getOrDefault(InvitationStatus.SENT, 0L).intValue())
+							.accepted(counts.getOrDefault(InvitationStatus.ACCEPTED, 0L).intValue())
+							.rejected(counts.getOrDefault(InvitationStatus.REJECTED, 0L).intValue())
+							.expired(counts.getOrDefault(InvitationStatus.EXPIRED, 0L).intValue())
+							.revoked(counts.getOrDefault(InvitationStatus.REVOKED, 0L).intValue())
+							.completed(counts.getOrDefault(InvitationStatus.COMPLETED, 0L).intValue())
+							.anonymous((int) anonymous)
+							.build();
+				})
+				.filter(dto -> dto.getTotal() != null && dto.getTotal() > 0)
+				.sorted(Comparator.comparing(ExamInvitationOverviewDTO::getStartTime,
+						Comparator.nullsLast(Comparator.naturalOrder())))
+				.toList();
+	}
+
 	@Override
 	public void delete(Long id) {
 		checkPermission(CrudAction.DELETE);
 
 		Exam exam = examRepository.lockForAttemptStart(id)
 				.orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+		checkOwnership(exam);
 
 		beforeDelete(exam);
 
@@ -158,8 +209,8 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		checkPermission(CrudAction.UPDATE);
 		ValidationContext context = new ValidationContext();
 		Exam exam = findExam(examId);
-		if (exam.getStartTime() != null && !LocalDateTime.now().isBefore(exam.getStartTime())) {
-			throw new BadRequestException("Đề thi đã bắt đầu, không thể thêm câu hỏi");
+		if (examAttemptRepository.existsByExam_Id(exam.getId())) {
+			throw new BadRequestException("Đề thi đã có sinh viên làm bài, không thể thêm câu hỏi");
 		}
 		Set<Question> questions = resolveQuestions(exam, questionIds, context, exam.getExamType());
 		context.throwIfErrors();
@@ -171,8 +222,8 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	public ExamDTO removeQuestion(Long examId, Long questionId) {
 		checkPermission(CrudAction.UPDATE);
 		Exam exam = findExam(examId);
-		if (exam.getStartTime() != null && !LocalDateTime.now().isBefore(exam.getStartTime())) {
-			throw new BadRequestException("Đề thi đã bắt đầu, không thể xóa câu hỏi");
+		if (examAttemptRepository.existsByExam_Id(exam.getId())) {
+			throw new BadRequestException("Đề thi đã có sinh viên làm bài, không thể xóa câu hỏi");
 		}
 		Set<Question> before = new LinkedHashSet<>(exam.getQuestions());
 		exam.getQuestions().removeIf(question -> question.getId().equals(questionId));
@@ -191,8 +242,8 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		if (copy.getSourceQuestionId() == null) {
 			throw new BadRequestException("Đây không phải bản sao của đề thi, không thể sửa trong đề");
 		}
-		if (exam.getStartTime() != null && !LocalDateTime.now().isBefore(exam.getStartTime())) {
-			throw new BadRequestException("Đề thi đã bắt đầu, không thể sửa câu hỏi");
+		if (examAttemptRepository.existsByExam_Id(exam.getId())) {
+			throw new BadRequestException("Đề thi đã có sinh viên làm bài, không thể sửa câu hỏi");
 		}
 
 		ValidationContext context = new ValidationContext();
@@ -212,8 +263,52 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	}
 
 	private Exam findExam(Long examId) {
-		return examRepository.findById(examId)
+		Exam exam = examRepository.findById(examId)
 				.orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+		checkOwnership(exam);
+		return exam;
+	}
+
+	/** Giao vien (khong phai ADMIN) chi duoc thay/quan ly de thi do chinh minh tao; ADMIN va vai tro khac khong bi gioi han. */
+	private Long ownerScopeUserId() {
+		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+		if (auth != null && auth.getPrincipal() instanceof UserPrincipal principal
+				&& examAccessGuard.isOwnerScoped(principal)) {
+			return principal.getUser().getId();
+		}
+		return null;
+	}
+
+	/** De cua nguoi khac duoc coi nhu khong ton tai (khong lo thong tin). */
+	private void checkOwnership(Exam exam) {
+		Long scope = ownerScopeUserId();
+		if (scope != null && !Objects.equals(exam.getCreatedBy(), scope)) {
+			throw new ResourceNotFoundException("Exam not found");
+		}
+	}
+
+	@Override
+	public Page<ExamDTO> getAll(Pageable pageable, String search, ExamFilter filter) {
+		Long scope = ownerScopeUserId();
+		if (scope != null) {
+			if (filter == null) {
+				filter = new ExamFilter();
+			}
+			filter.setCreatedBy(scope);
+		}
+		return super.getAll(pageable, search, filter);
+	}
+
+	@Override
+	public ExamDTO getById(Long id) {
+		examRepository.findById(id).ifPresent(this::checkOwnership);
+		return super.getById(id);
+	}
+
+	@Override
+	public ExamDTO update(Long id, ExamDTO request) {
+		examRepository.findById(id).ifPresent(this::checkOwnership);
+		return super.update(id, request);
 	}
 
 	private void deleteExamCopies(Set<Question> before, Set<Question> after) {
