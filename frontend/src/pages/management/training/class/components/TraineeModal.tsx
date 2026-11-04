@@ -23,6 +23,7 @@ export type TraineeModalMode = "create" | "edit" | "view";
 export interface TraineeModalProps {
     open: boolean;
     mode: TraineeModalMode;
+    site?: string;
     trainee?: Trainee | null;
     existingTrainees: Trainee[];
     onOpenChange: (open: boolean) => void;
@@ -30,12 +31,157 @@ export interface TraineeModalProps {
     onSwitchToEdit?: () => void;
 }
 
+export interface FptStudentIdSiteRule {
+    siteCategory: "HCM" | "HN" | "OTHER";
+    siteLabel: string;
+    prefixes: readonly string[];
+    pattern: RegExp;
+    placeholder: string;
+    formatHint: string;
+    errorMessage: string;
+}
+
+const HCM_STUDENT_ID_RULE: FptStudentIdSiteRule = {
+    siteCategory: "HCM",
+    siteLabel: "HCM",
+    prefixes: ["SE", "SS", "AI", "IA"],
+    pattern: /^(?:SE|SS|AI|IA)\d{6}$/i,
+    placeholder: "e.g. SE180101 (SE/SS/AI/IA + 6 digits)",
+    formatHint: "HCM: SE / SS / AI / IA + 6 digits",
+    errorMessage:
+        "FPT Student ID for HCM site must be SE, SS, AI, or IA followed by 6 digits (e.g. SE180101).",
+};
+
+const HN_STUDENT_ID_RULE: FptStudentIdSiteRule = {
+    siteCategory: "HN",
+    siteLabel: "HN",
+    prefixes: ["HE", "HS", "AI", "IA"],
+    pattern: /^(?:HE|HS|AI|IA)\d{6}$/i,
+    placeholder: "e.g. HE180101 (HE/HS/AI/IA + 6 digits)",
+    formatHint: "HN: HE / HS / AI / IA + 6 digits",
+    errorMessage:
+        "FPT Student ID for HN site must be HE, HS, AI, or IA followed by 6 digits (e.g. HE180101).",
+};
+
+const OTHER_SITE_STUDENT_ID_RULE: FptStudentIdSiteRule = {
+    siteCategory: "OTHER",
+    siteLabel: "Other Site",
+    prefixes: ["DE"],
+    pattern: /^DE\d{6}$/i,
+    placeholder: "e.g. DE180101 (DE + 6 digits)",
+    formatHint: "DE + 6 digits",
+    errorMessage: "FPT Student ID for this site must be DE followed by 6 digits (e.g. DE180101).",
+};
+
+export function getFptStudentIdRuleBySite(site?: string): FptStudentIdSiteRule {
+    const normalized = (site ?? "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase();
+
+    if (
+        !normalized ||
+        normalized.includes("hcm") ||
+        normalized.includes("ho chi minh") ||
+        normalized.includes("sai gon") ||
+        normalized.includes("saigon")
+    ) {
+        return HCM_STUDENT_ID_RULE;
+    }
+
+    if (normalized.includes("hn") || normalized.includes("ha noi") || normalized.includes("hanoi")) {
+        return HN_STUDENT_ID_RULE;
+    }
+
+    return OTHER_SITE_STUDENT_ID_RULE;
+}
+
+export function formatFptStudentIdForSite(rawValue?: string, site?: string, traineeId = 1): string {
+    const rule = getFptStudentIdRuleBySite(site);
+    const cleaned = (rawValue ?? "").trim().toUpperCase();
+
+    if (rule.pattern.test(cleaned)) {
+        return cleaned;
+    }
+
+    const codeMatch = /^([A-Z]{2})(\d{6})$/.exec(cleaned);
+    if (codeMatch) {
+        const [, prefix, digits] = codeMatch;
+        if (rule.prefixes.includes(prefix)) {
+            return `${prefix}${digits}`;
+        }
+        if (rule.siteCategory === "HN") {
+            const mapped = prefix === "SE" ? "HE" : prefix === "SS" ? "HS" : rule.prefixes[0];
+            return `${mapped}${digits}`;
+        }
+        if (rule.siteCategory === "HCM") {
+            const mapped = prefix === "HE" ? "SE" : prefix === "HS" ? "SS" : rule.prefixes[0];
+            return `${mapped}${digits}`;
+        }
+        return `DE${digits}`;
+    }
+
+    if (!cleaned) return "";
+
+    const absId = Math.abs(traineeId || 1);
+    const prefix = rule.prefixes[(absId - 1) % rule.prefixes.length];
+    const numberPart = String(180000 + (absId % 100000)).padStart(6, "0");
+    return `${prefix}${numberPart}`;
+}
+
 const GENDER_OPTIONS: TraineeGender[] = ["Male", "Female", "Other"];
 const STATUS_OPTIONS: TraineeStatus[] = ["Active", "Inactive", "Dropped Out"];
 
+export const MAX_TRAINEE_NAME_LENGTH = 100;
+export const MIN_TRAINEE_AGE_YEARS = 17;
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const ACCOUNT_PATTERN = /^[A-Za-z0-9._-]{2,50}$/;
 const NATIONAL_ID_PATTERN = /^\d{9,12}$/;
+
+export function getMaxAllowedDobDateString(referenceDate: Date = new Date()): string {
+    const cutoffYear = referenceDate.getFullYear() - MIN_TRAINEE_AGE_YEARS;
+    const month = referenceDate.getMonth();
+    const day = referenceDate.getDate();
+    const cutoff = new Date(cutoffYear, month, day);
+    // Handle Feb 29 on a leap year when reference year - 17 is not a leap year
+    if (cutoff.getMonth() !== month) {
+        cutoff.setDate(0);
+    }
+    const yyyy = String(cutoff.getFullYear()).padStart(4, "0");
+    const mm = String(cutoff.getMonth() + 1).padStart(2, "0");
+    const dd = String(cutoff.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+export function isDobAtLeastMinAge(
+    dobStr: string,
+    minAgeYears: number = MIN_TRAINEE_AGE_YEARS,
+    referenceDate: Date = new Date(),
+): boolean {
+    const trimmed = dobStr.trim();
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+    if (!match) return false;
+    const birthYear = Number(match[1]);
+    const birthMonth = Number(match[2]) - 1;
+    const birthDay = Number(match[3]);
+    const birthDate = new Date(birthYear, birthMonth, birthDay);
+    if (
+        Number.isNaN(birthDate.getTime()) ||
+        birthDate.getFullYear() !== birthYear ||
+        birthDate.getMonth() !== birthMonth ||
+        birthDate.getDate() !== birthDay
+    ) {
+        return false;
+    }
+
+    let age = referenceDate.getFullYear() - birthYear;
+    const monthDiff = referenceDate.getMonth() - birthMonth;
+    if (monthDiff < 0 || (monthDiff === 0 && referenceDate.getDate() < birthDay)) {
+        age -= 1;
+    }
+    return age >= minAgeYears;
+}
 
 export function normalizeTraineeGender(gender?: string): TraineeGender {
     const normalized = (gender ?? "").trim().toLowerCase();
@@ -84,7 +230,7 @@ export function resolveTraineeStatusBadge(status?: string) {
     };
 }
 
-function toInitialFormValues(trainee?: Trainee | null): TraineeFormInput {
+function toInitialFormValues(trainee?: Trainee | null, site?: string): TraineeFormInput {
     if (!trainee) {
         return {
             fullName: "",
@@ -101,7 +247,7 @@ function toInitialFormValues(trainee?: Trainee | null): TraineeFormInput {
 
     return {
         fullName: trainee.fullName ?? "",
-        fptAccount: trainee.fptAccount ?? trainee.code ?? "",
+        fptAccount: formatFptStudentIdForSite(trainee.fptAccount ?? trainee.code, site, trainee.id),
         personalEmail: trainee.personalEmail ?? trainee.email ?? "",
         nationalId: trainee.nationalId ?? "",
         employeeId: trainee.employeeId ?? "",
@@ -118,25 +264,33 @@ type FormErrors = Partial<Record<FormFieldKey, string>>;
 function validateTraineeForm(
     values: TraineeFormInput,
     existingTrainees: Trainee[],
+    site?: string,
     editingId?: number,
 ): FormErrors {
     const errors: FormErrors = {};
     const peers = existingTrainees.filter((item) => item.id !== editingId);
+    const studentIdRule = getFptStudentIdRuleBySite(site);
 
     const fullName = values.fullName.trim();
     if (!fullName) {
         errors.fullName = "Full Name is required.";
+    } else if (values.fullName.length > MAX_TRAINEE_NAME_LENGTH) {
+        errors.fullName = `Full Name must not exceed ${MAX_TRAINEE_NAME_LENGTH} characters.`;
     }
 
-    const account = values.fptAccount.trim();
-    if (!account) {
-        errors.fptAccount = "FPT Student Account is required.";
-    } else if (!ACCOUNT_PATTERN.test(account)) {
-        errors.fptAccount = "Account must be 2–50 letters, numbers, dots, underscores, or hyphens.";
+    const studentId = values.fptAccount.trim().toUpperCase();
+    if (!studentId) {
+        errors.fptAccount = "FPT Student ID is required.";
+    } else if (!studentIdRule.pattern.test(studentId)) {
+        errors.fptAccount = studentIdRule.errorMessage;
     } else if (
-        peers.some((item) => (item.fptAccount ?? item.code ?? "").trim().toLowerCase() === account.toLowerCase())
+        peers.some(
+            (item) =>
+                formatFptStudentIdForSite(item.fptAccount ?? item.code, site, item.id).toUpperCase() ===
+                studentId,
+        )
     ) {
-        errors.fptAccount = "FPT Student Account already exists in this class.";
+        errors.fptAccount = "FPT Student ID already exists in this class.";
     }
 
     const email = values.personalEmail.trim();
@@ -159,26 +313,34 @@ function validateTraineeForm(
         errors.nationalId = "National ID already exists in this class.";
     }
 
+    const dob = (values.dob ?? "").trim();
+    if (!dob) {
+        errors.dob = "Date of Birth is required.";
+    } else if (!isDobAtLeastMinAge(dob, MIN_TRAINEE_AGE_YEARS)) {
+        errors.dob = `Trainee must be at least ${MIN_TRAINEE_AGE_YEARS} years old (University level).`;
+    }
+
     return errors;
 }
 
 function TraineeProfileBody({
     trainee,
+    site,
     onClose,
     onSwitchToEdit,
 }: {
     trainee: Trainee;
+    site?: string;
     onClose: () => void;
     onSwitchToEdit?: () => void;
 }) {
     const badge = resolveTraineeStatusBadge(trainee.status);
+    const studentId = formatFptStudentIdForSite(trainee.fptAccount || trainee.code, site, trainee.id);
     const fields: Array<{ label: string; value: string }> = [
         { label: "Full Name", value: trainee.fullName || "—" },
-        { label: "FPT Student Account", value: trainee.fptAccount || trainee.code || "—" },
+        { label: "FPT Student ID", value: studentId || "—" },
         { label: "Personal Email", value: trainee.personalEmail || trainee.email || "—" },
         { label: "National ID", value: trainee.nationalId || "—" },
-        { label: "Employee ID", value: trainee.employeeId || "—" },
-        { label: "Access Card ID", value: trainee.accessCardId || "—" },
         { label: "DOB", value: trainee.dob ? formatDate(trainee.dob) : "—" },
         { label: "Gender", value: trainee.gender || "—" },
     ];
@@ -189,7 +351,7 @@ function TraineeProfileBody({
                 <div>
                     <p className="text-base font-semibold text-foreground">{trainee.fullName || "—"}</p>
                     <p className="text-xs text-muted-foreground">
-                        Account: {trainee.fptAccount || trainee.code || "—"}
+                        FPT Student ID: {studentId || "—"}
                     </p>
                 </div>
                 <Badge variant="secondary" className={cn("rounded-full px-3 py-0.5 text-xs font-medium", badge.className)}>
@@ -226,19 +388,23 @@ function TraineeProfileBody({
 
 function TraineeFormBody({
     mode,
+    site,
     trainee,
     existingTrainees,
     onClose,
     onSubmit,
 }: {
     mode: "create" | "edit";
+    site?: string;
     trainee?: Trainee | null;
     existingTrainees: Trainee[];
     onClose: () => void;
     onSubmit: (values: TraineeFormInput) => void;
 }) {
-    const [values, setValues] = useState<TraineeFormInput>(() => toInitialFormValues(trainee));
+    const [values, setValues] = useState<TraineeFormInput>(() => toInitialFormValues(trainee, site));
     const [errors, setErrors] = useState<FormErrors>({});
+    const studentIdRule = getFptStudentIdRuleBySite(site);
+    const maxAllowedDob = getMaxAllowedDobDateString();
 
     const updateField = <K extends FormFieldKey>(field: K, value: TraineeFormInput[K]) => {
         setValues((prev) => ({ ...prev, [field]: value }));
@@ -253,7 +419,7 @@ function TraineeFormBody({
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        const validationErrors = validateTraineeForm(values, existingTrainees, trainee?.id);
+        const validationErrors = validateTraineeForm(values, existingTrainees, site, trainee?.id);
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
             return;
@@ -261,7 +427,7 @@ function TraineeFormBody({
 
         onSubmit({
             fullName: values.fullName.trim(),
-            fptAccount: values.fptAccount.trim(),
+            fptAccount: values.fptAccount.trim().toUpperCase(),
             personalEmail: values.personalEmail.trim(),
             nationalId: values.nationalId.trim(),
             employeeId: (values.employeeId ?? "").trim(),
@@ -277,27 +443,40 @@ function TraineeFormBody({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {/* 1. Full Name */}
                 <div className="space-y-1.5">
-                    <Label htmlFor="trainee-full-name">
-                        Full Name <span className="text-destructive">*</span>
-                    </Label>
+                    <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="trainee-full-name">
+                            Full Name <span className="text-destructive">*</span>
+                        </Label>
+                        <span className="text-[11px] font-medium text-muted-foreground">
+                            {values.fullName.length}/{MAX_TRAINEE_NAME_LENGTH}
+                        </span>
+                    </div>
                     <Input
                         id="trainee-full-name"
                         placeholder="e.g. Hoàng Phương Bình"
+                        maxLength={MAX_TRAINEE_NAME_LENGTH}
                         value={values.fullName}
                         aria-invalid={Boolean(errors.fullName)}
-                        onChange={(e) => updateField("fullName", e.target.value)}
+                        onChange={(e) =>
+                            updateField("fullName", e.target.value.slice(0, MAX_TRAINEE_NAME_LENGTH))
+                        }
                     />
                     {errors.fullName ? <p className="text-xs text-destructive">{errors.fullName}</p> : null}
                 </div>
 
-                {/* 2. FPT Student Account */}
+                {/* 2. FPT Student ID */}
                 <div className="space-y-1.5">
-                    <Label htmlFor="trainee-fpt-account">
-                        FPT Student Account <span className="text-destructive">*</span>
-                    </Label>
+                    <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="trainee-fpt-account">
+                            FPT Student ID <span className="text-destructive">*</span>
+                        </Label>
+                        <span className="text-[11px] font-medium text-muted-foreground">
+                            {studentIdRule.formatHint}
+                        </span>
+                    </div>
                     <Input
                         id="trainee-fpt-account"
-                        placeholder="e.g. binhhp1"
+                        placeholder={studentIdRule.placeholder}
                         value={values.fptAccount}
                         aria-invalid={Boolean(errors.fptAccount)}
                         onChange={(e) => updateField("fptAccount", e.target.value)}
@@ -336,45 +515,28 @@ function TraineeFormBody({
                     {errors.nationalId ? <p className="text-xs text-destructive">{errors.nationalId}</p> : null}
                 </div>
 
-                {/* 5. Employee ID */}
+                {/* 5. DOB */}
                 <div className="space-y-1.5">
-                    <Label htmlFor="trainee-employee-id">Employee ID</Label>
-                    <Input
-                        id="trainee-employee-id"
-                        placeholder="e.g. FPT26081"
-                        value={values.employeeId ?? ""}
-                        onChange={(e) => updateField("employeeId", e.target.value)}
-                    />
-                </div>
-
-                {/* 6. Access Card ID */}
-                <div className="space-y-1.5">
-                    <Label htmlFor="trainee-access-card-id">Access Card ID</Label>
-                    <Input
-                        id="trainee-access-card-id"
-                        placeholder="e.g. AC-88201"
-                        value={values.accessCardId ?? ""}
-                        onChange={(e) => updateField("accessCardId", e.target.value)}
-                    />
-                </div>
-
-                {/* 7. DOB */}
-                <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                        <Label htmlFor="trainee-dob">DOB</Label>
-                        {values.dob ? (
-                            <span className="text-xs text-muted-foreground">{formatDate(values.dob)}</span>
-                        ) : null}
+                    <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="trainee-dob">
+                            DOB <span className="text-destructive">*</span>
+                        </Label>
+                        <span className="text-[11px] font-medium text-muted-foreground">
+                            {values.dob ? formatDate(values.dob) : `Min ${MIN_TRAINEE_AGE_YEARS} years old`}
+                        </span>
                     </div>
                     <Input
                         id="trainee-dob"
                         type="date"
+                        max={maxAllowedDob}
                         value={values.dob ?? ""}
+                        aria-invalid={Boolean(errors.dob)}
                         onChange={(e) => updateField("dob", e.target.value)}
                     />
+                    {errors.dob ? <p className="text-xs text-destructive">{errors.dob}</p> : null}
                 </div>
 
-                {/* 8. Gender */}
+                {/* 6. Gender */}
                 <div className="space-y-1.5">
                     <Label htmlFor="trainee-gender">Gender</Label>
                     <NativeSelect
@@ -390,7 +552,7 @@ function TraineeFormBody({
                     </NativeSelect>
                 </div>
 
-                {/* 9. Status */}
+                {/* 7. Status */}
                 <div className="space-y-1.5 sm:col-span-2">
                     <Label htmlFor="trainee-status">Status</Label>
                     <NativeSelect
@@ -425,6 +587,7 @@ function TraineeFormBody({
 export function TraineeModal({
     open,
     mode,
+    site,
     trainee,
     existingTrainees,
     onOpenChange,
@@ -435,7 +598,7 @@ export function TraineeModal({
         mode === "create" ? "Add New Trainee" : mode === "edit" ? "Edit Trainee" : "Trainee Profile";
     const description =
         mode === "create"
-            ? "Fill in trainee details to add them to the class list. Click Save Changes on the toolbar to persist."
+            ? "Fill in trainee details to add them to the class list. Click Save Changes to persist."
             : mode === "edit"
               ? "Modify trainee information. Changes are staged locally until you click Save Changes."
               : "Detailed personal and enrollment profile of the selected trainee.";
@@ -451,13 +614,15 @@ export function TraineeModal({
                 {mode === "view" && trainee ? (
                     <TraineeProfileBody
                         trainee={trainee}
+                        site={site}
                         onClose={() => onOpenChange(false)}
                         onSwitchToEdit={onSwitchToEdit}
                     />
                 ) : (
                     <TraineeFormBody
-                        key={`${mode}-${trainee?.id ?? "new"}-${open ? "open" : "closed"}`}
+                        key={`${mode}-${trainee?.id ?? "new"}-${site ?? ""}-${open ? "open" : "closed"}`}
                         mode={mode === "edit" ? "edit" : "create"}
+                        site={site}
                         trainee={trainee}
                         existingTrainees={existingTrainees}
                         onClose={() => onOpenChange(false)}
@@ -470,4 +635,3 @@ export function TraineeModal({
 }
 
 export default TraineeModal;
-

@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TraineeBatchPayload } from "@/api/features/trainee.api";
 import { fakeHttp, type RecordedCall } from "@/test/fake-http";
@@ -8,6 +8,7 @@ import type { Trainee } from "@/types";
 import ClassDetailPage from "../ClassDetailPage";
 import ClassListPage from "../ClassListPage";
 import { getMockTraineesByClass, MOCK_TRAINING_CLASSES } from "../mocks/classTrainee.mock";
+import { formatFptStudentIdForSite, getFptStudentIdRuleBySite } from "./TraineeModal";
 
 vi.mock("@/api/axios", () => import("@/test/mocks").then((m) => m.axiosModule()));
 vi.mock("@/components/layout/MainLayout", () => import("@/test/mocks").then((m) => m.layoutModule()));
@@ -19,7 +20,7 @@ function renderClassFlow(route = "/classes/2") {
             { path: "/classes", element: <ClassListPage /> },
             { path: "/classes/:classId", element: <ClassDetailPage /> },
             { path: "/training-operations/class-details/:classCode", element: <ClassDetailPage /> },
-            { path: "/topic-marks/gradebook-demo", element: <div>Topic Mark Gradebook Page</div> },
+            { path: "/topic-marks", element: <div>Topic Marks Page</div> },
         ],
         { route },
     );
@@ -93,20 +94,18 @@ describe("ClassDetailView & TraineeListTab", () => {
         expect(await screen.findByText("Hoàng Phương Bình")).toBeInTheDocument();
     });
 
-    it("renders all 12 Trainee List columns, searches trainees, selects checkboxes, and navigates on Topic Mark", async () => {
+    it("renders all 10 Trainee List columns with FPT Student ID, searches trainees, selects checkboxes, and navigates on Topic Mark", async () => {
         const { user } = renderClassFlow("/classes/2");
 
         const table = await screen.findByRole("table", { name: "Trainee List" });
         const headers = within(table).getAllByRole("columnheader");
-        expect(headers).toHaveLength(12);
+        expect(headers).toHaveLength(10);
         expect(headers.slice(1).map((h) => h.textContent)).toEqual([
             "No.",
             "Full Name",
-            "FPT Student Account",
+            "FPT Student ID",
             "Personal Email",
             "National ID",
-            "Employee ID",
-            "Access Card ID",
             "DOB",
             "Gender",
             "Status",
@@ -123,21 +122,21 @@ describe("ClassDetailView & TraineeListTab", () => {
         const firstRowCells = within(rows[0]).getAllByRole("cell");
         expect(firstRowCells[1]).toHaveTextContent("1");
         expect(firstRowCells[2]).toHaveTextContent("Hoàng Phương Bình");
-        expect(firstRowCells[3]).toHaveTextContent("binhhp1");
+        expect(firstRowCells[3]).toHaveTextContent("SE180101");
         expect(firstRowCells[4]).toHaveTextContent("phuongbinh.conan@gmail.com");
         expect(firstRowCells[5]).toHaveTextContent("075204005839");
-        expect(firstRowCells[8]).toHaveTextContent("23-Aug-2004");
-        expect(firstRowCells[9]).toHaveTextContent("Male");
-        expect(firstRowCells[10]).toHaveTextContent("Active");
+        expect(firstRowCells[6]).toHaveTextContent("23-Aug-2004");
+        expect(firstRowCells[7]).toHaveTextContent("Male");
+        expect(firstRowCells[8]).toHaveTextContent("Active");
 
         // Select all & individual selection
         const selectAll = screen.getByRole("checkbox", { name: "Select all trainees" });
         await user.click(selectAll);
         expect(screen.getByRole("checkbox", { name: "Select Hoàng Phương Bình" })).toBeChecked();
 
-        // Filter trainees via search input
+        // Filter trainees via search input by FPT Student ID
         const searchInput = screen.getByPlaceholderText("Search trainees");
-        await user.type(searchInput, "anhtv68");
+        await user.type(searchInput, "SS180102");
         const filteredRows = within(table).getAllByRole("row").slice(1);
         expect(filteredRows).toHaveLength(1);
         expect(within(filteredRows[0]).getByText("Trần Việt Anh")).toBeInTheDocument();
@@ -151,7 +150,33 @@ describe("ClassDetailView & TraineeListTab", () => {
 
         // Topic Mark navigation
         await user.click(screen.getByRole("button", { name: "Topic Mark" }));
-        expect(await screen.findByText("Topic Mark Gradebook Page")).toBeInTheDocument();
+        expect(await screen.findByText("Topic Marks Page")).toBeInTheDocument();
+    });
+
+    it("enforces site-specific FPT Student ID rules (HCM: SE/SS/AI/IA, HN: HE/HS/AI/IA, Other: DE + 6 digits)", () => {
+        const hcmRule = getFptStudentIdRuleBySite("TP. Ho Chi Minh");
+        expect(hcmRule.pattern.test("SE180101")).toBe(true);
+        expect(hcmRule.pattern.test("SS180102")).toBe(true);
+        expect(hcmRule.pattern.test("AI180103")).toBe(true);
+        expect(hcmRule.pattern.test("IA180104")).toBe(true);
+        expect(hcmRule.pattern.test("HE180101")).toBe(false);
+        expect(hcmRule.pattern.test("DE180101")).toBe(false);
+
+        const hnRule = getFptStudentIdRuleBySite("Ha Noi");
+        expect(hnRule.pattern.test("HE180101")).toBe(true);
+        expect(hnRule.pattern.test("HS180102")).toBe(true);
+        expect(hnRule.pattern.test("AI180103")).toBe(true);
+        expect(hnRule.pattern.test("IA180104")).toBe(true);
+        expect(hnRule.pattern.test("SE180101")).toBe(false);
+        expect(hnRule.pattern.test("DE180101")).toBe(false);
+
+        const otherRule = getFptStudentIdRuleBySite("Da Nang");
+        expect(otherRule.pattern.test("DE180101")).toBe(true);
+        expect(otherRule.pattern.test("SE180101")).toBe(false);
+        expect(otherRule.pattern.test("HE180101")).toBe(false);
+
+        expect(formatFptStudentIdForSite("SE180101", "HN", 101)).toBe("HE180101");
+        expect(formatFptStudentIdForSite("SS180102", "Da Nang", 102)).toBe("DE180102");
     });
 
     it("validates Add Trainee form and stages new, edited, and deleted trainees before persisting via Save Changes", async () => {
@@ -165,23 +190,47 @@ describe("ClassDetailView & TraineeListTab", () => {
         await user.click(within(addDialog).getByRole("button", { name: "Add Trainee" }));
 
         expect(within(addDialog).getByText("Full Name is required.")).toBeInTheDocument();
-        expect(within(addDialog).getByText("FPT Student Account is required.")).toBeInTheDocument();
+        expect(within(addDialog).getByText("FPT Student ID is required.")).toBeInTheDocument();
         expect(within(addDialog).getByText("Personal Email is required.")).toBeInTheDocument();
         expect(within(addDialog).getByText("National ID is required.")).toBeInTheDocument();
+        expect(within(addDialog).getByText("Date of Birth is required.")).toBeInTheDocument();
 
-        // Fill valid new trainee
-        await user.type(within(addDialog).getByLabelText(/Full Name/i), "Nguyễn Minh Khang");
-        await user.type(within(addDialog).getByLabelText(/FPT Student Account/i), "khangnm9");
+        // Full Name hard-capped at 100 characters
+        const addNameInput = within(addDialog).getByLabelText(/Full Name/i) as HTMLInputElement;
+        expect(addNameInput).toHaveAttribute("maxLength", "100");
+        fireEvent.change(addNameInput, { target: { value: "A".repeat(120) } });
+        expect(addNameInput.value).toHaveLength(100);
+        fireEvent.change(addNameInput, { target: { value: "" } });
+
+        // Reject invalid HN prefix on HCM class and DOB under 17 years old
+        await user.type(addNameInput, "Nguyễn Minh Khang");
+        await user.type(within(addDialog).getByLabelText(/FPT Student ID/i), "HE180999");
         await user.type(within(addDialog).getByLabelText(/Personal Email/i), "khang.nguyen@gmail.com");
         await user.type(within(addDialog).getByLabelText(/National ID/i), "079204009999");
-        await user.type(within(addDialog).getByLabelText(/Employee ID/i), "FPT26099");
-        await user.type(within(addDialog).getByLabelText(/Access Card ID/i), "AC-88299");
-        await user.type(within(addDialog).getByLabelText(/^DOB$/i), "2004-10-15");
+        const dobInput = within(addDialog).getByLabelText(/DOB/i);
+        await user.type(dobInput, "2015-05-10");
+        await user.click(within(addDialog).getByRole("button", { name: "Add Trainee" }));
+        expect(
+            within(addDialog).getByText(
+                "FPT Student ID for HCM site must be SE, SS, AI, or IA followed by 6 digits (e.g. SE180101).",
+            ),
+        ).toBeInTheDocument();
+        expect(
+            within(addDialog).getByText("Trainee must be at least 17 years old (University level)."),
+        ).toBeInTheDocument();
+
+        // Fill valid HCM FPT Student ID and valid DOB (>= 17 years old)
+        const studentIdInput = within(addDialog).getByLabelText(/FPT Student ID/i);
+        await user.clear(studentIdInput);
+        await user.type(studentIdInput, "SE180999");
+        await user.clear(dobInput);
+        await user.type(dobInput, "2004-10-15");
         await user.selectOptions(within(addDialog).getByLabelText(/^Gender$/i), "Male");
         await user.selectOptions(within(addDialog).getByLabelText(/^Status$/i), "Active");
         await user.click(within(addDialog).getByRole("button", { name: "Add Trainee" }));
 
         expect(await screen.findByText("Nguyễn Minh Khang")).toBeInTheDocument();
+        expect(screen.getByText("SE180999")).toBeInTheDocument();
         expect(screen.getByText("15-Oct-2004")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: /save changes/i })).toBeEnabled();
 
@@ -190,13 +239,13 @@ describe("ClassDetailView & TraineeListTab", () => {
         await user.click(await screen.findByRole("menuitem", { name: /^edit$/i }));
 
         const editDialog = await screen.findByRole("dialog", { name: "Edit Trainee" });
-        const empInput = within(editDialog).getByLabelText(/Employee ID/i);
-        await user.clear(empInput);
-        await user.type(empInput, "FPT26002");
+        const nameInput = within(editDialog).getByLabelText(/Full Name/i);
+        await user.clear(nameInput);
+        await user.type(nameInput, "Trần Việt Anh Updated");
         await user.selectOptions(within(editDialog).getByLabelText(/^Status$/i), "Inactive");
         await user.click(within(editDialog).getByRole("button", { name: "Update Trainee" }));
 
-        expect(await screen.findByText("FPT26002")).toBeInTheDocument();
+        expect(await screen.findByText("Trần Việt Anh Updated")).toBeInTheDocument();
         expect(screen.getByText("Inactive")).toBeInTheDocument();
 
         // 3. Delete an existing trainee ("Đỗ Gia Huy") with confirmation modal
@@ -222,16 +271,16 @@ describe("ClassDetailView & TraineeListTab", () => {
         const sentPayload = fakeHttp.callsTo("put", "/external/classes/2/trainees/batch")[0]
             .data as TraineeBatchPayload;
         expect(sentPayload.created).toHaveLength(1);
-        expect(sentPayload.created[0].fptAccount).toBe("khangnm9");
+        expect(sentPayload.created[0].fptAccount).toBe("SE180999");
         expect(sentPayload.updated).toHaveLength(1);
         expect(sentPayload.updated[0].id).toBe(102);
-        expect(sentPayload.updated[0].employeeId).toBe("FPT26002");
+        expect(sentPayload.updated[0].fullName).toBe("Trần Việt Anh Updated");
         expect(sentPayload.deletedIds).toEqual([104]);
 
         await waitFor(() => {
             expect(screen.getByRole("button", { name: /save changes/i })).toBeDisabled();
         });
-    });
+    }, 15000);
 
     it("supports Discard to restore staged deletions and guards tab navigation when unsaved changes exist", async () => {
         const { user } = renderClassFlow("/classes/2");
@@ -264,6 +313,33 @@ describe("ClassDetailView & TraineeListTab", () => {
         await user.click(await screen.findByRole("menuitem", { name: /view profile/i }));
         const profileDialog = await screen.findByRole("dialog", { name: "Trainee Profile" });
         expect(within(profileDialog).getByText("phuongbinh.conan@gmail.com")).toBeInTheDocument();
+        await user.click(within(profileDialog).getAllByRole("button", { name: "Close" })[0]);
+
+        // Bulk selection: Export Selected and Delete Selected start disabled
+        const exportSelectedBtn = screen.getByRole("button", { name: /export selected/i });
+        const deleteSelectedBtn = screen.getByRole("button", { name: /delete selected/i });
+        expect(exportSelectedBtn).toBeDisabled();
+        expect(deleteSelectedBtn).toBeDisabled();
+
+        // Tick two trainees -> both buttons light up with count (2)
+        await user.click(screen.getByRole("checkbox", { name: "Select Hoàng Phương Bình" }));
+        await user.click(screen.getByRole("checkbox", { name: "Select Trần Việt Anh" }));
+        expect(exportSelectedBtn).toBeEnabled();
+        expect(deleteSelectedBtn).toBeEnabled();
+        expect(exportSelectedBtn).toHaveTextContent("2");
+        expect(deleteSelectedBtn).toHaveTextContent("2");
+
+        // Click Delete Selected -> opens bulk delete confirmation dialog and stages deletion
+        await user.click(deleteSelectedBtn);
+        const bulkDeleteDialog = await screen.findByRole("dialog", { name: "Remove Selected Trainees" });
+        expect(
+            within(bulkDeleteDialog).getByText(/Are you sure you want to remove 2 selected trainees from class\?/i),
+        ).toBeInTheDocument();
+        await user.click(within(bulkDeleteDialog).getByRole("button", { name: /delete selected/i }));
+
+        expect(screen.queryByText("Hoàng Phương Bình")).not.toBeInTheDocument();
+        expect(screen.queryByText("Trần Việt Anh")).not.toBeInTheDocument();
+        expect(screen.getByText("2 unsaved changes")).toBeInTheDocument();
     });
 
     it("renders the 3x6 General property grid inside Class Info tab", async () => {

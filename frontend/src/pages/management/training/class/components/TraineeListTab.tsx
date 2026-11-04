@@ -1,8 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Eye, MoreVertical, Pencil, RotateCcw, Save, Search, Trash2, Users } from "lucide-react";
+import { Download, Eye, MoreVertical, Pencil, RotateCcw, Save, Search, Trash2, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { utils, writeFile } from "xlsx";
 import {
     type TraineeBatchPayload,
     type TraineeFormInput,
@@ -35,6 +36,7 @@ import { cn } from "@/lib/utils";
 import type { ExternalClass, Trainee } from "@/types";
 import { formatDate, splitLocalDateTime } from "@/utils/session.utils";
 import {
+    formatFptStudentIdForSite,
     normalizeTraineeGender,
     normalizeTraineeStatus,
     resolveTraineeStatusBadge,
@@ -47,16 +49,25 @@ function formatDob(dob?: string) {
     return formatDate(dob);
 }
 
-function isSameTrainee(baseline: Trainee | undefined, candidate: Trainee): boolean {
+function isSameTrainee(baseline: Trainee | undefined, candidate: Trainee, site?: string): boolean {
     if (!baseline) return false;
 
     const baseDob = baseline.dob ? splitLocalDateTime(baseline.dob).date : "";
     const candDob = candidate.dob ? splitLocalDateTime(candidate.dob).date : "";
+    const baseStudentId = formatFptStudentIdForSite(
+        baseline.fptAccount ?? baseline.code,
+        site,
+        baseline.id,
+    );
+    const candStudentId = formatFptStudentIdForSite(
+        candidate.fptAccount ?? candidate.code,
+        site,
+        candidate.id,
+    );
 
     return (
         (baseline.fullName ?? "").trim() === (candidate.fullName ?? "").trim() &&
-        (baseline.fptAccount ?? baseline.code ?? "").trim() ===
-            (candidate.fptAccount ?? candidate.code ?? "").trim() &&
+        baseStudentId === candStudentId &&
         (baseline.personalEmail ?? baseline.email ?? "").trim() ===
             (candidate.personalEmail ?? candidate.email ?? "").trim() &&
         (baseline.nationalId ?? "").trim() === (candidate.nationalId ?? "").trim() &&
@@ -68,10 +79,10 @@ function isSameTrainee(baseline: Trainee | undefined, candidate: Trainee): boole
     );
 }
 
-function toFormInput(trainee: Trainee): TraineeFormInput {
+function toFormInput(trainee: Trainee, site?: string): TraineeFormInput {
     return {
         fullName: (trainee.fullName ?? "").trim(),
-        fptAccount: (trainee.fptAccount ?? trainee.code ?? "").trim(),
+        fptAccount: formatFptStudentIdForSite(trainee.fptAccount ?? trainee.code, site, trainee.id),
         personalEmail: (trainee.personalEmail ?? trainee.email ?? "").trim(),
         nationalId: (trainee.nationalId ?? "").trim(),
         employeeId: (trainee.employeeId ?? "").trim(),
@@ -91,6 +102,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const classId = String(classItem.id);
+    const classSite = classItem.site;
     const { data: serverTrainees = [], isPending, isError, error, refetch } = useClassTrainees(classId);
 
     // Local staging state: null means synchronized with serverTrainees
@@ -109,10 +121,17 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         trainee: null,
     });
 
-    // Confirmation dialog state for Delete
+    // Confirmation dialog state for single row Delete & Bulk Delete
     const [deleteTarget, setDeleteTarget] = useState<Trainee | null>(null);
+    const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
     const activeTrainees = draftTrainees ?? serverTrainees;
+
+    const selectedTrainees = useMemo(
+        () => activeTrainees.filter((trainee) => selectedIds.has(trainee.id)),
+        [activeTrainees, selectedIds],
+    );
+    const selectedCount = selectedTrainees.length;
 
     const pendingChanges = useMemo(() => {
         if (draftTrainees === null) {
@@ -128,10 +147,17 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         const baselineById = new Map(serverTrainees.map((item) => [item.id, item]));
         const draftIdSet = new Set(draftTrainees.map((item) => item.id));
 
-        const created = draftTrainees.filter((item) => item.id < 0).map(toFormInput);
-        const updated = draftTrainees.filter(
-            (item) => item.id > 0 && !isSameTrainee(baselineById.get(item.id), item),
-        );
+        const created = draftTrainees.filter((item) => item.id < 0).map((item) => toFormInput(item, classSite));
+        const updated = draftTrainees
+            .filter((item) => item.id > 0 && !isSameTrainee(baselineById.get(item.id), item, classSite))
+            .map((item) => {
+                const studentId = formatFptStudentIdForSite(item.fptAccount ?? item.code, classSite, item.id);
+                return {
+                    ...item,
+                    code: studentId,
+                    fptAccount: studentId,
+                };
+            });
         const deletedIds = serverTrainees
             .filter((item) => !draftIdSet.has(item.id))
             .map((item) => item.id);
@@ -143,7 +169,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
             updatedIdSet: new Set(updated.map((item) => item.id)),
             total: created.length + updated.length + deletedIds.length,
         };
-    }, [draftTrainees, serverTrainees]);
+    }, [classSite, draftTrainees, serverTrainees]);
 
     const hasUnsavedChanges = pendingChanges.total > 0;
 
@@ -190,20 +216,24 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         const keyword = search.trim().toLowerCase();
         if (!keyword) return activeTrainees;
 
-        return activeTrainees.filter((trainee) =>
-            [
+        return activeTrainees.filter((trainee) => {
+            const studentId = formatFptStudentIdForSite(
+                trainee.fptAccount ?? trainee.code,
+                classSite,
+                trainee.id,
+            );
+            return [
                 trainee.fullName,
+                studentId,
                 trainee.fptAccount ?? trainee.code,
                 trainee.personalEmail ?? trainee.email,
                 trainee.nationalId,
-                trainee.employeeId,
-                trainee.accessCardId,
                 formatDob(trainee.dob),
                 trainee.gender,
                 trainee.status,
-            ].some((field) => String(field ?? "").toLowerCase().includes(keyword)),
-        );
-    }, [activeTrainees, search]);
+            ].some((field) => String(field ?? "").toLowerCase().includes(keyword));
+        });
+    }, [activeTrainees, classSite, search]);
 
     const selectedVisibleCount = useMemo(
         () => filteredTrainees.filter((trainee) => selectedIds.has(trainee.id)).length,
@@ -251,13 +281,14 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
 
     const handleModalSubmit = (values: TraineeFormInput) => {
         const currentList = draftTrainees ?? serverTrainees;
+        const normalizedStudentId = values.fptAccount.trim().toUpperCase();
 
         if (modalState.mode === "create") {
             const tempId = Math.min(0, ...currentList.map((item) => item.id)) - 1;
             const stagedTrainee: Trainee = {
                 id: tempId,
-                code: values.fptAccount,
-                fptAccount: values.fptAccount,
+                code: normalizedStudentId,
+                fptAccount: normalizedStudentId,
                 fullName: values.fullName,
                 personalEmail: values.personalEmail,
                 email: values.personalEmail,
@@ -276,8 +307,8 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                     item.id === targetId
                         ? {
                               ...item,
-                              code: values.fptAccount,
-                              fptAccount: values.fptAccount,
+                              code: normalizedStudentId,
+                              fptAccount: normalizedStudentId,
                               fullName: values.fullName,
                               personalEmail: values.personalEmail,
                               email: values.personalEmail,
@@ -311,6 +342,43 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         setDeleteTarget(null);
     };
 
+    const handleConfirmBulkDelete = () => {
+        if (selectedCount === 0) return;
+        const currentList = draftTrainees ?? serverTrainees;
+        setDraftTrainees(currentList.filter((item) => !selectedIds.has(item.id)));
+        setSelectedIds(new Set());
+        setBulkDeleteOpen(false);
+        toast.info(
+            `Removed ${selectedCount} selected ${selectedCount === 1 ? "trainee" : "trainees"} (staged). Click Save Changes to persist.`,
+        );
+    };
+
+    const handleExportSelected = () => {
+        if (selectedCount === 0) return;
+
+        const rows = selectedTrainees.map((trainee, index) => ({
+            "No.": index + 1,
+            "Full Name": trainee.fullName ?? "",
+            "FPT Student ID": formatFptStudentIdForSite(
+                trainee.fptAccount || trainee.code,
+                classSite,
+                trainee.id,
+            ),
+            "Personal Email": trainee.personalEmail || trainee.email || "",
+            "National ID": trainee.nationalId ?? "",
+            DOB: formatDob(trainee.dob),
+            Gender: trainee.gender ?? "",
+            Status: resolveTraineeStatusBadge(trainee.status).label,
+        }));
+
+        const worksheet = utils.json_to_sheet(rows);
+        const workbook = utils.book_new();
+        utils.book_append_sheet(workbook, worksheet, "Selected Trainees");
+        const fileName = `${classItem.code ?? `Class_${classId}`}_Selected_Trainees.xlsx`;
+        writeFile(workbook, fileName);
+        toast.success(`Exported ${selectedCount} selected ${selectedCount === 1 ? "trainee" : "trainees"} to ${fileName}`);
+    };
+
     const handleDiscardChanges = () => {
         setDraftTrainees(null);
         setSelectedIds((prev) => {
@@ -338,7 +406,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
             classId,
             ...(classItem.code ? { classCode: classItem.code } : {}),
         });
-        navigate(`/topic-marks/gradebook-demo?${params.toString()}`);
+        navigate(`/topic-marks?${params.toString()}`);
     };
 
     const handleAttendance = () => {
@@ -390,6 +458,40 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                         + Add Trainee
                     </Button>
 
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={selectedCount === 0 || isPending || saveMutation.isPending}
+                        onClick={handleExportSelected}
+                        className={cn(
+                            selectedCount > 0 &&
+                                "border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-950/40",
+                        )}
+                    >
+                        <Download className="size-4" aria-hidden />
+                        <span>Export Selected</span>
+                        {selectedCount > 0 ? (
+                            <span className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-blue-100 px-1.5 text-xs font-semibold text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                {selectedCount}
+                            </span>
+                        ) : null}
+                    </Button>
+
+                    <Button
+                        type="button"
+                        variant={selectedCount > 0 ? "destructive" : "outline"}
+                        disabled={selectedCount === 0 || isPending || saveMutation.isPending}
+                        onClick={() => setBulkDeleteOpen(true)}
+                    >
+                        <Trash2 className="size-4" aria-hidden />
+                        <span>Delete Selected</span>
+                        {selectedCount > 0 ? (
+                            <span className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold">
+                                {selectedCount}
+                            </span>
+                        ) : null}
+                    </Button>
+
                     <Button type="button" variant="outline" onClick={handleTopicMark}>
                         Topic Mark
                     </Button>
@@ -403,7 +505,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
             <div className="max-h-[540px] overflow-auto rounded-md border">
                 <Table
                     aria-label="Trainee List"
-                    className="min-w-[1160px] border-collapse [&_td]:border-r [&_td:last-child]:border-r-0 [&_th]:border-r [&_th:last-child]:border-r-0"
+                    className="min-w-[960px] border-collapse [&_td]:border-r [&_td:last-child]:border-r-0 [&_th]:border-r [&_th:last-child]:border-r-0"
                 >
                     <TableHeader className="sticky top-0 z-10 bg-muted/40">
                         <TableRow className="hover:bg-transparent">
@@ -417,11 +519,9 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                             </TableHead>
                             <TableHead className="w-12 px-3 font-semibold text-foreground">No.</TableHead>
                             <TableHead className="px-3 font-semibold text-foreground">Full Name</TableHead>
-                            <TableHead className="px-3 font-semibold text-foreground">FPT Student Account</TableHead>
+                            <TableHead className="px-3 font-semibold text-foreground">FPT Student ID</TableHead>
                             <TableHead className="px-3 font-semibold text-foreground">Personal Email</TableHead>
                             <TableHead className="px-3 font-semibold text-foreground">National ID</TableHead>
-                            <TableHead className="px-3 font-semibold text-foreground">Employee ID</TableHead>
-                            <TableHead className="px-3 font-semibold text-foreground">Access Card ID</TableHead>
                             <TableHead className="px-3 font-semibold text-foreground">DOB</TableHead>
                             <TableHead className="px-3 font-semibold text-foreground">Gender</TableHead>
                             <TableHead className="px-3 font-semibold text-foreground">Status</TableHead>
@@ -433,7 +533,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                         {isPending ? (
                             Array.from({ length: 6 }, (_, rowIdx) => (
                                 <TableRow key={rowIdx}>
-                                    {Array.from({ length: 12 }, (_, colIdx) => (
+                                    {Array.from({ length: 10 }, (_, colIdx) => (
                                         <TableCell key={colIdx} className="px-3 py-3">
                                             <Skeleton className="h-4 w-full" />
                                         </TableCell>
@@ -442,7 +542,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                             ))
                         ) : filteredTrainees.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={12} className="py-12 text-center text-muted-foreground">
+                                <TableCell colSpan={10} className="py-12 text-center text-muted-foreground">
                                     <div className="flex flex-col items-center gap-2">
                                         <Users className="size-7 text-muted-foreground/70" aria-hidden />
                                         <p className="text-sm">
@@ -458,7 +558,11 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                                 const isSelected = selectedIds.has(trainee.id);
                                 const isNewRow = trainee.id < 0;
                                 const isEditedRow = pendingChanges.updatedIdSet.has(trainee.id);
-                                const account = trainee.fptAccount || trainee.code || "";
+                                const studentId = formatFptStudentIdForSite(
+                                    trainee.fptAccount || trainee.code,
+                                    classSite,
+                                    trainee.id,
+                                );
                                 const personalEmail = trainee.personalEmail || trainee.email || "";
                                 const statusBadge = resolveTraineeStatusBadge(trainee.status);
 
@@ -474,7 +578,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                                     >
                                         <TableCell className="px-3 py-3 text-center">
                                             <Checkbox
-                                                aria-label={`Select ${trainee.fullName ?? account ?? trainee.id}`}
+                                                aria-label={`Select ${trainee.fullName ?? studentId ?? trainee.id}`}
                                                 checked={isSelected}
                                                 onCheckedChange={(checked) =>
                                                     handleToggleRow(trainee.id, checked === true)
@@ -497,19 +601,13 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                                             </div>
                                         </TableCell>
                                         <TableCell className="px-3 py-3 text-sm text-[#3b4cb8] dark:text-blue-300">
-                                            {account}
+                                            {studentId}
                                         </TableCell>
                                         <TableCell className="px-3 py-3 text-sm text-foreground">
                                             {personalEmail}
                                         </TableCell>
                                         <TableCell className="px-3 py-3 text-sm text-foreground">
                                             {trainee.nationalId ?? ""}
-                                        </TableCell>
-                                        <TableCell className="px-3 py-3 text-sm text-foreground">
-                                            {trainee.employeeId ?? ""}
-                                        </TableCell>
-                                        <TableCell className="px-3 py-3 text-sm text-foreground">
-                                            {trainee.accessCardId ?? ""}
                                         </TableCell>
                                         <TableCell className="px-3 py-3 text-sm whitespace-nowrap text-foreground">
                                             {formatDob(trainee.dob)}
@@ -534,7 +632,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                                                     <Button
                                                         variant="ghost"
                                                         size="icon-sm"
-                                                        aria-label={`Actions for ${trainee.fullName ?? account ?? trainee.id}`}
+                                                        aria-label={`Actions for ${trainee.fullName ?? studentId ?? trainee.id}`}
                                                     >
                                                         <MoreVertical className="size-4 text-muted-foreground" />
                                                     </Button>
@@ -601,6 +699,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
             <TraineeModal
                 open={modalState.open}
                 mode={modalState.mode}
+                site={classSite}
                 trainee={modalState.trainee}
                 existingTrainees={activeTrainees}
                 onOpenChange={(open) => setModalState((prev) => ({ ...prev, open }))}
@@ -612,7 +711,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                 }
             />
 
-            {/* Delete Confirmation Modal */}
+            {/* Single Row Delete Confirmation Modal */}
             <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
@@ -626,8 +725,12 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                         <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
                             <p className="font-medium text-foreground">{deleteTarget.fullName || "—"}</p>
                             <p className="text-xs text-muted-foreground">
-                                {deleteTarget.fptAccount || deleteTarget.code || "—"} •{" "}
-                                {deleteTarget.personalEmail || deleteTarget.email || "—"}
+                                {formatFptStudentIdForSite(
+                                    deleteTarget.fptAccount || deleteTarget.code,
+                                    classSite,
+                                    deleteTarget.id,
+                                ) || "—"}{" "}
+                                • {deleteTarget.personalEmail || deleteTarget.email || "—"}
                             </p>
                         </div>
                     ) : null}
@@ -638,6 +741,47 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                         </Button>
                         <Button type="button" variant="destructive" onClick={handleConfirmDelete}>
                             Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Bulk Delete Selected Confirmation Modal */}
+            <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Remove Selected Trainees</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to remove {selectedCount} selected{" "}
+                            {selectedCount === 1 ? "trainee" : "trainees"} from class?
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedCount > 0 ? (
+                        <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border bg-muted/30 p-3 text-sm">
+                            {selectedTrainees.map((trainee) => (
+                                <div key={trainee.id} className="flex items-center justify-between gap-2">
+                                    <span className="truncate font-medium text-foreground">
+                                        {trainee.fullName || "—"}
+                                    </span>
+                                    <span className="shrink-0 text-xs text-muted-foreground">
+                                        {formatFptStudentIdForSite(
+                                            trainee.fptAccount || trainee.code,
+                                            classSite,
+                                            trainee.id,
+                                        )}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : null}
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setBulkDeleteOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={handleConfirmBulkDelete}>
+                            Delete Selected ({selectedCount})
                         </Button>
                     </DialogFooter>
                 </DialogContent>
