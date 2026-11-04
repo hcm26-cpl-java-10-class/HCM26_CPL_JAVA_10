@@ -8,6 +8,7 @@ import type {
   EssayGradingSummary,
   ExamDTO,
   ExamFilter,
+  ExamCategory,
   GradeSubmissionRequest,
   QuestionDTO,
   QuestionFilter,
@@ -20,6 +21,7 @@ const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 export interface PublishedExamScore {
   examId: number;
   examTitle: string;
+  category: ExamCategory;
   attemptNumber: number;
   objectiveScore: number | null;
   finalScore: number | null;
