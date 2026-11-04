@@ -218,7 +218,7 @@ export default function EssayAttemptDetailPage() {
         selectedTab ?? (detail && detail.essays.length === 0 && codings.length > 0 ? "coding" : "essay");
 
     return (
-        <MainLayout pathName={{ exams: "Assessment Management", grading: "Essay Grading", detail: "Submission Review" }}>
+        <MainLayout pathName={{ exams: "Exam Management", grading: "Essay Grading", detail: "Submission Review" }}>
             <section className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-12">
                 {/* Top Action & Navigation Bar */}
                 <div className="flex flex-wrap items-center justify-between gap-4">
@@ -268,7 +268,7 @@ export default function EssayAttemptDetailPage() {
                         <AlertTriangle className="size-5 shrink-0 mt-0.5" />
                         <div>
                             <h4 className="font-semibold text-sm">Failed to load submission</h4>
-                            <p className="text-xs mt-1">It may not have been submitted or does not belong to this assessment.</p>
+                            <p className="text-xs mt-1">It may not have been submitted or does not belong to this exam.</p>
                         </div>
                     </div>
                 )}
@@ -436,7 +436,7 @@ export default function EssayAttemptDetailPage() {
                         {tab === "essay" && detail.essays.length === 0 && (
                             <div className="rounded-xl border bg-card p-12 text-center text-muted-foreground">
                                 <FileText className="mx-auto size-8 text-muted-foreground/50 mb-2" />
-                                <p className="font-medium text-sm">This assessment attempt contains no essay questions.</p>
+                                <p className="font-medium text-sm">This exam attempt contains no essay questions.</p>
                             </div>
                         )}
 
@@ -778,7 +778,7 @@ export default function EssayAttemptDetailPage() {
                             ) : (
                                 <Save className="mr-1.5 size-4" />
                             )}
-                            {saveGradeMutation.isPending ? "Saving..." : "Confirm & Save"}
+                            {saveGradeMutation.isPending ? "Saving..." : "Confirm & Save Official Grade"}
                         </Button>
                     </div>
                 )}
@@ -792,7 +792,7 @@ export default function EssayAttemptDetailPage() {
                                 Overwrite Confirmed Grade?
                             </DialogTitle>
                             <DialogDescription>
-                                This assessment attempt has already been graded with an official final score of{" "}
+                                This exam attempt has already been graded with an official final score of{" "}
                                 <span className="font-semibold text-foreground">
                                     {detail?.finalScore != null ? `${formatScore(detail.finalScore)} pts` : "Graded"}
                                 </span>

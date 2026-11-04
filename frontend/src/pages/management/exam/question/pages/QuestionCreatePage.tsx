@@ -40,25 +40,22 @@ export function QuestionCreatePage() {
 
     return (
         <MainLayout pathName={{ questions: "Questions", create: "Create" }}>
-            <div className="flex flex-col h-[calc(100vh-6.5rem)]">
-                <Card className="flex flex-col flex-1 min-h-0 overflow-hidden shadow-sm">
-                    <CardHeader className="shrink-0 border-b pb-3 bg-muted/10">
-                        <CardTitle>Create Question</CardTitle>
-                        <CardDescription>Create a new question with its options.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
-                        <QuestionForm
-                            form={form}
-                            setForm={setForm}
-                            onSubmit={(values) => createMutation.mutate(values)}
-                            isSaving={createMutation.isPending}
-                            submitLabel="Save"
-                            showActive={true}
-                            fillHeight
-                        />
-                    </CardContent>
-                </Card>
-            </div>
+            <Card className="w-full">
+                <CardHeader>
+                    <CardTitle>Create Question</CardTitle>
+                    <CardDescription>Create a new question with its options.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <QuestionForm
+                        form={form}
+                        setForm={setForm}
+                        onSubmit={(values) => createMutation.mutate(values)}
+                        isSaving={createMutation.isPending}
+                        submitLabel="Save"
+                        showActive={true}
+                    />
+                </CardContent>
+            </Card>
         </MainLayout>
     );
 }

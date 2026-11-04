@@ -259,7 +259,7 @@ public class QuestionDataInitializer implements CommandLineRunner {
 
     /**
      * Cau hoi CODING (Java, kieu Coderbyte). params: {ten, kieu}. tests: moi dong = cac gia tri dau vao theo thu tu
-     * tham so, phan tu cuoi la ket qua mong doi. 2 test dau hien thi cho sinh vien, cac test con lai an.
+     * tham so, phan tu cuoi la ket qua mong doi. 2 test dau hien thi cho sinh vien, 8 test con lai an.
      */
     private Question makeCoding(String content, Difficulty diff, String functionName, String returnType,
                                 String[][] params, String[][] tests) {

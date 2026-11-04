@@ -27,11 +27,9 @@ public class GuestUserService {
 
     @Transactional
     public User findOrCreateGuest(String email, String fullName) {
-        String normalizedEmail = email == null ? "" : email.trim().toLowerCase();
+        String normalizedEmail = email.trim().toLowerCase();
 
-        Optional<User> existing = normalizedEmail.isEmpty()
-                ? Optional.empty()
-                : userRepository.findByEmail(normalizedEmail);
+        Optional<User> existing = userRepository.findByEmail(normalizedEmail);
         if (existing.isPresent() && Boolean.TRUE.equals(existing.get().getIsGuest())) {
             return existing.get();
         }
@@ -39,11 +37,8 @@ public class GuestUserService {
         Role studentRole = roleRepository.findByName("STUDENT")
                 .orElseThrow(() -> new IllegalStateException("Role STUDENT not found"));
 
-        // Email trống hoặc đã bị tài khoản thật chiếm dùng -> sinh email nội bộ @anon.invalid
         boolean emailTaken = existing.isPresent();
-        String storedEmail = (emailTaken || normalizedEmail.isEmpty())
-                ? buildInternalGuestEmail(normalizedEmail.isEmpty() ? "anon" : normalizedEmail)
-                : normalizedEmail;
+        String storedEmail = emailTaken ? buildInternalGuestEmail(normalizedEmail) : normalizedEmail;
 
         User guest = User.builder()
                 .email(storedEmail)

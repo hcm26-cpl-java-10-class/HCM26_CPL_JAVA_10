@@ -27,8 +27,5 @@ public class IntegrityEventRequest {
         private Integer durationSeconds;
         @Size(max = 300)
         private String detail;
-        /** Anh bang chung (data URL jpeg, da thu nho) - chi dung cho su kien camera. */
-        @Size(max = 250000)
-        private String snapshot;
     }
 }

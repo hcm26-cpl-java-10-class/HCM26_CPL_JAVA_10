@@ -56,11 +56,6 @@ public class ExamIntegrityReportDTO {
         private int contextMenuCount;
         private int shortcutCount;        // DEVTOOLS_KEY + PRINT_ATTEMPT
         private int multiSessionCount;
-        private int cameraOffCount;        // CAMERA_OFF
-        private int cameraCoveredCount;    // CAMERA_COVERED
-        private int faceMissingCount;      // FACE_MISSING (roi khoi camera)
-        private int multipleFacesCount;    // MULTIPLE_FACES
-        private boolean hasEntryPhoto;     // da chup anh luc vao thi
         private int totalAwaySeconds;
         private Instant lastViolationAt;
         private boolean flagged;
@@ -78,14 +73,5 @@ public class ExamIntegrityReportDTO {
         private String detail;
         private String userAgent;
         private String ipAddress;
-        /** Anh bang chung (data URL) - chi co voi su kien camera. */
-        private String snapshot;
-    }
-
-    /** Anh chup luc vao thi. */
-    @Getter @Setter
-    public static class EntryPhotoDTO {
-        private String imageData;
-        private Instant capturedAt;
     }
 }
