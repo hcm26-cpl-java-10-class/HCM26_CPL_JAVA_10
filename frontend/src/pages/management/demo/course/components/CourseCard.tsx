@@ -10,7 +10,6 @@ interface CourseCardProps {
   course: CatalogCourse;
   /** id enrollment của user cho khóa này (nếu đã ghi danh) — dùng cho nút Continue learning. */
   enrollmentId?: number;
-  isStudentView: boolean;
   canEnroll: boolean;
   isEnrolling: boolean;
   canAssign: boolean;
@@ -24,7 +23,6 @@ interface CourseCardProps {
 export function CourseCard({
   course,
   enrollmentId,
-  isStudentView,
   canEnroll,
   isEnrolling,
   canAssign,
@@ -74,7 +72,7 @@ export function CourseCard({
       <Badge className="absolute left-3 top-3 bg-white/95 text-slate-800 hover:bg-white">
         {course.categoryName || "Course"}
       </Badge>
-      {isStudentView && course.enrolled && (
+      {course.enrolled && (
         <Badge className="absolute right-3 top-3 bg-emerald-600 text-white hover:bg-emerald-600">
           <CheckCircle2 className="size-3" /> Enrolled
         </Badge>
@@ -149,7 +147,7 @@ export function CourseCard({
               <Eye className="size-4" /> View detail
             </Button>
           )}
-          {showEnrollmentAction && (isStudentView && course.enrolled && enrollmentId !== undefined ? (
+          {showEnrollmentAction && (course.enrolled && enrollmentId !== undefined ? (
             <Button asChild className="flex-1">
               <Link to={`/enrollments/${enrollmentId}/learn`}>
                 <PlayCircle className="size-4" /> Continue learning
@@ -157,20 +155,15 @@ export function CourseCard({
             </Button>
           ) : (
             <>
-              {/* Student view: Enroll. Admin/staff view: Assign (department hoặc student). */}
-              {canEnroll && (isStudentView ? (
-                !course.enrolled && (
-                  <Button className="flex-1" disabled={isEnrolling} onClick={() => onEnroll(course.id)}>
-                    {isEnrolling ? "Enrolling..." : "Enroll"}
-                  </Button>
-                )
-              ) : (
-                <CourseEnrollmentAssignmentDialog course={course} />
-              ))}
+              {!course.enrolled && canEnroll && (
+                <Button className="flex-1" disabled={isEnrolling} onClick={() => onEnroll(course.id)}>
+                  {isEnrolling ? "Enrolling..." : "Enroll"}
+                </Button>
+              )}
             </>
           ))}
         </div>
-        {canAssign && !isStudentView && (
+        {canAssign && (
           <CourseEnrollmentAssignmentDialog course={course} />
         )}
       </div>

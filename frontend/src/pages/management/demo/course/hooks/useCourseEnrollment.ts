@@ -1,7 +1,6 @@
 import { enrollmentApi } from "@/api";
 import { notificationQueryKey } from "@/api/features/notification.api";
 import { usePermissions } from "@/hooks/usePermissions";
-import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "sonner";
@@ -14,9 +13,7 @@ import { getErrorMessage } from "../utils/course.utils.ts";
  */
 export function useCourseEnrollment() {
   const queryClient = useQueryClient();
-  const { hasPermission, activeRole } = usePermissions();
-  // Student view: tự Enroll. Admin/staff view: Assign cho department/student.
-  const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
+  const { hasPermission } = usePermissions();
 
   const canEnroll = hasPermission("ENROLLMENT_CREATE");
   const canCancel = hasPermission("ENROLLMENT_DELETE");
@@ -60,7 +57,6 @@ export function useCourseEnrollment() {
   });
 
   return {
-    isStudentView,
     canEnroll,
     canCancel,
     enrollmentsQuery,
