@@ -5,7 +5,6 @@ package com.example.starter_project_2025.exception;
  * (illegal status transition, schedule overlap, ...). Mapped to HTTP 409.
  */
 public class ConflictException extends RuntimeException {
-
     public ConflictException(String message) {
         super(message);
     }

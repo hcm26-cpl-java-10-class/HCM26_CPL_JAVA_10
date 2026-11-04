@@ -36,6 +36,14 @@ public class ExternalApiController {
                 .body(calendarExcelExporter.export(id, calendarId));
     }
 
+    @GetMapping("/data-source")
+    @Operation(summary = "Identify whether shared data is local sample data")
+    public DataSourceResponse getDataSource() {
+        return new DataSourceResponse(externalApiService.isSampleData());
+    }
+
+    public record DataSourceResponse(boolean sampleData) {}
+
     @GetMapping("/classes")
     @Operation(summary = "Fetch classes from external system",
             description = "status defaults to 'active'; pass status=all to list classes of every status")
