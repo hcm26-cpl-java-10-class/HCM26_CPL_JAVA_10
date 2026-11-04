@@ -4,10 +4,10 @@ import {
   USER_STATUS_BADGE_CLASS,
   USER_STATUS_DOT_CLASS,
   USER_STATUS_OPTIONS,
-  type UserAccountStatus,
+  type UserStatus,
 } from "@/types";
 
-export function UserStatusBadge({ status }: { status: UserAccountStatus }) {
+export function UserStatusBadge({ status }: { status: UserStatus }) {
   const label = USER_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
 
   return (

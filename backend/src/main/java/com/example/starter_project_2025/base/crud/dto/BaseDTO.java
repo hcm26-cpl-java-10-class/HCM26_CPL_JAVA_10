@@ -11,7 +11,6 @@ import static com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY;
 
 @Getter
 @Setter
-
 public abstract class BaseDTO {
 
     private Long id;

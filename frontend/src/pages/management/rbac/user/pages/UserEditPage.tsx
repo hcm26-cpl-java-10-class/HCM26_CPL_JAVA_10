@@ -1,39 +1,43 @@
 import { userApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import type { UserDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { UserForm } from "../components/UserForm";
 import {
-  extractDetailedServerError,
+  emptyUserForm,
   extractServerErrors,
-  toUserPayload,
-  type UserFormData,
+  toFormValues,
+  toPayload,
+  validateUserForm,
+  type FieldErrors,
+  type UserFormValues,
 } from "../user-form.utils";
 
 export function UserEditPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { id } = useParams<{ id: string }>();
+  const [values, setValues] = useState<UserFormValues>(emptyUserForm);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const userQuery = useQuery({
     queryKey: ["user", "detail", id],
-    queryFn: () => {
-      if (!id) throw new Error("Không xác định được người dùng cần chỉnh sửa.");
-      return userApi.getById(id);
-    },
-    enabled: Boolean(id),
+    queryFn: () => userApi.getById(id as string),
+    enabled: !!id,
   });
 
+  useEffect(() => {
+    if (userQuery.data) setValues(toFormValues(userQuery.data));
+  }, [userQuery.data]);
+
   const updateMutation = useMutation({
-    mutationFn: (payload: UserDTO) => {
-      if (!id) throw new Error("Không xác định được người dùng cần chỉnh sửa.");
-      return userApi.update(id, payload);
-    },
+    mutationFn: (payload: UserDTO) => userApi.update(id as string, payload),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["user"] }),
@@ -42,11 +46,27 @@ export function UserEditPage() {
       toast.success("Cập nhật người dùng thành công.");
       navigate("/users");
     },
-    onError: (error: unknown, payload) => {
-      console.log("Payload FE gửi:", payload);
-      toast.error(extractDetailedServerError(error));
+    onError: (error: any) => {
+      const { fieldErrors, message } = extractServerErrors(error);
+      setErrors(fieldErrors);
+      toast.error(message);
     },
   });
+
+  const handleChange = <K extends keyof UserFormValues>(key: K, value: UserFormValues[K]) => {
+    setValues((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
+  };
+
+  const handleSubmit = () => {
+    const clientErrors = validateUserForm(values, "edit");
+    setErrors(clientErrors);
+    if (Object.keys(clientErrors).length > 0) {
+      toast.error("Vui lòng kiểm tra lại các trường bị lỗi.");
+      return;
+    }
+    updateMutation.mutate({ ...userQuery.data, ...toPayload(values, "edit") });
+  };
 
   const pathName = { users: "Người dùng", edit: "Chỉnh sửa" };
 
@@ -71,26 +91,31 @@ export function UserEditPage() {
 
   return (
     <MainLayout pathName={pathName}>
-      {userQuery.isLoading ? (
-        <p className="text-sm text-muted-foreground">Đang tải dữ liệu người dùng...</p>
-      ) : userQuery.isError ? (
-        <div className="space-y-4 rounded-lg border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-          <p>{extractServerErrors(userQuery.error).message}</p>
-          <Button variant="outline" onClick={() => navigate("/users")}>
-            Về danh sách
-          </Button>
-        </div>
-      ) : userQuery.data ? (
-        <UserForm
-          mode="EDIT"
-          initialData={userQuery.data}
-          onSubmit={(data: UserFormData) =>
-            updateMutation.mutate(toUserPayload(data, userQuery.data))
-          }
-          onClose={() => navigate("/users")}
-          isSubmitting={updateMutation.isPending}
-        />
-      ) : null}
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Chỉnh sửa người dùng</CardTitle>
+          <CardDescription>Cập nhật thông tin người dùng #{id}.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {userQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Đang tải dữ liệu...</p>
+          ) : userQuery.isError ? (
+            <p className="text-sm text-destructive">
+              {extractServerErrors(userQuery.error).message}
+            </p>
+          ) : (
+            <UserForm
+              mode="edit"
+              values={values}
+              errors={errors}
+              submitting={updateMutation.isPending}
+              onChange={handleChange}
+              onSubmit={handleSubmit}
+              onCancel={() => navigate("/users")}
+            />
+          )}
+        </CardContent>
+      </Card>
     </MainLayout>
   );
 }

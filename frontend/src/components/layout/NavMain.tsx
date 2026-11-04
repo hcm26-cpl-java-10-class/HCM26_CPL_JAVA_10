@@ -52,9 +52,8 @@ export function NavMain({
                             flex
                             items-center
                             justify-center
-                            rounded-xl
 
-                            data-[active=true]:!bg-orange-600
+                            data-[active=true]:!bg-blue-800
                             data-[active=true]:!text-white
                         "
                         >
@@ -66,7 +65,7 @@ export function NavMain({
                                 w-9
                                 items-center
                                 justify-center
-                                rounded-xl
+                                rounded-[10px]
                                 transition-colors
                             "
                             >
@@ -95,8 +94,7 @@ export function NavMain({
                         tooltip={title}
                         isActive={groupActive}
                         className="
-                            rounded-xl
-                            data-[active=true]:data-[state=closed]:bg-orange-600
+                            data-[active=true]:data-[state=closed]:bg-blue-800
                             data-[active=true]:data-[state=closed]:text-white
                         "
                     >
@@ -121,8 +119,7 @@ export function NavMain({
                                     isActive={subItem.isActive}
                                     className="
                                         group
-                                        rounded-xl
-                                        data-[active=true]:bg-orange-600
+                                        data-[active=true]:bg-blue-800
                                         data-[active=true]:text-white
                                     "
                                 >

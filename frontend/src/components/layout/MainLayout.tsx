@@ -10,12 +10,10 @@ export function MainLayout({
     children,
     pathName,
     plainBreadcrumb = false,
-    headerContent,
 }: {
     children: React.ReactNode;
     pathName?: Record<string, string>;
     plainBreadcrumb?: boolean;
-    headerContent?: React.ReactNode;
 }) {
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
@@ -42,14 +40,10 @@ export function MainLayout({
             <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
                 <header className="flex h-16 shrink-0 items-center gap-2">
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
-                        {headerContent ?? (
-                            <>
-                                <div className="flex items-center gap-2">
-                                    <DynamicBreadcrumbs pathTitles={pathName} plain={plainBreadcrumb} />
-                                </div>
-                                <HeaderRight />
-                            </>
-                        )}
+                        <div className="flex items-center gap-2">
+                            <DynamicBreadcrumbs pathTitles={pathName} plain={plainBreadcrumb} />
+                        </div>
+                        <HeaderRight />
                     </div>
                 </header>
 

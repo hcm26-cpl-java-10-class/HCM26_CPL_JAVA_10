@@ -12,30 +12,19 @@ import { validatePasswordStrength } from "@/utils/password.utils";
 
 const resetSchema = z
     .object({
-        password: z.string().min(8, "Mật khẩu phải có ít nhất 8 ký tự.").superRefine((value, ctx) => {
-            if (value.length < 8) return;
+        password: z.string().superRefine((value, ctx) => {
             const problem = validatePasswordStrength(value);
-            if (problem) {
-                const message =
-                    problem === "Password must be 8-64 characters."
-                        ? "Mật khẩu không được vượt quá 64 ký tự."
-                        : problem === "Password must not contain spaces."
-                          ? "Mật khẩu không được chứa khoảng trắng."
-                          : problem === "Password must contain at least one letter and one number."
-                            ? "Mật khẩu phải có ít nhất một chữ cái và một chữ số."
-                            : "Mật khẩu quá phổ biến. Vui lòng chọn mật khẩu khác.";
-                ctx.addIssue({ code: "custom", message });
-            }
+            if (problem) ctx.addIssue({ code: "custom", message: problem });
         }),
         confirmPassword: z.string(),
     })
     .refine((data) => data.password === data.confirmPassword, {
-        message: "Mật khẩu xác nhận không khớp.",
+        message: "Passwords don't match",
         path: ["confirmPassword"],
     });
 
 interface ResetPasswordFormProps {
-    onSubmit: (data: ResetPasswordData) => Promise<void>;
+    onSubmit: (data: ResetPasswordData) => void;
     loading: boolean;
 }
 
@@ -49,10 +38,10 @@ export const ResetPasswordForm = ({ onSubmit, loading }: ResetPasswordFormProps)
     });
 
     return (
-        <div className="space-y-7 p-8 sm:p-10">
-            <div className="space-y-3 text-center">
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900">Đặt lại mật khẩu</h1>
-                <p className="text-sm text-slate-600">Mật khẩu cần có ít nhất 8 ký tự.</p>
+        <div className="p-10 space-y-7">
+            <div className="text-center space-y-3">
+                <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">New Password</h1>
+                <p className="text-lg text-gray-500">Use 8-64 characters with at least one letter and one number</p>
             </div>
 
             <Form {...form}>
@@ -62,35 +51,22 @@ export const ResetPasswordForm = ({ onSubmit, loading }: ResetPasswordFormProps)
                         name="password"
                         render={({ field }) => (
                             <FormItem>
-                                <label htmlFor="new-password" className="mb-2 block text-sm font-medium text-slate-900">
-                                    Mật khẩu mới
-                                </label>
                                 <div className="relative">
                                     <FormControl>
                                         <Input
                                             {...field}
-                                            id="new-password"
                                             type={showPassword ? "text" : "password"}
-                                            autoComplete="new-password"
-                                            placeholder="Nhập mật khẩu mới"
-                                            className="h-11 rounded-lg border-slate-300 bg-white pr-12 focus-visible:border-orange-600 focus-visible:ring-orange-500"
+                                            placeholder="Password"
+                                            className="h-14 text-lg rounded-2xl"
                                         />
                                     </FormControl>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label={showPassword ? "Ẩn mật khẩu mới" : "Hiện mật khẩu mới"}
-                                        aria-pressed={showPassword}
-                                        className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-500 hover:bg-slate-100"
+                                    <button
+                                        className="absolute right-3 top-4"
                                         type="button"
-                                        onClick={() => setShowPassword((visible) => !visible)}
+                                        onClick={() => setShowPassword(!showPassword)}
                                     >
-                                        {showPassword ? (
-                                            <EyeOff aria-hidden="true" />
-                                        ) : (
-                                            <Eye aria-hidden="true" />
-                                        )}
-                                    </Button>
+                                        {showPassword ? <Eye size={22}></Eye> : <EyeOff size={22}></EyeOff>}
+                                    </button>
                                 </div>
                                 <FormMessage />
                             </FormItem>
@@ -101,42 +77,22 @@ export const ResetPasswordForm = ({ onSubmit, loading }: ResetPasswordFormProps)
                         name="confirmPassword"
                         render={({ field }) => (
                             <FormItem>
-                                <label
-                                    htmlFor="confirm-new-password"
-                                    className="mb-2 block text-sm font-medium text-slate-900"
-                                >
-                                    Xác nhận mật khẩu mới
-                                </label>
                                 <div className="relative">
                                     <FormControl>
                                         <Input
                                             {...field}
-                                            id="confirm-new-password"
                                             type={showConfirmPassword ? "text" : "password"}
-                                            autoComplete="new-password"
-                                            placeholder="Nhập lại mật khẩu mới"
-                                            className="h-11 rounded-lg border-slate-300 bg-white pr-12 focus-visible:border-orange-600 focus-visible:ring-orange-500"
+                                            placeholder="Confirm Password"
+                                            className="h-14 text-lg rounded-2xl"
                                         />
                                     </FormControl>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label={
-                                            showConfirmPassword
-                                                ? "Ẩn mật khẩu xác nhận"
-                                                : "Hiện mật khẩu xác nhận"
-                                        }
-                                        aria-pressed={showConfirmPassword}
-                                        className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-500 hover:bg-slate-100"
+                                    <button
+                                        className="absolute right-3 top-4"
                                         type="button"
-                                        onClick={() => setShowConfirmPassword((visible) => !visible)}
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                                     >
-                                        {showConfirmPassword ? (
-                                            <EyeOff aria-hidden="true" />
-                                        ) : (
-                                            <Eye aria-hidden="true" />
-                                        )}
-                                    </Button>
+                                        {showConfirmPassword ? <Eye size={22}></Eye> : <EyeOff size={22}></EyeOff>}
+                                    </button>
                                 </div>
                                 <FormMessage />
                             </FormItem>
@@ -146,17 +102,13 @@ export const ResetPasswordForm = ({ onSubmit, loading }: ResetPasswordFormProps)
                     <Button
                         type="submit"
                         disabled={loading}
-                        className="h-11 w-full rounded-lg bg-orange-600 font-semibold text-white hover:bg-orange-700"
+                        className="w-full h-13 text-xl font-bold rounded-2xl bg-green-600 hover:bg-green-700"
                     >
                         {loading ? (
-                            <>
-                                <Loader2 className="animate-spin" aria-hidden="true" />
-                                Đang cập nhật...
-                            </>
+                            <Loader2 className="animate-spin" />
                         ) : (
                             <>
-                                Xác nhận đổi mật khẩu
-                                <CheckCircle2 className="ml-2" size={18} aria-hidden="true" />
+                                Update Password <CheckCircle2 className="ml-2" size={22} />
                             </>
                         )}
                     </Button>

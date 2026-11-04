@@ -20,22 +20,7 @@ export * from "./features/menu/module_group";
 export * from "./features/rbac/department";
 export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
-export type {
-  Gender,
-  User,
-  UserAccountStatus,
-  UserDTO,
-  UserFilter,
-  UserRole,
-  UserStatus,
-} from "./features/rbac/user";
-export {
-  GENDER_OPTIONS,
-  USER_STATUS_BADGE_CLASS,
-  USER_STATUS_DOT_CLASS,
-  USER_STATUS_HEADER_CLASS,
-  USER_STATUS_OPTIONS,
-} from "./features/rbac/user";
+export * from "./features/rbac/user";
 export * from "./features/demo/session";
 export * from "./features/demo/lesson";
 export * from './features/rbac/location';
