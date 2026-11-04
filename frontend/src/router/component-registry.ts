@@ -34,6 +34,8 @@ export const routes: RouteConfig[] = [
   { path: "/training/trainee", component: TraineePage },
   { path: "/training/log-work", component: LogWorkPage },
   { path: "/training/content", component: ContentPage },
+  { path: "/subjects", component: ContentPage, requiredPermission: "SUBJECT_READ" },
+  { path: "/programs", component: ContentPage, requiredPermission: "PROGRAM_READ" },
   { path: "/training/reports", component: ReportsPage },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
