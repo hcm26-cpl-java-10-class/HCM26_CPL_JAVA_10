@@ -1,451 +1,501 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { Folder, FolderOpen, MapPin, ChevronRight, Building2, Search, Layers, Plus, Edit2, Trash2, X, AlertTriangle } from "lucide-react";
-import type { LocationNode } from "@/types/features/rbac/location";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  Folder,
+  FolderOpen,
+  MapPin,
+  ChevronRight,
+  Search,
+  Plus,
+  Edit2,
+  Trash2,
+  X,
+  AlertTriangle,
+  Users,
+  User,
+  Briefcase,
+  Mail,
+  Phone,
+  Building2,
+} from "lucide-react";
+import type { LocationNode, LocationUser } from "@/types/features/rbac/location";
 import { locationApi } from "@/api/features/rbac/location.api";
 
 interface LocationTreeProps {
-  selectedLocationId: number | string | null;
-  onSelectLocation: (location: LocationNode) => void;
+  selectedLocationId?: number | string | null;
+  onSelectLocation?: (location: LocationNode) => void;
 }
 
-const MOCK_LOCATION_TREE: LocationNode[] = [
-  {
-    id: 1,
-    code: "VN",
-    name: "Việt Nam (Hệ thống Cơ sở)",
-    parentId: null,
-    users: [
-      { id: 101, username: "GV001", fullName: "GS.TS. Nguyễn Văn A", jobTitle: "Trưởng Ban Đào tạo", email: "nva@edu.vn", phone: "0901234567" },
-      { id: 102, username: "NV001", fullName: "ThS. Trần Thị B", jobTitle: "Chuyên viên Khảo thí", email: "ttb@edu.vn", phone: "0909876543" },
-    ],
-    children: [
-      {
-        id: 2,
-        code: "CAMPUS_HN",
-        name: "Cơ sở Hà Nội",
-        parentId: 1,
-        users: [
-          { id: 103, username: "GV002", fullName: "PGS.TS. Lê Văn C", jobTitle: "Giám đốc Cơ sở Hà Nội", email: "lvc@edu.vn", phone: "0912345678" }
-        ],
-        children: [
-          {
-            id: 3,
-            code: "HOA_LAC",
-            name: "Phân hiệu Hòa Lạc",
-            parentId: 2,
-            users: [
-              { id: 104, username: "GV003", fullName: "ThS. Phạm Minh D", jobTitle: "Giảng viên Khoa CNTT", email: "pmd@edu.vn", phone: "0933333333" },
-              { id: 105, username: "NV002", fullName: "Hoàng Anh E", jobTitle: "Cán bộ Quản lý Sinh viên", email: "hae@edu.vn", phone: "0944444444" }
-            ],
-            children: []
-          },
-          {
-            id: 4,
-            code: "CAU_GIAY",
-            name: "Cơ sở Cầu Giấy (Tòa nhà Đào tạo)",
-            parentId: 2,
-            users: [
-              { id: 106, username: "GV004", fullName: "TS. Đỗ Quốc F", jobTitle: "Trưởng Bộ môn Ngoại ngữ", email: "dqf@edu.vn", phone: "0944444444" }
-            ],
-            children: []
-          }
-        ]
-      },
-      {
-        id: 5,
-        code: "CAMPUS_HCM",
-        name: "Cơ sở TP. Hồ Chí Minh",
-        parentId: 1,
-        users: [
-          { id: 107, username: "GV005", fullName: "TS. Nguyễn Thị G", jobTitle: "Phó Giám đốc Cơ sở HCM", email: "ntg@edu.vn", phone: "0966666666" }
-        ],
-        children: [
-          {
-            id: 6,
-            code: "KHU_CNCAO",
-            name: "Phân hiệu Khu Công nghệ cao (Q9)",
-            parentId: 5,
-            users: [
-              { id: 108, username: "NV003", fullName: "Vũ Văn H", jobTitle: "Giáo vụ Khoa Kỹ thuật", email: "vvh@edu.vn", phone: "0977777777" }
-            ],
-            children: []
-          }
-        ]
-      },
-      {
-        id: 7,
-        code: "CAMPUS_DN",
-        name: "Cơ sở Đà Nẵng",
-        parentId: 1,
-        users: [],
-        children: []
-      }
-    ]
-  }
-];
-
 export const LocationTree: React.FC<LocationTreeProps> = ({
-  selectedLocationId,
+  selectedLocationId = null,
   onSelectLocation,
 }) => {
-  const [treeData, setTreeData] = useState<LocationNode[]>(MOCK_LOCATION_TREE);
-  const [expandedIds, setExpandedIds] = useState<Record<string | number, boolean>>({ 1: true, 2: true, 5: true });
+  const [treeData, setTreeData] = useState<LocationNode[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<Record<string | number, boolean>>({});
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeNode, setActiveNode] = useState<LocationNode | null>(null);
 
-  // States cho Form Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingNode, setEditingNode] = useState<LocationNode | null>(null);
-  const [targetParentId, setTargetParentId] = useState<number | string | null>(null);
-  const [formData, setFormData] = useState({ name: "", code: "" });
+  const [targetParentId, setTargetParentId] = useState<number | null>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    code: "",
+    description: "",
+    status: "ACTIVE",
+  });
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  // States cho Delete Confirmation Modal chuẩn UI
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [nodeToDelete, setNodeToDelete] = useState<LocationNode | null>(null);
 
   const loadTreeData = useCallback(async () => {
+    setLoading(true);
     try {
-      const data = await locationApi.getLocationTree();
-      if (data && Array.isArray(data) && data.length > 0) {
+      const data = await locationApi.getTree();
+      if (data && Array.isArray(data)) {
         setTreeData(data);
-      } else {
-        setTreeData(MOCK_LOCATION_TREE);
+        const defaultExpanded: Record<string | number, boolean> = {};
+        data.forEach((node) => {
+          defaultExpanded[node.id] = true;
+        });
+        setExpandedIds((prev) => ({ ...defaultExpanded, ...prev }));
+        if (data.length > 0 && !activeNode) {
+          setActiveNode(data[0]);
+        }
       }
     } catch (error) {
-      setTreeData(MOCK_LOCATION_TREE);
+      console.error("Failed to load location tree:", error);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [activeNode]);
 
   useEffect(() => {
     loadTreeData();
   }, [loadTreeData]);
 
-  useEffect(() => {
-    if (!selectedLocationId && MOCK_LOCATION_TREE.length > 0) {
-      onSelectLocation(MOCK_LOCATION_TREE[0]);
+  const handleNodeClick = (node: LocationNode) => {
+    setActiveNode(node);
+    if (onSelectLocation) {
+      onSelectLocation(node);
     }
-  }, [selectedLocationId, onSelectLocation]);
+  };
 
   const toggleExpand = (id: number | string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpandedIds((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleExpandAll = () => {
-    const allIds: Record<string | number, boolean> = {};
-    const traverse = (nodes: LocationNode[]) => {
-      nodes.forEach((n) => {
-        allIds[n.id] = true;
-        if (n.children) traverse(n.children);
-      });
-    };
-    traverse(treeData);
-    setExpandedIds(allIds);
-  };
-
   const handleAddChild = (node: LocationNode, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingNode(null);
-    setTargetParentId(node.id);
-    setFormData({ name: "", code: "" });
+    setTargetParentId(Number(node.id));
+    setFormData({ name: "", code: "", description: "", status: "ACTIVE" });
+    setErrorMessage(null);
     setIsModalOpen(true);
   };
 
   const handleEditNode = (node: LocationNode, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingNode(node);
-    setTargetParentId(node.parentId);
-    setFormData({ name: node.name, code: node.code });
+    setTargetParentId(node.parentId ? Number(node.parentId) : null);
+    setFormData({
+      name: node.name,
+      code: node.code,
+      description: (node as any).description || "",
+      status: node.status || "ACTIVE",
+    });
+    setErrorMessage(null);
     setIsModalOpen(true);
   };
 
-  // Trigger mở Confirm Delete Modal
   const handleOpenDeleteModal = (node: LocationNode, e: React.MouseEvent) => {
     e.stopPropagation();
     setNodeToDelete(node);
     setIsDeleteModalOpen(true);
   };
 
-  // Thực thi xóa nút khỏi cây
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!nodeToDelete) return;
-    const deleteFromTree = (nodes: LocationNode[]): LocationNode[] => {
-      return nodes
-        .filter((n) => String(n.id) !== String(nodeToDelete.id))
-        .map((n) => ({
-          ...n,
-          children: n.children ? deleteFromTree(n.children) : [],
-        }));
-    };
-    setTreeData((prev) => deleteFromTree(prev));
-    setIsDeleteModalOpen(false);
-    setNodeToDelete(null);
+    try {
+      await locationApi.delete(nodeToDelete.id as any);
+      if (activeNode?.id === nodeToDelete.id) {
+        setActiveNode(null);
+      }
+      await loadTreeData();
+    } catch (error: any) {
+      alert(error?.response?.data?.message || "Không thể xóa vị trí này!");
+    } finally {
+      setIsDeleteModalOpen(false);
+      setNodeToDelete(null);
+    }
   };
 
-  const handleSaveModal = (e: React.FormEvent) => {
+  const handleSaveModal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.code) return;
-
-    if (editingNode) {
-      const updateTree = (nodes: LocationNode[]): LocationNode[] => {
-        return nodes.map((n) => {
-          if (n.id === editingNode.id) {
-            return { ...n, name: formData.name, code: formData.code };
-          }
-          if (n.children) {
-            return { ...n, children: updateTree(n.children) };
-          }
-          return n;
-        });
-      };
-      setTreeData((prev) => updateTree(prev));
-    } else {
-      const newNode: LocationNode = {
-        id: Date.now(),
-        name: formData.name,
-        code: formData.code,
-        parentId: targetParentId as any,
-        users: [],
-        children: [],
-      };
-
-      const insertTree = (nodes: LocationNode[]): LocationNode[] => {
-        return nodes.map((n) => {
-          if (String(n.id) === String(targetParentId)) {
-            return { ...n, children: [...(n.children || []), newNode] };
-          }
-          if (n.children) {
-            return { ...n, children: insertTree(n.children) };
-          }
-          return n;
-        });
-      };
-
-      if (!targetParentId) {
-        setTreeData((prev) => [...prev, newNode]);
-      } else {
-        setTreeData((prev) => insertTree(prev));
-        setExpandedIds((prev) => ({ ...prev, [targetParentId]: true }));
-      }
+    if (!formData.name.trim() || !formData.code.trim()) {
+      setErrorMessage("Tên và mã vị trí không được để trống!");
+      return;
     }
 
-    setIsModalOpen(false);
+    setSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      const payload: Record<string, any> = {
+        name: formData.name.trim(),
+        code: formData.code.trim().toUpperCase(),
+        description: formData.description.trim(),
+        status: formData.status,
+        parentLocationId: targetParentId ? Number(targetParentId) : null,
+      };
+
+      if (editingNode) {
+        await locationApi.update(editingNode.id as any, payload as any);
+      } else {
+        await locationApi.create(payload as any);
+      }
+      await loadTreeData();
+      setIsModalOpen(false);
+    } catch (error: any) {
+      console.error("Failed to save location:", error);
+      const apiError =
+        error?.response?.data?.message ||
+        error?.response?.data?.errors?.code ||
+        "Lưu vị trí thất bại. Vui lòng kiểm tra lại mã Code (không trùng lặp)!";
+      setErrorMessage(apiError);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const filterTree = (nodes: LocationNode[], query: string): LocationNode[] => {
     if (!query) return nodes;
-    return nodes.reduce<LocationNode[]>((acc, node) => {
-      const matches =
-        node.name.toLowerCase().includes(query.toLowerCase()) ||
-        node.code.toLowerCase().includes(query.toLowerCase());
-      const filteredChildren = node.children ? filterTree(node.children, query) : [];
+    const lowerQuery = query.toLowerCase();
 
-      if (matches || filteredChildren.length > 0) {
-        acc.push({
-          ...node,
-          children: filteredChildren,
-        });
-      }
-      return acc;
-    }, []);
+    return nodes
+      .map((node) => {
+        const matchesSelf =
+          node.name.toLowerCase().includes(lowerQuery) ||
+          node.code.toLowerCase().includes(lowerQuery);
+        const filteredChildren = node.children ? filterTree(node.children, query) : [];
+
+        if (matchesSelf || filteredChildren.length > 0) {
+          return { ...node, children: filteredChildren };
+        }
+        return null;
+      })
+      .filter(Boolean) as LocationNode[];
   };
 
-  const displayedData = searchQuery ? filterTree(treeData, searchQuery) : treeData;
+  const filteredTreeData = useMemo(() => filterTree(treeData, searchQuery), [treeData, searchQuery]);
 
-  const renderTreeNode = (node: LocationNode, depth: number = 0) => {
-    const hasChildren = node.children && node.children.length > 0;
-    const isExpanded = !!expandedIds[node.id] || searchQuery.length > 0;
-    const isSelected = selectedLocationId === node.id;
-
+  const renderTree = (nodes: LocationNode[]) => {
     return (
-      <div key={node.id} className="flex flex-col text-xs select-none">
-        <div
-          onClick={() => onSelectLocation(node)}
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
-          className={`group flex items-center gap-1.5 py-1.5 pr-2 rounded-lg cursor-pointer transition-all duration-200 border border-transparent ${
-            isSelected
-              ? "bg-blue-500/15 text-blue-500 dark:text-blue-400 font-semibold border-blue-500/30 shadow-xs"
-              : "hover:bg-accent/70 text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {hasChildren ? (
-            <button
-              type="button"
-              onClick={(e) => toggleExpand(node.id, e)}
-              className="p-1 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground shrink-0 transition-transform duration-200 cursor-pointer"
-            >
-              <ChevronRight
-                className={`size-3.5 transition-transform duration-200 ${
-                  isExpanded ? "rotate-90 text-blue-500" : ""
+      <ul className="pl-3 space-y-1 border-l border-border/50 ml-2">
+        {nodes.map((node) => {
+          const userList: LocationUser[] = node.users || [];
+          const userCount = node.totalUsers || userList.length || 0;
+          const hasChildren = Boolean(node.children && node.children.length > 0);
+          const canExpand = hasChildren || userCount > 0;
+
+          const isExpanded = expandedIds[node.id] || Boolean(searchQuery);
+          const isSelected = activeNode ? String(activeNode.id) === String(node.id) : false;
+
+          return (
+            <li key={node.id} className="text-xs space-y-1">
+              <div
+                onClick={() => handleNodeClick(node)}
+                className={`flex items-center justify-between p-1.5 rounded-md cursor-pointer transition-colors group ${
+                  isSelected ? "bg-primary/15 text-primary font-semibold" : "hover:bg-accent text-foreground"
                 }`}
-              />
-            </button>
-          ) : (
-            <span className="w-5 shrink-0" />
-          )}
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {canExpand ? (
+                    <button
+                      type="button"
+                      onClick={(e) => toggleExpand(node.id, e)}
+                      className="p-0.5 hover:bg-muted rounded text-muted-foreground"
+                    >
+                      <ChevronRight className={`size-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                    </button>
+                  ) : (
+                    <span className="w-4" />
+                  )}
 
-          {depth === 0 ? (
-            <Building2 className={`size-4 shrink-0 transition-colors ${isSelected ? "text-blue-500" : "text-blue-400/80"}`} />
-          ) : isExpanded ? (
-            <FolderOpen className="size-4 text-amber-500 shrink-0 transition-transform duration-200" />
-          ) : (
-            <Folder className="size-4 text-amber-500/80 shrink-0 transition-transform duration-200" />
-          )}
+                  {hasChildren ? (
+                    isExpanded ? <FolderOpen className="size-4 text-amber-500 shrink-0" /> : <Folder className="size-4 text-amber-500 shrink-0" />
+                  ) : (
+                    <MapPin className="size-4 text-emerald-500 shrink-0" />
+                  )}
 
-          <span className="truncate flex-1 tracking-tight">{node.name}</span>
+                  <span className="truncate">{node.name}</span>
+                  <span className="text-[10px] font-mono text-muted-foreground ml-1">({node.code})</span>
 
-          <span
-            className={`text-[10px] font-mono px-1.5 py-0.5 rounded border transition-colors shrink-0 ${
-              isSelected
-                ? "bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/30"
-                : "bg-muted/70 text-muted-foreground border-border/60 group-hover:border-border"
-            }`}
-          >
-            {node.code}
-          </span>
+                  {userCount > 0 && (
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-primary/10 text-primary border border-primary/20 font-medium ml-1 shrink-0">
+                      <Users className="size-2.5" />
+                      <span>{userCount}</span>
+                    </span>
+                  )}
+                </div>
 
-          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 ml-1 transition-opacity">
-            <button
-              type="button"
-              onClick={(e) => handleAddChild(node, e)}
-              className="p-1 hover:bg-muted text-muted-foreground hover:text-blue-500 rounded cursor-pointer"
-              title="Add Sub-location"
-            >
-              <Plus className="size-3" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => handleEditNode(node, e)}
-              className="p-1 hover:bg-muted text-muted-foreground hover:text-amber-500 rounded cursor-pointer"
-              title="Edit Location"
-            >
-              <Edit2 className="size-3" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => handleOpenDeleteModal(node, e)}
-              className="p-1 hover:bg-muted text-muted-foreground hover:text-rose-500 rounded cursor-pointer"
-              title="Delete Location"
-            >
-              <Trash2 className="size-3" />
-            </button>
-          </div>
-        </div>
+                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1">
+                  <button type="button" onClick={(e) => handleAddChild(node, e)} title="Thêm vị trí con" className="p-1 hover:text-primary">
+                    <Plus className="size-3" />
+                  </button>
+                  <button type="button" onClick={(e) => handleEditNode(node, e)} title="Chỉnh sửa" className="p-1 hover:text-blue-500">
+                    <Edit2 className="size-3" />
+                  </button>
+                  <button type="button" onClick={(e) => handleOpenDeleteModal(node, e)} title="Xóa" className="p-1 hover:text-destructive">
+                    <Trash2 className="size-3" />
+                  </button>
+                </div>
+              </div>
 
-        {hasChildren && (
-          <div
-            className={`grid transition-all duration-300 ease-in-out ${
-              isExpanded ? "grid-rows-[1fr] opacity-100 mt-1" : "grid-rows-[0fr] opacity-0"
-            }`}
-          >
-            <div className="overflow-hidden flex flex-col gap-0.5">
-              {node.children!.map((child) => renderTreeNode(child, depth + 1))}
-            </div>
-          </div>
-        )}
-      </div>
+              {isExpanded && userList.length > 0 && (
+                <ul className="pl-6 space-y-1 my-1 border-l border-dashed border-primary/30 ml-4">
+                  {userList.map((usr) => (
+                    <li
+                      key={usr.id}
+                      className="flex items-center justify-between text-[11px] py-1 px-2.5 rounded bg-muted/40 hover:bg-muted/70 text-muted-foreground"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <User className="size-3 text-primary shrink-0" />
+                        <span className="font-medium text-foreground">{usr.fullName}</span>
+                      </div>
+                      {usr.roleName && (
+                        <span className="inline-flex items-center gap-1 text-[10px] bg-background px-1.5 py-0.5 rounded border border-border text-primary font-normal">
+                          <Briefcase className="size-2.5" />
+                          {usr.roleName}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {hasChildren && isExpanded && renderTree(node.children!)}
+            </li>
+          );
+        })}
+      </ul>
     );
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card p-3.5 shadow-xs flex flex-col gap-3">
-      <div className="flex items-center justify-between pb-2 border-b border-border">
-        <h3 className="text-xs font-bold text-card-foreground flex items-center gap-2">
-          <div className="p-1.5 bg-blue-500/10 text-blue-500 rounded-md">
-            <MapPin className="size-4" />
-          </div>
-          <span>Sơ đồ Địa điểm</span>
-        </h3>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={handleExpandAll}
-            className="p-1 hover:bg-muted text-[10px] text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer"
-            title="Expand All"
-          >
-            <Layers className="size-3.5" />
-          </button>
+    <div className="grid grid-cols-12 gap-4 items-start">
+      <div className="col-span-12 lg:col-span-4 bg-card border border-border rounded-lg p-3 shadow-xs">
+        <div className="mb-3 relative">
+          <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search location..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-background text-xs rounded-md pl-8 pr-3 py-1.5 border border-input focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
+        <div className="max-h-[550px] overflow-y-auto">
+          {loading ? (
+            <div className="text-xs text-muted-foreground text-center py-4">Loading tree...</div>
+          ) : filteredTreeData.length > 0 ? (
+            renderTree(filteredTreeData)
+          ) : (
+            <div className="text-xs text-muted-foreground text-center py-4">No locations found.</div>
+          )}
         </div>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="Filter tree..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-background text-xs rounded-lg pl-8 pr-3 py-1.5 border border-input focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground placeholder:text-muted-foreground"
-        />
-      </div>
+      <div className="col-span-12 lg:col-span-8">
+        {activeNode ? (
+          <div className="bg-card border border-border rounded-lg p-5 shadow-xs space-y-5">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-primary/10 rounded-lg text-primary">
+                  <Building2 className="size-6" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">{activeNode.name}</h2>
+                  <p className="text-xs font-mono text-muted-foreground">Mã vị trí: {activeNode.code}</p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-medium">
+                <MapPin className="size-3" />
+                {activeNode.status || "ACTIVE"}
+              </span>
+            </div>
 
-      <div className="flex flex-col gap-0.5 max-h-[520px] overflow-y-auto pr-1 custom-scrollbar">
-        {displayedData.length > 0 ? (
-          displayedData.map((node) => renderTreeNode(node, 0))
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 bg-muted/40 border border-border/60 rounded-md flex items-center gap-3">
+                <Users className="size-5 text-primary" />
+                <div>
+                  <p className="text-[11px] text-muted-foreground">Tổng số nhân sự</p>
+                  <p className="text-sm font-bold">{activeNode.users?.length || activeNode.totalUsers || 0} người</p>
+                </div>
+              </div>
+              <div className="p-3 bg-muted/40 border border-border/60 rounded-md flex items-center gap-3">
+                <Building2 className="size-5 text-amber-500" />
+                <div>
+                  <p className="text-[11px] text-muted-foreground">Vị trí con trực thuộc</p>
+                  <p className="text-sm font-bold">{activeNode.children?.length || 0} vị trí</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Users className="size-3.5 text-primary" />
+                Danh sách nhân sự thuộc vị trí này
+              </h3>
+
+              {activeNode.users && activeNode.users.length > 0 ? (
+                <div className="border border-border rounded-md overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-muted/50 border-b border-border text-muted-foreground font-medium">
+                      <tr>
+                        <th className="py-2.5 px-3">Họ và tên</th>
+                        <th className="py-2.5 px-3">Chức danh / Role</th>
+                        <th className="py-2.5 px-3">Email</th>
+                        <th className="py-2.5 px-3">Số điện thoại</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {activeNode.users.map((usr) => (
+                        <tr key={usr.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="py-2.5 px-3 font-medium flex items-center gap-2">
+                            <div className="size-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-[10px]">
+                              {usr.fullName ? usr.fullName.charAt(0) : "U"}
+                            </div>
+                            <span>{usr.fullName}</span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            {usr.roleName ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded border border-primary/20 font-medium">
+                                <Briefcase className="size-3" />
+                                {usr.roleName}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground italic">Chưa gán</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Mail className="size-3 text-muted-foreground/70" />
+                              {usr.email || "—"}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Phone className="size-3 text-muted-foreground/70" />
+                              {usr.phone || "—"}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-8 border border-dashed border-border rounded-md text-center text-xs text-muted-foreground">
+                  Không có nhân sự nào được gán trực tiếp vào vị trí này.
+                </div>
+              )}
+            </div>
+          </div>
         ) : (
-          <div className="py-8 text-center text-xs text-muted-foreground">
-            No location data
+          <div className="bg-card border border-border rounded-lg p-12 text-center text-xs text-muted-foreground h-full flex flex-col items-center justify-center gap-2">
+            <Building2 className="size-10 text-muted-foreground/40" />
+            <p className="font-medium">Vui lòng chọn một vị trí ở cây bên trái để xem thông tin chi tiết.</p>
           </div>
         )}
       </div>
 
-      {/* Form Modal (Add/Edit Node) */}
+      {/* FULL FORM MODAL CÓ BÁO LỖI VÀ ĐẦY ĐỦ TRƯỜNG THÔNG TIN */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-3.5 border-b border-border flex items-center justify-between">
-              <h4 className="text-xs font-bold text-foreground">
-                {editingNode ? "Edit Location Node" : "Add Sub-location Node"}
-              </h4>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 text-muted-foreground hover:text-foreground rounded-md cursor-pointer"
-              >
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-lg p-5 w-full max-w-md space-y-4 shadow-lg">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="font-semibold text-sm">
+                {editingNode ? "Chỉnh sửa vị trí" : "Thêm vị trí trực thuộc"}
+              </h3>
+              <button type="button" onClick={() => setIsModalOpen(false)}>
                 <X className="size-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveModal} className="p-3.5 flex flex-col gap-3 text-xs">
+            {errorMessage && (
+              <div className="p-2.5 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-md flex items-center gap-2">
+                <AlertTriangle className="size-4 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveModal} className="space-y-3 text-xs">
               <div>
-                <label className="block text-muted-foreground font-medium mb-1">
-                  Location Name *
-                </label>
+                <label className="block mb-1 font-medium text-muted-foreground">Tên vị trí *</label>
                 <input
                   type="text"
                   required
+                  placeholder="Ví dụ: Phòng Kế toán"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Cơ sở Cầu Giấy"
-                  className="w-full bg-background border border-input rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-blue-500 outline-none text-foreground"
+                  className="w-full bg-background border border-input p-2 rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs"
                 />
               </div>
 
               <div>
-                <label className="block text-muted-foreground font-medium mb-1">
-                  Location Code *
-                </label>
+                <label className="block mb-1 font-medium text-muted-foreground">Mã vị trí (Code) *</label>
                 <input
                   type="text"
                   required
+                  placeholder="Ví dụ: HN_ACC_01"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                  placeholder="e.g. CAU_GIAY"
-                  className="w-full bg-background border border-input rounded-lg px-3 py-1.5 text-xs font-mono focus:ring-1 focus:ring-blue-500 outline-none text-foreground"
+                  className="w-full bg-background border border-input p-2 rounded font-mono uppercase focus:outline-none focus:ring-1 focus:ring-primary text-xs"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-border">
+              <div>
+                <label className="block mb-1 font-medium text-muted-foreground">Mô tả vị trí</label>
+                <textarea
+                  rows={2}
+                  placeholder="Mô tả ngắn gọn về chức năng của vị trí này..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full bg-background border border-input p-2 rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block mb-1 font-medium text-muted-foreground">Trạng thái</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  className="w-full bg-background border border-input p-2 rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs"
+                >
+                  <option value="ACTIVE">Hoạt động (ACTIVE)</option>
+                  <option value="INACTIVE">Khóa / Ngưng (INACTIVE)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-3 py-1.5 rounded-lg border border-border hover:bg-accent text-muted-foreground text-xs font-medium cursor-pointer"
+                  className="px-3 py-1.5 border rounded text-xs hover:bg-muted"
                 >
-                  Cancel
+                  Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer"
+                  disabled={submitting}
+                  className="px-4 py-1.5 bg-primary text-primary-foreground rounded text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
                 >
-                  Save Node
+                  {submitting ? "Đang lưu..." : "Lưu thay đổi"}
                 </button>
               </div>
             </form>
@@ -453,46 +503,29 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
         </div>
       )}
 
-      {/* Confirmation Delete Modal Chuẩn UI (Y hệt ảnh chụp mẫu) */}
-      {isDeleteModalOpen && nodeToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-4 flex items-center justify-between border-b border-border/50">
-              <div className="flex items-center gap-2.5">
-                <div className="p-1.5 bg-rose-500/10 text-rose-500 rounded-md">
-                  <Trash2 className="size-4" />
-                </div>
-                <h4 className="text-xs font-bold text-foreground">Delete Confirmation</h4>
-              </div>
-              <button
-                onClick={() => setIsDeleteModalOpen(false)}
-                className="p-1 text-muted-foreground hover:text-foreground rounded-md cursor-pointer transition-colors"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-
-            <div className="p-4 text-xs text-muted-foreground">
-              <p>
-                Are you sure you want to delete <strong className="text-foreground">{nodeToDelete.name}</strong> ({nodeToDelete.code})? This action cannot be undone.
-              </p>
-            </div>
-
-            <div className="p-3 bg-muted/20 border-t border-border/50 flex items-center justify-end gap-2">
+      {/* MODAL DELETE */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-lg p-4 w-full max-w-xs space-y-3 text-center">
+            <AlertTriangle className="size-8 text-destructive mx-auto" />
+            <h3 className="font-semibold text-sm">Xóa vị trí này?</h3>
+            <p className="text-xs text-muted-foreground">
+              Bạn có chắc chắn muốn xóa <b>{nodeToDelete?.name}</b>?
+            </p>
+            <div className="flex justify-center gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setIsDeleteModalOpen(false)}
-                className="px-3.5 py-1.5 rounded-lg border border-border hover:bg-accent text-foreground text-xs font-medium transition-colors cursor-pointer"
+                className="px-3 py-1 border rounded text-xs"
               >
-                Cancel
+                Hủy
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDelete}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                className="px-3 py-1 bg-destructive text-destructive-foreground rounded text-xs"
               >
-                <Trash2 className="size-3.5" />
-                <span>Delete</span>
+                Xóa ngay
               </button>
             </div>
           </div>
@@ -501,5 +534,3 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
     </div>
   );
 };
-
-export default LocationTree;

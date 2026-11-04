@@ -30,9 +30,6 @@ export function SidebarMenu() {
 
                 const items = group.modules
                     .filter((module) => !!module.url)
-                    .filter((module) => {
-                        const isUnderSystemManagement = groupNameLower.includes("system");
-
                     // Temporarily hide standalone "Modules" navigation item under "System Management"
                     .filter((module) => {
                         const isUnderSystemManagement =
@@ -45,7 +42,6 @@ export function SidebarMenu() {
                         }
                         return true;
                     })
-
                     .map((module) => ({
                         title: module.title ?? "Untitled",
                         url: module.url ?? "#",
