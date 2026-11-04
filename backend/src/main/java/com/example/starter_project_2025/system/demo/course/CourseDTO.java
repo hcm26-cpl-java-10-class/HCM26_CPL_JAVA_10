@@ -14,6 +14,8 @@ import lombok.experimental.FieldDefaults;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class CourseDTO extends BaseDTO {
+    @com.fasterxml.jackson.annotation.JsonProperty(access=com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    String categoryName;
 
     @NotBlank(groups = OnCreate.class, message = "Course name is required")
     @Size(max = 150, message = "Name must not exceed 150 characters")
@@ -27,4 +29,16 @@ public class CourseDTO extends BaseDTO {
 
     @Size(max = 100, message = "Instructor must not exceed 100 characters")
     String instructor;
+
+    @Size(max = 255)
+    String category;
+
+    @Size(max = 50)
+    String courseLevel;
+
+    @Size(max = 50)
+    String publicationStatus;
+
+    @Size(max = 255)
+    String instructorEmail;
 }

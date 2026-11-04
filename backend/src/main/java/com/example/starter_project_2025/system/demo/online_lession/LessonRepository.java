@@ -6,6 +6,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface LessonRepository extends BaseCrudRepository<Lesson, Long> {
 
+    java.util.List<Lesson> findAllByCourse_IdOrderByOrderIndexAsc(Long courseId);
+    java.util.List<Lesson> findBySection_IdOrderByOrderIndexAsc(Long sectionId);
+    java.util.List<Lesson> findAllByCourse_IdAndIsActiveTrueOrderByOrderIndexAsc(Long courseId);
+
     boolean existsByCourse_IdAndTitleIgnoreCase(Long courseId, String title);
 
     boolean existsByCourse_IdAndOrderIndex(Long courseId, Integer orderIndex);

@@ -1,6 +1,6 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
-
+import { canAccessPath } from "@/utils/rbac.utils";
+import { useLocation, Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/store/store";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -18,11 +18,24 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredPermissions,
   requireAll = false,
 }) => {
-  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const { hasPermission, hasAnyPermission, hasAllPermissions,activeRole, } = usePermissions();
+  const { isAuthenticated, permissions } = useSelector(
+    (state: RootState) => state.auth
+  );
+  const {
+    activeRole,
+    hasPermission,
+    hasAnyPermission,
+    hasAllPermissions,
+  } = usePermissions();
+
+  const { pathname } = useLocation();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (!canAccessPath(pathname, activeRole, permissions)) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
@@ -38,9 +51,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       return <Navigate to="/unauthorized" replace />;
     }
   }
+
   if (
-      window.location.pathname === "/admin/audit-log" &&
-      activeRole?.toUpperCase() !== "ADMIN"
+    pathname === "/admin/audit-log" &&
+    activeRole?.toUpperCase() !== "ADMIN"
   ) {
     return <Navigate to="/unauthorized" replace />;
   }

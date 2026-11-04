@@ -29,6 +29,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import java.time.Instant;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -63,7 +64,15 @@ public class AuthServiceImpl implements AuthService {
 
 
     @Override
+    @Transactional
     public AuthenticationResponse login(LoginRequest request) {
+      
+return login(request, request != null ? request.device() : null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse login(LoginRequest request, String device) {
         String email = request.email();
 
         Authentication authentication;
@@ -85,6 +94,12 @@ public class AuthServiceImpl implements AuthService {
         }
 
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+        User user = principal.getUser();
+        user.setLastLoginAt(Instant.now());
+        if (StringUtils.hasText(device)) {
+            user.setLastLoginDevice(device.trim());
+        }
+        user = userRepository.save(user);
 
         // Temporary password (for example from an Excel import): the password was right, but the account
         // can only be used after its owner chooses their own. No access or refresh token is issued, so the
@@ -127,7 +142,25 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
+    public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName) {
+        return loginWithGoogle(email, true, firstName, lastName, null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String device) {
+        return loginWithGoogle(email, true, firstName, lastName, device);
+    }
+
+    @Override
+    @Transactional
     public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName) {
+        return loginWithGoogle(email, emailVerified, firstName, lastName, null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName, String device) {
         if (!StringUtils.hasText(email)) {
             throw new SsoLoginException(SsoLoginException.AUTH_FAILED, "Google account email is required");
         }
@@ -147,6 +180,12 @@ public class AuthServiceImpl implements AuthService {
         ssoAccessPolicy.checkAccount(user);
 
         user = updateUserFromGoogleProfile(user, firstName, lastName);
+
+        user.setLastLoginAt(Instant.now());
+        if (StringUtils.hasText(device)) {
+            user.setLastLoginDevice(device.trim());
+        }
+        user = userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(user.getId());
 
@@ -408,6 +447,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return user.getRoles().stream()
+                .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .map(Role::getName)
                 .filter(StringUtils::hasText)
                 .map(this::normalizeRoleName)
@@ -421,6 +461,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return user.getRoles().stream()
+                .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .filter(role -> role.getPermissions() != null)
                 .flatMap(role -> role.getPermissions().stream())
                 .map(permission -> permission.getName())
@@ -435,6 +476,7 @@ public class AuthServiceImpl implements AuthService {
 
         if (user.getRoles() != null) {
             Map<String, Role> rolesByName = user.getRoles().stream()
+                    .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                     .filter(role -> StringUtils.hasText(role.getName()))
                     .collect(Collectors.toMap(
                             role -> normalizeRoleName(role.getName()),

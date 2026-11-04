@@ -1,0 +1,1 @@
+package com.example.starter_project_2025.system.demo.qna; public interface LessonQuestionRepository extends org.springframework.data.jpa.repository.JpaRepository<LessonQuestion,Long> {}

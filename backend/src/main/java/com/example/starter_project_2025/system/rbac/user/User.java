@@ -15,6 +15,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
@@ -73,10 +74,25 @@ public class User extends BaseEntity {
     @ExportField(name = "Last Name")
     String lastName;
 
+    @Column(name = "employee_code", length = 50)
+    String employeeCode;
+
     @Column(length = 20)
     @ImportField(name = "Phone")
     @ExportField(name = "Phone")
     String phone;
+
+    @Column(length = 20)
+    String phoneNumber;
+
+    @Column(length = 100)
+    String department;
+
+    @Column(name = "last_login_at")
+    Instant lastLoginAt;
+
+    @Column(name = "last_login_device", length = 150)
+    String lastLoginDevice;
 
     @Column(length = 500)
     @ImportField(name = "Description")
@@ -126,6 +142,6 @@ public class User extends BaseEntity {
     Set<Department> departments = new HashSet<>();
 
     public String getFullName() {
-        return firstName + (lastName != null ? " " + lastName : "");
+        return firstName + (lastName != null && !lastName.isBlank() ? " " + lastName : "");
     }
 }

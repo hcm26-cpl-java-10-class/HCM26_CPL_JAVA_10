@@ -1,9 +1,12 @@
+import { LearningRecordsPanel } from "@/pages/management/learning/components/LearningRecordsPanel";
+import { usePermissions } from "@/hooks/usePermissions";
 import { departmentApi, roleApi, userApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PermissionGate } from "@/components/PermissionGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { GENDER_OPTIONS, USER_STATUS_HEADER_CLASS, type UserStatus } from "@/types";
 import { useQuery } from "@tanstack/react-query";
@@ -111,22 +114,26 @@ function MetaItem({ icon: Icon, label, value }: { icon: IconType; label: string;
 }
 
 export function UserDetailPage() {
+  const { hasAllPermissions, hasPermission, user: account } = usePermissions();
+  const canInspectLearning = hasAllPermissions(["ADMIN_ACCESS", "USER_READ", "USER_LEARNING_READ"]);
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const pathName = { users: "Người dùng", detail: "Chi tiết" };
 
   const userQuery = useQuery({
-    queryKey: ["user", "detail", id],
+    queryKey: ["user", "detail", account.email, id],
     queryFn: () => userApi.getById(id as string),
     enabled: !!id,
   });
   const roleQuery = useQuery({
-    queryKey: ["role", "options"],
+    queryKey: ["role", "options", account.email],
     queryFn: () => roleApi.getPage({ page: 0, size: 200 }),
+    enabled: hasPermission("ROLE_READ"),
   });
   const deptQuery = useQuery({
-    queryKey: ["department", "options"],
+    queryKey: ["department", "options", account.email],
     queryFn: () => departmentApi.getPage({ page: 0, size: 500 }),
+    enabled: hasPermission("DEPARTMENT_READ"),
   });
 
   const user = userQuery.data;
@@ -135,7 +142,7 @@ export function UserDetailPage() {
 
   const roleNames = nameOf(roleQuery.data?.content ?? roleQuery.data?.items, user?.roleIds);
   const deptNames = nameOf(deptQuery.data?.content ?? deptQuery.data?.items, user?.departmentIds);
-  const fullName = [user?.lastName, user?.firstName].filter(Boolean).join(" ");
+  const fullName = user?.fullName || [user?.lastName, user?.firstName].filter(Boolean).join(" ") || [user?.firstName, user?.lastName].filter(Boolean).join(" ");
   const displayName = fullName || user?.email || "";
   const status: UserStatus = user?.status ?? (user?.isActive === false ? "INACTIVE" : "ACTIVE");
   const initial = (user?.firstName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase();
@@ -158,11 +165,85 @@ export function UserDetailPage() {
           </CardContent>
         ) : userQuery.isError ? (
           <CardContent>
-            <p className="text-sm text-destructive">{extractServerErrors(userQuery.error).message}</p>
+            <p role="alert" className="text-sm text-destructive">{extractServerErrors(userQuery.error).message}</p>
+            <Button className="mt-3" variant="outline" onClick={() => void userQuery.refetch()}>Retry</Button>
           </CardContent>
         ) : (
           <CardContent>
-            <div className="mx-auto grid w-full max-w-5xl gap-5">
+            {canInspectLearning && id ? (
+              <Tabs defaultValue="general" className="grid gap-5">
+                <TabsList className="group-data-[orientation=horizontal]/tabs:h-auto flex-wrap justify-start">
+                  <TabsTrigger className="h-auto min-h-9" value="general">Thông tin chung</TabsTrigger>
+                  <TabsTrigger className="h-auto min-h-9" value="learning">Lịch sử học tập</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="general">
+                  <div className="mx-auto grid w-full max-w-5xl gap-5">
+                    <div className={cn("rounded-xl border p-6", USER_STATUS_HEADER_CLASS[status])}>
+                      <div className="flex flex-wrap items-center gap-5">
+                        <div
+                          className={cn(
+                            "flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-2xl font-semibold ring-4 ring-background",
+                            avatarColor(displayName),
+                          )}
+                        >
+                          {initial}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h2 className="truncate text-xl font-semibold">{displayName}</h2>
+                          <p className="mt-0.5 truncate text-sm text-muted-foreground">{user?.email}</p>
+                          {status !== "ACTIVE" && (
+                            <p className="mt-2 text-xs font-medium text-red-700 dark:text-red-400">
+                              {status === "LOCKED"
+                                ? "Tài khoản đang bị khóa, không thể đăng nhập."
+                                : "Tài khoản đã ngưng hoạt động, không thể đăng nhập."}
+                            </p>
+                          )}
+                        </div>
+                        <UserStatusBadge status={status} />
+                      </div>
+                    </div>
+
+                    <Section title="Thông tin tài khoản">
+                      <InfoRow icon={AtSign} label="Username">
+                        {user?.username}
+                      </InfoRow>
+                      <InfoRow icon={Hash} label="Mã nhân viên">
+                        {user?.employeeCode}
+                      </InfoRow>
+                      <InfoRow icon={Mail} label="Email">
+                        {user?.email}
+                      </InfoRow>
+                      <InfoRow icon={Phone} label="Số điện thoại">
+                        {user?.phone}
+                      </InfoRow>
+                      <InfoRow icon={Building2} label="Phòng ban" className="sm:col-span-2">
+                        {deptNames.length > 0 ? <BadgeGroup names={deptNames} /> : null}
+                      </InfoRow>
+                      <InfoRow icon={ShieldCheck} label="Role" className="sm:col-span-2">
+                        {roleNames.length > 0 ? <BadgeGroup names={roleNames} /> : null}
+                      </InfoRow>
+                      <InfoRow icon={FileText} label="Mô tả" className="sm:col-span-2">
+                        {user?.description ? <p className="whitespace-pre-line font-normal leading-6">{user.description}</p> : null}
+                      </InfoRow>
+                    </Section>
+
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 px-1 text-xs text-muted-foreground">
+                      <MetaItem icon={CalendarDays} label="Ngày tạo" value={formatDate(user?.createdAt) || "—"} />
+                      <MetaItem icon={Clock} label="Cập nhật lần cuối" value={formatDate(user?.updatedAt) || "—"} />
+                      {user?.lastLoginAt && (
+                        <MetaItem icon={Clock} label="Đăng nhập gần nhất" value={formatDate(user.lastLoginAt)} />
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="learning">
+                  <LearningRecordsPanel userId={id} />
+                </TabsContent>
+              </Tabs>
+            ) : (
+              <div className="mx-auto grid w-full max-w-5xl gap-5">
                 <div className={cn("rounded-xl border p-6", USER_STATUS_HEADER_CLASS[status])}>
                   <div className="flex flex-wrap items-center gap-5">
                     <div
@@ -226,6 +307,7 @@ export function UserDetailPage() {
                   )}
                 </div>
               </div>
+            )}
           </CardContent>
         )}
 

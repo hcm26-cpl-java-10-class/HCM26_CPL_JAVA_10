@@ -1,3 +1,7 @@
+import {useSelector} from "react-redux";
+import type {RootState} from "@/store/store";
+import { useDispatch } from "react-redux";
+import { setLogout } from "@/store/slices/auth/authSlice";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
 import { NavMain } from "@/components/layout/NavMain";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
@@ -10,11 +14,13 @@ import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
 
 export function SidebarMenu() {
+    const dispatch = useDispatch();
     const location = useLocation();
     const navigate = useNavigate();
     const { toggleSidebar, state } = useSidebar();
     const { data: moduleGroups = [] } = useActiveModuleGroups();
 
+    const canManageCourse = useSelector((s:RootState)=>s.auth.permissions.includes("ADMIN_ACCESS")&&s.auth.permissions.includes("COURSE_READ"));
     const navGroups = useMemo(() => {
         const resolveIcon = (iconName?: string) => {
             const key: keyof typeof iconMap =
@@ -23,35 +29,43 @@ export function SidebarMenu() {
             return iconMap[key];
         };
 
-        return moduleGroups
+        const groups = moduleGroups
             .map((group) => ({
                 id: group.id ?? group.name ?? "group",
                 name: group.name ?? "Menu",
                 items: group.modules
                     .filter((module) => !!module.url)
-                    // Temporarily hide standalone "Modules" navigation item under "System Management"
-                    .filter((module) => {
-                        const isUnderSystemManagement =
-                            (group.name || "").toLowerCase().includes("system");
-                        const isModulesMenu =
-                            module.url === "/menus" || (module.title || "").toLowerCase() === "modules";
-
-                        if (isUnderSystemManagement && isModulesMenu) {
-                            return false;
+                    .map((module) => {
+                        let normalizedUrl = module.url ?? "#";
+                        if (normalizedUrl === "/menu-groups") {
+                            normalizedUrl = "/module-groups";
+                        } else if (normalizedUrl === "/menus") {
+                            normalizedUrl = "/modules";
                         }
-                        return true;
-                    })
-                    .map((module) => ({
-                        title: module.title ?? "Untitled",
-                        url: module.url ?? "#",
-                        icon: resolveIcon(module.icon),
-                        isActive:
+
+                        const isCurrentActive =
                             !!module.url &&
-                            (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
-                    })),
+                            (location.pathname === normalizedUrl ||
+                                location.pathname === module.url ||
+                                (normalizedUrl !== "/" && location.pathname.startsWith(`${normalizedUrl}/`)) ||
+                                (module.url !== "/" && location.pathname.startsWith(`${module.url}/`)));
+
+                        return {
+                            title: module.title ?? "Untitled",
+                            url: normalizedUrl,
+                            icon: resolveIcon(module.icon),
+                            isActive: isCurrentActive,
+                        };
+                    }),
             }))
             .filter((group) => group.items.length > 0);
-    }, [location.pathname, moduleGroups]);
+        if(canManageCourse){const group=groups.find(g=>g.name==="Course Management"||g.name==="Course Online");if(group){
+          const items=[["Courses","/courses","graduation-cap"],["Enrollments","/course-enrollments","bar-chart"]];
+          group.items=items.map(([title,url,icon])=>({title,url,icon:resolveIcon(icon),isActive:location.pathname===url||(url==="/course-enrollments"&&location.pathname==="/enrollments")}));
+        }}
+        for(const group of groups)if(group.name==="Course Management"||group.name==="Course Online")group.items=group.items.filter(item=>["/courses","/course-enrollments","/enrollments"].includes(item.url));
+        return groups;
+    }, [location.pathname, moduleGroups,canManageCourse]);
 
     return (
         <Sidebar variant="inset" collapsible="icon">
@@ -72,7 +86,7 @@ export function SidebarMenu() {
                     </div>
 
                     {state === "expanded" && (
-                        <span className="text-lg font-bold text-blue-800 truncate">RBAC System</span>
+                        <span className="text-lg font-bold text-blue-800 dark:text-blue-400 truncate">RBAC System</span>
                     )}
                 </Button>
             </SidebarHeader>
@@ -95,8 +109,7 @@ export function SidebarMenu() {
                         size="icon"
                         variant="ghost"
                         onClick={async () => {
-                            await authApi.logout();
-                            navigate("/login");
+                            try { await authApi.logout(); } finally { dispatch(setLogout()); navigate("/login"); }
                         }}
                     >
                         <LogOutIcon className="size-4" />

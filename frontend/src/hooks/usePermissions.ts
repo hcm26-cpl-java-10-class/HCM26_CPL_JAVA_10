@@ -44,6 +44,7 @@ export const usePermissions = () => {
 
   return {
     user,
+    canLearn: permissions.includes("LEARNER_ACCESS") && permissions.includes("LEARNING_SELF_READ"),
     activeRole,
     viewRole,
     availableRoles,
