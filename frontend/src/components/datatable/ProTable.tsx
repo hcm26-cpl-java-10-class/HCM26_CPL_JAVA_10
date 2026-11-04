@@ -51,6 +51,9 @@ interface ProTableProps<TData = any> {
 
     hideActions?: boolean;
 
+    /** Ẩn toàn bộ toolbar (search, sort, filter, actions). */
+    hideToolbar?: boolean;
+
     mode?: "default" | "browse";
 
     expandable?: {
@@ -72,6 +75,7 @@ export function ProTable<TData = any>({
     autoPageSize = true,
     rowHeight = 49,
     hideActions = false,
+    hideToolbar = false,
     mode = "default",
     expandable,
 }: ProTableProps<TData>) {
@@ -200,16 +204,22 @@ export function ProTable<TData = any>({
         onRowClick || (isBrowseMode ? ((onView || setDetailRow) as (row: TData) => void) : undefined);
 
     return (
-        <div className="grid gap-4 h-full font-inter grid-rows-[auto_1fr_auto]">
-            <Toolbar
-                table={table}
-                headerActions={headerActions}
-                viewMode={effectiveViewMode}
-                onViewModeChange={setViewMode}
-                showViewModeToggle={!isBrowseMode}
-                showActions={!isBrowseMode}
-                showCardColumnToggle={!isBrowseMode}
-            />
+        <div
+            className={`grid gap-4 h-full font-inter ${
+                hideToolbar ? "grid-rows-[1fr_auto]" : "grid-rows-[auto_1fr_auto]"
+            }`}
+        >
+            {!hideToolbar && (
+                <Toolbar
+                    table={table}
+                    headerActions={headerActions}
+                    viewMode={effectiveViewMode}
+                    onViewModeChange={setViewMode}
+                    showViewModeToggle={!isBrowseMode}
+                    showActions={!isBrowseMode}
+                    showCardColumnToggle={!isBrowseMode}
+                />
+            )}
 
             <div
                 ref={containerRef}

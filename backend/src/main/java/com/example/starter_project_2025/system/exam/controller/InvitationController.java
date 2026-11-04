@@ -49,6 +49,16 @@ public class InvitationController {
         return ResponseEntity.ok(service.createBatchInvitations(examId, request, principal));
     }
 
+    @PostMapping("/exams/{examId}/invitations/by-course")
+    @PreAuthorize("hasAuthority('INVITATION_CREATE')")
+    public ResponseEntity<BatchInvitationResponse> createByCourse(
+            @PathVariable Long examId,
+            @Valid @RequestBody GroupInvitationRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(service.createInvitationsByCourse(examId, request, principal));
+    }
+
     @GetMapping("/exams/{examId}/invitations")
     @PreAuthorize("hasAuthority('INVITATION_READ')")
     public ResponseEntity<List<InvitationDTO>> listByExam(

@@ -86,4 +86,12 @@ public class InvitationDTO extends BaseDTO {
 
     @JsonProperty(access = READ_ONLY)
     private Boolean examHasPassword;
+
+    /** Nguồn tạo lời mời: MANUAL hoặc COURSE. */
+    @JsonProperty(access = READ_ONLY)
+    private String sourceType;
+
+    /** Lớp (course) dùng làm nguồn khi tạo lời mời hàng loạt. */
+    @JsonProperty(access = READ_ONLY)
+    private Long sourceCourseId;
 }

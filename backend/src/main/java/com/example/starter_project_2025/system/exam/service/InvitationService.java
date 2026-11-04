@@ -8,6 +8,9 @@ import com.example.starter_project_2025.system.exam.audit.InvitationAuditService
 import com.example.starter_project_2025.system.exam.domain.*;
 import com.example.starter_project_2025.system.exam.dto.*;
 import com.example.starter_project_2025.system.notification.service.EmailService;
+import com.example.starter_project_2025.system.demo.course.Course;
+import com.example.starter_project_2025.system.demo.course.CourseRepository;
+import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentService;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.google.zxing.BarcodeFormat;
@@ -29,8 +32,12 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -46,6 +53,8 @@ public class InvitationService {
     private final ExamAccessGuard examAccessGuard;
     private final InvitationAuditService invitationAuditService;
     private final ExamReminderRepository examReminderRepository;
+    private final CourseRepository courseRepository;
+    private final CourseEnrollmentService courseEnrollmentService;
 
     @Value("${app.frontend-domain}")
     private String frontendUrl;
@@ -175,6 +184,200 @@ public class InvitationService {
                 .successfulInvitations(successful)
                 .errors(errors)
                 .build();
+    }
+
+    /**
+     * Mời dự thi hàng loạt theo lớp (course).
+     *
+     * <p>Quy tắc:
+     * <ul>
+     *   <li>Học viên nguồn = học viên đang active, có role STUDENT và đã đăng ký lớp.</li>
+     *   <li>Nếu {@code userIds} rỗng thì lấy toàn bộ học viên của lớp.</li>
+     *   <li>Idempotent: học viên đã có lời mời cho đề này bị bỏ qua (SKIPPED), không làm hỏng cả lô.</li>
+     *   <li>Lỗi của một học viên không ảnh hưởng các học viên còn lại; kết quả trả về chi tiết từng người.</li>
+     * </ul>
+     */
+    @Transactional
+    public BatchInvitationResponse createInvitationsByCourse(
+            Long examId,
+            GroupInvitationRequest request,
+            UserPrincipal principal) {
+
+        boolean isAdminOrTeacher = principal.getUser().getRoles().stream()
+                .anyMatch(r -> "ADMIN".equals(r.getName()) || "TEACHER".equals(r.getName()));
+        if (!isAdminOrTeacher) {
+            throw new BadRequestException("Chỉ ADMIN hoặc TEACHER được tạo lời mời hàng loạt theo lớp");
+        }
+
+        if (request.getCourseId() == null) {
+            throw new BadRequestException("Thiếu thông tin lớp để mời dự thi");
+        }
+
+        Exam exam = examRepository.findById(examId)
+                .filter(e -> Boolean.TRUE.equals(e.getIsActive()))
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đề thi với id: " + examId));
+
+        examAccessGuard.checkCanManage(exam, principal);
+
+        validateExamInvitable(exam);
+
+        Course course = courseRepository.findById(request.getCourseId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy lớp với id: " + request.getCourseId()));
+
+        List<User> classStudents = courseEnrollmentService.getActiveStudentsByCourse(course.getId());
+        Map<Long, User> enrolledById = new LinkedHashMap<>();
+        for (User student : classStudents) {
+            enrolledById.put(student.getId(), student);
+        }
+
+        Set<Long> selectedUserIds = request.getUserIds() == null || request.getUserIds().isEmpty()
+                ? null
+                : new HashSet<>(request.getUserIds());
+
+        List<InvitationBulkItemResult> items = new ArrayList<>();
+        List<InvitationDTO> successful = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        int skippedCount = 0;
+        int failureCount = 0;
+
+        LocalDateTime expiresAt = resolveExpiresAt(request.getExpiresAt(), exam);
+
+        for (Long userId : resolveTargetUserIds(selectedUserIds, enrolledById.keySet())) {
+            User student = enrolledById.get(userId);
+
+            if (student == null) {
+                failureCount++;
+                items.add(InvitationBulkItemResult.builder()
+                        .userId(userId)
+                        .status(InvitationBulkItemResult.Status.FAILED)
+                        .reason("Học viên không thuộc lớp " + course.getName())
+                        .build());
+                errors.add("User ID " + userId + ": Học viên không thuộc lớp " + course.getName());
+                continue;
+            }
+
+            if (!Boolean.TRUE.equals(student.getIsActive())) {
+                failureCount++;
+                items.add(InvitationBulkItemResult.builder()
+                        .userId(userId)
+                        .userEmail(student.getEmail())
+                        .userFullName(student.getFullName())
+                        .status(InvitationBulkItemResult.Status.FAILED)
+                        .reason("Tài khoản học viên đã bị vô hiệu hóa")
+                        .build());
+                errors.add(student.getEmail() + ": Tài khoản học viên đã bị vô hiệu hóa");
+                continue;
+            }
+
+            if (!isStudentRole(student)) {
+                failureCount++;
+                items.add(InvitationBulkItemResult.builder()
+                        .userId(userId)
+                        .userEmail(student.getEmail())
+                        .userFullName(student.getFullName())
+                        .status(InvitationBulkItemResult.Status.FAILED)
+                        .reason("Tài khoản không có vai trò học viên")
+                        .build());
+                errors.add(student.getEmail() + ": Tài khoản không có vai trò học viên");
+                continue;
+            }
+
+            if (invitationRepository.existsByExamIdAndUserId(examId, student.getId())) {
+                skippedCount++;
+                items.add(InvitationBulkItemResult.builder()
+                        .userId(student.getId())
+                        .userEmail(student.getEmail())
+                        .userFullName(student.getFullName())
+                        .status(InvitationBulkItemResult.Status.SKIPPED)
+                        .reason("Học viên đã có lời mời cho đề thi này")
+                        .build());
+                continue;
+            }
+
+            try {
+                Invitation invitation = Invitation.builder()
+                        .exam(exam)
+                        .user(student)
+                        .token(generateToken())
+                        .status(InvitationStatus.PENDING)
+                        .expiresAt(expiresAt)
+                        .note(request.getNote())
+                        .anonymous(false)
+                        .sourceType("COURSE")
+                        .sourceCourseId(course.getId())
+                        .build();
+
+                invitation = invitationRepository.save(invitation);
+
+                invitationAuditService.record(invitation, InvitationAuditAction.CREATE, principal, null);
+
+                if (request.isSendEmail()) {
+                    emailService.sendExamInvitation(invitation, student);
+                    invitation.setStatus(InvitationStatus.SENT);
+                    invitation.setSentAt(LocalDateTime.now());
+                    invitation = invitationRepository.save(invitation);
+                }
+
+                InvitationDTO dto = toDTO(invitation);
+                successful.add(dto);
+                items.add(InvitationBulkItemResult.builder()
+                        .userId(student.getId())
+                        .userEmail(student.getEmail())
+                        .userFullName(student.getFullName())
+                        .invitationId(invitation.getId())
+                        .status(InvitationBulkItemResult.Status.SUCCESS)
+                        .reason(request.isSendEmail() ? "Đã tạo lời mời và gửi email" : "Đã tạo lời mời")
+                        .build());
+            } catch (Exception e) {
+                failureCount++;
+                items.add(InvitationBulkItemResult.builder()
+                        .userId(student.getId())
+                        .userEmail(student.getEmail())
+                        .userFullName(student.getFullName())
+                        .status(InvitationBulkItemResult.Status.FAILED)
+                        .reason(e.getMessage())
+                        .build());
+                errors.add(student.getEmail() + ": " + e.getMessage());
+            }
+        }
+
+        invitationAuditService.record(
+                exam.getId(),
+                null,
+                null,
+                InvitationAuditAction.BATCH_CREATE,
+                principal.getUser().getId(),
+                "Mời theo lớp " + course.getName() + " (courseId=" + course.getId() + "): "
+                        + successful.size() + " thành công, "
+                        + skippedCount + " bỏ qua, "
+                        + failureCount + " lỗi");
+
+        return BatchInvitationResponse.builder()
+                .totalRequested(items.size())
+                .successCount(successful.size())
+                .skippedCount(skippedCount)
+                .failureCount(failureCount)
+                .successfulInvitations(successful)
+                .errors(errors)
+                .items(items)
+                .build();
+    }
+
+    /**
+     * Danh sách user id cần xử lý: toàn bộ học viên của lớp nếu không chọn cụ thể,
+     * hoặc đúng các id đã chọn (kể cả id không thuộc lớp để báo lỗi rõ ràng).
+     */
+    private List<Long> resolveTargetUserIds(Set<Long> selectedUserIds, Set<Long> classUserIds) {
+        if (selectedUserIds == null) {
+            return new ArrayList<>(classUserIds);
+        }
+        return new ArrayList<>(selectedUserIds);
+    }
+
+    private boolean isStudentRole(User user) {
+        return user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(r -> "STUDENT".equalsIgnoreCase(r.getName()));
     }
 
     @Transactional(readOnly = true)
@@ -730,6 +933,8 @@ public class InvitationService {
         dto.setMaxAccessTime(invitation.getMaxAccessTime());
         dto.setMaxAccessAttempts(invitation.getMaxAccessAttempts());
         dto.setAccessAttemptCount(invitation.getAccessAttemptCount());
+        dto.setSourceType(invitation.getSourceType());
+        dto.setSourceCourseId(invitation.getSourceCourseId());
 
         if (exam != null) {
             dto.setExamStartTime(exam.getStartTime());

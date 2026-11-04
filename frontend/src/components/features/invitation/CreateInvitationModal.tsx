@@ -6,6 +6,7 @@ import type {
     ReminderRequest,
     ReminderType,
 } from "@/types";
+import { BulkInviteByClassTab } from "@/components/features/invitation/BulkInviteByClassTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Link2, Mail, QrCode, RefreshCw, Share2, Users, X } from "lucide-react";
+import { Copy, GraduationCap, Link2, Mail, QrCode, RefreshCw, Share2, Users, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -232,16 +233,28 @@ export function CreateInvitationModal({
                 </DialogHeader>
 
                 <Tabs defaultValue="account" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="account" className="gap-2">
                             <Users className="size-4" />
                             Registered Account
+                        </TabsTrigger>
+                        <TabsTrigger value="class" className="gap-2">
+                            <GraduationCap className="size-4" />
+                            By Class
                         </TabsTrigger>
                         <TabsTrigger value="share" className="gap-2">
                             <Share2 className="size-4" />
                             Shareable Link
                         </TabsTrigger>
                     </TabsList>
+
+                    <TabsContent value="class">
+                        <BulkInviteByClassTab
+                            key={open ? "open" : "closed"}
+                            examId={examId}
+                            onSuccess={onSuccess}
+                        />
+                    </TabsContent>
 
                     <TabsContent value="account" className="space-y-4 pt-4">
                         <form
