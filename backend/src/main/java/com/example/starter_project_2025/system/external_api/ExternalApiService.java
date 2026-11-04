@@ -125,6 +125,21 @@ public interface ExternalApiService {
     /** Get budget for a class. */
     Object fetchClassBudget(Long classId);
 
+    // ===================== OPERATION & MILESTONES =====================
+
+    Object fetchClassOperation(Long classId);
+    Object saveClassOperation(Long classId, Object body);
+
+    // ===================== TOPIC ASSESSMENTS =====================
+
+    Object fetchTopicAssessments(Long classId);
+    Object saveTopicAssessments(Long classId, Object body);
+
+    // ===================== ACTIVITIES =====================
+
+    Object fetchClassActivities(Long classId);
+    Object addClassActivity(Long classId, Object body);
+
     // ===================== AUDIT =====================
 
     /** Get all audit records. */

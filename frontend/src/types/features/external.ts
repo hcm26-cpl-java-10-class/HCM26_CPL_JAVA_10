@@ -207,3 +207,77 @@ export interface ExternalRoom {
     name?: string;
     capacity?: number;
 }
+
+
+// ===================== BUDGET & OPERATION INFO =====================
+
+export interface GpaCalculation {
+    topicMark: number;
+    disciplinePoint: number;
+    bonusPoint: number;
+    penaltyPoint: number;
+}
+
+export interface OperatingInfo {
+    actualStartDate?: string;
+    earlyGraduatedDate?: string;
+    actualEndDate?: string;
+    gpaCalculation: GpaCalculation;
+    hasNoAllocationNeeds: boolean;
+}
+
+export interface MilestoneTopic {
+    id: number;
+    topic: string;
+    maxScore: number;
+    passingScore: number;
+    weightedNumber: number;
+}
+
+export interface Milestone {
+    id: number;
+    name: string;
+    status: string; // e.g. "Baselined"
+    checkpointType: string; // e.g. "STANDARD"
+    salaryPaid: string; // e.g. "Yes" | "No"
+    startDate: string;
+    endDate: string;
+    topics: MilestoneTopic[];
+}
+
+export interface ClassOperationData {
+    classId: number;
+    operatingInfo: OperatingInfo;
+    milestones: Milestone[];
+    totalWeightedNumber?: number;
+}
+
+// ===================== TOPIC ASSESSMENTS =====================
+
+export interface AssessmentItem {
+    id: number;
+    name: string;
+    weightedNumber: number;
+    quantity: number;
+    note?: string;
+    action?: string; // e.g. "Keep" | "Update" | "Delete"
+    changeStatus?: "none" | "waiting" | "confirmed";
+}
+
+export interface TopicAssessment {
+    id: number;
+    title: string;
+    assessments: AssessmentItem[];
+}
+
+// ===================== CLASS ACTIVITIES =====================
+
+export interface ClassActivity {
+    id: number;
+    classId: number;
+    author: string;
+    initials: string;
+    content: string;
+    timestamp: string;
+    type: "history" | "comment";
+}

@@ -3,6 +3,7 @@ import {
     CalendarDays,
     ClipboardList,
     FileText,
+    History,
     Users,
     Wallet,
 } from "lucide-react";
@@ -13,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useExternalClass } from "@/hooks/useExternalLookups";
 import { classTitle } from "@/utils/class.utils";
+import { ClassActivitiesTab } from "./components/ClassActivitiesTab";
 import { ClassBudgetTab } from "./components/ClassBudgetTab";
 import { ClassCalendarTab } from "./components/ClassCalendarTab";
 import { ClassInfoTab } from "./components/ClassInfoTab";
@@ -25,7 +27,8 @@ const TABS = [
     { value: "trainees", label: "Trainee List", icon: Users },
     { value: "sessions", label: "Sessions", icon: CalendarDays },
     { value: "calendar", label: "Calendar", icon: ClipboardList },
-    { value: "budget", label: "Budget & Operation", icon: Wallet },
+    { value: "budget", label: "Budget & Operation Info", icon: Wallet },
+    { value: "activities", label: "Activities", icon: History },
 ] as const;
 
 type TabValue = (typeof TABS)[number]["value"];
@@ -66,7 +69,7 @@ export default function ClassDetailPage() {
 
     return (
         <MainLayout pathName={{ classes: "Class List", ...(id && classItem ? { [id]: classTitle(classItem) } : {}) }}>
-            <section className="w-full min-w-0 overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
+            <section className="w-full min-w-0 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col h-[calc(100vh-140px)] min-h-[620px] overflow-hidden">
                 {!id ? (
                     <ApiErrorState
                         error={undefined}
@@ -105,7 +108,7 @@ export default function ClassDetailPage() {
                             onValueChange={(value) =>
                                 setSearchParams({ tab: value }, { replace: true, state: location.state })
                             }
-                            className="gap-0"
+                            className="flex-1 flex flex-col min-h-0 gap-0"
                         >
                             <TabsList
                                 variant="line"
@@ -122,7 +125,7 @@ export default function ClassDetailPage() {
                                 ))}
                             </TabsList>
 
-                            <div className="p-4 sm:p-5">
+                            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 fams-scrollbar">
                                 <TabsContent value="info">
                                     <ClassInfoTab classItem={classItem} />
                                 </TabsContent>
@@ -141,6 +144,10 @@ export default function ClassDetailPage() {
 
                                 <TabsContent value="budget">
                                     <ClassBudgetTab classItem={classItem} />
+                                </TabsContent>
+
+                                <TabsContent value="activities">
+                                    <ClassActivitiesTab classItem={classItem} />
                                 </TabsContent>
                             </div>
                         </Tabs>
