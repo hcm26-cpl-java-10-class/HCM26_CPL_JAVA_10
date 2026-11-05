@@ -60,7 +60,7 @@ export default function CourseReportPage() {
   ] as const;
 
   return (
-    <MainLayout pathName={{ enrollments: "Enrollments" }}>
+    <MainLayout pathName={{ "course-enrollments": "Enrollments" }}>
       <section className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div><p className="text-sm font-medium text-blue-600">COURSE OVERVIEW</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Enrollments</h1></div>
