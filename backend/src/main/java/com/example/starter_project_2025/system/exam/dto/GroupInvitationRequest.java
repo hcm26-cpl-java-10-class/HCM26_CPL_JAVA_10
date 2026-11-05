@@ -23,6 +23,8 @@ public class GroupInvitationRequest {
 
     private String note;
 
+    private String availableFrom;
+
     private String expiresAt;
 
     /** Gửi email ngay sau khi tạo lời mời (mặc định có). */

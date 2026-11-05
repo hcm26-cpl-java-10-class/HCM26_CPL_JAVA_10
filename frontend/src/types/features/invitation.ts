@@ -20,6 +20,7 @@ export interface InvitationDTO extends BaseDTO {
     sentAt?: string | null;
     acceptedAt?: string | null;
     rejectedAt?: string | null;
+    availableFrom?: string | null;
     expiresAt?: string | null;
     revokedAt?: string | null;
     revokedReason?: string | null;
@@ -47,6 +48,7 @@ export interface InvitationCreateRequest {
     userId: number;
     note?: string;
 
+    availableFrom?: string;
     expiresAt?: string;
 }
 
@@ -93,6 +95,7 @@ export interface GroupInvitationRequest {
     courseId: number;
     userIds?: number[];
     note?: string;
+    availableFrom?: string;
     expiresAt?: string;
     sendEmail?: boolean;
 }
@@ -116,6 +119,7 @@ export interface AnonymousInvitationRequest {
     studentEmail?: string;
     note?: string;
 
+    availableFrom?: string;
     expiresAt?: string;
 
     maxAccessTime?: string;

@@ -3,6 +3,7 @@ import type {
     GroupInvitationRequest,
     InvitationBulkItemResult,
 } from "@/types";
+import { ExamScheduleSelector, type ScheduleMode } from "@/components/features/invitation/ExamScheduleSelector";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,6 +31,7 @@ interface BulkInviteByClassTabProps {
 interface ClassForm {
     courseId: string;
     note: string;
+    availableFrom: string;
     expiresAt: string;
     sendEmail: boolean;
 }
@@ -37,6 +39,7 @@ interface ClassForm {
 const DEFAULT_FORM: ClassForm = {
     courseId: "",
     note: "",
+    availableFrom: "",
     expiresAt: "",
     sendEmail: true,
 };
@@ -65,11 +68,23 @@ const BULK_STATUS_VARIANT: Record<
 export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTabProps) {
     const queryClient = useQueryClient();
     const [form, setForm] = useState<ClassForm>(DEFAULT_FORM);
+    const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("FLEXIBLE");
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [search, setSearch] = useState("");
     const [results, setResults] = useState<InvitationBulkItemResult[]>([]);
 
     const courseId = form.courseId ? Number(form.courseId) : null;
+
+    const examQuery = useQuery({
+        queryKey: ["exam-detail-for-class-invitation", examId],
+        queryFn: async () => {
+            const { examApi } = await import("@/api");
+            return examApi.getById(String(examId));
+        },
+        enabled: examId > 0,
+        staleTime: 5 * 60 * 1000,
+    });
+    const durationMinutes = examQuery.data?.durationMinutes || 60;
 
     const coursesQuery = useQuery({
         queryKey: ["invitation-class-list"],
@@ -125,6 +140,7 @@ export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTab
                 courseId: courseId!,
                 userIds: Array.from(selectedIds),
                 note: form.note || undefined,
+                availableFrom: form.availableFrom ? new Date(form.availableFrom).toISOString() : undefined,
                 expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : undefined,
                 sendEmail: form.sendEmail,
             };
@@ -336,24 +352,24 @@ export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTab
                         )}
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label>Note (optional)</Label>
-                            <Input
-                                placeholder="e.g., Midterm of class A..."
-                                value={form.note}
-                                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Confirmation Deadline (optional)</Label>
-                            <Input
-                                type="datetime-local"
-                                value={form.expiresAt}
-                                onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))}
-                            />
-                        </div>
+                    <div className="space-y-2">
+                        <Label>Ghi chú (Note - tùy chọn)</Label>
+                        <Input
+                            placeholder="ví dụ: Bài kiểm tra định kỳ lớp A, ca thi sáng..."
+                            value={form.note}
+                            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                        />
                     </div>
+
+                    <ExamScheduleSelector
+                        durationMinutes={durationMinutes}
+                        scheduleMode={scheduleMode}
+                        onScheduleModeChange={setScheduleMode}
+                        availableFrom={form.availableFrom}
+                        onAvailableFromChange={(val) => setForm((f) => ({ ...f, availableFrom: val }))}
+                        expiresAt={form.expiresAt}
+                        onExpiresAtChange={(val) => setForm((f) => ({ ...f, expiresAt: val }))}
+                    />
 
                     <label className="flex items-center gap-2 text-sm">
                         <Checkbox

@@ -46,6 +46,9 @@ public class Invitation extends BaseEntity {
 
     private LocalDateTime sentAt;
 
+    @Column(name = "available_from")
+    private LocalDateTime availableFrom;
+
     private LocalDateTime expiresAt;
 
     private LocalDateTime acceptedAt;

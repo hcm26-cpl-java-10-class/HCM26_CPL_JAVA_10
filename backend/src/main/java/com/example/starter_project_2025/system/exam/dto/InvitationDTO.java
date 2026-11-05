@@ -35,6 +35,8 @@ public class InvitationDTO extends BaseDTO {
     @JsonProperty(access = READ_ONLY)
     private LocalDateTime sentAt;
 
+    private LocalDateTime availableFrom;
+
     private LocalDateTime expiresAt;
 
     @JsonProperty(access = READ_ONLY)

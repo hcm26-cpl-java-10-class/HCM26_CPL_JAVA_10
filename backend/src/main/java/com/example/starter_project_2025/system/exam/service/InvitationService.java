@@ -114,6 +114,7 @@ public class InvitationService {
         }
 
         LocalDateTime expiresAt = resolveExpiresAt(request.getExpiresAt(), exam);
+        LocalDateTime availableFrom = parseDateTime(request.getAvailableFrom());
 
         Invitation invitation = Invitation.builder()
                 .exam(exam)
@@ -121,6 +122,7 @@ public class InvitationService {
                 .token(generateToken())
                 .status(InvitationStatus.PENDING)
                 .expiresAt(expiresAt)
+                .availableFrom(availableFrom)
                 .note(request.getNote())
                 .anonymous(false)
                 .build();
@@ -242,6 +244,7 @@ public class InvitationService {
         int failureCount = 0;
 
         LocalDateTime expiresAt = resolveExpiresAt(request.getExpiresAt(), exam);
+        LocalDateTime availableFrom = parseDateTime(request.getAvailableFrom());
 
         for (Long userId : resolveTargetUserIds(selectedUserIds, enrolledById.keySet())) {
             User student = enrolledById.get(userId);
@@ -302,6 +305,7 @@ public class InvitationService {
                         .token(generateToken())
                         .status(InvitationStatus.PENDING)
                         .expiresAt(expiresAt)
+                        .availableFrom(availableFrom)
                         .note(request.getNote())
                         .anonymous(false)
                         .sourceType("COURSE")
@@ -614,6 +618,7 @@ public class InvitationService {
                 .guestName(guestName)
                 .guestEmail(guestEmail)
                 .accessCode(accessCode)
+                .availableFrom(parseDateTime(request.getAvailableFrom()))
                 .maxAccessTime(request.getMaxAccessTime() != null ?
                         parseDateTime(request.getMaxAccessTime())
                         : defaultMaxAccessTime(exam))
@@ -685,6 +690,12 @@ public class InvitationService {
             throw new BadRequestException("Mã truy cập không hợp lệ");
         }
 
+        if (invitation.getAvailableFrom() != null && LocalDateTime.now().isBefore(invitation.getAvailableFrom())) {
+            return AnonymousAccessResponse.builder()
+                    .valid(false)
+                    .message("Ca thi chưa bắt đầu. Vui lòng quay lại vào lúc " + invitation.getAvailableFrom())
+                    .build();
+        }
         if (invitation.getStatus() == InvitationStatus.REVOKED ||
             invitation.getStatus() == InvitationStatus.EXPIRED) {
             return AnonymousAccessResponse.builder()
@@ -839,6 +850,9 @@ public class InvitationService {
         if (invitation.getStatus() == InvitationStatus.REVOKED) {
             throw new BadRequestException("Lời mời đã bị thu hồi");
         }
+        if (invitation.getAvailableFrom() != null && LocalDateTime.now().isBefore(invitation.getAvailableFrom())) {
+            throw new BadRequestException("Ca thi chưa bắt đầu. Vui lòng quay lại vào lúc " + invitation.getAvailableFrom());
+        }
         if (invitation.getStatus() == InvitationStatus.EXPIRED ||
             (invitation.getExpiresAt() != null && LocalDateTime.now().isAfter(invitation.getExpiresAt()))) {
             invitation.setStatus(InvitationStatus.EXPIRED);
@@ -919,6 +933,7 @@ public class InvitationService {
 
         dto.setStatus(invitation.getStatus());
         dto.setSentAt(invitation.getSentAt());
+        dto.setAvailableFrom(invitation.getAvailableFrom());
         dto.setExpiresAt(invitation.getExpiresAt());
         dto.setAcceptedAt(invitation.getAcceptedAt());
         dto.setRejectedAt(invitation.getRejectedAt());
