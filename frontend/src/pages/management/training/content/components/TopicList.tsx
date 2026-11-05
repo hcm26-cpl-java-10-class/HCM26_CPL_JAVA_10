@@ -32,6 +32,7 @@ import {
   SlidersHorizontal,
   Eye,
   RefreshCw,
+  Power,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -41,6 +42,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TopicDetailModal } from "./TopicDetailModal";
+import { TopicImportDialog } from "./TopicImportDialog";
+import { TopicExportDialog } from "./TopicExportDialog";
 
 interface TopicListProps {
   onViewDetail?: (topic: TopicItem) => void;
@@ -64,9 +67,7 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
   const [cloningTopic, setCloningTopic] = useState<TopicItem | null>(null);
   const [newVersion, setNewVersion] = useState("");
   const [isImportOpen, setIsImportOpen] = useState(false);
-  const [importFile, setImportFile] = useState<File | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
-  const [importErrors, setImportErrors] = useState<{ rowNumber: number; message: string }[]>([]);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [detailTopic, setDetailTopic] = useState<TopicItem | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
@@ -102,18 +103,28 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
       setTopics(res.content || []);
       setTotalPages(res.totalPages || 1);
       setTotalElements(res.totalElements || 0);
-    } catch {
-      toast.error("Cannot load topics");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to load topics");
     } finally {
       setLoading(false);
     }
   }, [page, search, technicalGroup, statusFilter]);
 
-  useEffect(() => { loadTopics(); }, [loadTopics]);
+  useEffect(() => {
+    loadTopics();
+  }, [loadTopics]);
 
   const handleOpenCreate = () => {
     setEditingTopic(null);
-    setFormData({ code: "", name: "", version: "1.0", technicalGroup: "Backend", durationHours: 40, description: "", isActive: true });
+    setFormData({
+      code: "",
+      name: "",
+      version: "1.0",
+      technicalGroup: "Backend",
+      durationHours: 40,
+      description: "",
+      isActive: true,
+    });
     setIsFormOpen(true);
   };
 
@@ -133,6 +144,10 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
 
   const handleSaveTopic = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.code.trim() || !formData.name.trim()) {
+      toast.error("Please fill in Code and Name");
+      return;
+    }
     try {
       if (editingTopic) {
         await topicApi.update(editingTopic.id, {
@@ -146,7 +161,7 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
         toast.success("Topic updated successfully!");
       } else {
         await topicApi.create({
-          code: formData.code,
+          code: formData.code.toUpperCase().trim(),
           name: formData.name,
           version: formData.version,
           technicalGroup: formData.technicalGroup,
@@ -217,62 +232,6 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
     }
   };
 
-  const handleDownloadTemplate = async () => {
-    try {
-      const blob = await topicApi.downloadImportTemplate();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "topic-import-template.xlsx";
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success("Đã tải xuống file mẫu import môn học");
-    } catch {
-      toast.error("Không thể tải file mẫu");
-    }
-  };
-
-  const handleExport = async (format: "EXCEL" | "CSV" = "EXCEL") => {
-    try {
-      const blob = await topicApi.exportFile(format);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const ext = format === "CSV" ? "csv" : "xlsx";
-      a.download = `topics_${new Date().toISOString().slice(0, 10)}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      toast.success(`Exported ${format === "CSV" ? "CSV" : "Excel"} successfully!`);
-    } catch {
-      toast.error("Export failed");
-    }
-  };
-
-  const handleImport = async () => {
-    if (!importFile) { toast.error("Please select a file"); return; }
-    setIsImporting(true);
-    setImportErrors([]);
-    try {
-      const res = await topicApi.importFile(importFile);
-      if (res.errors && res.errors.length > 0) {
-        setImportErrors(res.errors);
-        toast.warning(`Imported ${res.successCount || 0} successfully, but ${res.failureCount || 0} rows failed.`);
-      } else {
-        toast.success(`Import successful! ${res.successCount || 0} topics added.`);
-        setIsImportOpen(false);
-        setImportFile(null);
-      }
-      loadTopics();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Import failed");
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
   const activeFilters = [technicalGroup !== "ALL", statusFilter !== "ALL"].filter(Boolean).length;
 
   return (
@@ -304,25 +263,33 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
               </span>
             )}
           </Button>
-          <Button variant="outline" size="sm" className="gap-2 bg-white border-gray-300" onClick={() => setIsImportOpen(true)}>
+
+          {/* Import Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 bg-white border-gray-300"
+            onClick={() => setIsImportOpen(true)}
+          >
             <Upload className="size-4" /> Import
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 bg-white border-gray-300">
-                <Download className="size-4" /> Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExport("EXCEL")}>
-                Export Excel (.xlsx)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport("CSV")}>
-                Export CSV (.csv)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button size="sm" className="gap-2 bg-[#5b52e0] hover:bg-[#4d44cb] text-white" onClick={handleOpenCreate}>
+
+          {/* Export Button - Opens Hình 3 Modal */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 bg-white border-gray-300"
+            onClick={() => setIsExportOpen(true)}
+          >
+            <Download className="size-4" /> Export
+          </Button>
+
+          {/* Add Button */}
+          <Button
+            size="sm"
+            className="gap-2 bg-[#5b52e0] hover:bg-[#4d44cb] text-white"
+            onClick={handleOpenCreate}
+          >
             <Plus className="size-4" /> Add
           </Button>
         </div>
@@ -339,12 +306,14 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Groups</SelectItem>
-                <SelectItem value="Backend">Backend</SelectItem>
+                <SelectItem value="Java">Java</SelectItem>
+                <SelectItem value="React">React</SelectItem>
                 <SelectItem value="Frontend">Frontend</SelectItem>
+                <SelectItem value="Backend">Backend</SelectItem>
                 <SelectItem value="Database">Database</SelectItem>
                 <SelectItem value="DevOps">DevOps</SelectItem>
                 <SelectItem value="Testing">Testing</SelectItem>
-                <SelectItem value="Common">Common / Soft skills</SelectItem>
+                <SelectItem value="Soft Skills">Soft Skills</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -361,211 +330,268 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
               </SelectContent>
             </Select>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-4 text-xs text-gray-500"
-            onClick={() => { setTechnicalGroup("ALL"); setStatusFilter("ALL"); setPage(0); }}
-          >
-            Reset
-          </Button>
+          <div className="flex items-end flex-1 justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-gray-500 gap-1.5"
+              onClick={() => { setTechnicalGroup("ALL"); setStatusFilter("ALL"); setSearch(""); setPage(0); }}
+            >
+              <RefreshCw className="size-3" /> Reset
+            </Button>
+          </div>
         </div>
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+        <table className="w-full text-left text-sm border-collapse">
+          <thead className="bg-[#5b52e0] text-white">
+            <tr>
+              <th className="p-3 font-semibold">Topic Code</th>
+              <th className="p-3 font-semibold">Topic Name</th>
+              <th className="p-3 font-semibold">Version</th>
+              <th className="p-3 font-semibold">Technical Group</th>
+              <th className="p-3 font-semibold text-right">Duration (Hours)</th>
+              <th className="p-3 font-semibold text-center">Status</th>
+              <th className="p-3 font-semibold text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {loading ? (
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 w-8">#</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 w-[130px]">Code</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Name</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 w-16">Version</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 w-28">Technical Group</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 w-28">Duration</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 w-24">Status</th>
-                <th className="w-10"></th>
+                <td colSpan={7} className="text-center p-8 text-gray-500">
+                  <RefreshCw className="size-5 animate-spin mx-auto mb-2 text-[#5b52e0]" />
+                  Loading topics...
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading && topics.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="text-center py-16 text-gray-400">
-                    <RefreshCw className="size-5 animate-spin mx-auto mb-2 text-purple-500" />
-                    Loading...
+            ) : topics.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="text-center p-8 text-gray-500">
+                  No topics found
+                </td>
+              </tr>
+            ) : (
+              topics.map((t) => (
+                <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="p-3 font-mono font-medium text-gray-900">
+                    <button
+                      onClick={() => handleOpenDetail(t)}
+                      className="text-[#5b52e0] hover:underline cursor-pointer"
+                    >
+                      {t.code}
+                    </button>
+                  </td>
+                  <td className="p-3 font-medium text-gray-800">
+                    <button
+                      onClick={() => handleOpenDetail(t)}
+                      className="text-left hover:text-[#5b52e0] transition-colors cursor-pointer"
+                    >
+                      {t.name}
+                    </button>
+                  </td>
+                  <td className="p-3">
+                    <span className="inline-block px-2 py-0.5 text-xs font-mono bg-purple-50 text-purple-700 border border-purple-200 rounded">
+                      v{t.version}
+                    </span>
+                  </td>
+                  <td className="p-3 text-gray-600">{t.technicalGroup || "—"}</td>
+                  <td className="p-3 text-right font-mono text-gray-700">{t.durationHours}h</td>
+                  <td className="p-3 text-center">
+                    <span
+                      onClick={() => handleToggleStatus(t)}
+                      title="Click to toggle status"
+                      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors ${
+                        t.isActive
+                          ? "bg-green-100 text-green-800 hover:bg-green-200"
+                          : "bg-red-100 text-red-800 hover:bg-red-200"
+                      }`}
+                    >
+                      {t.isActive ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  <td className="p-3 text-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="size-8 text-gray-500 hover:text-gray-900">
+                          <MoreVertical className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onClick={() => handleOpenDetail(t)} className="gap-2 text-xs">
+                          <Eye className="size-3.5 text-gray-500" /> View Schedule
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleOpenEdit(t)} className="gap-2 text-xs">
+                          <Edit2 className="size-3.5 text-blue-500" /> Edit Topic
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleOpenClone(t)} className="gap-2 text-xs">
+                          <Copy className="size-3.5 text-purple-500" /> Clone Version
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleToggleStatus(t)}
+                          className={`gap-2 text-xs font-medium cursor-pointer ${
+                            t.isActive
+                              ? "text-orange-600 focus:text-orange-600"
+                              : "text-emerald-600 focus:text-emerald-600"
+                          }`}
+                        >
+                          <Power className="size-3.5" />
+                          {t.isActive ? "Inactive Topic" : "Active Topic"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleDeleteTopic(t)} className="gap-2 text-xs text-red-600">
+                          <Trash2 className="size-3.5" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
-              ) : topics.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="text-center py-16 text-gray-400 text-sm">
-                    No data available in table
-                  </td>
-                </tr>
-              ) : (
-                topics.map((t, idx) => (
-                  <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-gray-500 text-xs">{page * 10 + idx + 1}</td>
-                    <td className="px-4 py-3">
-                      <button
-                        className="font-mono text-xs font-semibold text-blue-600 hover:underline"
-                        onClick={() => handleOpenDetail(t)}
-                      >
-                        {t.code}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        className="text-[#5b52e0] hover:underline font-medium text-sm text-left line-clamp-1"
-                        onClick={() => handleOpenDetail(t)}
-                      >
-                        {t.name}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 text-xs font-mono">{t.version}</td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">{t.technicalGroup || "—"}</td>
-                    <td className="px-4 py-3 text-right text-gray-700 text-xs font-medium">{t.durationHours}h</td>
-                    <td className="px-4 py-3">
-                      {t.isActive ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
-                          Inactive
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-2 py-3">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="size-7 text-gray-400 hover:text-gray-600">
-                            <MoreVertical className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem onClick={() => handleOpenDetail(t)}>
-                            <Eye className="size-3.5 mr-2" /> View Detail
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleOpenEdit(t)}>
-                            <Edit2 className="size-3.5 mr-2" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleOpenClone(t)}>
-                            <Copy className="size-3.5 mr-2" /> Clone Version
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleToggleStatus(t)} className={t.isActive ? "text-orange-600" : "text-green-600"}>
-                            {t.isActive ? "Deactivate" : "Activate"}
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleDeleteTopic(t)} className="text-red-600">
-                            <Trash2 className="size-3.5 mr-2" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-500">
-          <span>Showing {topics.length} of {totalElements} entries</span>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="sm" className="h-7 px-3 text-xs" disabled={page <= 0} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-            <span className="px-2 font-medium">{page + 1} / {totalPages}</span>
-            <Button variant="outline" size="sm" className="h-7 px-3 text-xs" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>Next</Button>
-          </div>
+      {/* Pagination */}
+      <div className="flex items-center justify-between text-xs text-gray-500">
+        <div>
+          Showing {topics.length > 0 ? page * 10 + 1 : 0} to {Math.min((page + 1) * 10, totalElements)} of {totalElements} topics
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            className="h-8 text-xs"
+          >
+            Previous
+          </Button>
+          <span className="px-2 font-mono">
+            Page {page + 1} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage((p) => p + 1)}
+            className="h-8 text-xs"
+          >
+            Next
+          </Button>
         </div>
       </div>
 
-      {/* Topic Detail Modal */}
-      <TopicDetailModal
-        topic={detailTopic}
-        open={isDetailOpen}
-        onOpenChange={setIsDetailOpen}
-        onEdit={(t) => { setIsDetailOpen(false); handleOpenEdit(t); }}
-      />
+      {/* Detail Modal */}
+      <TopicDetailModal topic={detailTopic} open={isDetailOpen} onOpenChange={setIsDetailOpen} />
 
-      {/* Create / Edit Topic Dialog */}
+      {/* Create/Edit Form Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-[500px]">
-          <form onSubmit={handleSaveTopic}>
-            <DialogHeader>
-              <DialogTitle>{editingTopic ? `Edit Topic: ${editingTopic.code}` : "Create New Topic"}</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Code <span className="text-red-500">*</span></Label>
-                  <Input
-                    placeholder="e.g. JAVA_CORE"
-                    value={formData.code}
-                    disabled={!!editingTopic}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                    className="font-mono text-sm"
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Version <span className="text-red-500">*</span></Label>
-                  <Input
-                    placeholder="1.0"
-                    value={formData.version}
-                    onChange={(e) => setFormData({ ...formData, version: e.target.value })}
-                    className="font-mono text-sm"
-                    required
-                  />
-                </div>
-              </div>
+          <DialogHeader>
+            <DialogTitle>{editingTopic ? "Edit Topic" : "Create New Topic"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSaveTopic} className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Name <span className="text-red-500">*</span></Label>
+                <Label className="text-xs font-semibold">
+                  Topic Code <span className="text-red-500">*</span>
+                </Label>
                 <Input
-                  placeholder="Topic full name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  disabled={!!editingTopic}
+                  placeholder="e.g. L1_AL_CCGM"
+                  value={formData.code}
+                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                  className="font-mono uppercase text-xs"
                   required
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Technical Group</Label>
-                  <Select value={formData.technicalGroup} onValueChange={(v) => setFormData({ ...formData, technicalGroup: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Backend">Backend</SelectItem>
-                      <SelectItem value="Frontend">Frontend</SelectItem>
-                      <SelectItem value="Database">Database</SelectItem>
-                      <SelectItem value="DevOps">DevOps</SelectItem>
-                      <SelectItem value="Testing">Testing</SelectItem>
-                      <SelectItem value="Common">Common / Soft skills</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Duration (Hours) <span className="text-red-500">*</span></Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="1000"
-                    value={formData.durationHours}
-                    onChange={(e) => setFormData({ ...formData, durationHours: Number(e.target.value) })}
-                    required
-                  />
-                </div>
-              </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Description</Label>
-                <Textarea
-                  rows={3}
-                  placeholder="Topic objectives and skills..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                <Label className="text-xs font-semibold">
+                  Version <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  placeholder="e.g. 1.0"
+                  value={formData.version}
+                  onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                  className="font-mono text-xs"
+                  required
                 />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">
+                Topic Name <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                placeholder="e.g. Clean Code and Git Multi-platform"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="text-xs"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Technical Group</Label>
+                <Select
+                  value={formData.technicalGroup}
+                  onValueChange={(v) => setFormData({ ...formData, technicalGroup: v })}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Java">Java</SelectItem>
+                    <SelectItem value="React">React</SelectItem>
+                    <SelectItem value="Frontend">Frontend</SelectItem>
+                    <SelectItem value="Backend">Backend</SelectItem>
+                    <SelectItem value="Database">Database</SelectItem>
+                    <SelectItem value="DevOps">DevOps</SelectItem>
+                    <SelectItem value="Testing">Testing</SelectItem>
+                    <SelectItem value="Soft Skills">Soft Skills</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">
+                  Duration (Hours) <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={formData.durationHours}
+                  onChange={(e) => setFormData({ ...formData, durationHours: parseInt(e.target.value, 10) || 1 })}
+                  className="text-xs font-mono"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Status</Label>
+                <Select
+                  value={formData.isActive ? "ACTIVE" : "INACTIVE"}
+                  onValueChange={(v) => setFormData({ ...formData, isActive: v === "ACTIVE" })}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Description</Label>
+              <Textarea
+                rows={3}
+                placeholder="Detailed objectives, outline..."
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="text-xs resize-none"
+              />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
@@ -599,53 +625,18 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
         </DialogContent>
       </Dialog>
 
-      {/* Import Dialog */}
-      <Dialog open={isImportOpen} onOpenChange={(open) => { setIsImportOpen(open); if (!open) setImportErrors([]); }}>
-        <DialogContent className="sm:max-w-[550px]">
-          <DialogHeader>
-            <DialogTitle>Import Topics from File</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-4">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-gray-500">
-                Supports Excel (.xlsx, .xls) or .csv. Required columns: Code, Name, Version, Technical Group, Duration (Hours).
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-xs text-[#5b52e0] border-[#5b52e0] hover:bg-purple-50 shrink-0"
-                onClick={handleDownloadTemplate}
-              >
-                <Download className="size-3.5" /> Download Template
-              </Button>
-            </div>
-            <Input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { setImportFile(e.target.files?.[0] || null); setImportErrors([]); }} />
+      {/* Import Dialog - Theo đúng Hình 2 với tính năng Preview và Rollback */}
+      <TopicImportDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        onSuccess={loadTopics}
+      />
 
-            {importErrors.length > 0 && (
-              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
-                <p className="text-xs font-semibold text-red-700 mb-1.5">
-                  Import Errors ({importErrors.length} rows):
-                </p>
-                <div className="max-h-40 overflow-y-auto space-y-1 text-xs text-red-600">
-                  {importErrors.map((err, idx) => (
-                    <div key={idx} className="flex gap-2">
-                      <span className="font-mono font-semibold">Row {err.rowNumber}:</span>
-                      <span>{err.message}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setIsImportOpen(false); setImportErrors([]); }}>Close</Button>
-            <Button onClick={handleImport} disabled={!importFile || isImporting} className="bg-purple-600 hover:bg-purple-700 text-white">
-              {isImporting ? "Processing..." : "Import"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Export Dialog - Theo đúng Hình 3 với lựa chọn Excel, CSV, PDF */}
+      <TopicExportDialog
+        open={isExportOpen}
+        onOpenChange={setIsExportOpen}
+      />
     </div>
   );
 }

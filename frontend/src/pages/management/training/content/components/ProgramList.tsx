@@ -3,6 +3,7 @@ import { programApi } from "@/api/features/program.api";
 import type { TrainingProgramItem, ProgramStatus } from "@/types/features/content";
 import { ProgramDetailModal } from "./ProgramDetailModal";
 import { ProgramImportDialog } from "./ProgramImportDialog";
+import { ProgramExportDialog } from "./ProgramExportDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +77,7 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCloneOpen, setIsCloneOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [cloningProgram, setCloningProgram] = useState<TrainingProgramItem | null>(null);
   const [newVersion, setNewVersion] = useState("1.1");
 
@@ -158,26 +160,7 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
     }
   };
 
-  const handleExport = async (format: "xlsx" | "csv" | "txt" = "xlsx") => {
-    try {
-      const blob = await programApi.exportFile({
-        search: search.trim() || undefined,
-        status: statusFilter !== "ALL" ? (statusFilter as ProgramStatus) : undefined,
-        region: regionFilter !== "ALL" ? regionFilter : undefined,
-        format,
-      });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `training_programs_${new Date().toISOString().slice(0, 10)}.${format}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      toast.success(`Xuất file ${format.toUpperCase()} thành công!`);
-    } catch {
-      toast.error("Không thể xuất file");
-    }
-  };
+
 
   const activeFilterCount = [
     statusFilter !== "ACTIVE" ? 1 : 0,
@@ -229,25 +212,15 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
           </Button>
 
           {/* Export */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2 bg-white border-gray-300 text-gray-700">
-                <Download className="size-4" />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExport("xlsx")}>
-                Xuất file Excel (.xlsx)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport("csv")}>
-                Xuất file CSV (.csv)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport("txt")}>
-                Xuất file TXT (.txt)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 bg-white border-gray-300 text-gray-700"
+            onClick={() => setIsExportOpen(true)}
+          >
+            <Download className="size-4" />
+            Export
+          </Button>
 
           {/* Add */}
           <Button size="sm" className="gap-2 bg-[#5b52e0] hover:bg-[#4d44cb] text-white" onClick={onOpenCreate}>
@@ -486,6 +459,15 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
         open={isImportOpen}
         onClose={() => setIsImportOpen(false)}
         onImported={loadPrograms}
+      />
+
+      {/* Export Dialog */}
+      <ProgramExportDialog
+        open={isExportOpen}
+        onOpenChange={setIsExportOpen}
+        search={search}
+        status={statusFilter !== "ALL" ? (statusFilter as ProgramStatus) : undefined}
+        region={regionFilter !== "ALL" ? regionFilter : undefined}
       />
     </div>
   );

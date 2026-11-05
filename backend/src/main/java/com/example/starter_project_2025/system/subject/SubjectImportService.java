@@ -7,28 +7,25 @@ import com.example.starter_project_2025.base.dataio.importer.result.ImportResult
 import com.example.starter_project_2025.base.dataio.importer.result.RowError;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.BusinessValidationException;
+import com.example.starter_project_2025.system.subject.dto.TopicImportPreviewResponse;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
 import jakarta.validation.groups.Default;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SubjectImportService {
@@ -36,40 +33,157 @@ public class SubjectImportService {
     private final GenericImportMapper importMapper;
     private final SubjectMapper subjectMapper;
     private final SubjectService subjectService;
+    private final SubjectRepository subjectRepository;
     private final Validator validator;
-    private final PlatformTransactionManager transactionManager;
 
-    @PreAuthorize("hasAuthority('SUBJECT_CREATE')")
-    public ImportResult importFile(MultipartFile file) {
-        List<Map<String, String>> rows;
-        try (InputStream input = file.getInputStream()) {
-            rows = parserFactory.getParser(file.getOriginalFilename()).parse(input);
-        } catch (Exception error) {
-            throw new BadRequestException("Unable to read subject import file. Use a valid CSV or Excel template.");
+    @PreAuthorize("hasAuthority('SUBJECT_READ')")
+    public TopicImportPreviewResponse preview(MultipartFile file) {
+        List<Map<String, String>> rawRows = parseFile(file);
+        Set<String> seenKeys = new HashSet<>();
+        List<TopicImportPreviewResponse.RowResult> rowResults = new ArrayList<>();
+
+        int rowNumber = 2; // Row 1 is header
+        for (Map<String, String> raw : rawRows) {
+            Map<String, String> normalized = normalizeRow(raw);
+            List<String> errors = new ArrayList<>();
+
+            String code = normalized.get("Code");
+            String name = normalized.get("Name");
+            String version = normalized.get("Version");
+            String technicalGroup = normalized.get("Technical Group");
+            String durationStr = normalized.get("Duration (Hours)");
+            String description = normalized.get("Description");
+            String status = normalized.get("Status");
+
+            Integer duration = null;
+            if (durationStr != null && !durationStr.isBlank()) {
+                try {
+                    duration = Integer.parseInt(durationStr.trim());
+                    if (duration <= 0) {
+                        errors.add("Thời lượng (Hours) phải lớn hơn 0");
+                    }
+                } catch (Exception e) {
+                    errors.add("Thời lượng (Hours) phải là số nguyên");
+                }
+            } else {
+                errors.add("Thời lượng (Hours) không được để trống");
+            }
+
+            if (code == null || code.isBlank()) {
+                errors.add("Mã môn học (Code) không được để trống");
+            }
+            if (name == null || name.isBlank()) {
+                errors.add("Tên môn học (Name) không được để trống");
+            }
+            if (version == null || version.isBlank()) {
+                errors.add("Phiên bản (Version) không được để trống");
+            }
+
+            // Bean validation via DTO
+            try {
+                SubjectDTO dto = subjectMapper.toResponse(importMapper.map(normalized, Subject.class));
+                var violations = validator.validate(dto, Default.class, OnCreate.class);
+                for (var v : violations) {
+                    errors.add(v.getMessage());
+                }
+            } catch (Exception ex) {
+                errors.add(rowErrorMessage(ex));
+            }
+
+            // Check duplicate in same file
+            String normCode = SubjectIdentity.normalizeCode(code);
+            String normVersion = SubjectIdentity.normalizeVersion(version);
+            if (normCode != null && !normCode.isBlank() && normVersion != null && !normVersion.isBlank()) {
+                String key = normCode + "#" + normVersion;
+                if (seenKeys.contains(key)) {
+                    errors.add("Trùng mã và phiên bản với dòng trước đó trong file: " + normCode + " (v" + normVersion + ")");
+                } else {
+                    seenKeys.add(key);
+                }
+
+                // Check duplicate in existing database
+                boolean existsInDb = subjectRepository.existsByNormalizedIdentity(
+                        normCode, SubjectIdentity.versionAliases(normVersion), null);
+                if (existsInDb) {
+                    errors.add("Môn học với mã '" + normCode + "' phiên bản '" + normVersion + "' đã tồn tại trong hệ thống.");
+                }
+            }
+
+            List<String> distinctErrors = errors.stream().distinct().toList();
+            boolean valid = distinctErrors.isEmpty();
+
+            rowResults.add(new TopicImportPreviewResponse.RowResult(
+                    rowNumber,
+                    code,
+                    name,
+                    version,
+                    technicalGroup,
+                    duration,
+                    description,
+                    status != null && !status.isBlank() ? status : "ACTIVE",
+                    valid,
+                    distinctErrors
+            ));
+            rowNumber++;
         }
 
-        // Commit each successful row before reading the next one. A failed row must
-        // not roll back earlier rows or poison the transaction for later rows.
-        TransactionTemplate rowTransaction = new TransactionTemplate(transactionManager);
-        rowTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        int invalidCount = (int) rowResults.stream().filter(r -> !r.valid()).count();
+        int validCount = rowResults.size() - invalidCount;
+        boolean canImport = invalidCount == 0 && !rowResults.isEmpty();
+
+        return new TopicImportPreviewResponse(
+                rowResults.size(),
+                validCount,
+                invalidCount,
+                canImport,
+                rowResults
+        );
+    }
+
+    /**
+     * Import subject/topics with strict all-or-nothing rollback semantics:
+     * If ANY row in the file has an error, the entire import is rejected and rolled back.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @PreAuthorize("hasAuthority('SUBJECT_CREATE')")
+    public ImportResult importFile(MultipartFile file) {
+        TopicImportPreviewResponse preview = preview(file);
+
+        if (!preview.canImport()) {
+            throw new BadRequestException(
+                    "Import bị từ chối (Rollback toàn bộ): Phát hiện "
+                            + preview.invalidRows()
+                            + " dòng có lỗi. Theo quy định, 100% dòng phải hợp lệ mới được phép Import."
+            );
+        }
+
+        List<Map<String, String>> rawRows = parseFile(file);
         ImportResult result = new ImportResult();
+
         int rowNumber = 2;
-        for (Map<String, String> row : rows) {
+        for (Map<String, String> raw : rawRows) {
+            Map<String, String> normalized = normalizeRow(raw);
             try {
-                SubjectDTO request = subjectMapper.toResponse(importMapper.map(normalizeRow(row), Subject.class));
-                var violations = validator.validate(request, Default.class, OnCreate.class);
-                if (!violations.isEmpty()) throw new ConstraintViolationException(violations);
-                rowTransaction.execute(status -> subjectService.create(request));
+                SubjectDTO request = subjectMapper.toResponse(importMapper.map(normalized, Subject.class));
+                subjectService.create(request);
                 result.setSuccessCount(result.getSuccessCount() + 1);
-            } catch (AccessDeniedException error) {
-                throw error;
             } catch (Exception error) {
-                result.getErrors().add(new RowError(rowNumber, rowErrorMessage(error)));
-                result.setFailureCount(result.getFailureCount() + 1);
+                // If anything fails here, transaction rolls back automatically
+                log.error("Error creating subject row {}: {}", rowNumber, error.getMessage(), error);
+                throw new BadRequestException("Lỗi lưu dòng " + rowNumber + ": " + rowErrorMessage(error));
             }
             rowNumber++;
         }
+
         return result;
+    }
+
+    private List<Map<String, String>> parseFile(MultipartFile file) {
+        try (InputStream input = file.getInputStream()) {
+            return parserFactory.getParser(file.getOriginalFilename()).parse(input);
+        } catch (Exception error) {
+            throw new BadRequestException("Không thể đọc file import. Vui lòng sử dụng file CSV hoặc Excel hợp lệ.");
+        }
     }
 
     private Map<String, String> normalizeRow(Map<String, String> row) {
@@ -110,14 +224,36 @@ public class SubjectImportService {
                     int rounded = (int) Math.round(Double.parseDouble(duration.trim()));
                     values.put("Duration (Hours)", String.valueOf(rounded));
                 } catch (Exception ex) {
-                    throw new BadRequestException("Duration must be a whole number of hours");
+                    values.put("Duration (Hours)", duration.trim());
                 }
             }
         }
+
+        String status = values.get("Status");
+        if (status != null && !status.isBlank()) {
+            String normStatus = status.trim().toUpperCase(Locale.ROOT);
+            if ("HOẠT ĐỘNG".equals(normStatus) || "DANG HOAT DONG".equals(normStatus) || "TRUE".equals(normStatus) || "1".equals(normStatus)) {
+                normStatus = "ACTIVE";
+            } else if ("NGỪNG HOẠT ĐỘNG".equals(normStatus) || "NGUNG HOAT DONG".equals(normStatus) || "FALSE".equals(normStatus) || "0".equals(normStatus)) {
+                normStatus = "INACTIVE";
+            }
+            values.put("Status", normStatus);
+        } else {
+            values.put("Status", "ACTIVE");
+        }
+
         return values;
     }
 
     private String rowErrorMessage(Exception error) {
+        Throwable cause = error;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        String msg = cause.getMessage();
+        if (msg != null && msg.contains("No enum constant")) {
+            return "Trạng thái không hợp lệ. Vui lòng nhập ACTIVE hoặc INACTIVE.";
+        }
         if (error instanceof BusinessValidationException validation) {
             return validation.getErrors().values().stream().flatMap(List::stream)
                     .distinct().sorted().collect(Collectors.joining("; "));
@@ -129,6 +265,6 @@ public class SubjectImportService {
         if (error instanceof DataIntegrityViolationException integrity) {
             return SubjectExceptionHandler.persistenceMessage(integrity);
         }
-        return error.getMessage() != null ? error.getMessage() : "Invalid subject data";
+        return msg != null ? msg : "Dữ liệu môn học không hợp lệ";
     }
 }

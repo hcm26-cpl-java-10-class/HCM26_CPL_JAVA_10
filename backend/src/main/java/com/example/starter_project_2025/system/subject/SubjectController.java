@@ -7,6 +7,7 @@ import com.example.starter_project_2025.base.crud.dto.OnUpdate;
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
 import com.example.starter_project_2025.base.dataio.common.FileFormat;
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
+import com.example.starter_project_2025.system.subject.dto.TopicImportPreviewResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
@@ -88,6 +89,13 @@ public class SubjectController
             HttpServletResponse response
     ) throws java.io.IOException {
         super.exportFile(format, response);
+    }
+
+    @PostMapping(value = "/import/preview", consumes = "multipart/form-data")
+    @PreAuthorize("hasAuthority('SUBJECT_READ')")
+    @Operation(summary = "Xem trước file import môn học")
+    public TopicImportPreviewResponse previewImport(@RequestParam("file") MultipartFile file) {
+        return subjectImportService.preview(file);
     }
 
     @Override

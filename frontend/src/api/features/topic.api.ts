@@ -1,5 +1,5 @@
 import axiosInstance from "../axios";
-import type { TopicItem } from "@/types/features/content";
+import type { TopicItem, TopicImportPreview } from "@/types/features/content";
 import type { PageResponse } from "@/types/common/pageable";
 
 const path = "/topics";
@@ -60,10 +60,19 @@ export const topicApi = {
     return res.data;
   },
 
-  exportFile: async (format: "EXCEL" | "CSV" = "EXCEL"): Promise<Blob> => {
+  exportFile: async (format: "EXCEL" | "CSV" | "PDF" = "EXCEL"): Promise<Blob> => {
     const res = await axiosInstance.get(`${path}/export`, {
       params: { format },
       responseType: "blob",
+    });
+    return res.data;
+  },
+
+  previewImport: async (file: File): Promise<TopicImportPreview> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await axiosInstance.post<TopicImportPreview>(`${path}/import/preview`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
     return res.data;
   },

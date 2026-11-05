@@ -83,3 +83,23 @@ export interface ProgramImportPreview {
   rows: ProgramImportPreviewRow[];
 }
 
+export interface TopicImportPreviewRow {
+  rowNumber: number;
+  code: string;
+  name: string;
+  version: string;
+  technicalGroup?: string;
+  durationHours?: number;
+  description?: string;
+  status?: string;
+  valid: boolean;
+  errors: string[];
+}
+
+export interface TopicImportPreview {
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  canImport: boolean;
+  rows: TopicImportPreviewRow[];
+}
