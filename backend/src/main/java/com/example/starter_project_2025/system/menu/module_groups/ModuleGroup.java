@@ -24,7 +24,7 @@ import java.util.List;
 @AllArgsConstructor
 @Table(name = "module_groups")
 @FieldDefaults(level = AccessLevel.PRIVATE)
-@ImportEntity("module_group")
+@ImportEntity("module-group")
 @ExportEntity(fileName = "module_groups", sheetName = "Module Groups")
 @ResourcePermission("MENU")
 @ResourceMenu(
@@ -47,7 +47,8 @@ public class ModuleGroup extends BaseEntity {
     @Column(nullable = false)
     Integer displayOrder = 0;
 
-    @OneToMany(mappedBy = "moduleGroup", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @OneToMany(mappedBy = "moduleGroup")
     @Fetch(FetchMode.SUBSELECT)
     List<Module> modules = new ArrayList<>();
 }

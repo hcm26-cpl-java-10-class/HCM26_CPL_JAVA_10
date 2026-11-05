@@ -10,9 +10,9 @@ export const NotFoundRedirect = () => {
     (state: RootState) => state.auth
   );
 
-  const { isLoading } = useActiveModuleGroups(isAuthenticated);
+  const { isLoading, isFetching, isPlaceholderData } = useActiveModuleGroups(isAuthenticated);
 
-  if (isLoading) {
+  if (isLoading || (isFetching && isPlaceholderData)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="flex items-center gap-3 text-sm text-slate-600">

@@ -1,8 +1,8 @@
 export interface PageResponse<T> {
 
-  content: T[];  // Backend returns 'content' (Spring Boot Page)
+  content: T[];
 
-  items: T[];    // Alias for compatibility
+  items: T[];
 
   page: number;
 
@@ -36,6 +36,6 @@ export type SortDirection = "asc" | "desc";
 export interface SortEntry {
 
   field: string;
-  
+
   direction: SortDirection;
 }

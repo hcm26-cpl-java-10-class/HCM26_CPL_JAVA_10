@@ -4,8 +4,10 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.system.rbac.permission.Permission;
 import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -27,6 +29,7 @@ public class RoleServiceImpl
     RoleMapper roleMapper;
     RoleRepository roleRepository;
     PermissionRepository permissionRepository;
+    UserRepository userRepository;
 
     @Override
     protected BaseCrudRepository<Role, Long> getRepository() {
@@ -49,11 +52,20 @@ public class RoleServiceImpl
         validateRoleNameUnique(request.getName(), null, ctx);
         validatePermissions(request.getPermissionIds(), ctx);
 
+        role.setIsSystem(false);
         assignPermissions(role, request.getPermissionIds());
     }
 
     @Override
+    public RoleDTO create(RoleDTO request) {
+        RoleDTO response = super.create(request);
+        response.setUserCount(userRepository.countByRolesId(response.getId()));
+        return response;
+    }
+
+    @Override
     protected void beforeUpdate(Role role, RoleDTO request, ValidationContext ctx) {
+        request.setIsSystem(role.getIsSystem());
 
         if (request.getName() != null) {
             validateRoleNameUnique(request.getName(), role.getId(), ctx);
@@ -65,6 +77,31 @@ public class RoleServiceImpl
 
         if (request.getPermissionIds() != null) {
             assignPermissions(role, request.getPermissionIds());
+        }
+    }
+
+    @Override
+    public RoleDTO update(Long id, RoleDTO request) {
+        RoleDTO response = super.update(id, request);
+        response.setUserCount(userRepository.countByRolesId(id));
+        return response;
+    }
+
+    @Override
+    public RoleDTO getById(Long id) {
+        RoleDTO response = super.getById(id);
+        response.setUserCount(userRepository.countByRolesId(id));
+        return response;
+    }
+
+    @Override
+    protected void beforeDelete(Role role) {
+        if (Boolean.TRUE.equals(role.getIsSystem())) {
+            throw new BadRequestException("Không thể xóa vai trò mặc định của hệ thống!");
+        }
+
+        if (userRepository.countByRolesId(role.getId()) > 0) {
+            throw new BadRequestException("Không thể xóa vai trò đang được gán cho người dùng!");
         }
     }
 
@@ -82,7 +119,6 @@ public class RoleServiceImpl
     private void validatePermissions(Set<Long> permissionIds, ValidationContext ctx) {
 
         if (permissionIds == null || permissionIds.isEmpty()) {
-            ctx.add("permissionIds", "At least one permission must be assigned");
             return;
         }
 
@@ -94,6 +130,9 @@ public class RoleServiceImpl
     }
 
     private Set<Permission> getPermissions(Set<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return new HashSet<>();
+        }
         return new HashSet<>(permissionRepository.findAllById(ids));
     }
 

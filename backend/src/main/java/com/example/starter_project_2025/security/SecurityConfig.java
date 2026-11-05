@@ -8,6 +8,7 @@ import lombok.experimental.NonFinal;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -52,6 +53,7 @@ public class SecurityConfig {
             "/actuator/health",
             "/swagger-ui.html",
             "/swagger-ui/**",
+            "/uploads/**",
             "/v3/api-docs/**",
             "/ws/**",
             "/public/**",
@@ -61,6 +63,9 @@ public class SecurityConfig {
             "/verify/**",
             "/api/auth/**",
             "/api/public/**",
+            "/api/exams/verify-access/**",
+            "/api/exams/anonymous-session",
+            "/api/exams/anonymous/**",
             "/h2-console/**"
     };
 
@@ -82,11 +87,13 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/api/lesson-audio/**").permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/api/lesson-documents/**").permitAll();
                     auth.anyRequest().authenticated();
                 })
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)   // 401
-                        .accessDeniedHandler(jwtAccessDeniedHandler)             // 403
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler)
                 )
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oAuth2AuthenticationSuccessHandler)

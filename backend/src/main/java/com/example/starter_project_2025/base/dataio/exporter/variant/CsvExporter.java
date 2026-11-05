@@ -28,14 +28,12 @@ public class CsvExporter implements Exporter {
 
         PrintWriter writer = new PrintWriter(os);
 
-        // Header
         writer.println(
                 config.columns().stream()
                         .map(ExportColumn::header)
                         .collect(Collectors.joining(","))
         );
 
-        // Data
         for (T item : data) {
             String line = config.columns().stream()
                     .map(c -> {
@@ -50,5 +48,3 @@ public class CsvExporter implements Exporter {
         writer.flush();
     }
 }
-
-

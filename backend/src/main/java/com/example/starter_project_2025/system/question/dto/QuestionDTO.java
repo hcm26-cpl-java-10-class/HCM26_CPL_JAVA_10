@@ -8,10 +8,13 @@ import com.example.starter_project_2025.system.question.domain.QuestionType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
+import jakarta.validation.constraints.Pattern;
 
 import java.util.List;
 
@@ -29,12 +32,38 @@ public class QuestionDTO extends BaseDTO {
     private Difficulty difficulty;
 
     private String topic;
+    @Size(max = 1000, groups = {OnCreate.class, OnUpdate.class})
+    @Pattern(regexp = "^$|^https?://.+", message = "Image URL must start with http:// or https://",
+            groups = {OnCreate.class, OnUpdate.class})
+    private String imageUrl;
 
     @Min(value = 1, groups = {OnCreate.class, OnUpdate.class})
     private Integer points;
 
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Long sourceQuestionId;
+
     @Valid
     private List<OptionDTO> options;
+
+    @Valid
+    private List<EssayCriterionDTO> gradingCriteria;
+
+    /** Chi dung cho cau hoi lap trinh (type = CODING). */
+    private CodeSpecDTO code;
+
+    @Getter @Setter
+    public static class EssayCriterionDTO {
+        @NotBlank(groups = {OnCreate.class, OnUpdate.class})
+        @Size(max = 200, groups = {OnCreate.class, OnUpdate.class})
+        private String name;
+
+        @Size(max = 1000, groups = {OnCreate.class, OnUpdate.class})
+        private String description;
+
+        @Min(value = 1, groups = {OnCreate.class, OnUpdate.class})
+        private Integer weightPercentage;
+    }
 
     @Getter @Setter
     public static class OptionDTO {
@@ -45,5 +74,10 @@ public class QuestionDTO extends BaseDTO {
         private String content;
 
         private boolean correct;
+        @Size(max = 1000, groups = {OnCreate.class, OnUpdate.class})
+        @Pattern(regexp = "^https?://.+", message = "Image URL must start with http:// or https://",
+                groups = {OnCreate.class, OnUpdate.class})
+        private String imageUrl;
+
     }
 }

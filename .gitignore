@@ -1,4 +1,4 @@
- === IDE ===
+# === IDE ===
 .idea/
 .run/*.saved
 *.iml
@@ -12,6 +12,7 @@ Thumbs.db
 backend/target/
 backend/*.jar
 backend/*.war
+backend/data/
 
 # === Local databases and demo logs ===
 /data/
@@ -22,14 +23,25 @@ backend/demo-start.log
 
 # === Backend .env (secrets) ===
 backend/.env
+backend/.env.local
+backend/.env.*.local
+!backend/.env.example
 
 # === Frontend (Node) ===
 frontend/node_modules/
 frontend/dist/
 
+# === Frontend .env (secrets/local config) ===
+# .env.example được commit để người mới biết cần đặt biến nào.
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
 # === Docker .env (secrets) ===
 docker/.env
 
+# === Logs ===
+*.log
 
 /backend.zip
 /backend/compile.log
@@ -37,3 +49,10 @@ docker/.env
 /test.txt
 /docs/UFR-PRJ-004-*.md
 /.playwright-mcp/
+
+# === Nested clone / local workspace folder ===
+HCM26_CPL_JAVA_10/
+frontend-dev.err
+
+# === Runtime uploaded files (khong commit) ===
+uploads/

@@ -30,14 +30,12 @@ public class ExcelExporter implements Exporter {
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet(config.sheetName());
 
-        // Header
         Row headerRow = sheet.createRow(0);
         for (int i = 0; i < config.columns().size(); i++) {
             headerRow.createCell(i)
                     .setCellValue(config.columns().get(i).header());
         }
 
-        // Data
         for (int i = 0; i < data.size(); i++) {
             T item = data.get(i);
             Row row = sheet.createRow(i + 1);
@@ -57,5 +55,3 @@ public class ExcelExporter implements Exporter {
         workbook.close();
     }
 }
-
-

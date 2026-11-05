@@ -13,10 +13,6 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Request DTO for updating one or more TopicMarkEntry scores for a student,
- * with a mandatory reason for audit purposes.
- */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

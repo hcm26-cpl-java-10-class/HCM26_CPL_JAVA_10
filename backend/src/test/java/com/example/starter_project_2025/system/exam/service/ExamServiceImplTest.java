@@ -2,10 +2,11 @@ package com.example.starter_project_2025.system.exam.service;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,12 +23,14 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
 import com.example.starter_project_2025.system.question.domain.Difficulty;
+import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionRepository;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
@@ -67,7 +70,7 @@ class ExamServiceImplTest {
         question.setId(10L);
         question.setIsActive(true);
         question.setContent("Question content");
-        question.setType(QuestionType.SINGLE_CHOICE);
+        question.setType(QuestionType.MULTIPLE_CHOICE);
         question.setDifficulty(Difficulty.EASY);
     }
 
@@ -77,18 +80,76 @@ class ExamServiceImplTest {
     }
 
     @Test
-    void addQuestionsDeduplicatesIdsAndReturnsUpdatedExam() {
+    void addQuestionsClonesBankQuestionsAndLeavesOriginalUntouched() {
         ExamDTO response = new ExamDTO();
         when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
         when(questionRepository.findAllById(any())).thenReturn(List.of(question));
         when(examRepository.save(exam)).thenReturn(exam);
         when(examMapper.toResponse(exam)).thenReturn(response);
+        when(questionRepository.save(any(Question.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         ExamDTO result = examService.addQuestions(1L, List.of(10L, 10L));
 
         assertSame(response, result);
-        assertEquals(Set.of(question), exam.getQuestions());
+        assertEquals(1, exam.getQuestions().size());
+
+        Question copy = exam.getQuestions().iterator().next();
+        assertNotSame(question, copy);
+        assertEquals(10L, copy.getSourceQuestionId());
+        assertEquals("Question content", copy.getContent());
+        assertNull(question.getSourceQuestionId());
+
         verify(examRepository).save(exam);
+    }
+
+    @Test
+    void addQuestionsCopiesEssayGradingCriteriaIndependently() {
+        question.setType(QuestionType.ESSAY);
+        EssayGradingCriterion sourceCriterion = new EssayGradingCriterion();
+        sourceCriterion.setName("Correctness");
+        sourceCriterion.setDescription("Core concepts are correct");
+        sourceCriterion.setWeightPercentage(100);
+        question.getGradingCriteria().add(sourceCriterion);
+
+        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+        when(questionRepository.findAllById(any())).thenReturn(List.of(question));
+        when(examRepository.save(exam)).thenReturn(exam);
+        when(examMapper.toResponse(exam)).thenReturn(new ExamDTO());
+        when(questionRepository.save(any(Question.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        examService.addQuestions(1L, List.of(10L));
+
+        Question copy = exam.getQuestions().iterator().next();
+        assertEquals(1, copy.getGradingCriteria().size());
+        assertNotSame(sourceCriterion, copy.getGradingCriteria().get(0));
+        assertEquals("Correctness", copy.getGradingCriteria().get(0).getName());
+        assertEquals(100, copy.getGradingCriteria().get(0).getWeightPercentage());
+    }
+
+    @Test
+    void addQuestionsFailsWhenExamAlreadyStarted() {
+        exam.setStartTime(java.time.LocalDateTime.now().minusMinutes(5));
+        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+
+        assertThrows(
+                BadRequestException.class,
+                () -> examService.addQuestions(1L, List.of(10L))
+        );
+        verify(examRepository, never()).save(any(Exam.class));
+    }
+
+    @Test
+    void removeQuestionFailsWhenExamAlreadyStarted() {
+        exam.setStartTime(java.time.LocalDateTime.now().minusMinutes(5));
+        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+
+        assertThrows(
+                BadRequestException.class,
+                () -> examService.removeQuestion(1L, 10L)
+        );
+        verify(examRepository, never()).save(any(Exam.class));
     }
 
     @Test
@@ -101,7 +162,7 @@ class ExamServiceImplTest {
                 () -> examService.addQuestions(1L, List.of(10L, 999L))
         );
 
-        assertEquals(Set.of(), exam.getQuestions());
+        assertEquals(0, exam.getQuestions().size());
         verify(examRepository, never()).save(any(Exam.class));
     }
 }

@@ -1,4 +1,3 @@
-// ─── Date format utilities for datatable ─────────────────────────────────────
 
 export type DateFormatKey = "datetime" | "date" | "time" | "relative" | "iso";
 

@@ -19,6 +19,9 @@ public class QuestionOption extends BaseEntity {
     @Column(name = "is_correct", nullable = false)
     private boolean correct;
 
+    @Column(length = 1000)
+    private String imageUrl;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "question_id", nullable = false)
     private Question question;

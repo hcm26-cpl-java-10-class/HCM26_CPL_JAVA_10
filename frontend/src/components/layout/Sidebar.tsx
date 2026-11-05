@@ -1,7 +1,5 @@
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
-
 import { NavMain } from "@/components/layout/NavMain";
-
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, LoaderCircle, LogOutIcon, RefreshCw } from "lucide-react";
@@ -49,8 +47,17 @@ export function SidebarMenu() {
             .map((group) => ({
                 id: group.id ?? group.name ?? "group",
                 name: group.name ?? "Menu",
+                hiddenInMenu: group.hiddenInMenu,
                 items: group.modules
-                    .filter((module) => !!module.url && module.url.replace(/\/$/, "") !== "/project-template-versions")
+                    .filter((module) => {
+                        const url = module.url?.replace(/\/+$/, "") ?? "";
+                        return (
+                            !!module.url &&
+                            !module.hiddenInMenu &&
+                            url !== "/project-template-versions" &&
+                            url !== "/enrollments"
+                        );
+                    })
                     .map((module) => ({
                         title: module.title ?? "Untitled",
                         url: module.url ?? "#",
@@ -60,12 +67,11 @@ export function SidebarMenu() {
                             (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
                     })),
             }))
-            .filter((group) => group.items.length > 0);
+            .filter((group) => !group.hiddenInMenu && group.items.length > 0);
     }, [location.pathname, moduleGroups]);
 
     return (
         <Sidebar variant="inset" collapsible="icon">
-            {/* Header */}
             <SidebarHeader className="py-3 px-0">
                 <Button
                     type="button"
@@ -87,7 +93,6 @@ export function SidebarMenu() {
                 </Button>
             </SidebarHeader>
 
-            {/* Content */}
             <SidebarContent>
                 {isMenuLoading ? (
                     <div className="flex items-center justify-center px-3 py-6 text-muted-foreground">
@@ -122,7 +127,6 @@ export function SidebarMenu() {
                 )}
             </SidebarContent>
 
-            {/* Footer */}
             <SidebarFooter className="p-4 text-xs flex flex-row items-center gap-2 text-muted-foreground group-data-[collapsible=icon]:justify-center">
                 {state === "expanded" && <span className="flex-1 truncate">RBAC System v1.0</span>}
 

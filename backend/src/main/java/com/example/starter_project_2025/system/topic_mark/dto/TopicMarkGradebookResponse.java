@@ -10,14 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Gradebook view response with columns derived from TopicAssessmentComponents.
- *
- * Column keys in {@link Row#values}:
- *  - "{componentId}_{index}" → score for a TopicAssessmentComponent slot (Double or null)
- *  - "FINAL_SCORE"           → computed final score (Double or null)
- *  - "IS_PASSED"             → Boolean
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -30,8 +22,6 @@ public class TopicMarkGradebookResponse {
 
     @Schema(description = "One row per enrolled student")
     private List<Row> rows;
-
-    // ── Inner types ───────────────────────────────────────────────────────────
 
     @Data
     @Builder
@@ -62,7 +52,6 @@ public class TopicMarkGradebookResponse {
         @Schema(description = "Whether this component counts toward final score; null for meta columns", nullable = true)
         private Boolean isGraded;
 
-        /** Convenience constructor for meta columns (FINAL_SCORE, IS_PASSED). */
         public Column(String key, String label) {
             this.key = key;
             this.label = label;
@@ -85,12 +74,6 @@ public class TopicMarkGradebookResponse {
         @Schema(description = "Student email", example = "john.doe@example.com")
         private String email;
 
-        /**
-         * Map of column key → value.
-         * - '{componentId}_{index}' key → Double score (null = not entered)
-         * - FINAL_SCORE                 → Double (nullable)
-         * - IS_PASSED                   → Boolean
-         */
         @Schema(description = "Score / meta values keyed by column key")
         private Map<String, Object> values;
     }

@@ -3,9 +3,14 @@ package com.example.starter_project_2025.system.exam.mapper;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
+import com.example.starter_project_2025.system.exam.service.ExamScoring;
+import com.example.starter_project_2025.system.exam.service.ExamTypePolicy;
+import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.mapper.QuestionMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -37,11 +42,35 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setTitle(e.getTitle());
         d.setDurationMinutes(e.getDurationMinutes());
 
+        d.setStartTime(e.getStartTime());
+        d.setEndTime(e.getEndTime());
+        d.setMaxAttempts(e.getMaxAttempts());
+        d.setShuffleQuestions(e.getShuffleQuestions());
+        d.setShuffleOptions(e.getShuffleOptions());
+        d.setShowAnswersAfterExam(e.getShowAnswersAfterExam());
+        d.setPassScore(e.getPassScore());
+        d.setMaxScore(ExamScoring.effectiveMax(e.getMaxScore()));
+        d.setLatePolicy(e.getLatePolicy());
+        d.setLatePenaltyPercent(e.getLatePenaltyPercent());
+        d.setLateGraceMinutes(e.getLateGraceMinutes());
+        d.setResultVisibility(e.getResultVisibility());
+        d.setExamType(ExamTypePolicy.effective(e.getExamType()));
+        d.setCategory(e.getCategory() == null ? ExamCategory.ASSESSMENT : e.getCategory());
+
         List<Question> sorted = e.getQuestions().stream()
                 .sorted(Comparator.comparing(Question::getId)).toList();
         d.setQuestionIds(sorted.stream().map(Question::getId).toList());
         d.setQuestions(sorted.stream().map(questionMapper::toResponse).toList());
         d.setTotalPoints(sorted.stream().mapToInt(Question::getPoints).sum());
+        // CHANGED: chi nguoi co EXAM_UPDATE (giao vien) moi thay accessCode; nguoi khac chi thay hasPassword
+        d.setAccessCode(canSeeAccessCode() ? e.getAccessCode() : null);
+        // NEW (anti-cheat)
+        d.setAntiCheatEnabled(Boolean.TRUE.equals(e.getAntiCheatEnabled()));
+        d.setDetectTabSwitch(Boolean.TRUE.equals(e.getDetectTabSwitch()));
+        d.setBlockCopyPaste(Boolean.TRUE.equals(e.getBlockCopyPaste()));
+        d.setRequireFullscreen(Boolean.TRUE.equals(e.getRequireFullscreen()));
+        d.setSingleSession(Boolean.TRUE.equals(e.getSingleSession()));
+        d.setHasPassword(e.getAccessCode() != null && !e.getAccessCode().trim().isEmpty());
         return d;
     }
 
@@ -51,8 +80,41 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         apply(e, dto);
     }
 
+    // NEW: kiem tra nguoi dang goi co quyen sua de thi khong
+    private static boolean canSeeAccessCode() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.isAuthenticated()
+                && auth.getAuthorities().stream().anyMatch(a -> "EXAM_UPDATE".equals(a.getAuthority()));
+    }
+
     private void apply(Exam e, ExamDTO d) {
         if (d.getTitle() != null) e.setTitle(d.getTitle().trim());
         if (d.getDurationMinutes() != null) e.setDurationMinutes(d.getDurationMinutes());
+
+        if (d.getStartTime() != null) e.setStartTime(d.getStartTime());
+        if (d.getEndTime() != null) e.setEndTime(d.getEndTime());
+        if (d.getMaxAttempts() != null) e.setMaxAttempts(d.getMaxAttempts());
+        if (d.getShuffleQuestions() != null) e.setShuffleQuestions(d.getShuffleQuestions());
+        if (d.getShuffleOptions() != null) e.setShuffleOptions(d.getShuffleOptions());
+        if (d.getShowAnswersAfterExam() != null) e.setShowAnswersAfterExam(d.getShowAnswersAfterExam());
+        if (d.getPassScore() != null) e.setPassScore(d.getPassScore());
+        if (d.getMaxScore() != null) e.setMaxScore(d.getMaxScore());
+        else if (e.getMaxScore() == null) e.setMaxScore(ExamScoring.DEFAULT_MAX_SCORE);
+        if (d.getLatePolicy() != null) e.setLatePolicy(d.getLatePolicy());
+        if (d.getLatePenaltyPercent() != null) e.setLatePenaltyPercent(d.getLatePenaltyPercent());
+        if (d.getLateGraceMinutes() != null) e.setLateGraceMinutes(d.getLateGraceMinutes());
+        if (d.getResultVisibility() != null) e.setResultVisibility(d.getResultVisibility());
+        if (d.getExamType() != null) e.setExamType(d.getExamType());
+        if (d.getCategory() != null) e.setCategory(d.getCategory());
+        // NEW (anti-cheat)
+        if (d.getAntiCheatEnabled() != null) e.setAntiCheatEnabled(d.getAntiCheatEnabled());
+        if (d.getDetectTabSwitch() != null) e.setDetectTabSwitch(d.getDetectTabSwitch());
+        if (d.getBlockCopyPaste() != null) e.setBlockCopyPaste(d.getBlockCopyPaste());
+        if (d.getRequireFullscreen() != null) e.setRequireFullscreen(d.getRequireFullscreen());
+        if (d.getSingleSession() != null) e.setSingleSession(d.getSingleSession());
+        if (d.getAccessCode() != null) {
+            String trimmed = d.getAccessCode().trim();
+            e.setAccessCode(trimmed.isEmpty() ? null : trimmed);
+        }
     }
 }
