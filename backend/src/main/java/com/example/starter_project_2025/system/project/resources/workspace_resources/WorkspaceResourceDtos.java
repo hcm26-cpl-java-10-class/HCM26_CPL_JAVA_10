@@ -28,7 +28,12 @@ public final class WorkspaceResourceDtos {
                                Integer orderIndex,
                                LocalDateTime updatedAt,
                                Long updatedBy,
-                               List<FileItem> files) {
+                               List<FileItem> files,
+                               Long sourceTemplateId,
+                               String sourceName,
+                               String origin,
+                               Long projectId,
+                               boolean canManage) {
     }
 
     /** Result of {@code GET /api/workspaces/{id}/resources}. */

@@ -103,6 +103,9 @@ public class ProjectTeamMembershipService {
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "ProjectMember", "memberId", memberId));
+        if (ProjectMemberRole.hasRole(removed.getRole(), "PM")) {
+            throw new BadRequestException("Không thể gỡ Leader khỏi nhóm đã công bố.");
+        }
         String beforeState = serialize(snapshot(team, oldMembers));
         entityManager.lock(team, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
         entityManager.flush();
@@ -169,6 +172,9 @@ public class ProjectTeamMembershipService {
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "ProjectMember", "memberId", memberId));
+        if (ProjectMemberRole.hasRole(originalAssignment.getRole(), "PM")) {
+            throw new BadRequestException("Không thể đổi Leader khỏi nhóm đã công bố.");
+        }
 
         ProjectTeam destinationTeam = null;
         ProjectMember replacementAssignment = null;
@@ -200,6 +206,9 @@ public class ProjectTeamMembershipService {
                     .findFirst()
                     .orElseThrow(() -> new BadRequestException(
                             "Replacement member does not belong to the selected team"));
+            if (ProjectMemberRole.hasRole(replacementAssignment.getRole(), "PM")) {
+                throw new BadRequestException("Không thể đổi Leader khỏi nhóm đã công bố.");
+            }
         }
 
         String sourceBefore = serialize(snapshot(sourceTeam, sourceMembers));
@@ -305,6 +314,9 @@ public class ProjectTeamMembershipService {
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "ProjectMember", "memberId", memberId));
+        if (ProjectMemberRole.hasRole(assignment.getRole(), "PM")) {
+            throw new BadRequestException("Không thể chuyển Leader khỏi nhóm đã công bố.");
+        }
         if (projectMemberRepository.existsByTeam_IdAndClassMember_Id(
                 destinationTeam.getId(), memberId)) {
             throw new BadRequestException("Học viên đã thuộc nhóm nhận.");

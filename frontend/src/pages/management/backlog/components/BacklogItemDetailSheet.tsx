@@ -91,6 +91,7 @@ interface BacklogItemDetailSheetProps {
   /** SPRINT_UPDATE (moving the item to another sprint / back to the backlog). */
   canMove: boolean;
   canDelete: boolean;
+  readOnly?: boolean;
   /** Called after a successful mutation so the board can reload. */
   onChanged?: () => void | Promise<void>;
   onDeleted?: () => void | Promise<void>;
@@ -207,6 +208,7 @@ export function BacklogItemDetailSheet({
   canEdit,
   canMove,
   canDelete,
+  readOnly = false,
   onChanged,
   onDeleted,
 }: BacklogItemDetailSheetProps) {
@@ -829,7 +831,7 @@ export function BacklogItemDetailSheet({
             </div>
 
             <div className="px-5 pb-5">
-              <BacklogSubtasksPanel key={item.id} backlogId={item.id} />
+              <BacklogSubtasksPanel key={item.id} backlogId={item.id} readOnly={readOnly} />
             </div>
 
             <div className="px-5 pb-8">

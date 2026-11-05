@@ -46,6 +46,12 @@ public class ProjectTeam extends BaseEntity {
     @Column(name = "project_template_version_id")
     Long projectTemplateVersionId;
 
+    @Column(name = "assigned_constraints_json", columnDefinition = "TEXT")
+    String assignedConstraintsJson;
+
+    @Column(name = "assigned_template_name", length = 255)
+    String assignedTemplateName;
+
     public Long getProjectId() {
         return project == null ? null : project.getId();
     }
@@ -55,6 +61,7 @@ public class ProjectTeam extends BaseEntity {
     }
 
     public String getProjectTemplateName() {
+        if (assignedTemplateName != null) return assignedTemplateName;
         return projectTemplate == null ? null : projectTemplate.getName();
     }
 
@@ -83,8 +90,17 @@ public class ProjectTeam extends BaseEntity {
     @Column(name = "assigned_mentor_id")
     Long assignedMentorId;
 
+    /** Class member selected as leader while the team is a draft. */
+    @Column(name = "leader_member_id")
+    Long leaderMemberId;
+
     @Column(name = "max_members", nullable = false)
     Integer maxMembers;
+
+    /** Null on legacy rows, which are treated as manually created teams. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "allocation_source", length = 10)
+    TeamAllocationSource allocationSource;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

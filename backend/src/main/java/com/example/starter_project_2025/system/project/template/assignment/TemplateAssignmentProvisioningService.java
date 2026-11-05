@@ -20,7 +20,6 @@ import com.example.starter_project_2025.system.project.milestone.domain.LatePoli
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
-import com.example.starter_project_2025.system.project.resources.project_resources.ProjectResourceProvisioningService;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogPriority;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
@@ -100,7 +99,7 @@ public class TemplateAssignmentProvisioningService {
     private final TemplateMilestoneScheduleValidator scheduleValidator;
     private final TemplateMilestoneRubrics milestoneRubrics;
     private final TemplateBriefSnapshotWriter briefSnapshots;
-    private final ProjectResourceProvisioningService projectResourceProvisioning;
+    private final TemplateAssignmentResourceWriter assignmentResources;
     private final ObjectMapper objectMapper;
     private final jakarta.persistence.EntityManager entityManager;
 
@@ -125,7 +124,7 @@ public class TemplateAssignmentProvisioningService {
         List<TemplateMilestone> milestonePlan =
                 templateMilestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
         var planRequest = TemplateMilestonePlanRequest.from(template.getLockVersion(), milestonePlan);
-        milestoneValidator.validate(planRequest);
+        milestoneValidator.validate(planRequest, template.getParentTemplateId() == null);
         scheduleValidator.validate(planRequest, template.getEstimatedDurationWeeks());
         milestoneRubrics.requirePublished(planRequest, tenantId);
 
@@ -141,13 +140,11 @@ public class TemplateAssignmentProvisioningService {
 
         // ---- Step 3: workspace + generated components
         Workspace workspace = ensureWorkspace(team, project, tenantId, actorId, correlationId);
+        int inheritedResources = assignmentResources.copy(project, template, snapshot);
 
         int generatedMilestones = generateMilestones(
                 team, project, tenantId, actorId, now, milestonePlan);
         int generatedBacklogItems = generateSampleBacklog(project, template);
-        // US-RES-001: the project inherits the resource set of the version it
-        // was assigned from. The copies stay independent from the template.
-        int inheritedResources = projectResourceProvisioning.provision(snapshot, project.getId(), tenantId);
 
         recordActivity(workspace, tenantId, actorId, correlationId, ACTIVITY_WORKSPACE_GENERATED);
 
@@ -225,7 +222,7 @@ public class TemplateAssignmentProvisioningService {
                                       Long actorId,
                                       String correlationId) {
 
-        Workspace existing = workspaces.findFirstByTeamIdOrderByIdAsc(team.getId()).orElse(null);
+        Workspace existing = workspaces.findCurrentByTeamId(team.getId()).orElse(null);
         if (existing != null) {
             if (existing.getProject() == null) {
                 existing.setProject(project);

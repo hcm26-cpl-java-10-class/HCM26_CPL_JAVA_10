@@ -43,6 +43,14 @@ public interface ProjectMemberRepository
             Long userId,
             com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus status);
 
+    @Query("""
+            select count(member) > 0 from ProjectMember member
+             where member.team.id = :teamId and member.isActive = true
+               and member.classMember.isActive = true and member.classMember.trainingClass.id = :classId
+               and member.classMember.user.id = :userId and member.classMember.status = :status
+            """)
+    boolean existsActiveMembership(Long teamId, Long classId, Long userId, ClassMemberStatus status);
+
     boolean existsByTeam_IdAndIsActiveTrueAndClassMember_TrainingClass_IdAndClassMember_User_IdAndClassMember_Status(
             Long teamId,
             Long classId,

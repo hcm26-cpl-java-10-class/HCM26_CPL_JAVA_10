@@ -12,7 +12,7 @@ export interface SubmissionListItem {
   milestoneId: string;
   milestoneTitle: string;
   mandatory: boolean;
-  teamId: number;
+  teamId: number | null;
   teamName: string;
   studentName: string;
   reviewerName: string;
@@ -138,7 +138,7 @@ export interface SubmissionDetail {
   milestoneTitle: string;
   milestoneDescription?: string | null;
   mandatory: boolean;
-  teamId: number;
+  teamId: number | null;
   teamName: string;
   studentId: string;
   studentName: string;

@@ -20,6 +20,12 @@ public class ProjectTemplateException extends RuntimeException {
         return new ProjectTemplateException(409, message, Map.of("code", List.of(message)));
     }
 
+    public static ProjectTemplateException duplicateCode(boolean module) {
+        if (!module) return duplicateCode();
+        String message = "Module code already exists within this parent template";
+        return new ProjectTemplateException(409, message, Map.of("code", List.of(message)));
+    }
+
     public static ProjectTemplateException conflict(String message) {
         return new ProjectTemplateException(409, message, Map.of());
     }

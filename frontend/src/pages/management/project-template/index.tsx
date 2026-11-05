@@ -7,10 +7,11 @@ import { useProTable } from "@/components/datatable/hook/useProTable";
 import { ProTable } from "@/components/datatable/ProTable";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { ProjectTemplateFilter, ProjectTemplateListItem } from "@/types/features/project-template";
 import type { Pagination } from "@/types";
-import { Eye, Files, Pen, Plus, RefreshCw, Rocket, Trash2 } from "lucide-react";
-import { useMemo } from "react";
+import { Eye, Files, FolderTree, Pen, Plus, RefreshCw, Rocket, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ProjectTemplateCard } from "./components/ProjectTemplateCard";
 import { ProjectTemplateError, ProjectTemplateLoading } from "./components/ProjectTemplateState";
@@ -23,16 +24,18 @@ export default function ProjectTemplateListPage() {
   const navigate = useNavigate();
   const options = useProjectTemplateOptions();
   const canReadVersions = options.hasPermission("PROJECT_TEMPLATE_VERSION_READ");
+  const [showModules, setShowModules] = useState(false);
   const listApi = useMemo(() => ({
     ...projectTemplateApi,
     getPage: async (pagination: Pagination, search?: string, filter?: ProjectTemplateFilter) => {
-      if (canReadVersions) return projectTemplateApi.getVersionPage(pagination, search, filter);
-      const page = await projectTemplateApi.getPage(pagination, search, filter);
+      const filters = { ...filter, includeModules: showModules };
+      if (canReadVersions) return projectTemplateApi.getVersionPage(pagination, search, filters);
+      const page = await projectTemplateApi.getPage(pagination, search, filters);
       const content = (page.content ?? page.items ?? []).map(template => ({ ...template, rowId: `template-${template.id}`,
         versionId: null, versionLabel: `v${template.templateVersion}.0`, latestVersion: true, templateStatus: template.status }));
       return { ...page, content, items: content };
     },
-  }), [canReadVersions]);
+  }), [canReadVersions, showModules]);
   const schema = useMemo(() => ({
     ...projectTemplateSchema,
     idField: "rowId",
@@ -46,7 +49,7 @@ export default function ProjectTemplateListPage() {
   }), [options.data?.categories]);
   const table = useProTable(listApi, schema, {
     queryKeyRoot: "project-templates",
-    queryKeyParts: [options.user.email, options.activeRole, "list", canReadVersions ? "versions" : "templates"],
+    queryKeyParts: [options.user.email, options.activeRole, "list", canReadVersions ? "versions" : "templates", showModules],
     enabled: options.isSuccess,
     searchDebounceMs: 300,
     retry: false,
@@ -102,14 +105,20 @@ export default function ProjectTemplateListPage() {
                   </button>
                 );
                 if (field.name === "name") return (
-                  <button className="block w-full truncate text-left font-medium hover:text-primary hover:underline" onClick={() => view(template)}>
-                    {template.name}
-                  </button>
+                  <div className={`flex min-w-0 items-center gap-2 ${template.parentTemplateId != null ? "border-l-2 pl-3" : ""}`}>
+                    {template.parentTemplateId != null && <Badge variant="secondary" className="shrink-0">Module</Badge>}
+                    <button className="min-w-0 truncate text-left font-medium hover:text-primary hover:underline" onClick={() => view(template)}>
+                      {template.name}
+                    </button>
+                  </div>
                 );
                 return undefined;
               }}
               headerActions={(
                 <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" aria-pressed={showModules} onClick={() => {
+                    table.setPage(0); setShowModules(value => !value);
+                  }}><FolderTree className="size-4" />{showModules ? "Hide modules" : "Show modules"}</Button>
                   <ActionButton tooltip="Refresh templates" disabled={table.isFetching} onClick={() => void table.refetch()}
                     icon={<RefreshCw className={`size-4 ${table.isFetching ? "animate-spin" : ""}`} />} />
                   {table.permission.canCreate && <ActionButton title="Create" tooltip="Create project template" variant="default"

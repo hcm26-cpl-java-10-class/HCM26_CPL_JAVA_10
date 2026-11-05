@@ -17,6 +17,7 @@ export interface TemplateFormValues {
   code: string;
   name: string;
   description: string;
+  technologyStack: string;
   category: string;
   level: ProjectTemplateLevel | "";
   estimatedDurationWeeks: string;
@@ -24,17 +25,14 @@ export interface TemplateFormValues {
 
 export type TemplateFieldErrors = Partial<Record<keyof TemplateFormValues, string[]>>;
 
-export const maxDescriptionWords = 1000;
-
-export function descriptionWordCount(value: string): number {
-  return value.trim() ? value.trim().split(/\s+/u).length : 0;
-}
+export const maxDescriptionLength = 1000;
 
 export function toTemplateFormValues(template?: ProjectTemplateDTO): TemplateFormValues {
   return {
     code: template?.code ?? "",
     name: template?.name ?? "",
     description: template?.description ?? "",
+    technologyStack: template?.technologyStack ?? "",
     category: template?.category ?? "",
     level: template?.level ?? "",
     estimatedDurationWeeks: template?.estimatedDurationWeeks?.toString() ?? "",
@@ -60,9 +58,10 @@ export function validateTemplateForm(values: TemplateFormValues, minimumDuration
     }
   }
   if (!values.description.trim()) errors.description = ["Description is required"];
-  else if (descriptionWordCount(values.description) > maxDescriptionWords) {
-    errors.description = ["Description must not exceed 1000 words"];
+  else if (values.description.length > maxDescriptionLength) {
+    errors.description = ["Description must not exceed 1000 characters"];
   }
+  if (values.technologyStack.trim().length > 2000) errors.technologyStack = ["Technical stack must not exceed 2000 characters"];
   if (!templateLevelOptions.some((option) => option.value === values.level)) {
     errors.level = ["Select Beginner, Intermediate or Advanced"];
   }

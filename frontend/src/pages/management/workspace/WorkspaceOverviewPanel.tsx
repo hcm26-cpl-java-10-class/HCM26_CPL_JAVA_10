@@ -2,18 +2,20 @@ import type { WorkspaceDetail } from "@/types/features/workspace";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkspaceStatusBadge } from "./workspace.shared";
-import { WorkspaceGitRepositoryPanel } from "./WorkspaceGitRepositoryPanel";
 import { WorkspaceResourcesPanel } from "./WorkspaceResourcesPanel";
+import { WorkspaceGitRepositoryPanel } from "./WorkspaceGitRepositoryPanel";
+import type { WorkspaceProjectNode } from "@/types/features/project-assignment";
 
 function information(value?: string | null) {
   return value?.trim() || "No information available";
 }
 
-export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMembers, onAccessChanged }: {
+export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMembers, onAccessChanged, selectedProject }: {
   workspace: WorkspaceDetail;
   canViewMembers: boolean;
   onViewMembers: () => void;
   onAccessChanged: () => void;
+  selectedProject?: WorkspaceProjectNode;
 }) {
   return <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
     <div className="space-y-5">
@@ -22,11 +24,12 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
         <CardContent>
           {workspace.projectId == null ? <p className="text-sm text-muted-foreground">No project linked to this workspace.</p>
             : <div className="grid min-w-0 gap-5 text-sm sm:grid-cols-2">
-              <div className="min-w-0"><p className="text-muted-foreground">Project code</p><p className="break-words">{information(workspace.projectCode)}</p></div>
-              <div className="min-w-0"><p className="text-muted-foreground">Project name</p><p className="break-words">{information(workspace.projectName)}</p></div>
-              <div className="min-w-0 sm:col-span-2"><p className="mb-2 font-medium">Description</p><p className="whitespace-pre-wrap break-words leading-7">{information(workspace.projectDescription)}</p></div>
-              <div><p className="mb-2 text-muted-foreground">Project status</p>{workspace.projectStatus
-                ? <WorkspaceStatusBadge status={workspace.projectStatus} />
+              <div className="min-w-0"><p className="text-muted-foreground">Project code</p><p className="break-words">{information(selectedProject?.code ?? workspace.projectCode)}</p></div>
+              <div className="min-w-0"><p className="text-muted-foreground">Project name</p><p className="break-words">{information(selectedProject?.name ?? workspace.projectName)}</p></div>
+              <div className="min-w-0 sm:col-span-2"><p className="mb-2 font-medium">Description</p><p className="whitespace-pre-wrap break-words leading-7">{information(selectedProject?.description ?? workspace.topic_snapshot?.description ?? workspace.projectDescription)}</p></div>
+              {selectedProject?.technologyStack && <div className="min-w-0 sm:col-span-2"><p className="text-muted-foreground">Technical stack</p><p className="break-words">{selectedProject.technologyStack}</p></div>}
+              <div><p className="mb-2 text-muted-foreground">Project status</p>{(selectedProject?.status ?? workspace.projectStatus)
+                ? <WorkspaceStatusBadge status={selectedProject?.status ?? workspace.projectStatus ?? undefined} />
                 : <p>No information available</p>}</div>
               <div className="min-w-0"><p className="text-muted-foreground">Class</p><p className="break-words">{information(workspace.projectClassName)}</p></div>
               <div className="min-w-0"><p className="text-muted-foreground">Cohort</p><p className="break-words">{information(workspace.projectCohortName)}</p></div>
@@ -39,6 +42,7 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
               workspaceId={workspace.id}
               projectId={workspace.projectId}
               teamId={workspace.teamId}
+              selectedProjectId={selectedProject?.id}
               onAccessChanged={onAccessChanged}
             />
           </div>

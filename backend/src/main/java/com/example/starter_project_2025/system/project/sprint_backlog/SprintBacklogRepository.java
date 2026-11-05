@@ -11,6 +11,7 @@ import java.util.Optional;
 
 @Repository
 public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklog, Long> {
+    List<SprintBacklog> findAllByProjectIdInAndIsActiveTrueOrderByIdAsc(Collection<Long> projectIds);
     @Query("""
             select case when count(item) > 0 then true else false end
             from SprintBacklog item left join item.sprint sprint

@@ -60,12 +60,14 @@ function categoryLabel(resource: WorkspaceResource) {
 export function WorkspaceResourcesPanel({
   workspaceId,
   projectId,
+  selectedProjectId,
   teamId,
   onAccessChanged,
   embedded = false,
 }: {
   workspaceId: number;
   projectId?: number | null;
+  selectedProjectId?: number | null;
   teamId: number;
   onAccessChanged: () => void;
   /** Render as a sub-section (used inside the Project brief card on Overview). */
@@ -83,8 +85,8 @@ export function WorkspaceResourcesPanel({
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const fileInputs = useRef<Record<number, HTMLInputElement | null>>({});
   const query = useQuery({
-    queryKey: ["workspace-resources", workspaceId, user.email, activeRole],
-    queryFn: ({ signal }) => workspaceApi.resources(workspaceId, signal),
+    queryKey: ["workspace-resources", workspaceId, user.email, activeRole, selectedProjectId],
+    queryFn: ({ signal }) => workspaceApi.resources(workspaceId, signal, selectedProjectId),
     retry: false,
     staleTime: 0,
     gcTime: 0,
@@ -121,8 +123,15 @@ export function WorkspaceResourcesPanel({
     );
   }
 
-  const documents = data.items.filter((item) => item.kind === "FILE" || item.files.length > 0);
-  const links = data.items.filter((item) => item.kind === "LINK" && item.url);
+  const groups = new Map<string, WorkspaceResource[]>();
+  for (const item of data.items) {
+    const key = `${item.origin}:${item.sourceTemplateId ?? item.projectId}`;
+    const group = groups.get(key) ?? [];
+    group.push(item);
+    groups.set(key, group);
+  }
+  const sortedGroups = [...groups.values()].sort((first, second) =>
+    Number(second[0].origin === "PARENT") - Number(first[0].origin === "PARENT"));
   const empty = data.items.length === 0;
   const noProject = data.projectId == null;
   const canManage = data.canManage;
@@ -148,15 +157,17 @@ export function WorkspaceResourcesPanel({
     if (downloading != null) return;
     setDownloading(file.id);
     try {
-      const ticket = await workspaceApi.resourceDownloadTicket(workspaceId, resource.id, file.id);
+      const { blob, fileName } = await workspaceApi.downloadResource(workspaceId, resource.id, file.id);
+      const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
-      anchor.href = ticket.url;
-      anchor.download = ticket.fileName;
+      anchor.href = url;
+      anchor.download = fileName;
       anchor.rel = "noopener";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      toast.success(`Downloading ${ticket.fileName}`);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success(`Downloading ${fileName}`);
     } catch (error) {
       toast.error(getWorkspaceError(error));
     } finally {
@@ -192,7 +203,7 @@ export function WorkspaceResourcesPanel({
     try {
       const saved = editing
         ? await workspaceApi.updateResource(workspaceId, editing.id, payload)
-        : await workspaceApi.createResource(workspaceId, payload);
+        : await workspaceApi.createResource(workspaceId, payload, selectedProjectId);
       if (file) await replaceFiles(saved.id, editing?.files ?? [], file);
       await refresh();
       setDialogOpen(false);
@@ -247,7 +258,7 @@ export function WorkspaceResourcesPanel({
   };
 
   const manageActions = (resource: WorkspaceResource, compact = false) => {
-    if (!canManage) return null;
+    if (!resource.canManage) return null;
     return (
       <div className="flex flex-wrap gap-1">
         <input
@@ -349,119 +360,57 @@ export function WorkspaceResourcesPanel({
           </CardContent>
         </Card>
       ) : (
-        <div className={embedded
-          ? "grid gap-4"
-          : "grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"}>
-          <Card>
-            <CardHeader>
-              <CardTitle>Documents</CardTitle>
-              <CardDescription>{documents.length} resource(s) with downloadable files</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {documents.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  No documents have been attached yet.
-                </p>
-              ) : (
-                documents.map((resource) => (
-                  <div key={resource.id} className="space-y-2 rounded-lg border p-4">
+        <div className="space-y-4">
+          {sortedGroups.map(group => {
+            const source = group[0];
+            const label = source.origin === "PARENT" ? "Master resources"
+              : source.origin === "SUB_PROJECT" ? "Module resources" : "Project resources";
+            return <Card key={`${source.origin}:${source.sourceTemplateId ?? source.projectId}`}>
+              <CardHeader><CardTitle>{label}{source.sourceName ? ` — ${source.sourceName}` : ""}</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {group.map(resource => {
+                  const href = resource.kind === "LINK" ? normalizeExternalUrl(resource.url) : null;
+                  return <div key={resource.id} className="space-y-2 rounded-lg border p-4">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0 space-y-1">
-                        <p className="break-words font-medium">{resource.title}</p>
-                        {resource.description && (
-                          <p className="break-words text-sm text-muted-foreground">{resource.description}</p>
-                        )}
+                        {href ? <a href={href} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 break-all font-medium hover:underline">
+                          {categoryLabel(resource).toLowerCase() === "git"
+                            ? <Link2 className="size-4 shrink-0" /> : <ExternalLink className="size-4 shrink-0" />}
+                          {resource.title}
+                        </a> : <p className="break-words font-medium">{resource.title}</p>}
+                        {resource.description && <p className="break-words text-sm text-muted-foreground">{resource.description}</p>}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="outline">{categoryLabel(resource)}</Badge>
-                        {manageActions(resource)}
+                        {manageActions(resource, resource.kind === "LINK")}
                       </div>
                     </div>
-                    {resource.files.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No file attached yet.</p>
-                    ) : (
-                      <ul className="divide-y rounded-md border">
-                        {resource.files.map((file) => (
-                          <li
-                            key={file.id}
-                            className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm"
-                          >
-                            <span className="flex min-w-0 items-center gap-2">
-                              <FileText className="size-4 shrink-0 text-muted-foreground" />
-                              <span className="truncate">{file.fileName}</span>
-                              <span className="shrink-0 text-xs text-muted-foreground">
-                                {humanSize(file.sizeBytes)}
-                              </span>
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={downloading === file.id}
-                                onClick={() => void download(resource, file)}
-                              >
-                                {downloading === file.id ? <Loader2 className="animate-spin" /> : <Download />}
-                                Download
-                              </Button>
-                              {canManage && (
-                                <Button variant="ghost" size="sm" className="text-destructive"
-                                  onClick={() => void removeFile(resource, file)}>
-                                  <X />Remove
-                                </Button>
-                              )}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    {href && <p className="break-all text-xs text-primary">{href}</p>}
+                    {resource.files.length > 0 ? <ul className="divide-y rounded-md border">
+                      {resource.files.map(file => <li key={file.id}
+                        className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <FileText className="size-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{file.fileName}</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">{humanSize(file.sizeBytes)}</span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" disabled={downloading === file.id}
+                            onClick={() => void download(resource, file)}>
+                            {downloading === file.id ? <Loader2 className="animate-spin" /> : <Download />}Download
+                          </Button>
+                          {resource.canManage && <Button variant="ghost" size="sm" className="text-destructive"
+                            onClick={() => void removeFile(resource, file)}><X />Remove</Button>}
+                        </span>
+                      </li>)}
+                    </ul> : resource.kind === "FILE" && <p className="text-sm text-muted-foreground">No file attached yet.</p>}
                     <p className="text-xs text-muted-foreground">Updated {formatDate(resource.updatedAt)}</p>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Links</CardTitle>
-              <CardDescription>Git repositories and shared documents</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {links.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  No external links have been shared yet.
-                </p>
-              ) : (
-                links.map((resource) => {
-                  const href = normalizeExternalUrl(resource.url);
-                  return (
-                    <div key={resource.id} className="space-y-2 rounded-lg border p-4 transition-colors hover:bg-muted/50">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <a
-                          href={href ?? "#"}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex min-w-0 items-center gap-2 font-medium hover:underline"
-                        >
-                          {categoryLabel(resource).toLowerCase() === "git" ? <Link2 className="size-4 shrink-0" /> : <ExternalLink className="size-4 shrink-0" />}
-                          <span className="break-all">{resource.title}</span>
-                        </a>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary">{categoryLabel(resource)}</Badge>
-                          {manageActions(resource, true)}
-                        </div>
-                      </div>
-                      {resource.description && (
-                        <p className="break-words text-sm text-muted-foreground">{resource.description}</p>
-                      )}
-                      <p className="break-all text-xs text-primary">{href ?? resource.url}</p>
-                      <p className="text-xs text-muted-foreground">Updated {formatDate(resource.updatedAt)}</p>
-                    </div>
-                  );
-                })
-              )}
-            </CardContent>
-          </Card>
+                  </div>;
+                })}
+              </CardContent>
+            </Card>;
+          })}
         </div>
       )}
 
