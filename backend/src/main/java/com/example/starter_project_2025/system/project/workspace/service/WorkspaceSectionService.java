@@ -2,8 +2,6 @@ package com.example.starter_project_2025.system.project.workspace.service;
 
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
-import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
-import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
 
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.Arrays;
 import static com.example.starter_project_2025.system.project.workspace.dto.WorkspaceSectionDtos.*;
@@ -21,12 +21,20 @@ import static com.example.starter_project_2025.system.project.workspace.dto.Work
 @Service @RequiredArgsConstructor @Transactional(readOnly = true)
 public class WorkspaceSectionService {
     private record Context(User user, Workspace workspace, Scope scope) { }
+
+    /** The workspace Kanban board always uses exactly these four statuses. */
+    private static final Set<String> BOARD_STATUS_KEYS = Set.of("TODO", "IN_PROGRESS", "REVIEW", "DONE");
+    private static final List<BoardColumn> DEFAULT_BOARD_COLUMNS = List.of(
+            new BoardColumn("TODO", "To do", true),
+            new BoardColumn("IN_PROGRESS", "In progress", true),
+            new BoardColumn("REVIEW", "Review", true),
+            new BoardColumn("DONE", "Done", true));
+
     private final WorkspaceAccessService access;
     private final WorkspaceContextService contexts;
     private final WorkspaceSectionPolicy policy;
     private final WorkspaceSectionDataSource source;
     private final ObjectMapper objectMapper;
-    private final SprintBacklogRepository sprintBacklogs;
 
     private Context context(Long id) {
         User user = access.requireUser(false);
@@ -60,7 +68,18 @@ public class WorkspaceSectionService {
         String json = context(id).workspace().getBoardColumnsConfig();
         if (json == null || json.isBlank()) return defaultBoardColumns();
         try {
-            return new BoardColumns(objectMapper.readValue(json, new TypeReference<List<BoardColumn>>() { }));
+            List<BoardColumn> stored = objectMapper.readValue(json, new TypeReference<List<BoardColumn>>() { });
+            Map<String, BoardColumn> storedByKey = new LinkedHashMap<>();
+            stored.stream()
+                    .filter(column -> BOARD_STATUS_KEYS.contains(column.key()))
+                    .forEach(column -> storedByKey.putIfAbsent(column.key(), column));
+            // Guarantee the four workflow columns, including Review for
+            // workspaces saved while the old Backlog column still existed.
+            List<BoardColumn> normalized = DEFAULT_BOARD_COLUMNS.stream()
+                    .map(column -> new BoardColumn(column.key(), column.label(),
+                            storedByKey.getOrDefault(column.key(), column).visible()))
+                    .toList();
+            return new BoardColumns(normalized);
         } catch (JsonProcessingException | RuntimeException ex) {
             return defaultBoardColumns();
         }
@@ -73,32 +92,15 @@ public class WorkspaceSectionService {
         if (!access.permitted(context.user(), "SPRINT_WRITE")
                 && !access.permitted(context.user(), "SPRINT_BACKLOG_UPDATE"))
             throw new AccessDeniedException("Sprint board update permission is required to configure the team board");
-        Set<String> allowed = Set.of("BACKLOG", "TODO", "IN_PROGRESS", "REVIEW", "DONE",
-                "CUSTOM_1", "CUSTOM_2", "CUSTOM_3", "CUSTOM_4", "CUSTOM_5");
         List<BoardColumn> columns = request.columns();
-        if (columns.stream().anyMatch(column -> !allowed.contains(column.key()))
-                || columns.stream().map(BoardColumn::key).distinct().count() != columns.size()
-                || columns.stream().map(column -> column.label().trim().toLowerCase()).distinct().count() != columns.size()
-                || columns.stream().noneMatch(BoardColumn::visible))
+        if (!columns.stream().map(BoardColumn::key).toList().equals(
+                    DEFAULT_BOARD_COLUMNS.stream().map(BoardColumn::key).toList())
+                || java.util.stream.IntStream.range(0, columns.size()).anyMatch(index ->
+                    !columns.get(index).label().equals(DEFAULT_BOARD_COLUMNS.get(index).label()))
+                || columns.stream().noneMatch(BoardColumn::visible)) {
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
-                    "Use each supported board column once and keep at least one column visible");
-        Set<String> requestedKeys = columns.stream().map(BoardColumn::key).collect(java.util.stream.Collectors.toSet());
-        if (!requestedKeys.containsAll(Set.of("BACKLOG", "TODO", "DONE"))) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
-                    "Keep Backlog, To do and Done as the workflow intake and completion columns");
-        }
-        for (String customKey : List.of("IN_PROGRESS", "REVIEW", "CUSTOM_1", "CUSTOM_2", "CUSTOM_3", "CUSTOM_4", "CUSTOM_5")) {
-            SprintBacklogStatus status = SprintBacklogStatus.valueOf(customKey);
-            if (!requestedKeys.contains(customKey)
-                    && (sprintBacklogs.existsInWorkspaceStatus(context.scope().teamId(), context.scope().projectId(), status)
-                    || "IN_PROGRESS".equals(customKey) && sprintBacklogs.existsInWorkspaceStatus(
-                            context.scope().teamId(), context.scope().projectId(), SprintBacklogStatus.BLOCKED))) {
-                throw new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.CONFLICT,
-                        "A status cannot be removed while work items in this workspace still use it");
-            }
+                    "Keep the four fixed statuses in order: TODO, IN_PROGRESS, REVIEW, DONE. Status names cannot be changed.");
         }
         try {
             context.workspace().setBoardColumnsConfig(objectMapper.writeValueAsString(columns));
@@ -109,9 +111,7 @@ public class WorkspaceSectionService {
     }
 
     private BoardColumns defaultBoardColumns() {
-        return new BoardColumns(List.of(new BoardColumn("BACKLOG", "Backlog", true),
-                new BoardColumn("TODO", "To do", true), new BoardColumn("IN_PROGRESS", "In progress", true),
-                new BoardColumn("REVIEW", "Review", true), new BoardColumn("DONE", "Done", true)));
+        return new BoardColumns(DEFAULT_BOARD_COLUMNS);
     }
     public Content read(Long id, String key) {
         Context context = context(id);

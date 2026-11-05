@@ -49,6 +49,7 @@ import {
 } from "../../sprint-backlog/sprintBacklog.constants";
 import { extractErrorMessage } from "../../sprint/hooks/useSprintPlanningBoard";
 import {
+  canMoveToStatus,
   backlogPriorityMeta,
   backlogStatusMeta,
   backlogWorkTypeMeta,
@@ -282,8 +283,9 @@ export function BacklogItemDetailSheet({
         .map((value) => workflowStatuses.find((option) => option.value === value)
           ?? SPRINT_BACKLOG_STATUS_OPTIONS.find((option) => option.value === value))
         .filter((option): option is { value: SprintBacklogStatus; label: string } => option != null)
-    : [...SPRINT_BACKLOG_STATUS_OPTIONS, ...workflowStatuses.filter((custom) => !SPRINT_BACKLOG_STATUS_OPTIONS.some((known) => known.value === custom.value))]
-        .filter((option) => draft?.status !== "DONE" || option.value === "DONE" || option.value === "REVIEW");
+    : SPRINT_BACKLOG_STATUS_OPTIONS.filter(option => currentSprintId == null
+        ? option.value === "TODO"
+        : canMoveToStatus(draft?.status ?? detail?.status ?? "TODO", option.value));
 
   const save = async (patch: Partial<SprintBacklogDTO>) => {
     if (!item || !canEdit) return;
@@ -1088,17 +1090,4 @@ export function BacklogItemDetailSheet({
 }
 
 /** Backend status -> board status (used for the colour pills only). */
-const statusToBoard = (status: SprintBacklogStatus) => {
-  switch (status) {
-    case "IN_PROGRESS":
-      return "IN_PROGRESS" as const;
-    case "REVIEW":
-      return "REVIEW" as const;
-    case "BLOCKED":
-      return "BLOCKED" as const;
-    case "DONE":
-      return "DONE" as const;
-    default:
-      return "SPRINT_BACKLOG" as const;
-  }
-};
+const statusToBoard = (status: SprintBacklogStatus) => status;

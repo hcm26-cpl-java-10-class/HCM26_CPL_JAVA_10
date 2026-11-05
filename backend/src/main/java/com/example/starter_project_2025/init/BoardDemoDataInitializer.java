@@ -179,7 +179,7 @@ public class BoardDemoDataInitializer implements CommandLineRunner {
         seedTask(project.getId(), sprint.getId(), null,
                 "DEMO-104", "Document API contract", TaskStatus.DONE, TaskPriority.LOW, 4);
         seedTask(project.getId(), sprint.getId(), null,
-                "DEMO-105", "Resolve test environment issue", TaskStatus.BLOCKED, TaskPriority.CRITICAL, 5);
+                "DEMO-105", "Resolve test environment issue", TaskStatus.REVIEW, TaskPriority.CRITICAL, 5);
         seedTask(project.getId(), null, null,
                 "DEMO-106", "Add accessibility checks", TaskStatus.TODO, TaskPriority.HIGH, 6);
         seedTask(adminProject.getId(), adminSprint.getId(), adminMembership.getId(),

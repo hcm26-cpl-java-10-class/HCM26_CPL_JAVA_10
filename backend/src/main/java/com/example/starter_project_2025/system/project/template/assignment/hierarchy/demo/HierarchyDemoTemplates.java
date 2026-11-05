@@ -46,20 +46,22 @@ public class HierarchyDemoTemplates {
         if (templates.existsByTenantIdAndCodeScopeIdAndCodeAndTemplateVersion(admin.getTenantId(), 0L, code, 1))
             throw new IllegalStateException("Reserved hierarchy demo template already exists: " + code);
         ProjectTemplate master = template(admin, code, name, null, rubric);
+        versions.createInitialVersion(master);
         files.attach(master, "architecture-spec.pdf");
         files.attach(master, "git-guideline.pdf");
         ProjectTemplate auth = template(admin, "MOD-AUTH", "Module Auth", master, rubric);
+        versions.createInitialVersion(auth);
         files.attach(auth, "auth-spec.pdf"); files.attach(auth, "auth-sample.csv");
         ProjectTemplate payment = template(admin, "MOD-PAYMENT", "Module Payment", master, rubric);
+        versions.createInitialVersion(payment);
         files.attach(payment, "payment-api.pdf"); files.attach(payment, "payment-sdk.zip");
         ProjectTemplate catalog = template(admin, "MOD-CATALOG", "Module Catalog", master, rubric);
+        versions.createInitialVersion(catalog);
         files.attach(catalog, "catalog-spec.pdf");
         List<ProjectTemplate> modules = List.of(auth, payment, catalog);
         for (ProjectTemplate module : modules) {
-            versions.createInitialVersion(module);
             if (publish) activate(module);
         }
-        versions.createInitialVersion(master);
         if (publish) activate(master);
         return new Library(master, modules);
     }

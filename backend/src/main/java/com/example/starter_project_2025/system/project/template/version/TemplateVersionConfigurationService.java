@@ -11,8 +11,6 @@ import com.example.starter_project_2025.system.project.template.*;
 import com.example.starter_project_2025.system.project.template.assignment.TemplateBriefSnapshotWriter;
 import com.example.starter_project_2025.system.project.template.content.*;
 import com.example.starter_project_2025.system.project.template.milestone.*;
-import com.example.starter_project_2025.system.project.template.resources.TemplateResource;
-import com.example.starter_project_2025.system.project.template.resources.TemplateResourceRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -55,7 +53,6 @@ public class TemplateVersionConfigurationService {
     private final EntityManager entityManager;
     private final TemplateVersionLifecycleService lifecycle;
     private final TemplateHierarchyService hierarchy;
-    private final TemplateResourceRepository resources;
 
     public TemplateVersionConfigurationResponse get(Long id) {
         User user = access.requireUser("READ");
@@ -112,8 +109,10 @@ public class TemplateVersionConfigurationService {
     @Transactional
     public TemplateVersionConfigurationResponse saveOverview(Long id, ProjectTemplateRequest request) {
         var context = editable(id, request.lockVersion());
+        boolean module = context.owner().getParentTemplateId() != null;
+        if (module) request = request.withCategory(hierarchy.masterCategory(context.owner()));
         overviewValidator.validate(request, true);
-        requireCategory(request.category(), context.user().getTenantId());
+        if (!module) requireCategory(request.category(), context.user().getTenantId());
         if (context.owner().getParentTemplateId() == null ? templates.existsByTenantIdAndCodeScopeIdAndCodeAndTemplateVersionAndIdNot(
                 context.user().getTenantId(), context.owner().getCodeScopeId(), request.code().strip(),
                 context.owner().getTemplateVersion(), context.owner().getId())
@@ -173,22 +172,11 @@ public class TemplateVersionConfigurationService {
     }
 
     @Transactional
-    public TemplateVersionConfigurationResponse saveResources(Long id, BigDecimal revision, List<Long> ids) {
-        var context = editable(id, revision);
-        var selected = resources.findAllByTemplate_IdAndIdInOrderByIdAsc(context.owner().getId(), ids);
-        if (selected.size() != ids.size()) {
-            throw new AccessDeniedException("The selected resource does not belong to this template");
-        }
-        var content = configurations.read(context.version().getContentJson());
-        content.set("resources", json.valueToTree(selected.stream().map(TemplateResource::snapshot).toList()));
-        return save(context, content);
-    }
-
-    @Transactional
     public TemplateVersionConfigurationResponse publish(Long id, TemplateActivationRequest request) {
         User actor = access.requireUser("ACTIVATE");
         var context = editable(id, request.lockVersion(), actor);
         ObjectNode content = configurations.read(context.version().getContentJson());
+        inheritCategory(context.owner(), content);
         validate(content, request.lockVersion(), context.user().getTenantId(), true, context.owner().getParentTemplateId() == null);
         hierarchy.requirePublishedModules(context.owner());
         String beforeTemplate = configurations.capture(context.owner());
@@ -216,6 +204,7 @@ public class TemplateVersionConfigurationService {
         if (version.getStatus() != ProjectTemplateVersionStatus.DRAFT) return;
         ObjectNode content = configurations.read(version.getContentJson());
         if (!canonical(content)) return;
+        inheritCategory(owner, content);
         validate(content, BigDecimal.valueOf(owner.getLockVersion()), user.getTenantId(), false, owner.getParentTemplateId() == null);
         if (owner.getStatus() == ProjectTemplateStatus.DRAFT && latest(owner, version)) {
             configurations.apply(owner, content);
@@ -227,6 +216,7 @@ public class TemplateVersionConfigurationService {
 
     private TemplateVersionConfigurationResponse save(EditContext context, ObjectNode content) {
         Map<String, Object> before = state(context.version());
+        inheritCategory(context.owner(), content);
         context.version().setContentJson(configurations.writeConfiguration(content));
         if (context.owner().getStatus() == ProjectTemplateStatus.DRAFT) {
             configurations.apply(context.owner(), content);
@@ -239,6 +229,10 @@ public class TemplateVersionConfigurationService {
         versions.saveAndFlush(context.version());
         record("UPDATE_CONFIGURATION", context, before);
         return response(context.owner(), context.version(), context.user());
+    }
+
+    private void inheritCategory(ProjectTemplate owner, ObjectNode content) {
+        if (owner.getParentTemplateId() != null) content.put("category", hierarchy.masterCategory(owner));
     }
 
     private void validate(ObjectNode content, BigDecimal revision, Long tenantId, boolean complete, boolean weighted) {

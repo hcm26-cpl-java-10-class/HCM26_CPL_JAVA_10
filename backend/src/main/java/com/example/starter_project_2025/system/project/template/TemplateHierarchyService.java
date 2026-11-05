@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -52,6 +53,37 @@ public class TemplateHierarchyService {
         return live(template, access.can(user, "UPDATE"), new HashSet<>());
     }
 
+    public String masterCategory(ProjectTemplate template) {
+        Set<Long> visited = new HashSet<>();
+        ProjectTemplate root = template;
+        while (root.getParentTemplate() != null) {
+            if (!visited.add(root.getId())) throw invalidHierarchy();
+            root = root.getParentTemplate();
+            if (!Objects.equals(root.getTenantId(), template.getTenantId())) throw invalidHierarchy();
+        }
+        return root.getCategory();
+    }
+
+    @Transactional
+    public void normalizeExistingCategories() {
+        for (ProjectTemplate module : templates.findAllByParentTemplateIsNotNullAndIsActiveTrue()) {
+            module.setCategory(masterCategory(module));
+        }
+    }
+
+    @Transactional
+    public void inheritCategory(ProjectTemplate master) {
+        inheritCategory(master, master.getCategory(), new HashSet<>());
+    }
+
+    private void inheritCategory(ProjectTemplate template, String category, Set<Long> visited) {
+        if (!visited.add(template.getId())) throw invalidHierarchy();
+        for (ProjectTemplate child : children(template)) {
+            child.setCategory(category);
+            inheritCategory(child, category, visited);
+        }
+    }
+
     public ArrayNode captureModules(ProjectTemplate template) {
         ArrayNode result = json.createArrayNode();
         for (ProjectTemplate child : children(template)) {
@@ -64,9 +96,17 @@ public class TemplateHierarchyService {
             node.put("status", child.getStatus().name());
             node.put("templateVersion", child.getTemplateVersion());
             if (published != null) node.put("versionId", published.getId());
+            inheritSnapshotCategory(node, masterCategory(template));
             result.add(node);
         }
         return result;
+    }
+
+    private void inheritSnapshotCategory(ObjectNode node, String category) {
+        node.put("category", category);
+        node.path("modules").forEach(child -> {
+            if (child instanceof ObjectNode module) inheritSnapshotCategory(module, category);
+        });
     }
 
     public void requirePublishedModules(ProjectTemplate template) {

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AssignmentModule, AssignmentTemplate, ProjectAssignmentMode, ProjectAssignmentRequest, ProjectAssignmentResult } from "@/types/features/project-assignment";
 import { WorkspaceMasterMilestonesPanel } from "../workspace/WorkspaceMasterMilestonesPanel";
-import { AssignmentTeamRoles, assignmentRoleErrors, type MemberRoleChoices } from "./AssignmentTeamRoles";
+import { AssignmentTeamRoles, assignmentMemberRoles, assignmentRoleErrors, type MemberRoleChoices } from "./AssignmentTeamRoles";
 
 const selectClass = "h-10 w-full rounded-md border bg-background px-3 text-sm disabled:opacity-50";
 function failure(error: unknown) {
@@ -46,6 +46,7 @@ function AssignmentPanel({ classId, sessionId, onAssigned }: { classId: number; 
   const [mode, setMode] = useState<ProjectAssignmentMode>("SPLIT");
   const [teamId, setTeamId] = useState("");
   const [mapping, setMapping] = useState<Record<number, string>>({});
+  const [leaderChoices, setLeaderChoices] = useState<Record<number, number | null>>({});
   const [roleChoices, setRoleChoices] = useState<Record<number, MemberRoleChoices>>({});
   const [review, setReview] = useState(false);
   const [blocked, setBlocked] = useState(false);
@@ -98,7 +99,10 @@ function AssignmentPanel({ classId, sessionId, onAssigned }: { classId: number; 
       const team = data.teams.find(value => String(value.id) === mapping[module.templateId]);
       return team ? [{ team, policy: module.rolePolicy, projectName: module.name }] : [];
     });
-  const rolesReady = roleTeams.every(({ team, policy }) => assignmentRoleErrors(team, policy, roleChoices[team.id] ?? {}).length === 0);
+  const leaderFor = (team: typeof roleTeams[number]["team"]) =>
+    team.leaderMemberId ?? (team.status === "DRAFT" ? leaderChoices[team.id] ?? null : null);
+  const rolesReady = roleTeams.every(({ team, policy }) =>
+    assignmentRoleErrors(team, policy, roleChoices[team.id] ?? {}, leaderFor(team)).length === 0);
   const ready = !!data && !preview.isError && !preview.isFetching && rolesReady && (mode === "SPLIT" ? mapped : wholeValid);
   function submit() {
     if (!ready || !data || sending.current || assignment.isPending) return;
@@ -106,8 +110,11 @@ function AssignmentPanel({ classId, sessionId, onAssigned }: { classId: number; 
       masterTemplateId: data.master.id, versionId: data.master.versionId, mode,
       ...(mode === "WHOLE" ? { teamId: Number(teamId) } : {}),
       modules: mode === "WHOLE" ? [] : data.modules.map(module => ({ moduleTemplateId: module.templateId, teamId: Number(mapping[module.templateId]) })),
-      teamRoles: roleTeams.map(({ team }) => ({ teamId: team.id, expectedVersion: team.version,
-        members: team.members.map(member => ({ memberId: member.memberId, roles: roleChoices[team.id]?.[member.memberId] ?? member.roles })) })),
+      teamRoles: roleTeams.map(({ team, policy }) => ({
+        teamId: team.id, expectedVersion: team.version, leaderMemberId: leaderFor(team),
+        members: team.members.map(member => ({ memberId: member.memberId,
+          roles: assignmentMemberRoles(member, policy, roleChoices[team.id] ?? {}, leaderFor(team)) })),
+      })),
     };
     const fingerprint = JSON.stringify(request);
     if (requestKey.current?.fingerprint !== fingerprint) requestKey.current = { fingerprint, key: crypto.randomUUID() };
@@ -170,7 +177,7 @@ function AssignmentPanel({ classId, sessionId, onAssigned }: { classId: number; 
                 : <div className="space-y-2"><Label htmlFor="master-template">Master template</Label>
                   <select id="master-template" className={selectClass} value={selected?.id ?? ""} onChange={event => {
                     setSelected(catalog.data?.find(item => item.id === Number(event.target.value)) ?? null);
-                    setMapping({}); setTeamId(""); setRoleChoices({}); assignment.reset();
+                    setMapping({}); setTeamId(""); setRoleChoices({}); setLeaderChoices({}); assignment.reset();
                   }}><option value="">Select a master template</option>{catalog.data?.map(template =>
                     <option key={template.id} value={template.id}>{template.code} · {template.name} · {template.version}</option>)}</select>
                   {catalog.data?.length === 0 && <p className="text-sm text-muted-foreground">No published master templates match this search.</p>}</div>}
@@ -216,7 +223,11 @@ function AssignmentPanel({ classId, sessionId, onAssigned }: { classId: number; 
               {roleTeams.length > 0 && <div className="space-y-3"><p className="text-sm font-medium">Member roles</p>
                 <p className="text-xs text-muted-foreground">Check roles against the selected project requirements. Role changes are saved when you confirm this assignment.</p>
                 {roleTeams.map(({ team, policy, projectName }) => <AssignmentTeamRoles key={team.id} team={team} policy={policy}
-                  projectName={projectName} choices={roleChoices[team.id] ?? {}} readOnly={review || assignment.isPending}
+                  projectName={projectName} choices={roleChoices[team.id] ?? {}} leaderId={leaderFor(team)}
+                  readOnly={review || assignment.isPending}
+                  onLeaderChange={memberId => {
+                    setLeaderChoices(previous => ({ ...previous, [team.id]: memberId })); assignment.reset();
+                  }}
                   onChange={(memberId, roles) => {
                     setRoleChoices(previous => ({ ...previous, [team.id]: { ...previous[team.id], [memberId]: roles } })); assignment.reset();
                   }} />)}

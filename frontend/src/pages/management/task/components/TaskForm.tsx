@@ -20,8 +20,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "rea
 import { toast } from "sonner";
 import {
   getTaskError,
-  maxTaskDescriptionWords,
-  taskDescriptionWordCount,
+  maxTaskDescriptionLength,
   taskPriorityOptions,
   toTaskFormValues,
   toTaskPayload,
@@ -73,9 +72,9 @@ export function TaskForm({ projectId, backlogItemId, task, onSaved, onCancel, on
   const [errors, setErrors] = useState<TaskFieldErrors>({});
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTaskError> | null>(null);
   const estimateRequired = Boolean(task?.assigneeProjectMemberId);
-  const descriptionWords = taskDescriptionWordCount(values.description);
-  const descriptionErrors = descriptionWords > maxTaskDescriptionWords
-    ? ["Description must not exceed 1000 words"] : errors.description;
+  const descriptionLength = values.description.length;
+  const descriptionErrors = descriptionLength > maxTaskDescriptionLength
+    ? ["Description must not exceed 1000 characters"] : errors.description;
   const requestRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const submittingRef = useRef(false);
 
@@ -167,6 +166,7 @@ export function TaskForm({ projectId, backlogItemId, task, onSaved, onCancel, on
             </TaskField>
             <TaskField name="description" label="Description" errors={descriptionErrors}>
               <Textarea
+                maxLength={maxTaskDescriptionLength}
                 id="task-description"
                 value={values.description}
                 rows={10}
@@ -177,8 +177,8 @@ export function TaskForm({ projectId, backlogItemId, task, onSaved, onCancel, on
                 onChange={(event) => changeField("description", event.target.value)}
               />
               <span id="task-description-count"
-                className={`text-right text-xs tabular-nums ${descriptionWords > maxTaskDescriptionWords ? "text-destructive" : "text-muted-foreground"}`}>
-                {descriptionWords.toLocaleString("en-US")} / {maxTaskDescriptionWords.toLocaleString("en-US")} words
+                className={`text-right text-xs tabular-nums ${descriptionLength > maxTaskDescriptionLength ? "text-destructive" : "text-muted-foreground"}`}>
+                {descriptionLength.toLocaleString("en-US")} / {maxTaskDescriptionLength.toLocaleString("en-US")} characters
               </span>
             </TaskField>
           </CardContent>

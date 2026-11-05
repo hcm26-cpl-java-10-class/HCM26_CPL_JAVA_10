@@ -44,6 +44,7 @@ public class AllocationReadinessService {
     public static final String ERR_TEAM_TEMPLATE_INVALID = "ERR_TEAM_TEMPLATE_INVALID";
     public static final String ERR_TEAM_CAPACITY_EXCEEDED = "ERR_TEAM_CAPACITY_EXCEEDED";
     public static final String ERR_TEAM_ROLE_REQUIRED = "ERR_TEAM_ROLE_REQUIRED";
+    public static final String ERR_TEAM_LEADER_REQUIRED = "ERR_TEAM_LEADER_REQUIRED";
     public static final String ERR_MULTI_ROLE_NOT_ALLOWED = "ERR_MULTI_ROLE_NOT_ALLOWED";
     public static final String ERR_TEAM_ROLE_QUOTA_NOT_MET = "ERR_TEAM_ROLE_QUOTA_NOT_MET";
 
@@ -91,7 +92,8 @@ public class AllocationReadinessService {
 
         List<ClassMember> activeMembers = classMemberRepository
                 .findAllByTrainingClass_IdAndStatusOrderByIdAsc(
-                        classId, ClassMemberStatus.ACTIVE);
+                        classId, ClassMemberStatus.ACTIVE).stream()
+                .filter(AllocationStudentEligibility::isEligible).toList();
 
         Set<Long> assignedMemberIds = new HashSet<>(memberRepository
                 .findAssignedMemberIdsBySessionAndTeamStatuses(
@@ -169,22 +171,34 @@ public class AllocationReadinessService {
     private List<AllocationReadinessResponse.TeamReadinessIssue> inspectTeam(
             ProjectTeam team
     ) {
+        List<ProjectMember> assignments = memberRepository.findAllByTeam_IdOrderByIdAsc(team.getId());
+        List<Long> pmIds = assignments.stream()
+                .filter(row -> ProjectMemberRole.hasRole(row.getRole(), "PM"))
+                .map(row -> row.getClassMember().getId()).toList();
+        Long leaderId = ProjectTeamLeaderService.effectiveLeader(team, assignments);
+        List<AllocationReadinessResponse.TeamReadinessIssue> issues = new ArrayList<>();
+        if (leaderId == null || !pmIds.equals(List.of(leaderId))) {
+            issues.add(issue(team, ERR_TEAM_LEADER_REQUIRED,
+                    "Nhóm cần đúng một Leader/PM trước khi công bố.", pmIds, List.of()));
+        }
         ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
-            return List.of(issue(
+            issues.add(issue(
                     team,
                     ERR_TEAM_TEMPLATE_REQUIRED,
                     "Nhóm chưa được gán đề bài dự án hợp lệ.",
                     List.of(),
                     List.of()));
+            return issues;
         }
         if (Boolean.FALSE.equals(template.getIsActive())) {
-            return List.of(issue(
+            issues.add(issue(
                     team,
                     ERR_TEAM_TEMPLATE_INVALID,
                     "Đề bài dự án đã được gán không còn hoạt động (ACTIVE).",
                     List.of(),
                     List.of()));
+            return issues;
         }
 
         ProjectTemplateConstraints.Capacity capacity;
@@ -193,17 +207,15 @@ public class AllocationReadinessService {
             capacity = ProjectTemplateConstraints.parse(objectMapper, template, null);
             policy = ProjectTemplateConstraints.parseRolePolicy(objectMapper, template);
         } catch (RuntimeException invalidTemplate) {
-            return List.of(issue(
+            issues.add(issue(
                     team,
                     ERR_TEAM_TEMPLATE_INVALID,
                     "Cấu hình đề bài dự án không hợp lệ: " + invalidTemplate.getMessage(),
                     List.of(),
                     List.of()));
+            return issues;
         }
 
-        List<ProjectMember> assignments =
-                memberRepository.findAllByTeam_IdOrderByIdAsc(team.getId());
-        List<AllocationReadinessResponse.TeamReadinessIssue> issues = new ArrayList<>();
 
         if (!capacity.accepts(assignments.size())) {
             issues.add(issue(

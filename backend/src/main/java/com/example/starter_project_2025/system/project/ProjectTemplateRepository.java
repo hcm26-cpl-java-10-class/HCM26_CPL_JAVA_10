@@ -58,6 +58,8 @@ public interface ProjectTemplateRepository
     List<ProjectTemplate> findAllByParentTemplate_IdAndTenantIdAndIsActiveTrueOrderByCodeAscIdAsc(
             Long parentTemplateId, Long tenantId);
 
+    List<ProjectTemplate> findAllByParentTemplateIsNotNullAndIsActiveTrue();
+
     boolean existsByParentTemplate_IdAndIsActiveTrue(Long parentTemplateId);
 
     @Query("select distinct t.category from ProjectTemplate t "

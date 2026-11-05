@@ -3,13 +3,11 @@ package com.example.starter_project_2025.system.project.task;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
-import java.util.regex.Pattern;
 
 @Component
 public class TaskValidator {
 
-    private static final int MAX_DESCRIPTION_WORDS = 1000;
-    private static final Pattern WORD = Pattern.compile("(?U)\\S+");
+    static final int MAX_DESCRIPTION_LENGTH = 1000;
 
     public void normalizeAndValidate(TaskDTO request, boolean updating) {
         Map<String, List<String>> errors = new LinkedHashMap<>();
@@ -19,9 +17,8 @@ public class TaskValidator {
         if (title.isEmpty() || title.length() > 250) {
             errors.put("title", List.of("Task title must contain 1 to 250 characters"));
         }
-        if (request.getDescription() != null && WORD.matcher(request.getDescription()).results()
-                .limit(MAX_DESCRIPTION_WORDS + 1L).count() > MAX_DESCRIPTION_WORDS) {
-            errors.put("description", List.of("Description must not exceed 1000 words"));
+        if (request.getDescription() != null && request.getDescription().length() > MAX_DESCRIPTION_LENGTH) {
+            errors.put("description", List.of("Description must not exceed 1000 characters"));
         }
         if (request.getProjectId() == null) {
             errors.put("projectId", List.of("Please select a project"));

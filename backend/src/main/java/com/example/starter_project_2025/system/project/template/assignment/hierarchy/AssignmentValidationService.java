@@ -95,7 +95,7 @@ public class AssignmentValidationService {
         if (edit == null) return;
         var request = new UpdateTeamRolesRequest(edit.expectedVersion(), edit.members().stream().map(member ->
                 new UpdateTeamRolesRequest.MemberRoleAssignment(member.memberId(), null, member.roles())).toList());
-        roleService.updateRolesForAssignment(session, team, request, templates.roles(node), authentication);
+        roleService.updateRolesForAssignment(session, team, request, templates.roles(node), edit.leaderMemberId(), authentication);
     }
 
     private Map<Long, Long> selectedTeams(AssignmentTemplateReader.Node master, AssignmentDtos.Request request) {
@@ -149,6 +149,12 @@ public class AssignmentValidationService {
 
     private void validateConstraints(AssignmentTemplateReader.Node node, ProjectTeam team) {
         List<ProjectMember> roster = activeMembers(team);
+        Long leader = ProjectTeamLeaderService.effectiveLeader(team, roster);
+        List<Long> pmIds = roster.stream().filter(member -> ProjectMemberRole.hasRole(member.getRole(), "PM"))
+                .map(member -> member.getClassMember().getId()).toList();
+        if (leader == null || !pmIds.equals(List.of(leader))) {
+            throw AssignmentException.invalid(team.getTeamName() + " requires exactly one Leader/PM");
+        }
         var capacity = templates.capacity(node);
         if (!capacity.accepts(roster.size())) throw AssignmentException.invalid(team.getTeamName() + " requires "
                 + capacity.window() + " active members for " + node.name());

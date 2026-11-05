@@ -96,12 +96,7 @@ export const TASK_STATUS_META: Record<
   BacklogStatus,
   { label: string; chip: string; column: string }
 > = {
-  BACKLOG: {
-    label: "To Do",
-    chip: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300",
-    column: "todo",
-  },
-  SPRINT_BACKLOG: {
+  TODO: {
     label: "To Do",
     chip: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300",
     column: "todo",
@@ -120,11 +115,6 @@ export const TASK_STATUS_META: Record<
     label: "Done",
     chip: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
     column: "done",
-  },
-  BLOCKED: {
-    label: "Blocked",
-    chip: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
-    column: "blocked",
   },
 };
 
@@ -232,9 +222,7 @@ export const completionRate = (items: SprintPlanningItem[]) => {
 };
 
 export const countByStatus = (items: SprintPlanningItem[]) => ({
-  todo: items.filter(
-    (item) => !item.status || item.status === "BACKLOG" || item.status === "SPRINT_BACKLOG",
-  ).length,
+  todo: items.filter((item) => !item.status || item.status === "TODO").length,
   inProgress: items.filter((item) => item.status === "IN_PROGRESS").length,
   review: items.filter((item) => item.status === "REVIEW").length,
   done: items.filter((item) => item.status === "DONE").length,

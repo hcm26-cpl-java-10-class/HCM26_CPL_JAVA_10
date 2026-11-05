@@ -17,4 +17,8 @@ public record ProjectTemplateRequest(
             ProjectTemplateLevel level, BigDecimal estimatedDurationWeeks, BigDecimal lockVersion) {
         this(code, name, description, category, level, estimatedDurationWeeks, lockVersion, null, null);
     }
+    public ProjectTemplateRequest withCategory(String inheritedCategory) {
+        return new ProjectTemplateRequest(code, name, description, inheritedCategory, level,
+                estimatedDurationWeeks, lockVersion, parentTemplateId, technologyStack);
+    }
 }

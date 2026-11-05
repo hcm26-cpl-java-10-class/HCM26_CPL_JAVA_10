@@ -21,7 +21,7 @@ import { TemplateModulesPanel } from "../components/TemplateModulesPanel";
 import { TemplateResourcesPanel } from "../components/TemplateResourcesPanel";
 import { TemplateVersionsPanel } from "../components/TemplateVersionsPanel";
 import { useProjectTemplateOptions } from "../hooks/useProjectTemplateOptions";
-import { descriptionWordCount, maxDescriptionWords, templateLevelLabel } from "../project-template.utils";
+import { maxDescriptionLength, templateLevelLabel } from "../project-template.utils";
 
 export function ProjectTemplateDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -42,6 +42,16 @@ export function ProjectTemplateDetailPage() {
     refetchOnReconnect: false,
   });
   const template = query.data;
+  const resourceVersions = useQuery({
+    queryKey: ["project-template-versions", "by-template", template?.id, options.user.email, options.activeRole],
+    queryFn: () => projectTemplateVersionApi.getByTemplate(template!.id),
+    enabled: !!template && tab === "resources" && options.hasPermission("PROJECT_TEMPLATE_VERSION_READ"),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const resourceVersion = resourceVersions.data?.find(version => version.isActive
+    && version.status === (template?.status === "ACTIVE" ? "PUBLISHED" : template?.status));
+
   const versionId = Number(searchParams.get("version"));
   const versionQuery = useQuery({
     queryKey: ["project-template-versions", options.user.email, options.activeRole, "configuration", versionId],
@@ -145,7 +155,7 @@ export function ProjectTemplateDetailPage() {
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h2 className="text-sm font-medium">Description</h2>
                           <span className="text-xs tabular-nums text-muted-foreground">
-                            {descriptionWordCount(template.description ?? "").toLocaleString("en-US")} / {maxDescriptionWords.toLocaleString("en-US")} words
+                            {(template.description?.length ?? 0).toLocaleString("en-US")} / {maxDescriptionLength.toLocaleString("en-US")} characters
                           </span>
                         </div>
                         <p className="mt-2 min-w-0 max-w-full whitespace-pre-wrap text-sm leading-7 text-muted-foreground [overflow-wrap:anywhere]">{template.description}</p>
@@ -185,7 +195,13 @@ export function ProjectTemplateDetailPage() {
                 </TabsContent>
                 <TabsContent value="modules"><TemplateModulesPanel templateId={template.id}
                   canCreate={!!options.data?.canCreate && !template.readOnly && template.status !== "ARCHIVED"} /></TabsContent>
-                <TabsContent value="resources"><TemplateResourcesPanel templateId={template.id} editable={canEdit} /></TabsContent>
+                <TabsContent value="resources">
+                  {!options.hasPermission("PROJECT_TEMPLATE_VERSION_READ") ? <Alert><AlertDescription>Version access is required to view resources.</AlertDescription></Alert>
+                    : resourceVersions.isPending ? <ProjectTemplateLoading />
+                    : resourceVersions.isError ? <ProjectTemplateError error={resourceVersions.error} onRetry={() => void resourceVersions.refetch()} />
+                    : resourceVersion?.id != null ? <TemplateResourcesPanel versionId={resourceVersion.id} editable={canEdit} />
+                    : <Alert><AlertDescription>Select a version in the Versions tab to view its resources.</AlertDescription></Alert>}
+                </TabsContent>
               </Tabs>}
             </>
           )}

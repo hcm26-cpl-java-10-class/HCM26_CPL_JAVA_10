@@ -25,6 +25,8 @@ import { WorkspaceProjectLogsPanel } from "./WorkspaceProjectLogsPanel";
 import { WorkspaceProjectHierarchy, flattenWorkspaceProjects } from "./WorkspaceProjectHierarchy";
 import { ProjectCompletionPanel } from "./ProjectCompletionPanel";
 import { WorkspaceMasterMilestonesPanel } from "./WorkspaceMasterMilestonesPanel";
+import { WorkspaceResourcesPanel } from "./WorkspaceResourcesPanel";
+import { WorkspaceAlertsPanel } from "@/pages/management/alerts/WorkspaceAlertsPanel";
 
 export default function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -76,7 +78,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     const resolved = sectionAccess(permissions, hasPermission);
     // Team-only workspaces own their Board through the workspace Team, so the
     // Board remains available even when legacy section permissions are absent.
-    return item.key === "sprints" && Number.isSafeInteger(context.teamId)
+    return (item.key === "sprints" || item.key === "feedback") && Number.isSafeInteger(context.teamId)
       ? { ...resolved, canRead: hasPermission("WORKSPACE_READ") || hasPermission("VIEW_PROJECT_WORKSPACE") }
       : resolved;
   }) ?? [];
@@ -123,6 +125,8 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                 : tab === "members" ? <WorkspaceMembersPanel workspaceId={workspaceId} teamId={context.teamId}
                     classId={context.classId} allocationSessionId={context.allocationSessionId} canViewMembers
                     onAccessChanged={reloadAccess} />
+                : tab === "resources" ? <WorkspaceResourcesPanel key={projectId} workspaceId={workspaceId} projectId={context.projectId}
+                    teamId={context.teamId} selectedProjectId={projectId} onAccessChanged={reloadAccess} />
                 : tab === "milestones" ? <>
                     {hierarchy.data?.assignmentId != null && (!isMaster || hierarchy.data.mode === "SPLIT") &&
                       <WorkspaceMasterMilestonesPanel workspaceId={workspaceId} onOpenMaster={selectProject} onChanged={() => void refresh()} />}
@@ -132,17 +136,17 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                   </>
                 : tab === "artifacts" ? <WorkspaceArtifactsPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
                     teamId={context.teamId} access={current} projectScoped={projectScoped} readOnly={projectReadOnly} />
-                : tab === "sprints" ? <WorkspaceTeamBoardPanel workspaceId={workspaceId} teamId={context.teamId}
+                : tab === "sprints" ? <WorkspaceTeamBoardPanel key={projectId} workspaceId={workspaceId} teamId={context.teamId}
                     projectId={projectId} readOnly={projectReadOnly}
                     canUpdate={!projectReadOnly && hasPermission("SPRINT_BACKLOG_UPDATE")}
                     canMove={!projectReadOnly && hasPermission("SPRINT_UPDATE")}
                     canDelete={!projectReadOnly && hasPermission("SPRINT_BACKLOG_DELETE")}
-                    canConfigureColumns={current.actions.configureBoard === true}
                     onCreateWorkItem={sections.find(item => item.key === "backlog")?.canRead ? () => changeTab("backlog") : undefined} />
                 : tab === "backlog" ? <WorkspaceBacklogPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
                     teamId={context.teamId} projectName={project?.name ?? context.projectName}
                     taskKeyPrefix={context.taskKeyPrefix} readOnly={projectReadOnly} />
                 : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} readOnly={projectReadOnly} />
+                : tab === "feedback" ? <WorkspaceAlertsPanel workspaceId={workspaceId} teamId={context.teamId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
                     projectId={context.projectId} teamId={context.teamId} section={tab}
                     label={WORKSPACE_SECTIONS.find(section => section.id === tab)!.label}

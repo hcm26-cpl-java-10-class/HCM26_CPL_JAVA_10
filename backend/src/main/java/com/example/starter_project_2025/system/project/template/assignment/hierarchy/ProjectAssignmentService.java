@@ -73,12 +73,13 @@ public class ProjectAssignmentService {
                 .filter(team -> Boolean.TRUE.equals(team.getIsActive()))
                 .map(team -> {
                     String reason = validation.unavailableReason(team);
-                    var roster = validation.activeMembers(team).stream().map(member -> new AssignmentDtos.Member(
+                    var activeMembers = validation.activeMembers(team);
+                    var roster = activeMembers.stream().map(member -> new AssignmentDtos.Member(
                             member.getClassMember().getId(), member.getClassMember().getUser().getFullName(),
                             member.getClassMember().getUser().getUserCode(), ProjectMemberRole.parseRoles(member.getRole()))).toList();
                     return new AssignmentDtos.Team(team.getId(), team.getTeamName(), roster.size(),
                             team.getStatus().name(), reason == null, "unfinished".equals(reason) ? "This team already has unfinished project work" : reason,
-                            team.getVersion(), roster);
+                            team.getVersion(), roster, ProjectTeamLeaderService.effectiveLeader(team, activeMembers));
                 }).toList();
         return new AssignmentDtos.Preview(new AssignmentDtos.Template(root.templateId(), root.sourceVersionId(), root.version(), root.code(), root.name()),
                 capacity.minMembers(), capacity.maxMembers(), root.content().path("milestones").size(),

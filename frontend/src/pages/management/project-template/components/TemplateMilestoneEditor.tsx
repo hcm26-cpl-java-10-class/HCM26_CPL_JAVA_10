@@ -79,7 +79,7 @@ export function TemplateMilestoneEditor({ milestone, index, count, disabled, edi
               placeholder="E.g. Requirements analysis" />
           </MilestoneField>
           <MilestoneField path={`${path}.description`} label="Description" errors={errors}>
-            <Textarea {...fieldProps("description")} rows={3} value={milestone.description}
+            <Textarea {...fieldProps("description")} maxLength={1000} rows={3} value={milestone.description}
               onChange={(event) => onChange({ description: event.target.value })} placeholder="Describe the expected outcome (optional)." />
           </MilestoneField>
           <div className="grid gap-4 sm:grid-cols-3">

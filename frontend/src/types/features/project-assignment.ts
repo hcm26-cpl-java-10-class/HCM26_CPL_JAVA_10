@@ -5,7 +5,7 @@ export interface AssignmentRolePolicy { allowMultiRole: boolean; quotas: Array<{
 export interface AssignmentMember { memberId: number; name: string; userCode: string; roles: AssignmentRole[] }
 export interface AssignmentTeam {
   id: number; name: string; memberCount: number; status: string; eligible: boolean; reason: string | null;
-  version: number; members: AssignmentMember[];
+  version: number; members: AssignmentMember[]; leaderMemberId: number | null;
 }
 export interface AssignmentModule {
   templateId: number; code: string; name: string; minMembers: number; maxMembers: number;
@@ -21,7 +21,7 @@ export interface ProjectAssignmentRequest {
   masterTemplateId: number; versionId: number; mode: ProjectAssignmentMode;
   teamId?: number;
   modules: Array<{ moduleTemplateId: number; teamId: number }>;
-  teamRoles?: Array<{ teamId: number; expectedVersion: number; members: Array<{ memberId: number; roles: AssignmentRole[] }> }>;
+  teamRoles?: Array<{ teamId: number; expectedVersion: number; leaderMemberId: number | null; members: Array<{ memberId: number; roles: AssignmentRole[] }> }>;
 }
 export interface ProjectAssignmentResult {
   assignmentId: number; mode: ProjectAssignmentMode; masterProjectId: number; assignedAt: string;

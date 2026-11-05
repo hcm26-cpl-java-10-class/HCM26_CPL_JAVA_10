@@ -97,7 +97,7 @@ class ProjectBoardServiceImplTest {
     }
 
     @Test
-    void returnsSixColumnsAndOnlyProjectBacklogAndSelectedSprintTasks() {
+    void returnsFiveColumnsAndOnlyProjectBacklogAndSelectedSprintTasks() {
         Project project = Project.builder()
                 .id(11L)
                 .tenantId(3L)
@@ -118,8 +118,7 @@ class ProjectBoardServiceImplTest {
                 task(2L, "TASK-002", 19L, TaskStatus.TODO),
                 task(3L, "TASK-003", 19L, TaskStatus.IN_PROGRESS),
                 task(4L, "TASK-004", 19L, TaskStatus.REVIEW),
-                task(5L, "TASK-005", 19L, TaskStatus.DONE),
-                task(6L, "TASK-006", 19L, TaskStatus.BLOCKED)
+                task(5L, "TASK-005", 19L, TaskStatus.DONE)
         );
 
         when(projectRepository.findById(11L)).thenReturn(Optional.of(project));
@@ -141,12 +140,12 @@ class ProjectBoardServiceImplTest {
 
         assertEquals(11L, result.projectId());
         assertEquals("Sprint 1", result.sprint().name());
-        assertEquals(6, result.columns().size());
-        assertEquals(List.of("BACKLOG", "TODO", "IN_PROGRESS", "REVIEW", "DONE", "BLOCKED"),
+        assertEquals(5, result.columns().size());
+        assertEquals(List.of("BACKLOG", "TODO", "IN_PROGRESS", "REVIEW", "DONE"),
                 result.columns().stream().map(BoardColumnResponse::key).toList());
         assertEquals(1, result.columns().get(0).count());
         assertEquals("TASK-001", result.columns().get(0).tasks().get(0).code());
-        assertEquals(List.of(1, 1, 1, 1, 1, 1),
+        assertEquals(List.of(1, 1, 1, 1, 1),
                 result.columns().stream().map(BoardColumnResponse::count).toList());
         assertEquals(List.of(), result.activityTrail());
         verify(taskRepository, never()).save(any(Task.class));
@@ -209,10 +208,10 @@ class ProjectBoardServiceImplTest {
 
         ProjectBoardResponse result = service.getBoard(11L, 19L);
 
-        assertEquals(6, result.columns().size());
-        assertEquals(List.of(0, 0, 0, 0, 0, 0),
+        assertEquals(5, result.columns().size());
+        assertEquals(List.of(0, 0, 0, 0, 0),
                 result.columns().stream().map(BoardColumnResponse::count).toList());
-        assertEquals(List.of(List.of(), List.of(), List.of(), List.of(), List.of(), List.of()),
+        assertEquals(List.of(List.of(), List.of(), List.of(), List.of(), List.of()),
                 result.columns().stream().map(BoardColumnResponse::tasks).toList());
     }
 

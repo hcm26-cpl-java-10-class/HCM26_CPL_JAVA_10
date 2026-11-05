@@ -11,8 +11,6 @@ import com.example.starter_project_2025.system.project.template.backlog.Template
 import com.example.starter_project_2025.system.project.template.backlog.TemplateBacklogItemRepository;
 import com.example.starter_project_2025.system.project.template.artifact.TemplateArtifactRequirementRepository;
 import com.example.starter_project_2025.system.project.template.milestone.*;
-import com.example.starter_project_2025.system.project.template.resources.TemplateResource;
-import com.example.starter_project_2025.system.project.template.resources.TemplateResourceRepository;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -42,7 +40,6 @@ public class TemplateConfigurationService {
     private final ProjectTemplateValidator validator;
     private final ObjectMapper json;
     private final TemplateHierarchyService hierarchy;
-    private final TemplateResourceRepository resources;
 
     public String capture(ProjectTemplate template) {
         var plan = milestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
@@ -55,7 +52,7 @@ public class TemplateConfigurationService {
         content.put("description", template.getDescription());
         content.put("technologyStack", template.getTechnologyStack());
         content.put("parentTemplateId", template.getParentTemplateId());
-        content.put("category", template.getCategory());
+        content.put("category", hierarchy.masterCategory(template));
         content.put("level", template.getLevel());
         content.put("estimatedDurationWeeks", template.getEstimatedDurationWeeks());
         content.put("constraints", parse(template.getConstraintsJson()));
@@ -63,8 +60,6 @@ public class TemplateConfigurationService {
         content.put("backlogItems", backlog.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId()).stream()
                 .map(item -> new BacklogData(item.getId(), item.getTitle(), item.getDescription(), item.getSuggestedRole())).toList());
         content.put("modules", hierarchy.captureModules(template));
-        content.put("resources", resources.findAllByTemplate_IdAndIsActiveTrueOrderByIdAsc(template.getId()).stream()
-                .map(TemplateResource::snapshot).toList());
         return write(content);
     }
 
@@ -87,12 +82,14 @@ public class TemplateConfigurationService {
     public ProjectTemplate view(ProjectTemplate owner, ProjectTemplateSnapshot version) {
         var content = read(version.getContentJson());
         var configuration = configuration(content);
+        String category = owner.getParentTemplateId() != null && version.getStatus() == ProjectTemplateVersionStatus.DRAFT
+                ? hierarchy.masterCategory(owner) : configuration.category();
         return ProjectTemplate.builder().id(owner.getId()).tenantId(owner.getTenantId())
                 .isActive(owner.getIsActive())
                 .parentTemplate(owner.getParentTemplate()).codeScopeId(owner.getCodeScopeId())
                 .technologyStack(content.path("technologyStack").isTextual() ? content.path("technologyStack").asText() : null)
                 .code(content.path("code").asText(owner.getCode())).name(content.path("name").asText(owner.getName()))
-                .description(configuration.description()).category(configuration.category()).level(configuration.level())
+                .description(configuration.description()).category(category).level(configuration.level())
                 .estimatedDurationWeeks(configuration.estimatedDurationWeeks()).templateVersion(majorVersion(version.getVersion(), owner.getTemplateVersion()))
                 .status(version.getStatus() == ProjectTemplateVersionStatus.DRAFT ? ProjectTemplateStatus.DRAFT
                         : version.getStatus() == ProjectTemplateVersionStatus.ARCHIVED ? ProjectTemplateStatus.ARCHIVED : ProjectTemplateStatus.ACTIVE)
@@ -142,21 +139,14 @@ public class TemplateConfigurationService {
         if (content.has("technologyStack")) {
             template.setTechnologyStack(content.path("technologyStack").isTextual() ? content.path("technologyStack").asText() : null);
         }
-        template.setCategory(configuration.category());
+        boolean module = template.getParentTemplateId() != null;
+        String category = module ? hierarchy.masterCategory(template) : configuration.category();
+        boolean categoryChanged = !java.util.Objects.equals(template.getCategory(), category);
+        template.setCategory(category);
+        if (!module && categoryChanged) hierarchy.inheritCategory(template);
         template.setLevel(configuration.level());
         template.setEstimatedDurationWeeks(configuration.estimatedDurationWeeks());
         template.setConstraintsJson(write(configuration.constraints() == null ? Map.of() : configuration.constraints()));
-        if (content.path("resources").isArray()) {
-            List<Long> ids = new ArrayList<>();
-            content.path("resources").forEach(item -> ids.add(item.path("id").asLong()));
-            List<TemplateResource> selected = resources.findAllByTemplate_IdAndIdInOrderByIdAsc(template.getId(), ids);
-            if (selected.size() != ids.size()) throw invalidContent();
-            List<TemplateResource> current = resources.findAllByTemplate_IdAndIsActiveTrueOrderByIdAsc(template.getId());
-            current.forEach(item -> item.setIsActive(false));
-            resources.saveAllAndFlush(current);
-            selected.forEach(item -> item.setIsActive(true));
-            resources.saveAllAndFlush(selected);
-        }
         if (configuration.milestones() != null) {
             var existing = milestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId()).stream()
                     .collect(Collectors.toMap(TemplateMilestone::getId, Function.identity()));
@@ -251,22 +241,6 @@ public class TemplateConfigurationService {
             copy.setSuggestedRole(item.suggestedRole());
             copy.setOrderIndex(index);
             backlog.save(copy);
-        }
-        if (content.path("resources").isArray()) {
-            for (JsonNode item : content.path("resources")) {
-                TemplateResource original = resources.findAllByTemplate_IdAndIdInOrderByIdAsc(source.getId(),
-                        List.of(item.path("id").asLong())).stream().findFirst().orElseThrow(this::invalidContent);
-                TemplateResource copy = new TemplateResource();
-                copy.setTemplate(template);
-                copy.setKind(original.getKind());
-                copy.setTitle(original.getTitle());
-                copy.setFileName(original.getFileName());
-                copy.setContentType(original.getContentType());
-                copy.setSizeBytes(original.getSizeBytes());
-                copy.setStorageKey(original.getStorageKey());
-                copy.setExternalUrl(original.getExternalUrl());
-                resources.save(copy);
-            }
         }
         return template;
     }

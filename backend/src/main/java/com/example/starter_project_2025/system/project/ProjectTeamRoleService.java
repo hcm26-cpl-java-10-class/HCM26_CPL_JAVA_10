@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -89,16 +90,17 @@ public class ProjectTeamRoleService {
                     "Chỉ có thể cập nhật vai trò cho nhóm DRAFT hoặc ACTIVE");
         }
 
-        applyRoleConfiguration(session, team, request, authentication, null, null);
+        applyRoleConfiguration(session, team, request, authentication, null, null, null);
     }
 
     @Transactional
     public void updateRolesForAssignment(TeamAllocationSession session, ProjectTeam team,
-            UpdateTeamRolesRequest request, ProjectTemplateConstraints.RolePolicy policy, Authentication authentication) {
+            UpdateTeamRolesRequest request, ProjectTemplateConstraints.RolePolicy policy, Long requestedLeaderId,
+            Authentication authentication) {
         scopeAuthorizationService.assertCanManageTeamMentor(authentication, session.getTrainingClass());
         if (!team.getAllocationSession().getId().equals(session.getId()))
             throw new AccessDeniedException("The team belongs to another allocation session");
-        applyRoleConfiguration(session, team, request, authentication, null, policy);
+        applyRoleConfiguration(session, team, request, authentication, null, policy, requestedLeaderId);
     }
 
     // ------------------------------------------------------------------
@@ -143,7 +145,7 @@ public class ProjectTeamRoleService {
                 team,
                 request,
                 authentication,
-                membership.getClassMember().getId(), null);
+                membership.getClassMember().getId(), null, null);
     }
 
     // ------------------------------------------------------------------
@@ -156,7 +158,8 @@ public class ProjectTeamRoleService {
             UpdateTeamRolesRequest request,
             Authentication authentication,
             Long requiredLeaderMemberId,
-            ProjectTemplateConstraints.RolePolicy assignmentPolicy
+            ProjectTemplateConstraints.RolePolicy assignmentPolicy,
+            Long requestedLeaderId
     ) {
         if (request == null || request.expectedVersion() == null) {
             throw new TeamRoleAssignmentException(
@@ -213,6 +216,25 @@ public class ProjectTeamRoleService {
         }
 
         validateTemplatePolicy(team, requestedRoles, requiredLeaderMemberId, assignmentPolicy);
+        Long leaderId = ProjectTeamLeaderService.effectiveLeader(team, assignments);
+        if (requestedLeaderId != null && !Objects.equals(leaderId, requestedLeaderId)) {
+            if (leaderId != null || team.getStatus() != ProjectTeamStatus.DRAFT
+                    || session.getStatus() != TeamAllocationSessionStatus.OPEN
+                    || !assignmentsByMemberId.containsKey(requestedLeaderId)) {
+                throw new BadRequestException("Chỉ định hoặc đổi PM bằng thao tác Chỉ định làm Leader");
+            }
+            leaderId = requestedLeaderId;
+        }
+        List<Long> pmIds = requestedRoles.entrySet().stream()
+                .filter(entry -> entry.getValue().contains(TEAM_LEADER_ROLE))
+                .map(Map.Entry::getKey).toList();
+        if (assignmentPolicy != null && leaderId == null) {
+            throw new BadRequestException("Chọn Leader/PM cho nhóm trước khi gán dự án");
+        }
+        if (leaderId == null ? !pmIds.isEmpty() : !pmIds.equals(List.of(leaderId))) {
+            throw new BadRequestException("Chỉ định hoặc đổi PM bằng thao tác Chỉ định làm Leader");
+        }
+        boolean setLeader = assignmentPolicy != null && team.getLeaderMemberId() == null;
 
         List<ProjectMember> changedAssignments = assignments.stream()
                 .filter(assignment -> !ProjectMemberRole.isValidSpec(assignment.getRole()) || !equalsRoleSpec(
@@ -220,7 +242,7 @@ public class ProjectTeamRoleService {
                                 assignment.getClassMember().getId())),
                         assignment.getRole()))
                 .toList();
-        if (changedAssignments.isEmpty()) {
+        if (changedAssignments.isEmpty() && !setLeader) {
             return;
         }
 
@@ -238,6 +260,7 @@ public class ProjectTeamRoleService {
         changedAssignments.forEach(assignment -> assignment.setRole(
                 ProjectMemberRole.formatRoles(requestedRoles.get(
                         assignment.getClassMember().getId()))));
+        if (setLeader) team.setLeaderMemberId(leaderId);
         memberRepository.saveAllAndFlush(changedAssignments);
         String afterState = serialize(snapshot(team, assignments));
 
@@ -372,6 +395,7 @@ public class ProjectTeamRoleService {
         return new TeamSnapshot(
                 team.getId(),
                 team.getVersion(),
+                team.getLeaderMemberId(),
                 assignments.stream()
                         .map(assignment -> new MemberRoleSnapshot(
                                 assignment.getClassMember().getId(),
@@ -398,6 +422,7 @@ public class ProjectTeamRoleService {
     private record TeamSnapshot(
             Long teamId,
             Long version,
+            Long leaderMemberId,
             List<MemberRoleSnapshot> members
     ) {
     }

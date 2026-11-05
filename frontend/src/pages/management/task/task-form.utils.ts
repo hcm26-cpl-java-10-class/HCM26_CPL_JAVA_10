@@ -11,22 +11,16 @@ export interface TaskFormValues {
 
 export type TaskFieldErrors = Record<string, string[] | undefined>;
 
-export const maxTaskDescriptionWords = 1000;
-
-export function taskDescriptionWordCount(value: string): number {
-  return value.trim() ? value.trim().split(/\s+/u).length : 0;
-}
+export const maxTaskDescriptionLength = 1000;
 
 export const taskStatusOptions = [
   { value: "TODO", label: "To Do" },
   { value: "IN_PROGRESS", label: "In Progress" },
   { value: "REVIEW", label: "Review" },
   { value: "DONE", label: "Done" },
-  { value: "BLOCKED", label: "Blocked" },
 ] as const;
 
-export const subtaskStatusOptions = taskStatusOptions.filter(option =>
-  option.value === "TODO" || option.value === "IN_PROGRESS" || option.value === "DONE");
+export const subtaskStatusOptions = taskStatusOptions;
 
 export const taskPriorityOptions = [
   { value: "LOW", label: "Low" },
@@ -58,8 +52,8 @@ export function validateTaskForm(values: TaskFormValues, estimateRequired = fals
   if (!title || title.length > 250) {
     errors.title = ["Task title must contain 1 to 250 characters"];
   }
-  if (taskDescriptionWordCount(values.description) > maxTaskDescriptionWords) {
-    errors.description = ["Description must not exceed 1000 words"];
+  if (values.description.length > maxTaskDescriptionLength) {
+    errors.description = ["Description must not exceed 1000 characters"];
   }
   const hours = values.estimatedHours.trim();
   if (values.deadline && Number.isNaN(new Date(values.deadline).getTime())) {

@@ -8,7 +8,9 @@ import com.example.starter_project_2025.system.project.milestone.domain.*;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
-import com.example.starter_project_2025.system.project.resources.*;
+import com.example.starter_project_2025.system.project.resources.TeamSubprojectAssignment;
+import com.example.starter_project_2025.system.project.resources.TeamSubprojectAssignmentRepository;
+import com.example.starter_project_2025.system.project.resources.project_resources.ProjectResourceProvisioningService;
 import com.example.starter_project_2025.system.project.rubric.domain.RubricVersionStatus;
 import com.example.starter_project_2025.system.project.rubric.integration.RubricTenantIdentity;
 import com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository;
@@ -46,9 +48,8 @@ public class AssignmentProjectWriter {
     private final WorkspaceRepository workspaces;
     private final WorkspaceProjectScope scope;
     private final TeamSubprojectAssignmentRepository mappings;
-    private final ProjectResourceSnapshotService resourceSnapshots;
     private final AssignmentSnapshotService snapshotWriter;
-    private final AssignmentResourceWriter resourceWriter;
+    private final ProjectResourceProvisioningService resourceWriter;
     private final AssignmentTemplateReader templateReader;
     private final TeamPublishItemService teamPublisher;
     private final CohortRepository cohorts;
@@ -59,7 +60,7 @@ public class AssignmentProjectWriter {
     public AssignmentDtos.Result create(ProjectAssignment assignment, AssignmentTemplateReader.Node master,
                                          AssignmentValidationService.Selection selection, Authentication authentication) {
         Map<Long, Project> created = new LinkedHashMap<>();
-        createBranch(master, null, null, List.of(), assignment, selection, created);
+        createBranch(master, null, null, null, assignment, selection, created);
         Project root = created.get(master.templateId());
         assignment.setMasterProjectId(root.getId());
         List<AssignmentDtos.Workspace> result = new ArrayList<>();
@@ -88,7 +89,6 @@ public class AssignmentProjectWriter {
                 assigned.add(mapping);
             }
             mappings.saveAllAndFlush(assigned);
-            resourceSnapshots.capture(workspace);
             result.add(new AssignmentDtos.Workspace(workspace.getId(), team.getId(), team.getTeamName(),
                     project.getId(), project.getName()));
         }
@@ -97,13 +97,15 @@ public class AssignmentProjectWriter {
     }
 
     private void createBranch(AssignmentTemplateReader.Node node, Project parent, Long parentSnapshotId,
-                              List<AssignmentResourceWriter.Source> ancestors, ProjectAssignment assignment,
+                              ProjectResourceProvisioningService.Source sharedResources, ProjectAssignment assignment,
                               AssignmentValidationService.Selection selection, Map<Long, Project> created) {
         ProjectTeam owner = selection.owners().get(node.templateId());
         if (owner == null && (parent != null || assignment.getMode() != AssignmentDtos.Mode.SPLIT))
             throw AssignmentException.invalid("Every module requires an assigned team");
         Long teamId = owner == null ? null : owner.getId();
-        ProjectTemplateSnapshot snapshot = snapshotWriter.capture(node, assignment, parentSnapshotId, teamId);
+        String origin = parent != null ? "SUB_PROJECT" : node.modules().isEmpty() ? "PROJECT" : "PARENT";
+        var capture = snapshotWriter.capture(node, assignment, parentSnapshotId, teamId, origin);
+        ProjectTemplateSnapshot snapshot = capture.snapshot();
         Project project = new Project();
         project.setTenant(tenants.findById(assignment.getTenantId()).orElseThrow());
         project.setClassId(assignment.getClassId());
@@ -125,12 +127,12 @@ public class AssignmentProjectWriter {
         created.put(node.templateId(), project);
         createMilestones(node, project, assignment);
         createBacklog(node, project);
-        List<AssignmentResourceWriter.Source> inherited = new ArrayList<>(ancestors);
-        inherited.add(new AssignmentResourceWriter.Source(node, parent == null
-                ? node.modules().isEmpty() ? "PROJECT" : "PARENT" : "SUB_PROJECT"));
-        resourceWriter.copy(project, assignment, inherited);
+        if (sharedResources != null) resourceWriter.provision(project, sharedResources);
+        resourceWriter.provision(project, capture.source());
+        var sharedForChildren = parent == null && assignment.getMode() == AssignmentDtos.Mode.SPLIT
+                ? capture.source() : null;
         for (var child : node.modules())
-            createBranch(child, project, snapshot.getId(), inherited, assignment, selection, created);
+            createBranch(child, project, snapshot.getId(), sharedForChildren, assignment, selection, created);
     }
 
     private void createMilestones(AssignmentTemplateReader.Node node, Project project, ProjectAssignment assignment) {

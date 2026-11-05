@@ -64,7 +64,9 @@ public class AssignmentTemplateReader {
             for (var child : content.path("modules")) {
                 if (!(child instanceof ObjectNode saved) || !saved.path("versionId").canConvertToLong())
                     throw AssignmentException.invalid("Publish every module before assigning the master");
-                children.add(node(saved.deepCopy(), saved.path("versionId").asLong(), null, tenantId, visited));
+                ObjectNode module = saved.deepCopy();
+                module.set("category", content.get("category"));
+                children.add(node(module, saved.path("versionId").asLong(), null, tenantId, visited));
             }
         }
         return new Node(owner.getId(), versionId, version == null ? source.getVersion() : version,

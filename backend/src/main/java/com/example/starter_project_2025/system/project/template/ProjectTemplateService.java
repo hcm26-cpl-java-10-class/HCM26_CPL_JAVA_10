@@ -46,6 +46,7 @@ public class ProjectTemplateService {
     private final ObjectMapper objectMapper;
     private final OutboxEventRepository events;
     private final TemplateConfigurationService configurations;
+    private final TemplateHierarchyService hierarchy;
     private final TemplateVersionLifecycleService versionLifecycle;
     /** US-07: every template owns a version chain, seeded with its v1.0 baseline. */
     private final ProjectTemplateSnapshotService snapshotService;
@@ -102,10 +103,11 @@ public class ProjectTemplateService {
     @Transactional
     public ProjectTemplateResponse create(ProjectTemplateRequest request) {
         User user = access.requireUser("CREATE");
-        validator.validate(request, false);
-        requireCategory(request.category(), user.getTenantId());
-        String code = request.code().strip();
         ProjectTemplate parent = parent(request.parentTemplateId(), user);
+        if (parent != null) request = request.withCategory(hierarchy.masterCategory(parent));
+        validator.validate(request, false);
+        if (parent == null) requireCategory(request.category(), user.getTenantId());
+        String code = request.code().strip();
         Long scope = parent == null ? 0L : parent.getId();
         if (parent == null ? templates.existsByTenantIdAndCodeScopeIdAndCodeAndTemplateVersion(user.getTenantId(), scope, code, 1)
                 : templates.existsByTenantIdAndCodeScopeIdAndCode(user.getTenantId(), scope, code)) {
@@ -127,8 +129,10 @@ public class ProjectTemplateService {
         if (template.getStatus() != ProjectTemplateStatus.DRAFT) {
             throw ProjectTemplateException.conflict("Only draft templates can be edited");
         }
+        boolean module = template.getParentTemplateId() != null;
+        if (module) request = request.withCategory(hierarchy.masterCategory(template));
         validator.validate(request, true);
-        requireCategory(request.category(), user.getTenantId());
+        if (!module) requireCategory(request.category(), user.getTenantId());
         if (!template.getLockVersion().equals(request.lockVersion().longValueExact())) {
             throw ProjectTemplateException.conflict("This template has changed. Reload it before saving your changes");
         }
@@ -144,7 +148,9 @@ public class ProjectTemplateService {
         scheduleValidator.validateDuration(request.estimatedDurationWeeks().intValueExact(),
                 milestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(id));
         String beforeState = state(template);
+        boolean categoryChanged = !java.util.Objects.equals(template.getCategory(), request.category().strip());
         apply(template, request);
+        if (!module && categoryChanged) hierarchy.inheritCategory(template);
         template = templates.saveAndFlush(template);
         configurations.refreshDraft(template);
         recordAudit(template, user, "PROJECT_TEMPLATE_UPDATED", beforeState);

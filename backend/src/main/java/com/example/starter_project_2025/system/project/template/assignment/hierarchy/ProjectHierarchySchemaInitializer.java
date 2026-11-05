@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project.template.assignment.hierarchy;
 
+import com.example.starter_project_2025.system.project.template.TemplateHierarchyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
@@ -13,6 +14,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ProjectHierarchySchemaInitializer implements CommandLineRunner {
     private final JdbcTemplate jdbc;
+    private final TemplateHierarchyService hierarchy;
 
     @Override
     public void run(String... args) {
@@ -33,5 +35,6 @@ public class ProjectHierarchySchemaInitializer implements CommandLineRunner {
                     : " ALTER COLUMN " + column + " DROP NOT NULL";
             jdbc.execute("ALTER TABLE " + table + change);
         });
+        hierarchy.normalizeExistingCategories();
     }
 }

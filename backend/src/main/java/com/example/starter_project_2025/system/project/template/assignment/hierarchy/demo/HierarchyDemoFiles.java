@@ -1,9 +1,14 @@
 package com.example.starter_project_2025.system.project.template.assignment.hierarchy.demo;
 
 import com.example.starter_project_2025.system.project.ProjectTemplate;
-import com.example.starter_project_2025.system.project.resources.ProjectResourceStorage;
-import com.example.starter_project_2025.system.project.template.resources.TemplateResource;
-import com.example.starter_project_2025.system.project.template.resources.TemplateResourceRepository;
+import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
+import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateVersionStatus;
+import com.example.starter_project_2025.system.project.resources.ResourceKind;
+import com.example.starter_project_2025.system.project.resources.TemplateResourceFileStorage;
+import com.example.starter_project_2025.system.project.resources.template_resource_files.TemplateResourceFile;
+import com.example.starter_project_2025.system.project.resources.template_resource_files.TemplateResourceFileRepository;
+import com.example.starter_project_2025.system.project.resources.template_resources.TemplateResource;
+import com.example.starter_project_2025.system.project.resources.template_resources.TemplateResourceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
@@ -24,7 +29,9 @@ public class HierarchyDemoFiles {
     private static final List<String> FILES = List.of("architecture-spec.pdf", "git-guideline.pdf",
             "auth-spec.pdf", "auth-sample.csv", "payment-api.pdf", "payment-sdk.zip", "catalog-spec.pdf", "unsupported.txt");
     private final TemplateResourceRepository resources;
-    private final ProjectResourceStorage storage;
+    private final ProjectTemplateSnapshotRepository versions;
+    private final TemplateResourceFileRepository files;
+    private final TemplateResourceFileStorage storage;
     @Value("${app.project.hierarchy-demo.samples-path:./data/hierarchy-demo/samples}")
     private String samplesPath;
 
@@ -52,17 +59,25 @@ public class HierarchyDemoFiles {
     }
 
     public void attach(ProjectTemplate template, String name) {
-        byte[] content = bytes(name);
+        var draft = versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
+                template.getId(), ProjectTemplateVersionStatus.DRAFT).orElseThrow();
+        var stored = storage.storeBytes(bytes(name), name);
         TemplateResource resource = new TemplateResource();
-        resource.setTemplate(template);
-        resource.setKind("FILE");
+        resource.setTemplateId(template.getId());
+        resource.setTemplateVersionId(draft.getId());
+        resource.setTenantId(template.getTenantId());
+        resource.setKind(ResourceKind.FILE);
         resource.setTitle(name);
-        resource.setFileName(name);
-        resource.setContentType(name.endsWith(".pdf") ? "application/pdf"
-                : name.endsWith(".csv") ? "text/csv" : "application/zip");
-        resource.setSizeBytes((long) content.length);
-        resource.setStorageKey(storage.store(content));
+        resource.setOrderIndex((int) resources.countByTemplateVersionId(draft.getId()));
         resources.saveAndFlush(resource);
+
+        TemplateResourceFile file = new TemplateResourceFile();
+        file.setResourceId(resource.getId());
+        file.setOriginalName(stored.originalName());
+        file.setContentType(stored.contentType());
+        file.setSizeBytes(stored.sizeBytes());
+        file.setStorageKey(stored.storageKey());
+        files.saveAndFlush(file);
     }
 
     private byte[] bytes(String name) {

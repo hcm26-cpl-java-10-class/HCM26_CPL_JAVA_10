@@ -14,7 +14,7 @@ import { AlertCircle, ArrowLeft, Loader2, Save } from "lucide-react";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { getTemplateError, templateLevelOptions, toTemplateFormValues, validateTemplateForm,
-  descriptionWordCount, maxDescriptionWords,
+  maxDescriptionLength,
   type TemplateFieldErrors, type TemplateFormValues } from "../project-template.utils";
 
 function TemplateField({ name, label, errors, suffix, children, required = true }: {
@@ -51,7 +51,8 @@ export function ProjectTemplateForm({ template, parentTemplate, masterTemplate, 
   const [values, setValues] = useState(() => ({ ...toTemplateFormValues(template),
     ...(!template && parentTemplate ? { category: masterTemplate?.category ?? parentTemplate.category, level: parentTemplate.level,
       estimatedDurationWeeks: String(parentTemplate.estimatedDurationWeeks), technologyStack: parentTemplate.technologyStack ?? "" } : {}) }));
-  const wordCount = descriptionWordCount(values.description);
+  const module = template?.parentTemplateId != null || parentTemplate != null;
+  const descriptionLength = values.description.length;
   const categories = [...new Set([...options.categories, ...[template?.category, masterTemplate?.category, parentTemplate?.category]
     .filter((value): value is string => !!value)])];
   const [lockVersion] = useState(template?.lockVersion);
@@ -103,7 +104,7 @@ export function ProjectTemplateForm({ template, parentTemplate, masterTemplate, 
   };
   const inputProps = (field: keyof TemplateFormValues) => ({
     id: `template-${field}`,
-    "aria-invalid": !!errors[field]?.length || field === "description" && wordCount > maxDescriptionWords,
+    "aria-invalid": !!errors[field]?.length || field === "description" && descriptionLength > maxDescriptionLength,
     "aria-describedby": `template-${field}-error${field === "description" ? " template-description-count" : ""}`,
   });
 
@@ -141,11 +142,11 @@ export function ProjectTemplateForm({ template, parentTemplate, masterTemplate, 
             </div>
             <TemplateField name="description" label="Description" errors={errors.description} suffix={
               <span id="template-description-count" role="status"
-                className={`text-xs tabular-nums ${wordCount > maxDescriptionWords ? "text-destructive" : "text-muted-foreground"}`}>
-                {wordCount.toLocaleString("en-US")} / {maxDescriptionWords.toLocaleString("en-US")} words
+                className={`text-xs tabular-nums ${descriptionLength > maxDescriptionLength ? "text-destructive" : "text-muted-foreground"}`}>
+                {descriptionLength.toLocaleString("en-US")} / {maxDescriptionLength.toLocaleString("en-US")} characters
               </span>
             }>
-              <Textarea {...inputProps("description")} rows={7} wrap="soft"
+              <Textarea {...inputProps("description")} maxLength={maxDescriptionLength} rows={7} wrap="soft"
                 className="min-w-0 max-w-full resize-y whitespace-pre-wrap [field-sizing:fixed] [overflow-wrap:anywhere]"
                 value={values.description} onChange={(event) => change("description", event.target.value)}
                 placeholder="Describe the project background, objectives and expected scope." />
@@ -157,13 +158,11 @@ export function ProjectTemplateForm({ template, parentTemplate, masterTemplate, 
             </TemplateField>
             <div className="grid gap-5 md:grid-cols-3">
               <TemplateField name="category" label="Domain / category" errors={errors.category}>
-                <Select value={values.category} onValueChange={(value) => change("category", value)} disabled={mutation.isPending}>
+                <Select value={values.category} onValueChange={(value) => change("category", value)} disabled={module || mutation.isPending}>
                   <SelectTrigger {...inputProps("category")} className="w-full"><SelectValue placeholder="Select a category" /></SelectTrigger>
                   <SelectContent>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent>
                 </Select>
-                {!template && parentTemplate && <p className="text-xs text-muted-foreground">
-                  Defaulted from master project: {masterTemplate?.category ?? parentTemplate.category}.
-                </p>}
+                {module && <p className="text-xs text-muted-foreground">Inherited from the master project.</p>}
               </TemplateField>
               <TemplateField name="level" label="Level" errors={errors.level}>
                 <Select value={values.level} onValueChange={(value) => change("level", value as ProjectTemplateLevel)} disabled={mutation.isPending}>

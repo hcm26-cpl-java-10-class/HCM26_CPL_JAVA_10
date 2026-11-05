@@ -16,11 +16,11 @@ import { minimumTemplateDurationWeeks, getTemplateError, templateLevelLabel } fr
 import { ProjectTemplateForm } from "./ProjectTemplateForm";
 import { ProjectTemplateError, ProjectTemplateLoading } from "./ProjectTemplateState";
 import { TemplateMilestonesForm } from "./TemplateMilestonesForm";
+import { TemplateResourcesPanel } from "./TemplateResourcesPanel";
 import { TemplateSampleContentForm } from "./TemplateSampleContentForm";
 import { TemplateTeamConstraintsForm } from "./TemplateTeamConstraintsForm";
 import { ProjectTemplateStatusBadge } from "./ProjectTemplateStatusBadge";
 import { TemplateModulesPanel } from "./TemplateModulesPanel";
-import { TemplateResourcesPanel } from "./TemplateResourcesPanel";
 
 export function TemplateVersionConfiguration({ versionId, editOverview = false, onChanged }: { versionId: number; editOverview?: boolean; onChanged: () => void }) {
   const { user, activeRole, hasPermission } = usePermissions();
@@ -108,6 +108,9 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
         previewImport={file => projectTemplateVersionApi.previewBacklogImport(versionId, file)}
         downloadImportTemplate={() => projectTemplateVersionApi.getBacklogImportTemplate(versionId)}
         save={async payload => remember(await projectTemplateVersionApi.saveBacklog(versionId, payload)).sampleContent} onSaved={() => undefined} /></TabsContent>
+      <TabsContent value="resources">
+        {hasPermission("PROJECT_TEMPLATE_VERSION_READ") && <TemplateResourcesPanel versionId={versionId} editable={editable} />}
+      </TabsContent>
       <TabsContent value="activity">{audit.isLoading ? <ProjectTemplateLoading /> : audit.isError ? <ProjectTemplateError error={audit.error} onRetry={() => void audit.refetch()} />
         : <Card><CardHeader><CardTitle>Version activity</CardTitle></CardHeader><CardContent>
           {!audit.data?.length ? <p className="text-sm text-muted-foreground">No recorded activity.</p> : <ul className="divide-y">{audit.data.map(item => <li key={item.id} className="grid gap-1 py-3 text-sm">
@@ -115,7 +118,6 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
           </li>)}</ul>}</CardContent></Card>}</TabsContent>
       <TabsContent value="modules"><TemplateModulesPanel templateId={template.id} versionId={versionId}
         historical={!editable} canCreate={editable && !!options.data?.canCreate} /></TabsContent>
-      <TabsContent value="resources"><TemplateResourcesPanel templateId={template.id} versionId={versionId} editable={editable} /></TabsContent>
     </Tabs>
     <Dialog open={publishOpen} onOpenChange={value => { if (!publishing) setPublishOpen(value); }}>
       <DialogContent showCloseButton={!publishing}><DialogHeader><DialogTitle>Publish {version.version}?</DialogTitle><DialogDescription>

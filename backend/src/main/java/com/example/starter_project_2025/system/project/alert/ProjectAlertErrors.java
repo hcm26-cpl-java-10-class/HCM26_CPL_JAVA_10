@@ -13,7 +13,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.dao.*;
 import jakarta.persistence.*;
 import java.util.*;
-@Slf4j @RestControllerAdvice(assignableTypes=ProjectAlertController.class) @Order(Ordered.HIGHEST_PRECEDENCE)
+@Slf4j @RestControllerAdvice(assignableTypes={ProjectAlertController.class,WorkspaceProjectAlertController.class}) @Order(Ordered.HIGHEST_PRECEDENCE)
 public class ProjectAlertErrors {
     private ResponseEntity<Map<String,Object>> response(int status,String message,Map<String,?> extra) {
         String id=TaskRequestContext.currentCorrelationId();Map<String,Object> body=new LinkedHashMap<>(extra);
@@ -28,6 +28,10 @@ public class ProjectAlertErrors {
     @ExceptionHandler(ResourceNotFoundException.class) public ResponseEntity<?> missing(ResourceNotFoundException e) {return response(404,e.getMessage(),Map.of());}
     @ExceptionHandler(AccessDeniedException.class) public ResponseEntity<?> denied(AccessDeniedException e) {return response(403,e.getMessage(),Map.of());}
     @ExceptionHandler(AuthenticationCredentialsNotFoundException.class) public ResponseEntity<?> login(AuthenticationCredentialsNotFoundException e) {return response(401,e.getMessage(),Map.of());}
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<?> status(org.springframework.web.server.ResponseStatusException e) {
+        return response(e.getStatusCode().value(),e.getReason()==null?"Unable to access this workspace":e.getReason(),Map.of());
+    }
     @ExceptionHandler({HttpMessageNotReadableException.class,MethodArgumentTypeMismatchException.class,org.springframework.validation.BindException.class})
     public ResponseEntity<?> invalid(Exception e) {return response(422,"Invalid alert request or filters",Map.of());}
     @ExceptionHandler({OptimisticLockException.class,PessimisticLockException.class,LockTimeoutException.class,
@@ -35,6 +39,6 @@ public class ProjectAlertErrors {
     public ResponseEntity<?> changed(Exception e) {return response(409,"Data changed while the alert was being prepared. Reload the list.",Map.of());}
     @ExceptionHandler(Exception.class) public ResponseEntity<?> failed(Exception e) {
         log.error("Project alert request failed, correlationId={}",TaskRequestContext.currentCorrelationId(),e);
-        return response(500,"Unable to load or queue alerts. Please try again.",Map.of());
+        return response(500,"Unable to load or send alerts. Please try again.",Map.of());
     }
 }

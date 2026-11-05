@@ -31,7 +31,7 @@ public class TemplateSampleContentValidator {
             if (item == null) { error(errors, path, "Enter the backlog item"); continue; }
             id(errors, path + ".id", item.id(), ids, false);
             text(errors, path + ".title", item.title(), 200, "Backlog title");
-            description(errors, path + ".description", item.description(), 2000);
+            description(errors, path + ".description", item.description(), 1000);
         }
         return errors;
     }

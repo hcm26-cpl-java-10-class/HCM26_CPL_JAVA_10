@@ -119,6 +119,7 @@ class ProjectTeamRoleServiceTest {
 
     @Test
     void updatesRolesAndWritesAuditAndOutboxInOneChange() {
+        team.setLeaderMemberId(19L);
         when(memberRepository.findAllByTeam_IdOrderByIdAsc(13L))
                 .thenReturn(List.of(member));
         MDC.put(CorrelationIdFilter.MDC_KEY, "role-assignment-test");
@@ -191,6 +192,7 @@ class ProjectTeamRoleServiceTest {
 
     @Test
     void recordsHistoryForDraftRoleChanges() {
+        team.setLeaderMemberId(19L);
         team.setStatus(ProjectTeamStatus.DRAFT);
         when(memberRepository.findAllByTeam_IdOrderByIdAsc(13L))
                 .thenReturn(List.of(member));

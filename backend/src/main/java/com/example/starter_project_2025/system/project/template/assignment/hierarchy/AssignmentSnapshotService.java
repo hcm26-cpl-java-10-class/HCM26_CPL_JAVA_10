@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.project.template.assignment.hier
 
 import com.example.starter_project_2025.system.project.project_template_version.*;
 import com.example.starter_project_2025.system.project.template.assignment.TemplateBriefSnapshotWriter;
+import com.example.starter_project_2025.system.project.resources.project_resources.ProjectResourceProvisioningService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -11,12 +13,18 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class AssignmentSnapshotService {
+    public record Capture(ProjectTemplateSnapshot snapshot, ProjectResourceProvisioningService.Source source) { }
+
     private final ProjectTemplateSnapshotRepository snapshots;
     private final SnapshotResourceRepository resources;
 
-    public ProjectTemplateSnapshot capture(AssignmentTemplateReader.Node node, ProjectAssignment assignment,
-                                           Long parentSnapshotId, Long teamId) {
+    private final ProjectResourceProvisioningService provisioning;
+    private final ObjectMapper json;
+
+    public Capture capture(AssignmentTemplateReader.Node node, ProjectAssignment assignment,
+                                           Long parentSnapshotId, Long teamId, String origin) {
         var content = node.content().deepCopy();
+        content.remove("resources");
         content.put("purpose", TemplateBriefSnapshotWriter.PURPOSE_TEAM_ASSIGNMENT);
         content.put("assignmentId", assignment.getId());
         content.put("assignedTeamId", teamId);
@@ -32,17 +40,16 @@ public class AssignmentSnapshotService {
                 .contentJson(content.toString()).build();
         snapshots.saveAndFlush(snapshot);
         List<SnapshotResource> copies = new ArrayList<>();
-        for (var file : content.path("resources")) {
-            if (!file.path("id").canConvertToLong() || file.path("id").asLong() <= 0)
-                throw AssignmentException.invalid("The saved resource metadata is invalid");
+        var source = provisioning.capture(node.templateId(), node.sourceVersionId(), node.name(), origin);
+        for (var item : source.resources()) {
             SnapshotResource copy = new SnapshotResource();
             copy.setTenantId(assignment.getTenantId());
             copy.setSnapshotId(snapshot.getId());
-            copy.setSourceResourceId(file.path("id").asLong());
-            copy.setContentJson(file.toString());
+            copy.setSourceResourceId(item.id());
+            copy.setContentJson(json.valueToTree(item).toString());
             copies.add(copy);
         }
         resources.saveAll(copies);
-        return snapshot;
+        return new Capture(snapshot, source);
     }
 }

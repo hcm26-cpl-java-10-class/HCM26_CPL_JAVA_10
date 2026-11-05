@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkspaceStatusBadge } from "./workspace.shared";
 import { WorkspaceResourcesPanel } from "./WorkspaceResourcesPanel";
+import { WorkspaceGitRepositoryPanel } from "./WorkspaceGitRepositoryPanel";
 import type { WorkspaceProjectNode } from "@/types/features/project-assignment";
 
 function information(value?: string | null) {
@@ -33,10 +34,20 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
               <div className="min-w-0"><p className="text-muted-foreground">Class</p><p className="break-words">{information(workspace.projectClassName)}</p></div>
               <div className="min-w-0"><p className="text-muted-foreground">Cohort</p><p className="break-words">{information(workspace.projectCohortName)}</p></div>
             </div>}
+          <div className="mt-6 border-t pt-5"><WorkspaceGitRepositoryPanel key={workspace.id} workspaceId={workspace.id} /></div>
+          <div className="mt-6 border-t pt-5">
+            <WorkspaceResourcesPanel
+              key={`overview-resources-${workspace.id}`}
+              embedded
+              workspaceId={workspace.id}
+              projectId={workspace.projectId}
+              teamId={workspace.teamId}
+              selectedProjectId={selectedProject?.id}
+              onAccessChanged={onAccessChanged}
+            />
+          </div>
         </CardContent>
       </Card>
-      <WorkspaceResourcesPanel key={workspace.id} workspaceId={workspace.id} projectId={workspace.projectId}
-        teamId={workspace.teamId} onAccessChanged={onAccessChanged} />
     </div>
     <div className="space-y-5">
       <Card><CardHeader><CardTitle>{workspace.teamName}</CardTitle></CardHeader>

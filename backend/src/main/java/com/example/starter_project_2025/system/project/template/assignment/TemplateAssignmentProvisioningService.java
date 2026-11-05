@@ -68,7 +68,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import com.example.starter_project_2025.system.project.resources.ProjectResourceSnapshotService;
 
 @Slf4j
 @Service
@@ -100,7 +99,6 @@ public class TemplateAssignmentProvisioningService {
     private final TemplateMilestoneScheduleValidator scheduleValidator;
     private final TemplateMilestoneRubrics milestoneRubrics;
     private final TemplateBriefSnapshotWriter briefSnapshots;
-    private final ProjectResourceSnapshotService resourceSnapshots;
     private final TemplateAssignmentResourceWriter assignmentResources;
     private final ObjectMapper objectMapper;
     private final jakarta.persistence.EntityManager entityManager;
@@ -142,8 +140,7 @@ public class TemplateAssignmentProvisioningService {
 
         // ---- Step 3: workspace + generated components
         Workspace workspace = ensureWorkspace(team, project, tenantId, actorId, correlationId);
-        assignmentResources.copy(project, template, snapshot);
-        resourceSnapshots.capture(workspace);
+        int inheritedResources = assignmentResources.copy(project, template, snapshot);
 
         int generatedMilestones = generateMilestones(
                 team, project, tenantId, actorId, now, milestonePlan);
@@ -152,7 +149,7 @@ public class TemplateAssignmentProvisioningService {
         recordActivity(workspace, tenantId, actorId, correlationId, ACTIVITY_WORKSPACE_GENERATED);
 
         recordProvisioning(team, project, template, snapshot, workspace,
-                generatedMilestones, generatedBacklogItems, actorId, correlationId);
+                generatedMilestones, generatedBacklogItems, inheritedResources, actorId, correlationId);
     }
 
     // ------------------------------------------------------------------
@@ -386,6 +383,7 @@ public class TemplateAssignmentProvisioningService {
                                     Workspace workspace,
                                     int milestoneCount,
                                     int backlogItemCount,
+                                    int resourceCount,
                                     Long actorId,
                                     String correlationId) {
 
@@ -402,6 +400,7 @@ public class TemplateAssignmentProvisioningService {
         state.put("workspaceId", workspace.getId());
         state.put("milestones", milestoneCount);
         state.put("backlogItems", backlogItemCount);
+        state.put("resources", resourceCount);
         state.put("members", roster(team));
 
         String payload;

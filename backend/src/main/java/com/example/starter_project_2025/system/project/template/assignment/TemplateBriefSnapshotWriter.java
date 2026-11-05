@@ -11,8 +11,6 @@ import com.example.starter_project_2025.system.project.template.milestone.Templa
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateRubricCriterion;
 import com.example.starter_project_2025.system.project.template.TemplateHierarchyService;
-import com.example.starter_project_2025.system.project.template.resources.TemplateResource;
-import com.example.starter_project_2025.system.project.template.resources.TemplateResourceRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
@@ -52,7 +50,6 @@ public class TemplateBriefSnapshotWriter {
     private final TemplateMilestoneRepository templateMilestones;
     private final TemplateBacklogItemRepository templateBacklogItems;
     private final ObjectMapper objectMapper;
-    private final TemplateResourceRepository resources;
     private final TemplateHierarchyService hierarchy;
 
     /**
@@ -149,11 +146,8 @@ public class TemplateBriefSnapshotWriter {
         content.put("backlogItems", backlog.stream().map(this::backlogItem).toList());
         Object sourceContent = source == null ? null : readJsonOrNull(source.getContentJson());
         if (sourceContent instanceof com.fasterxml.jackson.databind.JsonNode published) {
-            content.put("resources", published.path("resources").isArray() ? published.path("resources") : List.of());
             content.put("modules", published.path("modules").isArray() ? published.path("modules") : List.of());
         } else if (source == null) {
-            content.put("resources", resources.findAllByTemplate_IdAndIsActiveTrueOrderByIdAsc(template.getId()).stream()
-                    .map(TemplateResource::snapshot).toList());
             content.put("modules", hierarchy.captureModules(template));
         }
 

@@ -126,7 +126,7 @@ public class WorkspaceAccessService {
                 || "ADMIN".equals(role.getName())
                 || "PO".equals(role.getName())));
         return admin || (team.getAssignedMentorId() != null && team.getAssignedMentorId().equals(user.getId()))
-                || members.existsByTeam_IdAndIsActiveTrueAndClassMember_TrainingClass_IdAndClassMember_User_IdAndClassMember_Status(
+                || members.existsActiveMembership(
                         team.getId(), team.getTrainingClass().getId(), user.getId(),
                         com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE)
                 || classScope.canManageClass(SecurityContextHolder.getContext().getAuthentication(),

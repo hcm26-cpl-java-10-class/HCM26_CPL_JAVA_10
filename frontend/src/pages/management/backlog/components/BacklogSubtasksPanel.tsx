@@ -83,7 +83,7 @@ export function BacklogSubtasksPanel({ backlogId, readOnly = false }: { backlogI
       {!readOnly && hasPermission("TASK_CREATE") && data && !error && <Button size="sm" variant="outline" onClick={() => setEditing({})}>
         <Plus className="size-3.5" />Add subtask</Button>}
     </div>
-    <p className="text-xs text-muted-foreground">To Do ↔ In Progress ↔ Done. Subtask status is managed separately from the backlog item.</p>
+    <p className="text-xs text-muted-foreground">To Do ↔ In Progress ↔ Review ↔ Done. Subtask status is managed separately from the backlog item.</p>
     {query.isPending && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Loading subtasks...</p>}
     {error && <Alert variant="destructive"><AlertDescription>
       {Object.values(error.fieldErrors).flat()[0] ?? error.message}

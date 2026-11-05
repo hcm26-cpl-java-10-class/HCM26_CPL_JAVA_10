@@ -1,5 +1,6 @@
 import axiosInstance from "@/api/axios";
 import type { WorkspaceCandidateItem, WorkspaceCreateRequest, WorkspaceDetail, WorkspaceResponse, WorkspaceProjectOption, WorkspaceMember, WorkspaceNavigation, WorkspaceBoardColumn, WorkspaceSectionKey, WorkspaceSectionContent, WorkspaceSectionItem, SectionCreate, SectionReview, ProjectLog, ProjectLogCreateRequest, ProjectLogFilters, ProjectLogPage, ProjectLogOptions, ProjectLogAudit } from "@/types/features/workspace";
+import type { WorkspaceResource, WorkspaceResourceCollection, WorkspaceResourceDownloadTicket, WorkspaceResourceFile, WorkspaceResourcePayload } from "@/types/features/workspace-resource";
 
 export const workspaceApi = {
   navigation: async (id: number, signal?: AbortSignal) =>
@@ -10,6 +11,41 @@ export const workspaceApi = {
     (await axiosInstance.put<{ columns: WorkspaceBoardColumn[] }>(`/workspaces/${id}/board-columns`, { columns })).data.columns,
   section: async (id: number, key: WorkspaceSectionKey, signal?: AbortSignal) =>
     (await axiosInstance.get<WorkspaceSectionContent>("/workspaces/" + id + "/" + key, { signal })).data,
+  /** US-RES-004: project resources visible to the active team. */
+  resources: async (id: number, signal?: AbortSignal, projectId?: number | null): Promise<WorkspaceResourceCollection> =>
+    (await axiosInstance.get<WorkspaceResourceCollection>(`/workspaces/${id}/resources`, { signal, params: { projectId } })).data,
+  /** US-RES-003: adds a resource to the workspace project. */
+  createResource: async (id: number, payload: WorkspaceResourcePayload, projectId?: number | null): Promise<WorkspaceResource> =>
+    (await axiosInstance.post<WorkspaceResource>(`/workspaces/${id}/resources`, payload, { params: { projectId } })).data,
+  /** US-RES-003: edits the display fields of one workspace resource. */
+  updateResource: async (id: number, resourceId: number, payload: WorkspaceResourcePayload): Promise<WorkspaceResource> =>
+    (await axiosInstance.put<WorkspaceResource>(`/workspaces/${id}/resources/${resourceId}`, payload)).data,
+  /** US-RES-003: removes (soft-deletes) one workspace resource. */
+  deleteResource: async (id: number, resourceId: number): Promise<void> => {
+    await axiosInstance.delete(`/workspaces/${id}/resources/${resourceId}`);
+  },
+  /** US-RES-003: uploads / replaces a document of one workspace resource. */
+  uploadResourceFile: async (id: number, resourceId: number, file: File): Promise<WorkspaceResourceFile> => {
+    const form = new FormData();
+    form.append("file", file);
+    return (await axiosInstance.post<WorkspaceResourceFile>(
+      `/workspaces/${id}/resources/${resourceId}/files`,
+      form,
+      { headers: { "Content-Type": undefined } },
+    )).data;
+  },
+  /** US-RES-003: removes one attached document from a workspace resource. */
+  deleteResourceFile: async (id: number, resourceId: number, fileId: number): Promise<void> => {
+    await axiosInstance.delete(`/workspaces/${id}/resources/${resourceId}/files/${fileId}`);
+  },
+  /** Requests the short-lived signed URL of one attached document. */
+  downloadResource: async (id: number, resourceId: number, fileId: number) => {
+    const ticket = (await axiosInstance.get<WorkspaceResourceDownloadTicket>(
+      `/workspaces/${id}/resources/${resourceId}/files/${fileId}/download-ticket`,
+    )).data;
+    const response = await axiosInstance.get<Blob>(ticket.url, { responseType: "blob" });
+    return { blob: response.data, fileName: ticket.fileName };
+  },
   createSectionItem: async (id: number, path: string, input: SectionCreate) =>
     (await axiosInstance.post<WorkspaceSectionItem>("/workspaces/" + id + "/" + path, input)).data,
   updateTask: async (id: number, taskId: string, input: SectionCreate) =>
