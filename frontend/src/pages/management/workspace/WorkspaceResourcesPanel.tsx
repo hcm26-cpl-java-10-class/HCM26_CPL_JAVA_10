@@ -8,11 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import ConfirmDialog from "@/components/ui/confirmdialog";
 import type {
   WorkspaceResource,
+  WorkspaceResourceKind,
   WorkspaceResourceFile,
   WorkspaceResourcePayload,
 } from "@/types/features/workspace-resource";
 import {
   BookOpen,
+  CloudUpload,
   Download,
   ExternalLink,
   FileText,
@@ -68,7 +70,7 @@ export function WorkspaceResourcesPanel({
   projectId?: number | null;
   teamId: number;
   onAccessChanged: () => void;
-  /** Render as a sub-section (used inside the Project brief card on Overview). */
+  /** Compact section rendered inside its own card on Overview. */
   embedded?: boolean;
 }) {
   const { user, activeRole } = usePermissions();
@@ -76,6 +78,7 @@ export function WorkspaceResourcesPanel({
   const [downloading, setDownloading] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<WorkspaceResource | null>(null);
+  const [initialKind, setInitialKind] = useState<WorkspaceResourceKind>("LINK");
   const [saving, setSaving] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<WorkspaceResource | null>(null);
@@ -133,6 +136,7 @@ export function WorkspaceResourcesPanel({
   };
 
   const openCreate = () => {
+    setInitialKind("LINK");
     setEditing(null);
     setDialogError(null);
     setDialogOpen(true);
@@ -281,22 +285,19 @@ export function WorkspaceResourcesPanel({
   ) : null;
 
   return (
-    <div className={embedded ? "space-y-4" : "space-y-5"}>
+    <div className={embedded ? "min-w-0" : "space-y-5"}>
       {embedded ? (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="flex items-center gap-2 font-semibold"><BookOpen className="size-4 text-primary" />Resources</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-slate-50/40 px-4 py-3.5 dark:bg-muted/20 sm:px-5">
+            <div className="flex min-w-0 items-center gap-2.5"><span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400"><FolderOpen className="size-4" /></span><div className="space-y-1"><h3 className="flex flex-wrap items-center gap-2 text-sm font-semibold leading-5">Resources (Tài nguyên tài liệu){!empty && <Badge variant="secondary">{data.items.length}</Badge>}</h3><p className="text-[11px] leading-4 text-muted-foreground">{canManage ? `Upload limits · up to ${humanSize(data.maxFileBytes)} per file` : "Tài liệu và liên kết được chia sẻ với nhóm"}</p></div></div>
             <div className="flex flex-wrap items-center gap-2">
               {canManage && (
-                <Button size="sm" onClick={openCreate}><Plus />Add resource</Button>
+                <Button size="sm" className="border border-transparent bg-black text-white hover:bg-black/85 dark:border-slate-600" onClick={openCreate}><Plus />Add resource</Button>
               )}
               <Button variant="outline" size="sm" disabled={query.isFetching} onClick={() => void query.refetch()}>
                 <RefreshCw className={query.isFetching ? "animate-spin" : undefined} />Refresh
               </Button>
             </div>
           </div>
-          {manageHint}
-        </div>
       ) : (
         <Card>
           <CardHeader>
@@ -325,7 +326,14 @@ export function WorkspaceResourcesPanel({
         </Card>
       )}
 
-      {noProject ? (
+      <div className={embedded ? "p-4 sm:p-5" : undefined}>
+      {embedded && (noProject || empty) ? (
+        <div className="flex flex-col items-center gap-3 px-2 py-6 text-center">
+          <span className="flex size-12 items-center justify-center rounded-full border bg-slate-50 text-slate-400 dark:bg-muted/30 dark:text-muted-foreground">{noProject ? <BookOpen className="size-5" /> : <FolderOpen className="size-5" />}</span>
+          <div className="max-w-md space-y-1"><p className="text-sm font-semibold">{noProject ? "No project linked yet" : "No resources yet"}</p><p className="text-xs leading-5 text-muted-foreground">{noProject ? "Link a project to view its learning resources." : canManage ? "Add a link or upload a document to share with your team and mentor." : "Documents and links shared with your team will appear here."}</p></div>
+          {!noProject && canManage && <Button type="button" size="sm" variant="secondary" onClick={() => { openCreate(); setInitialKind("FILE"); }}><CloudUpload className="size-4" />Upload file now</Button>}
+        </div>
+      ) : noProject ? (
         <Card>
           <CardContent>
             <WorkspaceEmptyState
@@ -350,21 +358,21 @@ export function WorkspaceResourcesPanel({
         </Card>
       ) : (
         <div className={embedded
-          ? "grid gap-4"
+          ? "grid items-start gap-5 lg:grid-cols-2"
           : "grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"}>
-          <Card>
-            <CardHeader>
-              <CardTitle>Documents</CardTitle>
+          <Card className={embedded ? "gap-3 rounded-none border-0 py-0 shadow-none" : undefined}>
+            <CardHeader className={embedded ? "px-0" : undefined}>
+              <CardTitle className={embedded ? "text-sm" : undefined}>Documents</CardTitle>
               <CardDescription>{documents.length} resource(s) with downloadable files</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className={embedded ? "space-y-3 px-0" : "space-y-4"}>
               {documents.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
+                <p className={embedded ? "text-sm text-muted-foreground" : "py-6 text-center text-sm text-muted-foreground"}>
                   No documents have been attached yet.
                 </p>
               ) : (
                 documents.map((resource) => (
-                  <div key={resource.id} className="space-y-2 rounded-lg border p-4">
+                  <div key={resource.id} className={`min-w-0 space-y-2 rounded-lg border ${embedded ? "p-3" : "p-4"}`}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0 space-y-1">
                         <p className="break-words font-medium">{resource.title}</p>
@@ -421,21 +429,21 @@ export function WorkspaceResourcesPanel({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Links</CardTitle>
+          <Card className={embedded ? "gap-3 rounded-none border-0 py-0 shadow-none" : undefined}>
+            <CardHeader className={embedded ? "px-0" : undefined}>
+              <CardTitle className={embedded ? "text-sm" : undefined}>Links</CardTitle>
               <CardDescription>Git repositories and shared documents</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className={embedded ? "space-y-3 px-0" : "space-y-3"}>
               {links.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
+                <p className={embedded ? "text-sm text-muted-foreground" : "py-6 text-center text-sm text-muted-foreground"}>
                   No external links have been shared yet.
                 </p>
               ) : (
                 links.map((resource) => {
                   const href = normalizeExternalUrl(resource.url);
                   return (
-                    <div key={resource.id} className="space-y-2 rounded-lg border p-4 transition-colors hover:bg-muted/50">
+                    <div key={resource.id} className={`min-w-0 space-y-2 rounded-lg border transition-colors hover:bg-muted/50 ${embedded ? "p-3" : "p-4"}`}>
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <a
                           href={href ?? "#"}
@@ -464,11 +472,13 @@ export function WorkspaceResourcesPanel({
           </Card>
         </div>
       )}
+      </div>
 
       <WorkspaceResourceDialog
         open={dialogOpen}
         onOpenChange={(value) => { if (!saving) setDialogOpen(value); }}
         resource={editing}
+        initialKind={initialKind}
         collection={data}
         saving={saving}
         error={dialogError}

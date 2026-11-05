@@ -5,9 +5,10 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { WorkspaceOverviewPanel } from "./WorkspaceOverviewPanel";
 import { WorkspaceSectionState, sectionForbidden } from "./WorkspaceSectionState";
 
-export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canViewMembers, onViewMembers,
+export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canViewMembers, onViewMembers, onViewAccess,
   onAccessChanged }: {
   workspaceId: number; projectId?: number | null; teamId: number; canViewMembers: boolean; onViewMembers: () => void;
+  onViewAccess: () => void;
   onAccessChanged: () => void;
 }) {
   const { user, activeRole } = usePermissions();
@@ -25,6 +26,6 @@ export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canVi
   if (!workspace || workspace.id !== workspaceId || workspace.teamId !== teamId || workspace.projectId !== projectId)
     return <WorkspaceSectionState error={new Error("Overview context does not match this workspace.")} retry={() => void query.refetch()} />;
   return <WorkspaceOverviewPanel workspace={workspace}
-    canViewMembers={canViewMembers && workspace.can_view_members} onViewMembers={onViewMembers}
+    canViewMembers={canViewMembers && workspace.can_view_members} onViewMembers={onViewMembers} onViewAccess={onViewAccess}
     onAccessChanged={onAccessChanged} />;
 }
