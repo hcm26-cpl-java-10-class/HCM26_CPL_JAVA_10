@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Streams a stored document for a valid, short-lived signed token.
+ * Streams a document for the authenticated member who requested the signed token.
  * <p>
  * The token carries the workspace, resource and file identifiers plus an
  * expiry timestamp and an HMAC signature, so the raw storage path never

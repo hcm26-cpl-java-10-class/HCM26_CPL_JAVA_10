@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { workspaceApi } from "@/api/features/workspace.api";
+import { projectAssignmentApi } from "@/api/features/project-assignment.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,9 @@ import { sectionAccess } from "./workspace.section-access";
 import { WorkspaceTeamBoardPanel } from "./WorkspaceTeamBoardPanel";
 import { WorkspaceBacklogPanel } from "./WorkspaceBacklogPanel";
 import { WorkspaceProjectLogsPanel } from "./WorkspaceProjectLogsPanel";
+import { WorkspaceProjectHierarchy, flattenWorkspaceProjects } from "./WorkspaceProjectHierarchy";
+import { ProjectCompletionPanel } from "./ProjectCompletionPanel";
+import { WorkspaceMasterMilestonesPanel } from "./WorkspaceMasterMilestonesPanel";
 import { WorkspaceResourcesPanel } from "./WorkspaceResourcesPanel";
 import { WorkspaceAlertsPanel } from "@/pages/management/alerts/WorkspaceAlertsPanel";
 
@@ -52,9 +56,28 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     }, { replace: true });
   }
   const context = navigation.data?.workspaceId === workspaceId ? navigation.data : undefined;
+  const hierarchy = useQuery({
+    queryKey: ["workspace-project-hierarchy", workspaceId, user.email, activeRole],
+    queryFn: ({ signal }) => projectAssignmentApi.workspace(workspaceId, signal),
+    enabled: validId && navigation.isSuccess, retry: false, staleTime: 0,
+  });
+  const projects = flattenWorkspaceProjects(hierarchy.data?.projects ?? []).filter(project => project.assigned);
+  const requestedProject = params.get("project");
+  const project = projects.find(item => item.id === (requestedProject ? Number(requestedProject) : context?.projectId));
+  const invalidProject = requestedProject !== null && hierarchy.isSuccess && !project;
+  const projectId = project?.id ?? context?.projectId;
+  const projectReadOnly = !!hierarchy.data?.readOnly || ["COMPLETED", "CANCELLED"].includes(project?.status ?? context?.projectStatus ?? "");
+  const projectScoped = hierarchy.data?.assignmentId != null || !!hierarchy.data?.readOnly;
+  const isMaster = hierarchy.data?.assignmentId != null && project?.parentProjectId == null;
+  const sharedMasterSelected = isMaster && hierarchy.data?.mode === "SPLIT";
+  function selectProject(projectId: number) {
+    setParams(previous => { const next = new URLSearchParams(previous); next.set("project", String(projectId)); return next; }, { replace: true });
+  }
   const sections = context?.sections.map(item => {
-    const resolved = sectionAccess(item, hasPermission);
-    // Board and received Alerts use the workspace Team's access boundary.
+    const permissions = projectReadOnly ? { ...item, actions: Object.fromEntries(Object.keys(item.actions).map(action => [action, false])) } : item;
+    const resolved = sectionAccess(permissions, hasPermission);
+    // Team-only workspaces own their Board through the workspace Team, so the
+    // Board remains available even when legacy section permissions are absent.
     return (item.key === "sprints" || item.key === "feedback") && Number.isSafeInteger(context.teamId)
       ? { ...resolved, canRead: hasPermission("WORKSPACE_READ") || hasPermission("VIEW_PROJECT_WORKSPACE") }
       : resolved;
@@ -64,8 +87,8 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const denied = blocked === tab || !current?.canRead;
   const validContext = context && Number.isSafeInteger(context.teamId);
   async function refresh() {
-    await navigation.refetch();
-    await Promise.all(["workspace-detail", "workspace-members", "workspace-section"].map(key =>
+    await Promise.all([navigation.refetch(), hierarchy.refetch()]);
+    await Promise.all(["workspace-detail", "workspace-members", "workspace-section", "workspace-resources"].map(key =>
       queryClient.invalidateQueries({ queryKey: [key, workspaceId] })));
   }
   return <MainLayout pathName={{ management: "Management", workspaces: "Workspace",
@@ -75,15 +98,20 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
         <Button variant="outline" asChild><Link to="/management/workspaces/candidates"><ArrowLeft />Workspace list</Link></Button>
         <Button variant="outline" disabled={!validId || navigation.isFetching} onClick={() => void refresh()}><RefreshCw />Refresh access</Button>
       </div>
-      {!validId || navigation.isError || navigation.isPending || !validContext
-        ? <WorkspaceSectionState loading={validId && navigation.isPending} denied={sectionForbidden(navigation.error)}
-            error={navigation.error} retry={() => void navigation.refetch()} />
+      {invalidProject ? <p role="alert" className="rounded-lg border p-5 text-destructive">The selected project is outside this workspace.</p>
+        : !validId || navigation.isError || navigation.isPending || hierarchy.isError || hierarchy.isPending || !validContext
+        ? <WorkspaceSectionState loading={validId && (navigation.isPending || hierarchy.isPending)} denied={sectionForbidden(navigation.error ?? hierarchy.error)}
+            error={navigation.error ?? hierarchy.error} retry={() => void refresh()} />
         : <>
           <Card><CardHeader><div className="flex items-center justify-between gap-3">
             <div className="space-y-2"><Badge variant="outline">{context.projectCode ?? "TEAM-ONLY"}</Badge>
               <CardTitle>{context.projectName ?? "Team workspace"}</CardTitle><p className="text-sm text-muted-foreground">{context.teamName}</p></div>
             {context.projectStatus && <WorkspaceStatusBadge status={context.projectStatus} />}
           </div></CardHeader></Card>
+          {hierarchy.data && <WorkspaceProjectHierarchy data={hierarchy.data} selectedId={projectId} onSelect={selectProject} />}
+          {projectScoped && projectId && !sharedMasterSelected && <ProjectCompletionPanel key={`${projectId}:${context.teamId}`} workspaceId={workspaceId}
+            projectId={projectId} teamId={context.teamId} readOnly={projectReadOnly} onChanged={() => void refresh()}
+            title={`${isMaster ? "Master" : "Module"} completion — ${project?.name ?? context.projectName}`} />}
           <Tabs value={tab} onValueChange={changeTab} className="gap-5">
             <div className="overflow-x-auto border-b pb-1"><TabsList variant="line" aria-label="Workspace sections"
               className="w-max min-w-full justify-start">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) =>
@@ -91,27 +119,33 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                 className="gap-2 px-4 py-2"><Icon />{label}</TabsTrigger>)}</TabsList></div>
             <TabsContent key={tab} value={tab} className="space-y-5">
               {denied || !current ? <WorkspaceSectionState denied retry={reloadAccess} />
-                : tab === "overview" ? <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId}
+                : tab === "overview" ? <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId} selectedProject={projectScoped ? project : undefined}
                     teamId={context.teamId} canViewMembers={!!members?.canRead} onViewMembers={() => changeTab("members")}
                     onAccessChanged={reloadAccess} />
                 : tab === "members" ? <WorkspaceMembersPanel workspaceId={workspaceId} teamId={context.teamId}
                     classId={context.classId} allocationSessionId={context.allocationSessionId} canViewMembers
                     onAccessChanged={reloadAccess} />
-                : tab === "resources" ? <WorkspaceResourcesPanel workspaceId={workspaceId} projectId={context.projectId}
-                    teamId={context.teamId} onAccessChanged={reloadAccess} />
-                : tab === "milestones" ? <WorkspaceMilestonesPanel workspaceId={workspaceId} projectId={context.projectId}
-                    teamId={context.teamId} access={current} />
-                : tab === "artifacts" ? <WorkspaceArtifactsPanel workspaceId={workspaceId} projectId={context.projectId}
-                    teamId={context.teamId} access={current} />
-                : tab === "sprints" ? <WorkspaceTeamBoardPanel teamId={context.teamId}
-                    canUpdate={hasPermission("SPRINT_BACKLOG_UPDATE")}
-                    canMove={hasPermission("SPRINT_UPDATE")}
-                    canDelete={hasPermission("SPRINT_BACKLOG_DELETE")}
+                : tab === "resources" ? <WorkspaceResourcesPanel key={projectId} workspaceId={workspaceId} projectId={context.projectId}
+                    teamId={context.teamId} selectedProjectId={projectId} onAccessChanged={reloadAccess} />
+                : tab === "milestones" ? <>
+                    {hierarchy.data?.assignmentId != null && (!isMaster || hierarchy.data.mode === "SPLIT") &&
+                      <WorkspaceMasterMilestonesPanel workspaceId={workspaceId} onOpenMaster={selectProject} onChanged={() => void refresh()} />}
+                    {!sharedMasterSelected && <WorkspaceMilestonesPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
+                      teamId={context.teamId} access={current} projectScoped={projectScoped} readOnly={projectReadOnly}
+                      title={hierarchy.data?.assignmentId != null ? `${isMaster ? "Master" : "Module"} milestones — ${project?.name ?? context.projectName}` : undefined} />}
+                  </>
+                : tab === "artifacts" ? <WorkspaceArtifactsPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
+                    teamId={context.teamId} access={current} projectScoped={projectScoped} readOnly={projectReadOnly} />
+                : tab === "sprints" ? <WorkspaceTeamBoardPanel key={projectId} workspaceId={workspaceId} teamId={context.teamId}
+                    projectId={projectId} readOnly={projectReadOnly}
+                    canUpdate={!projectReadOnly && hasPermission("SPRINT_BACKLOG_UPDATE")}
+                    canMove={!projectReadOnly && hasPermission("SPRINT_UPDATE")}
+                    canDelete={!projectReadOnly && hasPermission("SPRINT_BACKLOG_DELETE")}
                     onCreateWorkItem={sections.find(item => item.key === "backlog")?.canRead ? () => changeTab("backlog") : undefined} />
-                : tab === "backlog" ? <WorkspaceBacklogPanel projectId={context.projectId}
-                    teamId={context.teamId} projectName={context.projectName}
-                    taskKeyPrefix={context.taskKeyPrefix} />
-                : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} />
+                : tab === "backlog" ? <WorkspaceBacklogPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
+                    teamId={context.teamId} projectName={project?.name ?? context.projectName}
+                    taskKeyPrefix={context.taskKeyPrefix} readOnly={projectReadOnly} />
+                : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} readOnly={projectReadOnly} />
                 : tab === "feedback" ? <WorkspaceAlertsPanel workspaceId={workspaceId} teamId={context.teamId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}
                     projectId={context.projectId} teamId={context.teamId} section={tab}

@@ -97,7 +97,7 @@ public class TemplateResource extends BaseEntity {
     ResourceKind kind = ResourceKind.LINK;
 
     /** External link / repository URL; required for {@link ResourceKind#LINK}. */
-    @Column(length = 1000)
+    @Column(length = 2000)
     @ImportField(name = "Url")
     @ExportField(name = "Url")
     String url;

@@ -77,7 +77,9 @@ public class TaskAlertProjectBridge implements TaskProjectAccess {
     }
     boolean matches(ProjectTeam team, Project project) {
         return Boolean.TRUE.equals(team.getIsActive()) && team.getStatus() == ProjectTeamStatus.ACTIVE
-                && Objects.equals(team.getProjectId(), project.getId()) && team.getTrainingClass() != null
+                && (Objects.equals(team.getProjectId(), project.getId())
+                    || project.getAssignmentId() != null && Objects.equals(team.getId(), project.getTeamId()))
+                && team.getTrainingClass() != null
                 && Boolean.TRUE.equals(team.getTrainingClass().getIsActive())
                 && Objects.equals(team.getTrainingClass().getTenantId(), project.getTenant().getId());
     }

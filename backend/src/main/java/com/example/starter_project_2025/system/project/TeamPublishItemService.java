@@ -68,8 +68,7 @@ public class TeamPublishItemService {
         List<Long> pmIds = assignments.stream().filter(row ->
                 ProjectMemberRole.hasRole(row.getRole(), "PM"))
                 .map(row -> row.getClassMember().getId()).toList();
-        Long leaderId = team.getLeaderMemberId() != null ? team.getLeaderMemberId()
-                : pmIds.size() == 1 ? pmIds.get(0) : null;
+        Long leaderId = ProjectTeamLeaderService.effectiveLeader(team, assignments);
         if (leaderId == null || !pmIds.equals(List.of(leaderId))) {
             throw new TeamPublishValidationException("Nhóm cần đúng một Leader/PM trước khi công bố");
         }
@@ -165,7 +164,7 @@ public class TeamPublishItemService {
             ProjectTeam team,
             List<ProjectMember> assignments
     ) {
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
             return;
         }

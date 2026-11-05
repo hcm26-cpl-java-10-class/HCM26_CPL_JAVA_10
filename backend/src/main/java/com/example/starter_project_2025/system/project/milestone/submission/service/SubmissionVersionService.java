@@ -25,6 +25,8 @@ public class SubmissionVersionService {
     private final CurrentActorProvider actorProvider;
     private final Clock milestoneClock;
     private final MilestoneSubmissionWindow submissionWindow;
+    private final ProjectCompletionService projectCompletion;
+    private final com.example.starter_project_2025.system.project.milestone.submission.integration.ProjectCompletionPort completionPort;
 
     @Transactional
     public SubmissionDtos.Detail createNextVersion(UUID id, SubmissionDtos.CreateVersionRequest request) {
@@ -39,6 +41,7 @@ public class SubmissionVersionService {
     private SubmissionDtos.Detail createNextVersion(MilestoneSubmission submission,
                                                      SubmissionDtos.CreateVersionRequest request,
                                                      boolean mine) {
+        requireWritableMaster(submission);
         UUID id = submission.getId();
         if (submission.getStatus() != SubmissionStatus.CHANGES_REQUESTED) {
             throw new MilestoneConflictException("A new version can only be created after changes are requested");
@@ -69,6 +72,7 @@ public class SubmissionVersionService {
 
     private SubmissionDtos.Detail updateDraft(MilestoneSubmission submission, UUID versionId,
                                                SubmissionDtos.UpdateDraftRequest request, boolean mine) {
+        requireWritableMaster(submission);
         UUID id = submission.getId();
         if (submission.getStatus() != SubmissionStatus.DRAFT) {
             throw new MilestoneConflictException("Only a draft submission can be edited");
@@ -110,6 +114,7 @@ public class SubmissionVersionService {
                 id, "SUBMISSION_SUBMITTED", actorId, idempotencyKey.trim()).isPresent()) {
             return mine ? queryService.getMyDetail(id) : queryService.getDetail(id);
         }
+        requireWritableMaster(submission);
         if (submission.getStatus() != SubmissionStatus.DRAFT) {
             throw new MilestoneConflictException("Only a draft submission can be submitted");
         }
@@ -127,7 +132,7 @@ public class SubmissionVersionService {
                     || now.isAfter(submission.getMilestone().getLateUntil())) {
                 throw validation("submission", "The milestone submission window has closed");
             }
-            penalty = submission.getMilestone().getLatePenaltyPercent();
+            penalty = submission.getMilestone().latePenaltyAt(now);
         }
         version.submit(now, late, penalty);
         submission.submitted(version.getVersionNumber(), now);
@@ -144,6 +149,13 @@ public class SubmissionVersionService {
 
     private MilestoneValidationException validation(String field, String message) {
         return new MilestoneValidationException(Map.of(field, List.of(message)));
+    }
+
+    private void requireWritableMaster(MilestoneSubmission submission) {
+        if (submission.getTeamId() == null) {
+            completionPort.lockHierarchy(submission.getProjectId(), submission.getTenantId(), null);
+            projectCompletion.requireActive(submission.getTenantId(), submission.getProjectId());
+        }
     }
 
     private void applyDraftContent(SubmissionVersion version,

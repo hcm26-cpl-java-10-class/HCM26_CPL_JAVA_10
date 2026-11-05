@@ -27,7 +27,9 @@ function listParams(pagination: Pagination, search?: string, filter?: ProjectTem
   const sort = pagination.sort ?? "createdAt,desc";
   (Array.isArray(sort) ? sort : [sort]).forEach(value => params.append("sort", value));
   if (search?.trim()) params.set("search", search.trim());
-  Object.entries(filter ?? {}).forEach(([key, value]) => { if (value) params.set(key, value); });
+  Object.entries(filter ?? {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+  });
   return params;
 }
 

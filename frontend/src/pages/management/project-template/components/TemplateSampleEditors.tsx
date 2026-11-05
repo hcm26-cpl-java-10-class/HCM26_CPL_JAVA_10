@@ -51,7 +51,7 @@ export function TemplateBacklogEditor(props: EditorProps & {
           </Select>
         </Field>
       </div>
-      <Field path={`${path}.description`} label="Backlog description" errors={errors}><Textarea {...fieldProps("description")} rows={3} value={item.description}
+      <Field path={`${path}.description`} label="Backlog description" errors={errors}><Textarea {...fieldProps("description")} maxLength={1000} rows={3} value={item.description}
         onChange={(event) => onChange({ description: event.target.value })} placeholder="Describe the expected work (optional)." /></Field>
     </fieldset>
   </CardContent></Card>;

@@ -369,7 +369,7 @@ class MilestoneSubmissionIntegrationTest {
     }
 
     @Test
-    void gradeLockAndWaiverDoNotCompleteProjectWithoutAcceptedMilestone() throws Exception {
+    void lockedGradeAndApprovedWaiverCompleteTheMandatoryMilestoneRequirement() throws Exception {
         Instant now = Instant.now();
         UUID actor = UUID.randomUUID();
         Long projectId = 902L;
@@ -395,7 +395,7 @@ class MilestoneSubmissionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"Approved curriculum exception\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.completed").value(false))
+                .andExpect(jsonPath("$.completed").value(true))
                 .andExpect(jsonPath("$.gradeLocked").value(true));
     }
 

@@ -1,6 +1,7 @@
 import { teamAllocationApi } from "@/api";
 import { teamTemplateApi } from "@/api/features/team-template.api";
 import { TemplatePickerPanel } from "./TemplatePickerPanel";
+import { MasterProjectAssignmentPanel } from "./MasterProjectAssignmentPanel";
 import type { TemplateCandidate } from "@/types/features/template-candidate";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -1478,9 +1479,9 @@ export default function TeamAllocationPage() {
                   )}
                   {session.status !== "OPEN" && (
                     <p className="w-full text-xs text-muted-foreground">
-                      Phiên đã publish hoặc đóng nên không thể thay đổi sức chứa và
-                      không thể gán đề bài cho các nhóm đã chuyển sang ACTIVE. Hãy tạo
-                      phiên phân nhóm mới để gán đề bài cho nhóm DRAFT.
+                      Phiên đã publish hoặc đóng nên không thể thay đổi sức chứa.
+                      Dùng Master project assignment để phân công dự án cho nhóm đủ
+                      điều kiện; nhóm phải hoàn tất hoặc hủy dự án cũ trước khi nhận dự án mới.
                     </p>
                   )}
                   {session.status === "OPEN" && !teamsQuery.isLoading && !teamsQuery.isError &&
@@ -2083,6 +2084,8 @@ export default function TeamAllocationPage() {
                 </CardContent>
               </Card>
 
+              {sessionId !== null && (hasPermission("PEO_TEAM_ALLOCATE") || hasPermission("PRJ_WORKSPACE_MANAGE")) &&
+                <MasterProjectAssignmentPanel classId={classId} sessionId={sessionId} onAssigned={() => { void teamsQuery.refetch(); }} />}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">

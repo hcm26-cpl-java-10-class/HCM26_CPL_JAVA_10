@@ -54,8 +54,7 @@ public class ProjectTeamLeaderService {
         }
         List<ProjectMember> currentPm = roster.stream()
                 .filter(row -> ProjectMemberRole.hasRole(row.getRole(), "PM")).toList();
-        Long oldId = team.getLeaderMemberId();
-        if (oldId == null && currentPm.size() == 1) oldId = currentPm.get(0).getClassMember().getId();
+        Long oldId = effectiveLeader(team, roster);
         if (oldId != null && !oldId.equals(request.memberId()) && !request.confirmReplacement()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Nhóm đã có Leader; cần xác nhận thay thế");
         }
@@ -94,6 +93,13 @@ public class ProjectTeamLeaderService {
         outbox.save(ProjectTeamOutboxEvent.builder().eventType("PROJECT_TEAM_LEADER_CHANGED")
                 .aggregateId(teamId).payload(after).correlationId(correlation).status("PENDING").build());
         return request.memberId();
+    }
+
+    public static Long effectiveLeader(ProjectTeam team, List<ProjectMember> roster) {
+        if (team.getLeaderMemberId() != null) return team.getLeaderMemberId();
+        List<Long> pmIds = roster.stream().filter(row -> ProjectMemberRole.hasRole(row.getRole(), "PM"))
+                .map(row -> row.getClassMember().getId()).toList();
+        return pmIds.size() == 1 ? pmIds.getFirst() : null;
     }
 
     private String snapshot(ProjectTeam team, List<ProjectMember> roster) {

@@ -100,7 +100,7 @@ public class ProjectTeamQueryService {
     }
 
     private ProjectTemplateConstraints.Capacity readTemplateCapacity(ProjectTeam team) {
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
             return null;
         }
@@ -114,7 +114,7 @@ public class ProjectTeamQueryService {
     }
 
     private ProjectTemplateConstraints.RolePolicy readTemplatePolicy(ProjectTeam team) {
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
             return ProjectTemplateConstraints.RolePolicy.singleRoleDefault();
         }

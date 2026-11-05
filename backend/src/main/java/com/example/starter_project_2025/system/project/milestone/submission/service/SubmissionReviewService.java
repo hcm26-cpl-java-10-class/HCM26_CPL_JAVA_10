@@ -31,6 +31,7 @@ public class SubmissionReviewService {
     private final CurrentActorProvider actorProvider;
     private final Clock milestoneClock;
     private final ProjectCompletionService projectCompletionService;
+    private final com.example.starter_project_2025.system.project.milestone.submission.integration.ProjectCompletionPort completionPort;
     private final com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventWriter milestoneOutbox;
 
     @Transactional
@@ -45,6 +46,9 @@ public class SubmissionReviewService {
         }
 
         MilestoneSubmission submission = queryService.require(submissionId);
+        if (submission.getTeamId() == null)
+            completionPort.lockHierarchy(submission.getProjectId(), submission.getTenantId(), null);
+        projectCompletionService.requireActive(submission.getTenantId(), submission.getProjectId());
         if (submission.getLockVersion() != request.expectedVersion()) {
             throw new MilestoneConflictException("Submission was changed by another request; reload and try again");
         }
