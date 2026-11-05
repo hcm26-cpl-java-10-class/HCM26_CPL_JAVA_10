@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useExternalClass } from "@/hooks/useExternalLookups";
+import { useClasses } from "@/hooks/useClasses";
 import { classTitle, getClassStatusMeta } from "@/utils/class.utils";
 import { ClassActivitiesTab } from "./ClassActivitiesTab";
 import { ClassBudgetTab } from "./ClassBudgetTab";
@@ -73,9 +73,10 @@ export function ClassDetailView() {
     const activeTab: ClassDetailTabValue = isValidTab(requestedTab) ? requestedTab : DEFAULT_TAB;
 
     const [hasUnsavedTraineeChanges, setHasUnsavedTraineeChanges] = useState(false);
+    const [calendarDirty, setCalendarDirty] = useState(false);
     const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation>(null);
 
-    const query = useExternalClass(identifier);
+    const query = useClasses({ classId: identifier ?? "" });
     const classItem = query.data;
 
     const listSearch = (location.state as { listSearch?: string } | null)?.listSearch;
@@ -86,7 +87,7 @@ export function ClassDetailView() {
     const handleTabChange = (nextValue: string) => {
         if (!isValidTab(nextValue) || nextValue === activeTab) return;
 
-        if (activeTab === "trainees" && hasUnsavedTraineeChanges) {
+        if ((activeTab === "trainees" && hasUnsavedTraineeChanges) || (activeTab === "calendar" && calendarDirty)) {
             setPendingNavigation({ type: "tab", tab: nextValue });
             return;
         }
@@ -106,6 +107,7 @@ export function ClassDetailView() {
         const target = pendingNavigation;
         setPendingNavigation(null);
         setHasUnsavedTraineeChanges(false);
+        setCalendarDirty(false);
 
         if (target.type === "tab") {
             setSearchParams({ tab: target.tab }, { replace: true, state: location.state });
@@ -202,7 +204,7 @@ export function ClassDetailView() {
                                 </TabsContent>
 
                                 <TabsContent value="calendar">
-                                    <ClassCalendarTab classItem={classItem} />
+                                    <ClassCalendarTab classItem={classItem} onDirtyChange={setCalendarDirty} />
                                 </TabsContent>
 
                                 <TabsContent value="budget">

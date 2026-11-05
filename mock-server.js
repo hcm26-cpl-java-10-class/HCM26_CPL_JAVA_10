@@ -1094,47 +1094,6 @@ const server = http.createServer(async (req, res) => {
     return json(res, 201, newAudit);
   }
 
-  // ======== DASHBOARD ANALYTICS ========
-
-  if (req.method === 'GET' && pathname === '/api/analytics') {
-    const total = classes.length;
-    const byStatus = {};
-    classes.forEach(c => { byStatus[c.status] = (byStatus[c.status] || 0) + 1; });
-    const totalTrainees = classes.reduce((s, c) => s + (c.enrolledTrainees || 0), 0);
-    const passRate = classes.filter(c => c.status === 'completed').length / (total || 1) * 100;
-
-    const bySite = {};
-    classes.forEach(c => { bySite[c.site || 'Unknown'] = (bySite[c.site || 'Unknown'] || 0) + 1; });
-
-    const bySkill = {};
-    classes.forEach(c => { bySkill[c.skills || 'Other'] = (bySkill[c.skills || 'Other'] || 0) + 1; });
-
-    const fillRate = classes.map(c => ({
-      code: c.code,
-      enrolled: c.enrolledTrainees || 0,
-      planned: c.plannedSize || 1,
-      pct: Math.round(((c.enrolledTrainees || 0) / (c.plannedSize || 1)) * 100)
-    }));
-
-    return json(res, 200, {
-      totalClasses: total,
-      activeClasses: byStatus['active'] || 0,
-      completedClasses: byStatus['completed'] || 0,
-      totalTrainees,
-      passRate: Math.round(passRate),
-      byStatus,
-      bySite,
-      bySkill,
-      fillRate,
-      auditStats: {
-        total: auditRecords.length,
-        pass: auditRecords.filter(a => a.result === 'pass').length,
-        warning: auditRecords.filter(a => a.result === 'warning').length,
-        fail: auditRecords.filter(a => a.result === 'fail').length,
-      }
-    });
-  }
-
   // ======== CLASSES CRUD ========
 
   // POST /api/classes (Create)
@@ -1323,5 +1282,4 @@ server.listen(PORT, () => {
   console.log(`   Attendance:GET  /api/classes/:id/sessions/:sid/attendance`);
   console.log(`   Budget:    GET  /api/classes/:id/budget`);
   console.log(`   Audits:    GET  /api/audits`);
-  console.log(`   Analytics: GET  /api/analytics\n`);
 });

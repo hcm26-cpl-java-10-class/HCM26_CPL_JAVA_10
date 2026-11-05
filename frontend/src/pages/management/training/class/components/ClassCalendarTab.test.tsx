@@ -7,6 +7,8 @@ import { grant } from "@/test/mocks";
 import { renderAt } from "@/test/render";
 import { ClassCalendarTab } from "./ClassCalendarTab";
 
+vi.mock("@/components/layout/MainLayout", () => import("@/test/mocks").then((m) => m.layoutModule()));
+vi.mock("./ClassInfoTab", () => ({ ClassInfoTab: () => <div>Class information</div> }));
 vi.mock("@/api/axios", () => import("@/test/mocks").then((m) => m.axiosModule()));
 vi.mock("@/hooks/usePermissions", () => import("@/test/mocks").then((m) => m.permissionsModule()));
 vi.mock("xlsx", async (importOriginal) => ({ ...await importOriginal<typeof import("xlsx")>(), writeFile: vi.fn() }));
@@ -176,6 +178,7 @@ it("enables Save changes when inline changes are made and submits update batch",
     expect(saveBtn).toBeDisabled();
     expect(screen.getByText("No unsaved changes")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Edit calendar version 1.2" }));
     const noteInput = screen.getByLabelText("History change note for version 1.2");
     await user.clear(noteInput);
     await user.type(noteInput, "Updated schedule for sprint");
@@ -190,4 +193,142 @@ it("enables Save changes when inline changes are made and submits update batch",
             { id: 2, name: "Java_Calendar_1.2", historyChange: "Updated schedule for sprint" }
         ]
     });
+});
+
+
+it("requires Edit, restores both fields on Cancel or Escape, and detects reverted changes", async () => {
+    grant("SESSION_READ", "SESSION_UPDATE");
+    const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
+    await screen.findByRole("button", { name: "Java_Calendar_1.2" });
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Edit calendar version 1.2" }));
+    const name = screen.getByLabelText("Calendar name for version 1.2");
+    const note = screen.getByLabelText("History change note for version 1.2");
+    fireEvent.change(name, { target: { value: "Renamed" } });
+    fireEvent.change(note, { target: { value: "Changed note" } });
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Cancel editing version 1.2" }));
+    expect(screen.getByRole("button", { name: "Java_Calendar_1.2" })).toBeInTheDocument();
+    expect(screen.getByText("Update trainer")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Edit calendar version 1.2" }));
+    fireEvent.change(screen.getByLabelText("Calendar name for version 1.2"), { target: { value: "Renamed" } });
+    fireEvent.keyDown(screen.getByLabelText("Calendar name for version 1.2"), { key: "Escape" });
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Edit calendar version 1.2" }));
+    fireEvent.change(screen.getByLabelText("Calendar name for version 1.2"), { target: { value: "Renamed" } });
+    fireEvent.change(screen.getByLabelText("Calendar name for version 1.2"), { target: { value: "Java_Calendar_1.2" } });
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+});
+
+it("validates required fields and lengths before sending any request", async () => {
+    grant("SESSION_READ", "SESSION_UPDATE");
+    const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
+    await user.click(await screen.findByRole("button", { name: "Edit calendar version 1.2" }));
+    const name = screen.getByLabelText("Calendar name for version 1.2");
+    const note = screen.getByLabelText("History change note for version 1.2");
+    fireEvent.change(name, { target: { value: "   " } });
+    expect(name).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("Calendar name is required.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    fireEvent.change(name, { target: { value: "x".repeat(101) } });
+    expect(screen.getByText("Calendar name must be 100 characters or fewer.")).toBeInTheDocument();
+    fireEvent.change(name, { target: { value: "Valid name" } });
+    fireEvent.change(note, { target: { value: "" } });
+    expect(screen.getByText("History change note is required.")).toBeInTheDocument();
+    fireEvent.change(note, { target: { value: "x".repeat(201) } });
+    expect(screen.getByText("History change note must be 200 characters or fewer.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    fireEvent.change(name, { target: { value: "x".repeat(100) } });
+    fireEvent.change(note, { target: { value: "x".repeat(200) } });
+    expect(screen.queryByText(/characters or fewer/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+    fireEvent.change(note, { target: { value: "x".repeat(201) } });
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")).toHaveLength(0);
+});
+
+it("locks edits during saving and preserves drafts after failure for retry", async () => {
+    grant("SESSION_READ", "SESSION_UPDATE");
+    let rejectSave!: (reason: unknown) => void;
+    fakeHttp.on("put", "/external/classes/1/calendars", () => new Promise((_, reject) => { rejectSave = reject; }));
+    const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
+    await user.click(await screen.findByRole("button", { name: "Edit calendar version 1.2" }));
+    fireEvent.change(screen.getByLabelText("Calendar name for version 1.2"), { target: { value: " New name " } });
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByRole("button", { name: "Saving…" });
+    expect(screen.getByLabelText("Calendar name for version 1.2")).toBeDisabled();
+    expect(screen.getByLabelText("History change note for version 1.2")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel editing version 1.2" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit calendar version 1.1" })).toBeDisabled();
+    rejectSave(httpError(503));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled());
+    expect(screen.getByLabelText("Calendar name for version 1.2")).toHaveValue(" New name ");
+    fakeHttp.on("put", "/external/classes/1/calendars", {});
+    fakeHttp.on("get", "/external/classes/1/calendars", [{ ...records[1], name: "New name" }, records[0]]);
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByRole("button", { name: "New name" });
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")[1].data).toEqual({ updates: [{ id: 2, name: "New name", historyChange: "Update trainer" }] });
+});
+
+it("cancels only the selected row and saves the remaining changes together", async () => {
+    grant("SESSION_READ", "SESSION_UPDATE");
+    fakeHttp.on("put", "/external/classes/1/calendars", {});
+    const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
+    await user.click(await screen.findByRole("button", { name: "Edit calendar version 1.2" }));
+    await user.click(screen.getByRole("button", { name: "Edit calendar version 1.1" }));
+    fireEvent.change(screen.getByLabelText("History change note for version 1.2"), { target: { value: "New active note" } });
+    fireEvent.change(screen.getByLabelText("History change note for version 1.1"), { target: { value: "New inactive note" } });
+    expect(screen.getByText("2 unsaved changes")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel editing version 1.1" }));
+    expect(screen.getByText("1 unsaved change")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Actions for calendar version 1.2" }));
+    expect(screen.getByRole("menuitem", { name: "Adjust" })).toHaveAttribute("aria-disabled", "true");
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")).toHaveLength(1));
+    expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")[0].data).toEqual({ updates: [{ id: 2, name: records[1].name, historyChange: "New active note" }] });
+});
+
+it("warns before leaving through a link or closing the page and removes the warning after Cancel", async () => {
+    grant("SESSION_READ", "SESSION_UPDATE");
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
+    await user.click(await screen.findByRole("button", { name: "Edit calendar version 1.2" }));
+    fireEvent.change(screen.getByLabelText("Calendar name for version 1.2"), { target: { value: "Draft name" } });
+    await user.click(screen.getByRole("link", { name: "Back to Class List" }));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(screen.getByTestId("location")).toHaveTextContent(/^\/$/);
+    const close = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(close);
+    expect(close.defaultPrevented).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Cancel editing version 1.2" }));
+    const cleanClose = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(cleanClose);
+    expect(cleanClose.defaultPrevented).toBe(false);
+    confirm.mockRestore();
+});
+
+it("keeps Calendar drafts when switching tabs is declined and discards them only after confirmation", async () => {
+    grant("SESSION_READ", "SESSION_UPDATE");
+    fakeHttp.on("get", "/external/classes/1", { id: 1, code: "JAVA_01", status: "active" });
+    fakeHttp.on("get", "/classes/1", { id: 1, code: "JAVA_01", status: "active" });
+    const { default: ClassDetailPage } = await import("../ClassDetailPage");
+    const { user } = renderAt(<ClassDetailPage />, { route: "/classes/1?tab=calendar", path: "/classes/:classId" });
+    await user.click(await screen.findByRole("button", { name: "Edit calendar version 1.2" }));
+    fireEvent.change(screen.getByLabelText("Calendar name for version 1.2"), { target: { value: "Draft name" } });
+    await user.click(screen.getByRole("tab", { name: "Class Info" }));
+    const leaveDialog = await screen.findByRole("dialog", { name: "Unsaved Changes" });
+    await user.click(within(leaveDialog).getByRole("button", { name: "Stay" }));
+    expect(screen.getByRole("tab", { name: "Calendar" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByLabelText("Calendar name for version 1.2")).toHaveValue("Draft name");
+    await user.click(screen.getByRole("tab", { name: "Class Info" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "Unsaved Changes" })).getByRole("button", { name: "Leave" }));
+    expect(screen.getByRole("tab", { name: "Class Info" })).toHaveAttribute("aria-selected", "true");
+    await user.click(screen.getByRole("tab", { name: "Calendar" }));
+    expect(await screen.findByRole("button", { name: "Java_Calendar_1.2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
 });

@@ -33,7 +33,9 @@ beforeEach(() => {
     grant("SESSION_READ");
     serverTraineesState = getMockTraineesByClass(2);
     fakeHttp.on("get", "/external/classes", MOCK_TRAINING_CLASSES);
+    fakeHttp.on("get", "/classes", MOCK_TRAINING_CLASSES);
     fakeHttp.on("get", "/external/classes/2", MOCK_TRAINING_CLASSES[0]);
+    fakeHttp.on("get", "/classes/2", MOCK_TRAINING_CLASSES[0]);
     fakeHttp.on("get", "/external/classes/2/trainees", () => serverTraineesState);
     fakeHttp.on("put", "/external/classes/2/trainees/batch", (call: RecordedCall) => {
         const payload = call.data as TraineeBatchPayload;

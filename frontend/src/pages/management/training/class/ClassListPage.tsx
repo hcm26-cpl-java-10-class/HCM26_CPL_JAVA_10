@@ -48,8 +48,8 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useExternalClasses } from "@/hooks/useExternalLookups";
-import { externalApi } from "@/api/features/external.api";
+import { useClasses } from "@/hooks/useClasses";
+import { clsApi } from "@/api/features/cls.api";
 import { cn } from "@/lib/utils";
 import type { ExternalClass } from "@/types";
 import {
@@ -178,11 +178,11 @@ function EmptyState({ filtered, onClear, onCreate }: { filtered: boolean; onClea
         <div className="flex flex-col items-center gap-3 px-6 py-14 text-center text-muted-foreground">
             <GraduationCap className="size-8" aria-hidden />
             <p className="text-sm">
-                {filtered ? "No classes match your search or filters." : "Hệ thống chưa có lớp học nào."}
+                {filtered ? "No classes match your search or filters." : "The master training system has no classes yet."}
             </p>
             {filtered ? (
-                <Button variant="outline" size="sm" onClick={onClear}>
-                    Xóa tìm kiếm và bộ lọc
+                <Button variant="outline" size="sm" onClick={onClear} aria-label="Clear search and filters">
+                    Clear search and filters
                 </Button>
             ) : (
                 <Button size="sm" onClick={onCreate} className="bg-blue-800 hover:bg-blue-900 text-white gap-1.5">
@@ -195,7 +195,7 @@ function EmptyState({ filtered, onClear, onCreate }: { filtered: boolean; onClea
 
 export default function ClassListPage() {
     const list = useClassListState();
-    const classes = useExternalClasses();
+    const classes = useClasses();
     const { state } = list;
     const { filters, sortKey, sortDirection, page, pageSize } = state;
     const data = classes.data;
@@ -295,7 +295,7 @@ export default function ClassListPage() {
 
         setIsDeleting(true);
         try {
-            await externalApi.deleteClass(deletingClass.id);
+            await clsApi.deleteClass(deletingClass.id);
             setDeleteModalOpen(false);
             classes.refetch();
         } catch (err: any) {

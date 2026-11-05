@@ -42,7 +42,7 @@ const rowCodes = async () => (await rowsOf()).map((row) => within(row).getByRole
 
 beforeEach(() => {
     fakeHttp.reset();
-    fakeHttp.on("get", "/external/classes", classes);
+    fakeHttp.on("get", "/classes", classes);
 });
 
 describe("Class List: loading data", () => {
@@ -62,7 +62,7 @@ describe("Class List: loading data", () => {
         renderList();
         await rowsOf();
 
-        expect(fakeHttp.callsTo("get", "/external/classes")[0].params).toEqual({ status: "all" });
+        expect(fakeHttp.callsTo("get", "/classes")[0].params).toEqual({ status: "all", size: 100 });
     });
 
     it("shows a column the master system does not provide as a dash, never as an invented value", async () => {
@@ -70,17 +70,17 @@ describe("Class List: loading data", () => {
 
         const cells = within((await rowsOf())[0]).getAllByRole("cell");
         // No., Class, Site, Trainee Type, Program, Class Admin, Trainees, Start Date, Master Trainer, Status, Action
-        expect(cells).toHaveLength(11);
-        for (const index of [2, 3, 5, 8]) {
-            expect(cells[index]).toHaveTextContent("—");
+        expect(cells).toHaveLength(12);
+        for (const index of [3, 4, 6, 9]) {
+            expect(cells[index]).toHaveTextContent("\u2014");
         }
-        expect(cells[6]).toHaveTextContent("— / 20");
-        expect(cells[7]).toHaveTextContent("15-Jan-2026");
+        expect(cells[7]).toHaveTextContent("\u2014 / 20");
+        expect(cells[8]).toHaveTextContent("15-Jan-2026");
     });
 
     it("shows a loading skeleton while the request is in flight", async () => {
         let release: (value: unknown) => void = () => {};
-        fakeHttp.on("get", "/external/classes", () => new Promise((resolve) => (release = resolve)));
+        fakeHttp.on("get", "/classes", () => new Promise((resolve) => (release = resolve)));
         renderList();
 
         expect(await screen.findByRole("status", { name: "Loading classes" })).toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("Class List: loading data", () => {
     });
 
     it("shows an empty state (not an error, not a 404) when the master system has no classes", async () => {
-        fakeHttp.on("get", "/external/classes", []);
+        fakeHttp.on("get", "/classes", []);
         renderList();
 
         expect(await screen.findByText("The master training system has no classes yet.")).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe("Class List: loading data", () => {
 
     it("shows the error state with a working retry when the master system is down", async () => {
         let down = true;
-        fakeHttp.on("get", "/external/classes", () => {
+        fakeHttp.on("get", "/classes", () => {
             if (down) throw httpError(503);
             return classes;
         });
@@ -125,7 +125,7 @@ describe("Class List: loading data", () => {
         ["500", httpError(500), "Server error"],
         ["network", networkError(), "Cannot reach the server"],
     ])("tells a %s apart from an empty list", async (_name, error, title) => {
-        fakeHttp.on("get", "/external/classes", () => {
+        fakeHttp.on("get", "/classes", () => {
             throw error;
         });
         renderList();
@@ -291,8 +291,8 @@ describe("Class List: navigation", () => {
         renderList();
         await rowsOf();
 
-        expect(screen.queryByRole("button", { name: /create class/i })).not.toBeInTheDocument();
-        expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /create class/i })).toBeInTheDocument();
+        // Edit and Delete are only in row action menus or dialogs
         expect(screen.queryByRole("button", { name: /delete|deactivate/i })).not.toBeInTheDocument();
     });
 });

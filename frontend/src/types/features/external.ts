@@ -161,21 +161,6 @@ export interface StatusLogEntry {
     changedAt: string;
 }
 
-// ===================== ANALYTICS =====================
-
-export interface TrainingAnalytics {
-    totalClasses: number;
-    activeClasses: number;
-    completedClasses: number;
-    totalTrainees: number;
-    passRate: number;
-    byStatus: Record<string, number>;
-    bySite: Record<string, number>;
-    bySkill: Record<string, number>;
-    fillRate: { code: string; enrolled: number; planned: number; pct: number }[];
-    auditStats: { total: number; pass: number; warning: number; fail: number };
-}
-
 // ===================== CLASS =====================
 
 export interface ExternalClass {

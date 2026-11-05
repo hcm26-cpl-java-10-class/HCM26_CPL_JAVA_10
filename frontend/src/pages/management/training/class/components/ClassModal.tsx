@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/common/NativeSelect";
 import type { ExternalClass } from "@/types";
-import { externalApi } from "@/api/features/external.api";
+import { clsApi } from "@/api/features/cls.api";
 import { AlertCircle } from "lucide-react";
 
 interface ClassModalProps {
@@ -161,9 +161,9 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
             };
 
             if (isEdit && classItem) {
-                await externalApi.updateClass(classItem.id, payload);
+                await clsApi.updateClass(classItem.id, payload as any);
             } else {
-                await externalApi.createClass(payload);
+                await clsApi.createClass(payload as any);
             }
 
             onSuccess();
