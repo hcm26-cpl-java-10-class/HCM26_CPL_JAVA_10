@@ -16,6 +16,7 @@ export interface InvitationDTO extends BaseDTO {
     examTitle?: string;
     userEmail?: string;
     userFullName?: string;
+    userCode?: string | null;
     token?: string;
     status?: InvitationStatus;
     sentAt?: string | null;

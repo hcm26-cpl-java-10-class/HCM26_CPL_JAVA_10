@@ -40,6 +40,7 @@ export function ColumnToggle({
           <Button
             variant="outline"
             size={compact ? "icon" : "default"}
+            aria-label={compact ? "Column visibility" : "Columns"}
             className={compact ? `h-7 w-7 p-0 ${className ?? ""}` : `w-full !outline-none lg:w-auto ${className ?? ""}`}
           >
             <Columns3 size={compact ? 15 : 16} />

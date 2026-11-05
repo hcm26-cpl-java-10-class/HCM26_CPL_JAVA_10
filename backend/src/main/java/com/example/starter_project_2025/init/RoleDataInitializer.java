@@ -37,8 +37,10 @@ public class RoleDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        ensurePermission("COURSE_REPORT", "READ");
+        ensurePermission("PEO", "TEAM_ALLOCATE");
         ensurePermission("EXAM", "TAKE");
+        ensurePermission("ARTIFACT", "DRAFT_WRITE");
+        ensurePermission("COURSE_REPORT", "READ");
         ensurePermission("STUDENT_SCORE", "RELEASE");
         ensurePermission("STUDENT_SCORE", "VIEW_OWN");
         ensurePermission("SCORE_APPEAL", "CREATE");
@@ -73,7 +75,10 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "STUDENT_SCORE_VIEW_OWN",
                         "SCORE_APPEAL_CREATE",
                         "SCORE_APPEAL_VIEW_OWN",
-                        "EXAM_TAKE"
+                        "WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
+                        "MILESTONE_READ", "SPRINT_READ", "TASK_WRITE", "ARTIFACT_READ", "ARTIFACT_SUBMIT",
+                        "ARTIFACT_DRAFT_WRITE",
+                        "FEEDBACK_READ", "WORKSPACE_ACTIVITY_READ"
                 )
         );
         upsertRole(
@@ -120,9 +125,31 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "LESSON_ANSWER_CREATE", "LESSON_ANSWER_READ",
                         "LESSON_ANSWER_UPDATE", "LESSON_ANSWER_DELETE",
                         "LESSON_REPORT_READ", "LESSON_REPORT_UPDATE",
-                        "EXAM_TAKE"
+                        "EXAM_TAKE",
+                        "WORKSPACE_READ", "WORKSPACE_CREATE", "WORKSPACE_MEMBER_READ", "TEAM_READ", "TEAM_UPDATE",
+                        "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
+                        "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_REVIEW", "FEEDBACK_READ", "FEEDBACK_WRITE",
+                        "WORKSPACE_ACTIVITY_READ"
                 )
         );
+
+        // Grant an existing PM role; do not create extra roles/accounts or expand data scope.
+        roleRepository.findByName("PM").ifPresent(pm -> {
+            pm.getPermissions().addAll(findPermissions("WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
+                    "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
+                    "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_SUBMIT", "ARTIFACT_REVIEW",
+                    "FEEDBACK_READ", "FEEDBACK_WRITE", "WORKSPACE_ACTIVITY_READ"));
+            roleRepository.save(pm);
+        });
+        ensureAllocationPermissionForRole(
+                "PROGRAM_MANAGER", "Program manager with team allocation access");
+        ensureAllocationPermissionForRole(
+                "MENTOR", "Mentor with team allocation access");
+        ensureAllocationPermissionForRole(
+                "CLASS_ADMIN", "Class administrator with team allocation access");
+        grantWorkspaceLogAccess("MENTOR");
+        grantWorkspaceLogAccess("PROGRAM_MANAGER");
+        grantWorkspaceLogAccess("CLASS_ADMIN");
 
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");
     }
@@ -157,5 +184,32 @@ public class RoleDataInitializer implements CommandLineRunner {
             permissionRepository.findByName(permissionName).ifPresent(permissions::add);
         }
         return permissions;
+    }
+
+    private void ensureAllocationPermissionForRole(String roleName, String description) {
+        Permission allocationPermission = permissionRepository.findByName("PEO_TEAM_ALLOCATE")
+                .orElseThrow(() -> new IllegalStateException(
+                        "PEO_TEAM_ALLOCATE permission was not initialized"));
+        Permission classReadPermission = permissionRepository.findByName("TRAINING_CLASS_READ")
+                .orElseThrow(() -> new IllegalStateException(
+                        "TRAINING_CLASS_READ permission was not initialized"));
+        Role role = roleRepository.findByName(roleName).orElseGet(() -> {
+            Role newRole = new Role();
+            newRole.setName(roleName);
+            newRole.setDescription(description);
+            newRole.setIsActive(true);
+            return newRole;
+        });
+        role.getPermissions().add(allocationPermission);
+        role.getPermissions().add(classReadPermission);
+        roleRepository.save(role);
+    }
+
+    private void grantWorkspaceLogAccess(String roleName) {
+        roleRepository.findByName(roleName).ifPresent(role -> {
+            role.getPermissions().addAll(findPermissions("WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
+                    "MILESTONE_READ", "SPRINT_READ", "WORKSPACE_ACTIVITY_READ"));
+            roleRepository.save(role);
+        });
     }
 }

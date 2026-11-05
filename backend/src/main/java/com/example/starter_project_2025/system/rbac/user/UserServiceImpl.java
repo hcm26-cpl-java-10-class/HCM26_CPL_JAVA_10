@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.demo.department.Department;
 import com.example.starter_project_2025.system.demo.department.DepartmentRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -31,6 +32,7 @@ public class UserServiceImpl
     UserMapper userMapper;
     UserRepository userRepository;
     RoleRepository roleRepository;
+    TenantRepository tenantRepository;
     DepartmentRepository departmentRepository;
     PasswordEncoder passwordEncoder;
 
@@ -59,6 +61,7 @@ public class UserServiceImpl
         validateEmployeeCodeUnique(request.getEmployeeCode(), null, ctx);
         validatePhone(request.getPhone(), ctx);
         validateRoles(request.getRoleIds(), ctx);
+        validateTenant(request.getTenantId(), ctx);
 
         user.setUsername(request.getUsername());
         user.setEmployeeCode(request.getEmployeeCode());
@@ -66,6 +69,7 @@ public class UserServiceImpl
         user.setDescription(request.getDescription());
 
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        user.setTenantId(request.getTenantId());
 
         Set<Role> roles = getRoles(request.getRoleIds());
         user.setRoles(roles);
@@ -96,8 +100,16 @@ public class UserServiceImpl
             validateRoles(request.getRoleIds(), ctx);
         }
 
+        if (request.getTenantId() != null) {
+            validateTenant(request.getTenantId(), ctx);
+        }
+
         if (ctx.hasErrors()) {
             return;
+        }
+
+        if (request.getTenantId() != null) {
+            user.setTenantId(request.getTenantId());
         }
 
         if (request.getPassword() != null) {
@@ -109,6 +121,7 @@ public class UserServiceImpl
             user.getRoles().addAll(getRoles(request.getRoleIds()));
         }
 
+        assignDepartment(user, request, ctx);
     }
 
     private void normalize(UserDTO request) {
@@ -223,6 +236,12 @@ public class UserServiceImpl
 
         if (found != roleIds.size()) {
             ctx.add("roleIds", "One or more roles are invalid");
+        }
+    }
+
+    private void validateTenant(Long tenantId, ValidationContext ctx) {
+        if (tenantId != null && !tenantRepository.existsByIdAndIsActiveTrue(tenantId)) {
+            ctx.add("tenantId", "Tenant does not exist or is inactive");
         }
     }
 
