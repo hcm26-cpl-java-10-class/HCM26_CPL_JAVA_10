@@ -73,7 +73,7 @@ function OpenLinkButton({ href, label }: { href: string; label: string }) {
 
 function InvalidContent({ message }: { message: string }) {
   return (
-    <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+    <div className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
       {message}
     </div>
   );
@@ -114,7 +114,7 @@ function VideoPreview({ lesson }: { lesson: LessonDTO }) {
 
   // Nguồn video không nhúng được (host lạ) -> mở bằng link
   return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border bg-muted/30 p-8 text-center">
+    <div className="flex flex-col items-center gap-3 rounded-xl border bg-muted/30 p-4 text-center">
       <PlayCircle className="size-10 text-muted-foreground" />
       <p className="text-sm text-muted-foreground break-all">{source.src}</p>
       <OpenLinkButton href={source.src} label="Open video" />
@@ -128,7 +128,7 @@ function TextPreview({ lesson }: { lesson: LessonDTO }) {
   }
   // Render dạng text thuần (không dùng dangerouslySetInnerHTML) -> an toàn với XSS
   return (
-    <article className="max-h-[60vh] overflow-y-auto rounded-xl border bg-card p-5 text-sm leading-7 whitespace-pre-wrap break-words">
+    <article className="max-h-[60vh] overflow-y-auto rounded-xl border bg-card p-4 text-sm leading-7 whitespace-pre-wrap break-words">
       {lesson.textContent}
     </article>
   );
@@ -181,7 +181,7 @@ function ResourcePreview({ lesson }: { lesson: LessonDTO }) {
           className="h-[50vh] w-full rounded-xl border"
         />
       ) : lesson.contentType === "DOCUMENT" ? (
-        <div className="rounded-xl border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+        <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-center text-sm text-muted-foreground">
           This document cannot be previewed here. Use Open to view it in a new tab.
         </div>
       ) : null}

@@ -11,10 +11,13 @@ export function MainLayout({
                                children,
                                pathName,
                                pathLinks,
+                               dense = false,
                            }: {
     children: ReactNode;
     pathName?: Record<string, string>;
     pathLinks?: Record<string, string>;
+    /** Tighter header / content padding (Course Online pages). */
+    dense?: boolean;
 }) {
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
@@ -39,7 +42,7 @@ export function MainLayout({
         <SidebarProvider>
             <SidebarMenu />
             <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
-                <header className="flex min-h-16 shrink-0 items-center gap-2 py-3">
+                <header className={`flex shrink-0 items-center gap-2 ${dense ? "min-h-11 py-0.5" : "min-h-16 py-3"}`}>
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                             <SidebarTrigger aria-label="Toggle navigation sidebar" />
@@ -49,7 +52,7 @@ export function MainLayout({
                     </div>
                 </header>
 
-                <main className="min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6">
+                <main className={`min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto ${dense ? "px-4 pb-3 pt-1" : "px-6 pb-6 pt-6"}`}>
                     {children}
                 </main>
             </SidebarInset>
