@@ -38,6 +38,7 @@ export type StudentSyllabusDetail = {
             id: number;
             title: string;
             orderIndex: number;
+            cloIds: number[];
         }>;
     }>;
 
@@ -81,6 +82,12 @@ export const studentSyllabusApi = {
                 { params }
             )
         ).data,
+
+    downloadArchive: async (id: number): Promise<Blob> =>
+        (await api.get(`${base}/${id}/materials.zip`, { responseType: "blob" })).data,
+
+    downloadFile: async (id: number, key: string): Promise<Blob> =>
+        (await api.get(`${base}/${id}/material-files/${encodeURIComponent(key)}`, { responseType: "blob" })).data,
 
     detail: async (id: number) =>
         (

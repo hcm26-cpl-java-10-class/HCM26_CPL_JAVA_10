@@ -70,6 +70,8 @@ import { buildEntityRoutes } from "./build-router";
 
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
+import CourseUsagePage from "@/pages/management/demo/syllabus/CourseUsagePage";
+import SyllabusTemplatesPage from "@/pages/management/demo/syllabus/SyllabusTemplatesPage";
 
 import StudentSyllabusListPage from "@/pages/student/StudentSyllabusListPage";
 import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
@@ -347,6 +349,18 @@ export const routes: RouteConfig[] = [
     path: "/syllabuses",
     component: SyllabusesPage,
     requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/syllabuses/course-usage",
+    component: CourseUsagePage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/syllabuses/templates",
+    component: SyllabusTemplatesPage,
+    requiredPermission: "SYLLABUS_CREATE",
     isModuleDriven: true,
   },
   {

@@ -21,6 +21,7 @@ public class SyllabusService {
     private final SyllabusSectionRepository sections;
     private final SyllabusTopicRepository topics;
     private final SyllabusWorkflowService workflow;
+    private final SyllabusTopicCloLinkRepository coverageLinks;
     private static String clean(String raw) {
         return raw == null
                 ? ""
@@ -643,6 +644,7 @@ public class SyllabusService {
             );
         }
 
+        coverageLinks.deleteAllForTopic(topicId);
         topics.delete(entity);
     }
 
