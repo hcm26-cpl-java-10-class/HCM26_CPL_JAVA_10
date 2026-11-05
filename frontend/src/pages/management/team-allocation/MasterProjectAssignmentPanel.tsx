@@ -156,7 +156,7 @@ function AssignmentPanel({ classId, sessionId, onAssigned }: { classId: number; 
         <DialogHeader><DialogTitle>Class master milestones</DialogTitle>
           <DialogDescription>Manage shared deliverables and the master assessment independently of team workspaces.</DialogDescription></DialogHeader>
         <div className="min-h-0 space-y-4 overflow-y-auto pr-1">{managedMaster != null &&
-          <WorkspaceMasterMilestonesPanel masterProjectId={managedMaster} returnTo={`/team-allocation/classes/${classId}?sessionId=${sessionId}`}
+          <WorkspaceMasterMilestonesPanel masterProjectId={managedMaster} returnTo={`/team-allocation/classes/${classId}/setup?sessionId=${sessionId}`}
             onChanged={() => { void classMasters.refetch(); void client.invalidateQueries({ queryKey: ["workspace-project-hierarchy"] }); }} />}</div>
       </DialogContent>
     </Dialog>

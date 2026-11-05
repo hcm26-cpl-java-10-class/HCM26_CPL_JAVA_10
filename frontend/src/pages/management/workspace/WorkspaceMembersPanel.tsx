@@ -65,7 +65,7 @@ export function WorkspaceMembersPanel({ workspaceId, teamId, classId, allocation
 
   const loading = query.isFetching || query.isLoading;
   const canOpenAllocation = hasPermission("PEO_TEAM_ALLOCATE") || hasPermission("PRJ_WORKSPACE_MANAGE");
-  const allocationUrl = `/team-allocation/classes/${classId}?sessionId=${allocationSessionId}&teamId=${teamId}`;
+  const allocationUrl = `/team-allocation/classes/${classId}/setup?sessionId=${allocationSessionId}&teamId=${teamId}`;
 
   return <Card>
     <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
