@@ -1,6 +1,7 @@
-﻿import { teamAllocationApi } from "@/api";
+import { teamAllocationApi, trainingClassApi } from "@/api";
 import { teamTemplateApi } from "@/api/features/team-template.api";
 import { TemplatePickerPanel } from "./TemplatePickerPanel";
+import { MasterProjectAssignmentPanel } from "./MasterProjectAssignmentPanel";
 import type { TemplateCandidate } from "@/types/features/template-candidate";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -17,11 +18,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { TrainingClassDTO } from "@/types/features/training-class";
 import type {
   AllocationApiError,
   AllocationReadiness,
+  AutoAllocationPreview,
   AllocationSession,
   AllocationTeam,
   ClassMember,
@@ -32,7 +35,6 @@ import type {
   SaveDraftRequest,
   TeamMemberRole,
   TeamReadinessIssue,
-  TeamRoleQuota,
   TeamRoleQuotaViolation,
   TeamTemplateApiError,
   TransferTeamMemberRequest,
@@ -41,16 +43,22 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import {
   AlertCircle,
+  ArrowLeft,
+  CalendarDays,
   CircleAlert,
   ClipboardList,
   ArrowRightLeft,
   ChevronDown,
+  ChevronRight,
+  History,
+  Info,
   ListChecks,
   LoaderCircle,
   Plus,
-  Ban,
+  RefreshCw,
   Save,
   Search,
+  Shuffle,
   Send,
   ShieldCheck,
   Trash2,
@@ -70,6 +78,7 @@ interface LocalDraftTeam {
   assignedMentorId: number | null;
   memberIds: number[];
   memberRoles: Record<number, string | null>;
+  effectiveMaxMembers?: number;
 }
 
 /** Everything the saved-team dialog can change in one save (no publish). */
@@ -128,6 +137,62 @@ function getSavedSession(): AllocationSession | null {
   return null;
 }
 
+/** Unsaved draft teams are kept per class + session so a refresh doesn't lose them. */
+const DRAFT_STORAGE_PREFIX = "team-allocation-drafts";
+
+interface StoredDraftState {
+  classId: number;
+  sessionId: number;
+  teams: LocalDraftTeam[];
+  editingSavedTeamId: number | null;
+  memberPickerTeamId: string | null;
+  rememberedMentorId: number | null;
+}
+
+function draftStorageKeyFor(classId: number, sessionId: number) {
+  return `${DRAFT_STORAGE_PREFIX}:${classId}:${sessionId}`;
+}
+
+function isRestorableDraftTeam(value: unknown): value is LocalDraftTeam {
+  if (typeof value !== "object" || value === null) return false;
+  const team = value as Record<string, unknown>;
+  return (
+    typeof team.localId === "string" &&
+    typeof team.teamName === "string" &&
+    Array.isArray(team.memberIds) &&
+    team.memberIds.every((id) => typeof id === "number") &&
+    typeof team.memberRoles === "object" &&
+    team.memberRoles !== null
+  );
+}
+
+function readStoredDrafts(key: string): StoredDraftState | null {
+  try {
+    const serialized = localStorage.getItem(key);
+    if (!serialized) return null;
+    const parsed: unknown = JSON.parse(serialized);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const state = parsed as Partial<StoredDraftState>;
+    if (!Array.isArray(state.teams)) return null;
+    const teams = state.teams.filter(isRestorableDraftTeam);
+    if (teams.length === 0) return null;
+    return {
+      classId: typeof state.classId === "number" ? state.classId : 0,
+      sessionId: typeof state.sessionId === "number" ? state.sessionId : 0,
+      teams,
+      editingSavedTeamId:
+        typeof state.editingSavedTeamId === "number" ? state.editingSavedTeamId : null,
+      memberPickerTeamId:
+        typeof state.memberPickerTeamId === "string" ? state.memberPickerTeamId : null,
+      rememberedMentorId:
+        typeof state.rememberedMentorId === "number" ? state.rememberedMentorId : null,
+    };
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+}
+
 function getApiFailure(error: unknown): ApiFailure {
   if (axios.isAxiosError<AllocationApiError>(error)) {
     const data = error.response?.data;
@@ -138,7 +203,7 @@ function getApiFailure(error: unknown): ApiFailure {
         data?.message ??
         data?.error ??
         error.message ??
-        "Kh├┤ng thß╗â ho├án tß║Ñt y├¬u cß║ºu. Vui l├▓ng thß╗¡ lß║íi.",
+        "Không thể hoàn tất yêu cầu. Vui lòng thử lại.",
       memberId: data?.memberId ?? null,
       unassignedCount: data?.unassignedCount,
       unassignedMemberIds: data?.unassignedMemberIds,
@@ -156,7 +221,7 @@ function getApiFailure(error: unknown): ApiFailure {
     code: "ERR_REQUEST_FAILED",
     message: error instanceof Error
       ? error.message
-      : "Kh├┤ng thß╗â ho├án tß║Ñt y├¬u cß║ºu. Vui l├▓ng thß╗¡ lß║íi.",
+      : "Không thể hoàn tất yêu cầu. Vui lòng thử lại.",
     memberId: null,
     invalidMemberIds: undefined,
   };
@@ -177,7 +242,7 @@ function getTemplateFailure(error: unknown): TeamTemplateApiError {
       message:
         data?.message ??
         error.message ??
-        "Kh├┤ng thß╗â g├ín ─æß╗ü b├ái. Vui l├▓ng thß╗¡ lß║íi.",
+        "Không thể gán đề bài. Vui lòng thử lại.",
       teamId: data?.teamId ?? null,
       projectTemplateId: data?.projectTemplateId ?? null,
       projectTemplateName: data?.projectTemplateName ?? null,
@@ -192,7 +257,7 @@ function getTemplateFailure(error: unknown): TeamTemplateApiError {
     errorCode: "ERR_REQUEST_FAILED",
     message: error instanceof Error
       ? error.message
-      : "Kh├┤ng thß╗â g├ín ─æß╗ü b├ái. Vui l├▓ng thß╗¡ lß║íi.",
+      : "Không thể gán đề bài. Vui lòng thử lại.",
   };
 }
 
@@ -263,12 +328,6 @@ function roleQuotaGaps(
   });
 }
 
-function quotaWindow(quota: TeamRoleQuota) {
-  return quota.max >= UNBOUNDED_ROLE_QUOTA
-    ? `${quota.min}+`
-    : `${quota.min}-${quota.max}`;
-}
-
 function getStoredKey(
   ref: MutableRefObject<{ fingerprint: string; key: string } | null>,
   fingerprint: string,
@@ -279,7 +338,7 @@ function getStoredKey(
   return ref.current.key;
 }
 
-export default function TeamAllocationPage() {
+export default function TeamAllocationSetupPage() {
   const { hasPermission } = usePermissions();
   const { classId: classIdParam } = useParams<{ classId: string }>();
   const location = useLocation();
@@ -295,22 +354,21 @@ export default function TeamAllocationPage() {
     };
   }, [location.search]);
   const requestedSessionRef = useRef(allocationLink.sessionId);
+  const classQuery = useQuery({
+    queryKey: ["training-class", "detail", classId],
+    queryFn: () => trainingClassApi.getById(String(classId)),
+    enabled: Number.isSafeInteger(classId) && classId > 0,
+    retry: false,
+  });
   const selectedClass = (location.state as { trainingClass?: TrainingClassDTO } | null)
-    ?.trainingClass;
+    ?.trainingClass ?? classQuery.data;
   const queryClient = useQueryClient();
   const initialSession = useMemo(() => {
     const saved = getSavedSession();
     return saved?.classId === classId &&
       (allocationLink.sessionId === null || saved.id === allocationLink.sessionId) ? saved : null;
   }, [classId, allocationLink.sessionId]);
-  const [capacityInput, setCapacityInput] = useState(initialSession?.maxMembers.toString() ?? "");
   const [session, setSession] = useState<AllocationSession | null>(initialSession);
-  const [createAnotherSession, setCreateAnotherSession] = useState(false);
-  const [newSessionCapacity, setNewSessionCapacity] = useState("");
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [summaryDialog, setSummaryDialog] = useState<
-    "unassigned" | "saved" | "publishable" | null
-  >(null);
   const [removeMemberTarget, setRemoveMemberTarget] = useState<{
     teamId: number;
     memberId: number;
@@ -325,7 +383,8 @@ export default function TeamAllocationPage() {
   } | null>(null);
   const [activeMentorReason, setActiveMentorReason] = useState("");
   const [activeMentorSelection, setActiveMentorSelection] = useState("");
-  const [activeTab, setActiveTab] = useState<"teams" | "history">("teams");
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [activeWorkspace, setActiveWorkspace] = useState<"build" | "review">("build");
   const [transferTarget, setTransferTarget] = useState<{
     teamId: number;
     memberId: number;
@@ -338,11 +397,21 @@ export default function TeamAllocationPage() {
   const [roleAssignmentFailures, setRoleAssignmentFailures] =
     useState<Record<number, ApiFailure>>({});
   const [draftTeams, setDraftTeams] = useState<LocalDraftTeam[]>([]);
-  const [collapsedDraftTeamIds, setCollapsedDraftTeamIds] = useState<Set<string>>(
+  const [leaderReplacement, setLeaderReplacement] = useState<{
+    team: AllocationTeam; memberId: number; memberName: string; oldName: string;
+  } | null>(null);
+  const [autoPreview, setAutoPreview] = useState<AutoAllocationPreview | null>(null);
+  const [expandedPreviewTeams, setExpandedPreviewTeams] = useState<Set<number>>(
     () => new Set(),
   );
+  const [autoPreviewError, setAutoPreviewError] = useState("");
+  const [autoConfirmKey, setAutoConfirmKey] = useState<string | null>(null);
   const [memberSearch, setMemberSearch] = useState("");
   const [memberPickerTeamId, setMemberPickerTeamId] = useState<string | null>(null);
+  const [mentorForAllDialogOpen, setMentorForAllDialogOpen] = useState(false);
+  const [mentorForAllSelection, setMentorForAllSelection] = useState("");
+  /** Mentor đã chọn gần nhất — tự gán cho nhóm nháp tạo mới. */
+  const [rememberedMentorId, setRememberedMentorId] = useState<number | null>(null);
   const [editingSavedTeamId, setEditingSavedTeamId] = useState<number | null>(null);
   const [saveFailure, setSaveFailure] = useState<ApiFailure | null>(null);
   const [publishFailure, setPublishFailure] = useState<ApiFailure | null>(null);
@@ -350,6 +419,7 @@ export default function TeamAllocationPage() {
   /** US-12: latest strict-mode readiness report (null until checked). */
   const [readiness, setReadiness] = useState<AllocationReadiness | null>(null);
   const [readinessError, setReadinessError] = useState<ApiFailure | null>(null);
+  const [readinessDialogOpen, setReadinessDialogOpen] = useState(false);
   const [publishItemFailures, setPublishItemFailures] = useState<
     PublishTeamsResponse["failedItems"]
   >([]);
@@ -358,8 +428,12 @@ export default function TeamAllocationPage() {
     Record<number, TeamTemplateApiError>
   >({});
   const saveKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
+  const restoredDraftKeyRef = useRef<string | null>(null);
 
   const sessionId = session?.id ?? null;
+  const draftStorageKey = classId > 0 && sessionId !== null
+    ? draftStorageKeyFor(classId, sessionId)
+    : null;
   const sessionsQuery = useQuery({
     queryKey: ["team-allocation", "sessions", classId],
     queryFn: () => teamAllocationApi.getSessions(classId),
@@ -403,7 +477,6 @@ export default function TeamAllocationPage() {
     if (!matchingSession) {
       if (session) {
         setSession(null);
-        setCapacityInput("");
         localStorage.removeItem(SESSION_STORAGE_KEY);
       }
       return;
@@ -416,83 +489,117 @@ export default function TeamAllocationPage() {
       return;
     }
     setSession(matchingSession);
-    setCapacityInput(String(matchingSession.maxMembers));
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(matchingSession));
   }, [sessionsQuery.data, session]);
 
-  const openSessionMutation = useMutation({
-    mutationFn: () => {
-      const maxMembers = Number(session ? newSessionCapacity : capacityInput);
-      if (!Number.isSafeInteger(maxMembers) || maxMembers <= 0) {
-        throw new Error("Sß╗⌐c chß╗⌐a phß║úi l├á sß╗æ nguy├¬n d╞░╞íng.");
-      }
-      return teamAllocationApi.openSession(classId, { maxMembers });
-    },
-    onSuccess: (openedSession) => {
-      // Put the new session at the top of the cached list before it is
-      // re-fetched: the session-sync effect below falls back to
-      // `sessions[0]` when the selected id is not in the list yet, which used
-      // to bounce the page back to a previous (e.g. PUBLISHED) session.
-      queryClient.setQueryData<AllocationSession[]>(
-        ["team-allocation", "sessions", classId],
-        (current) => current
-          ? [openedSession, ...current.filter((item) => item.id !== openedSession.id)]
-          : [openedSession],
-      );
-      setSession(openedSession);
-      setCapacityInput(String(openedSession.maxMembers));
+  // Restore unsaved draft teams for this class + session (survives a refresh).
+  useEffect(() => {
+    if (!draftStorageKey) return;
+    if (restoredDraftKeyRef.current === draftStorageKey) return;
+    restoredDraftKeyRef.current = draftStorageKey;
+    const stored = readStoredDrafts(draftStorageKey);
+    if (!stored) {
       setDraftTeams([]);
       setEditingSavedTeamId(null);
-      setCreateAnotherSession(false);
-      setSaveFailure(null);
-      setPublishFailure(null);
-      setPublishItemFailures([]);
-      setLastWarnings([]);
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(openedSession));
-      void queryClient.invalidateQueries({
-        queryKey: ["team-allocation", "sessions", classId],
-      });
-      toast.success(`─É├ú mß╗ƒ phi├¬n ph├ón nh├│m #${openedSession.id}.`);
+      setMemberPickerTeamId(null);
+      return;
+    }
+    setDraftTeams(stored.teams);
+    setEditingSavedTeamId(stored.editingSavedTeamId);
+    setMemberPickerTeamId(
+      stored.memberPickerTeamId &&
+        stored.teams.some((team) => team.localId === stored.memberPickerTeamId)
+        ? stored.memberPickerTeamId
+        : stored.teams[0]?.localId ?? null,
+    );
+    if (stored.rememberedMentorId !== null) {
+      setRememberedMentorId(stored.rememberedMentorId);
+    }
+    setSaveFailure(null);
+  }, [draftStorageKey]);
+
+  // Keep the saved snapshot in sync while the drafts are being edited.
+  useEffect(() => {
+    if (!draftStorageKey) return;
+    if (restoredDraftKeyRef.current !== draftStorageKey) return;
+    if (draftTeams.length === 0) {
+      localStorage.removeItem(draftStorageKey);
+      return;
+    }
+    try {
+      const snapshot: StoredDraftState = {
+        classId,
+        sessionId: sessionId!,
+        teams: draftTeams,
+        editingSavedTeamId,
+        memberPickerTeamId,
+        rememberedMentorId,
+      };
+      localStorage.setItem(draftStorageKey, JSON.stringify(snapshot));
+    } catch {
+      // Persistence is best effort — never block the editor.
+    }
+  }, [
+    draftStorageKey,
+    draftTeams,
+    editingSavedTeamId,
+    memberPickerTeamId,
+    rememberedMentorId,
+    classId,
+    sessionId,
+  ]);
+
+  useEffect(() => {
+    setAutoPreview(null);
+    setAutoPreviewError("");
+    setAutoConfirmKey(null);
+  }, [sessionId, session?.maxMembers]);
+
+  const autoPreviewMutation = useMutation({
+    mutationFn: () => teamAllocationApi.previewAutoAllocation(classId, sessionId!),
+    onSuccess: (preview) => {
+      setExpandedPreviewTeams((current) => autoPreview === null
+        ? new Set(preview.teams.map((_, index) => index))
+        : new Set([...current].filter((index) => index < preview.teams.length)));
+      setAutoPreview(preview);
+      setAutoConfirmKey(crypto.randomUUID());
+      setAutoPreviewError("");
     },
-    onError: (error) => toast.error(getApiFailure(error).message),
+    onError: (error) => {
+      setAutoPreview(null);
+      setAutoConfirmKey(null);
+      setAutoPreviewError(getApiFailure(error).message);
+    },
   });
 
-  const updateCapacityMutation = useMutation({
-    mutationFn: () => {
-      const maxMembers = Number(capacityInput);
-      if (classId === null || sessionId === null) {
-        throw new Error("Kh├┤ng c├│ phi├¬n ph├ón nh├│m ─æang mß╗ƒ.");
-      }
-      if (!Number.isSafeInteger(maxMembers) || maxMembers <= 0) {
-        throw new Error("Sß╗⌐c chß╗⌐a phß║úi l├á sß╗æ nguy├¬n d╞░╞íng.");
-      }
-      return teamAllocationApi.updateSessionCapacity(classId, sessionId, maxMembers);
+  const autoConfirmMutation = useMutation({
+    mutationFn: () => teamAllocationApi.confirmAutoAllocation(
+      classId, sessionId!, autoPreview!, autoConfirmKey!),
+    onSuccess: async (result) => {
+      setAutoPreview(null);
+      setAutoConfirmKey(null);
+      setAutoPreviewError("");
+      setReadiness(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["team-allocation", "teams", classId, sessionId] }),
+        queryClient.invalidateQueries({ queryKey: ["team-allocation", "unassigned-members", classId, sessionId] }),
+        queryClient.invalidateQueries({ queryKey: ["team-allocation", "class-roster", classId, sessionId] }),
+      ]);
+      toast.success(`Đã tạo ${result.teams.length} nhóm Draft từ bản xem trước.`);
     },
-    onSuccess: (updatedSession) => {
-      queryClient.setQueryData<AllocationSession[]>(
-        ["team-allocation", "sessions", classId],
-        (current) => current
-          ? current.map((item) =>
-              item.id === updatedSession.id ? updatedSession : item,
-            )
-          : [updatedSession],
-      );
-      setSession(updatedSession);
-      setCapacityInput(String(updatedSession.maxMembers));
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedSession));
-      saveKeyRef.current = null;
-      void queryClient.invalidateQueries({
-        queryKey: ["team-allocation", "teams", classId, updatedSession.id],
-      });
-      toast.success(`─É├ú cß║¡p nhß║¡t sß╗⌐c chß╗⌐a tß╗æi ─æa th├ánh ${updatedSession.maxMembers} hß╗ìc vi├¬n/nh├│m.`);
+    onError: (error) => {
+      const failure = getApiFailure(error);
+      setAutoPreviewError(failure.status === 409
+        ? "Dữ liệu lớp đã thay đổi. Hãy tạo lại bản xem trước."
+        : failure.message);
+      if (failure.status === 409) setAutoConfirmKey(null);
     },
-    onError: (error) => toast.error(getApiFailure(error).message),
   });
 
   const saveDraftMutation = useMutation({
     mutationFn: async (teams: LocalDraftTeam[]): Promise<DraftWarning[]> => {
       if (classId === null || sessionId === null) {
-        throw new Error("H├úy mß╗ƒ phi├¬n ph├ón nh├│m tr╞░ß╗¢c khi l╞░u.");
+        throw new Error("Hãy mở phiên phân nhóm trước khi lưu.");
       }
       const savedDrafts = teams.filter((team) => team.savedTeamId !== undefined);
       const newDrafts = teams.filter((team) => team.savedTeamId === undefined);
@@ -548,9 +655,9 @@ export default function TeamAllocationPage() {
           queryKey: ["team-allocation", "class-roster", classId, sessionId],
         }),
       ]);
-      toast.success("─É├ú l╞░u thay ─æß╗òi nh├│m DRAFT.");
+      toast.success("Đã lưu thay đổi nhóm DRAFT.");
       if (response.length) {
-        toast.warning(`─É├ú l╞░u k├¿m ${response.length} cß║únh b├ío hß╗ìc vi├¬n tr├╣ng DRAFT.`);
+        toast.warning(`Đã lưu kèm ${response.length} cảnh báo học viên trùng DRAFT.`);
       }
     },
     onError: (error) => {
@@ -560,45 +667,11 @@ export default function TeamAllocationPage() {
     },
   });
 
-  const cancelSessionMutation = useMutation({
-    mutationFn: () => {
-      if (classId === null || sessionId === null) {
-        throw new Error("Kh├┤ng c├│ phi├¬n ph├ón nh├│m ─æang mß╗ƒ.");
-      }
-      return teamAllocationApi.cancelSession(classId, sessionId);
-    },
-    onSuccess: async (cancelledSession) => {
-      setSession(cancelledSession);
-      setCapacityInput(String(cancelledSession.maxMembers));
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(cancelledSession));
-      setDraftTeams([]);
-      setMemberPickerTeamId(null);
-      setCancelDialogOpen(false);
-      setSaveFailure(null);
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ["team-allocation", "sessions", classId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["team-allocation", "teams", classId, sessionId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["team-allocation", "unassigned-members", classId, sessionId],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["team-allocation", "class-roster", classId, sessionId],
-        }),
-      ]);
-      toast.success("─É├ú hß╗ºy phi├¬n. C├íc nh├│m DRAFT ─æ├ú ─æ╞░ß╗úc l╞░u trß╗».");
-    },
-    onError: (error) => toast.error(getApiFailure(error).message),
-  });
-
   // US-12: strict-mode pre-check (read-only, returns free students + team issues).
   const readinessMutation = useMutation({
     mutationFn: () => {
       if (sessionId === null) {
-        throw new Error("Kh├┤ng c├│ phi├¬n ph├ón nh├│m ─æang mß╗ƒ.");
+        throw new Error("Không có phiên phân nhóm đang mở.");
       }
       return teamAllocationApi.getReadiness(classId, sessionId);
     },
@@ -607,11 +680,11 @@ export default function TeamAllocationPage() {
       setReadinessError(null);
       setPublishFailure(null);
       if (report.readyToPublish) {
-        toast.success("Lß╗¢p ─æß╗º ─æiß╗üu kiß╗çn c├┤ng bß╗æ (Ready to Publish).");
+        toast.success("Lớp đủ điều kiện công bố (Ready to Publish).");
       } else {
         toast.warning(
-          `Lß╗¢p ch╞░a ─æß╗º ─æiß╗üu kiß╗çn c├┤ng bß╗æ: ${report.unassignedStudentCount} hß╗ìc vi├¬n tß╗▒ do, `
-            + `${report.teamIssues.length} lß╗ùi nh├│m.`,
+          `Lớp chưa đủ điều kiện công bố: ${report.unassignedStudentCount} học viên tự do, `
+            + `${report.teamIssues.length} lỗi nhóm.`,
         );
       }
     },
@@ -629,7 +702,7 @@ export default function TeamAllocationPage() {
   const publishSessionMutation = useMutation({
     mutationFn: () => {
       if (sessionId === null) {
-        throw new Error("Kh├┤ng c├│ phi├¬n ph├ón nh├│m ─æang mß╗ƒ.");
+        throw new Error("Không có phiên phân nhóm đang mở.");
       }
       return teamAllocationApi.publishSession(
         classId,
@@ -644,7 +717,7 @@ export default function TeamAllocationPage() {
       setPublishFailure(null);
       setReadinessError(null);
       if (succeededItems.length > 0) {
-        const successMessage = `─É├ú c├┤ng bß╗æ ch├¡nh thß╗⌐c ${succeededItems.length} nh├│m.`;
+        const successMessage = `Đã công bố chính thức ${succeededItems.length} nhóm.`;
         setPublishSuccess(successMessage);
         toast.success(successMessage);
       } else {
@@ -653,11 +726,12 @@ export default function TeamAllocationPage() {
       if (failedItems.length > 0) {
         setPublishSuccess(null);
         toast.warning(
-          `${failedItems.length} nh├│m ch╞░a thß╗â c├┤ng bß╗æ. Xem to├án bß╗Ö l├╜ do b├¬n d╞░ß╗¢i.`,
+          `${failedItems.length} nhóm chưa thể công bố. Xem toàn bộ lý do bên dưới.`,
         );
       }
       if (failedItems.length === 0 && succeededItems.length > 0) {
         setReadiness(null);
+        setReadinessDialogOpen(false);
         setSession((current) => {
           if (!current) return current;
           const publishedSession = { ...current, status: "PUBLISHED" as const };
@@ -716,16 +790,23 @@ export default function TeamAllocationPage() {
     ]);
   };
 
+  const checkPublishReadiness = () => {
+    setReadinessDialogOpen(true);
+    setReadiness(null);
+    setReadinessError(null);
+    readinessMutation.mutate();
+  };
+
   const addActiveMemberMutation = useMutation({
     mutationFn: ({ teamId, memberId }: { teamId: number; memberId: number }) => {
-      if (sessionId === null) throw new Error("Kh├┤ng c├│ phi├¬n ph├ón nh├│m.");
+      if (sessionId === null) throw new Error("Không có phiên phân nhóm.");
       return teamAllocationApi.addActiveTeamMember(
         classId, sessionId, teamId, memberId,
       );
     },
     onSuccess: async () => {
       await invalidateMembershipQueries();
-      toast.success("─É├ú th├¬m hß╗ìc vi├¬n v├áo nh├│m ACTIVE.");
+      toast.success("Đã thêm học viên vào nhóm ACTIVE.");
     },
     onError: (error) => toast.error(getApiFailure(error).message),
   });
@@ -736,14 +817,14 @@ export default function TeamAllocationPage() {
       memberId,
       reason,
     }: { teamId: number; memberId: number; reason: string }) => {
-      if (sessionId === null) throw new Error("Kh├┤ng c├│ phi├¬n ph├ón nh├│m.");
+      if (sessionId === null) throw new Error("Không có phiên phân nhóm.");
       return teamAllocationApi.removeActiveTeamMember(
         classId, sessionId, teamId, memberId, reason,
       );
     },
     onSuccess: async () => {
       await invalidateMembershipQueries();
-      toast.success("─É├ú gß╗í hß╗ìc vi├¬n khß╗Åi nh├│m ACTIVE.");
+      toast.success("Đã gỡ học viên khỏi nhóm ACTIVE.");
     },
     onError: (error) => toast.error(getApiFailure(error).message),
   });
@@ -754,7 +835,7 @@ export default function TeamAllocationPage() {
       mentorId,
       reason,
     }: { teamId: number; mentorId: number | null; reason?: string }) => {
-      if (sessionId === null) throw new Error("Kh├┤ng c├│ phi├¬n ph├ón nh├│m.");
+      if (sessionId === null) throw new Error("Không có phiên phân nhóm.");
       return teamAllocationApi.updateTeamMentor(
         classId, sessionId, teamId, mentorId, reason,
       );
@@ -765,7 +846,7 @@ export default function TeamAllocationPage() {
       });
       setActiveMentorTarget(null);
       setActiveMentorReason("");
-      toast.success("─É├ú cß║¡p nhß║¡t Mentor phß╗Ñ tr├ích nh├│m.");
+      toast.success("Đã cập nhật Mentor phụ trách nhóm.");
     },
     onError: (error) => toast.error(getApiFailure(error).message),
   });
@@ -780,7 +861,7 @@ export default function TeamAllocationPage() {
       expectedVersion: number;
       members: Array<{ memberId: number; roles: TeamMemberRole[] }>;
     }) => {
-      if (sessionId === null) throw new Error("Kh├┤ng c├│ phi├¬n ph├ón nh├│m.");
+      if (sessionId === null) throw new Error("Không có phiên phân nhóm.");
       return teamAllocationApi.updateTeamRoles(
         classId,
         sessionId,
@@ -809,7 +890,7 @@ export default function TeamAllocationPage() {
       await queryClient.invalidateQueries({
         queryKey: ["team-member-history"],
       });
-      toast.success("─É├ú l╞░u vai tr├▓ th├ánh vi├¬n trong nh├│m.");
+      toast.success("Đã lưu vai trò thành viên trong nhóm.");
     },
     onError: (error, variables) => {
       const failure = getApiFailure(error);
@@ -824,9 +905,34 @@ export default function TeamAllocationPage() {
       }));
       toast.error(
         failure.status === 409
-          ? "Dß╗» liß╗çu/Version nh├│m ─æ├ú bß╗ï thay ─æß╗òi, vui l├▓ng tß║úi lß║íi trang"
+          ? "Dữ liệu/Version nhóm đã bị thay đổi, vui lòng tải lại trang"
           : failure.message,
       );
+    },
+  });
+
+  const assignLeaderMutation = useMutation({
+    mutationFn: ({ team, memberId, confirmReplacement }: {
+      team: AllocationTeam; memberId: number; confirmReplacement: boolean;
+    }) => {
+      if (sessionId === null) throw new Error("Không có phiên phân nhóm.");
+      return teamAllocationApi.assignLeader(classId, sessionId, team.teamId,
+        memberId, team.version, confirmReplacement);
+    },
+    onSuccess: async () => {
+      setLeaderReplacement(null);
+      setReadiness(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["team-allocation", "teams", classId, sessionId] }),
+        queryClient.invalidateQueries({ queryKey: ["team-member-history"] }),
+      ]);
+      toast.success("Đã cập nhật Leader của nhóm.");
+    },
+    onError: async (error) => {
+      if (getApiFailure(error).status === 409) {
+        await queryClient.invalidateQueries({ queryKey: ["team-allocation", "teams", classId, sessionId] });
+      }
+      toast.error(getApiFailure(error).message);
     },
   });
 
@@ -836,7 +942,7 @@ export default function TeamAllocationPage() {
   const saveTeamDetailsMutation = useMutation({
     mutationFn: async (payload: SaveTeamDetailsPayload) => {
       if (classId === null || sessionId === null) {
-        throw new Error("Kh├┤ng c├│ phi├¬n ph├ón nh├│m.");
+        throw new Error("Không có phiên phân nhóm.");
       }
       let expectedVersion = payload.teamVersion;
       if (payload.templateChanged && payload.projectTemplateId !== null) {
@@ -894,7 +1000,7 @@ export default function TeamAllocationPage() {
           queryKey: ["team-member-history"],
         }),
       ]);
-      toast.success("─É├ú l╞░u th├┤ng tin nh├│m (ch╞░a c├┤ng bß╗æ).");
+      toast.success("Đã lưu thông tin nhóm (chưa công bố).");
     },
     onError: (error, payload) => {
       const failure = getApiFailure(error);
@@ -907,7 +1013,7 @@ export default function TeamAllocationPage() {
           ...current,
           [payload.teamId]: templateFailure,
         }));
-        toast.error(templateFailure.message ?? "Kh├┤ng thß╗â g├ín ─æß╗ü b├ái.");
+        toast.error(templateFailure.message ?? "Không thể gán đề bài.");
         return;
       }
       const invalidMemberIds = failure.status === 422
@@ -921,7 +1027,7 @@ export default function TeamAllocationPage() {
       }));
       toast.error(
         failure.status === 409
-          ? "Dß╗» liß╗çu/Version nh├│m ─æ├ú bß╗ï thay ─æß╗òi, vui l├▓ng tß║úi lß║íi trang"
+          ? "Dữ liệu/Version nhóm đã bị thay đổi, vui lòng tải lại trang"
           : failure.message,
       );
     },
@@ -939,7 +1045,7 @@ export default function TeamAllocationPage() {
       versionId?: number;
     }) => {
       if (classId === null || sessionId === null) {
-        throw new Error("Kh├┤ng c├│ phi├¬n ph├ón nh├│m.");
+        throw new Error("Không có phiên phân nhóm.");
       }
       return teamAllocationApi.assignProjectTemplate(
         classId,
@@ -961,7 +1067,7 @@ export default function TeamAllocationPage() {
         queryKey: ["team-allocation", "teams", classId, sessionId],
       });
       toast.success(
-        `─É├ú g├ín ─æß╗ü b├ái ΓÇ£${updated.projectTemplateName ?? "─æß╗ü b├ái"}ΓÇ¥ cho nh├│m ${updated.teamName}.`,
+        `Đã gán đề bài “${updated.projectTemplateName ?? "đề bài"}” cho nhóm ${updated.teamName}.`,
       );
     },
     onError: (error, variables) => {
@@ -970,7 +1076,7 @@ export default function TeamAllocationPage() {
         ...current,
         [variables.teamId]: failure,
       }));
-      toast.error(failure.message ?? "Kh├┤ng thß╗â g├ín ─æß╗ü b├ái.");
+      toast.error(failure.message ?? "Không thể gán đề bài.");
     },
   });
 
@@ -998,7 +1104,7 @@ export default function TeamAllocationPage() {
       mode: "move" | "swap";
       payload: TransferTeamMemberRequest;
     }) => {
-      if (sessionId === null) throw new Error("Kh├┤ng c├│ phi├¬n ph├ón nh├│m.");
+      if (sessionId === null) throw new Error("Không có phiên phân nhóm.");
       if (mode === "swap" && replacementMemberId !== undefined) {
         return teamAllocationApi.swapActiveTeamMember(
           classId,
@@ -1023,7 +1129,7 @@ export default function TeamAllocationPage() {
       setTransferReplacementMemberId("");
       setTransferMode("move");
       setTransferReason("");
-      toast.success("─É├ú chuyß╗ân hß╗ìc vi├¬n sang nh├│m mß╗¢i.");
+      toast.success("Đã chuyển học viên sang nhóm mới.");
     },
     onError: (error) => toast.error(getApiFailure(error).message),
   });
@@ -1032,10 +1138,31 @@ export default function TeamAllocationPage() {
     ? membersQuery.data ?? []
     : [];
   const savedTeams = teamsQuery.data?.teams ?? [];
+  const assignedInCurrentSession = new Set(
+    savedTeams
+      .filter((team) => team.status === "DRAFT" || team.status === "ACTIVE")
+      .flatMap((team) => team.memberIds),
+  );
+  const autoAvailableCount = rosterQuery.data && teamsQuery.data
+    ? rosterQuery.data.filter((member) => !assignedInCurrentSession.has(member.memberId)).length
+    : null;
   const memberPickerTeam = draftTeams.find(
     (team) => team.localId === memberPickerTeamId,
   );
+  const memberPickerMaxMembers = memberPickerTeam
+    ? memberPickerTeam.effectiveMaxMembers ?? session?.maxMembers ?? 0
+    : 0;
+  const memberPickerIsFull = Boolean(memberPickerTeam) &&
+    memberPickerMaxMembers > 0 &&
+    (memberPickerTeam?.memberIds.length ?? 0) >= memberPickerMaxMembers;
   const draftMemberIds = new Set(draftTeams.flatMap((team) => team.memberIds));
+  /** Học viên đã thuộc một nhóm khác trong phiên (DRAFT/ACTIVE) thì không được chọn nữa. */
+  const otherSavedTeamMemberIds = new Set(
+    savedTeams
+      .filter((team) => team.teamId !== memberPickerTeam?.savedTeamId)
+      .filter((team) => team.status === "DRAFT" || team.status === "ACTIVE")
+      .flatMap((team) => team.memberIds),
+  );
   const memberById = new Map(
     [...members, ...(rosterQuery.data ?? [])].map((member) => [member.memberId, member]),
   );
@@ -1051,24 +1178,20 @@ export default function TeamAllocationPage() {
   const teamsMissingRoles = publishableTeams.filter(
     (team) => !hasCompleteTeamRoles(team),
   );
-  const canCancelSession =
-    session?.status === "OPEN" &&
-    !teamsQuery.isLoading &&
-    !teamsQuery.isError &&
-    savedTeams.every((team) => team.status === "DRAFT");
   const addDraftTeam = () => {
     if (editingSavedTeamId !== null) {
-      toast.error("H├úy l╞░u hoß║╖c hß╗ºy chß╗ënh sß╗¡a nh├│m tr╞░ß╗¢c khi th├¬m nh├│m mß╗¢i.");
+      toast.error("Hãy lưu hoặc hủy chỉnh sửa nhóm trước khi thêm nhóm mới.");
       return;
     }
     const localId = crypto.randomUUID();
-    setCollapsedDraftTeamIds(new Set(draftTeams.map((team) => team.localId)));
+    setAutoPreview(null);
+    setAutoConfirmKey(null);
     setDraftTeams((current) => [
       ...current,
       {
         localId,
-        teamName: `Nh├│m ${current.length + 1}`,
-        assignedMentorId: null,
+        teamName: `Nhóm ${current.length + 1}`,
+        assignedMentorId: rememberedMentorId,
         memberIds: [],
         memberRoles: {},
       },
@@ -1078,28 +1201,42 @@ export default function TeamAllocationPage() {
     setSaveFailure(null);
   };
 
-  const addDraftTeamWithCapacity = async () => {
+  const addDraftTeamWithCapacity = () => {
     if (!session) return;
-    if (editingSavedTeamId !== null) {
-      toast.error("H├úy l╞░u hoß║╖c hß╗ºy chß╗ënh sß╗¡a nh├│m tr╞░ß╗¢c khi th├¬m nh├│m mß╗¢i.");
-      return;
-    }
-    const maxMembers = Number(capacityInput);
-    if (!Number.isSafeInteger(maxMembers) || maxMembers <= 0) {
-      toast.error("Sß╗⌐c chß╗⌐a phß║úi l├á sß╗æ nguy├¬n d╞░╞íng.");
-      return;
-    }
-    if (maxMembers !== session.maxMembers) {
-      try {
-        await updateCapacityMutation.mutateAsync();
-      } catch {
-        return;
-      }
-    }
     addDraftTeam();
   };
 
+  /** Selecting a draft team in the right column opens its student picker on the left. */
+  const selectDraftTeamForMembers = (team: LocalDraftTeam) => {
+    setMemberPickerTeamId(team.localId);
+  };
+
+  const applyMentorToAllDraftTeams = (mentorId: number | null) => {
+    setDraftTeams((current) => current.map((team) => ({ ...team, assignedMentorId: mentorId })));
+    setRememberedMentorId(mentorId);
+    setSaveFailure(null);
+    setMentorForAllDialogOpen(false);
+    setMentorForAllSelection("");
+    toast.success(
+      mentorId === null
+        ? "Đã bỏ Mentor phụ trách của tất cả nhóm nháp."
+        : "Đã gán Mentor cho tất cả nhóm nháp.",
+    );
+  };
+
   const toggleMember = (teamId: string, memberId: number, checked: boolean) => {
+    const targetTeam = draftTeams.find((item) => item.localId === teamId);
+    if (!targetTeam) return;
+    if (checked && !targetTeam.memberIds.includes(memberId)) {
+      const maxMembers = targetTeam.effectiveMaxMembers ?? session?.maxMembers ?? 0;
+      if (maxMembers > 0 && targetTeam.memberIds.length >= maxMembers) {
+        toast.warning(
+          `Nhóm "${targetTeam.teamName || "chưa đặt tên"}" đã đủ ${maxMembers} thành viên. Bỏ chọn một học viên trước khi thêm người khác.`,
+          { duration: 2500 },
+        );
+        return;
+      }
+    }
     setDraftTeams((current) => current.map((team) => {
       if (team.localId !== teamId) return team;
       return {
@@ -1121,15 +1258,15 @@ export default function TeamAllocationPage() {
   const saveDraft = () => {
     const newTeams = draftTeams.filter((team) => team.savedTeamId === undefined);
     if (!draftTeams.length) {
-      toast.error("H├úy th├¬m ├¡t nhß║Ñt mß╗Öt nh├│m tr╞░ß╗¢c khi l╞░u.");
+      toast.error("Hãy thêm ít nhất một nhóm trước khi lưu.");
       return;
     }
     if (draftTeams.some((team) => !team.teamName.trim())) {
-      toast.error("T├¬n nh├│m kh├┤ng ─æ╞░ß╗úc ─æß╗â trß╗æng.");
+      toast.error("Tên nhóm không được để trống.");
       return;
     }
     if (newTeams.some((team) => team.memberIds.length === 0)) {
-      toast.error("Mß╗ùi nh├│m mß╗¢i cß║ºn c├│ ├¡t nhß║Ñt mß╗Öt hß╗ìc vi├¬n.");
+      toast.error("Mỗi nhóm mới cần có ít nhất một học viên.");
       return;
     }
     saveDraftMutation.mutate(draftTeams);
@@ -1137,7 +1274,7 @@ export default function TeamAllocationPage() {
 
   const editSavedTeam = (team: AllocationTeam) => {
     if (draftTeams.length > 0) {
-      toast.error("H├úy l╞░u hoß║╖c hß╗ºy thay ─æß╗òi hiß╗çn tß║íi tr╞░ß╗¢c khi chß╗ënh sß╗¡a nh├│m ─æ├ú l╞░u.");
+      toast.error("Hãy lưu hoặc hủy thay đổi hiện tại trước khi chỉnh sửa nhóm đã lưu.");
       return;
     }
     const localId = `saved-${team.teamId}`;
@@ -1150,6 +1287,7 @@ export default function TeamAllocationPage() {
       memberRoles: Object.fromEntries(
         (team.members ?? []).map((member) => [member.memberId, member.role ?? "DEV"]),
       ),
+      effectiveMaxMembers: team.maxMembers ?? session?.maxMembers,
     }]);
     setEditingSavedTeamId(team.teamId);
     setMemberPickerTeamId(localId);
@@ -1182,400 +1320,368 @@ export default function TeamAllocationPage() {
 
   const nameForMember = (memberId: number) => {
     const member = memberById.get(memberId);
-    if (!member) return `Hß╗ìc vi├¬n #${memberId}`;
+    if (!member) return `Học viên #${memberId}`;
     return member.userCode ? `${member.fullName} (${member.userCode})` : member.fullName;
   };
 
+  const hasUnsavedDrafts = draftTeams.length > 0;
+
   return (
     <MainLayout pathName={{ "team-allocation": "Project Team Allocation" }}>
-      <div className="mx-auto w-full max-w-7xl space-y-6">
-        <div role="tablist" aria-label="Quß║ún l├╜ nh├│m" className="flex gap-2 border-b">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "teams"}
-            className={`border-b-2 px-4 py-2 text-sm font-medium ${
-              activeTab === "teams"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground"
-            }`}
-            onClick={() => setActiveTab("teams")}
-          >
-            Nh├│m v├á th├ánh vi├¬n
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "history"}
-            className={`border-b-2 px-4 py-2 text-sm font-medium ${
-              activeTab === "history"
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground"
-            }`}
-            onClick={() => setActiveTab("history")}
-          >
-            Lß╗ïch sß╗¡ th├ánh vi├¬n / Vai tr├▓
-          </button>
-        </div>
-
-        {activeTab === "history" && (
-          <TeamMemberHistoryPanel
-            classId={classId}
-            cohortId={selectedClass?.cohortId ?? null}
-            className={selectedClass?.name ?? `Lß╗¢p #${classId}`}
-          />
-        )}
-        <div className={activeTab === "teams" ? "contents" : "hidden"}>
+      <div className="mx-auto flex min-h-full w-full max-w-7xl flex-1 flex-col gap-2 pb-1">
         {!hasPermission("PEO_TEAM_ALLOCATE") &&
           !hasPermission("PRJ_WORKSPACE_MANAGE") && (
           <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-            T├ái khoß║ún hiß╗çn tß║íi kh├┤ng c├│ quyß╗ün ph├ón nh├│m dß╗▒ ├ín.
+            Tài khoản hiện tại không có quyền phân nhóm dự án.
           </div>
         )}
 
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-2">
-                <CardTitle>{selectedClass?.name ?? `Lß╗¢p #${classId}`}</CardTitle>
-                <CardDescription>
-                  {selectedClass
-                    ? `${selectedClass.code} ┬╖ ${selectedClass.memberCount} hß╗ìc vi├¬n`
-                    : "Phi├¬n ph├ón nh├│m v├á danh s├ích hß╗ìc vi├¬n cß╗ºa lß╗¢p ─æ├ú chß╗ìn."}
-                </CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => navigate("/team-allocation")}
-              >
-                Quay lß║íi danh s├ích lß╗¢p
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {sessionsQuery.data && sessionsQuery.data.length > 0 && (
-              <label className="block max-w-md space-y-2 text-sm font-medium">
-                Phi├¬n ph├ón nh├│m cß╗ºa lß╗¢p
-                <select
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={session?.id ?? ""}
-                  onChange={(event) => {
-                    const selected = sessionsQuery.data?.find(
-                      (item) => item.id === Number(event.target.value),
-                    );
-                    if (!selected) return;
-                    if (
-                      draftTeams.length > 0 &&
-                      !window.confirm("Thay ─æß╗òi ch╞░a l╞░u sß║╜ bß╗ï bß╗Å. Bß║ín muß╗æn chuyß╗ân phi├¬n?")
-                    ) {
-                      return;
-                    }
-                    setSession(selected);
-                    setCapacityInput(String(selected.maxMembers));
-                    setDraftTeams([]);
-                    setEditingSavedTeamId(null);
-                    setMemberPickerTeamId(null);
-                    setCreateAnotherSession(false);
-                    setSaveFailure(null);
-                    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(selected));
-                  }}
-                >
-                  {sessionsQuery.data.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      Phi├¬n #{item.sessionNumber} ┬╖ {item.status} ┬╖ tß╗æi ─æa {item.maxMembers}/nh├│m
-                    </option>
-                  ))}
-                  {!session && (
-                    <option value="" disabled>
-                      Chß╗ìn phi├¬n ph├ón nh├│m
-                    </option>
-                  )}
-                </select>
-              </label>
-            )}
-            {session && !createAnotherSession && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setNewSessionCapacity("");
-                  setCreateAnotherSession(true);
-                }}
-                disabled={!hasPermission("PEO_TEAM_ALLOCATE")}
-              >
-                <Plus className="size-4" />
-                Tß║ío phi├¬n mß╗¢i
-              </Button>
-            )}
-            {(!session || createAnotherSession) && (
-              <>
-                <label className="block max-w-xs space-y-2 text-sm font-medium">
-                  Sß╗⌐c chß╗⌐a tß╗æi ─æa / nh├│m {session ? "(phi├¬n mß╗¢i)" : ""}
-                <Input
-                  inputMode="numeric"
-                  min={1}
-                  type="number"
-                  placeholder="Nhß║¡p sß╗æ hß╗ìc vi├¬n tß╗æi ─æa"
-                  value={session ? newSessionCapacity : capacityInput}
-                  onChange={(event) => {
-                    if (session) setNewSessionCapacity(event.target.value);
-                    else setCapacityInput(event.target.value);
-                  }}
-                  disabled={!hasPermission("PEO_TEAM_ALLOCATE")}
-                />
-              </label>
-                <p className="text-xs text-muted-foreground">
-                  Lß╗¢p v├á project template ─æ╞░ß╗úc x├íc ─æß╗ïnh tß╗▒ ─æß╗Öng; m├ú phi├¬n do hß╗ç thß╗æng tß║ío.
+        {teamsQuery.isError && session && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm">
+            <span className="text-destructive">
+              Không tải được phiên #{session.id}. Kiểm tra class ID/session ID và quyền truy cập.
+            </span>
+            <Button variant="outline" size="sm" onClick={() => void teamsQuery.refetch()}>
+              <RefreshCw className="size-3.5" />
+              Thử lại
+            </Button>
+          </div>
+        )}
+
+        {session && session.status !== "OPEN" && (
+          <p className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+            <Info className="mt-0.5 size-3.5 shrink-0 text-primary" />
+            <span>
+              Phiên đã {session.status === "PUBLISHED" ? "công bố" : "đóng"} nên không thể thay đổi sức chứa.
+              Dùng <strong className="font-medium text-foreground">Master project assignment</strong> để phân
+              công dự án cho nhóm đủ điều kiện; nhóm phải hoàn tất hoặc hủy dự án cũ trước khi nhận dự án mới.
+            </span>
+          </p>
+        )}
+
+        {!session && (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+              <span className="flex size-12 items-center justify-center rounded-full bg-muted">
+                <CalendarDays className="size-6 text-muted-foreground" />
+              </span>
+              <div className="space-y-1">
+                <p className="font-medium">Chưa chọn phiên phân nhóm</p>
+                <p className="mx-auto max-w-md text-sm text-muted-foreground">
+                  Hãy tạo hoặc chọn một phiên phân nhóm ở trang lớp học, sau đó bấm
+                  “Allocate Teams” để bắt đầu.
                 </p>
-              </>
-            )}
-            {(!session || createAnotherSession) && (
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => {
-                    if (
-                      session &&
-                      draftTeams.length > 0 &&
-                      !window.confirm(
-                        "Tß║ío phi├¬n mß╗¢i sß║╜ bß╗Å c├íc thay ─æß╗òi nh├│m ch╞░a l╞░u trong phi├¬n hiß╗çn tß║íi. Bß║ín c├│ muß╗æn tiß║┐p tß╗Ñc?",
-                      )
-                    ) {
-                      return;
-                    }
-                    openSessionMutation.mutate();
-                  }}
-                  disabled={
-                    !hasPermission("PEO_TEAM_ALLOCATE") ||
-                    openSessionMutation.isPending ||
-                    !Number.isSafeInteger(Number(session ? newSessionCapacity : capacityInput)) ||
-                    Number(session ? newSessionCapacity : capacityInput) <= 0
-                  }
-                >
-                  {openSessionMutation.isPending
-                    ? <LoaderCircle className="size-4 animate-spin" />
-                    : <Plus className="size-4" />}
-                  Tß║ío phi├¬n ph├ón nh├│m
-                </Button>
-                {session && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setCreateAnotherSession(false)}
-                    disabled={openSessionMutation.isPending}
-                  >
-                    Hß╗ºy
-                  </Button>
-                )}
               </div>
-            )}
-            {session && !createAnotherSession && (
-              <div className="space-y-3 rounded-xl border bg-muted/40 p-4">
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <Badge variant={session.status === "OPEN" ? "default" : "secondary"}>
-                    {session.status}
-                  </Badge>
-                  <span className="font-medium">Phi├¬n #{session.sessionNumber}</span>
-                  <span className="text-muted-foreground">Lß╗¢p #{session.classId}</span>
-                  {teamsQuery.isLoading && <LoaderCircle className="size-4 animate-spin text-muted-foreground" />}
-                </div>
-                <div className="flex flex-wrap items-center gap-3 text-sm">
-                  <span className="text-muted-foreground">
-                    Sß╗⌐c chß╗⌐a hiß╗çn tß║íi: <strong className="text-foreground">{session.maxMembers}</strong> hß╗ìc vi├¬n/nh├│m
-                  </span>
-                  {session.status === "OPEN" && (
-                    <Button
-                      variant="destructive"
-                      onClick={() => setCancelDialogOpen(true)}
-                      disabled={
-                        !hasPermission("PEO_TEAM_ALLOCATE") ||
-                        !canCancelSession ||
-                        cancelSessionMutation.isPending
-                      }
-                    >
-                      {cancelSessionMutation.isPending
-                        ? <LoaderCircle className="size-4 animate-spin" />
-                        : <Ban className="size-4" />}
-                      Hß╗ºy phi├¬n
-                    </Button>
-                  )}
-                  {session.status !== "OPEN" && (
-                    <p className="w-full text-xs text-muted-foreground">
-                      Phi├¬n ─æ├ú publish hoß║╖c ─æ├│ng n├¬n kh├┤ng thß╗â thay ─æß╗òi sß╗⌐c chß╗⌐a v├á
-                      kh├┤ng thß╗â g├ín ─æß╗ü b├ái cho c├íc nh├│m ─æ├ú chuyß╗ân sang ACTIVE. H├úy tß║ío
-                      phi├¬n ph├ón nh├│m mß╗¢i ─æß╗â g├ín ─æß╗ü b├ái cho nh├│m DRAFT.
-                    </p>
-                  )}
-                  {session.status === "OPEN" && !teamsQuery.isLoading && !teamsQuery.isError &&
-                    !savedTeams.every((team) => team.status === "DRAFT") && (
-                      <p className="w-full text-xs text-muted-foreground">
-                        Chß╗ë c├│ thß╗â hß╗ºy khi tß║Ñt cß║ú nh├│m trong phi├¬n ─æß╗üu ß╗ƒ trß║íng th├íi DRAFT.
-                      </p>
-                    )}
-                </div>
-              </div>
-            )}
-            {teamsQuery.isError && session && (
-              <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
-                <span className="text-destructive">
-                  Kh├┤ng tß║úi ─æ╞░ß╗úc phi├¬n #{session.id}. Kiß╗âm tra class ID/session ID v├á quyß╗ün truy cß║¡p.
-                </span>
-                <Button variant="outline" size="sm" onClick={() => void teamsQuery.refetch()}>
-                  Thß╗¡ lß║íi
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              <Button
+                onClick={() => navigate(`/team-allocation/classes/${classId}`)}
+                className="gap-2"
+              >
+                <ArrowLeft className="size-4" />
+                Quay lại phiên phân nhóm
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {session && (
           <>
-            {/* US-12 ΓÇö strict-mode class readiness before publishing the session. */}
-            <Card
-              className={
-                readiness && !readiness.readyToPublish
-                  ? "border-destructive/50"
-                  : undefined
-              }
-            >
-              <CardHeader>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1.5">
-                    <CardTitle className="flex items-center gap-2">
-                      <ShieldCheck className="size-5 text-primary" />
-                      Kiß╗âm tra ─æiß╗üu kiß╗çn c├┤ng bß╗æ to├án lß╗¢p
-                    </CardTitle>
-                    <CardDescription>
-                      BR-UNI-10 ┬╖ Strict mode: 100% hß╗ìc vi├¬n phß║úi ─æ├ú c├│ nh├│m, mß╗ìi nh├│m
-                      phß║úi ─æ╞░ß╗úc g├ín ─æß╗ü b├ái hß╗úp lß╗ç v├á ─æ├íp ß╗⌐ng ─æß╗º ─æß╗ïnh suß║Ñt vai tr├▓ tr╞░ß╗¢c
-                      khi c├┤ng bß╗æ phi├¬n.
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+            <div className="sticky bottom-0 z-30 order-last mt-auto">
+            <div className="flex items-center justify-between gap-2 rounded-xl border bg-background/95 p-1.5 shadow-lg backdrop-blur">
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/team-allocation/classes/${classId}`)}
+                  className="gap-2 bg-background transition-colors hover:border-primary/40"
+                >
+                  <ArrowLeft className="size-4" />
+                  Quay lại phiên phân nhóm
+                </Button>
+              <div className="flex gap-1" role="tablist" aria-label="Quy trình phân nhóm">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeWorkspace === "build"}
+                  onClick={() => setActiveWorkspace("build")}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    activeWorkspace === "build"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
+                  }`}
+                >
+                  <span className={`flex size-5 items-center justify-center rounded-full text-[11px] font-bold ${
+                    activeWorkspace === "build" ? "bg-primary text-primary-foreground" : "bg-muted-foreground/15"
+                  }`}>
+                    1
+                  </span>
+                  <UsersRound className="size-4" />
+                  Allocate Teams
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-muted-foreground">
+                    {draftTeams.length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeWorkspace === "review"}
+                  onClick={() => setActiveWorkspace("review")}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    activeWorkspace === "review"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-background/70 hover:text-foreground"
+                  }`}
+                >
+                  <span className={`flex size-5 items-center justify-center rounded-full text-[11px] font-bold ${
+                    activeWorkspace === "review" ? "bg-primary text-primary-foreground" : "bg-muted-foreground/15"
+                  }`}>
+                    2
+                  </span>
+                  <ClipboardList className="size-4" />
+                  Set up Teams
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-muted-foreground">
+                    {savedTeams.length}
+                  </span>
+                  {publishableTeams.length > 0 && (
+                    <span
+                      className="size-1.5 animate-pulse rounded-full bg-emerald-500"
+                      aria-label="Có nhóm chờ publish"
+                    />
+                  )}
+                </button>
+              </div>
+              </div>
+              <div className="flex min-w-0 flex-1 items-center justify-end gap-2 px-1">
+                <p aria-live="polite" className="hidden min-w-0 flex-1 truncate text-right text-xs text-muted-foreground xl:block">
+                  {activeWorkspace === "build"
+                    ? "Tạo nhóm và phân bổ học viên vào từng nhóm."
+                    : "Gán đề bài dự án, vai trò thành viên và kiểm tra điều kiện công bố."}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setHistoryDialogOpen(true)}
+                  className="shrink-0 gap-2 bg-background transition-colors hover:border-primary/40"
+                >
+                  <History className="size-4" />
+                  Lịch sử thành viên / Vai trò
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                </Button>
+                {activeWorkspace === "build" && (
+                  <WithHint
+                    hint={
+                      !hasPermission("PEO_TEAM_ALLOCATE")
+                        ? "Bạn không có quyền tạo nhóm cho lớp này."
+                        : session.status !== "OPEN"
+                          ? "Phiên không ở trạng thái mở nên không thể lưu nhóm."
+                          : draftTeams.length === 0
+                            ? "Chưa có nhóm nháp nào để lưu."
+                            : null
+                    }
+                  >
                     <Button
-                      variant="outline"
-                      onClick={() => readinessMutation.mutate()}
+                      onClick={saveDraft}
+                      className="shrink-0 gap-1.5 shadow-lg shadow-primary/20 transition-transform active:scale-[0.99]"
                       disabled={
-                        readinessMutation.isPending ||
-                        session.status !== "OPEN" ||
-                        (!hasPermission("PEO_TEAM_ALLOCATE") &&
-                          !hasPermission("PRJ_WORKSPACE_MANAGE"))
+                        !hasPermission("PEO_TEAM_ALLOCATE") ||
+                        saveDraftMutation.isPending ||
+                        draftTeams.length === 0 ||
+                        session.status !== "OPEN"
                       }
                     >
-                      {readinessMutation.isPending
+                      {saveDraftMutation.isPending
                         ? <LoaderCircle className="size-4 animate-spin" />
-                        : <ListChecks className="size-4" />}
-                      Kiß╗âm tra ─æiß╗üu kiß╗çn c├┤ng bß╗æ
+                        : <Save className="size-4" />}
+                      {editingSavedTeamId !== null
+                        ? "Lưu chỉnh sửa nhóm"
+                        : "Lưu nhóm DRAFT"}
                     </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {session.status !== "OPEN" && (
-                  <p className="text-sm text-muted-foreground">
-                    Phi├¬n ─æang ß╗ƒ trß║íng th├íi {session.status}; chß╗ë phi├¬n OPEN mß╗¢i cß║ºn
-                    kiß╗âm tra ─æiß╗üu kiß╗çn c├┤ng bß╗æ.
-                  </p>
+                  </WithHint>
                 )}
-                {session.status === "OPEN" && draftTeams.length > 0 && (
-                  <p className="text-sm text-amber-700 dark:text-amber-300">
-                    C├▓n thay ─æß╗òi nh├│m ch╞░a l╞░u. H├úy l╞░u nh├íp tr╞░ß╗¢c khi kiß╗âm tra hoß║╖c
-                    c├┤ng bß╗æ.
-                  </p>
-                )}
-                {readinessError && (
-                  <div
-                    role="alert"
-                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-                  >
-                    {readinessError.message}
-                  </div>
-                )}
-                {!readiness && !readinessError && session.status === "OPEN" && (
-                  <p className="text-sm text-muted-foreground">
-                    Nhß║Ñn ΓÇ£Kiß╗âm tra ─æiß╗üu kiß╗çn c├┤ng bß╗æΓÇ¥ ─æß╗â x├íc thß╗▒c s─⌐ sß╗æ to├án lß╗¢p, ─æß╗ü b├ái
-                    v├á ─æß╗ïnh suß║Ñt vai tr├▓ cß╗ºa tß║Ñt cß║ú nh├│m tr╞░ß╗¢c khi c├┤ng bß╗æ ch├¡nh thß╗⌐c.
-                  </p>
-                )}
-                {readiness && <ReadinessReport report={readiness} />}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
+            </div>
 
-            <section className="grid gap-4 sm:grid-cols-3">
-              <MetricCard
-                icon={<Users className="size-5" />}
-                label="Hß╗ìc vi├¬n ch╞░a v├áo nh├│m ACTIVE trong phi├¬n"
-                value={members.length}
-                onClick={() => setSummaryDialog("unassigned")}
-              />
-              <MetricCard
-                icon={<ClipboardList className="size-5" />}
-                label="Nh├│m ─æ├ú l╞░u"
-                value={savedTeams.length}
-                onClick={() => setSummaryDialog("saved")}
-              />
-              <MetricCard
-                icon={<CircleAlert className="size-5" />}
-                label="Nh├│m chß╗¥ publish"
-                value={publishableTeams.length}
-                onClick={() => setSummaryDialog("publishable")}
-              />
-            </section>
-
-            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
-              <Card className={saveFailure?.status === 422 ? "border-destructive" : ""}>
-                <CardHeader className="flex flex-col gap-4">
-                  <div className="space-y-1.5">
-                    <CardTitle>Tß║ío nh├│m nh├íp</CardTitle>
-                    <CardDescription>
-                      Cß║Ñu h├¼nh sß╗⌐c chß╗⌐a v├á th├¬m nh├│m tß║íi ─æ├óy. Nh├│m ─æ├ú nhß║¡p sß║╜ tß╗▒ thu gß╗ìn ─æß╗â dß╗à quß║ún l├╜.
-                    </CardDescription>
+            <div className={activeWorkspace === "review" ? "flex min-h-0 flex-1 flex-col" : "grid items-start gap-6"}>
+              <div className={activeWorkspace === "build" ? "block" : "hidden"}>
+              <Card className={`gap-3 py-4 ${saveFailure?.status === 422 ? "border-destructive" : ""}`}>
+                <CardHeader className="flex flex-col gap-2 px-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <UsersRound className="size-4 text-primary" />
+                        Tạo nhóm & phân bổ học viên
+                      </CardTitle>
+                      {hasUnsavedDrafts ? (
+                        <>
+                          <Badge
+                            variant="outline"
+                            className="border-amber-500/40 bg-amber-500/10 text-[11px] text-amber-700 dark:text-amber-300"
+                          >
+                            Chưa lưu
+                          </Badge>
+                          <span className="text-[11px] font-normal text-muted-foreground">
+                            {draftTeams.length} nhóm · {draftMemberIds.size} học viên đang chờ lưu.
+                            Nhóm vượt giới hạn sẽ được backend kiểm tra.
+                          </span>
+                        </>
+                      ) : (
+                        <span className="flex items-center gap-1.5 text-[11px] font-normal text-muted-foreground">
+                          <Info className="size-3.5 shrink-0" />
+                          Nhóm vượt giới hạn sẽ được backend kiểm tra; form không bị xóa nếu phát sinh lỗi.
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
-                    <label className="block w-full max-w-xs space-y-1.5 text-sm font-medium">
-                      Sß╗⌐c chß╗⌐a tß╗æi ─æa / nh├│m
-                      <Input
-                        inputMode="numeric"
-                        min={1}
-                        type="number"
-                        value={capacityInput}
-                        onChange={(event) => setCapacityInput(event.target.value)}
-                        disabled={session.status !== "OPEN" || !hasPermission("PEO_TEAM_ALLOCATE")}
-                      />
-                    </label>
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 p-2">
                     <Button
+                      size="sm"
                       onClick={() => void addDraftTeamWithCapacity()}
                       disabled={
                         !hasPermission("PEO_TEAM_ALLOCATE") ||
                         session.status !== "OPEN" ||
-                        updateCapacityMutation.isPending ||
-                        saveDraftMutation.isPending ||
-                        !Number.isSafeInteger(Number(capacityInput)) ||
-                        Number(capacityInput) <= 0
+                        saveDraftMutation.isPending
                       }
                     >
-                      {updateCapacityMutation.isPending
-                        ? <LoaderCircle className="size-4 animate-spin" />
-                        : <Plus className="size-4" />}
-                      {Number(capacityInput) !== session.maxMembers
-                        ? "Cß║¡p nhß║¡t & th├¬m nh├│m"
-                        : "Th├¬m nh├│m"}
+                      <Plus className="size-4" />
+                      Thêm nhóm
                     </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => autoPreviewMutation.mutate()}
+                      disabled={
+                        !hasPermission("PEO_TEAM_ALLOCATE") || session.status !== "OPEN" ||
+                        draftTeams.length > 0 ||
+                        autoAvailableCount === 0 ||
+                        autoPreviewMutation.isPending || autoConfirmMutation.isPending
+                      }
+                    >
+                      {autoPreviewMutation.isPending
+                        ? <LoaderCircle className="size-4 animate-spin" />
+                        : <Shuffle className="size-4" />}
+                      Xem trước chia tự động
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setMentorForAllSelection(
+                          rememberedMentorId === null ? "" : String(rememberedMentorId),
+                        );
+                        setMentorForAllDialogOpen(true);
+                      }}
+                      disabled={
+                        !hasPermission("PEO_TEAM_ALLOCATE") ||
+                        session.status !== "OPEN" ||
+                        draftTeams.length === 0 ||
+                        mentorsQuery.isLoading ||
+                        saveDraftMutation.isPending
+                      }
+                    >
+                      <Users className="size-4" />
+                      Chọn Mentor cho tất cả nhóm
+                    </Button>
+                    {session.status === "OPEN" && (
+                      <p className="w-full text-[11px] text-muted-foreground" aria-live="polite">
+                        {autoAvailableCount === null
+                          ? "Đang tính số học viên có thể chia trong phiên này…"
+                          : `Còn ${autoAvailableCount} học viên hợp lệ chưa có nhóm Draft/Active trong phiên này.`}
+                      </p>
+                    )}
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-3 px-4 pb-4">
+                  {autoPreviewError && (
+                    <div role="alert" className="rounded-lg border border-destructive/30 p-2.5 text-xs text-destructive">
+                      {autoPreviewError}
+                    </div>
+                  )}
+                  {autoPreview && (
+                    <section className="space-y-2 rounded-xl border bg-muted/20 p-3" aria-label="Bản xem trước chia nhóm tự động">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <h3 className="text-sm font-semibold">Xem trước chia tự động</h3>
+                          <p className="text-xs text-muted-foreground">
+                            {autoPreview.eligibleCount} học viên · {autoPreview.teams.length} nhóm ·
+                            sức chứa chuẩn {autoPreview.standardMax} ·
+                            {autoPreview.teams.filter((team) => team.members.length > autoPreview.standardMax).length} nhóm thêm 1 học viên do số dư.
+                            Các nhóm Draft đã lưu được giữ nguyên.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" size="sm" variant="outline"
+                            disabled={autoPreviewMutation.isPending || autoConfirmMutation.isPending}
+                            onClick={() => autoPreviewMutation.mutate()}>
+                            <Shuffle className="size-4" /> Xáo trộn lại
+                          </Button>
+                          <Button type="button" size="sm" variant="outline"
+                            disabled={autoConfirmMutation.isPending}
+                            onClick={() => { setAutoPreview(null); setAutoPreviewError(""); setAutoConfirmKey(null); }}>
+                            Hủy xem trước
+                          </Button>
+                          <Button type="button" size="sm"
+                            disabled={!autoConfirmKey || autoConfirmMutation.isPending || autoPreviewMutation.isPending ||
+                              draftTeams.length > 0}
+                            onClick={() => autoConfirmMutation.mutate()}>
+                            {autoConfirmMutation.isPending && <LoaderCircle className="size-4 animate-spin" />}
+                            Xác nhận tạo nhóm Draft
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid items-start gap-2 sm:grid-cols-2">
+                        {autoPreview.teams.map((team, index) => {
+                          const expanded = expandedPreviewTeams.has(index);
+                          const panelId = `auto-preview-team-${sessionId}-${index}`;
+                          return (
+                            <article key={`${index}-${team.teamName}`}
+                              className="min-w-0 self-start overflow-hidden rounded-lg border bg-background">
+                              <button type="button" aria-expanded={expanded} aria-controls={panelId}
+                                className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-xs font-medium hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                                onClick={() => setExpandedPreviewTeams((current) => {
+                                  const next = new Set(current);
+                                  if (next.has(index)) next.delete(index);
+                                  else next.add(index);
+                                  return next;
+                                })}>
+                                <ChevronDown className={`size-4 shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`} />
+                                <span className="min-w-0 flex-1 truncate">{team.teamName} · {team.members.length} học viên</span>
+                                {team.members.length > autoPreview.standardMax && (
+                                  <Badge variant="secondary" className="shrink-0">Thêm 1 do số dư</Badge>
+                                )}
+                              </button>
+                              {expanded && (
+                                <ul id={panelId} className="space-y-1 border-t px-3 py-2 text-xs text-muted-foreground">
+                                  {team.members.map((member) => (
+                                    <li key={member.memberId} className="break-words">
+                                      • {member.fullName}{member.userCode ? ` (${member.userCode})` : ""}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  )}
                   {saveFailure && (
-                    <div role="alert" className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
+                    <div role="alert" className="flex gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs">
                       <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
                       <div className="space-y-1">
                         <p className="font-medium text-destructive">
                           {saveFailure.status === 422
-                            ? "Sß╗⌐c chß╗⌐a nh├│m kh├┤ng hß╗úp lß╗ç"
+                            ? "Sức chứa nhóm không hợp lệ"
                             : saveFailure.status === 409
-                              ? "Dß╗» liß╗çu ─æ├ú thay ─æß╗òi"
-                              : "Kh├┤ng thß╗â l╞░u nh├│m"}
+                              ? "Dữ liệu đã thay đổi"
+                              : "Không thể lưu nhóm"}
                         </p>
                         <p className="text-muted-foreground">{saveFailure.message}</p>
                         {saveFailure.status === 409 && (
                           <p className="text-muted-foreground">
-                            Bß║ún nh├íp cß╗ºa bß║ín vß║½n ─æ╞░ß╗úc giß╗». Bß╗Å chß╗ìn hß╗ìc vi├¬n bß╗ï ─æ├ính dß║Ñu rß╗ôi l╞░u lß║íi.
+                            Bản nháp của bạn vẫn được giữ. Bỏ chọn học viên bị đánh dấu rồi lưu lại.
                           </p>
                         )}
                       </div>
@@ -1583,230 +1689,212 @@ export default function TeamAllocationPage() {
                   )}
 
                   {membersQuery.isError ? (
-                    <div role="alert" className="rounded-xl border border-destructive/30 p-5 text-sm">
-                      <p className="text-destructive">Kh├┤ng tß║úi ─æ╞░ß╗úc danh s├ích hß╗ìc vi├¬n.</p>
-                      <Button className="mt-3" variant="outline" size="sm" onClick={() => void membersQuery.refetch()}>
-                        Thß╗¡ tß║úi lß║íi
+                    <div role="alert" className="rounded-xl border border-destructive/30 p-3 text-xs">
+                      <p className="text-destructive">Không tải được danh sách học viên.</p>
+                      <Button className="mt-2" variant="outline" size="sm" onClick={() => void membersQuery.refetch()}>
+                        Thử tải lại
                       </Button>
                     </div>
                   ) : (
-                    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,1.1fr)]">
-                      <div className="space-y-3">
-                        {draftTeams.length === 0 ? (
-                          <div className="rounded-xl border border-dashed px-5 py-10 text-center">
-                            <UsersRound className="mx-auto size-9 text-muted-foreground" />
-                            <p className="mt-3 font-medium">Ch╞░a c├│ nh├│m nh├íp</p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              Th├¬m nh├│m ─æß╗â bß║»t ─æß║ºu chß╗ìn hß╗ìc vi├¬n.
-                            </p>
+                    <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(260px,1fr)]">
+                      <div className="order-2 flex min-w-0 flex-col gap-3 lg:col-start-2 lg:row-start-1">
+                      {memberPickerTeam ? (
+                        <section
+                          className="space-y-2 rounded-xl border border-primary/30 bg-background p-3 shadow-sm"
+                          aria-label="Chỉnh sửa nhóm đang chọn"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <h3 className="text-xs font-semibold">Chỉnh sửa nhóm đang chọn</h3>
+                            </div>
+                            <span className={`flex items-center gap-1.5 text-xs ${
+                              memberPickerTeam.memberIds.length >
+                              (memberPickerTeam.effectiveMaxMembers ?? session.maxMembers)
+                                ? "font-semibold text-destructive"
+                                : "text-muted-foreground"
+                            }`}>
+                              <Users className="size-4" />
+                              {memberPickerTeam.memberIds.length}/
+                              {memberPickerTeam.effectiveMaxMembers ?? session.maxMembers} thành viên
+                            </span>
                           </div>
-                        ) : draftTeams.map((team, teamIndex) => {
-                          const collapsed = collapsedDraftTeamIds.has(team.localId);
-                          const mentorName = mentorsQuery.data?.find(
-                            (mentor) => mentor.mentorId === team.assignedMentorId,
-                          )?.fullName;
-                          return (
-                            <article
-                              key={team.localId}
-                              className={`rounded-xl border p-3 ${
-                                saveFailure?.memberId &&
-                                team.memberIds.includes(saveFailure.memberId)
-                                  ? "border-destructive bg-destructive/5"
-                                  : ""
-                              }`}
-                            >
-                              <button
-                                type="button"
-                                className="flex w-full items-center justify-between gap-3 text-left"
-                                aria-expanded={!collapsed}
-                                onClick={() => setCollapsedDraftTeamIds((current) => {
-                                  const next = new Set(current);
-                                  if (next.has(team.localId)) next.delete(team.localId);
-                                  else next.add(team.localId);
-                                  return next;
-                                })}
+                          <div className="grid gap-2">
+                            <label className="block space-y-1 text-xs font-medium">
+                              Tên nhóm
+                              <Input
+                                value={memberPickerTeam.teamName}
+                                maxLength={255}
+                                onChange={(event) => {
+                                  const localId = memberPickerTeam.localId;
+                                  setDraftTeams((current) => current.map((item) =>
+                                    item.localId === localId
+                                      ? { ...item, teamName: event.target.value }
+                                      : item,
+                                  ));
+                                  setSaveFailure(null);
+                                }}
+                              />
+                            </label>
+                            <label className="block space-y-1 text-xs font-medium">
+                              Mentor phụ trách
+                              <select
+                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                                value={memberPickerTeam.assignedMentorId ?? ""}
+                                disabled={mentorsQuery.isLoading}
+                                onChange={(event) => {
+                                  const mentorId = event.target.value
+                                    ? Number(event.target.value)
+                                    : null;
+                                  if (mentorId !== null) setRememberedMentorId(mentorId);
+                                  const currentIndex = draftTeams.findIndex(
+                                    (item) => item.localId === memberPickerTeam.localId,
+                                  );
+                                  setDraftTeams((current) => current.map((item, index) =>
+                                    item.localId === memberPickerTeam.localId
+                                      ? { ...item, assignedMentorId: mentorId }
+                                      : index > currentIndex &&
+                                          mentorId !== null &&
+                                          item.assignedMentorId === null
+                                        ? { ...item, assignedMentorId: mentorId }
+                                        : item,
+                                  ));
+                                }}
                               >
-                                <span className="flex min-w-0 items-center gap-2">
-                                  <ChevronDown className={`size-4 shrink-0 transition-transform ${collapsed ? "-rotate-90" : ""}`} />
-                                  <span className="min-w-0">
-                                    <span className="block truncate text-sm font-semibold">
-                                      {team.teamName || `Nh├│m ${teamIndex + 1}`}
-                                    </span>
-                                    <span className="block truncate text-xs text-muted-foreground">
-                                      {team.memberIds.length}/{session.maxMembers} th├ánh vi├¬n
-                                      {mentorName ? ` ┬╖ ${mentorName}` : ""}
-                                    </span>
-                                  </span>
+                                <option value="">Chưa chọn Mentor</option>
+                                {(mentorsQuery.data ?? []).map((mentor) => (
+                                  <option key={mentor.mentorId} value={mentor.mentorId}>
+                                    {mentor.fullName}
+                                    {mentor.defaultMentor ? " · Mentor mặc định của lớp" : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              {mentorsQuery.isError && (
+                                <span className="block text-xs font-normal text-destructive">
+                                  Không tải được danh sách Mentor của lớp.
                                 </span>
-                                <span className="shrink-0 text-xs text-muted-foreground">
-                                  {collapsed ? "Mß╗ƒ" : "Thu gß╗ìn"}
-                                </span>
-                              </button>
-                              {!collapsed && (
-                                <div className="mt-3 space-y-3 border-t pt-3">
-                                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                                    <label className="min-w-0 flex-1 space-y-1.5 text-sm font-medium">
-                                      T├¬n nh├│m
-                                      <Input
-                                        value={team.teamName}
-                                        maxLength={255}
-                                        onChange={(event) => {
-                                          setDraftTeams((current) => current.map((item) =>
-                                            item.localId === team.localId
-                                              ? { ...item, teamName: event.target.value }
-                                              : item,
-                                          ));
-                                          setSaveFailure(null);
-                                        }}
-                                      />
-                                    </label>
-                                    <span className={`flex items-center gap-2 pb-2 text-sm ${
-                                      team.memberIds.length > session.maxMembers
-                                        ? "font-semibold text-destructive"
-                                        : "text-muted-foreground"
-                                    }`}>
-                                      <Users className="size-4" />
-                                      {team.memberIds.length}/{session.maxMembers}
-                                    </span>
-                                  </div>
-                                  <label className="block space-y-1.5 text-sm font-medium">
-                                    Mentor phß╗Ñ tr├ích
-                                    <select
-                                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                      value={team.assignedMentorId ?? ""}
-                                      disabled={mentorsQuery.isLoading}
-                                      onChange={(event) => {
-                                        const mentorId = event.target.value
-                                          ? Number(event.target.value)
-                                          : null;
-                                        setDraftTeams((current) => current.map((item, index) =>
-                                          item.localId === team.localId
-                                            ? { ...item, assignedMentorId: mentorId }
-                                            : index > teamIndex &&
-                                                mentorId !== null &&
-                                                item.assignedMentorId === null
-                                              ? { ...item, assignedMentorId: mentorId }
-                                              : item,
-                                        ));
-                                      }}
-                                    >
-                                      <option value="">Ch╞░a chß╗ìn Mentor</option>
-                                      {(mentorsQuery.data ?? []).map((mentor) => (
-                                        <option key={mentor.mentorId} value={mentor.mentorId}>
-                                          {mentor.fullName}
-                                          {mentor.defaultMentor ? " ┬╖ Mentor mß║╖c ─æß╗ïnh cß╗ºa lß╗¢p" : ""}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    {mentorsQuery.isError && (
-                                      <span className="block text-xs font-normal text-destructive">
-                                        Kh├┤ng tß║úi ─æ╞░ß╗úc danh s├ích Mentor cß╗ºa lß╗¢p.
-                                      </span>
-                                    )}
-                                  </label>
-                                  <div className="flex flex-wrap gap-2">
-                                    {team.savedTeamId === undefined && (
-                                      <Button
-                                        type="button"
-                                        variant="destructive"
-                                        size="sm"
-                                        aria-label={`X├│a nh├│m nh├íp ${team.teamName || teamIndex + 1}`}
-                                        onClick={() => {
-                                          setDraftTeams((current) =>
-                                            current.filter((item) => item.localId !== team.localId),
-                                          );
-                                          setCollapsedDraftTeamIds((current) => {
-                                            const next = new Set(current);
-                                            next.delete(team.localId);
-                                            return next;
-                                          });
-                                          if (memberPickerTeamId === team.localId) {
-                                            setMemberPickerTeamId(null);
-                                          }
-                                          setSaveFailure(null);
-                                        }}
-                                      >
-                                        <Trash2 className="size-4" />
-                                        X├│a nh├│m
-                                      </Button>
-                                    )}
-                                    <Button
-                                      size="sm"
-                                      variant={memberPickerTeamId === team.localId ? "default" : "outline"}
-                                      onClick={() => {
-                                        setMemberPickerTeamId((current) =>
-                                          current === team.localId ? null : team.localId,
-                                        );
-                                        setMemberSearch("");
-                                      }}
-                                      disabled={!hasPermission("PEO_TEAM_ALLOCATE") || session.status !== "OPEN"}
-                                    >
-                                      <Users className="size-4" />
-                                      {memberPickerTeamId === team.localId
-                                        ? "─Éang chß╗ìn hß╗ìc vi├¬n"
-                                        : "Chß╗ìn hß╗ìc vi├¬n"}
-                                    </Button>
-                                    {team.savedTeamId !== undefined && (
-                                      <Button size="sm" variant="outline" onClick={cancelDraftEditing}>
-                                        Hß╗ºy chß╗ënh sß╗¡a
-                                      </Button>
-                                    )}
-                                  </div>
-                                  {team.memberIds.length > session.maxMembers && (
-                                    <p className="text-xs text-destructive">
-                                      V╞░ß╗út sß╗⌐c chß╗⌐a tß╗æi ─æa {session.maxMembers}; danh s├ích chß╗ìn vß║½n ─æ╞░ß╗úc giß╗» ─æß╗â bß║ín ─æiß╗üu chß╗ënh.
-                                    </p>
-                                  )}
-                                  <div className="max-h-24 overflow-y-auto rounded-md border p-2">
-                                    <div className="flex flex-wrap gap-2">
-                                      {team.memberIds.length === 0 ? (
-                                        <span className="text-xs text-muted-foreground">Ch╞░a chß╗ìn hß╗ìc vi├¬n</span>
-                                      ) : team.memberIds.map((memberId) => (
-                                        <Badge
-                                          key={memberId}
-                                          variant="secondary"
-                                          className={saveFailure?.memberId === memberId
-                                            ? "border-destructive text-destructive"
-                                            : ""}
-                                        >
-                                          {nameForMember(memberId)}
-                                          <button
-                                            type="button"
-                                            aria-label={`Bß╗Å chß╗ìn ${nameForMember(memberId)}`}
-                                            className="ml-1 rounded-full hover:text-destructive"
-                                            onClick={() => toggleMember(team.localId, memberId, false)}
-                                          >
-                                            <X className="size-3" />
-                                          </button>
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
                               )}
-                            </article>
-                          );
-                        })}
+                            </label>
+                          </div>
+                          {memberPickerTeam.memberIds.length >
+                            (memberPickerTeam.effectiveMaxMembers ?? session.maxMembers) && (
+                            <p className="text-xs text-destructive">
+                              Vượt sức chứa tối đa {memberPickerTeam.effectiveMaxMembers ?? session.maxMembers}; danh sách chọn vẫn được giữ để bạn điều chỉnh.
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-2">
+                            {memberPickerTeam.savedTeamId === undefined ? (
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                aria-label={`Xóa nhóm nháp ${memberPickerTeam.teamName || ""}`}
+                                onClick={() => {
+                                  const removedId = memberPickerTeam.localId;
+                                  const remaining = draftTeams.filter(
+                                    (item) => item.localId !== removedId,
+                                  );
+                                  setDraftTeams(remaining);
+                                  setMemberPickerTeamId(remaining[0]?.localId ?? null);
+                                  setSaveFailure(null);
+                                }}
+                              >
+                                <Trash2 className="size-4" />
+                                Xóa nhóm
+                              </Button>
+                            ) : (
+                              <Button size="sm" variant="outline" onClick={cancelDraftEditing}>
+                                Hủy chỉnh sửa
+                              </Button>
+                            )}
+                          </div>
+                        </section>
+                      ) : (
+                        <div className="rounded-xl border border-dashed px-3 py-2 text-[11px] text-muted-foreground">
+                          Chọn một nhóm nháp ở khung bên phải để chỉnh sửa tên nhóm, Mentor phụ trách và học viên.
+                        </div>
+                      )}
+
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-sm font-semibold">Nhóm nháp</h3>
+                          <Badge variant="secondary" className="tabular-nums">{draftTeams.length}</Badge>
+                        </div>
+                        {draftTeams.length === 0 ? (
+                          <div className="space-y-2 rounded-lg border border-dashed px-2.5 py-4 text-center">
+                            <p className="text-xs text-muted-foreground">Chưa có nhóm nháp.</p>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="w-full gap-1.5"
+                              onClick={() => void addDraftTeamWithCapacity()}
+                              disabled={
+                                !hasPermission("PEO_TEAM_ALLOCATE") ||
+                                session.status !== "OPEN"
+                              }
+                            >
+                              <Plus className="size-4" />
+                              Thêm nhóm
+                            </Button>
+                          </div>
+                        ) : (
+                          <ul
+                            className="space-y-2 overflow-y-auto pr-1"
+                            style={{ maxHeight: "min(16rem, calc(100vh - 38rem))" }}
+                          >
+                            {draftTeams.map((team, teamIndex) => {
+                              const isSelected = memberPickerTeamId === team.localId;
+                              return (
+                                <li key={team.localId}>
+                                  <button
+                                    type="button"
+                                    aria-pressed={isSelected}
+                                    aria-controls="draft-member-picker"
+                                    onClick={() => selectDraftTeamForMembers(team)}
+                                    title={team.teamName || `Nhóm ${teamIndex + 1}`}
+                                    className={`w-full truncate rounded-lg border px-2.5 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                                      isSelected
+                                        ? "border-primary bg-primary text-primary-foreground"
+                                        : "bg-background hover:border-primary/40"
+                                    }`}
+                                  >
+                                    {team.teamName || `Nhóm ${teamIndex + 1}`}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
                       </div>
 
                       {memberPickerTeam ? (
-                        <div className="min-w-0 space-y-3 rounded-xl border border-primary/30 bg-muted/20 p-4">
+                        <div className="order-1 min-w-0 space-y-3 rounded-xl border border-primary/30 bg-muted/20 p-3 lg:col-start-1 lg:row-start-1" id="draft-member-picker">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                               <h3 className="text-sm font-semibold">
-                                Chß╗ìn hß╗ìc vi├¬n cho {memberPickerTeam.teamName || "nh├│m ch╞░a ─æß║╖t t├¬n"}
+                                Chọn học viên cho {memberPickerTeam.teamName || "nhóm chưa đặt tên"}
                               </h3>
                               <p className="text-xs text-muted-foreground">
-                                ─É├ú chß╗ìn {memberPickerTeam.memberIds.length}/{session.maxMembers} hß╗ìc vi├¬n.
-                                Mß╗Öt hß╗ìc vi├¬n c├│ thß╗â ß╗ƒ nhiß╗üu nh├│m DRAFT; hß╗ç thß╗æng sß║╜ cß║únh b├ío khi l╞░u.
+                                Đã chọn {memberPickerTeam.memberIds.length}/{memberPickerMaxMembers} học viên.
+                                Học viên đã thuộc nhóm khác trong phiên sẽ không chọn được.
                               </p>
+                              {memberPickerIsFull && (
+                                <p
+                                  className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300"
+                                  role="status"
+                                  aria-live="polite"
+                                >
+                                  <CircleAlert className="size-3.5 shrink-0" />
+                                  Nhóm đã đủ {memberPickerMaxMembers} thành viên. Bỏ chọn một học viên để thêm người khác.
+                                </p>
+                              )}
                             </div>
                             <div className="relative w-full sm:max-w-xs">
                               <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                               <Input
                                 className="pl-9"
-                                placeholder="T├¼m t├¬n hoß║╖c m├ú hß╗ìc vi├¬n"
-                                aria-label={`T├¼m hß╗ìc vi├¬n cho ${memberPickerTeam.teamName}`}
+                                placeholder="Tìm tên hoặc mã học viên"
+                                aria-label={`Tìm học viên cho ${memberPickerTeam.teamName}`}
                                 value={memberSearch}
                                 onChange={(event) => setMemberSearch(event.target.value)}
                               />
@@ -1815,37 +1903,64 @@ export default function TeamAllocationPage() {
                           {(memberPickerTeam.savedTeamId !== undefined
                             ? rosterQuery.isLoading
                             : membersQuery.isLoading) ? (
-                            <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                              <LoaderCircle className="size-4 animate-spin" />
-                              ─Éang tß║úi hß╗ìc vi├¬n...
+                            <div className="space-y-2" aria-busy="true" aria-label="Đang tải học viên">
+                              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <LoaderCircle className="size-3.5 animate-spin" />
+                                Đang tải học viên...
+                              </span>
+                              {[0, 1, 2, 3].map((row) => (
+                                <div
+                                  key={row}
+                                  className="h-11 animate-pulse rounded-lg border bg-muted/40"
+                                  style={{ animationDelay: `${row * 80}ms` }}
+                                />
+                              ))}
                             </div>
                           ) : filteredMembers.length === 0 ? (
-                            <p className="py-6 text-center text-sm text-muted-foreground">
-                              {members.length === 0
-                                ? "Kh├┤ng c├▓n hß╗ìc vi├¬n ACTIVE ch╞░a ─æ╞░ß╗úc xß║┐p v├áo nh├│m ACTIVE trong phi├¬n n├áy."
-                                : "Kh├┤ng t├¼m thß║Ñy hß╗ìc vi├¬n ph├╣ hß╗úp."}
-                            </p>
+                            <div className="py-8 text-center">
+                              <Users className="mx-auto size-7 text-muted-foreground/70" />
+                              <p className="mt-2 text-sm text-muted-foreground">
+                                {members.length === 0
+                                  ? "Không còn học viên ACTIVE chưa được xếp vào nhóm ACTIVE trong phiên này."
+                                  : "Không tìm thấy học viên phù hợp."}
+                              </p>
+                              {members.length > 0 && memberSearch.trim() && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="mt-2"
+                                  onClick={() => setMemberSearch("")}
+                                >
+                                  <X className="size-3.5" />
+                                  Xóa từ khóa tìm kiếm
+                                </Button>
+                              )}
+                            </div>
                           ) : (
-                            <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+                            <div
+                              className="space-y-2 overflow-y-auto pr-1"
+                              style={{ maxHeight: "min(21rem, calc(100vh - 32rem))" }}
+                            >
                               {filteredMembers.map((member) => {
                                 const selected = memberPickerTeam.memberIds.includes(member.memberId);
-                                const assignedToAnotherDraft =
-                                  !selected && draftMemberIds.has(member.memberId);
-                                const assignedToActiveTeam =
-                                  memberPickerTeam.savedTeamId !== undefined &&
-                                  (rosterQuery.data ?? []).some(
-                                    (rosterMember) =>
-                                      rosterMember.memberId === member.memberId &&
-                                      rosterMember.assignedToActiveTeam,
-                                  );
+                                const assignedToOtherTeam = !selected &&
+                                  (draftMemberIds.has(member.memberId) ||
+                                    otherSavedTeamMemberIds.has(member.memberId) ||
+                                    (memberPickerTeam.savedTeamId !== undefined &&
+                                      (rosterQuery.data ?? []).some(
+                                        (rosterMember) =>
+                                          rosterMember.memberId === member.memberId &&
+                                          rosterMember.assignedToActiveTeam,
+                                      )));
                                 return (
                                   <MemberOption
                                     key={`${memberPickerTeam.localId}-${member.memberId}`}
                                     member={member}
                                     checked={selected}
-                                    duplicateDraft={assignedToAnotherDraft}
+                                    duplicateDraft={assignedToOtherTeam}
                                     highlighted={saveFailure?.memberId === member.memberId}
-                                    disabled={assignedToActiveTeam && !selected}
+                                    disabled={assignedToOtherTeam}
                                     onCheckedChange={(checked) =>
                                       toggleMember(memberPickerTeam.localId, member.memberId, checked)
                                     }
@@ -1856,48 +1971,58 @@ export default function TeamAllocationPage() {
                           )}
                         </div>
                       ) : (
-                        <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                          Th├¬m nh├│m hoß║╖c chß╗ìn ΓÇ£Chß╗ìn hß╗ìc vi├¬nΓÇ¥ ß╗ƒ mß╗Öt nh├│m ─æß╗â mß╗ƒ danh s├ích sinh vi├¬n tß║íi ─æ├óy.
+                        <div className="order-1 h-full rounded-xl border border-dashed px-6 py-10 text-center lg:col-start-1 lg:row-start-1">
+                          <Search className="mx-auto size-7 text-muted-foreground/70" />
+                          <p className="mt-2 text-sm font-medium">Chưa chọn nhóm</p>
+                          <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
+                            Bấm vào một nhóm ở khung bên phải để mở danh sách học viên tại đây.
+                          </p>
                         </div>
                       )}
 
-                      <div className="col-span-full flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-                        <p className="text-xs text-muted-foreground">
-                          Nh├│m v╞░ß╗út giß╗¢i hß║ín sß║╜ ─æ╞░ß╗úc backend kiß╗âm tra; form kh├┤ng bß╗ï x├│a nß║┐u ph├ít sinh lß╗ùi.
-                        </p>
-                        <Button
-                          onClick={saveDraft}
-                          disabled={
-                            !hasPermission("PEO_TEAM_ALLOCATE") ||
-                            saveDraftMutation.isPending ||
-                            draftTeams.length === 0 ||
-                            session.status !== "OPEN"
-                          }
-                        >
-                          {saveDraftMutation.isPending
-                            ? <LoaderCircle className="size-4 animate-spin" />
-                            : <Save className="size-4" />}
-                          {editingSavedTeamId !== null
-                            ? "L╞░u chß╗ënh sß╗¡a nh├│m"
-                            : "L╞░u nh├│m DRAFT"}
-                        </Button>
-                      </div>
                     </div>
                   )}
                 </CardContent>
               </Card>
+              </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <ClipboardList className="size-5 text-primary" />
-                    Nh├│m ─æ├ú l╞░u
-                  </CardTitle>
-                  <CardDescription>
-                    C├íc nh├│m DRAFT ch╞░a giß╗» chß╗ù hß╗ìc vi├¬n. C├┤ng bß╗æ ch├¡nh thß╗⌐c sß║╜ kiß╗âm tra lß║íi trß║íng th├íi th├ánh vi├¬n.
-                  </CardDescription>
+              <div className={activeWorkspace === "review" ? "flex min-h-0 flex-1 flex-col gap-4" : "hidden"}>
+              {sessionId !== null &&
+                (hasPermission("PEO_TEAM_ALLOCATE") || hasPermission("PRJ_WORKSPACE_MANAGE")) && (
+                <div className="shrink-0">
+                  <MasterProjectAssignmentPanel
+                    classId={classId}
+                    sessionId={sessionId}
+                    onAssigned={() => { void teamsQuery.refetch(); }}
+                  />
+                </div>
+              )}
+              <Card className="flex min-h-0 flex-1 flex-col">
+                <CardHeader className="shrink-0">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="space-y-1.5">
+                      <CardTitle className="flex items-center gap-2">
+                        <ClipboardList className="size-5 text-primary" />
+                        Nhóm đã lưu
+                        <Badge variant="secondary" className="tabular-nums">{savedTeams.length}</Badge>
+                      </CardTitle>
+                      <CardDescription>
+                        Các nhóm DRAFT chưa giữ chỗ học viên. Mở một nhóm để gán đề bài dự án,
+                        vai trò thành viên và Mentor; công bố chính thức sẽ kiểm tra lại trạng thái thành viên.
+                      </CardDescription>
+                    </div>
+                    {publishableTeams.length > 0 && (
+                      <Badge
+                        variant="outline"
+                        className="gap-1.5 border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                      >
+                        <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+                        {publishableTeams.length} nhóm chờ publish
+                      </Badge>
+                    )}
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
                   {lastWarnings.length > 0 && (
                     <WarningList warnings={lastWarnings} />
                   )}
@@ -1909,7 +2034,7 @@ export default function TeamAllocationPage() {
                           (publishFailure.unassignedMemberIds?.length ?? 0) > 0) && (
                           <div className="mt-3 rounded-lg border-2 border-destructive bg-background p-3">
                             <p className="font-semibold">
-                              Hß╗ìc vi├¬n tß╗▒ do ch╞░a ─æ╞░ß╗úc xß║┐p nh├│m (
+                              Học viên tự do chưa được xếp nhóm (
                               {publishFailure.unassignedCount
                                 ?? publishFailure.unassignedMembers?.length
                                 ?? publishFailure.unassignedMemberIds?.length}
@@ -1923,7 +2048,7 @@ export default function TeamAllocationPage() {
                                       variant="outline"
                                       className="border-destructive bg-destructive/10 text-destructive"
                                     >
-                                      {member.fullName}{member.userCode ? ` ┬╖ ${member.userCode}` : ` (#${member.memberId})`}
+                                      {member.fullName}{member.userCode ? ` · ${member.userCode}` : ` (#${member.memberId})`}
                                     </Badge>
                                   ))
                                 : publishFailure.unassignedMemberIds?.map((memberId) => (
@@ -1941,7 +2066,7 @@ export default function TeamAllocationPage() {
                       {(publishFailure.teamIssues?.length ?? 0) > 0 && (
                         <div className="mt-3 rounded-lg border-2 border-destructive bg-background p-3">
                           <p className="font-semibold">
-                            Nh├│m ch╞░a ─æ├íp ß╗⌐ng ─æiß╗üu kiß╗çn c├┤ng bß╗æ
+                            Nhóm chưa đáp ứng điều kiện công bố
                           </p>
                           <ul className="mt-2 space-y-1 text-xs">
                             {publishFailure.teamIssues?.map((issue, index) => (
@@ -1968,12 +2093,12 @@ export default function TeamAllocationPage() {
                   {publishItemFailures.length > 0 && (
                     <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3">
                       <p className="text-sm font-semibold text-destructive">
-                        Mß╗Öt sß╗æ nh├│m ch╞░a thß╗â publish
+                        Một số nhóm chưa thể publish
                       </p>
                       <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                         {publishItemFailures.map((failure) => (
                           <li key={failure.teamId}>
-                            Nh├│m #{failure.teamId}: {failure.message}
+                            Nhóm #{failure.teamId}: {failure.message}
                             {failure.memberId
                               ? ` (${nameForMember(failure.memberId)})`
                               : ""}
@@ -1983,18 +2108,27 @@ export default function TeamAllocationPage() {
                     </div>
                   )}
                   {teamsQuery.isLoading ? (
-                    <LoadingState label="─Éang tß║úi nh├│m..." />
+                    <LoadingState label="Đang tải nhóm..." />
                   ) : teamsQuery.isError ? (
                     <p className="text-sm text-muted-foreground">
-                      Danh s├ích nh├│m ch╞░a tß║úi ─æ╞░ß╗úc.
+                      Danh sách nhóm chưa tải được.
                     </p>
                   ) : savedTeams.length === 0 ? (
                     <div className="rounded-xl border border-dashed p-6 text-center">
                       <ClipboardList className="mx-auto size-8 text-muted-foreground" />
-                      <p className="mt-3 text-sm font-medium">Ch╞░a c├│ nh├│m ─æ├ú l╞░u</p>
+                      <p className="mt-3 text-sm font-medium">Chưa có nhóm đã lưu</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        L╞░u nh├│m nh├íp ─æß╗â ch├║ng xuß║Ñt hiß╗çn ß╗ƒ ─æ├óy.
+                        Lưu nhóm nháp để chúng xuất hiện ở đây.
                       </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3 gap-1.5"
+                        onClick={() => setActiveWorkspace("build")}
+                      >
+                        <ArrowLeft className="size-3.5" />
+                        Sang bước tạo nhóm
+                      </Button>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -2096,6 +2230,15 @@ export default function TeamAllocationPage() {
                             })
                           }
                           onRoleChange={clearTeamRoleFailure}
+                          leaderPending={assignLeaderMutation.isPending}
+                          onAssignLeader={(memberId, memberName) => {
+                            if (team.leaderMemberId && team.leaderMemberId !== memberId) {
+                              setLeaderReplacement({ team, memberId, memberName,
+                                oldName: nameForMember(team.leaderMemberId) });
+                            } else {
+                              assignLeaderMutation.mutate({ team, memberId, confirmReplacement: false });
+                            }
+                          }}
                           canAssignTemplate={
                             hasPermission("PEO_TEAM_ALLOCATE") ||
                             hasPermission("PRJ_WORKSPACE_MANAGE")
@@ -2113,10 +2256,7 @@ export default function TeamAllocationPage() {
                             clearTemplateAssignError(team.teamId)
                           }
                           canCreateNewSession={hasPermission("PEO_TEAM_ALLOCATE")}
-                          onCreateNewSession={() => {
-                            setNewSessionCapacity(String(session.maxMembers));
-                            setCreateAnotherSession(true);
-                          }}
+                          onCreateNewSession={() => navigate(`/team-allocation/classes/${classId}`)}
                         />
                       ))}
                     </div>
@@ -2125,138 +2265,187 @@ export default function TeamAllocationPage() {
                     <>
                       {teamsMissingRoles.length > 0 && (
                         <p className="text-sm text-muted-foreground">
-                          G├ín v├á l╞░u vai tr├▓ cho mß╗ìi th├ánh vi├¬n tr╞░ß╗¢c khi c├┤ng bß╗æ ch├¡nh thß╗⌐c.
+                          Một số nhóm còn thiếu điều kiện công bố. Hãy kiểm tra trước khi tiếp tục.
                         </p>
                       )}
-                      <Button
-                        className="w-full"
-                        disabled={
-                          publishSessionMutation.isPending ||
-                          !hasPermission("PEO_TEAM_ALLOCATE") ||
-                          session.status !== "OPEN" ||
-                          draftTeams.length > 0
+                      <WithHint
+                        hint={
+                          !hasPermission("PEO_TEAM_ALLOCATE")
+                            ? "Bạn không có quyền kiểm tra điều kiện công bố."
+                            : session.status !== "OPEN"
+                              ? "Phiên không ở trạng thái mở."
+                              : draftTeams.length > 0
+                                ? "Hãy lưu hoặc hủy nhóm nháp trước khi kiểm tra."
+                                : null
                         }
-                        onClick={() => {
-                          setPublishItemFailures([]);
-                          setPublishFailure(null);
-                          setPublishSuccess(null);
-                          publishSessionMutation.mutate();
-                        }}
                       >
-                        {publishSessionMutation.isPending
-                          ? <LoaderCircle className="size-4 animate-spin" />
-                          : <Send className="size-4" />}
-                        C├┤ng bß╗æ ch├¡nh thß╗⌐c
-                      </Button>
+                        <Button
+                          className="w-full gap-1.5 transition-transform active:scale-[0.99]"
+                          variant="outline"
+                          disabled={
+                            readinessMutation.isPending ||
+                            !hasPermission("PEO_TEAM_ALLOCATE") ||
+                            session.status !== "OPEN" ||
+                            draftTeams.length > 0
+                          }
+                          onClick={checkPublishReadiness}
+                        >
+                          {readinessMutation.isPending
+                            ? <LoaderCircle className="size-4 animate-spin" />
+                            : <ListChecks className="size-4" />}
+                          Kiểm tra điều kiện công bố
+                        </Button>
+                      </WithHint>
                     </>
                   )}
                 </CardContent>
               </Card>
+              </div>
             </div>
           </>
         )}
-        </div>
       </div>
-      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
-        <DialogContent>
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-6xl">
           <DialogHeader>
-            <DialogTitle>Hß╗ºy phi├¬n ph├ón nh├│m?</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="size-5 text-primary" />
+              Lịch sử thành viên / Vai trò
+            </DialogTitle>
             <DialogDescription>
-              Phi├¬n sß║╜ chuyß╗ân sang CANCELLED v├á c├íc nh├│m DRAFT sß║╜ ─æ╞░ß╗úc l╞░u trß╗» (ARCHIVED).
-              H├ánh ─æß╗Öng n├áy kh├┤ng x├│a lß╗ïch sß╗¡ v├á kh├┤ng thß╗â ho├án t├íc.
+              Nhật ký chỉ được thêm mới, sắp xếp từ mới nhất đến cũ nhất.
             </DialogDescription>
           </DialogHeader>
+          <TeamMemberHistoryPanel
+            classId={classId}
+            cohortId={selectedClass?.cohortId ?? null}
+            className={selectedClass?.name ?? `Lớp #${classId}`}
+            embedded
+          />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={mentorForAllDialogOpen} onOpenChange={setMentorForAllDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Chọn Mentor cho tất cả nhóm</DialogTitle>
+            <DialogDescription>
+              Mentor được chọn sẽ áp dụng cho toàn bộ {draftTeams.length} nhóm nháp hiện tại.
+            </DialogDescription>
+          </DialogHeader>
+          <label className="block space-y-1.5 text-sm font-medium">
+            Mentor phụ trách
+            <select
+              aria-label="Mentor cho tất cả nhóm nháp"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={mentorForAllSelection}
+              onChange={(event) => setMentorForAllSelection(event.target.value)}
+            >
+              <option value="">Bỏ chọn Mentor</option>
+              {(mentorsQuery.data ?? []).map((mentor) => (
+                <option key={mentor.mentorId} value={mentor.mentorId}>
+                  {mentor.fullName}
+                  {mentor.defaultMentor ? " · Mentor mặc định của lớp" : ""}
+                </option>
+              ))}
+            </select>
+            {mentorsQuery.isError && (
+              <span className="block text-xs font-normal text-destructive">
+                Không tải được danh sách Mentor của lớp.
+              </span>
+            )}
+          </label>
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setCancelDialogOpen(false)}
-              disabled={cancelSessionMutation.isPending}
+              onClick={() => setMentorForAllDialogOpen(false)}
             >
-              Quay lß║íi
+              Hủy
             </Button>
             <Button
-              variant="destructive"
-              onClick={() => cancelSessionMutation.mutate()}
-              disabled={!canCancelSession || cancelSessionMutation.isPending}
+              onClick={() => applyMentorToAllDraftTeams(
+                mentorForAllSelection ? Number(mentorForAllSelection) : null,
+              )}
+              disabled={draftTeams.length === 0}
             >
-              {cancelSessionMutation.isPending
-                ? <LoaderCircle className="size-4 animate-spin" />
-                : <Ban className="size-4" />}
-              X├íc nhß║¡n hß╗ºy phi├¬n
+              <Users className="size-4" />
+              Áp dụng cho tất cả nhóm
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog
-        open={summaryDialog !== null}
-        onOpenChange={(open) => {
-          if (!open) setSummaryDialog(null);
-        }}
-      >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+      <Dialog open={leaderReplacement !== null} onOpenChange={(open) => {
+        if (!open && !assignLeaderMutation.isPending) setLeaderReplacement(null);
+      }}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {summaryDialog === "unassigned"
-                ? "Hß╗ìc vi├¬n ch╞░a v├áo nh├│m ACTIVE trong phi├¬n"
-                : summaryDialog === "publishable"
-                  ? "Nh├│m chß╗¥ publish"
-                  : "Nh├│m ─æ├ú l╞░u"}
-            </DialogTitle>
+            <DialogTitle>Đổi Leader của nhóm?</DialogTitle>
             <DialogDescription>
-              {summaryDialog === "unassigned"
-                ? `${members.length} hß╗ìc vi├¬n`
-                : summaryDialog === "publishable"
-                  ? `${publishableTeams.length} nh├│m`
-                  : `${savedTeams.length} nh├│m`}
+              Nhóm đã có Leader ({leaderReplacement?.oldName}). Bạn có muốn đổi sang {leaderReplacement?.memberName} không?
             </DialogDescription>
           </DialogHeader>
-          {summaryDialog === "unassigned" ? (
-            members.length === 0 ? (
-              <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">
-                Kh├┤ng c├│ hß╗ìc vi├¬n n├áo trong danh s├ích n├áy.
-              </p>
-            ) : (
-              <ul className="max-h-[55vh] divide-y overflow-y-auto rounded-lg border">
-                {members.map((member) => (
-                  <li
-                    key={member.memberId}
-                    className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+          <DialogFooter>
+            <Button variant="outline" disabled={assignLeaderMutation.isPending}
+              onClick={() => setLeaderReplacement(null)}>Hủy</Button>
+            <Button disabled={assignLeaderMutation.isPending} onClick={() => {
+              if (leaderReplacement) assignLeaderMutation.mutate({
+                team: leaderReplacement.team, memberId: leaderReplacement.memberId,
+                confirmReplacement: true,
+              });
+            }}>Xác nhận đổi Leader</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={readinessDialogOpen}
+        onOpenChange={setReadinessDialogOpen}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Kiểm tra điều kiện công bố</DialogTitle>
+            <DialogDescription>
+              Kết quả kiểm tra toàn bộ học viên, nhóm, đề bài và định suất vai trò.
+            </DialogDescription>
+          </DialogHeader>
+          {readinessMutation.isPending ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+              <LoaderCircle className="size-4 animate-spin" />
+              Đang kiểm tra điều kiện công bố...
+            </div>
+          ) : readinessError ? (
+            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {readinessError.message}
+            </div>
+          ) : readiness ? (
+            <>
+              <ReadinessReport report={readiness} />
+              {readiness.readyToPublish && (
+                <DialogFooter>
+                  <Button
+                    disabled={
+                      publishSessionMutation.isPending ||
+                      !hasPermission("PEO_TEAM_ALLOCATE") ||
+                      session?.status !== "OPEN" ||
+                      draftTeams.length > 0
+                    }
+                    onClick={() => {
+                      setPublishItemFailures([]);
+                      setPublishFailure(null);
+                      setPublishSuccess(null);
+                      publishSessionMutation.mutate();
+                    }}
                   >
-                    <span className="min-w-0 truncate">{member.fullName}{member.userCode ? ` ┬╖ ${member.userCode}` : ""}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      #{member.memberId}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )
+                    {publishSessionMutation.isPending
+                      ? <LoaderCircle className="size-4 animate-spin" />
+                      : <Send className="size-4" />}
+                    Công bố chính thức
+                  </Button>
+                </DialogFooter>
+              )}
+            </>
           ) : (
-            (() => {
-              const displayedTeams = summaryDialog === "publishable"
-                ? publishableTeams
-                : savedTeams;
-              return displayedTeams.length === 0 ? (
-                <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">
-                  Kh├┤ng c├│ nh├│m n├áo trong danh s├ích n├áy.
-                </p>
-              ) : (
-                <ul className="max-h-[55vh] divide-y overflow-y-auto rounded-lg border">
-                  {displayedTeams.map((team) => (
-                    <li
-                      key={team.teamId}
-                      className="flex items-center justify-between gap-3 px-3 py-3 text-sm"
-                    >
-                      <span className="min-w-0 truncate font-medium">
-                        {team.teamName}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {team.memberIds.length} th├ánh vi├¬n
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              );
-            })()
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Chưa có kết quả kiểm tra.
+            </p>
           )}
         </DialogContent>
       </Dialog>
@@ -2274,17 +2463,17 @@ export default function TeamAllocationPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Chuyß╗ân hß╗ìc vi├¬n giß╗»a c├íc nh├│m</DialogTitle>
+            <DialogTitle>Chuyển học viên giữa các nhóm</DialogTitle>
             <DialogDescription>
-              Chß╗ìn chuyß╗ân trß╗▒c tiß║┐p nß║┐u nh├│m nhß║¡n c├▓n chß╗ù, hoß║╖c ─æß╗òi vß╗ï tr├¡ vß╗¢i mß╗Öt th├ánh vi├¬n cß╗ºa nh├│m nhß║¡n.
-              L├╜ do sß║╜ ─æ╞░ß╗úc ghi v├áo lß╗ïch sß╗¡.
+              Chọn chuyển trực tiếp nếu nhóm nhận còn chỗ, hoặc đổi vị trí với một thành viên của nhóm nhận.
+              Lý do sẽ được ghi vào lịch sử.
             </DialogDescription>
           </DialogHeader>
           <p className="text-sm font-medium">
-            Hß╗ìc vi├¬n: {transferTarget?.memberName}
+            Học viên: {transferTarget?.memberName}
           </p>
           <label className="space-y-2 text-sm font-medium">
-            H├¼nh thß╗⌐c
+            Hình thức
             <select
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               value={transferMode}
@@ -2295,12 +2484,12 @@ export default function TeamAllocationPage() {
               }}
               disabled={transferMemberMutation.isPending}
             >
-              <option value="move">Chuyß╗ân trß╗▒c tiß║┐p</option>
-              <option value="swap">─Éß╗òi vß╗ï tr├¡ hai hß╗ìc vi├¬n</option>
+              <option value="move">Chuyển trực tiếp</option>
+              <option value="swap">Đổi vị trí hai học viên</option>
             </select>
           </label>
           <label className="space-y-2 text-sm font-medium">
-            Nh├│m nhß║¡n
+            Nhóm nhận
             <select
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               value={transferDestinationId}
@@ -2310,7 +2499,7 @@ export default function TeamAllocationPage() {
               }}
               disabled={transferMemberMutation.isPending}
             >
-              <option value="">Chß╗ìn nh├│m</option>
+              <option value="">Chọn nhóm</option>
               {savedTeams
                 .filter((candidate) =>
                   candidate.teamId !== transferTarget?.teamId &&
@@ -2320,14 +2509,14 @@ export default function TeamAllocationPage() {
                 )
                 .map((candidate) => (
                   <option key={candidate.teamId} value={candidate.teamId}>
-                    {candidate.teamName} ({candidate.memberIds.length} th├ánh vi├¬n)
+                    {candidate.teamName} ({candidate.memberIds.length} thành viên)
                   </option>
                 ))}
             </select>
           </label>
           {transferMode === "swap" && transferDestinationId && (
             <label className="space-y-2 text-sm font-medium">
-              Hß╗ìc vi├¬n ─æß╗òi vß╗ï tr├¡
+              Học viên đổi vị trí
               <select
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                 value={transferReplacementMemberId}
@@ -2336,24 +2525,24 @@ export default function TeamAllocationPage() {
                 }
                 disabled={transferMemberMutation.isPending}
               >
-                <option value="">Chß╗ìn th├ánh vi├¬n nh├│m nhß║¡n</option>
+                <option value="">Chọn thành viên nhóm nhận</option>
                 {savedTeams
                   .find((candidate) =>
                     candidate.teamId === Number(transferDestinationId),
                   )
                   ?.members?.map((member) => (
                     <option key={member.memberId} value={member.memberId}>
-                      {member.fullName}{member.userCode ? ` ┬╖ ${member.userCode}` : ""} ┬╖ {member.role ?? "Ch╞░a c├│ role"}
+                      {member.fullName}{member.userCode ? ` · ${member.userCode}` : ""} · {member.role ?? "Chưa có role"}
                     </option>
                   ))}
               </select>
             </label>
           )}
           <label className="space-y-2 text-sm font-medium">
-            L├╜ do chuyß╗ân nh├│m (bß║»t buß╗Öc)
+            Lý do chuyển nhóm (bắt buộc)
             <Textarea
               maxLength={500}
-              placeholder="Nhß║¡p l├╜ do ─æiß╗üu chuyß╗ân"
+              placeholder="Nhập lý do điều chuyển"
               value={transferReason}
               onChange={(event) => setTransferReason(event.target.value)}
               disabled={transferMemberMutation.isPending}
@@ -2366,7 +2555,7 @@ export default function TeamAllocationPage() {
               disabled={transferMemberMutation.isPending}
               onClick={() => setTransferTarget(null)}
             >
-              Hß╗ºy
+              Hủy
             </Button>
             <Button
               type="button"
@@ -2408,7 +2597,7 @@ export default function TeamAllocationPage() {
               {transferMemberMutation.isPending
                 ? <LoaderCircle className="size-4 animate-spin" />
                 : <ArrowRightLeft className="size-4" />}
-              X├íc nhß║¡n chuyß╗ân nh├│m
+              Xác nhận chuyển nhóm
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2424,24 +2613,24 @@ export default function TeamAllocationPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Gß╗í hß╗ìc vi├¬n khß╗Åi nh├│m?</DialogTitle>
+            <DialogTitle>Gỡ học viên khỏi nhóm?</DialogTitle>
             <DialogDescription>
-              Nhß║¡p l├╜ do gß╗í {removeMemberTarget?.memberName ?? "hß╗ìc vi├¬n"}.
-              Hß╗ìc vi├¬n sß║╜ trß╗ƒ vß╗ü danh s├ích ch╞░a ─æ╞░ß╗úc xß║┐p nh├│m trong phi├¬n n├áy.
+              Nhập lý do gỡ {removeMemberTarget?.memberName ?? "học viên"}.
+              Học viên sẽ trở về danh sách chưa được xếp nhóm trong phiên này.
             </DialogDescription>
           </DialogHeader>
           <label className="space-y-2 text-sm font-medium">
-            L├╜ do gß╗í
+            Lý do gỡ
             <Textarea
               autoFocus
               maxLength={500}
-              placeholder="Nhß║¡p l├╜ do (bß║»t buß╗Öc)"
+              placeholder="Nhập lý do (bắt buộc)"
               value={removeMemberReason}
               onChange={(event) => setRemoveMemberReason(event.target.value)}
               disabled={removeActiveMemberMutation.isPending}
             />
             <span className="block text-xs font-normal text-muted-foreground">
-              {removeMemberReason.length}/500 k├╜ tß╗▒
+              {removeMemberReason.length}/500 ký tự
             </span>
           </label>
           <DialogFooter>
@@ -2454,7 +2643,7 @@ export default function TeamAllocationPage() {
               }}
               disabled={removeActiveMemberMutation.isPending}
             >
-              Hß╗ºy
+              Hủy
             </Button>
             <Button
               type="button"
@@ -2481,7 +2670,7 @@ export default function TeamAllocationPage() {
               {removeActiveMemberMutation.isPending
                 ? <LoaderCircle className="size-4 animate-spin" />
                 : <Trash2 className="size-4" />}
-              X├íc nhß║¡n gß╗í
+              Xác nhận gỡ
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2497,23 +2686,23 @@ export default function TeamAllocationPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Thay ─æß╗òi Mentor phß╗Ñ tr├ích</DialogTitle>
+            <DialogTitle>Thay đổi Mentor phụ trách</DialogTitle>
             <DialogDescription>
-              Cß║¡p nhß║¡t Mentor cho nh├│m {activeMentorTarget?.teamName}.
+              Cập nhật Mentor cho nhóm {activeMentorTarget?.teamName}.
               {activeMentorTarget?.active
-                ? " L├╜ do thay ─æß╗òi l├á bß║»t buß╗Öc v├á ─æ╞░ß╗úc l╞░u v├áo lß╗ïch sß╗¡ audit."
-                : " L├╜ do thay ─æß╗òi c├│ thß╗â ─æ╞░ß╗úc ghi lß║íi trong lß╗ïch sß╗¡ audit."}
+                ? " Lý do thay đổi là bắt buộc và được lưu vào lịch sử audit."
+                : " Lý do thay đổi có thể được ghi lại trong lịch sử audit."}
             </DialogDescription>
           </DialogHeader>
           <label className="space-y-2 text-sm font-medium">
-            Mentor phß╗Ñ tr├ích
+            Mentor phụ trách
             <select
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               value={activeMentorSelection}
               onChange={(event) => setActiveMentorSelection(event.target.value)}
               disabled={updateActiveMentorMutation.isPending}
             >
-              <option value="">Ch╞░a g├ín Mentor</option>
+              <option value="">Chưa gán Mentor</option>
               {(mentorsQuery.data ?? []).map((mentor) => (
                 <option key={mentor.mentorId} value={mentor.mentorId}>
                   {mentor.fullName}
@@ -2522,20 +2711,20 @@ export default function TeamAllocationPage() {
             </select>
           </label>
           <label className="space-y-2 text-sm font-medium">
-            L├╜ do thay ─æß╗òi{activeMentorTarget?.active ? " (bß║»t buß╗Öc)" : " (kh├┤ng bß║»t buß╗Öc)"}
+            Lý do thay đổi{activeMentorTarget?.active ? " (bắt buộc)" : " (không bắt buộc)"}
             <Textarea
               maxLength={500}
               placeholder={
                 activeMentorTarget?.active
-                  ? "Nhß║¡p l├╜ do thay ─æß╗òi (bß║»t buß╗Öc)"
-                  : "Nhß║¡p l├╜ do thay ─æß╗òi (kh├┤ng bß║»t buß╗Öc)"
+                  ? "Nhập lý do thay đổi (bắt buộc)"
+                  : "Nhập lý do thay đổi (không bắt buộc)"
               }
               value={activeMentorReason}
               onChange={(event) => setActiveMentorReason(event.target.value)}
               disabled={updateActiveMentorMutation.isPending}
             />
             <span className="block text-xs font-normal text-muted-foreground">
-              {activeMentorReason.length}/500 k├╜ tß╗▒
+              {activeMentorReason.length}/500 ký tự
             </span>
           </label>
           <DialogFooter>
@@ -2545,7 +2734,7 @@ export default function TeamAllocationPage() {
               onClick={() => setActiveMentorTarget(null)}
               disabled={updateActiveMentorMutation.isPending}
             >
-              Hß╗ºy
+              Hủy
             </Button>
             <Button
               type="button"
@@ -2574,7 +2763,7 @@ export default function TeamAllocationPage() {
               {updateActiveMentorMutation.isPending
                 ? <LoaderCircle className="size-4 animate-spin" />
                 : <Save className="size-4" />}
-              L╞░u Mentor
+              Lưu Mentor
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2583,36 +2772,24 @@ export default function TeamAllocationPage() {
   );
 }
 
-function MetricCard({
-  icon,
-  label,
-  value,
-  onClick,
+/** Wraps a disabled control so its blocking reason stays discoverable. */
+function WithHint({
+  hint,
+  children,
 }: {
-  icon: ReactNode;
-  label: string;
-  value: number;
-  onClick: () => void;
+  hint?: string | null;
+  children: ReactNode;
 }) {
+  if (!hint) return <>{children}</>;
   return (
-    <button
-      type="button"
-      className="rounded-xl text-left transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      onClick={onClick}
-      aria-label={`${label}: ${value}. Nhß║Ñn ─æß╗â xem chi tiß║┐t.`}
-    >
-      <Card className="h-full gap-4 py-5 transition-colors hover:border-primary/40">
-        <CardContent className="flex items-center gap-4">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          {icon}
-        </div>
-        <div className="min-w-0">
-          <p className="text-2xl font-bold tracking-tight">{value}</p>
-          <p className="text-sm text-muted-foreground">{label}</p>
-        </div>
-        </CardContent>
-      </Card>
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} className="inline-flex cursor-not-allowed">
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{hint}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -2620,10 +2797,12 @@ function TeamMemberHistoryPanel({
   classId,
   cohortId,
   className,
+  embedded = false,
 }: {
   classId: number;
   cohortId: number | null;
   className: string;
+  embedded?: boolean;
 }) {
   const [scope, setScope] = useState<"class" | "cohort">("class");
   const [memberFilter, setMemberFilter] = useState("");
@@ -2654,18 +2833,20 @@ function TeamMemberHistoryPanel({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Lß╗ïch sß╗¡ th├ánh vi├¬n / Vai tr├▓</CardTitle>
-        <CardDescription>
-          Nhß║¡t k├╜ chß╗ë ─æ╞░ß╗úc th├¬m mß╗¢i, sß║»p xß║┐p tß╗½ mß╗¢i nhß║Ñt ─æß║┐n c┼⌐ nhß║Ñt.
-          Phß║ím vi hiß╗çn tß║íi: {scope === "cohort" ? `Cohort #${cohortId}` : className}.
-        </CardDescription>
-      </CardHeader>
+    <Card className={embedded ? "border-0 shadow-none" : undefined}>
+      {!embedded && (
+        <CardHeader>
+          <CardTitle>Lịch sử thành viên / Vai trò</CardTitle>
+          <CardDescription>
+            Nhật ký chỉ được thêm mới, sắp xếp từ mới nhất đến cũ nhất.
+            Phạm vi hiện tại: {scope === "cohort" ? `Cohort #${cohortId}` : className}.
+          </CardDescription>
+        </CardHeader>
+      )}
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-end gap-3">
           <label className="space-y-1 text-sm font-medium">
-            Phß║ím vi
+            Phạm vi
             <select
               className="block h-10 rounded-md border border-input bg-background px-3"
               value={scope}
@@ -2675,12 +2856,12 @@ function TeamMemberHistoryPanel({
               }}
               disabled={cohortId === null}
             >
-              <option value="class">Lß╗¢p hiß╗çn tß║íi</option>
-              <option value="cohort">To├án cohort</option>
+              <option value="class">Lớp hiện tại</option>
+              <option value="cohort">Toàn cohort</option>
             </select>
           </label>
           <label className="space-y-1 text-sm font-medium">
-            Lß╗ìc theo ID hß╗ìc vi├¬n
+            Lọc theo ID học viên
             <Input
               inputMode="numeric"
               value={memberFilter}
@@ -2688,11 +2869,11 @@ function TeamMemberHistoryPanel({
                 setMemberFilter(event.target.value);
                 setPage(0);
               }}
-              placeholder="ID hß╗ìc vi├¬n"
+              placeholder="ID học viên"
             />
           </label>
           <label className="space-y-1 text-sm font-medium">
-            Lß╗ìc theo ID nh├│m
+            Lọc theo ID nhóm
             <Input
               inputMode="numeric"
               value={teamFilter}
@@ -2700,11 +2881,11 @@ function TeamMemberHistoryPanel({
                 setTeamFilter(event.target.value);
                 setPage(0);
               }}
-              placeholder="ID nh├│m c┼⌐/mß╗¢i"
+              placeholder="ID nhóm cũ/mới"
             />
           </label>
           <Button type="button" variant="outline" onClick={clearFilters}>
-            X├│a bß╗Ö lß╗ìc
+            Xóa bộ lọc
           </Button>
           <Button
             type="button"
@@ -2715,19 +2896,19 @@ function TeamMemberHistoryPanel({
             {historyQuery.isFetching
               ? <LoaderCircle className="size-4 animate-spin" />
               : <Search className="size-4" />}
-            L├ám mß╗¢i
+            Làm mới
           </Button>
         </div>
 
         {historyQuery.isLoading ? (
-          <LoadingState label="─Éang tß║úi lß╗ïch sß╗¡ biß║┐n ─æß╗Öng..." />
+          <LoadingState label="Đang tải lịch sử biến động..." />
         ) : historyQuery.isError ? (
           <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-            Kh├┤ng thß╗â tß║úi lß╗ïch sß╗¡. Kiß╗âm tra quyß╗ün truy cß║¡p hoß║╖c thß╗¡ lß║íi.
+            Không thể tải lịch sử. Kiểm tra quyền truy cập hoặc thử lại.
           </div>
         ) : historyQuery.data?.items.length === 0 ? (
           <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Ch╞░a c├│ lß╗ïch sß╗¡ biß║┐n ─æß╗Öng ph├╣ hß╗úp bß╗Ö lß╗ìc.
+            Chưa có lịch sử biến động phù hợp bộ lọc.
           </p>
         ) : (
           <>
@@ -2735,14 +2916,14 @@ function TeamMemberHistoryPanel({
               <table className="w-full min-w-[1050px] text-left text-sm">
                 <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
                   <tr>
-                    <th className="px-3 py-3">Thß╗¥i gian</th>
-                    {scope === "cohort" && <th className="px-3 py-3">Lß╗¢p</th>}
-                    <th className="px-3 py-3">Hß╗ìc vi├¬n</th>
-                    <th className="px-3 py-3">Nh├│m c┼⌐ ΓåÆ mß╗¢i</th>
-                    <th className="px-3 py-3">Role c┼⌐ ΓåÆ mß╗¢i</th>
-                    <th className="px-3 py-3">Biß║┐n ─æß╗Öng</th>
-                    <th className="px-3 py-3">L├╜ do</th>
-                    <th className="px-3 py-3">Ng╞░ß╗¥i thß╗▒c hiß╗çn</th>
+                    <th className="px-3 py-3">Thời gian</th>
+                    {scope === "cohort" && <th className="px-3 py-3">Lớp</th>}
+                    <th className="px-3 py-3">Học viên</th>
+                    <th className="px-3 py-3">Nhóm cũ → mới</th>
+                    <th className="px-3 py-3">Role cũ → mới</th>
+                    <th className="px-3 py-3">Biến động</th>
+                    <th className="px-3 py-3">Lý do</th>
+                    <th className="px-3 py-3">Người thực hiện</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -2761,19 +2942,19 @@ function TeamMemberHistoryPanel({
                         </span>
                       </td>
                       <td className="px-3 py-3">
-                        {item.fromTeamName ?? "Ch╞░a thuß╗Öc nh├│m"}
-                        <span className="mx-2 text-muted-foreground">ΓåÆ</span>
-                        {item.toTeamName ?? "Kh├┤ng thuß╗Öc nh├│m"}
+                        {item.fromTeamName ?? "Chưa thuộc nhóm"}
+                        <span className="mx-2 text-muted-foreground">→</span>
+                        {item.toTeamName ?? "Không thuộc nhóm"}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3">
-                        {item.fromRole ?? "ΓÇö"}
-                        <span className="mx-2 text-muted-foreground">ΓåÆ</span>
-                        {item.toRole ?? "ΓÇö"}
+                        {item.fromRole ?? "—"}
+                        <span className="mx-2 text-muted-foreground">→</span>
+                        {item.toRole ?? "—"}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3">
                         {historyActionLabel(item.action)}
                       </td>
-                      <td className="max-w-64 px-3 py-3">{item.reason ?? "ΓÇö"}</td>
+                      <td className="max-w-64 px-3 py-3">{item.reason ?? "—"}</td>
                       <td className="px-3 py-3">
                         {item.actorName}
                         <span className="block text-xs text-muted-foreground">
@@ -2787,7 +2968,7 @@ function TeamMemberHistoryPanel({
             </div>
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground">
-                {historyQuery.data?.totalElements ?? 0} biß║┐n ─æß╗Öng ┬╖ Trang{" "}
+                {historyQuery.data?.totalElements ?? 0} biến động · Trang{" "}
                 {(historyQuery.data?.page ?? 0) + 1} /{" "}
                 {Math.max(historyQuery.data?.totalPages ?? 1, 1)}
               </span>
@@ -2799,7 +2980,7 @@ function TeamMemberHistoryPanel({
                   disabled={page <= 0 || historyQuery.isFetching}
                   onClick={() => setPage((current) => current - 1)}
                 >
-                  Tr╞░ß╗¢c
+                  Trước
                 </Button>
                 <Button
                   type="button"
@@ -2825,15 +3006,15 @@ function TeamMemberHistoryPanel({
 function historyActionLabel(action: string) {
   switch (action) {
     case "ROLE_CHANGED":
-      return "─Éß╗òi vai tr├▓";
+      return "Đổi vai trò";
     case "MEMBER_TRANSFERRED":
-      return "Chuyß╗ân nh├│m";
+      return "Chuyển nhóm";
     case "MEMBER_SWAPPED":
-      return "─Éß╗òi vß╗ï tr├¡";
+      return "Đổi vị trí";
     case "MEMBER_ADDED":
-      return "Th├¬m th├ánh vi├¬n";
+      return "Thêm thành viên";
     case "MEMBER_REMOVED":
-      return "Gß╗í th├ánh vi├¬n";
+      return "Gỡ thành viên";
     default:
       return action;
   }
@@ -2868,14 +3049,14 @@ function MemberOption({
         checked={checked}
         disabled={disabled}
         onCheckedChange={(value) => onCheckedChange(value === true)}
-        aria-label={`Chß╗ìn ${member.fullName}`}
+        aria-label={`Chọn ${member.fullName}`}
       />
       <span className="min-w-0 flex-1 truncate font-medium">
         {member.fullName}{member.userCode ? <span className="ml-2 text-xs font-normal text-muted-foreground">{member.userCode}</span> : null}
       </span>
       <span className="text-xs text-muted-foreground">#{member.memberId}</span>
       {duplicateDraft && (
-        <span className="text-xs text-amber-700 dark:text-amber-300">─É├ú ß╗ƒ nh├│m DRAFT kh├íc</span>
+        <span className="text-xs text-amber-700 dark:text-amber-300">Đã ở nhóm khác</span>
       )}
     </label>
   );
@@ -2909,6 +3090,8 @@ function SavedTeamCard({
   onUpdateMentor,
   onUpdateRoles,
   onRoleChange,
+  leaderPending,
+  onAssignLeader,
   canAssignTemplate,
   assignTemplatePending,
   assignTemplateError,
@@ -2948,6 +3131,8 @@ function SavedTeamCard({
     members: Array<{ memberId: number; roles: TeamMemberRole[] }>,
   ) => void;
   onRoleChange: (teamId: number, memberId: number) => void;
+  leaderPending: boolean;
+  onAssignLeader: (memberId: number, memberName: string) => void;
   canAssignTemplate: boolean;
   assignTemplatePending: boolean;
   assignTemplateError?: TeamTemplateApiError;
@@ -2977,7 +3162,7 @@ function SavedTeamCard({
   });
   const templates = templatesQuery.data?.content ?? [];
   const templatesLoading = templatesQuery.isLoading;
-  const templatesError = templatesQuery.isError ? "Kh├┤ng tß║úi ─æ╞░ß╗úc danh s├ích ─æß╗ü b├ái." : null;
+  const templatesError = templatesQuery.isError ? "Không tải được danh sách đề bài." : null;
   const allowMultiRole = team.allowMultiRole ?? false;
   const roleQuotas = team.roleQuotas ?? [];
   const [memberRoles, setMemberRoles] = useState<Record<number, TeamMemberRole[]>>(
@@ -3005,7 +3190,12 @@ function SavedTeamCard({
           roles: memberRoles[memberId] ?? ([`DEV`] as TeamMemberRole[]),
         };
       });
-  const currentQuotaGaps = roleQuotaGaps(team, memberRoles);
+  const roleCounts = new Map<TeamMemberRole, number>();
+  Object.values(memberRoles).forEach((roles) => {
+    roles.forEach((role) => {
+      roleCounts.set(role, (roleCounts.get(role) ?? 0) + 1);
+    });
+  });
   const mentorValue = team.assignedMentorId === null
     ? ""
     : String(team.assignedMentorId);
@@ -3033,19 +3223,6 @@ function SavedTeamCard({
     }));
     setLocalRoleErrors((current) => current.filter((id) => id !== memberId));
     onRoleChange(team.teamId, memberId);
-  };
-  const toggleMemberRole = (memberId: number, role: TeamMemberRole) => {
-    const current = memberRoles[memberId] ?? [];
-    if (!allowMultiRole) {
-      updateMemberRoles(memberId, current[0] === role ? [] : [role]);
-      return;
-    }
-    updateMemberRoles(
-      memberId,
-      current.includes(role)
-        ? current.filter((value) => value !== role)
-        : [...current, role],
-    );
   };
   const transferTargets = allTeams.filter((candidate) =>
     candidate.teamId !== team.teamId &&
@@ -3095,13 +3272,13 @@ function SavedTeamCard({
             ? "rounded-lg p-2"
             : "rounded-xl border p-4"
         }`}
-        aria-label={`Xem chi tiß║┐t ${team.teamName}`}
+        aria-label={`Xem chi tiết ${team.teamName}`}
         onClick={() => setDetailsOpen(true)}
       >
         <span className="min-w-0">
           <span className="block truncate font-semibold">{team.teamName}</span>
           <span className="mt-1 block text-xs text-muted-foreground">
-            {team.memberIds.length} th├ánh vi├¬n
+            {team.memberIds.length} thành viên
           </span>
           <span
             className={`mt-1 block truncate text-xs ${
@@ -3109,26 +3286,26 @@ function SavedTeamCard({
             }`}
           >
             {team.projectTemplateId
-              ? `─Éß╗ü b├ái: ${team.projectTemplateName ?? `#${team.projectTemplateId}`}`
+              ? `Đề bài: ${team.projectTemplateName ?? `#${team.projectTemplateId}`}`
               : team.status === "DRAFT"
-                ? "Ch╞░a g├ín ─æß╗ü b├ái ┬╖ nhß║Ñn ─æß╗â g├ín"
-                : "Ch╞░a g├ín ─æß╗ü b├ái"}
+                ? "Chưa gán đề bài · nhấn để gán"
+                : "Chưa gán đề bài"}
           </span>
           <span className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
             <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">
               {mentorInitials || "?"}
             </span>
-            {mentorName ?? "Ch╞░a g├ín Mentor"}
+            {mentorName ?? "Chưa gán Mentor"}
           </span>
         </span>
       </button>
       {team.status === "DRAFT" && (
         <div className="min-w-0 rounded-lg border bg-muted/20 px-3 py-2">
           <p className="mb-1 text-xs font-medium text-muted-foreground">
-            Th├ánh vi├¬n ({team.memberIds.length})
+            Thành viên ({team.memberIds.length})
           </p>
           {team.memberIds.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nh├│m ch╞░a c├│ th├ánh vi├¬n.</p>
+            <p className="text-xs text-muted-foreground">Nhóm chưa có thành viên.</p>
           ) : (
             <ul className="max-h-28 divide-y overflow-y-auto pr-1">
               {team.memberIds.map((memberId) => (
@@ -3146,36 +3323,44 @@ function SavedTeamCard({
         if (!value) setPickerOpen(false);
       }}>
         <DialogContent className={pickerOpen
-          ? "flex max-h-[min(90vh,850px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
-          : "max-h-[85vh] overflow-y-auto sm:max-w-xl"}>
-          <div className={pickerOpen ? "hidden" : "contents"}>
+          ? "flex max-h-[min(90vh,850px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
+          : "flex w-[calc(100%-2rem)] max-h-[calc(90vh+50px)] flex-col overflow-hidden sm:max-w-3xl"}>
+          <div className={pickerOpen ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
           <DialogHeader>
-            <DialogTitle>{team.teamName}</DialogTitle>
-            <DialogDescription>
-              {team.memberIds.length} th├ánh vi├¬n ┬╖ Trß║íng th├íi {team.status}
-            </DialogDescription>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <DialogTitle className="text-2xl font-bold">{team.teamName}</DialogTitle>
+              <DialogDescription className="text-sm">
+                {team.memberIds.length} thành viên
+              </DialogDescription>
+              <Badge
+                variant={team.status === "DRAFT" ? "secondary" : "default"}
+                className="font-semibold"
+              >
+                {team.status}
+              </Badge>
+            </div>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-3 pb-4">
             <div className="flex items-center gap-3 rounded-lg border bg-background p-3">
               <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
                 {mentorInitials || "?"}
               </span>
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Mentor phß╗Ñ tr├ích</p>
+                <p className="text-xs text-muted-foreground">Mentor phụ trách</p>
                 <p className="truncate text-sm font-medium">
-                  {mentorName ?? "Ch╞░a g├ín Mentor"}
+                  {mentorName ?? "Chưa gán Mentor"}
                 </p>
               </div>
             </div>
             {isActive && canManageMentor && (
               <div className="flex flex-wrap gap-2">
                 <select
-                  aria-label={`Chß╗ìn Mentor cho ${team.teamName}`}
+                  aria-label={`Chọn Mentor cho ${team.teamName}`}
                   className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
                   value={selectedMentor}
                   onChange={(event) => setSelectedMentor(event.target.value)}
                 >
-                  <option value="">Chß╗ìn Mentor...</option>
+                  <option value="">Chọn Mentor...</option>
                   {mentors.map((mentor) => (
                     <option key={mentor.mentorId} value={mentor.mentorId}>
                       {mentor.fullName}
@@ -3193,26 +3378,25 @@ function SavedTeamCard({
                     selectedMentor ? Number(selectedMentor) : null,
                   )}
                 >
-                  Cß║¡p nhß║¡t Mentor
+                  Cập nhật Mentor
                 </Button>
               </div>
             )}
             <div className="space-y-2 rounded-lg border bg-background p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium">─Éß╗ü b├ái dß╗▒ ├ín</p>
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                  <p className="text-sm font-semibold">Đề bài dự án</p>
+                  <p className="text-xs text-muted-foreground">
+                    Sĩ số hiện tại: {team.memberCount ?? team.memberIds.length} thành viên
+                    {team.minMembers != null && team.maxMembers != null
+                      ? ` · Đề bài yêu cầu ${team.minMembers}–${team.maxMembers} thành viên`
+                      : ""}
+                  </p>
+                </div>
                 <Badge variant={team.projectTemplateId ? "default" : "secondary"}>
-                  {team.projectTemplateId ? "─É├ú g├ín" : "Ch╞░a g├ín"}
+                  {team.projectTemplateId ? "Đã gán" : "Chưa gán"}
                 </Badge>
               </div>
-              <p className="text-sm font-medium">
-                {team.projectTemplateName ?? "Ch╞░a g├ín ─æß╗ü b├ái"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                S─⌐ sß╗æ hiß╗çn tß║íi: {team.memberCount ?? team.memberIds.length} th├ánh vi├¬n
-                {team.minMembers != null && team.maxMembers != null
-                  ? ` ┬╖ ─Éß╗ü b├ái y├¬u cß║ºu ${team.minMembers}ΓÇô${team.maxMembers} th├ánh vi├¬n`
-                  : ""}
-              </p>
               {assignTemplateError && (
                 <div
                   role="alert"
@@ -3220,10 +3404,10 @@ function SavedTeamCard({
                 >
                   <p className="font-medium">
                     {assignTemplateError.errorCode === "ERR_TEAM_NOT_DRAFT"
-                      ? "Nh├│m kh├┤ng c├▓n ß╗ƒ trß║íng th├íi DRAFT"
+                      ? "Nhóm không còn ở trạng thái DRAFT"
                       : assignTemplateError.reason === "MIN_MEMBERS_NOT_MET"
-                        ? "Nh├│m ch╞░a ─æß╗º s─⌐ sß╗æ tß╗æi thiß╗âu"
-                        : "S─⌐ sß╗æ nh├│m v╞░ß╗út qu├í sß╗⌐c chß╗⌐a cß╗ºa ─æß╗ü b├ái"}
+                        ? "Nhóm chưa đủ sĩ số tối thiểu"
+                        : "Sĩ số nhóm vượt quá sức chứa của đề bài"}
                   </p>
                   <p className="mt-1 text-muted-foreground">
                     {assignTemplateError.message}
@@ -3231,8 +3415,8 @@ function SavedTeamCard({
                   {assignTemplateError.minMembers != null &&
                     assignTemplateError.maxMembers != null && (
                     <p className="mt-1 text-muted-foreground">
-                      Y├¬u cß║ºu {assignTemplateError.minMembers}ΓÇô
-                      {assignTemplateError.maxMembers} th├ánh vi├¬n ┬╖ hiß╗çn c├│{" "}
+                      Yêu cầu {assignTemplateError.minMembers}–
+                      {assignTemplateError.maxMembers} thành viên · hiện có{" "}
                       {assignTemplateError.memberCount ?? 0}.
                     </p>
                   )}
@@ -3241,7 +3425,7 @@ function SavedTeamCard({
               {isDraft && (
                 <div className="flex flex-wrap gap-2">
                   <select
-                    aria-label={`Chß╗ìn ─æß╗ü b├ái cho ${team.teamName}`}
+                    aria-label={`Chọn đề bài cho ${team.teamName}`}
                     className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
                     value={selectedTemplate}
                     disabled={!canAssignTemplate || assignTemplatePending || templatesLoading}
@@ -3252,7 +3436,7 @@ function SavedTeamCard({
                     }}
                   >
                     <option value="">
-                      {templatesLoading ? "─Éang tß║úi ─æß╗ü b├ái..." : "Chß╗ìn ─æß╗ü b├ái"}
+                      {templatesLoading ? "Đang tải đề bài..." : "Chọn đề bài"}
                     </option>
                     {team.projectTemplateId != null && !templates.some((option) => option.templateId === team.projectTemplateId) && (
                       <option value={team.projectTemplateId}>
@@ -3261,19 +3445,19 @@ function SavedTeamCard({
                     )}
                     {templates.map((option) => (
                       <option key={option.templateId} value={option.templateId}>
-                        {option.name} ({option.minMembers}ΓÇô{option.maxMembers} th├ánh vi├¬n)
+                        {option.name} ({option.minMembers}–{option.maxMembers} thành viên)
                       </option>
                     ))}
                     {selectedCandidate && !templates.some((option) => option.templateId === selectedCandidate.templateId) && (
                       <option value={selectedCandidate.templateId}>
-                        {selectedCandidate.name} ({selectedCandidate.minMembers}ΓÇô{selectedCandidate.maxMembers} th├ánh vi├¬n)
+                        {selectedCandidate.name} ({selectedCandidate.minMembers}–{selectedCandidate.maxMembers} thành viên)
                       </option>
                     )}
                   </select>
                   <Button type="button" size="sm" variant="outline"
                     disabled={!canAssignTemplate || assignTemplatePending}
                     onClick={() => setPickerOpen(true)}>
-                    <Search className="size-4" /> T├¼m ─æß╗ü b├ái
+                    <Search className="size-4" /> Tìm đề bài
                   </Button>
                   <Button
                     size="sm"
@@ -3295,13 +3479,13 @@ function SavedTeamCard({
                     {assignTemplatePending
                       ? <LoaderCircle className="size-4 animate-spin" />
                       : <Save className="size-4" />}
-                    G├ín ─æß╗ü b├ái
+                    Gán đề bài
                   </Button>
                 </div>
               )}
               {isDraft && selectedCandidate && templateChanged && (
                 <p role="status" className="rounded-md bg-primary/5 px-3 py-2 text-xs text-primary">
-                  ─Éang chß╗ìn ΓÇ£{selectedCandidate.name}ΓÇ¥ ({selectedCandidate.version}). Bß║Ñm G├ín ─æß╗ü b├ái hoß║╖c L╞░u ─æß╗â x├íc nhß║¡n.
+                  Đang chọn “{selectedCandidate.name}” ({selectedCandidate.version}). Bấm Gán đề bài hoặc Lưu để xác nhận.
                 </p>
               )}
               {templatesError && (
@@ -3310,9 +3494,9 @@ function SavedTeamCard({
               {!isDraft && (
                 <div className="space-y-1.5 rounded-lg bg-muted/50 p-2.5">
                   <p className="text-xs text-muted-foreground">
-                    Nh├│m ─æang ß╗ƒ trß║íng th├íi <strong>{team.status}</strong> n├¬n kh├┤ng thß╗â ─æß╗òi
-                    ─æß╗ü b├ái. ─Éß╗ü b├ái chß╗ë ─æ╞░ß╗úc g├ín khi nh├│m c├▓n ß╗ƒ trß║íng th├íi DRAFT (tr╞░ß╗¢c khi
-                    publish phi├¬n).
+                    Nhóm đang ở trạng thái <strong>{team.status}</strong> nên không thể đổi
+                    đề bài. Đề bài chỉ được gán khi nhóm còn ở trạng thái DRAFT (trước khi
+                    publish phiên).
                   </p>
                   {canCreateNewSession ? (
                     <Button
@@ -3325,107 +3509,171 @@ function SavedTeamCard({
                       }}
                     >
                       <Plus className="size-4" />
-                      Tß║ío phi├¬n ph├ón nh├│m mß╗¢i ─æß╗â g├ín ─æß╗ü b├ái
+                      Tạo phiên phân nhóm mới để gán đề bài
                     </Button>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      Li├¬n hß╗ç Mentor/Program Manager ─æß╗â tß║ío phi├¬n ph├ón nh├│m mß╗¢i.
+                      Liên hệ Mentor/Program Manager để tạo phiên phân nhóm mới.
                     </p>
                   )}
                 </div>
               )}
               {!canAssignTemplate && isDraft && (
                 <p className="text-xs text-muted-foreground">
-                  Bß║ín kh├┤ng c├│ quyß╗ün g├ín ─æß╗ü b├ái cho nh├│m n├áy.
+                  Bạn không có quyền gán đề bài cho nhóm này.
                 </p>
               )}
             </div>
-            {team.projectTemplateId == null ? (
+            {team.projectTemplateId == null && (
               <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                G├ín ─æß╗ü b├ái dß╗▒ ├ín ─æß╗â xem danh s├ích th├ánh vi├¬n v├á cß║Ñu h├¼nh vai tr├▓.
+                Gán đề bài dự án để áp dụng định suất và quy tắc kiêm nhiệm vai trò.
               </p>
-            ) : (
-              <>
-            <div>
-              <p className="mb-2 text-sm font-medium">Danh s├ích th├ánh vi├¬n</p>
+            )}
+            <section className="min-w-0 space-y-2">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">Danh sách thành viên ({members.length})</p>
+                {canManageRoles && roleQuotas.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Định suất vai trò của đề bài
+                    </span>
+                    <Badge variant={allowMultiRole ? "secondary" : "outline"}>
+                      {allowMultiRole ? "Cho phép kiêm nhiệm" : "Không kiêm nhiệm"}
+                    </Badge>
+                    {roleQuotas.map((quota) => {
+                      const actual = roleCounts.get(quota.role) ?? 0;
+                      const maximum = quota.max >= UNBOUNDED_ROLE_QUOTA
+                        ? quota.min
+                        : quota.max;
+                      const met = actual >= quota.min &&
+                        (quota.max >= UNBOUNDED_ROLE_QUOTA || actual <= quota.max);
+                      return (
+                        <Badge
+                          key={quota.role}
+                          variant="outline"
+                          className={met
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            : "border-destructive bg-destructive/10 text-destructive"}
+                        >
+                          {quota.role} {actual}/{maximum}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               {members.length === 0 ? (
-                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  Nh├│m ch╞░a c├│ th├ánh vi├¬n.
-                </p>
+                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nhóm chưa có thành viên.</p>
               ) : (
-                <ul className="divide-y rounded-lg border">
+                <ul className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto rounded-lg border p-2">
                   {members.map((member) => {
                     const selectedRoles = memberRoles[member.memberId]
                       ?? memberRolesOf(member);
+                    const leader = team.leaderMemberId === member.memberId;
+                    const canAssignLeader = isDraft &&
+                      (canManageMembers || canManageRoles) && !leader;
                     return (
-                    <li
-                      key={member.memberId}
-                      className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
-                    >
-                      <span className="min-w-0 truncate">{member.fullName}{member.userCode ? ` ┬╖ ${member.userCode}` : ""}</span>
+                    <li key={member.memberId}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            tabIndex={0}
+                            role="group"
+                            aria-label={`Thành viên ${member.fullName}`}
+                            className="flex min-w-0 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2.5 text-sm transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 truncate font-medium">{member.fullName}{member.userCode ? ` · ${member.userCode}` : ""}</span>
+                        {leader && <Badge className="shrink-0">Leader</Badge>}
+                      </span>
                       <span className="flex shrink-0 items-center gap-2">
                         {canManageRoles ? (
                           allowMultiRole ? (
-                            <span
-                              role="group"
-                              aria-label={`Vai tr├▓ cß╗ºa ${member.fullName}`}
-                              className={`flex flex-wrap gap-1 rounded-md ${
+                            <details
+                              className={`relative min-w-36 rounded-md ${
                                 invalidRoleMemberIds.has(member.memberId)
                                   ? "ring-1 ring-destructive"
                                   : ""
                               }`}
                             >
+                              <summary
+                                className="flex h-8 cursor-pointer list-none items-center justify-between gap-2 rounded-md border bg-background px-2 text-xs font-medium [&::-webkit-details-marker]:hidden"
+                                aria-label={`Chọn nhiều vai trò cho ${member.fullName}`}
+                              >
+                                <span className="max-w-28 truncate">
+                                  {selectedRoles.length > 0
+                                    ? selectedRoles.map((role) => TEAM_ROLE_LABEL[role]).join(", ")
+                                    : "Chọn vai trò"}
+                                </span>
+                                <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+                              </summary>
+                              <div
+                                role="group"
+                                aria-label={`Vai trò của ${member.fullName}`}
+                                className="absolute right-0 z-20 mt-1 min-w-44 rounded-md border bg-popover p-2 text-popover-foreground shadow-lg"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {TEAM_ROLE_OPTIONS.map((role) => (
+                                  <label
+                                    key={role}
+                                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs font-medium hover:bg-muted"
+                                  >
+                                    <Checkbox
+                                      checked={selectedRoles.includes(role)}
+                                      disabled={rolesPending}
+                                      onCheckedChange={(checked) => updateMemberRoles(
+                                        member.memberId,
+                                        checked
+                                          ? [...selectedRoles, role]
+                                          : selectedRoles.filter((selectedRole) => selectedRole !== role),
+                                      )}
+                                      aria-label={`${TEAM_ROLE_LABEL[role]} của ${member.fullName}`}
+                                    />
+                                    {TEAM_ROLE_LABEL[role]}
+                                  </label>
+                                ))}
+                              </div>
+                            </details>
+                          ) : (
+                            <span
+                              role="radiogroup"
+                              aria-label={`Vai trò của ${member.fullName}`}
+                              className={`flex flex-wrap items-center gap-2 rounded-md ${
+                                invalidRoleMemberIds.has(member.memberId)
+                                  ? "ring-1 ring-destructive"
+                                  : ""
+                              }`}
+                            >
+                              <label className="flex cursor-pointer items-center gap-1 text-xs font-medium">
+                                <input
+                                  type="radio"
+                                  name={`team-${team.teamId}-member-${member.memberId}-role`}
+                                  value=""
+                                  checked={selectedRoles.length === 0}
+                                  disabled={rolesPending}
+                                  onChange={() => updateMemberRoles(member.memberId, [])}
+                                />
+                                Chưa gán
+                              </label>
                               {TEAM_ROLE_OPTIONS.map((role) => (
-                                <label
-                                  key={role}
-                                  className={`flex cursor-pointer items-center gap-1 rounded-md border px-1.5 py-1 text-xs transition-colors ${
-                                    selectedRoles.includes(role)
-                                      ? "border-primary/50 bg-primary/10 font-medium text-primary"
-                                      : "bg-background text-muted-foreground"
-                                  } ${rolesPending ? "cursor-not-allowed opacity-60" : ""}`}
-                                >
-                                  <Checkbox
-                                    checked={selectedRoles.includes(role)}
+                                <label key={role} className="flex cursor-pointer items-center gap-1 text-xs font-medium">
+                                  <input
+                                    type="radio"
+                                    name={`team-${team.teamId}-member-${member.memberId}-role`}
+                                    value={role}
+                                    checked={selectedRoles[0] === role}
                                     disabled={rolesPending}
-                                    onCheckedChange={() =>
-                                      toggleMemberRole(member.memberId, role)}
-                                    aria-label={`${TEAM_ROLE_LABEL[role]} cß╗ºa ${member.fullName}`}
+                                    onChange={() => updateMemberRoles(member.memberId, [role])}
                                   />
                                   {TEAM_ROLE_LABEL[role]}
                                 </label>
                               ))}
                             </span>
-                          ) : (
-                            <select
-                              aria-label={`Vai tr├▓ cß╗ºa ${member.fullName}`}
-                              aria-invalid={invalidRoleMemberIds.has(member.memberId)}
-                              className={`h-8 rounded-md border bg-background px-2 text-xs ${
-                                invalidRoleMemberIds.has(member.memberId)
-                                  ? "border-destructive"
-                                  : ""
-                              }`}
-                              value={selectedRoles[0] ?? ""}
-                              disabled={rolesPending}
-                              onChange={(event) => {
-                                const role = event.target.value;
-                                updateMemberRoles(
-                                  member.memberId,
-                                  isTeamMemberRole(role) ? [role] : [],
-                                );
-                              }}
-                            >
-                              <option value="">Vui l├▓ng chß╗ìn vai tr├▓</option>
-                              {TEAM_ROLE_OPTIONS.map((role) => (
-                                <option key={role} value={role}>
-                                  {TEAM_ROLE_LABEL[role]}
-                                </option>
-                              ))}
-                            </select>
                           )
                         ) : (
                           <span className="flex flex-wrap gap-1">
                             {selectedRoles.length === 0 ? (
-                              <Badge variant="outline">Ch╞░a g├ín</Badge>
+                              <Badge variant="outline">Chưa gán</Badge>
                             ) : selectedRoles.map((role) => (
                               <Badge key={role} variant="secondary">{role}</Badge>
                             ))}
@@ -3439,8 +3687,8 @@ function SavedTeamCard({
                             type="button"
                             size="icon"
                             variant="ghost"
-                            aria-label={`Gß╗í ${member.fullName} khß╗Åi nh├│m`}
-                            title={`Gß╗í ${member.fullName} khß╗Åi nh├│m`}
+                            aria-label={`Gỡ ${member.fullName} khỏi nhóm`}
+                            title={`Gỡ ${member.fullName} khỏi nhóm`}
                             disabled={membershipPending}
                             onClick={() => onRemoveMember(member.memberId)}
                           >
@@ -3452,8 +3700,8 @@ function SavedTeamCard({
                             type="button"
                             size="icon"
                             variant="ghost"
-                            aria-label={`Chuyß╗ân ${member.fullName} sang nh├│m kh├íc`}
-                            title={`Chuyß╗ân ${member.fullName} sang nh├│m kh├íc`}
+                            aria-label={`Chuyển ${member.fullName} sang nhóm khác`}
+                            title={`Chuyển ${member.fullName} sang nhóm khác`}
                             disabled={transferPending || transferTargets.length === 0}
                             onClick={() => onTransfer(member.memberId)}
                           >
@@ -3463,49 +3711,40 @@ function SavedTeamCard({
                           </Button>
                         )}
                       </span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" sideOffset={10}
+                          className="w-72 max-w-[calc(100vw-3rem)] rounded-xl border border-border bg-popover p-4 text-left text-popover-foreground shadow-xl">
+                          <div className="space-y-3">
+                            <div>
+                              <p className="break-words font-semibold leading-snug">{member.fullName}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {member.userCode ?? `Học viên #${member.memberId}`}
+                              </p>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{team.teamName} · Thành viên trong nhóm</p>
+                            {leader ? <Badge>Leader/PM hiện tại</Badge> : canAssignLeader ? (
+                              <Button type="button" size="sm" className="w-full" disabled={leaderPending}
+                                onClick={() => onAssignLeader(member.memberId, member.fullName)}>
+                                <ShieldCheck className="size-4" /> Chỉ định làm Leader
+                              </Button>
+                            ) : null}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
                     </li>
                     );
                   })}
                 </ul>
               )}
-            </div>
+            </section>
             {canManageRoles && members.length > 0 && (
               <div className="space-y-2">
                 {!team.projectTemplateId && (
                   <p className="text-xs text-muted-foreground">
-                    Nh├│m ch╞░a g├ín ─æß╗ü b├ái: mß║╖c ─æß╗ïnh mß╗ùi th├ánh vi├¬n chß╗ë chß╗ìn 1 vai tr├▓.
-                    G├ín ─æß╗ü b├ái ─æß╗â ├íp dß╗Ñng ─æß╗ïnh suß║Ñt v├á quy tß║»c ki├¬m nhiß╗çm cß╗ºa ─æß╗ü b├ái.
+                    Nhóm chưa gán đề bài: mặc định mỗi thành viên chỉ chọn 1 vai trò.
+                    Gán đề bài để áp dụng định suất và quy tắc kiêm nhiệm của đề bài.
                   </p>
-                )}
-                {roleQuotas.length > 0 && (
-                  <div className="rounded-lg border bg-muted/30 p-2.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-medium">
-                        ─Éß╗ïnh suß║Ñt vai tr├▓ cß╗ºa ─æß╗ü b├ái
-                      </p>
-                      <Badge variant={allowMultiRole ? "secondary" : "outline"}>
-                        {allowMultiRole ? "Cho ph├⌐p ki├¬m nhiß╗çm" : "Kh├┤ng ki├¬m nhiß╗çm"}
-                      </Badge>
-                    </div>
-                    <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                      {roleQuotas.map((quota) => {
-                        const gap = currentQuotaGaps.find(
-                          (violation) => violation.role === quota.role,
-                        );
-                        return (
-                          <li key={quota.role}>
-                            <Badge
-                              variant={gap ? "destructive" : "outline"}
-                              className="font-normal"
-                            >
-                              {quota.role}: {quotaWindow(quota)}
-                              {gap ? ` ┬╖ hiß╗çn c├│ ${gap.actual}` : ""}
-                            </Badge>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
                 )}
                 {roleSaveError && (
                   <div
@@ -3513,7 +3752,7 @@ function SavedTeamCard({
                     className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
                   >
                     {roleSaveError.status === 409
-                      ? "Dß╗» liß╗çu/Version nh├│m ─æ├ú bß╗ï thay ─æß╗òi, vui l├▓ng tß║úi lß║íi trang"
+                      ? "Dữ liệu/Version nhóm đã bị thay đổi, vui lòng tải lại trang"
                       : roleSaveError.message}
                     {roleSaveError.violations &&
                       roleSaveError.violations.length > 0 && (
@@ -3522,8 +3761,8 @@ function SavedTeamCard({
                             <li key={`${violation.role}-${violation.reason}`}>
                               {violation.role}:{" "}
                               {violation.reason === "MISSING_REQUIRED_ROLE"
-                                ? `cß║ºn tß╗æi thiß╗âu ${violation.required}, hiß╗çn c├│ ${violation.actual}`
-                                : `tß╗æi ─æa ${violation.required}, hiß╗çn c├│ ${violation.actual}`}
+                                ? `cần tối thiểu ${violation.required}, hiện có ${violation.actual}`
+                                : `tối đa ${violation.required}, hiện có ${violation.actual}`}
                             </li>
                           ))}
                         </ul>
@@ -3535,8 +3774,8 @@ function SavedTeamCard({
                     role="alert"
                     className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
                   >
-                    Vui l├▓ng chß╗ìn ├¡t nhß║Ñt mß╗Öt vai tr├▓ cho mß╗ùi th├ánh vi├¬n
-                    {localRoleErrors.length > 0 ? ` (${localRoleErrors.length} th├ánh vi├¬n)` : ""}.
+                    Vui lòng chọn ít nhất một vai trò cho mỗi thành viên
+                    {localRoleErrors.length > 0 ? ` (${localRoleErrors.length} thành viên)` : ""}.
                   </div>
                 )}
                 {isActive && (
@@ -3564,8 +3803,8 @@ function SavedTeamCard({
                       ]);
                       toast.error(
                         missingRoleMemberIds.length
-                          ? "Mß╗ùi th├ánh vi├¬n cß║ºn ├¡t nhß║Ñt mß╗Öt vai tr├▓."
-                          : "─Éß╗ü b├ái kh├┤ng cho ph├⌐p ki├¬m nhiß╗çm vai tr├▓.",
+                          ? "Mỗi thành viên cần ít nhất một vai trò."
+                          : "Đề bài không cho phép kiêm nhiệm vai trò.",
                       );
                       return;
                     }
@@ -3583,32 +3822,30 @@ function SavedTeamCard({
                   {rolesPending
                     ? <LoaderCircle className="size-4 animate-spin" />
                     : <Save className="size-4" />}
-                  L╞░u vai tr├▓
+                  Lưu vai trò
                 </Button>
                 )}
               </div>
             )}
-              </>
-            )}
             {isActive && canManageMembers && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  ─Éß╗â thay th├ánh vi├¬n, h├úy gß╗í th├ánh vi├¬n hiß╗çn tß║íi rß╗ôi th├¬m hß╗ìc vi├¬n kh├íc v├áo nh├│m.
+                  Để thay thành viên, hãy gỡ thành viên hiện tại rồi thêm học viên khác vào nhóm.
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <select
-                    aria-label={`Chß╗ìn hß╗ìc vi├¬n th├¬m v├áo ${team.teamName}`}
+                    aria-label={`Chọn học viên thêm vào ${team.teamName}`}
                     className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
                     value={selectedToAdd}
                     disabled={membershipPending || team.memberIds.length >= maxMembers}
                     onChange={(event) => setSelectedToAdd(event.target.value)}
                   >
-                    <option value="">Th├¬m hß╗ìc vi├¬n ch╞░a v├áo nh├│m ACTIVE...</option>
+                    <option value="">Thêm học viên chưa vào nhóm ACTIVE...</option>
                     {memberOptions
                       .filter((option) => !option.assignedToActiveTeam)
                       .map((option) => (
                         <option key={option.memberId} value={option.memberId}>
-                          {option.fullName}{option.userCode ? ` ┬╖ ${option.userCode}` : ""}
+                          {option.fullName}{option.userCode ? ` · ${option.userCode}` : ""}
                         </option>
                       ))}
                   </select>
@@ -3628,18 +3865,18 @@ function SavedTeamCard({
                     {membershipPending
                       ? <LoaderCircle className="size-4 animate-spin" />
                       : <Plus className="size-4" />}
-                    Th├¬m
+                    Thêm
                   </Button>
                 </div>
                 {team.memberIds.length >= maxMembers && (
                   <p className="text-xs text-muted-foreground">
-                    Nh├│m ─æ├ú ─æß║ít sß╗⌐c chß╗⌐a tß╗æi ─æa ({maxMembers}).
+                    Nhóm đã đạt sức chứa tối đa ({maxMembers}).
                   </p>
                 )}
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="-mx-6 -mb-6 shrink-0 border-t bg-muted/40 px-6 py-4">
             {isDraft && (
               <>
                 <Button
@@ -3650,7 +3887,7 @@ function SavedTeamCard({
                     onEdit();
                   }}
                 >
-                  Chß╗ënh sß╗¡a DRAFT
+                  Chỉnh sửa DRAFT
                 </Button>
                 <Button
                   disabled={
@@ -3664,28 +3901,6 @@ function SavedTeamCard({
                       roles: memberRoles[member.memberId]
                         ?? memberRolesOf(member),
                     }));
-                    if (memberRolesChanged) {
-                      const missingRoleMemberIds = rolesPayload
-                        .filter((member) => member.roles.length === 0)
-                        .map((member) => member.memberId);
-                      const multiRoleMemberIds = allowMultiRole
-                        ? []
-                        : rolesPayload
-                          .filter((member) => member.roles.length > 1)
-                          .map((member) => member.memberId);
-                      if (missingRoleMemberIds.length || multiRoleMemberIds.length) {
-                        setLocalRoleErrors([
-                          ...missingRoleMemberIds,
-                          ...multiRoleMemberIds,
-                        ]);
-                        toast.error(
-                          missingRoleMemberIds.length
-                            ? "Mß╗ùi th├ánh vi├¬n cß║ºn ├¡t nhß║Ñt mß╗Öt vai tr├▓."
-                            : "─Éß╗ü b├ái kh├┤ng cho ph├⌐p ki├¬m nhiß╗çm vai tr├▓.",
-                        );
-                        return;
-                      }
-                    }
                     onSaveAll({
                       teamId: team.teamId,
                       teamVersion: team.version,
@@ -3704,7 +3919,7 @@ function SavedTeamCard({
                   {savePending
                     ? <LoaderCircle className="size-4 animate-spin" />
                     : <Save className="size-4" />}
-                  L╞░u
+                  Lưu
                 </Button>
               </>
             )}
@@ -3729,49 +3944,77 @@ function SavedTeamCard({
 
 /** US-12: renders the strict-mode readiness report returned by the backend. */
 function ReadinessReport({ report }: { report: AllocationReadiness }) {
-  if (report.readyToPublish) {
-    return (
-      <div
-        role="status"
-        className="space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4"
-      >
-        <p className="flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-300">
-          <ShieldCheck className="size-5" />
-          ─Éß╗º ─æiß╗üu kiß╗çn c├┤ng bß╗æ (Ready to Publish)
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {report.assignedStudents}/{report.totalStudents} hß╗ìc vi├¬n ─æ├ú c├│ nh├│m ┬╖{" "}
-          {report.totalTeams} nh├│m ┬╖ {report.teamsWithTemplate}/{report.totalTeams} nh├│m
-          c├│ ─æß╗ü b├ái hß╗úp lß╗ç ┬╖ kh├┤ng c├▓n hß╗ìc vi├¬n tß╗▒ do.
-        </p>
-      </div>
-    );
-  }
+  const ready = report.readyToPublish;
+  const statistics = [
+    {
+      label: "Học viên đã vào nhóm",
+      value: `${report.assignedStudents}/${report.totalStudents}`,
+      icon: <Users className="size-4" />,
+    },
+    {
+      label: "Tổng số nhóm",
+      value: report.totalTeams,
+      icon: <ClipboardList className="size-4" />,
+    },
+    {
+      label: "Nhóm có đề bài hợp lệ",
+      value: `${report.teamsWithTemplate}/${report.totalTeams}`,
+      icon: <ListChecks className="size-4" />,
+    },
+    {
+      label: ready ? "Học viên tự do" : "Lỗi điều kiện nhóm",
+      value: ready ? report.unassignedStudentCount : report.teamIssues.length,
+      icon: <CircleAlert className="size-4" />,
+    },
+  ];
 
   return (
     <div
-      role="alert"
-      className="space-y-3 rounded-xl border-2 border-destructive bg-destructive/5 p-4"
+      role={ready ? "status" : "alert"}
+      className={`space-y-4 rounded-xl border p-4 ${
+        ready
+          ? "border-emerald-500/30 bg-emerald-500/5"
+          : "border-destructive/50 bg-destructive/5"
+      }`}
     >
-      <p className="flex items-center gap-2 font-semibold text-destructive">
-        <CircleAlert className="size-5" />
-        Ch╞░a ─æß╗º ─æiß╗üu kiß╗çn c├┤ng bß╗æ
-      </p>
-      <div className="flex flex-wrap gap-2 text-xs">
-        <Badge variant="outline" className="border-destructive text-destructive">
-          {report.unassignedStudentCount} hß╗ìc vi├¬n tß╗▒ do
+      <div className="flex items-center justify-between gap-3">
+        <p className={`flex items-center gap-2 font-semibold ${
+          ready
+            ? "text-emerald-700 dark:text-emerald-300"
+            : "text-destructive"
+        }`}>
+          {ready ? <ShieldCheck className="size-5" /> : <CircleAlert className="size-5" />}
+          {ready ? "Đủ điều kiện công bố" : "Chưa đủ điều kiện công bố"}
+        </p>
+        <Badge
+          variant="outline"
+          className={ready
+            ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
+            : "border-destructive text-destructive"}
+        >
+          {ready ? "READY" : "BLOCKED"}
         </Badge>
-        <Badge variant="outline" className="border-destructive text-destructive">
-          {report.teamIssues.length} lß╗ùi nh├│m
-        </Badge>
-        <Badge variant="outline" className="border-destructive text-destructive">
-          {report.teamsWithTemplate}/{report.totalTeams} nh├│m c├│ ─æß╗ü b├ái
-        </Badge>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {statistics.map((statistic) => (
+          <div
+            key={statistic.label}
+            className="min-w-0 rounded-lg border bg-background/80 p-3"
+          >
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {statistic.icon}
+              <span className="truncate">{statistic.label}</span>
+            </div>
+            <p className="mt-2 text-2xl font-semibold tracking-tight">
+              {statistic.value}
+            </p>
+          </div>
+        ))}
       </div>
       {report.unassignedStudents.length > 0 && (
         <div className="rounded-lg border-2 border-destructive bg-background p-3">
           <p className="text-sm font-semibold text-destructive">
-            Danh s├ích hß╗ìc vi├¬n ch╞░a c├│ nh├│m ({report.unassignedStudentCount})
+            Danh sách học viên chưa có nhóm ({report.unassignedStudentCount})
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {report.unassignedStudents.map((student) => (
@@ -3780,37 +4023,37 @@ function ReadinessReport({ report }: { report: AllocationReadiness }) {
                 variant="outline"
                 className="border-destructive bg-destructive/10 text-destructive"
               >
-                {student.fullName}{student.userCode ? ` ┬╖ ${student.userCode}` : ` (#${student.memberId})`}
+                {student.fullName}{student.userCode ? ` · ${student.userCode}` : ` (#${student.memberId})`}
               </Badge>
             ))}
           </div>
         </div>
       )}
-      {report.teamIssues.length > 0 && (
+      {!ready && report.teamIssues.length > 0 && (
         <div className="rounded-lg border border-destructive/40 bg-background p-3">
-          <p className="text-sm font-semibold text-destructive">Lß╗ùi theo nh├│m</p>
+          <p className="text-sm font-semibold text-destructive">Lỗi theo nhóm</p>
           <ul className="mt-2 space-y-2 text-xs">
             {report.teamIssues.map((issue, index) => (
               <li key={`${issue.teamId}-${issue.code}-${index}`}>
                 <span className="font-medium">
                   {issue.teamName} (#{issue.teamId})
                 </span>{" "}
-                ΓÇö {issue.message}
+                — {issue.message}
                 {issue.violations?.length ? (
                   <ul className="mt-1 list-disc pl-4 text-muted-foreground">
                     {issue.violations.map((violation) => (
                       <li key={`${violation.role}-${violation.reason}`}>
                         {violation.role}:{" "}
                         {violation.reason === "MISSING_REQUIRED_ROLE"
-                          ? `cß║ºn tß╗æi thiß╗âu ${violation.required}, hiß╗çn c├│ ${violation.actual}`
-                          : `tß╗æi ─æa ${violation.required}, hiß╗çn c├│ ${violation.actual}`}
+                          ? `cần tối thiểu ${violation.required}, hiện có ${violation.actual}`
+                          : `tối đa ${violation.required}, hiện có ${violation.actual}`}
                       </li>
                     ))}
                   </ul>
                 ) : null}
                 {issue.memberIds?.length ? (
                   <span className="text-muted-foreground">
-                    {" "}┬╖ Th├ánh vi├¬n: {issue.memberIds.map((id) => `#${id}`).join(", ")}
+                    {" "}· Thành viên: {issue.memberIds.map((id) => `#${id}`).join(", ")}
                   </span>
                 ) : null}
               </li>
@@ -3827,7 +4070,7 @@ function WarningList({ warnings }: { warnings: DraftWarning[] }) {
     <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
       <p className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
         <AlertCircle className="size-4" />
-        Cß║únh b├ío hß╗ìc vi├¬n tr├╣ng trong c├íc nh├│m DRAFT
+        Cảnh báo học viên trùng trong các nhóm DRAFT
       </p>
       <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
         {warnings.map((warning, index) => (
