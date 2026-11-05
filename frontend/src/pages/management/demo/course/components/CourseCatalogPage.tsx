@@ -174,13 +174,13 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
   const navigate = useNavigate();
 
   const content = (
-    <div className={embedded ? "space-y-5" : "mx-auto w-full max-w-7xl space-y-8"}>
+    <div className={embedded ? "space-y-3" : "mx-auto w-full max-w-7xl space-y-3"}>
       {!embedded && (
-        <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-10 text-white sm:px-10 sm:py-12">
+        <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-4 py-7 text-white sm:px-10 sm:py-4">
           <div className="pointer-events-none absolute -right-16 -top-24 size-80 rounded-full bg-blue-500/30 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-32 right-1/3 size-72 rounded-full bg-violet-500/20 blur-3xl" />
           <div className="relative max-w-2xl">
-            <Badge className="mb-4 border border-white/20 bg-white/10 text-blue-100 hover:bg-white/10">
+            <Badge className="mb-3 border border-white/20 bg-white/10 text-blue-100 hover:bg-white/10">
               COURSE CATALOG
             </Badge>
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Build skills that move you forward.</h1>
@@ -192,8 +192,8 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
         </section>
       )}
 
-      <section className="space-y-5">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_200px_170px_170px]">
+      <section className="space-y-3">
+        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_200px_170px_170px]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -282,7 +282,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
         </div>
 
         {coursesQuery.isError ? (
-          <div role="alert" className="space-y-3 rounded-2xl border border-destructive/30 p-6">
+          <div role="alert" className="space-y-3 rounded-2xl border border-destructive/30 p-4">
             <p className="text-sm text-destructive">
               Could not load the course catalog. Please check your connection and try again.
             </p>
@@ -291,13 +291,13 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
             </Button>
           </div>
         ) : showSkeleton ? (
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 6 }, (_, i) => (
               <CourseCardSkeleton key={i} />
             ))}
           </div>
         ) : courses.length === 0 ? (
-          <div className="rounded-2xl border border-dashed p-10 text-center">
+          <div className="rounded-2xl border border-dashed p-4 text-center">
             {hasFilters ? (
               <SearchX className="mx-auto size-9 text-muted-foreground" />
             ) : (
@@ -317,7 +317,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
           </div>
         ) : (
           <div
-            className={`grid gap-5 transition-opacity sm:grid-cols-2 xl:grid-cols-3 ${
+            className={`grid gap-2 transition-opacity sm:grid-cols-2 xl:grid-cols-3 ${
               coursesQuery.isPlaceholderData ? "opacity-60" : ""
             }`}
             aria-busy={coursesQuery.isPlaceholderData}
@@ -354,5 +354,5 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
 
   if (embedded) return content;
 
-  return <MainLayout pathName={{ courses: "Courses" }}>{content}</MainLayout>;
+  return <MainLayout dense pathName={{ courses: "Courses" }}>{content}</MainLayout>;
 }

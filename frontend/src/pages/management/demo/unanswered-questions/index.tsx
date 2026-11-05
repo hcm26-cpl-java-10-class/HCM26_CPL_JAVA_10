@@ -79,12 +79,12 @@ export default function UnansweredQuestionsPage() {
   const filtering = Boolean(search) || courseId !== undefined;
 
   return (
-    <MainLayout pathName={{ "unanswered-questions": "Unanswered Questions" }}>
-      <section className="space-y-6">
+    <MainLayout dense pathName={{ "unanswered-questions": "Unanswered Questions" }}>
+      <section className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-blue-700">Q&amp;A</p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight">Unanswered questions</h1>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight">Unanswered questions</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Questions awaiting an answer in the courses you teach. The longest-waiting come first.
             </p>
@@ -96,7 +96,7 @@ export default function UnansweredQuestionsPage() {
           )}
         </div>
 
-        <div className="rounded-xl border bg-background p-4 shadow-sm">
+        <div className="rounded-xl border bg-background p-3 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -126,20 +126,20 @@ export default function UnansweredQuestionsPage() {
         </div>
 
         {listQuery.isLoading ? (
-          <p role="status" className="rounded-xl border p-10 text-center text-sm text-muted-foreground">
+          <p role="status" className="rounded-xl border p-4 text-center text-sm text-muted-foreground">
             Loading questions...
           </p>
         ) : listQuery.isError ? (
-          <div role="alert" className="space-y-3 rounded-xl border border-destructive/30 p-6">
+          <div role="alert" className="space-y-2 rounded-xl border border-destructive/30 p-4">
             <p className="text-sm text-destructive">Could not load unanswered questions.</p>
             <Button variant="outline" onClick={() => void listQuery.refetch()}>
               Try again
             </Button>
           </div>
         ) : questions.length === 0 ? (
-          <div className="rounded-2xl border border-dashed p-12 text-center">
+          <div className="rounded-2xl border border-dashed p-4 text-center">
             <CheckCircle2 className="mx-auto size-12 text-muted-foreground" />
-            <h2 className="mt-4 text-lg font-semibold">
+            <h2 className="mt-3 text-lg font-semibold">
               {filtering ? "No questions match your filters" : "All caught up"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -149,14 +149,14 @@ export default function UnansweredQuestionsPage() {
             </p>
           </div>
         ) : (
-          <ul className="space-y-3" aria-busy={listQuery.isPlaceholderData}>
+          <ul className="space-y-2" aria-busy={listQuery.isPlaceholderData}>
             {questions.map((question) => {
               const waiting = waitingTime(question.createdAt);
               return (
                 <li key={question.id}>
                   <Link
                     to={questionLink(question)}
-                    className="group block rounded-xl border bg-card p-4 transition-colors hover:border-primary/50 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="group block rounded-xl border bg-card p-3 transition-colors hover:border-primary/50 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <Badge variant="secondary">{question.courseName}</Badge>
