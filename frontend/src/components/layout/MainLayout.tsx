@@ -1,17 +1,20 @@
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import HeaderRight from "@/components/layout/HeaderRight";
-import {SidebarMenu} from "@/components/layout/Sidebar.tsx";
+import { SidebarMenu } from "@/components/layout/Sidebar.tsx";
 import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
 import { StudentNavbar } from "@/components/layout/StudentNavbar";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
+import type { ReactNode } from "react";
 
 export function MainLayout({
                                children,
                                pathName,
+                               pathLinks,
                            }: {
-    children: React.ReactNode;
+    children: ReactNode;
     pathName?: Record<string, string>;
+    pathLinks?: Record<string, string>;
 }) {
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
@@ -22,7 +25,7 @@ export function MainLayout({
                 <StudentNavbar />
 
                 <header className="flex min-h-14 shrink-0 items-center border-b px-6 py-2">
-                    <DynamicBreadcrumbs pathTitles={pathName} variant="student" />
+                    <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} variant="student" />
                 </header>
 
                 <main className="flex-1 px-6 pb-6 pt-4">
@@ -40,7 +43,7 @@ export function MainLayout({
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                             <SidebarTrigger aria-label="Toggle navigation sidebar" />
-                            <DynamicBreadcrumbs pathTitles={pathName} />
+                            <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} />
                         </div>
                         <div className="shrink-0"><HeaderRight /></div>
                     </div>

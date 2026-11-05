@@ -204,8 +204,17 @@ function isTeamMemberRole(role: string | null | undefined): role is TeamMemberRo
   return role === "PM" || role === "BA" || role === "DEV" || role === "QA";
 }
 
+const TEAM_ROLE_OPTIONS: TeamMemberRole[] = ["PM", "BA", "DEV", "QA"];
+
 /** Backend uses Integer.MAX_VALUE for an unbounded max quota. */
 const UNBOUNDED_ROLE_QUOTA = 2_147_483_647;
+
+const TEAM_ROLE_LABEL: Record<TeamMemberRole, string> = {
+  PM: "PM (Leader)",
+  BA: "BA",
+  DEV: "Dev",
+  QA: "QA",
+};
 
 /** US-11: member roles from the new `roles` array, falling back to `role`. */
 function memberRolesOf(member: {
@@ -348,6 +357,7 @@ export default function TeamAllocationPage() {
   /** US-12: latest strict-mode readiness report (null until checked). */
   const [readiness, setReadiness] = useState<AllocationReadiness | null>(null);
   const [readinessError, setReadinessError] = useState<ApiFailure | null>(null);
+  const [readinessDialogOpen, setReadinessDialogOpen] = useState(false);
   const [publishItemFailures, setPublishItemFailures] = useState<
     PublishTeamsResponse["failedItems"]
   >([]);
@@ -703,6 +713,7 @@ export default function TeamAllocationPage() {
       }
       if (failedItems.length === 0 && succeededItems.length > 0) {
         setReadiness(null);
+        setReadinessDialogOpen(false);
         setSession((current) => {
           if (!current) return current;
           const publishedSession = { ...current, status: "PUBLISHED" as const };
@@ -759,6 +770,13 @@ export default function TeamAllocationPage() {
         queryKey: ["team-member-history"],
       }),
     ]);
+  };
+
+  const checkPublishReadiness = () => {
+    setReadinessDialogOpen(true);
+    setReadiness(null);
+    setReadinessError(null);
+    readinessMutation.mutate();
   };
 
   const addActiveMemberMutation = useMutation({
@@ -1508,76 +1526,6 @@ export default function TeamAllocationPage() {
 
         {session && (
           <>
-            {/* US-12 — strict-mode class readiness before publishing the session. */}
-            <Card
-              className={
-                readiness && !readiness.readyToPublish
-                  ? "border-destructive/50"
-                  : undefined
-              }
-            >
-              <CardHeader>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1.5">
-                    <CardTitle className="flex items-center gap-2">
-                      <ShieldCheck className="size-5 text-primary" />
-                      Kiểm tra điều kiện công bố toàn lớp
-                    </CardTitle>
-                    <CardDescription>
-                      BR-UNI-10 · Strict mode: 100% học viên phải đã có nhóm, mọi nhóm
-                      cần được gán đề bài và hoàn tất các điều kiện trước khi công bố phiên.
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => readinessMutation.mutate()}
-                      disabled={
-                        readinessMutation.isPending ||
-                        session.status !== "OPEN" ||
-                        (!hasPermission("PEO_TEAM_ALLOCATE") &&
-                          !hasPermission("PRJ_WORKSPACE_MANAGE"))
-                      }
-                    >
-                      {readinessMutation.isPending
-                        ? <LoaderCircle className="size-4 animate-spin" />
-                        : <ListChecks className="size-4" />}
-                      Kiểm tra điều kiện công bố
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {session.status !== "OPEN" && (
-                  <p className="text-sm text-muted-foreground">
-                    Phiên đang ở trạng thái {session.status}; chỉ phiên OPEN mới cần
-                    kiểm tra điều kiện công bố.
-                  </p>
-                )}
-                {session.status === "OPEN" && draftTeams.length > 0 && (
-                  <p className="text-sm text-amber-700 dark:text-amber-300">
-                    Còn thay đổi nhóm chưa lưu. Hãy lưu nháp trước khi kiểm tra hoặc
-                    công bố.
-                  </p>
-                )}
-                {readinessError && (
-                  <div
-                    role="alert"
-                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-                  >
-                    {readinessError.message}
-                  </div>
-                )}
-                {!readiness && !readinessError && session.status === "OPEN" && (
-                  <p className="text-sm text-muted-foreground">
-                    Nhấn “Kiểm tra điều kiện công bố” để xác thực sĩ số toàn lớp,
-                    Leader và đề bài của các nhóm.
-                  </p>
-                )}
-                {readiness && <ReadinessReport report={readiness} />}
-              </CardContent>
-            </Card>
-
             <section className="grid gap-4 sm:grid-cols-3">
               <MetricCard
                 icon={<Users className="size-5" />}
@@ -2338,23 +2286,19 @@ export default function TeamAllocationPage() {
                       )}
                       <Button
                         className="w-full"
+                        variant="outline"
                         disabled={
-                          publishSessionMutation.isPending ||
+                          readinessMutation.isPending ||
                           !hasPermission("PEO_TEAM_ALLOCATE") ||
                           session.status !== "OPEN" ||
                           draftTeams.length > 0
                         }
-                        onClick={() => {
-                          setPublishItemFailures([]);
-                          setPublishFailure(null);
-                          setPublishSuccess(null);
-                          publishSessionMutation.mutate();
-                        }}
+                        onClick={checkPublishReadiness}
                       >
-                        {publishSessionMutation.isPending
+                        {readinessMutation.isPending
                           ? <LoaderCircle className="size-4 animate-spin" />
-                          : <Send className="size-4" />}
-                        Công bố chính thức
+                          : <ListChecks className="size-4" />}
+                        Kiểm tra điều kiện công bố
                       </Button>
                     </>
                   )}
@@ -2487,6 +2431,60 @@ export default function TeamAllocationPage() {
                 </ul>
               );
             })()
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={readinessDialogOpen}
+        onOpenChange={setReadinessDialogOpen}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Kiểm tra điều kiện công bố</DialogTitle>
+            <DialogDescription>
+              Kết quả kiểm tra toàn bộ học viên, nhóm, đề bài và định suất vai trò.
+            </DialogDescription>
+          </DialogHeader>
+          {readinessMutation.isPending ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+              <LoaderCircle className="size-4 animate-spin" />
+              Đang kiểm tra điều kiện công bố...
+            </div>
+          ) : readinessError ? (
+            <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {readinessError.message}
+            </div>
+          ) : readiness ? (
+            <>
+              <ReadinessReport report={readiness} />
+              {readiness.readyToPublish && (
+                <DialogFooter>
+                  <Button
+                    disabled={
+                      publishSessionMutation.isPending ||
+                      !hasPermission("PEO_TEAM_ALLOCATE") ||
+                      session?.status !== "OPEN" ||
+                      draftTeams.length > 0
+                    }
+                    onClick={() => {
+                      setPublishItemFailures([]);
+                      setPublishFailure(null);
+                      setPublishSuccess(null);
+                      publishSessionMutation.mutate();
+                    }}
+                  >
+                    {publishSessionMutation.isPending
+                      ? <LoaderCircle className="size-4 animate-spin" />
+                      : <Send className="size-4" />}
+                    Công bố chính thức
+                  </Button>
+                </DialogFooter>
+              )}
+            </>
+          ) : (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Chưa có kết quả kiểm tra.
+            </p>
           )}
         </DialogContent>
       </Dialog>
@@ -3125,6 +3123,8 @@ function SavedTeamCard({
   canManageMentor,
   canManageRoles,
   canTransfer,
+  roleSaveError,
+  rolesPending,
   transferPending,
   membershipPending,
   pending,
@@ -3135,6 +3135,8 @@ function SavedTeamCard({
   onRemoveMember,
   onTransfer,
   onUpdateMentor,
+  onUpdateRoles,
+  onRoleChange,
   leaderPending,
   onAssignLeader,
   canAssignTemplate,
@@ -3208,6 +3210,8 @@ function SavedTeamCard({
   const templates = templatesQuery.data?.content ?? [];
   const templatesLoading = templatesQuery.isLoading;
   const templatesError = templatesQuery.isError ? "Không tải được danh sách đề bài." : null;
+  const allowMultiRole = team.allowMultiRole ?? false;
+  const roleQuotas = team.roleQuotas ?? [];
   const [memberRoles, setMemberRoles] = useState<Record<number, TeamMemberRole[]>>(
     () => Object.fromEntries(
       (team.members ?? []).map((member) => [
@@ -3216,6 +3220,7 @@ function SavedTeamCard({
       ]),
     ),
   );
+  const [localRoleErrors, setLocalRoleErrors] = useState<number[]>([]);
   const isDraft = team.status === "DRAFT";
   const isActive = team.status === "ACTIVE";
   const members = team.members?.length
@@ -3232,6 +3237,12 @@ function SavedTeamCard({
           roles: memberRoles[memberId] ?? ([`DEV`] as TeamMemberRole[]),
         };
       });
+  const roleCounts = new Map<TeamMemberRole, number>();
+  Object.values(memberRoles).forEach((roles) => {
+    roles.forEach((role) => {
+      roleCounts.set(role, (roleCounts.get(role) ?? 0) + 1);
+    });
+  });
   const mentorValue = team.assignedMentorId === null
     ? ""
     : String(team.assignedMentorId);
@@ -3249,6 +3260,17 @@ function SavedTeamCard({
   });
   const hasPendingChanges =
     mentorChanged || templateChanged || memberRolesChanged;
+  const updateMemberRoles = (
+    memberId: number,
+    roles: TeamMemberRole[],
+  ) => {
+    setMemberRoles((current) => ({
+      ...current,
+      [memberId]: TEAM_ROLE_OPTIONS.filter((role) => roles.includes(role)),
+    }));
+    setLocalRoleErrors((current) => current.filter((id) => id !== memberId));
+    onRoleChange(team.teamId, memberId);
+  };
   const transferTargets = allTeams.filter((candidate) =>
     candidate.teamId !== team.teamId &&
     candidate.status === "ACTIVE",
@@ -3271,7 +3293,13 @@ function SavedTeamCard({
         memberRolesOf(member),
       ]),
     ));
+    setLocalRoleErrors([]);
   }, [team.version, team.members]);
+  const invalidRoleMemberIds = new Set([
+    ...localRoleErrors,
+    ...(roleSaveError?.invalidMemberIds ?? []),
+    ...(roleSaveError?.multiRoleMemberIds ?? []),
+  ]);
   const mentorName = team.assignedMentorName;
   const mentorInitials = mentorName
     ?.split(/\s+/)
@@ -3343,15 +3371,23 @@ function SavedTeamCard({
       }}>
         <DialogContent className={pickerOpen
           ? "flex max-h-[min(90vh,850px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
-          : "max-h-[85vh] w-[calc(100vw-2rem)] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-xl"}>
-          <div className={pickerOpen ? "hidden" : "contents"}>
+          : "flex w-[calc(100%-2rem)] max-h-[calc(90vh+50px)] flex-col overflow-hidden sm:max-w-5xl"}>
+          <div className={pickerOpen ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
           <DialogHeader>
-            <DialogTitle>{team.teamName}</DialogTitle>
-            <DialogDescription>
-              {team.memberIds.length} thành viên · Trạng thái {team.status}
-            </DialogDescription>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <DialogTitle className="text-2xl font-bold">{team.teamName}</DialogTitle>
+              <DialogDescription className="text-sm">
+                {team.memberIds.length} thành viên
+              </DialogDescription>
+              <Badge
+                variant={team.status === "DRAFT" ? "secondary" : "default"}
+                className="font-semibold"
+              >
+                {team.status}
+              </Badge>
+            </div>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-3 pb-4">
             <div className="flex items-center gap-3 rounded-lg border bg-background p-3">
               <span className="flex size-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
                 {mentorInitials || "?"}
@@ -3395,20 +3431,19 @@ function SavedTeamCard({
             )}
             <div className="space-y-2 rounded-lg border bg-background p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium">Đề bài dự án</p>
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                  <p className="text-sm font-semibold">Đề bài dự án</p>
+                  <p className="text-xs text-muted-foreground">
+                    Sĩ số hiện tại: {team.memberCount ?? team.memberIds.length} thành viên
+                    {team.minMembers != null && team.maxMembers != null
+                      ? ` · Đề bài yêu cầu ${team.minMembers}–${team.maxMembers} thành viên`
+                      : ""}
+                  </p>
+                </div>
                 <Badge variant={team.projectTemplateId ? "default" : "secondary"}>
                   {team.projectTemplateId ? "Đã gán" : "Chưa gán"}
                 </Badge>
               </div>
-              <p className="text-sm font-medium">
-                {team.projectTemplateName ?? "Chưa gán đề bài"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Sĩ số hiện tại: {team.memberCount ?? team.memberIds.length} thành viên
-                {team.minMembers != null && team.maxMembers != null
-                  ? ` · Đề bài yêu cầu ${team.minMembers}–${team.maxMembers} thành viên`
-                  : ""}
-              </p>
               {assignTemplateError && (
                 <div
                   role="alert"
@@ -3536,41 +3571,193 @@ function SavedTeamCard({
                 </p>
               )}
             </div>
+            {team.projectTemplateId == null && (
+              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                Gán đề bài dự án để áp dụng định suất và quy tắc kiêm nhiệm vai trò.
+              </p>
+            )}
             <section className="min-w-0 space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium">Danh sách thành viên ({members.length})</p>
-                <span className="text-xs text-muted-foreground">Rê chuột hoặc focus để xem nhanh</span>
+                {canManageRoles && roleQuotas.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Định suất vai trò của đề bài
+                    </span>
+                    <Badge variant={allowMultiRole ? "secondary" : "outline"}>
+                      {allowMultiRole ? "Cho phép kiêm nhiệm" : "Không kiêm nhiệm"}
+                    </Badge>
+                    {roleQuotas.map((quota) => {
+                      const actual = roleCounts.get(quota.role) ?? 0;
+                      const maximum = quota.max >= UNBOUNDED_ROLE_QUOTA
+                        ? quota.min
+                        : quota.max;
+                      const met = actual >= quota.min &&
+                        (quota.max >= UNBOUNDED_ROLE_QUOTA || actual <= quota.max);
+                      return (
+                        <Badge
+                          key={quota.role}
+                          variant="outline"
+                          className={met
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            : "border-destructive bg-destructive/10 text-destructive"}
+                        >
+                          {quota.role} {actual}/{maximum}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               {members.length === 0 ? (
                 <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nhóm chưa có thành viên.</p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto rounded-lg border p-2">
                   {members.map((member) => {
+                    const selectedRoles = memberRoles[member.memberId]
+                      ?? memberRolesOf(member);
                     const leader = team.leaderMemberId === member.memberId;
-                    const canAssign = isDraft && (canManageMembers || canManageRoles) && !leader;
-                    return <li key={member.memberId}>
+                    const canAssignLeader = isDraft &&
+                      (canManageMembers || canManageRoles) && !leader;
+                    return (
+                    <li key={member.memberId}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div tabIndex={0} role="group" aria-label={`Học viên ${member.fullName}`}
-                            className="flex min-w-0 flex-wrap items-center gap-3 rounded-lg border px-3 py-3 transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">
-                              {member.fullName.trim().charAt(0).toUpperCase()}
+                          <div
+                            tabIndex={0}
+                            role="group"
+                            aria-label={`Thành viên ${member.fullName}`}
+                            className="flex min-w-0 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2.5 text-sm transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 truncate font-medium">{member.fullName}{member.userCode ? ` · ${member.userCode}` : ""}</span>
+                        {leader && <Badge className="shrink-0">Leader</Badge>}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        {canManageRoles ? (
+                          allowMultiRole ? (
+                            <details
+                              className={`relative min-w-36 rounded-md ${
+                                invalidRoleMemberIds.has(member.memberId)
+                                  ? "ring-1 ring-destructive"
+                                  : ""
+                              }`}
+                            >
+                              <summary
+                                className="flex h-8 cursor-pointer list-none items-center justify-between gap-2 rounded-md border bg-background px-2 text-xs font-medium [&::-webkit-details-marker]:hidden"
+                                aria-label={`Chọn nhiều vai trò cho ${member.fullName}`}
+                              >
+                                <span className="max-w-28 truncate">
+                                  {selectedRoles.length > 0
+                                    ? selectedRoles.map((role) => TEAM_ROLE_LABEL[role]).join(", ")
+                                    : "Chọn vai trò"}
+                                </span>
+                                <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+                              </summary>
+                              <div
+                                role="group"
+                                aria-label={`Vai trò của ${member.fullName}`}
+                                className="absolute right-0 z-20 mt-1 min-w-44 rounded-md border bg-popover p-2 text-popover-foreground shadow-lg"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {TEAM_ROLE_OPTIONS.map((role) => (
+                                  <label
+                                    key={role}
+                                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs font-medium hover:bg-muted"
+                                  >
+                                    <Checkbox
+                                      checked={selectedRoles.includes(role)}
+                                      disabled={rolesPending}
+                                      onCheckedChange={(checked) => updateMemberRoles(
+                                        member.memberId,
+                                        checked
+                                          ? [...selectedRoles, role]
+                                          : selectedRoles.filter((selectedRole) => selectedRole !== role),
+                                      )}
+                                      aria-label={`${TEAM_ROLE_LABEL[role]} của ${member.fullName}`}
+                                    />
+                                    {TEAM_ROLE_LABEL[role]}
+                                  </label>
+                                ))}
+                              </div>
+                            </details>
+                          ) : (
+                            <span
+                              role="radiogroup"
+                              aria-label={`Vai trò của ${member.fullName}`}
+                              className={`flex flex-wrap items-center gap-2 rounded-md ${
+                                invalidRoleMemberIds.has(member.memberId)
+                                  ? "ring-1 ring-destructive"
+                                  : ""
+                              }`}
+                            >
+                              <label className="flex cursor-pointer items-center gap-1 text-xs font-medium">
+                                <input
+                                  type="radio"
+                                  name={`team-${team.teamId}-member-${member.memberId}-role`}
+                                  value=""
+                                  checked={selectedRoles.length === 0}
+                                  disabled={rolesPending}
+                                  onChange={() => updateMemberRoles(member.memberId, [])}
+                                />
+                                Chưa gán
+                              </label>
+                              {TEAM_ROLE_OPTIONS.map((role) => (
+                                <label key={role} className="flex cursor-pointer items-center gap-1 text-xs font-medium">
+                                  <input
+                                    type="radio"
+                                    name={`team-${team.teamId}-member-${member.memberId}-role`}
+                                    value={role}
+                                    checked={selectedRoles[0] === role}
+                                    disabled={rolesPending}
+                                    onChange={() => updateMemberRoles(member.memberId, [role])}
+                                  />
+                                  {TEAM_ROLE_LABEL[role]}
+                                </label>
+                              ))}
                             </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium" title={member.fullName}>{member.fullName}</p>
-                              <p className="truncate text-xs text-muted-foreground">{member.userCode ?? `#${member.memberId}`}</p>
-                            </div>
-                            {leader && <Badge className="shrink-0">Leader</Badge>}
-                            {isActive && (canManageMembers || canTransfer) && <div className="flex shrink-0 gap-1">
-                              {canTransfer && <Button type="button" size="icon" variant="ghost"
-                                aria-label={`Chuyển ${member.fullName} sang nhóm khác`}
-                                disabled={leader || transferPending || transferTargets.length === 0}
-                                onClick={() => onTransfer(member.memberId)}><ArrowRightLeft className="size-4" /></Button>}
-                              {canManageMembers && <Button type="button" size="icon" variant="ghost"
-                                aria-label={`Gỡ ${member.fullName} khỏi nhóm`}
-                                disabled={leader || membershipPending}
-                                onClick={() => onRemoveMember(member.memberId)}><Trash2 className="size-4" /></Button>}
-                            </div>}
+                          )
+                        ) : (
+                          <span className="flex flex-wrap gap-1">
+                            {selectedRoles.length === 0 ? (
+                              <Badge variant="outline">Chưa gán</Badge>
+                            ) : selectedRoles.map((role) => (
+                              <Badge key={role} variant="secondary">{role}</Badge>
+                            ))}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          #{member.memberId}
+                        </span>
+                        {isActive && canManageMembers && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Gỡ ${member.fullName} khỏi nhóm`}
+                            title={`Gỡ ${member.fullName} khỏi nhóm`}
+                            disabled={membershipPending}
+                            onClick={() => onRemoveMember(member.memberId)}
+                          >
+                            <Trash2 className="size-4 text-destructive" />
+                          </Button>
+                        )}
+                        {isActive && canTransfer && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Chuyển ${member.fullName} sang nhóm khác`}
+                            title={`Chuyển ${member.fullName} sang nhóm khác`}
+                            disabled={transferPending || transferTargets.length === 0}
+                            onClick={() => onTransfer(member.memberId)}
+                          >
+                            {transferPending
+                              ? <LoaderCircle className="size-4 animate-spin" />
+                              : <ArrowRightLeft className="size-4" />}
+                          </Button>
+                        )}
+                      </span>
                           </div>
                         </TooltipTrigger>
                         <TooltipContent side="right" sideOffset={10}
@@ -3583,7 +3770,7 @@ function SavedTeamCard({
                               </p>
                             </div>
                             <p className="text-xs text-muted-foreground">{team.teamName} · Thành viên trong nhóm</p>
-                            {leader ? <Badge>Leader/PM hiện tại</Badge> : canAssign ? (
+                            {leader ? <Badge>Leader/PM hiện tại</Badge> : canAssignLeader ? (
                               <Button type="button" size="sm" className="w-full" disabled={leaderPending}
                                 onClick={() => onAssignLeader(member.memberId, member.fullName)}>
                                 <ShieldCheck className="size-4" /> Chỉ định làm Leader
@@ -3592,11 +3779,101 @@ function SavedTeamCard({
                           </div>
                         </TooltipContent>
                       </Tooltip>
-                    </li>;
+                    </li>
+                    );
                   })}
                 </ul>
               )}
             </section>
+            {canManageRoles && members.length > 0 && (
+              <div className="space-y-2">
+                {!team.projectTemplateId && (
+                  <p className="text-xs text-muted-foreground">
+                    Nhóm chưa gán đề bài: mặc định mỗi thành viên chỉ chọn 1 vai trò.
+                    Gán đề bài để áp dụng định suất và quy tắc kiêm nhiệm của đề bài.
+                  </p>
+                )}
+                {roleSaveError && (
+                  <div
+                    role="alert"
+                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                  >
+                    {roleSaveError.status === 409
+                      ? "Dữ liệu/Version nhóm đã bị thay đổi, vui lòng tải lại trang"
+                      : roleSaveError.message}
+                    {roleSaveError.violations &&
+                      roleSaveError.violations.length > 0 && (
+                        <ul className="mt-2 space-y-0.5 text-xs">
+                          {roleSaveError.violations.map((violation) => (
+                            <li key={`${violation.role}-${violation.reason}`}>
+                              {violation.role}:{" "}
+                              {violation.reason === "MISSING_REQUIRED_ROLE"
+                                ? `cần tối thiểu ${violation.required}, hiện có ${violation.actual}`
+                                : `tối đa ${violation.required}, hiện có ${violation.actual}`}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                  </div>
+                )}
+                {localRoleErrors.length > 0 && (
+                  <div
+                    role="alert"
+                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                  >
+                    Vui lòng chọn ít nhất một vai trò cho mỗi thành viên
+                    {localRoleErrors.length > 0 ? ` (${localRoleErrors.length} thành viên)` : ""}.
+                  </div>
+                )}
+                {isActive && (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={rolesPending}
+                  onClick={() => {
+                    const missingRoleMemberIds = members
+                      .filter((member) =>
+                        (memberRoles[member.memberId]
+                          ?? memberRolesOf(member)).length === 0)
+                      .map((member) => member.memberId);
+                    const multiRoleMemberIds = allowMultiRole
+                      ? []
+                      : members
+                        .filter((member) =>
+                          (memberRoles[member.memberId]
+                            ?? memberRolesOf(member)).length > 1)
+                        .map((member) => member.memberId);
+                    if (missingRoleMemberIds.length || multiRoleMemberIds.length) {
+                      setLocalRoleErrors([
+                        ...missingRoleMemberIds,
+                        ...multiRoleMemberIds,
+                      ]);
+                      toast.error(
+                        missingRoleMemberIds.length
+                          ? "Mỗi thành viên cần ít nhất một vai trò."
+                          : "Đề bài không cho phép kiêm nhiệm vai trò.",
+                      );
+                      return;
+                    }
+                    onUpdateRoles(
+                      team.teamId,
+                      team.version,
+                      members.map((member) => ({
+                        memberId: member.memberId,
+                        roles: memberRoles[member.memberId]
+                          ?? memberRolesOf(member),
+                      })),
+                    );
+                  }}
+                >
+                  {rolesPending
+                    ? <LoaderCircle className="size-4 animate-spin" />
+                    : <Save className="size-4" />}
+                  Lưu vai trò
+                </Button>
+                )}
+              </div>
+            )}
             {isActive && canManageMembers && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
@@ -3646,7 +3923,7 @@ function SavedTeamCard({
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="-mx-6 -mb-6 shrink-0 border-t bg-muted/40 px-6 py-4">
             {isDraft && (
               <>
                 <Button
@@ -3714,44 +3991,72 @@ function SavedTeamCard({
 
 /** US-12: renders the strict-mode readiness report returned by the backend. */
 function ReadinessReport({ report }: { report: AllocationReadiness }) {
-  if (report.readyToPublish) {
-    return (
-      <div
-        role="status"
-        className="space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4"
-      >
-        <p className="flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-300">
-          <ShieldCheck className="size-5" />
-          Đủ điều kiện công bố (Ready to Publish)
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {report.assignedStudents}/{report.totalStudents} học viên đã có nhóm ·{" "}
-          {report.totalTeams} nhóm · {report.teamsWithTemplate}/{report.totalTeams} nhóm
-          có đề bài hợp lệ · không còn học viên tự do.
-        </p>
-      </div>
-    );
-  }
+  const ready = report.readyToPublish;
+  const statistics = [
+    {
+      label: "Học viên đã vào nhóm",
+      value: `${report.assignedStudents}/${report.totalStudents}`,
+      icon: <Users className="size-4" />,
+    },
+    {
+      label: "Tổng số nhóm",
+      value: report.totalTeams,
+      icon: <ClipboardList className="size-4" />,
+    },
+    {
+      label: "Nhóm có đề bài hợp lệ",
+      value: `${report.teamsWithTemplate}/${report.totalTeams}`,
+      icon: <ListChecks className="size-4" />,
+    },
+    {
+      label: ready ? "Học viên tự do" : "Lỗi điều kiện nhóm",
+      value: ready ? report.unassignedStudentCount : report.teamIssues.length,
+      icon: <CircleAlert className="size-4" />,
+    },
+  ];
 
   return (
     <div
-      role="alert"
-      className="space-y-3 rounded-xl border-2 border-destructive bg-destructive/5 p-4"
+      role={ready ? "status" : "alert"}
+      className={`space-y-4 rounded-xl border p-4 ${
+        ready
+          ? "border-emerald-500/30 bg-emerald-500/5"
+          : "border-destructive/50 bg-destructive/5"
+      }`}
     >
-      <p className="flex items-center gap-2 font-semibold text-destructive">
-        <CircleAlert className="size-5" />
-        Chưa đủ điều kiện công bố
-      </p>
-      <div className="flex flex-wrap gap-2 text-xs">
-        <Badge variant="outline" className="border-destructive text-destructive">
-          {report.unassignedStudentCount} học viên tự do
+      <div className="flex items-center justify-between gap-3">
+        <p className={`flex items-center gap-2 font-semibold ${
+          ready
+            ? "text-emerald-700 dark:text-emerald-300"
+            : "text-destructive"
+        }`}>
+          {ready ? <ShieldCheck className="size-5" /> : <CircleAlert className="size-5" />}
+          {ready ? "Đủ điều kiện công bố" : "Chưa đủ điều kiện công bố"}
+        </p>
+        <Badge
+          variant="outline"
+          className={ready
+            ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
+            : "border-destructive text-destructive"}
+        >
+          {ready ? "READY" : "BLOCKED"}
         </Badge>
-        <Badge variant="outline" className="border-destructive text-destructive">
-          {report.teamIssues.length} lỗi nhóm
-        </Badge>
-        <Badge variant="outline" className="border-destructive text-destructive">
-          {report.teamsWithTemplate}/{report.totalTeams} nhóm có đề bài
-        </Badge>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {statistics.map((statistic) => (
+          <div
+            key={statistic.label}
+            className="min-w-0 rounded-lg border bg-background/80 p-3"
+          >
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {statistic.icon}
+              <span className="truncate">{statistic.label}</span>
+            </div>
+            <p className="mt-2 text-2xl font-semibold tracking-tight">
+              {statistic.value}
+            </p>
+          </div>
+        ))}
       </div>
       {report.unassignedStudents.length > 0 && (
         <div className="rounded-lg border-2 border-destructive bg-background p-3">
@@ -3771,7 +4076,7 @@ function ReadinessReport({ report }: { report: AllocationReadiness }) {
           </div>
         </div>
       )}
-      {report.teamIssues.length > 0 && (
+      {!ready && report.teamIssues.length > 0 && (
         <div className="rounded-lg border border-destructive/40 bg-background p-3">
           <p className="text-sm font-semibold text-destructive">Lỗi theo nhóm</p>
           <ul className="mt-2 space-y-2 text-xs">

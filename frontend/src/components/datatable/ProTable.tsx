@@ -19,35 +19,10 @@ import { ColumnToggle } from "./toolbar/ColumnToggle";
 import { Toolbar } from "./toolbar/Toolbar";
 import type { ViewMode } from "./toolbar/Toolbar";
 
-/**
- * ProTable: Reusable data table component with sensible defaults
- *
- * Architecture: Default + Override Pattern
- *
- * Default behavior (zero config):
- * - Internal modal CRUD system (create/edit/delete)
- * - Default row actions (view, edit, delete)
- * - Default create button
- *
- * Optional overrides (for complex entities):
- * - headerActions: Override default create button
- * - renderRowActions: Complete override of row actions (full control)
- * - onView/onEdit/onDelete: Individual action overrides (keeps other defaults)
- * - renderFormModal: Override default form modal
- *
- * Benefits:
- * - Simple entities: zero config, just works
- * - Complex entities: full control via overrides
- * - Partial overrides: customize one action, keep others default
- * - No prop explosion
- * - Backward compatible
- * - Separation of concerns
- */
 interface ProTableProps<TData = any> {
-    /** Table instance from useTable hook */
+
     table: any;
 
-    /** Optional: Override default create button. If not provided, shows default "Create" button */
     headerActions?: React.ReactNode;
 
     /** Optional: extra buttons rendered next to the header actions / Create button */
@@ -88,13 +63,10 @@ interface ProTableProps<TData = any> {
     /** Optional: Override default view action. If not provided, uses internal modal view */
     onView?: (row: TData) => void;
 
-    /** Optional: Override default edit action. If not provided, uses internal modal edit */
     onEdit?: (row: TData) => void;
 
-    /** Optional: Override default delete action. If not provided, uses internal modal delete */
     onDelete?: (row: TData) => void;
 
-    /** Optional: Override default form modal. If not provided, uses internal FormModal */
     renderFormModal?: (props: {
         open: boolean;
         onClose: (open: boolean) => void;
@@ -103,16 +75,12 @@ interface ProTableProps<TData = any> {
         onSubmit: (data: any) => void;
     }) => React.ReactNode;
 
-    /** Optional: Handle row click */
     onRowClick?: (row: TData) => void;
 
-    /** Enable/disable auto page size calculation */
     autoPageSize?: boolean;
 
-    /** Row height for auto page size calculation */
     rowHeight?: number;
 
-    /** Hide default actions completely (for display-only tables) */
     hideActions?: boolean;
 
     /** Hide only the default Create action while retaining import/export actions */
@@ -148,7 +116,7 @@ interface ProTableProps<TData = any> {
      * the expandable field's value is rendered automatically via CellRenderer.
      */
     expandable?: {
-        /** Custom renderer for the expanded content below a row */
+
         renderExpandedRow?: (row: TData) => React.ReactNode;
     };
 }
@@ -190,7 +158,6 @@ export function ProTable<TData = any>({
     /** Browse mode normally hides row actions; entities can opt back in. */
     const allowBrowseRowActions = isBrowseMode && browseRowActions;
 
-    // Auto-detect expandable from schema — true when any field is marked expandable: true
     const isExpandable: boolean = schema.fields.some((f: any) => f.expandable === true);
 
     const [isAutoSize, setIsAutoSize] = useState(autoPageSize);
@@ -200,7 +167,6 @@ export function ProTable<TData = any>({
         onSizeChange: isAutoSize ? table.setSize : undefined,
     });
 
-    // Expandable row state
     const [expandedRows, setExpandedRows] = useState<Set<string | number>>(new Set());
     const toggleExpand = useCallback((id: string | number, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -215,7 +181,6 @@ export function ProTable<TData = any>({
         });
     }, []);
 
-    // Internal modal state (used when overrides are not provided)
     const [deleteItem, setDeleteItem] = useState<TData | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [detailRow, setDetailRow] = useState<TData | null>(null);
@@ -239,7 +204,6 @@ export function ProTable<TData = any>({
         }
     }, [isBrowseMode]);
 
-    // Date format cycling per date-type column
     const [dateFormats, setDateFormats] = useState<Record<string, DateFormatKey>>({});
     const cycleDateFormat = useCallback((fieldName: string) => {
         setDateFormats((prev) => {
@@ -250,7 +214,6 @@ export function ProTable<TData = any>({
         });
     }, []);
 
-    // Column widths state for resizing
     const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
         const widths: Record<string, number> = {};
         schema.fields.forEach((f: any) => {
@@ -303,7 +266,6 @@ export function ProTable<TData = any>({
         }
     };
 
-    // Determine if we should show actions column
     const canViewRow = table.permission?.canRead ?? true;
     const canEditRow = table.permission?.canUpdate ?? true;
     const canDeleteRow = table.permission?.canDelete ?? true;
@@ -315,7 +277,6 @@ export function ProTable<TData = any>({
     // the trailing icon button is clipped by the cell's overflow-hidden.
     const ACTION_COLUMN_WIDTH = actionsColumnWidth ?? (renderExtraRowActions ? 236 : 152);
 
-    // Default row actions renderer (uses internal modal system or custom overrides)
     const defaultRenderRowActions = (row: TData) => (
         <RowActions
             row={row}
@@ -329,7 +290,6 @@ export function ProTable<TData = any>({
         />
     );
 
-    // Use provided renderer or default (with individual overrides support)
     const finalRenderRowActions = renderRowActions || defaultRenderRowActions;
     const effectiveViewMode: ViewMode = isBrowseMode ? "card" : viewMode;
     const cardRowClickHandler =
@@ -374,7 +334,7 @@ export function ProTable<TData = any>({
                                 ))}
                                 {showActionsColumn && <col style={{ width: ACTION_COLUMN_WIDTH }} />}
                             </colgroup>
-                            <TableHeader className="bg-background z-10 sticky top-0 shadow-xs">
+                            <TableHeader className="bg-background z-40 sticky top-0 shadow-xs">
                                 <TableRow>
                                     {isExpandable && <TableHead style={{ width: 40 }} />}
                                     {selectable && (
@@ -402,7 +362,7 @@ export function ProTable<TData = any>({
                                     {showActionsColumn && (
                                         <TableHead
                                             style={{ width: ACTION_COLUMN_WIDTH }}
-                                            className="sticky right-0 z-30 bg-background border-l border-border/70 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.45)]"
+                                            className="sticky right-0 z-50 bg-background border-l border-border/70 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.45)]"
                                         >
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className="whitespace-nowrap">Actions</span>
@@ -518,7 +478,7 @@ export function ProTable<TData = any>({
                                                             style={{ width: ACTION_COLUMN_WIDTH }}
                                                             className={`sticky right-0 z-20 border-l border-border/70 ${
                                                                 index % 2 === 0 ? "bg-accent" : "bg-background"
-                                                            } group-hover:bg-muted/50 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.35)]`}
+                                                            } group-hover:bg-muted shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.35)]`}
                                                         >
                                                             <div className="flex items-center gap-1 overflow-hidden">
                                                                 {finalRenderRowActions(row)}
@@ -655,7 +615,6 @@ export function ProTable<TData = any>({
                 />
             )}
 
-            {/* Form Modal: Use custom renderer if provided, otherwise use default */}
             {renderFormModal ? (
                 renderFormModal({
                     open: table.isFormOpen,
@@ -696,7 +655,6 @@ export function ProTable<TData = any>({
                 />
             )}
 
-            {/* Delete Confirmation Modal: Always use internal system */}
             <ConfirmDeleteModal
                 open={!!deleteItem}
                 onOpenChange={(open) => !open && setDeleteItem(null)}
@@ -704,7 +662,6 @@ export function ProTable<TData = any>({
                 loading={deleteLoading}
             />
 
-            {/* Detail View Modal: Always use internal system */}
             <DetailModal
                 open={!!detailRow}
                 onClose={(open) => !open && setDetailRow(null)}

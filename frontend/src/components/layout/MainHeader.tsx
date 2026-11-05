@@ -27,8 +27,6 @@ export default function MainHeader({
     if (!Icon) return null;
 
     const resolvedTitle = title ?? activeModule?.name ?? "";
-    // const resolvedDescription =
-    //     description ?? activeModule?.description ?? "";
 
     return (
         <div className="flex flex-col">
@@ -36,11 +34,6 @@ export default function MainHeader({
                 <Icon className="text-gray-600" />
                 <h1 className="text-xl font-bold">{resolvedTitle}</h1>
             </div>
-            {/*{resolvedDescription && (*/}
-            {/*    <p className="text-gray-500 text-sm">*/}
-            {/*        {resolvedDescription}*/}
-            {/*    </p>*/}
-            {/*)}*/}
         </div>
     );
 }
