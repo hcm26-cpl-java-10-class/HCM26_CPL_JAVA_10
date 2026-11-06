@@ -43,6 +43,10 @@ class ProjectAlertMilestonePolicyTest {
         milestone.softDelete(UUID.randomUUID(),now);
         assertThat(policy.evaluate(milestone,items(0,1),now).atRisk()).isFalse();
     }
+    @Test void milestoneWithoutDeadlineDoesNotAlert() {
+        var progress=policy.evaluate(milestone(null),items(0,1),now);
+        assertThat(progress.atRisk()).isFalse();
+    }
     @Test void riskUsesExactRatioRatherThanRoundedPercentage() {
         var progress=policy.evaluate(milestone(now.plusSeconds(3600)),items(79999,100000),now);
         assertThat(progress.percentage()).isEqualByComparingTo("80.00");assertThat(progress.atRisk()).isTrue();
