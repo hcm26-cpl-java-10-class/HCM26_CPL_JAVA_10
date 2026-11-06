@@ -12,6 +12,14 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 
 export default function CourseGradeDetailPage() {
     const { courseId } = useParams<{ courseId: string }>();
@@ -34,20 +42,22 @@ export default function CourseGradeDetailPage() {
         (item) => item.courseId === id
     );
 
+    const gradeItems = course?.gradeItems ?? [];
+
     return (
         <MainLayout pathName={{ "my-scores": "My Scores" }}>
             <div className="space-y-6 p-4">
-                <div>
-                    <Button
-                        variant="outline"
-                        onClick={() => navigate("/my-scores")}
-                    >
-                        <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to Course Scores
-                    </Button>
-                </div>
+                <Button
+                    variant="outline"
+                    onClick={() => navigate("/my-scores")}
+                >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back to Course Scores
+                </Button>
 
-                <h1 className="text-2xl font-bold">Course Grade Details</h1>
+                <h1 className="text-2xl font-bold">
+                    Course Grade Details
+                </h1>
 
                 {!isValidId && (
                     <p className="text-sm text-destructive">
@@ -75,111 +85,140 @@ export default function CourseGradeDetailPage() {
 
                 {course && (
                     <>
-                        <Card>
-                            <CardHeader>
-                                <div className="flex flex-wrap items-start justify-between gap-4">
-                                    <div>
-                                        <CardTitle>
-                                            {course.courseCode
-                                                ? `${course.courseCode} - `
-                                                : ""}
-                                            {course.courseName}
-                                        </CardTitle>
+                        {/* Course Information */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>
+                                        {course.courseCode
+                                            ? `${course.courseCode} - `
+                                            : ""}
+                                        {course.courseName}
+                                    </CardTitle>
 
-                                        {course.className && (
-                                            <CardDescription>
-                                                Class: {course.className}
-                                            </CardDescription>
-                                        )}
-                                    </div>
-
-                                    {course.resultStatus && (
-                                        <Badge
-                                            variant={
-                                                course.resultStatus === "PASSED"
-                                                    ? "default"
-                                                    : "destructive"
-                                            }
-                                        >
-                                            {course.resultStatus}
-                                        </Badge>
+                                    {course.className && (
+                                        <CardDescription>
+                                            Class: {course.className}
+                                        </CardDescription>
                                     )}
-                                </div>
-                            </CardHeader>
+                                </CardHeader>
 
-                            <CardContent>
-                                <p className="text-sm text-muted-foreground">
-                                    Overall Score
-                                </p>
+                                <CardContent>
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                        {/* Overall Score */}
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">
+                                                Overall Score
+                                            </p>
 
-                                <p className="text-3xl font-semibold">
-                                    {course.overallScore != null
-                                        ? course.overallScore.toFixed(1)
-                                        : "-"}
-                                </p>
-                            </CardContent>
-                        </Card>
+                                            <p className="text-3xl font-semibold">
+                                                {course.overallScore != null
+                                                    ? course.overallScore.toFixed(1)
+                                                    : "-"}
+                                            </p>
+                                        </div>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Grade Details</CardTitle>
-                            </CardHeader>
+                                        {/* Status */}
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">
+                                                Status
+                                            </p>
 
-                            <CardContent>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                        <tr className="border-b text-left">
-                                            <th className="px-4 py-3">Grade Category</th>
-                                            <th className="px-4 py-3">Grade Item</th>
-                                            <th className="px-4 py-3">Grade Weight</th>
-                                            <th className="px-4 py-3">Value</th>
-                                        </tr>
-                                        </thead>
+                                            <div className="mt-2">
+                                                {course.resultStatus ? (
+                                                    <Badge
+                                                        variant={
+                                                            course.resultStatus === "PASSED"
+                                                                ? "default"
+                                                                : course.resultStatus === "FAILED"
+                                                                    ? "destructive"
+                                                                    : "outline"
+                                                        }
+                                                    >
+                                                        {course.resultStatus}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-2xl font-semibold">
+                                                    -
+                                                </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
 
-                                        <tbody>
-                                        {course.gradeItems.map((item, index) => (
-                                            <tr
-                                                key={`${item.examId ?? item.gradeCategory}-${index}`}
-                                                className="border-b"
-                                            >
-                                                <td className="px-4 py-3">
-                                                    {item.gradeCategory}
-                                                </td>
+                        {/* Grade Details */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Grade Details</CardTitle>
+                                </CardHeader>
 
-                                                <td className="px-4 py-3">
-                                                    {item.gradeItem ?? ""}
-                                                </td>
+                                <CardContent>
+                                    <div className="overflow-x-auto">
+                                        <Table className="[&_tbody_tr]:border-b-0">
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Grade Category</TableHead>
+                                                    <TableHead>Grade Item</TableHead>
+                                                    <TableHead>Grade Weight</TableHead>
+                                                    <TableHead>Value</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
 
-                                                <td className="px-4 py-3">
-                                                    {item.gradeWeight != null
-                                                        ? `${item.gradeWeight.toFixed(2)}%`
-                                                        : ""}
-                                                </td>
+                                            <TableBody>
+                                                {gradeItems.map((item, index) => {
+                                                    const currentCategory = item.gradeCategory?.trim() || "-";
 
-                                                <td className="px-4 py-3">
-                                                    {item.value != null
-                                                        ? item.value.toFixed(1)
-                                                        : ""}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                    const previousCategory =
+                                                        index > 0
+                                                            ? gradeItems[index - 1].gradeCategory?.trim() || "-"
+                                                            : null;
 
-                                        {course.gradeItems.length === 0 && (
-                                            <tr>
-                                                <td
-                                                    colSpan={4}
-                                                    className="px-4 py-6 text-center text-muted-foreground"
-                                                >
-                                                    No grade items available.
-                                                </td>
-                                            </tr>
-                                        )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                                    const showCategory = currentCategory !== previousCategory;
+
+                                                    return (
+                                                        <TableRow
+                                                            key={`${item.examId ?? item.gradeCategory}-${index}`}
+                                                            className={
+                                                                showCategory && index > 0
+                                                                    ? "border-b-0 border-t-2 border-t-border"
+                                                                    : "border-b-0 border-t-0"
+                                                            }
+                                                        >
+                                                            <TableCell className="font-medium">
+                                                                {showCategory ? currentCategory : ""}
+                                                            </TableCell>
+
+                                                            <TableCell>{item.gradeItem || "-"}</TableCell>
+
+                                                            <TableCell>
+                                                                {item.gradeWeight != null
+                                                                    ? `${item.gradeWeight.toFixed(2)}%`
+                                                                    : "-"}
+                                                            </TableCell>
+
+                                                            <TableCell>
+                                                                {item.value != null ? item.value.toFixed(1) : "-"}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+
+                                                {gradeItems.length === 0 && (
+                                                    <TableRow>
+                                                        <TableCell
+                                                            colSpan={4}
+                                                            className="py-6 text-center text-muted-foreground"
+                                                        >
+                                                            No grade items available.
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </CardContent>
+                            </Card>
                     </>
                 )}
             </div>

@@ -90,20 +90,16 @@ export default function MyScoresPage() {
 
                     <CardContent>
                       <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">
-                      Overall Score
-                    </span>
+                        <span className="text-sm text-muted-foreground">
+                          Overall Score
+                        </span>
 
                         <span className="text-2xl font-semibold">
-                      {course.overallScore != null
+                          {course.overallScore != null
                           ? course.overallScore.toFixed(1)
                           : "-"}
-                    </span>
+                        </span>
                       </div>
-
-                      <p className="mt-3 text-sm text-primary">
-                        View grade details →
-                      </p>
                     </CardContent>
                   </Card>
               ))}
