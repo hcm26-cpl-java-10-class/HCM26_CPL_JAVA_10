@@ -17,20 +17,30 @@ import { authApi } from "@/api/features/auth.api";
 import { iconMap } from "@/components/datatable/iconMap";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { usePermissions } from "@/hooks/usePermissions";
-import {
-  ChevronDown,
-  LogOutIcon,
-  Menu,
-} from "lucide-react";
-import {
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import { ChevronDown, LogOutIcon, Menu } from "lucide-react";
+import { useMemo } from "react";
+import { useDispatch } from "react-redux";
+import { useLocation, useNavigate } from "react-router-dom";
+import { setLogout } from "@/store/slices/auth/authSlice";
+import { useQueryClient } from "@tanstack/react-query";
 
 const normalizePath = (path?: string) => {
   const trimmed = (path || "/").replace(/\/+$/, "");
   return trimmed || "/";
 };
+
+/**
+ * The student persona works with a single backlog entry point: the `Sprints`
+ * and `Sprint Backlogs` menus collapse into `Backlogs` -> `/backlogs`.
+ */
+const STUDENT_HIDDEN_URLS = new Set(["/sprint-backlogs"]);
+
+const STUDENT_MENU_OVERRIDES: Record<string, { title: string; url: string }> = {
+  "/sprints": { title: "Backlogs", url: "/backlogs" },
+};
+
+const BACKLOGS_URL = "/backlogs";
+const MY_SUBMISSIONS_URL = "/student/milestone-submissions";
 
 const SYLLABUS_PATH = "/student/syllabuses";
 const ADMIN_ONLY_STUDENT_PREVIEW_PATHS = new Set(["/course-report", "/enrollment-logs"]);
@@ -46,14 +56,11 @@ const activeNavClass =
 export function StudentNavbar() {
   const location = useLocation();
   const navigate = useNavigate();
-
-  const { activeRole, hasPermission } = usePermissions();
-
-  const { data: moduleGroups = [] } =
-      useActiveModuleGroups();
-
+  const dispatch = useDispatch();
+  const queryClient = useQueryClient();
+  const { activeRole, effectivePermissions, hasPermission } = usePermissions();
+  const { data: moduleGroups = [] } = useActiveModuleGroups();
   const { count: pendingInvitationCount } = usePendingInvitations();
-
   const pathname = normalizePath(location.pathname);
 
   const canBrowseSyllabuses =
@@ -63,70 +70,119 @@ export function StudentNavbar() {
       pathname === SYLLABUS_PATH ||
       pathname.startsWith(`${SYLLABUS_PATH}/`);
 
+  const resolveIcon = (moduleIcon?: string) => {
+    const key: keyof typeof iconMap =
+      moduleIcon && moduleIcon in iconMap ? (moduleIcon as keyof typeof iconMap) : "menu";
+    return iconMap[key];
+  };
+
+  const navGroups = useMemo(() => {
+    const groups = moduleGroups
+      .map((group) => {
+        const seenUrls = new Set<string>();
+
+        const items = group.modules
+          .filter((module) => !!module.url)
+          .filter((module) => !module.hiddenInMenu)
+          .filter((module) => !ADMIN_ONLY_STUDENT_PREVIEW_PATHS.has(normalizePath(module.url)))
+          .filter((module) => !STUDENT_HIDDEN_URLS.has(normalizePath(module.url)))
+          .map((module) => {
+            const override = STUDENT_MENU_OVERRIDES[normalizePath(module.url)];
+            const url = override?.url ?? module.url!;
+
+            return {
+              id: module.id ?? `${group.id ?? group.name}-module`,
+              title: override?.title ?? module.title ?? "Untitled",
+              url,
+              icon: resolveIcon(module.icon),
+              isActive:
+                pathname === normalizePath(url) ||
+                pathname.startsWith(`${normalizePath(url)}/`),
+            };
+          })
+          .filter((item) => {
+            if (seenUrls.has(item.url)) {
+              return false;
+            }
+
+            seenUrls.add(item.url);
+            return true;
+          });
+
+        return {
+          id: group.id ?? group.name ?? "group",
+          name: group.name ?? "Menu",
+          hiddenInMenu: group.hiddenInMenu,
+          items,
+        };
+      });
+
+    // Safety net: when the sprint module is not configured in the database the
+    // student still needs the Backlogs entry point.
+    const hasBacklogs = groups.some((group) =>
+      group.items.some((item) => item.url === BACKLOGS_URL),
+    );
+
+    if (!hasBacklogs && hasPermission("SPRINT_READ")) {
+      const projectGroup =
+        groups.find((group) => /project/i.test(group.name)) ?? groups[0];
+
+      if (projectGroup) {
+        projectGroup.items.push({
+          id: "student-backlogs",
+          title: "Backlogs",
+          url: BACKLOGS_URL,
+          icon: resolveIcon("menu"),
+          isActive:
+            pathname === BACKLOGS_URL || pathname.startsWith(`${BACKLOGS_URL}/`),
+        });
+      }
+    }
+
+    const hasMySubmissions = groups.some((group) =>
+      group.items.some((item) => item.url === MY_SUBMISSIONS_URL),
+    );
+    if (!hasMySubmissions) {
+      const projectGroup = groups.find((group) => /project|dự án/i.test(group.name));
+      const item = {
+        id: "student-my-submissions",
+        title: "My Submissions",
+        url: MY_SUBMISSIONS_URL,
+        icon: resolveIcon("menu"),
+        isActive: pathname === MY_SUBMISSIONS_URL || pathname.startsWith(`${MY_SUBMISSIONS_URL}/`),
+      };
+      if (projectGroup) projectGroup.items.push(item);
+      else groups.push({ id: "student-project", name: "Dự án", hiddenInMenu: false, items: [item] });
+    }
+
+    return groups.filter((group) => !group.hiddenInMenu && group.items.length > 0);
+  }, [moduleGroups, pathname, hasPermission]);
+
+  // Pending-invitation badge next to the Invitations entry point.
   const renderPendingBadge = (url: string) => {
     if (normalizePath(url) !== "/invitations" || pendingInvitationCount <= 0) {
       return null;
     }
 
     return (
-        <span
-            aria-hidden="true"
-            className="ml-auto flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white"
-        >
-          {pendingInvitationCount > 9 ? "9+" : pendingInvitationCount}
-        </span>
+      <span
+        aria-hidden="true"
+        className="ml-auto flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white"
+      >
+        {pendingInvitationCount > 9 ? "9+" : pendingInvitationCount}
+      </span>
     );
   };
 
-  // Use the existing module groups from LMS.
-  const resolveIcon = (moduleIcon?: string) => {
-    const key: keyof typeof iconMap =
-        moduleIcon && moduleIcon in iconMap
-            ? (moduleIcon as keyof typeof iconMap)
-            : "menu";
-
-    return iconMap[key];
-  };
-
-  const navGroups = moduleGroups
-      .map((group) => ({
-        id: group.id ?? group.name ?? "group",
-        name: group.name ?? "Menu",
-        hiddenInMenu: group.hiddenInMenu,
-        items: group.modules
-            .filter(
-                (module) =>
-                    !!module.url &&
-                    !module.hiddenInMenu &&
-                    !ADMIN_ONLY_STUDENT_PREVIEW_PATHS.has(normalizePath(module.url))
-            )
-            .map((module) => ({
-              id:
-                  module.id ??
-                  `${group.id ?? group.name}-module`,
-              title: module.title ?? "Untitled",
-              url: module.url ?? "#",
-              icon: resolveIcon(module.icon),
-              isActive:
-                  !!module.url &&
-                  (
-                      pathname === normalizePath(module.url) ||
-                      pathname.startsWith(
-                          `${normalizePath(module.url)}/`
-                      )
-                  ),
-            })),
-      }))
-      .filter((group) => !group.hiddenInMenu && group.items.length > 0);
-
   type NavigationEntry =
-      | {
-    type: "group";
-    group: (typeof navGroups)[number];
-  }
-      | {
-    type: "syllabuses";
-  };
+    | {
+        type: "group";
+        group: (typeof navGroups)[number];
+      }
+    | {
+        type: "syllabuses";
+      };
+
 
   const navigation: NavigationEntry[] = [];
 
@@ -159,8 +215,13 @@ export function StudentNavbar() {
   }
 
   const handleLogout = async () => {
-    await authApi.logout();
-    navigate("/login");
+    try {
+      await authApi.logout();
+    } finally {
+      queryClient.removeQueries({ queryKey: ["sidebar-menu"] });
+      dispatch(setLogout());
+      navigate("/login", { replace: true });
+    }
   };
 
   return (
@@ -172,7 +233,7 @@ export function StudentNavbar() {
               type="button"
               variant="ghost"
               onClick={() =>
-                  navigate(getHomePathByRole(activeRole))
+                  navigate(getHomePathByRole(activeRole, effectivePermissions))
               }
               className="flex h-auto min-w-0 items-center justify-start gap-3 px-0 hover:bg-transparent"
           >

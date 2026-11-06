@@ -279,34 +279,49 @@ export function FormFieldRenderer({
         </div>
       );
 
-    case "textarea":
+    case "textarea": {
+      const rows = field.rows ?? 4;
+      const maxLength = rule.maxLength ?? field.maxLength;
+      const currentLength = typeof value === "string" ? value.length : 0;
+      const isAtLimit = !!maxLength && currentLength >= maxLength;
+
       return (
         <div className="grid gap-2">
           <Label htmlFor={field.name}>{field.label}{requiredMark}</Label>
-          <Textarea
-            id={field.name}
-            className={`h-32 resize-none overflow-y-auto ${errorClass}`}
-            value={value || ""}
-            onChange={(e) => onChange(field.name, e.target.value)}
-            placeholder={`Enter ${field.label.toLowerCase()}...`}
-            rows={4}
-            maxLength={rule.maxLength}
-            style={FIXED_TEXTAREA_STYLE}
-          />
-          {rule.maxLength ? (
-            <p className="text-xs text-muted-foreground text-right">
-              {(value || "").length}/{rule.maxLength}
-            </p>
-          ) : null}
+          <div className="relative">
+            <Textarea
+              id={field.name}
+              className={`${errorClass} resize-none overflow-y-auto ${
+                maxLength ? "pb-6 pr-14" : ""
+              }`}
+              style={FIXED_TEXTAREA_STYLE}
+              value={value || ""}
+              onChange={(e) => {
+                const nextValue = e.target.value;
+                onChange(
+                  field.name,
+                  maxLength ? nextValue.slice(0, maxLength) : nextValue,
+                );
+              }}
+              placeholder={`Enter ${field.label.toLowerCase()}...`}
+              rows={rows}
+              maxLength={maxLength}
+            />
+            {maxLength ? (
+              <span
+                className={`pointer-events-none absolute bottom-1.5 right-2 text-xs tabular-nums ${
+                  isAtLimit ? "text-destructive" : "text-muted-foreground"
+                }`}
+              >
+                {currentLength}/{maxLength}
+              </span>
+            ) : null}
+          </div>
           <FieldHint field={field} rule={rule} />
-          {field.maxLength ? (
-            <p className="text-xs text-muted-foreground text-right">
-              {String(value || "").length}/{field.maxLength} ký tự
-            </p>
-          ) : null}
           <FieldError errors={fieldErrors} />
         </div>
       );
+    }
 
     case "text":
     default:

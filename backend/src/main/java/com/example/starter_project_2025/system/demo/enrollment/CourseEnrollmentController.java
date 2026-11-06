@@ -141,7 +141,6 @@ public class CourseEnrollmentController {
     ) {
         return enrollmentService.getStudentsByCourse(courseId);
     }
-
     @GetMapping("/students/{studentId}/courses")
     @PreAuthorize("hasAuthority('DEPARTMENT_READ')")
     public List<CourseEnrollmentDTO> getStudentCourses(

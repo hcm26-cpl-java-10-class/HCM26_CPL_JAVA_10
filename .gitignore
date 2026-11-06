@@ -1,5 +1,6 @@
 # === IDE ===
 .idea/
+.run/*.saved
 *.iml
 .vscode/
 
@@ -12,6 +13,13 @@ backend/target/
 backend/*.jar
 backend/*.war
 backend/data/
+
+# === Local databases and demo logs ===
+/data/
+*.mv.db
+*.trace.db
+*.lock.db
+backend/demo-start.log
 
 # === Backend .env (secrets) ===
 backend/.env
@@ -36,6 +44,11 @@ docker/.env
 *.log
 
 /backend.zip
+/backend/compile.log
+/backend/compile_error.txt
+/test.txt
+/docs/UFR-PRJ-004-*.md
+/.playwright-mcp/
 
 # === Nested clone / local workspace folder ===
 HCM26_CPL_JAVA_10/

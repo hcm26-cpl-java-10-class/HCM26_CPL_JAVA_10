@@ -417,7 +417,7 @@ export function LessonQnA({ lessonId, className, focusQuestionId }: LessonQnAPro
           </div>
         ) : questions.length === 0 ? (
           search ? (
-            <div className="space-y-3 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+            <div className="space-y-3 rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
               <p>No questions match &ldquo;{search}&rdquo;.</p>
               {canAsk && (
                 <Button
@@ -434,7 +434,7 @@ export function LessonQnA({ lessonId, className, focusQuestionId }: LessonQnAPro
               )}
             </div>
           ) : (
-            <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+            <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
               No questions yet.{canAsk ? " Be the first to ask!" : ""}
             </p>
           )

@@ -4,12 +4,14 @@ import { useDispatch } from "react-redux";
 import { jwtDecode } from "jwt-decode";
 import { setLogin } from "@/store/slices/auth/authSlice";
 import type { LoginResponse } from "@/types";
-import { getHomePathByRole, normalizeAuthRolePayload } from "@/utils/rbac.utils";
+import { getHomePathByRole, normalizeAuthRolePayload, resolveEffectivePermissions } from "@/utils/rbac.utils";
+import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 
 export const OAuth2RedirectHandler = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const dispatch = useDispatch();
+    const { setViewRole } = useRoleSwitch();
 
     useEffect(() => {
         const error = searchParams.get("error");
@@ -52,12 +54,13 @@ export const OAuth2RedirectHandler = () => {
                 rolePermissions: normalized.rolePermissions,
             };
 
+            setViewRole(null);
             dispatch(setLogin(userData));
-            navigate(getHomePathByRole(userData.role), { replace: true });
+            navigate(getHomePathByRole(userData.role, resolveEffectivePermissions(userData.role, userData.rolePermissions, userData.permissions)), { replace: true });
         } catch {
             navigate("/login?error=google_token_invalid", { replace: true });
         }
-    }, [searchParams, dispatch, navigate]);
+    }, [searchParams, dispatch, navigate, setViewRole]);
 
     return (
         <div className="flex h-screen items-center justify-center">

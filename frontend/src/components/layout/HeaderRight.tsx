@@ -9,13 +9,14 @@ import {
   formatRoleLabel,
   getHomePathByRole,
   normalizeRole,
+  resolveEffectivePermissions,
   uniqueRoles,
 } from "@/utils/rbac.utils";
 import { useNavigate } from "react-router-dom";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 
 export default function HeaderRight() {
-  const { role, roles } = useSelector((state: RootState) => state.auth);
+  const { role, roles, rolePermissions, permissions } = useSelector((state: RootState) => state.auth);
   const { activeRole, availableRoles, isPreviewMode, setViewRole } = useRoleSwitch();
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -66,11 +67,29 @@ export default function HeaderRight() {
 
   const switchRole = (nextRole: string) => {
     const normalizedRole = normalizeRole(nextRole);
-    const homePath = getHomePathByRole(normalizedRole);
+    const targetRole = normalizedRole === primaryRole ? null : normalizedRole;
+
     setOpen(false);
+
+    /**
+     * The role and the URL must change in the same commit: React Router
+     * applies navigation updates inside `startTransition`, so an urgent
+     * `setViewRole` would otherwise commit first and re-render the *current*
+     * protected route with the *new* role (-> 403 on the old page).
+     */
     startTransition(() => {
-      navigate(homePath, { replace: true });
-      setViewRole(normalizedRole === primaryRole ? null : normalizedRole);
+      setViewRole(targetRole);
+      navigate(
+          getHomePathByRole(
+              normalizedRole,
+              resolveEffectivePermissions(
+                  normalizedRole,
+                  rolePermissions,
+                  permissions
+              ),
+          ),
+          { replace: true },
+      );
     });
   };
 

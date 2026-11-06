@@ -14,8 +14,10 @@ type AuthRolePayload = {
 export const normalizeRole = (role?: string | null): string =>
   (role ?? "").trim().toUpperCase();
 
-export const normalizePermission = (permission?: string | null): string =>
-  (permission ?? "").trim().toUpperCase();
+export const normalizePermission = (permission?: string | null): string => {
+  const normalized = (permission ?? "").trim().toUpperCase();
+  return ({ VIEW_PROJECT_WORKSPACE: "WORKSPACE_READ", CREATE_PROJECT_WORKSPACE: "WORKSPACE_CREATE" } as Record<string, string>)[normalized] ?? normalized;
+};
 
 export const uniquePermissions = (permissions?: string[] | null): string[] => {
   const seen = new Set<string>();
@@ -117,19 +119,6 @@ export const resolveEffectivePermissions = (
 ): string[] => {
   const role = normalizeRole(activeRole);
 
-  if (role && rolePermissions[role]?.length) {
-    return uniquePermissions(rolePermissions[role]);
-  }
-
-  if (role === STUDENT_ROLE) {
-    return uniquePermissions(
-      allPermissions.filter(
-        (permission) =>
-          permission.endsWith("_READ") || permission === "ENROLL_COURSE",
-      ),
-    );
-  }
-
   if (role === TEACHER_ROLE) {
     const teacherDefaults = new Set([
       "MENU_READ",
@@ -147,8 +136,22 @@ export const resolveEffectivePermissions = (
       "COURSE_DELETE",
     ]);
 
+    return uniquePermissions([
+      ...(rolePermissions[role] ?? []),
+      ...allPermissions.filter((permission) => teacherDefaults.has(permission)),
+    ]);
+  }
+
+  if (role && rolePermissions[role]?.length) {
+    return uniquePermissions(rolePermissions[role]);
+  }
+
+  if (role === STUDENT_ROLE) {
     return uniquePermissions(
-      allPermissions.filter((permission) => teacherDefaults.has(permission)),
+      allPermissions.filter(
+        (permission) =>
+          permission.endsWith("_READ") || permission === "ENROLL_COURSE",
+      ),
     );
   }
 
@@ -162,7 +165,7 @@ export const formatRoleLabel = (role: string): string =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
-export const getHomePathByRole = (role?: string | null): string => {
+export const getHomePathByRole = (role?: string | null, permissions?: string[]): string => {
   const normalizedRole = normalizeRole(role);
 
   if (normalizedRole === STUDENT_ROLE) {
@@ -171,6 +174,12 @@ export const getHomePathByRole = (role?: string | null): string => {
 
   if (normalizedRole === TEACHER_ROLE) {
     return "/teacher";
+  }
+
+  // The Dashboard menu requires USER_READ. Workspace-only roles cannot open it.
+  const grantedPermissions = new Set(uniquePermissions(permissions));
+  if (!grantedPermissions.has("USER_READ") && grantedPermissions.has("WORKSPACE_READ")) {
+    return "/management/workspaces/candidates";
   }
 
   return "/dashboard";
@@ -192,7 +201,7 @@ export const ROLE_HIDDEN_MODULE_URLS: Record<string, string[]> = {
 };
 
 export const ROLE_HIDDEN_MENU_GROUP_NAMES: Record<string, string[]> = {
-  [STUDENT_ROLE]: ["Assessment Management"],
+  [STUDENT_ROLE]: ["Exam Management"],
 };
 
 export const ROLE_MOVED_MENU_MODULES: Record<string, Record<string, string>> = {

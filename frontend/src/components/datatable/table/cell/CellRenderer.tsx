@@ -14,6 +14,7 @@ export { OverflowBadges } from "./OverflowBadges";
 interface CellRendererProps {
   field: FieldSchema;
   value: any;
+  row?: any;
   relationOptions?: Record<string, any[]>;
   onBooleanToggle?: (fieldName: string, newValue: boolean) => void;
   disableBooleanToggle?: boolean;
@@ -23,11 +24,16 @@ interface CellRendererProps {
 export function CellRenderer({
   field,
   value,
+  row,
   relationOptions = {},
   onBooleanToggle,
   disableBooleanToggle = false,
   dateFormat,
 }: CellRendererProps) {
+  if (field.renderCell) {
+    return <TableCell>{field.renderCell(value, row)}</TableCell>;
+  }
+
   if (field.type === "boolean") {
     const labels = field.booleanLabels || { true: "Yes", false: "No" };
     const label = value ? labels.true : labels.false;
@@ -166,7 +172,7 @@ export function CellRenderer({
       : undefined;
   const displayValue = optionLabel ?? value ?? "—";
   const displayStr =
-    field.type === "date" && value
+    (field.type === "date" || field.type === "datetime") && value
       ? formatDateValue(value, dateFormat)
       : String(displayValue);
 

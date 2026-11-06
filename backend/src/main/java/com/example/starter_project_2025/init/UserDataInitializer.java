@@ -4,6 +4,9 @@ import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.rbac.user.StudentUserCodeGenerator;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -25,8 +28,10 @@ public class UserDataInitializer implements CommandLineRunner {
   private static final String DEFAULT_PASSWORD = "password123";
 
   private final UserRepository userRepository;
+  private final StudentUserCodeGenerator studentUserCodeGenerator;
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
+  private final TenantRepository tenantRepository;
 
   @Value("${app.seed.admin.email:admin@example.com}")
   private String adminEmail;
@@ -89,11 +94,22 @@ public class UserDataInitializer implements CommandLineRunner {
 
     user.setIsActive(true);
 
+    if (user.getTenant() == null) {
+      Tenant tenant = tenantRepository.findByCode("LOCAL_TRAINING").orElseGet(() ->
+              tenantRepository.save(Tenant.builder().code("LOCAL_TRAINING").name("Local training").build()));
+      user.setTenant(tenant);
+      user.setTenantId(tenant.getId());
+    }
+
     if (replaceExistingRoles) {
       user.getRoles().clear();
     }
 
     user.getRoles().add(role);
+
+    if ("STUDENT".equals(role.getName())) {
+      studentUserCodeGenerator.assignIfMissing(user);
+    }
 
     userRepository.save(user);
   }

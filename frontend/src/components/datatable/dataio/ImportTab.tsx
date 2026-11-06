@@ -30,6 +30,8 @@ interface ImportTabProps {
   entityName?: string;
   allowedExtensions?: string[];
   maxFileSizeBytes?: number;
+  /** @deprecated Use `maxFileSizeBytes` instead. Kept for existing call sites. */
+  maxFileSize?: number;
   onDownloadTemplate?: () => Promise<void>;
 }
 
@@ -38,7 +40,8 @@ export function ImportTab({
                             onImport,
                             entityName,
                             allowedExtensions = DEFAULT_EXTENSIONS,
-                            maxFileSizeBytes = DEFAULT_MAX_SIZE,
+                            maxFileSizeBytes,
+                            maxFileSize,
                             onDownloadTemplate,
                           }: ImportTabProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -51,6 +54,8 @@ export function ImportTab({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const maxFileSizeLimit = maxFileSizeBytes ?? maxFileSize ?? DEFAULT_MAX_SIZE;
+
   const accept = allowedExtensions.join(",");
 
   const extensions = allowedExtensions.map((ext) =>
@@ -58,10 +63,10 @@ export function ImportTab({
   );
 
   const maxSizeLabel =
-      maxFileSizeBytes === DEFAULT_MAX_SIZE
+      maxFileSizeLimit === DEFAULT_MAX_SIZE
           ? "50 MB"
           : `${Number(
-              (maxFileSizeBytes / 1_000_000).toFixed(2)
+              (maxFileSizeLimit / 1_000_000).toFixed(2)
           )} MB`;
 
   // Reset native file input.
@@ -106,7 +111,7 @@ export function ImportTab({
       return;
     }
 
-    if (selected.size > maxFileSizeBytes) {
+    if (selected.size > maxFileSizeLimit) {
       rejectFile(
           `File size must not exceed ${maxSizeLabel}.`
       );

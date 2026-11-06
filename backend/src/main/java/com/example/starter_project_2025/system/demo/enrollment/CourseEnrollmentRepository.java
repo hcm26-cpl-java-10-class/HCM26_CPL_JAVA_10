@@ -34,7 +34,6 @@ public interface CourseEnrollmentRepository
             + "order by e.user.firstName asc, e.user.lastName asc")
     List<CourseEnrollment> findActiveStudentsByCourse(
             @Param("courseId") Long courseId);
-
     Optional<CourseEnrollment> findByIdAndUser_Id(
             Long enrollmentId,
             Long userId

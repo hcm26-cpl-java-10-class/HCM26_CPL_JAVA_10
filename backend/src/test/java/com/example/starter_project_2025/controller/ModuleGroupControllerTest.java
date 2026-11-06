@@ -60,6 +60,12 @@ public class ModuleGroupControllerTest {
     @MockBean
     private ImportService importService;
 
+    @MockBean
+    private RefreshTokenService refreshTokenService;
+
+    @MockBean
+    private com.example.starter_project_2025.security.UserDetailsServiceImpl userDetailsService;
+
     private ModuleGroupDTO mockDto;
 
     @BeforeEach

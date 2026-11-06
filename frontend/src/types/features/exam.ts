@@ -34,8 +34,6 @@ export interface CodeSpec {
   customMain?: boolean;
   /** Main class (custom or auto-generated). Only saved when customMain is true. */
   mainCode?: string | null;
-  /** Teacher's demo solution used to check the tests. Teacher-only; never sent to students. */
-  referenceCode?: string | null;
 }
 export type QuestionDifficulty = "EASY" | "MEDIUM" | "HARD";
 
@@ -65,10 +63,6 @@ export interface QuestionDTO {
   options: QuestionOptionDTO[];
   imageUrl?: string | null;
   code?: CodeSpec | null;
-  createdAt?: string | null;
-  updatedAt?: string | null;
-  createdBy?: number | null;
-  updatedBy?: number | null;
 }
 
 export interface QuestionFilter {
@@ -80,18 +74,18 @@ export interface QuestionFilter {
 
 export type LatePolicy = "NOT_ALLOWED" | "ALLOWED_WITH_PENALTY" | "ALLOWED";
 export type ExamType = "MULTIPLE_CHOICE" | "ESSAY" | "CODING" | "MC_CODING" | "MIXED";
-export type ExamCategory = "ASSIGNMENT" | "QUIZ" | "MIDTERM" | "FINAL_TEST";
+export type ExamCategory = "ASSESSMENT" | "QUIZ" | "MIDTERM" | "FINAL_TEST";
 export type ResultVisibility = "IMMEDIATE" | "AFTER_EXAM_CLOSED" | "MANUAL_RELEASE";
 
 export const EXAM_CATEGORY_LABEL: Record<ExamCategory, string> = {
-  ASSIGNMENT: "Assignment",
+  ASSESSMENT: "Assessment",
   QUIZ: "Quiz",
   MIDTERM: "Midterm",
   FINAL_TEST: "Final Test",
 };
 
 export const EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT: Record<ExamCategory, boolean> = {
-  ASSIGNMENT: true,
+  ASSESSMENT: true,
   QUIZ: true,
   MIDTERM: false,
   FINAL_TEST: false,
@@ -100,13 +94,6 @@ export const EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT: Record<ExamCategory, boolean> =
 export interface ExamDTO {
   id?: number;
   isActive?: boolean;
-  createdAt?: string | null;
-  updatedAt?: string | null;
-  /** Full name of the creator (empty for old data). */
-  createdByName?: string | null;
-  /** Submitted attempts waiting for the teacher to grade. */
-  pendingGradingCount?: number;
-  hasAttempts?: boolean;
   title: string;
   durationMinutes: number;
   startTime?: string | null;
@@ -134,8 +121,6 @@ export interface ExamDTO {
   blockCopyPaste?: boolean;
   requireFullscreen?: boolean;
   singleSession?: boolean;
-  cameraProctoring?: boolean;
-  notifyOnViolation?: boolean;
 }
 
 export interface ExamFilter {

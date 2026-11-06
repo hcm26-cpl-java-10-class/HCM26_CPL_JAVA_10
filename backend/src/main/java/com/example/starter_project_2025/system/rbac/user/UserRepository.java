@@ -13,10 +13,21 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends BaseCrudRepository<User, Long> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id in :ids order by u.id")
+    List<User> lockForContribution(@Param("ids") java.util.Collection<Long> ids);
 
     Optional<User> findByEmail(String email);
 
+    List<User> findByEmailEndingWithIgnoreCase(String emailSuffix);
+
+    List<User> findByTenantIdAndIsActiveTrue(Long tenantId);
+
+    Optional<User> findByIdAndIsActiveTrue(Long id);
+
     boolean existsByEmail(String email);
+
+    boolean existsByUserCode(String userCode);
 
     Optional<User> findByUsernameIgnoreCase(String username);
 
