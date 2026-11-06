@@ -100,7 +100,10 @@ export function WorkspaceResourcesPanel({
     if (denied) onAccessChanged();
   }, [denied, onAccessChanged]);
 
-  if (denied || query.isError || query.isPending || query.isFetching) {
+  // Keep loaded resources (and any open editor) mounted during background
+  // refetches, so returning to a browser tab does not flash the Overview.
+  // Initial loading and access errors still replace the content immediately.
+  if (denied || query.isError || query.isPending) {
     return (
       <WorkspaceSectionState
         loading={!query.isError && query.isFetching}
