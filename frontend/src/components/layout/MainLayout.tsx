@@ -11,11 +11,13 @@ import { cn } from "@/lib/utils";
 export function MainLayout({
                                children,
                                pathName,
+                               mainClassName,
                                pathLinks,
                                contentClassName,
                            }: {
     children: ReactNode;
     pathName?: Record<string, string>;
+    mainClassName?: string;
     contentClassName?: string;
     pathLinks?: Record<string, string>;
 }) {
@@ -31,7 +33,7 @@ export function MainLayout({
                     <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} variant="student" />
                 </header>
 
-                <main className={cn("flex-1 px-6 pb-6 pt-4", contentClassName)}>
+                <main className={cn("flex-1 px-6 pb-6 pt-4", mainClassName, contentClassName)}>
                     {children}
                 </main>
             </div>
@@ -52,7 +54,7 @@ export function MainLayout({
                     </div>
                 </header>
 
-                <main className={cn("min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6", contentClassName)}>
+                <main className={cn("min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6", mainClassName, contentClassName)}>
                     {children}
                 </main>
             </SidebarInset>

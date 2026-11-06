@@ -236,10 +236,9 @@ public class ProjectTeamDraftService {
 
         List<UpdateDraftTeamRequest.MemberRequest> assignments =
                 request.members() == null ? List.of() : request.members();
-        int effectiveMax = team.getProjectTemplateId() == null
-                ? (team.getAllocationSource() == TeamAllocationSource.AUTO
-                        ? Math.addExact(session.getMaxMembers(), 1) : session.getMaxMembers())
-                : team.getMaxMembers();
+        // The stored limit also preserves the extra seat of AUTO drafts created
+        // before the remainder-group allocation rule was introduced.
+        int effectiveMax = team.getMaxMembers();
         if (assignments.size() > effectiveMax) {
             throw new TeamCapacityExceededException(effectiveMax);
         }

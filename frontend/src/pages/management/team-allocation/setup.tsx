@@ -1607,9 +1607,16 @@ export default function TeamAllocationSetupPage() {
                           <p className="text-xs text-muted-foreground">
                             {autoPreview.eligibleCount} học viên · {autoPreview.teams.length} nhóm ·
                             sức chứa chuẩn {autoPreview.standardMax} ·
-                            {autoPreview.teams.filter((team) => team.members.length > autoPreview.standardMax).length} nhóm thêm 1 học viên do số dư.
+                            {autoPreview.eligibleCount % autoPreview.standardMax > 0
+                              ? `nhóm phần dư có ${autoPreview.eligibleCount % autoPreview.standardMax} học viên.`
+                              : "không có học viên dư."}
                             Các nhóm Draft đã lưu được giữ nguyên.
                           </p>
+                          {autoPreview.eligibleCount % autoPreview.standardMax > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Nhóm phần dư có thể cần điều chỉnh thành viên để đáp ứng sĩ số tối thiểu của đề bài trước khi công bố.
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" size="sm" variant="outline"
@@ -1648,8 +1655,9 @@ export default function TeamAllocationSetupPage() {
                                 })}>
                                 <ChevronDown className={`size-4 shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`} />
                                 <span className="min-w-0 flex-1 truncate">{team.teamName} · {team.members.length} học viên</span>
-                                {team.members.length > autoPreview.standardMax && (
-                                  <Badge variant="secondary" className="shrink-0">Thêm 1 do số dư</Badge>
+                                {index === autoPreview.teams.length - 1 &&
+                                  team.members.length < autoPreview.standardMax && (
+                                  <Badge variant="secondary" className="shrink-0">Nhóm phần dư</Badge>
                                 )}
                               </button>
                               {expanded && (
