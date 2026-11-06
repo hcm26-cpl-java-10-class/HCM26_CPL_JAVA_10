@@ -32,6 +32,8 @@ public class WorkspaceAccessService {
     private final WorkspaceRosterService roster;
     private final ProjectRepository projects;
     private final ScopeAuthorizationService classScope;
+    private final com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository workspaces;
+    private final com.example.starter_project_2025.system.project.resources.TeamSubprojectAssignmentRepository assignments;
     private static final Set<String> READ = Set.of("WORKSPACE_READ", "VIEW_PROJECT_WORKSPACE");
     private static final Set<String> CREATE = Set.of("WORKSPACE_CREATE", "CREATE_PROJECT_WORKSPACE");
 
@@ -88,7 +90,10 @@ public class WorkspaceAccessService {
     public ProjectTeam requirePair(User user, Long projectId, Long teamId, boolean lock) {
         Project project = requireProject(user, projectId, lock);
         ProjectTeam team = requireTeam(user, teamId, lock);
-        if (team.getProject() == null || !team.getProject().getId().equals(projectId)) {
+        boolean current = team.getProject() != null && team.getProject().getId().equals(projectId);
+        boolean historical = workspaces.existsByProjectIdAndTeamId(projectId, teamId);
+        boolean assigned = assignments.existsByTeam_IdAndProject_IdAndIsActiveTrue(teamId, projectId);
+        if (!current && !historical && !assigned) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Project/team không có quan hệ hợp lệ");
         }
         return team;
@@ -121,7 +126,7 @@ public class WorkspaceAccessService {
                 || "ADMIN".equals(role.getName())
                 || "PO".equals(role.getName())));
         return admin || (team.getAssignedMentorId() != null && team.getAssignedMentorId().equals(user.getId()))
-                || members.existsByTeam_IdAndIsActiveTrueAndClassMember_TrainingClass_IdAndClassMember_User_IdAndClassMember_Status(
+                || members.existsActiveMembership(
                         team.getId(), team.getTrainingClass().getId(), user.getId(),
                         com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE)
                 || classScope.canManageClass(SecurityContextHolder.getContext().getAuthentication(),
@@ -143,5 +148,20 @@ public class WorkspaceAccessService {
 
     public boolean projectCanStart(Project project) {
         return project.getStatus() == ProjectStatus.PLANNING || project.getStatus() == ProjectStatus.ACTIVE;
+    }
+
+    public boolean canAccessProject(User user, Project project) {
+        if (user.getRoles().stream().anyMatch(role -> Boolean.TRUE.equals(role.getIsActive())
+                && Set.of("SUPER_ADMIN", "ADMIN", "PO").contains(role.getName()))) return true;
+        var teamIds = new java.util.LinkedHashSet<Long>();
+        teams.findAllByProject_IdInOrderByIdDesc(java.util.List.of(project.getId())).forEach(team -> teamIds.add(team.getId()));
+        assignments.findAllByProject_IdAndIsActiveTrueOrderByIdAsc(project.getId()).forEach(row -> teamIds.add(row.getTeam().getId()));
+        for (var workspace : workspaces.findAll((root, query, cb) -> cb.equal(root.get("project").get("id"), project.getId())))
+            teamIds.add(workspace.getTeam().getId());
+        for (Long teamId : teamIds) {
+            try { requireTeam(user, teamId, false); return true; }
+            catch (AccessDeniedException | ResponseStatusException denied) { }
+        }
+        return false;
     }
 }

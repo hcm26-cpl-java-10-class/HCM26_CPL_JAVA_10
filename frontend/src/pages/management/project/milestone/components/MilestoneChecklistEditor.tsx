@@ -70,16 +70,31 @@ export function MilestoneChecklistEditor({
           const errorId = `${inputId}-error`;
 
           return (
-            <div key={field.id} className="grid gap-3 rounded-xl border bg-muted/10 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+            <div key={field.id} className="grid gap-2 rounded-lg border bg-muted/10 p-3">
+              <div className="grid min-w-0 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold" aria-hidden="true">
                   {index + 1}
                 </div>
-                <Label htmlFor={inputId} className="font-medium">
-                  Item name {index + 1} <span className="text-destructive">*</span>
-                </Label>
-
-                <div className="ml-auto flex items-center gap-1">
+                <div className="min-w-0 space-y-1">
+                  <Label htmlFor={inputId} className="sr-only">Acceptance condition {index + 1}</Label>
+                  <Input
+                    id={inputId}
+                    required
+                    maxLength={MILESTONE_FORM_LIMITS.checklistItemContent}
+                    placeholder={`Acceptance condition ${index + 1}`}
+                    aria-invalid={!!contentError}
+                    aria-describedby={`${counterId}${contentError ? ` ${errorId}` : ""}`}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && index === fields.length - 1) {
+                        event.preventDefault();
+                        addChecklistItem();
+                      }
+                    }}
+                    {...register(`checklist.${index}.content`)}
+                  />
+                  <FieldMessage id={errorId} message={contentError} />
+                </div>
+                <div className="flex items-center gap-1 sm:justify-end">
                   <Button
                     type="button"
                     variant="ghost"
@@ -113,26 +128,7 @@ export function MilestoneChecklistEditor({
                   </Button>
                 </div>
               </div>
-
-              <Input
-                id={inputId}
-                required
-                maxLength={MILESTONE_FORM_LIMITS.checklistItemContent}
-                placeholder="Enter the acceptance checklist item name"
-                aria-invalid={!!contentError}
-                aria-describedby={`${counterId}${contentError ? ` ${errorId}` : ""}`}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && index === fields.length - 1) {
-                    event.preventDefault();
-                    addChecklistItem();
-                  }
-                }}
-                {...register(`checklist.${index}.content`)}
-              />
-
-              <FieldMessage id={errorId} message={contentError} />
-
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 sm:pl-11">
                 <Controller
                   control={control}
                   name={`checklist.${index}.mandatory`}

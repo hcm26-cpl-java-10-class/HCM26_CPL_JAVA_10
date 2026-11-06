@@ -45,8 +45,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ProjectTeamRoleService {
 
-    private static final String TEAM_LEADER_ROLE = "PM";
-
     private final TeamAllocationSessionRepository sessionRepository;
     private final ProjectTeamRepository teamRepository;
     private final ProjectMemberRepository memberRepository;
@@ -89,7 +87,17 @@ public class ProjectTeamRoleService {
                     "Chỉ có thể cập nhật vai trò cho nhóm DRAFT hoặc ACTIVE");
         }
 
-        applyRoleConfiguration(session, team, request, authentication, null);
+        applyRoleConfiguration(session, team, request, authentication, null, null);
+    }
+
+    @Transactional
+    public void updateRolesForAssignment(TeamAllocationSession session, ProjectTeam team,
+            UpdateTeamRolesRequest request, ProjectTemplateConstraints.RolePolicy policy, Long requestedLeaderId,
+            Authentication authentication) {
+        scopeAuthorizationService.assertCanManageTeamMentor(authentication, session.getTrainingClass());
+        if (!team.getAllocationSession().getId().equals(session.getId()))
+            throw new AccessDeniedException("The team belongs to another allocation session");
+        applyRoleConfiguration(session, team, request, authentication, policy, requestedLeaderId);
     }
 
     // ------------------------------------------------------------------
@@ -97,9 +105,7 @@ public class ProjectTeamRoleService {
     // ------------------------------------------------------------------
 
     /**
-     * US-11: a student who is the PM (team leader) may configure the roles of
-     * their own DRAFT team. The leader must keep the PM role so the team stays
-     * manageable from the student workspace.
+     * US-11: the designated leader may configure the roles of their own DRAFT team.
      */
     @Transactional
     public void updateRolesAsTeamLeader(
@@ -115,9 +121,9 @@ public class ProjectTeamRoleService {
                 .findByTeam_IdAndClassMember_User_Id(teamId, userId)
                 .orElseThrow(() -> new AccessDeniedException(
                         "Bạn không phải thành viên của nhóm này."));
-        if (!ProjectMemberRole.hasRole(membership.getRole(), TEAM_LEADER_ROLE)) {
+        if (!team.isLedBy(membership.getClassMember().getId()) || !ProjectTeamLeaderService.eligible(membership)) {
             throw new AccessDeniedException(
-                    "Chỉ Trưởng nhóm (vai trò PM) mới được cấu hình vai trò thành viên.");
+                    "Chỉ Trưởng nhóm mới được cấu hình vai trò thành viên.");
         }
         if (team.getStatus() != ProjectTeamStatus.DRAFT) {
             throw new BadRequestException(
@@ -129,12 +135,7 @@ public class ProjectTeamRoleService {
                     "Phiên phân nhóm không còn mở để cấu hình vai trò");
         }
 
-        applyRoleConfiguration(
-                session,
-                team,
-                request,
-                authentication,
-                membership.getClassMember().getId());
+        applyRoleConfiguration(session, team, request, authentication, null, null);
     }
 
     // ------------------------------------------------------------------
@@ -146,7 +147,8 @@ public class ProjectTeamRoleService {
             ProjectTeam team,
             UpdateTeamRolesRequest request,
             Authentication authentication,
-            Long requiredLeaderMemberId
+            ProjectTemplateConstraints.RolePolicy assignmentPolicy,
+            Long requestedLeaderId
     ) {
         if (request == null || request.expectedVersion() == null) {
             throw new TeamRoleAssignmentException(
@@ -158,6 +160,10 @@ public class ProjectTeamRoleService {
 
         List<ProjectMember> assignments =
                 memberRepository.findAllByTeam_IdOrderByIdAsc(team.getId());
+        if (assignmentPolicy != null) assignments = assignments.stream().filter(member -> Boolean.TRUE.equals(member.getIsActive())
+                && Boolean.TRUE.equals(member.getClassMember().getIsActive())
+                && member.getClassMember().getStatus() == com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE
+                && team.getTrainingClass().getId().equals(member.getClassMember().getTrainingClass().getId())).toList();
         Map<Long, ProjectMember> assignmentsByMemberId = new HashMap<>();
         assignments.forEach(assignment ->
                 assignmentsByMemberId.put(assignment.getClassMember().getId(), assignment));
@@ -198,29 +204,29 @@ public class ProjectTeamRoleService {
                     invalidMemberIds.stream().distinct().toList());
         }
 
-        validateTemplatePolicy(team, requestedRoles, requiredLeaderMemberId);
-        Long leaderId = team.getLeaderMemberId();
-        if (leaderId == null) {
-            List<Long> legacyPmIds = assignments.stream()
-                    .filter(row -> ProjectMemberRole.hasRole(row.getRole(), "PM"))
-                    .map(row -> row.getClassMember().getId()).toList();
-            if (legacyPmIds.size() == 1) leaderId = legacyPmIds.get(0);
-        }
-        List<Long> pmIds = requestedRoles.entrySet().stream()
-                .filter(entry -> entry.getValue().contains("PM"))
-                .map(Map.Entry::getKey).toList();
-        if (pmIds.size() > 1 || (leaderId == null && !pmIds.isEmpty())
-                || (leaderId != null && !pmIds.equals(List.of(leaderId)))) {
-            throw new BadRequestException("Chỉ định hoặc đổi PM bằng thao tác Chỉ định làm Leader");
+        validateTemplatePolicy(team, requestedRoles, assignmentPolicy);
+        Long leaderToAssign = null;
+        if (assignmentPolicy != null) {
+            Long currentLeader = ProjectTeamLeaderService.activeLeaderId(team, assignments);
+            if (currentLeader == null) {
+                ProjectMember selected = assignmentsByMemberId.get(requestedLeaderId);
+                if (team.getStatus() != ProjectTeamStatus.DRAFT || session.getStatus() != TeamAllocationSessionStatus.OPEN
+                        || selected == null || !ProjectTeamLeaderService.eligible(selected)) {
+                    throw new BadRequestException("Chọn một thành viên ACTIVE làm Leader trước khi gán dự án");
+                }
+                leaderToAssign = requestedLeaderId;
+            } else if (requestedLeaderId != null && !currentLeader.equals(requestedLeaderId)) {
+                throw new BadRequestException("Đổi Leader bằng thao tác Chỉ định Leader");
+            }
         }
 
         List<ProjectMember> changedAssignments = assignments.stream()
-                .filter(assignment -> !equalsRoleSpec(
+                .filter(assignment -> !ProjectMemberRole.isValidSpec(assignment.getRole()) || !equalsRoleSpec(
                         ProjectMemberRole.formatRoles(requestedRoles.get(
                                 assignment.getClassMember().getId())),
                         assignment.getRole()))
                 .toList();
-        if (changedAssignments.isEmpty()) {
+        if (changedAssignments.isEmpty() && leaderToAssign == null) {
             return;
         }
 
@@ -238,6 +244,7 @@ public class ProjectTeamRoleService {
         changedAssignments.forEach(assignment -> assignment.setRole(
                 ProjectMemberRole.formatRoles(requestedRoles.get(
                         assignment.getClassMember().getId()))));
+        if (leaderToAssign != null) team.setLeaderMemberId(leaderToAssign);
         memberRepository.saveAllAndFlush(changedAssignments);
         String afterState = serialize(snapshot(team, assignments));
 
@@ -284,10 +291,10 @@ public class ProjectTeamRoleService {
     private void validateTemplatePolicy(
             ProjectTeam team,
             Map<Long, List<String>> requestedRoles,
-            Long requiredLeaderMemberId
+            ProjectTemplateConstraints.RolePolicy assignmentPolicy
     ) {
-        ProjectTemplate template = team.getProjectTemplate();
-        ProjectTemplateConstraints.RolePolicy policy = template == null
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
+        ProjectTemplateConstraints.RolePolicy policy = assignmentPolicy != null ? assignmentPolicy : template == null
                 ? ProjectTemplateConstraints.RolePolicy.singleRoleDefault()
                 : ProjectTemplateConstraints.parseRolePolicy(objectMapper, template);
 
@@ -325,13 +332,6 @@ public class ProjectTeamRoleService {
         if (!violations.isEmpty()) {
             throw TeamRolePolicyException.quotaNotMet(
                     buildQuotaMessage(violations), violations);
-        }
-
-        if (requiredLeaderMemberId != null) {
-            List<String> leaderRoles = requestedRoles.get(requiredLeaderMemberId);
-            if (leaderRoles == null || !leaderRoles.contains(TEAM_LEADER_ROLE)) {
-                throw TeamRolePolicyException.leaderRoleRequired(requiredLeaderMemberId);
-            }
         }
     }
 
@@ -371,6 +371,7 @@ public class ProjectTeamRoleService {
         return new TeamSnapshot(
                 team.getId(),
                 team.getVersion(),
+                team.getLeaderMemberId(),
                 assignments.stream()
                         .map(assignment -> new MemberRoleSnapshot(
                                 assignment.getClassMember().getId(),
@@ -397,6 +398,7 @@ public class ProjectTeamRoleService {
     private record TeamSnapshot(
             Long teamId,
             Long version,
+            Long leaderMemberId,
             List<MemberRoleSnapshot> members
     ) {
     }

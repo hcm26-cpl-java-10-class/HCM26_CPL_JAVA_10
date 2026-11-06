@@ -10,6 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
+import { usePendingInvitations } from "@/hooks/usePendingInvitations";
+import { InvitationBell } from "@/components/features/invitation/InvitationBell";
 import { cn } from "@/lib/utils";
 import { authApi } from "@/api/features/auth.api";
 import { iconMap } from "@/components/datatable/iconMap";
@@ -40,29 +42,49 @@ const STUDENT_MENU_OVERRIDES: Record<string, { title: string; url: string }> = {
 const BACKLOGS_URL = "/backlogs";
 const MY_SUBMISSIONS_URL = "/student/milestone-submissions";
 
+const SYLLABUS_PATH = "/student/syllabuses";
+const ADMIN_ONLY_STUDENT_PREVIEW_PATHS = new Set(["/course-report", "/enrollment-logs"]);
+
+const navButtonClass =
+    "h-9 rounded-[10px] border border-transparent px-3 text-sm " +
+    "bg-transparent shadow-none " +
+    "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
+
+const activeNavClass =
+    "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100";
+
 export function StudentNavbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
-  const { activeRole,  effectivePermissions ,hasPermission} = usePermissions();
+  const { activeRole, effectivePermissions, hasPermission } = usePermissions();
   const { data: moduleGroups = [] } = useActiveModuleGroups();
+  const { count: pendingInvitationCount } = usePendingInvitations();
   const pathname = normalizePath(location.pathname);
 
+  const canBrowseSyllabuses =
+      hasPermission("COURSE_READ");
+
+  const isSyllabusesActive =
+      pathname === SYLLABUS_PATH ||
+      pathname.startsWith(`${SYLLABUS_PATH}/`);
+
+  const resolveIcon = (moduleIcon?: string) => {
+    const key: keyof typeof iconMap =
+      moduleIcon && moduleIcon in iconMap ? (moduleIcon as keyof typeof iconMap) : "menu";
+    return iconMap[key];
+  };
+
   const navGroups = useMemo(() => {
-    const resolveIcon = (iconName?: string) => {
-      const key: keyof typeof iconMap =
-        iconName && iconName in iconMap ? (iconName as keyof typeof iconMap) : "menu";
-
-      return iconMap[key];
-    };
-
     const groups = moduleGroups
       .map((group) => {
         const seenUrls = new Set<string>();
 
         const items = group.modules
           .filter((module) => !!module.url)
+          .filter((module) => !module.hiddenInMenu)
+          .filter((module) => !ADMIN_ONLY_STUDENT_PREVIEW_PATHS.has(normalizePath(module.url)))
           .filter((module) => !STUDENT_HIDDEN_URLS.has(normalizePath(module.url)))
           .map((module) => {
             const override = STUDENT_MENU_OVERRIDES[normalizePath(module.url)];
@@ -90,6 +112,7 @@ export function StudentNavbar() {
         return {
           id: group.id ?? group.name ?? "group",
           name: group.name ?? "Menu",
+          hiddenInMenu: group.hiddenInMenu,
           items,
         };
       });
@@ -129,13 +152,67 @@ export function StudentNavbar() {
         isActive: pathname === MY_SUBMISSIONS_URL || pathname.startsWith(`${MY_SUBMISSIONS_URL}/`),
       };
       if (projectGroup) projectGroup.items.push(item);
-      else groups.push({ id: "student-project", name: "Dự án", items: [item] });
+      else groups.push({ id: "student-project", name: "Dự án", hiddenInMenu: false, items: [item] });
     }
 
-    return groups.filter((group) => group.items.length > 0);
+    return groups.filter((group) => !group.hiddenInMenu && group.items.length > 0);
   }, [moduleGroups, pathname, hasPermission]);
 
-  const hasMenuItems = navGroups.length > 0;
+  // Pending-invitation badge next to the Invitations entry point.
+  const renderPendingBadge = (url: string) => {
+    if (normalizePath(url) !== "/invitations" || pendingInvitationCount <= 0) {
+      return null;
+    }
+
+    return (
+      <span
+        aria-hidden="true"
+        className="ml-auto flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white"
+      >
+        {pendingInvitationCount > 9 ? "9+" : pendingInvitationCount}
+      </span>
+    );
+  };
+
+  type NavigationEntry =
+    | {
+        type: "group";
+        group: (typeof navGroups)[number];
+      }
+    | {
+        type: "syllabuses";
+      };
+
+
+  const navigation: NavigationEntry[] = [];
+
+  let syllabusInserted = false;
+
+  // Place Syllabuses after Course Online.
+  for (const group of navGroups) {
+    navigation.push({
+      type: "group",
+      group,
+    });
+
+    if (
+        canBrowseSyllabuses &&
+        group.name.toLowerCase().trim() === "course online"
+    ) {
+      navigation.push({
+        type: "syllabuses",
+      });
+
+      syllabusInserted = true;
+    }
+  }
+
+  // Fallback if Course Online is not available.
+  if (canBrowseSyllabuses && !syllabusInserted) {
+    navigation.push({
+      type: "syllabuses",
+    });
+  }
 
   const handleLogout = async () => {
     try {
@@ -148,130 +225,210 @@ export function StudentNavbar() {
   };
 
   return (
-    <header className="bg-sidebar text-sidebar-foreground border-b border-sidebar-border">
-      <div className="flex h-16 items-center gap-3 px-4">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => navigate(getHomePathByRole(activeRole, effectivePermissions))}
-          className="flex h-auto min-w-0 items-center justify-start gap-3 px-0 hover:bg-transparent"
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-blue-800 text-sm font-semibold text-white">
-            RB
-          </div>
-          <span className="truncate text-lg font-bold text-blue-800">RBAC System</span>
-        </Button>
+      <header className="border-b border-sidebar-border bg-sidebar text-sidebar-foreground">
+        <div className="flex h-16 items-center gap-3 px-4">
 
-        <div className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">
-          {hasMenuItems ? (
-            navGroups.map((group) => {
-              const groupHasActive = group.items.some((item) => item.isActive);
+          {/* BRAND */}
+          <Button
+              type="button"
+              variant="ghost"
+              onClick={() =>
+                  navigate(getHomePathByRole(activeRole, effectivePermissions))
+              }
+              className="flex h-auto min-w-0 items-center justify-start gap-3 px-0 hover:bg-transparent"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-blue-800 text-sm font-semibold text-white">
+              RB
+            </div>
+
+            <span className="truncate text-lg font-bold text-blue-800">
+            RBAC System
+          </span>
+          </Button>
+
+          {/* DESKTOP NAVIGATION */}
+          <nav
+              aria-label="Student navigation"
+              className="hidden min-w-0 flex-1 items-center gap-2 lg:flex"
+          >
+            {navigation.map((entry) => {
+              if (entry.type === "syllabuses") {
+                return (
+                    <Button
+                        key="student-syllabuses"
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                            navigate(SYLLABUS_PATH)
+                        }
+                        aria-current={
+                          isSyllabusesActive
+                              ? "page"
+                              : undefined
+                        }
+                        className={cn(
+                            navButtonClass,
+                            isSyllabusesActive && activeNavClass
+                        )}
+                    >
+                  <span className="max-w-[180px] truncate">
+                    Syllabuses
+                  </span>
+                    </Button>
+                );
+              }
+
+              const group = entry.group;
+
+              const groupHasActive =
+                  group.items.some(
+                      (item) => item.isActive
+                  );
 
               return (
-                <DropdownMenu key={group.id}>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className={cn(
-                        "h-9 rounded-[10px] border border-transparent px-3 text-sm",
-                        "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        groupHasActive && "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100",
-                      )}
+                  <DropdownMenu key={group.id}>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className={cn(
+                              navButtonClass,
+                              groupHasActive && activeNavClass
+                          )}
+                      >
+                    <span className="max-w-[180px] truncate">
+                      {group.name}
+                    </span>
+
+                        <ChevronDown className="h-4 w-4 opacity-70" />
+                      </Button>
+                    </DropdownMenuTrigger>
+
+                    <DropdownMenuContent
+                        align="start"
+                        className="min-w-64"
                     >
-                      <span className="max-w-[180px] truncate">{group.name}</span>
-                      <ChevronDown className="h-4 w-4 opacity-70" />
-                    </Button>
-                  </DropdownMenuTrigger>
+                      <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {group.name}
+                      </DropdownMenuLabel>
 
-                  <DropdownMenuContent align="start" className="min-w-64">
-                    <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {group.name}
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
+                      <DropdownMenuSeparator />
 
-                    {group.items.map((item) => (
-                      <DropdownMenuItem
-                        key={`${group.id}-${item.id}-${item.url}`}
-                        onClick={() => navigate(item.url)}
-                        className={cn(
-                          "gap-2",
-                          item.isActive && "bg-blue-50 text-blue-800 focus:bg-blue-100 focus:text-blue-800",
-                        )}
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      {group.items.map((item) => (
+                          <DropdownMenuItem
+                              key={`${group.id}-${item.id}-${item.url}`}
+                              onClick={() =>
+                                  navigate(item.url)
+                              }
+                              className={cn(
+                                  "gap-2",
+                                  item.isActive &&
+                                  "bg-blue-50 text-blue-800 focus:bg-blue-100 focus:text-blue-800"
+                              )}
+                          >
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                            {renderPendingBadge(item.url)}
+                          </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
               );
-            })
-          ) : (
-            <span className="text-sm text-muted-foreground">No menu items available</span>
-          )}
-        </div>
+            })}
+          </nav>
 
-        <div className="ml-auto flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="lg:hidden"
-                aria-label="Open navigation menu"
+          {/* MOBILE NAVIGATION */}
+          <div className="ml-auto flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="lg:hidden"
+                    aria-label="Open navigation menu"
+                >
+                  <Menu className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent
+                  align="end"
+                  className="w-72"
               >
-                <Menu className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
+                {navigation.map((entry, index) => {
+                  if (entry.type === "syllabuses") {
+                    return (
+                        <DropdownMenuItem
+                            key="mobile-syllabuses"
+                            onClick={() =>
+                                navigate(SYLLABUS_PATH)
+                            }
+                            className={cn(
+                                isSyllabusesActive &&
+                                "bg-blue-50 text-blue-800"
+                            )}
+                        >
+                          Syllabuses
+                        </DropdownMenuItem>
+                    );
+                  }
 
-            <DropdownMenuContent align="end" className="w-72">
-              {hasMenuItems ? (
-                navGroups.map((group, groupIndex) => (
-                  <div key={`mobile-${group.id}`}>
-                    <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {group.name}
-                    </DropdownMenuLabel>
+                  const group = entry.group;
 
-                    {group.items.map((item) => (
-                      <DropdownMenuItem
-                        key={`mobile-${group.id}-${item.id}-${item.url}`}
-                        onClick={() => navigate(item.url)}
-                        className={cn(
-                          "gap-2",
-                          item.isActive && "bg-blue-50 text-blue-800 focus:bg-blue-100 focus:text-blue-800",
+                  return (
+                      <div key={`mobile-${group.id}`}>
+                        {index > 0 && (
+                            <DropdownMenuSeparator />
                         )}
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </DropdownMenuItem>
-                    ))}
+                        <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          {group.name}
+                        </DropdownMenuLabel>
 
-                    {groupIndex < navGroups.length - 1 && <DropdownMenuSeparator />}
-                  </div>
-                ))
-              ) : (
-                <DropdownMenuItem disabled>No menu items available</DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                        {group.items.map((item) => (
+                            <DropdownMenuItem
+                                key={`mobile-${group.id}-${item.id}-${item.url}`}
+                                onClick={() =>
+                                    navigate(item.url)
+                                }
+                                className={cn(
+                                    "gap-2",
+                                    item.isActive &&
+                                    "bg-blue-50 text-blue-800"
+                                )}
+                            >
+                              <item.icon className="h-4 w-4" />
+                              <span>{item.title}</span>
+                              {renderPendingBadge(item.url)}
+                            </DropdownMenuItem>
+                        ))}
+                      </div>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          <HeaderRight />
-          <TooltipWrapper content="Logout">
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              onClick={handleLogout}
-            >
-              <LogOutIcon className="size-4" />
-            </Button>
-          </TooltipWrapper>
+            {/* INVITATION BELL */}
+            <InvitationBell />
+
+            {/* EXISTING ROLE SWITCHER */}
+            <HeaderRight />
+
+            {/* LOGOUT */}
+            <TooltipWrapper content="Logout">
+              <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  onClick={handleLogout}
+              >
+                <LogOutIcon className="size-4" />
+              </Button>
+            </TooltipWrapper>
+          </div>
         </div>
-      </div>
-
-    </header>
+      </header>
   );
 }

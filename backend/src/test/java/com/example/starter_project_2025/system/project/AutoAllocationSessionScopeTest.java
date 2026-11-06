@@ -68,6 +68,79 @@ class AutoAllocationSessionScopeTest {
     }
 
     @Test
+    void remainderMembersBecomeANewDraftTeamWithStandardCapacity() {
+        TrainingClass trainingClass = trainingClass();
+        TeamAllocationSession current = session(trainingClass, 5);
+        for (int i = 0; i < 7; i++) member(trainingClass);
+        entityManager.clear();
+
+        AutoAllocationService service = service();
+        AutoAllocationPreview preview = service.preview(trainingClass.getId(), current.getId(), actor());
+        assertEquals(List.of(5, 2), preview.teams().stream()
+                .map(team -> team.members().size()).toList());
+
+        List<Long> ids = preview.teams().stream().flatMap(team -> team.members().stream())
+                .map(AutoAllocationPreview.Member::memberId).toList();
+        AutoAllocationConfirmRequest oldSplit = new AutoAllocationConfirmRequest(preview.fingerprint(),
+                List.of(new AutoAllocationConfirmRequest.Team("Old 1", ids.subList(0, 4)),
+                        new AutoAllocationConfirmRequest.Team("Old 2", ids.subList(4, 7))));
+        AutoAllocationException stale = assertThrows(AutoAllocationException.class,
+                () -> service.confirm(trainingClass.getId(), current.getId(), oldSplit, actor()));
+        assertEquals("ERR_AUTO_ALLOCATION_STALE", stale.getCode());
+
+        AutoAllocationConfirmRequest request = new AutoAllocationConfirmRequest(preview.fingerprint(),
+                preview.teams().stream().map(team -> new AutoAllocationConfirmRequest.Team(
+                        team.teamName(), team.members().stream()
+                                .map(AutoAllocationPreview.Member::memberId).toList())).toList());
+        service.confirm(trainingClass.getId(), current.getId(), request, actor());
+
+        List<ProjectTeam> saved = teams.findAllByAllocationSession_IdOrderByIdAsc(current.getId());
+        assertEquals(2, saved.size());
+        assertEquals(List.of(5, 5), saved.stream().map(ProjectTeam::getMaxMembers).toList());
+        assertEquals(List.of(5L, 2L), saved.stream()
+                .map(team -> projectMembers.countByTeam_Id(team.getId())).toList());
+    }
+
+    @Test
+    void changingSessionCapacityPreservesOnlyLegacyAutoExtraSeats() {
+        TrainingClass trainingClass = trainingClass();
+        TeamAllocationSession current = session(trainingClass, 5);
+        current.setProjectTemplate(entityManager.persistAndFlush(ProjectTemplate.builder()
+                .name("Capacity test template").build()));
+        sessions.saveAndFlush(current);
+        ProjectTeam legacy = team(current, ProjectTeamStatus.DRAFT);
+        legacy.setAllocationSource(TeamAllocationSource.AUTO);
+        legacy.setMaxMembers(6);
+        teams.saveAndFlush(legacy);
+        ProjectTeam currentAuto = team(current, ProjectTeamStatus.DRAFT);
+        currentAuto.setAllocationSource(TeamAllocationSource.AUTO);
+        for (int i = 0; i < 6; i++) assign(legacy, member(trainingClass));
+        for (int i = 0; i < 5; i++) assign(currentAuto, member(trainingClass));
+
+        ScopeAuthorizationService authorization = new ScopeAuthorizationService(null, null) {
+            @Override
+            public void assertCanManageClass(Authentication actor, TrainingClass value) {
+                // Authorization is independent of the capacity rule under test.
+            }
+        };
+        TeamAllocationSessionService service = new TeamAllocationSessionService(null, null,
+                sessions, teams, projectMembers, null, null, authorization, null);
+
+        service.updateMaxMembers(trainingClass.getId(), current.getId(),
+                new UpdateAllocationSessionRequest(6), actor());
+        assertEquals(7, teams.findById(legacy.getId()).orElseThrow().getMaxMembers());
+        assertEquals(6, teams.findById(currentAuto.getId()).orElseThrow().getMaxMembers());
+
+        service.updateMaxMembers(trainingClass.getId(), current.getId(),
+                new UpdateAllocationSessionRequest(5), actor());
+        assertEquals(6, teams.findById(legacy.getId()).orElseThrow().getMaxMembers());
+        assertEquals(5, teams.findById(currentAuto.getId()).orElseThrow().getMaxMembers());
+        assertThrows(TeamCapacityExceededException.class,
+                () -> service.updateMaxMembers(trainingClass.getId(), current.getId(),
+                        new UpdateAllocationSessionRequest(4), actor()));
+    }
+
+    @Test
     void currentSessionDraftAndActiveAssignmentsAreExcludedButArchivedOnesAreAvailable() {
         TrainingClass trainingClass = trainingClass();
         TeamAllocationSession current = session(trainingClass, 2);

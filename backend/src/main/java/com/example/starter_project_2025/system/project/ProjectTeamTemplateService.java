@@ -53,9 +53,6 @@ public class ProjectTeamTemplateService {
     public static final String AUDIT_ACTION = "ASSIGN_TEAM_PROJECT_TEMPLATE";
     public static final String OUTBOX_EVENT = "PROJECT_TEAM_TEMPLATE_ASSIGNED";
 
-    /** Team roles use PM for the team leader. */
-    private static final String TEAM_LEADER_ROLE = "PM";
-
     private final ProjectTemplateRepository projectTemplateRepository;
     private final ProjectTemplateSnapshotRepository versions;
     private final TeamAllocationSessionRepository sessionRepository;
@@ -120,8 +117,7 @@ public class ProjectTeamTemplateService {
                 .findLeaderTeams(
                         userId,
                         ClassMemberStatus.ACTIVE,
-                        ProjectTeamStatus.DRAFT,
-                        TEAM_LEADER_ROLE)
+                        ProjectTeamStatus.DRAFT)
                 .stream()
                 .map(member -> toTeamResponse(member.getTeam()))
                 .toList();
@@ -185,11 +181,12 @@ public class ProjectTeamTemplateService {
 
         boolean isLeader = projectMemberRepository
                 .findByTeam_IdAndClassMember_User_Id(teamId, userId)
-                .map(member -> ProjectMemberRole.hasRole(member.getRole(), TEAM_LEADER_ROLE))
-                .orElse(false);
+                .filter(ProjectTeamLeaderService::eligible)
+                .filter(member -> team.isLedBy(member.getClassMember().getId()))
+                .isPresent();
         if (!isLeader) {
             throw new AccessDeniedException(
-                    "Chỉ Trưởng nhóm (vai trò PM) của nhóm mới được gán đề bài.");
+                    "Chỉ Trưởng nhóm mới được gán đề bài.");
         }
 
         ProjectTemplate template = findActiveTemplate(projectTemplateId, team.getTrainingClass().getTenantId());
@@ -323,7 +320,7 @@ public class ProjectTeamTemplateService {
 
     private TeamProjectTemplateResponse toTeamResponse(ProjectTeam team) {
         int memberCount = (int) projectMemberRepository.countByTeam_Id(team.getId());
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
 
         Integer minMembers = null;
         Integer maxMembers = null;

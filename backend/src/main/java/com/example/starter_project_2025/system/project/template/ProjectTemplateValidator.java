@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project.template;
 
+import com.example.starter_project_2025.system.project.ProjectTemplate;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,18 +10,20 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ProjectTemplateValidator {
-    public static final int MAX_DESCRIPTION_WORDS = 1000;
+    public static final int MAX_DESCRIPTION_LENGTH = 1000;
 
     public void validate(ProjectTemplateRequest request, boolean updating) {
         Map<String, List<String>> errors = new LinkedHashMap<>();
         text(errors, "code", request.code(), 100);
         text(errors, "name", request.name(), 255);
-        text(errors, "description", request.description(), Integer.MAX_VALUE);
-        if (request.description() != null && java.util.regex.Pattern.compile("(?U)\\S+").matcher(request.description())
-                .results().limit(MAX_DESCRIPTION_WORDS + 1L).count() > MAX_DESCRIPTION_WORDS) {
-            errors.put("description", List.of("Description must not exceed 1000 words"));
-        }
+        text(errors, "description", request.description(), MAX_DESCRIPTION_LENGTH);
         text(errors, "category", request.category(), 255);
+        if (request.technologyStack() != null && request.technologyStack().strip().length() > 2000) {
+            errors.put("technologyStack", List.of("Technical stack must not exceed 2000 characters"));
+        }
+        if (request.parentTemplateId() != null && request.parentTemplateId() <= 0) {
+            errors.put("parentTemplateId", List.of("Select an existing parent template"));
+        }
         if (request.level() == null) {
             errors.put("level", List.of("Select Beginner, Intermediate or Advanced"));
         }
@@ -32,6 +35,13 @@ public class ProjectTemplateValidator {
         }
         if (!errors.isEmpty()) {
             throw new ProjectTemplateException(422, "Please correct the highlighted fields", errors);
+        }
+    }
+
+    void validateModuleParent(ProjectTemplate parent) {
+        if (parent != null && parent.getParentTemplateId() != null) {
+            String message = "Only master templates can contain modules";
+            throw new ProjectTemplateException(422, message, Map.of("parentTemplateId", List.of(message)));
         }
     }
 

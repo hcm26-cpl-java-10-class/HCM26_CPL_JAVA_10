@@ -19,6 +19,7 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
   apiError?: ReviewFormError | null;
   onReview: (decision: ReviewDecision, values: Draft, checklist: Record<string, boolean>, overallFeedback?: string) => void;
 }) {
+  const sharedMaster = submission.teamId == null;
   const [draft, setDraft] = useState<Draft>(() => Object.fromEntries(
     submission.rubric.criteria.map((item) => [item.id, { feedback: "" }]),
   ));
@@ -111,7 +112,7 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
           </section>
           <section className="rounded-xl border p-4">
             <div className="flex justify-between gap-2"><Label htmlFor="overall-feedback">Revision instructions <span className="font-normal text-muted-foreground">(required for Request Changes)</span></Label><span className={`text-xs ${overallFeedback.length > 500 ? "text-destructive" : "text-muted-foreground"}`}>{overallFeedback.length}/500</span></div>
-            <Textarea id="overall-feedback" className="mt-3" rows={4} maxLength={501} disabled={pending} value={overallFeedback} aria-invalid={Boolean(localErrors.overallFeedback || apiError?.errors?.overallFeedback?.[0])} placeholder="Summarize exactly what the student must revise" onChange={(event) => { setOverallFeedback(event.target.value); setLocalErrors((current) => { const next = { ...current }; delete next.overallFeedback; return next; }); }} />
+            <Textarea id="overall-feedback" className="mt-3" rows={4} maxLength={501} disabled={pending} value={overallFeedback} aria-invalid={Boolean(localErrors.overallFeedback || apiError?.errors?.overallFeedback?.[0])} placeholder={sharedMaster ? "Describe what the shared master deliverable needs to revise" : "Summarize exactly what the student must revise"} onChange={(event) => { setOverallFeedback(event.target.value); setLocalErrors((current) => { const next = { ...current }; delete next.overallFeedback; return next; }); }} />
             {localErrors.overallFeedback || apiError?.errors?.overallFeedback?.[0] ? <p className="mt-2 text-sm text-destructive">{localErrors.overallFeedback ?? apiError?.errors?.overallFeedback?.[0]}</p> : null}
           </section>
         </CardContent>
@@ -120,7 +121,7 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
       {submission.status === "SUBMITTED" ? (
         <div className="sticky bottom-0 z-20 flex flex-col gap-2 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:justify-end">
           <Button variant="destructive" disabled={pending || !submission.availableActions.reject} onClick={() => requestDecision("REJECT")}><XCircle className="size-4" /> Reject submission</Button>
-          <Button variant="outline" disabled={pending || !submission.availableActions.requestChanges} onClick={() => requestDecision("REQUEST_CHANGES")}><RotateCcw className="size-4" /> Request student revision</Button>
+          <Button variant="outline" disabled={pending || !submission.availableActions.requestChanges} onClick={() => requestDecision("REQUEST_CHANGES")}><RotateCcw className="size-4" /> {sharedMaster ? "Request shared revision" : "Request student revision"}</Button>
           <Button disabled={pending || !submission.availableActions.accept} onClick={() => requestDecision("ACCEPT")}><CheckCircle2 className="size-4" /> {pending ? "Saving..." : "Accept submission"}</Button>
         </div>
       ) : null}
@@ -130,6 +131,7 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
         title={decision === "REJECT" ? "Reject this submission?" : "Request a new version?"}
         description={decision === "REJECT"
           ? "This is final: the submission becomes Rejected and the milestone becomes Failed."
+          : sharedMaster ? "The current version stays immutable. Class mentors can record the next shared submission version."
           : "The current version stays immutable and the student can create exactly one next draft version."}
         confirmLabel={decision === "REJECT" ? "Reject submission" : "Request changes"}
         loadingLabel="Saving review..."

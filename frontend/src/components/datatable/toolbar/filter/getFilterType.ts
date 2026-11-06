@@ -1,8 +1,5 @@
 import type { FieldSchema, FilterType } from "@/types";
 
-/**
- * Xác định loại filter phù hợp cho một field dựa trên `filterType` hoặc `type`.
- */
 export function getFilterType(field: FieldSchema): FilterType {
   if (field.filterType) return field.filterType;
 

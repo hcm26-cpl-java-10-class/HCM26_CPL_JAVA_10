@@ -65,13 +65,8 @@ public class TeamPublishItemService {
             throw new TeamPublishValidationException(
                     "A team without members cannot be published");
         }
-        List<Long> pmIds = assignments.stream().filter(row ->
-                ProjectMemberRole.hasRole(row.getRole(), "PM"))
-                .map(row -> row.getClassMember().getId()).toList();
-        Long leaderId = team.getLeaderMemberId() != null ? team.getLeaderMemberId()
-                : pmIds.size() == 1 ? pmIds.get(0) : null;
-        if (leaderId == null || !pmIds.equals(List.of(leaderId))) {
-            throw new TeamPublishValidationException("Nhóm cần đúng một Leader/PM trước khi công bố");
+        if (ProjectTeamLeaderService.activeLeaderId(team, assignments) == null) {
+            throw new TeamPublishValidationException("Chọn một thành viên ACTIVE làm Leader trước khi công bố nhóm.");
         }
         assignments.forEach(assignment -> {
             if (assignment.getRole() == null || assignment.getRole().isBlank()) {
@@ -160,12 +155,12 @@ public class TeamPublishItemService {
                 .build());
     }
 
-    /** US-11: publishing also enforces the template role quota minimums. */
+    /** US-11: publishing also enforces the template role quotas. */
     private void validateTemplateRolePolicy(
             ProjectTeam team,
             List<ProjectMember> assignments
     ) {
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
             return;
         }
@@ -196,6 +191,13 @@ public class TeamPublishItemService {
             throw new TeamPublishValidationException(
                     "Cấu hình vai trò chưa đáp ứng định suất của đề bài. "
                             + "Còn thiếu vai trò bắt buộc: " + String.join(", ", missing));
+        }
+        List<String> exceeded = policy.quotas().stream()
+                .filter(quota -> counts.getOrDefault(quota.role(), 0) > quota.max())
+                .map(quota -> quota.role() + " (tối đa " + quota.max() + ")")
+                .toList();
+        if (!exceeded.isEmpty()) {
+            throw new TeamPublishValidationException("Vượt định suất vai trò: " + String.join(", ", exceeded));
         }
     }
 

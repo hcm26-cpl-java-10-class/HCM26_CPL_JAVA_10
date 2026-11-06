@@ -11,6 +11,7 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class ImportResult {
 
+    int totalCount;
     int successCount;
     int failureCount;
     List<RowError> errors = new ArrayList<>();

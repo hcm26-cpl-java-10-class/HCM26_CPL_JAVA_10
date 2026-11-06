@@ -40,11 +40,26 @@ public class Question extends BaseEntity {
 
     private String topic;
 
+    @Column(length = 1000)
+    private String imageUrl;
+
     @Column(nullable = false)
     private int points = 1;
 
+    /** JSON mo ta bai lap trinh (ham + test case), chi dung khi type = CODING. */
+    @Column(name = "code_spec", columnDefinition = "TEXT")
+    private String codeSpec;
+
+    @Column(name = "source_question_id")
+    private Long sourceQuestionId;
+
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<QuestionOption> options = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "question_essay_criterion", joinColumns = @JoinColumn(name = "question_id"))
+    @OrderColumn(name = "display_order")
+    private List<EssayGradingCriterion> gradingCriteria = new ArrayList<>();
 
     @PrePersist
     @PreUpdate

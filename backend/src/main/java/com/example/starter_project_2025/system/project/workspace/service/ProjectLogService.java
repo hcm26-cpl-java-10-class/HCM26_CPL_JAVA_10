@@ -307,6 +307,9 @@ public class ProjectLogService {
     }
 
     private void requireWrite(Context context) {
+        if (context.workspace().getCurrentSlot() == null
+                || context.workspace().getStatus() != com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus.ACTIVE)
+            throw new AccessDeniedException("Previous workspaces are read-only");
         User user = context.user();
         requireRead(user);
         boolean administrator = user.getRoles().stream()

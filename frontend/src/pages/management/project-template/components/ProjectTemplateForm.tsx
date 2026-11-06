@@ -14,20 +14,21 @@ import { AlertCircle, ArrowLeft, Loader2, Save } from "lucide-react";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { getTemplateError, templateLevelOptions, toTemplateFormValues, validateTemplateForm,
-  descriptionWordCount, maxDescriptionWords,
+  maxDescriptionLength,
   type TemplateFieldErrors, type TemplateFormValues } from "../project-template.utils";
 
-function TemplateField({ name, label, errors, suffix, children }: {
+function TemplateField({ name, label, errors, suffix, children, required = true }: {
   name: string;
   label: string;
   errors?: string[];
   suffix?: ReactNode;
   children: ReactNode;
+  required?: boolean;
 }) {
   return (
     <div className="grid min-w-0 content-start gap-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Label htmlFor={`template-${name}`}>{label} <span className="text-destructive">*</span></Label>
+        <Label htmlFor={`template-${name}`}>{label} {required && <span className="text-destructive">*</span>}</Label>
         {suffix}
       </div>
       {children}
@@ -36,8 +37,9 @@ function TemplateField({ name, label, errors, suffix, children }: {
   );
 }
 
-export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 0, onCancel, onSaved, save }: {
+export function ProjectTemplateForm({ template, parentTemplate, options, minimumDurationWeeks = 0, onCancel, onSaved, save }: {
   template?: ProjectTemplateDTO;
+  parentTemplate?: ProjectTemplateDTO;
   options: ProjectTemplateOptions;
   minimumDurationWeeks?: number;
   onCancel: () => void;
@@ -45,9 +47,13 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
   save?: (payload: ProjectTemplatePayload) => Promise<ProjectTemplateDTO>;
 }) {
   const queryClient = useQueryClient();
-  const [values, setValues] = useState(() => toTemplateFormValues(template));
-  const wordCount = descriptionWordCount(values.description);
-  const categories = [...new Set([...options.categories, ...(template?.category ? [template.category] : [])])];
+  const [values, setValues] = useState(() => ({ ...toTemplateFormValues(template),
+    ...(!template && parentTemplate ? { category: parentTemplate.category, level: parentTemplate.level,
+      estimatedDurationWeeks: String(parentTemplate.estimatedDurationWeeks) } : {}) }));
+  const module = template?.parentTemplateId != null || parentTemplate != null;
+  const descriptionLength = values.description.length;
+  const categories = [...new Set([...options.categories, ...[template?.category, parentTemplate?.category]
+    .filter((value): value is string => !!value)])];
   const [lockVersion] = useState(template?.lockVersion);
   const [minimumDuration] = useState(minimumDurationWeeks);
   const [errors, setErrors] = useState<TemplateFieldErrors>({});
@@ -87,6 +93,7 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
       code: values.code.trim(),
       name: values.name.trim(),
       description: values.description.trim(),
+      ...(template?.parentTemplateId || parentTemplate?.id ? { parentTemplateId: template?.parentTemplateId ?? parentTemplate?.id } : {}),
       category: values.category.trim(),
       level: values.level as ProjectTemplateLevel,
       estimatedDurationWeeks: Number(values.estimatedDurationWeeks),
@@ -95,7 +102,7 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
   };
   const inputProps = (field: keyof TemplateFormValues) => ({
     id: `template-${field}`,
-    "aria-invalid": !!errors[field]?.length || field === "description" && wordCount > maxDescriptionWords,
+    "aria-invalid": !!errors[field]?.length || field === "description" && descriptionLength > maxDescriptionLength,
     "aria-describedby": `template-${field}-error${field === "description" ? " template-description-count" : ""}`,
   });
 
@@ -123,7 +130,9 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
             <div className="grid gap-5 md:grid-cols-2">
               <TemplateField name="code" label="Code" errors={errors.code}>
                 <Input {...inputProps("code")} value={values.code} onChange={(event) => change("code", event.target.value)} placeholder="E.g. PRJ-WEB-01" autoComplete="off" />
-                <p className="text-xs text-muted-foreground">Unique for this version in {options.tenantName}. Up to 100 characters.</p>
+                <p className="text-xs text-muted-foreground">{template?.parentTemplateId || parentTemplate
+                  ? "Unique within the parent template. Up to 100 characters."
+                  : `Unique for this version in ${options.tenantName}. Up to 100 characters.`}</p>
               </TemplateField>
               <TemplateField name="name" label="Name" errors={errors.name}>
                 <Input {...inputProps("name")} value={values.name} onChange={(event) => change("name", event.target.value)} placeholder="E.g. Learning Resource Portal" />
@@ -131,21 +140,22 @@ export function ProjectTemplateForm({ template, options, minimumDurationWeeks = 
             </div>
             <TemplateField name="description" label="Description" errors={errors.description} suffix={
               <span id="template-description-count" role="status"
-                className={`text-xs tabular-nums ${wordCount > maxDescriptionWords ? "text-destructive" : "text-muted-foreground"}`}>
-                {wordCount.toLocaleString("en-US")} / {maxDescriptionWords.toLocaleString("en-US")} words
+                className={`text-xs tabular-nums ${descriptionLength > maxDescriptionLength ? "text-destructive" : "text-muted-foreground"}`}>
+                {descriptionLength.toLocaleString("en-US")} / {maxDescriptionLength.toLocaleString("en-US")} characters
               </span>
             }>
-              <Textarea {...inputProps("description")} rows={7} wrap="soft"
+              <Textarea {...inputProps("description")} maxLength={maxDescriptionLength} rows={7} wrap="soft"
                 className="min-w-0 max-w-full resize-y whitespace-pre-wrap [field-sizing:fixed] [overflow-wrap:anywhere]"
                 value={values.description} onChange={(event) => change("description", event.target.value)}
                 placeholder="Describe the project background, objectives and expected scope." />
             </TemplateField>
             <div className="grid gap-5 md:grid-cols-3">
               <TemplateField name="category" label="Domain / category" errors={errors.category}>
-                <Select value={values.category} onValueChange={(value) => change("category", value)} disabled={mutation.isPending}>
+                <Select value={values.category} onValueChange={(value) => change("category", value)} disabled={module || mutation.isPending}>
                   <SelectTrigger {...inputProps("category")} className="w-full"><SelectValue placeholder="Select a category" /></SelectTrigger>
                   <SelectContent>{categories.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent>
                 </Select>
+                {module && <p className="text-xs text-muted-foreground">Inherited from the master project.</p>}
               </TemplateField>
               <TemplateField name="level" label="Level" errors={errors.level}>
                 <Select value={values.level} onValueChange={(value) => change("level", value as ProjectTemplateLevel)} disabled={mutation.isPending}>

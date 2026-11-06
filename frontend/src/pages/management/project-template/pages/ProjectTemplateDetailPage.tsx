@@ -17,9 +17,11 @@ import { TemplateMilestonesPanel } from "../components/TemplateMilestonesPanel";
 import { TemplateActivationDialog } from "../components/TemplateActivationDialog";
 import { TemplateArchiveDialog } from "../components/TemplateArchiveDialog";
 import { TemplateSampleContentPanel } from "../components/TemplateSampleContentPanel";
+import { TemplateModulesPanel } from "../components/TemplateModulesPanel";
+import { TemplateResourcesPanel } from "../components/TemplateResourcesPanel";
 import { TemplateVersionsPanel } from "../components/TemplateVersionsPanel";
 import { useProjectTemplateOptions } from "../hooks/useProjectTemplateOptions";
-import { descriptionWordCount, maxDescriptionWords, templateLevelLabel } from "../project-template.utils";
+import { maxDescriptionLength, templateLevelLabel } from "../project-template.utils";
 
 export function ProjectTemplateDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -28,7 +30,8 @@ export function ProjectTemplateDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const options = useProjectTemplateOptions();
   const requestedTab = searchParams.get("tab");
-  const tab = requestedTab === "team-constraints" || requestedTab === "milestones" || requestedTab === "sample-content" || requestedTab === "versions" ? requestedTab : "overview";
+  const tab = requestedTab === "team-constraints" || requestedTab === "milestones" || requestedTab === "sample-content"
+    || requestedTab === "versions" || requestedTab === "modules" || requestedTab === "resources" ? requestedTab : "overview";
   const detailQueryKey = ["project-templates", options.user.email, options.activeRole, "detail", id];
   const query = useQuery({
     queryKey: detailQueryKey,
@@ -39,6 +42,16 @@ export function ProjectTemplateDetailPage() {
     refetchOnReconnect: false,
   });
   const template = query.data;
+  const resourceVersions = useQuery({
+    queryKey: ["project-template-versions", "by-template", template?.id, options.user.email, options.activeRole],
+    queryFn: () => projectTemplateVersionApi.getByTemplate(template!.id),
+    enabled: !!template && tab === "resources" && options.hasPermission("PROJECT_TEMPLATE_VERSION_READ"),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const resourceVersion = resourceVersions.data?.find(version => version.isActive
+    && version.status === (template?.status === "ACTIVE" ? "PUBLISHED" : template?.status));
+
   const versionId = Number(searchParams.get("version"));
   const versionQuery = useQuery({
     queryKey: ["project-template-versions", options.user.email, options.activeRole, "configuration", versionId],
@@ -52,10 +65,11 @@ export function ProjectTemplateDetailPage() {
     ? versionQuery.data?.template : template;
   const canEdit = options.isSuccess && options.data?.canUpdate === true && !query.isError && !!template?.editable
     && options.hasPermission("PROJECT_TEMPLATE_UPDATE");
-  const canActivate = options.isSuccess && options.data?.canActivate === true && !query.isError
-    && template?.readOnly !== true
-    && template?.status === "DRAFT" && (options.activeRole === "ADMIN" || options.activeRole === "PROGRAM_MANAGER")
+  const canActivateTemplate = options.isSuccess && options.data?.canActivate === true && !query.isError
+    && !!template && !template.readOnly && template.status !== "ARCHIVED"
+    && (options.activeRole === "ADMIN" || options.activeRole === "PROGRAM_MANAGER")
     && options.hasPermission("PROJECT_TEMPLATE_ACTIVATE");
+  const canActivate = canActivateTemplate && template?.status === "DRAFT";
   const canArchive = options.isSuccess && options.data?.canArchive === true && !query.isError
     && template?.readOnly !== true
     && template?.status === "ACTIVE" && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE");
@@ -80,13 +94,15 @@ export function ProjectTemplateDetailPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => navigate("/project-templates")}><ArrowLeft /> Back to templates</Button>
+            {template?.parentTemplateId && <Button variant="outline" onClick={() => navigate(`/project-templates/${template.parentTemplateId}/detail?tab=modules`)}>
+              <ArrowLeft />Parent template</Button>}
             {tab === "versions" && <Button variant="outline" onClick={() => navigate(`/project-templates/${id}/detail`)}>Current template</Button>}
             {tab === "overview" && canEdit && (
               <Button onClick={() => navigate(`/project-templates/${id}/edit`)}><Pen /> Edit draft</Button>
             )}
-            {tab !== "versions" && template && template.status === "DRAFT" && !template.readOnly && options.data?.canArchive
+            {tab !== "versions" && template && !template.removed && (template.status === "DRAFT" || template.parentTemplateId != null) && !template.readOnly && options.data?.canArchive
               && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE") && <TemplateDeleteDialog template={template}
-                onDeleted={() => navigate("/project-templates")} />}
+                onDeleted={() => navigate(template.parentTemplateId ? `/project-templates/${template.parentTemplateId}/detail?tab=modules` : "/project-templates")} />}
             {tab !== "versions" && canActivate && template && <TemplateActivationDialog template={template}
               onOpenSection={selectTab}
               onActivated={(saved) => {
@@ -115,11 +131,13 @@ export function ProjectTemplateDetailPage() {
               )}
               {tab === "versions" ? <TemplateVersionsPanel template={template} /> : <Tabs value={tab} onValueChange={selectTab} className="min-w-0 gap-4">
                 <TabsList aria-label="Template configuration"
-                  className="grid w-full max-w-3xl grid-cols-2 group-data-[orientation=horizontal]/tabs:h-auto sm:grid-cols-5">
+                  className="grid w-full grid-cols-2 group-data-[orientation=horizontal]/tabs:h-auto sm:grid-cols-4 lg:grid-cols-7">
                   <TabsTrigger value="overview" className="h-full min-h-9 whitespace-normal">Overview</TabsTrigger>
                   <TabsTrigger value="team-constraints" className="h-full min-h-9 whitespace-normal">Team constraints</TabsTrigger>
                   <TabsTrigger value="milestones" className="h-full min-h-9 whitespace-normal">Milestones</TabsTrigger>
                   <TabsTrigger value="sample-content" className="h-full min-h-9 whitespace-normal">Backlog</TabsTrigger>
+                  <TabsTrigger value="modules" className="h-full min-h-9 whitespace-normal">Modules</TabsTrigger>
+                  <TabsTrigger value="resources" className="h-full min-h-9 whitespace-normal">Resources</TabsTrigger>
                   <TabsTrigger value="versions" className="h-full min-h-9 whitespace-normal">Versions</TabsTrigger>
                 </TabsList>
                 <TabsContent value="overview">
@@ -138,7 +156,7 @@ export function ProjectTemplateDetailPage() {
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h2 className="text-sm font-medium">Description</h2>
                           <span className="text-xs tabular-nums text-muted-foreground">
-                            {descriptionWordCount(template.description ?? "").toLocaleString("en-US")} / {maxDescriptionWords.toLocaleString("en-US")} words
+                            {(template.description?.length ?? 0).toLocaleString("en-US")} / {maxDescriptionLength.toLocaleString("en-US")} characters
                           </span>
                         </div>
                         <p className="mt-2 min-w-0 max-w-full whitespace-pre-wrap text-sm leading-7 text-muted-foreground [overflow-wrap:anywhere]">{template.description}</p>
@@ -174,6 +192,16 @@ export function ProjectTemplateDetailPage() {
                 </TabsContent>
                 <TabsContent value="sample-content">
                   <TemplateSampleContentPanel templateId={template.id} editable={canEdit} />
+                </TabsContent>
+                <TabsContent value="modules"><TemplateModulesPanel templateId={template.id}
+                  canActivate={canActivateTemplate}
+                  canCreate={!!options.data?.canCreate && !template.readOnly && template.status !== "ARCHIVED"} /></TabsContent>
+                <TabsContent value="resources">
+                  {!options.hasPermission("PROJECT_TEMPLATE_VERSION_READ") ? <Alert><AlertDescription>Version access is required to view resources.</AlertDescription></Alert>
+                    : resourceVersions.isPending ? <ProjectTemplateLoading />
+                    : resourceVersions.isError ? <ProjectTemplateError error={resourceVersions.error} onRetry={() => void resourceVersions.refetch()} />
+                    : resourceVersion?.id != null ? <TemplateResourcesPanel versionId={resourceVersion.id} editable={canEdit} />
+                    : <Alert><AlertDescription>Select a version in the Versions tab to view its resources.</AlertDescription></Alert>}
                 </TabsContent>
               </Tabs>}
             </>

@@ -36,7 +36,7 @@ public class Milestone {
     @Column(name = "project_id", updatable = false)
     private Long projectId;
 
-    @Column(name = "team_id", nullable = false, updatable = false)
+    @Column(name = "team_id", updatable = false)
     private Long teamId;
 
     @Column(nullable = false, length = 120)

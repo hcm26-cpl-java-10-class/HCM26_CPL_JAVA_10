@@ -172,17 +172,12 @@ public class AllocationReadinessService {
             ProjectTeam team
     ) {
         List<ProjectMember> assignments = memberRepository.findAllByTeam_IdOrderByIdAsc(team.getId());
-        List<Long> pmIds = assignments.stream()
-                .filter(row -> ProjectMemberRole.hasRole(row.getRole(), "PM"))
-                .map(row -> row.getClassMember().getId()).toList();
-        Long leaderId = team.getLeaderMemberId() != null ? team.getLeaderMemberId()
-                : pmIds.size() == 1 ? pmIds.get(0) : null;
         List<AllocationReadinessResponse.TeamReadinessIssue> issues = new ArrayList<>();
-        if (leaderId == null || !pmIds.equals(List.of(leaderId))) {
+        if (ProjectTeamLeaderService.activeLeaderId(team, assignments) == null) {
             issues.add(issue(team, ERR_TEAM_LEADER_REQUIRED,
-                    "Nhóm cần đúng một Leader/PM trước khi công bố.", pmIds, List.of()));
+                    "Chọn một thành viên ACTIVE làm Leader trước khi công bố nhóm.", List.of(), List.of()));
         }
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
             issues.add(issue(
                     team,

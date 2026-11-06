@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.topic_mark;
 
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.system.demo.student_score.StudentScore;
 import com.example.starter_project_2025.system.demo.student_score.StudentScoreRepository;
 import com.example.starter_project_2025.system.topic_mark.dto.ScoreHistoryResponse;
@@ -143,6 +144,10 @@ public class TopicMarkDemoService {
 
     public TopicMarkDetailResponse updateStudentMarks(UUID userId, UpdateTopicMarkRequest request) {
         StudentScore student = findStudentByUserId(userId);
+
+        if (student.isPublished()) {
+            throw new BadRequestException("Score already released, use an adjustment with a reason instead");
+        }
 
         Map<String, BigDecimal> scores = new LinkedHashMap<>(student.getScores() == null ? Map.of() : student.getScores());
         List<ComponentDef> components = buildComponentDefs(getAllStudents());

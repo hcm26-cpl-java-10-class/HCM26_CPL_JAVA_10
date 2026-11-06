@@ -31,7 +31,7 @@ export function validateSampleContent(values: SampleContentValues, content: Temp
   values.backlogItems.forEach((item, i) => {
     const path = `backlogItems[${i}]`;
     if (!item.title.trim() || item.title.trim().length > 200) errors[`${path}.title`] = ["Backlog title must contain 1 to 200 characters"];
-    if (item.description.trim().length > 2000) errors[`${path}.description`] = ["Description must not exceed 2000 characters"];
+    if (item.description.trim().length > 1000) errors[`${path}.description`] = ["Description must not exceed 1000 characters"];
     if (item.suggestedRole && !content.roles.includes(item.suggestedRole)) errors[`${path}.suggestedRole`] = ["Select PM, BA, DEV or QA"];
   });
   return errors;

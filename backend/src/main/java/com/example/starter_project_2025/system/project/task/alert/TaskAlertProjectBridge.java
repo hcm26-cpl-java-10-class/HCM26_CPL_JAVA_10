@@ -77,7 +77,9 @@ public class TaskAlertProjectBridge implements TaskProjectAccess {
     }
     boolean matches(ProjectTeam team, Project project) {
         return Boolean.TRUE.equals(team.getIsActive()) && team.getStatus() == ProjectTeamStatus.ACTIVE
-                && Objects.equals(team.getProjectId(), project.getId()) && team.getTrainingClass() != null
+                && (Objects.equals(team.getProjectId(), project.getId())
+                    || project.getAssignmentId() != null && Objects.equals(team.getId(), project.getTeamId()))
+                && team.getTrainingClass() != null
                 && Boolean.TRUE.equals(team.getTrainingClass().getIsActive())
                 && Objects.equals(team.getTrainingClass().getTenantId(), project.getTenant().getId());
     }
@@ -92,7 +94,7 @@ public class TaskAlertProjectBridge implements TaskProjectAccess {
                 && Objects.equals(row.getUser().getId(), actorId) && row.getProjectRole() == ProjectRole.TEAM_LEADER)
                 || projectMembers.findAll().stream().anyMatch(row -> current(row) && matches(row.getTeam(), project)
                 && Objects.equals(row.getClassMember().getUser().getId(), actorId)
-                && ("TEAM_LEADER".equals(row.getRole()) || ProjectMemberRole.hasRole(row.getRole(), "PM")));
+                && row.getTeam().isLedBy(row.getClassMember().getId()));
     }
     public boolean memberOf(Project project, Long actorId) {
         return teamMembers.findAll().stream().anyMatch(row -> current(row) && matches(row.getTeam(), project)
@@ -156,7 +158,7 @@ public class TaskAlertProjectBridge implements TaskProjectAccess {
                     .filter(this::current).filter(row -> !requireLeader || row.getProjectRole() == ProjectRole.TEAM_LEADER).isPresent();
         return projectMembers.findAllByTeam_IdOrderByIdAsc(recipient.teamId()).stream().anyMatch(row -> current(row)
                 && Objects.equals(row.getClassMember().getUser().getId(), actor.getId())
-                && (!requireLeader || "TEAM_LEADER".equals(row.getRole()) || ProjectMemberRole.hasRole(row.getRole(), "PM")));
+                && (!requireLeader || row.getTeam().isLedBy(row.getClassMember().getId())));
     }
     public boolean canRead(User actor, Task task) {
         Project project = project(task.getProjectId());

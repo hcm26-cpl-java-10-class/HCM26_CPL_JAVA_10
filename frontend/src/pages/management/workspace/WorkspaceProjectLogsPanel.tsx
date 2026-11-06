@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { workspaceApi } from "@/api/features/workspace.api";
 import type { ProjectLog, ProjectLogAuthorOption, ProjectLogAttendeeOption, ProjectLogTargetType, ProjectLogType, ProjectLogOption } from "@/types/features/workspace";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { WorkspaceEmptyState, getWorkspaceError } from "./workspace.shared";
-import { FileText } from "lucide-react";
+import { Activity, ChevronRight, FileText, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { toast } from "sonner";
 
 const LOG_TITLE_MAX_LENGTH = 100;
 const LOG_TEXT_MAX_LENGTH = 2000;
@@ -30,9 +33,11 @@ const emptyForm: LogForm = {
   severity: "MEDIUM", mitigationPlan: "", meetingDate: "", attendees: "", actionItems: "",
   targetType: "", targetId: ""
 };
-const LOG_TABS: { label: string; value?: ProjectLogType }[] = [
-  { label: "All logs" }, { label: "Decisions", value: "DECISION" },
-  { label: "Risks & issues", value: "RISK_ISSUE" }, { label: "Meeting notes", value: "MEETING_NOTE" }
+type LogView = ProjectLogType | "ALL" | "ACTIVITY";
+const LOG_TABS: { label: string; value: LogView }[] = [
+  { label: "All logs", value: "ALL" }, { label: "Decisions", value: "DECISION" },
+  { label: "Risks & issues", value: "RISK_ISSUE" }, { label: "Meeting notes", value: "MEETING_NOTE" },
+  { label: "Activity feed", value: "ACTIVITY" },
 ];
 const authorRoleLabel = (role: ProjectLogAuthorOption["role"]) => ({
   MEMBER: "Team member",
@@ -48,9 +53,13 @@ const attendeeRoleLabel = (role: ProjectLogAttendeeOption["role"]) => ({
 })[role];
 const attendeeRoles: ProjectLogAttendeeOption["role"][] = ["MEMBER", "MENTOR", "TRAINER", "CLASS_ADMIN"];
 
-export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number }) {
+export function WorkspaceProjectLogsPanel({ workspaceId, readOnly = false }: { workspaceId: number; readOnly?: boolean }) {
   const queryClient = useQueryClient();
-  const [type, setType] = useState<ProjectLogType>();
+  const [view, setView] = useState<LogView>("ALL");
+  const type = view === "ALL" || view === "ACTIVITY" ? undefined : view;
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectedLogId, setSelectedLogId] = useState<number | null>(null);
+  const detail = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
   const [createdBy, setCreatedBy] = useState("");
   const [createdFrom, setCreatedFrom] = useState("");
@@ -95,6 +104,7 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
         page, size: 10
       }, signal);
     },
+    enabled: view !== "ACTIVITY",
     retry: false
   });
   const options = useQuery({
@@ -105,17 +115,16 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
   const activity = useQuery({
     queryKey: ["workspace-section", workspaceId, "activity"],
     queryFn: ({ signal }) => workspaceApi.section(workspaceId, "activity", signal),
+    enabled: view === "ACTIVITY",
     retry: false
   });
   const activityItems = activity.data?.items ?? [];
   const activityPageCount = Math.ceil(activityItems.length / ACTIVITY_PAGE_SIZE);
+  const currentActivityPage = Math.min(activityPage, Math.max(0, activityPageCount - 1));
   const visibleActivityItems = activityItems.slice(
-    activityPage * ACTIVITY_PAGE_SIZE,
-    (activityPage + 1) * ACTIVITY_PAGE_SIZE
+    currentActivityPage * ACTIVITY_PAGE_SIZE,
+    (currentActivityPage + 1) * ACTIVITY_PAGE_SIZE
   );
-  useEffect(() => {
-    setActivityPage(0);
-  }, [activityItems.length]);
   const createMutation = useMutation({
     mutationFn: () => workspaceApi.createProjectLog(workspaceId, {
       ...form,
@@ -126,11 +135,15 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
       targetType: form.targetId ? form.targetType || undefined : undefined,
       targetId: form.targetId || undefined
     }),
-    onSuccess: async () => {
+    onSuccess: async (saved) => {
       setCreating(false);
       setForm(emptyForm);
+      clearFilters();
+      setSelectedLogId(saved.id);
+      if (view !== "ALL") setView(saved.type);
       await queryClient.invalidateQueries({ queryKey: ["project-logs", workspaceId] });
       await queryClient.invalidateQueries({ queryKey: ["workspace-section", workspaceId, "activity"] });
+      toast.success("Project log saved.");
     }
   });
   const riskMutation = useMutation({
@@ -139,6 +152,7 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["project-logs", workspaceId] });
       await queryClient.invalidateQueries({ queryKey: ["workspace-section", workspaceId, "activity"] });
+      toast.success("Risk status updated.");
     }
   });
   const eligibleTargets = useMemo((): ProjectLogOption[] => {
@@ -152,6 +166,7 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
   }
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (readOnly || createMutation.isPending || (form.type === "MEETING_NOTE" && !form.attendees)) return;
     createMutation.mutate();
   }
   const targetOptions = eligibleTargets.filter(option => option.type === form.targetType);
@@ -167,12 +182,65 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
   };
   const commonTargets = [...(options.data?.milestones ?? []), ...(options.data?.sprints ?? [])];
   const riskTargets = [...(options.data?.milestones ?? []), ...(options.data?.tasks ?? []), ...(options.data?.backlogItems ?? [])];
-  return <div className="space-y-5">
-    <Card>
-      <CardHeader><CardTitle>Filters</CardTitle></CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <Input aria-label="Search title, content or rationale" placeholder="Search title, content or rationale"
-          value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} />
+  const allTargets = [...riskTargets, ...(options.data?.sprints ?? [])];
+  const logs = query.data?.content ?? [];
+  const selectedLog = logs.find(item => item.id === selectedLogId) ?? logs[0];
+  const typeFilters = type === "DECISION" ? [decisionStatus, decisionLinkType]
+    : type === "RISK_ISSUE" ? [riskCategory, riskSeverity, riskStatus, riskTarget]
+      : type === "MEETING_NOTE" ? [meetingFrom, meetingTo, attendeeId, hasActionItems] : [];
+  const filterCount = [createdBy, createdFrom, createdTo, linkedTarget, ...typeFilters].filter(Boolean).length;
+  const filtered = !!search.trim() || filterCount > 0;
+  const clearFilters = () => {
+    setSearch(""); setCreatedBy(""); setCreatedFrom(""); setCreatedTo(""); setLinkedTarget("");
+    setDecisionStatus(""); setDecisionLinkType(""); setRiskCategory(""); setRiskSeverity("");
+    setRiskStatus(""); setRiskTarget(""); setMeetingFrom(""); setMeetingTo(""); setAttendeeId("");
+    setHasActionItems(""); setPage(0); setSelectedLogId(null);
+  };
+  const openCreate = () => {
+    setForm({ ...emptyForm, type: type ?? "DECISION" });
+    setAttendeeSearch("");
+    createMutation.reset();
+    void options.refetch();
+    setCreating(true);
+  };
+  return <>
+    <Tabs value={view} onValueChange={value => {
+      setView(value as LogView); setPage(0); setSelectedLogId(null);
+    }} className="gap-4">
+      <Card className="gap-4">
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-2">
+              <CardTitle>Risks, Decisions &amp; Logs</CardTitle>
+              <CardDescription>Review project decisions, track risks and issues, and revisit meeting notes.</CardDescription>
+            </div>
+            {!readOnly && <Button onClick={openCreate}><Plus className="size-4" />Create log</Button>}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <TabsList aria-label="Workspace logs" className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-5">
+            {LOG_TABS.map(tab => <TabsTrigger key={tab.value} value={tab.value}>{tab.label}</TabsTrigger>)}
+          </TabsList>
+        </CardContent>
+      </Card>
+
+      {view !== "ACTIVITY" && <TabsContent value={view} className="grid min-w-0 gap-4">
+        <Card className="gap-0 py-0">
+          <CardContent className="grid gap-4 px-4 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-48 flex-1">
+                <Search aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input aria-label="Search project logs" placeholder="Search title, content or rationale" className="pl-9"
+                  value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} />
+              </div>
+              <Button type="button" variant={filtersOpen ? "secondary" : "outline"} aria-expanded={filtersOpen}
+                aria-controls="workspace-log-filters" onClick={() => setFiltersOpen(open => !open)}>
+                <SlidersHorizontal className="size-4" />Filters{filterCount > 0 && <Badge variant="secondary">{filterCount}</Badge>}
+              </Button>
+              {filtered && <Button type="button" variant="ghost" onClick={clearFilters}>Clear filters</Button>}
+            </div>
+            {filtersOpen && <div id="workspace-log-filters" className="grid gap-3 border-t pt-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <select aria-label="Filter by author" className="rounded-md border bg-background px-3 py-2" value={createdBy}
           onChange={event => { setCreatedBy(event.target.value); setPage(0); }}>
           <option value="">All authors</option>
@@ -192,29 +260,146 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
             {option.type === "SPRINT" ? "Sprint" : "Milestone"}: {option.label}
           </option>)}
         </select>
-        <Button type="button" variant="outline" className="md:justify-self-start" onClick={() => {
-          setSearch(""); setCreatedBy(""); setCreatedFrom(""); setCreatedTo(""); setLinkedTarget("");
-          setDecisionStatus(""); setDecisionLinkType(""); setRiskCategory(""); setRiskSeverity("");
-          setRiskStatus(""); setRiskTarget(""); setMeetingFrom(""); setMeetingTo(""); setAttendeeId("");
-          setHasActionItems(""); setPage(0);
-        }}>Clear filters</Button>
-      </CardContent>
-    </Card>
-    <Card>
-      <CardHeader><div className="flex flex-wrap items-center justify-between gap-3">
-        <CardTitle>Risks, Decisions & Logs</CardTitle>
-        <div className="flex gap-2">
-          <Button type="button" onClick={() => {
-            setCreating(value => !value);
-            createMutation.reset();
-            if (!creating) void options.refetch();
-          }}>
-            {creating ? "Cancel" : "Create log"}
-          </Button>
-        </div>
-      </div></CardHeader>
-      {creating && <CardContent>
-        <form className="space-y-4" onSubmit={submit}>
+              </div>
+    {type === "DECISION" && <div className="grid gap-3 md:grid-cols-2">
+      <select aria-label="Filter decision status" className="rounded-md border bg-background px-3 py-2" value={decisionStatus}
+        onChange={event => { setDecisionStatus(event.target.value); setPage(0); }}>
+        <option value="">All decision statuses</option><option value="PROPOSED">Proposed</option>
+        <option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="SUPERSEDED">Superseded</option>
+      </select>
+      <select aria-label="Filter decision linked item type" className="rounded-md border bg-background px-3 py-2" value={decisionLinkType}
+        onChange={event => { setDecisionLinkType(event.target.value); setPage(0); }}>
+        <option value="">All linked item types</option><option value="MILESTONE">Milestone</option>
+        <option value="TASK">Task</option><option value="BACKLOG_ITEM">Backlog item</option>
+      </select>
+    </div>}
+    {type === "RISK_ISSUE" && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <select aria-label="Filter risk category" className="rounded-md border bg-background px-3 py-2" value={riskCategory}
+        onChange={event => { setRiskCategory(event.target.value); setPage(0); }}>
+        <option value="">All categories</option><option value="RISK">Risk</option><option value="ISSUE">Issue</option>
+      </select>
+      <select aria-label="Filter risk severity" className="rounded-md border bg-background px-3 py-2" value={riskSeverity}
+        onChange={event => { setRiskSeverity(event.target.value); setPage(0); }}>
+        <option value="">All severities</option><option value="LOW">Low</option><option value="MEDIUM">Medium</option>
+        <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
+      </select>
+      <select aria-label="Filter risk status" className="rounded-md border bg-background px-3 py-2" value={riskStatus}
+        onChange={event => { setRiskStatus(event.target.value); setPage(0); }}>
+        <option value="">All risk statuses</option><option value="OPEN">Open</option>
+        <option value="IN_MITIGATION">In mitigation</option><option value="CLOSED">Closed</option>
+      </select>
+      <select aria-label="Filter risk target" className="rounded-md border bg-background px-3 py-2" value={riskTarget}
+        onChange={event => { setRiskTarget(event.target.value); setPage(0); }}>
+        <option value="">All affected items</option>
+        {riskTargets.map(option => <option key={`${option.type}:${option.id}`} value={`${option.type}:${option.id}`}>
+          {option.type === "MILESTONE" ? "Milestone" : option.type === "TASK" ? "Task" : "Backlog item"}: {option.label}
+        </option>)}
+      </select>
+    </div>}
+    {type === "MEETING_NOTE" && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <Input aria-label="Meeting date from" type="date" value={meetingFrom} onChange={event => { setMeetingFrom(event.target.value); setPage(0); }} />
+      <Input aria-label="Meeting date to" type="date" value={meetingTo} onChange={event => { setMeetingTo(event.target.value); setPage(0); }} />
+      <select aria-label="Filter meeting attendee" className="rounded-md border bg-background px-3 py-2" value={attendeeId}
+        onChange={event => { setAttendeeId(event.target.value); setPage(0); }}>
+        <option value="">All attendees</option>
+        {(options.data?.attendees ?? []).map(person => <option key={person.id} value={person.id}>{person.label} ({attendeeRoleLabel(person.role)})</option>)}
+      </select>
+      <select aria-label="Filter meetings with action items" className="rounded-md border bg-background px-3 py-2" value={hasActionItems}
+        onChange={event => { setHasActionItems(event.target.value); setPage(0); }}>
+        <option value="">All meetings</option><option value="true">Has action items</option><option value="false">No action items</option>
+      </select>
+    </div>}
+            </div>}
+          </CardContent>
+        </Card>
+
+        {query.isPending ? <div className="grid gap-3" aria-label="Loading project logs">
+          {[1, 2, 3].map(item => <div key={item} className="h-20 animate-pulse rounded-lg bg-muted" />)}
+        </div> : query.isError ? <Card><CardContent className="grid justify-items-center gap-3 py-8">
+          <p role="alert" className="text-sm text-destructive">{getWorkspaceError(query.error)}</p>
+          <Button variant="outline" onClick={() => void query.refetch()}>Retry</Button>
+        </CardContent></Card> : selectedLog ? <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(15rem,0.8fr)_minmax(0,1.2fr)]">
+          <Card className="min-w-0 gap-3">
+            <CardHeader className="px-4">
+              <CardTitle className="text-base">Log entries</CardTitle>
+              <CardDescription aria-live="polite">{query.data.totalElements} results</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 px-4">
+              <ul className="grid max-h-[42vh] gap-2 overflow-y-auto p-0.5 xl:max-h-[55vh]" aria-label="Log entries">
+                {logs.map(item => <li key={item.id}>
+                  <button type="button" aria-pressed={selectedLog.id === item.id}
+                    className={"flex w-full items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring "
+                      + (selectedLog.id === item.id ? "border-primary bg-primary/5" : "hover:bg-muted/40")}
+                    onClick={() => {
+                      setSelectedLogId(item.id);
+                      requestAnimationFrame(() => detail.current?.scrollIntoView({ block: "nearest" }));
+                    }}>
+                    <span className="min-w-0 flex-1 space-y-1">
+                      <span className="block break-words text-sm font-medium">{item.title}</span>
+                      <span className="block text-xs text-muted-foreground">{logTypeLabel(item)} · {displayLabel(item.status)}</span>
+                      <span className="block text-xs text-muted-foreground">{item.authorName ?? "Unknown author"}
+                        {item.createdAt && " · " + new Date(item.createdAt).toLocaleDateString()}</span>
+                    </span>
+                    <ChevronRight aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  </button>
+                </li>)}
+              </ul>
+              {query.data.totalPages > 1 && <Pagination page={page} totalPages={query.data.totalPages} onChange={setPage} />}
+            </CardContent>
+          </Card>
+          <div ref={detail} className="min-w-0 scroll-mt-4">
+            <LogDetail key={selectedLog.id + ":" + selectedLog.version} item={selectedLog} readOnly={readOnly}
+              target={allTargets.find(option => option.type === selectedLog.targetType && option.id === selectedLog.targetId)}
+              onUpdateRisk={status => riskMutation.mutate({ item: selectedLog, status })}
+              updating={riskMutation.isPending && riskMutation.variables?.item.id === selectedLog.id}
+              updateError={riskMutation.isError && riskMutation.variables?.item.id === selectedLog.id ? riskMutation.error : undefined} />
+          </div>
+        </div> : <Card><WorkspaceEmptyState icon={FileText}
+          title={filtered ? "No matching logs" : "No project logs yet"}
+          description={filtered ? "Try a different search or clear your filters." : readOnly
+            ? "No logs were recorded for this workspace." : "Create a decision, risk or meeting note for this project."}
+          action={filtered ? <Button variant="outline" onClick={clearFilters}>Clear filters</Button>
+            : readOnly ? undefined : <Button onClick={openCreate}>Create log</Button>} /></Card>}
+      </TabsContent>}
+
+      <TabsContent value="ACTIVITY">
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Activity className="size-5" />Activity feed</CardTitle>
+            <CardDescription>Workspace changes recorded in chronological order.</CardDescription></CardHeader>
+          <CardContent>
+            {activity.isPending ? <div className="h-16 animate-pulse rounded-lg bg-muted" />
+              : activity.isError ? <div className="grid justify-items-start gap-3">
+                <p role="alert" className="text-sm text-destructive">{getWorkspaceError(activity.error)}</p>
+                <Button variant="outline" size="sm" onClick={() => void activity.refetch()}>Retry</Button>
+              </div> : activityItems.length > 0 ? <>
+                <ol className="space-y-4 border-l pl-4">
+                  {visibleActivityItems.map(event => <li key={event.id} className="grid gap-1 rounded-lg border bg-muted/15 p-3">
+                    <p className="text-sm font-medium">{event.title}</p>
+                    <p className="break-words text-sm text-muted-foreground">{event.description}</p>
+                    {event.occurredAt && <time dateTime={event.occurredAt} className="text-xs text-muted-foreground">
+                      {new Date(event.occurredAt).toLocaleString()}
+                    </time>}
+                  </li>)}
+                </ol>
+                {activityPageCount > 1 && <div className="mt-4">
+                  <Pagination page={currentActivityPage} totalPages={activityPageCount} onChange={setActivityPage} />
+                </div>}
+              </> : <WorkspaceEmptyState icon={Activity} title="No activity yet" description="Recorded workspace changes will appear here." />}
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
+
+    <Dialog open={creating && !readOnly} onOpenChange={open => { if (!createMutation.isPending) setCreating(open); }}>
+      <DialogContent className="flex max-h-[90dvh] flex-col overflow-hidden sm:max-w-3xl" showCloseButton={!createMutation.isPending}
+        onEscapeKeyDown={event => { if (createMutation.isPending) event.preventDefault(); }}
+        onInteractOutside={event => { if (createMutation.isPending) event.preventDefault(); }}>
+        <DialogHeader>
+          <DialogTitle>Create project log</DialogTitle>
+          <DialogDescription>Record a decision, risk, issue or meeting note.</DialogDescription>
+        </DialogHeader>
+        <form className="flex min-h-0 flex-col gap-4" onSubmit={submit}>
+          <div className="min-h-0 space-y-4 overflow-y-auto px-0.5 pr-2">
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1 text-sm">Log type
               <select className="w-full rounded-md border bg-background px-3 py-2" value={form.type}
@@ -339,143 +524,94 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
           </div>
           {options.isError && <p role="alert" className="text-sm text-destructive">{getWorkspaceError(options.error)}</p>}
           {createMutation.isError && <p role="alert" className="text-sm text-destructive">{getWorkspaceError(createMutation.error)}</p>}
-          <Button type="submit" disabled={createMutation.isPending || options.isPending}>
-            {createMutation.isPending ? "Saving..." : "Save log"}
-          </Button>
+          </div>
+          <DialogFooter className="shrink-0 border-t pt-3">
+            <Button type="button" variant="outline" disabled={createMutation.isPending} onClick={() => setCreating(false)}>Cancel</Button>
+            <Button type="submit" disabled={createMutation.isPending || options.isPending || (form.type === "MEETING_NOTE" && !form.attendees)}>
+              {createMutation.isPending ? "Saving..." : "Save log"}
+            </Button>
+          </DialogFooter>
         </form>
-      </CardContent>}
-    </Card>
-    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Project log type">
-      {LOG_TABS.map(tab => <Button key={tab.label} type="button" variant={type === tab.value ? "default" : "outline"}
-        onClick={() => { setType(tab.value); setPage(0); }}>{tab.label}</Button>)}
+      </DialogContent>
+    </Dialog>
+  </>;
+}
+
+function logTypeLabel(item: ProjectLog) {
+  if (item.type === "RISK_ISSUE") return item.category === "ISSUE" ? "Issue" : "Risk";
+  return item.type === "DECISION" ? "Decision" : "Meeting note";
+}
+
+function displayLabel(value: string) {
+  const label = value.toLowerCase().replaceAll("_", " ");
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function Pagination({ page, totalPages, onChange }: {
+  page: number; totalPages: number; onChange: (page: number) => void;
+}) {
+  return <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+    <p className="text-xs text-muted-foreground">Page {page + 1} of {totalPages}</p>
+    <div className="flex gap-2">
+      <Button type="button" variant="outline" size="sm" disabled={page === 0} onClick={() => onChange(page - 1)}>Previous</Button>
+      <Button type="button" variant="outline" size="sm" disabled={page + 1 >= totalPages} onClick={() => onChange(page + 1)}>Next</Button>
     </div>
-    {type === "DECISION" && <div className="grid gap-3 md:grid-cols-2">
-      <select aria-label="Filter decision status" className="rounded-md border bg-background px-3 py-2" value={decisionStatus}
-        onChange={event => { setDecisionStatus(event.target.value); setPage(0); }}>
-        <option value="">All decision statuses</option><option value="PROPOSED">Proposed</option>
-        <option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="SUPERSEDED">Superseded</option>
-      </select>
-      <select aria-label="Filter decision linked item type" className="rounded-md border bg-background px-3 py-2" value={decisionLinkType}
-        onChange={event => { setDecisionLinkType(event.target.value); setPage(0); }}>
-        <option value="">All linked item types</option><option value="MILESTONE">Milestone</option>
-        <option value="TASK">Task</option><option value="BACKLOG_ITEM">Backlog item</option>
-      </select>
-    </div>}
-    {type === "RISK_ISSUE" && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <select aria-label="Filter risk category" className="rounded-md border bg-background px-3 py-2" value={riskCategory}
-        onChange={event => { setRiskCategory(event.target.value); setPage(0); }}>
-        <option value="">All categories</option><option value="RISK">Risk</option><option value="ISSUE">Issue</option>
-      </select>
-      <select aria-label="Filter risk severity" className="rounded-md border bg-background px-3 py-2" value={riskSeverity}
-        onChange={event => { setRiskSeverity(event.target.value); setPage(0); }}>
-        <option value="">All severities</option><option value="LOW">Low</option><option value="MEDIUM">Medium</option>
-        <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
-      </select>
-      <select aria-label="Filter risk status" className="rounded-md border bg-background px-3 py-2" value={riskStatus}
-        onChange={event => { setRiskStatus(event.target.value); setPage(0); }}>
-        <option value="">All risk statuses</option><option value="OPEN">Open</option>
-        <option value="IN_MITIGATION">In mitigation</option><option value="CLOSED">Closed</option>
-      </select>
-      <select aria-label="Filter risk target" className="rounded-md border bg-background px-3 py-2" value={riskTarget}
-        onChange={event => { setRiskTarget(event.target.value); setPage(0); }}>
-        <option value="">All affected items</option>
-        {riskTargets.map(option => <option key={`${option.type}:${option.id}`} value={`${option.type}:${option.id}`}>
-          {option.type === "MILESTONE" ? "Milestone" : option.type === "TASK" ? "Task" : "Backlog item"}: {option.label}
-        </option>)}
-      </select>
-    </div>}
-    {type === "MEETING_NOTE" && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <Input aria-label="Meeting date from" type="date" value={meetingFrom} onChange={event => { setMeetingFrom(event.target.value); setPage(0); }} />
-      <Input aria-label="Meeting date to" type="date" value={meetingTo} onChange={event => { setMeetingTo(event.target.value); setPage(0); }} />
-      <select aria-label="Filter meeting attendee" className="rounded-md border bg-background px-3 py-2" value={attendeeId}
-        onChange={event => { setAttendeeId(event.target.value); setPage(0); }}>
-        <option value="">All attendees</option>
-        {(options.data?.authors ?? []).map(author => <option key={author.id} value={author.id}>{author.label} ({authorRoleLabel(author.role)})</option>)}
-      </select>
-      <select aria-label="Filter meetings with action items" className="rounded-md border bg-background px-3 py-2" value={hasActionItems}
-        onChange={event => { setHasActionItems(event.target.value); setPage(0); }}>
-        <option value="">All meetings</option><option value="true">Has action items</option><option value="false">No action items</option>
-      </select>
-    </div>}
-    {query.isPending ? <div className="space-y-3" aria-label="Loading project logs">
-      {[1, 2, 3].map(item => <div key={item} className="h-24 animate-pulse rounded-lg bg-muted" />)}
-    </div> : query.isError ? <Card><CardContent className="space-y-3 py-8 text-center">
-      <p role="alert" className="text-sm text-destructive">{getWorkspaceError(query.error)}</p>
-      <Button variant="outline" onClick={() => void query.refetch()}>Retry</Button>
-    </CardContent></Card> : query.data?.content.length === 0 ? <Card><WorkspaceEmptyState icon={FileText}
-      title="No project logs yet" description="Create the first decision, risk or meeting note for this project."
-      action={<Button onClick={() => setCreating(true)}>Create first log</Button>} /></Card>
-      : <div className="space-y-3">{query.data?.content.map(item =>
-        <LogCard key={item.id} item={item}
-          onUpdateRisk={status => riskMutation.mutate({ item, status })}
-          updating={riskMutation.isPending && riskMutation.variables?.item.id === item.id}
-          updateError={riskMutation.isError && riskMutation.variables?.item.id === item.id ? riskMutation.error : undefined} />)}</div>}
-    {query.data && query.data.totalPages > 1 && <div className="flex items-center justify-between">
-      <p className="text-sm text-muted-foreground">Page {query.data.number + 1} of {query.data.totalPages} · {query.data.totalElements} logs</p>
-      <div className="flex gap-2"><Button variant="outline" disabled={page === 0} onClick={() => setPage(current => current - 1)}>Previous</Button>
-        <Button variant="outline" disabled={page + 1 >= query.data.totalPages} onClick={() => setPage(current => current + 1)}>Next</Button></div>
-    </div>}
-    <Card>
-      <CardHeader><CardTitle>Activity feed</CardTitle></CardHeader>
-      <CardContent>{activity.isPending ? <div className="h-16 animate-pulse rounded-lg bg-muted" />
-        : activity.isError ? <p role="alert" className="text-sm text-destructive">{getWorkspaceError(activity.error)}</p>
-          : activityItems.length ? <>
-            <div className="divide-y">{visibleActivityItems.map(event => <div key={event.id} className="py-3">
-              <p className="text-sm font-medium">{event.title}</p>
-              <p className="text-xs text-muted-foreground">{event.description} · {event.occurredAt ? new Date(event.occurredAt).toLocaleString() : ""}</p>
-            </div>)}</div>
-            {activityPageCount > 1 && <div className="mt-4 flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Page {activityPage + 1} of {activityPageCount} · {activityItems.length} activities</p>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" disabled={activityPage === 0}
-                  onClick={() => setActivityPage(current => current - 1)}>Previous</Button>
-                <Button type="button" variant="outline" disabled={activityPage + 1 >= activityPageCount}
-                  onClick={() => setActivityPage(current => current + 1)}>Next</Button>
-              </div>
-            </div>}
-          </> : <p className="text-sm text-muted-foreground">No activity recorded yet.</p>}</CardContent>
-    </Card>
   </div>;
 }
 
-function LogCard({ item, onUpdateRisk, updating, updateError }: {
-  item: ProjectLog; onUpdateRisk: (status: string) => void; updating: boolean; updateError?: unknown;
+function LogDetail({ item, target, onUpdateRisk, updating, updateError, readOnly }: {
+  item: ProjectLog; target?: ProjectLogOption; onUpdateRisk: (status: string) => void;
+  updating: boolean; updateError?: unknown; readOnly: boolean;
 }) {
   const [status, setStatus] = useState(item.status);
-  const typeLabel = item.type === "RISK_ISSUE"
-    ? item.category === "ISSUE" ? "Issue" : "Risk"
-    : item.type === "DECISION" ? "Decision" : "Meeting note";
-  const linkLabel = item.targetType === "MILESTONE" ? "Milestone"
-    : item.targetType === "SPRINT" ? "Sprint"
-      : item.targetType === "TASK" ? "Task" : "Backlog item";
-  return <details className="rounded-xl border bg-card">
-    <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 [&::-webkit-details-marker]:hidden">
-      <span className="min-w-0 flex-1 truncate font-semibold">{item.title}</span>
-      <span className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline">{typeLabel}</Badge><Badge>{item.status}</Badge>
-        <span className="text-xs text-muted-foreground">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ""}</span>
-      </span>
-    </summary>
-    <div className="space-y-3 border-t p-4">
-      <p className="whitespace-pre-wrap text-sm text-muted-foreground">{item.content}</p>
-      {item.rationale && <p className="text-sm"><strong>Rationale:</strong> {item.rationale}</p>}
-      {item.severity && <p className="text-sm"><strong>Severity:</strong> {item.severity} · {item.category}</p>}
-      {item.mitigationPlan && <p className="whitespace-pre-wrap text-sm"><strong>Mitigation:</strong> {item.mitigationPlan}</p>}
-      {item.meetingDate && <p className="text-sm"><strong>Meeting:</strong> {new Date(item.meetingDate).toLocaleString()} · {item.attendees?.map(attendee => attendee.name).join(", ")}</p>}
-      {item.actionItems && <p className="whitespace-pre-wrap text-sm"><strong>Action items:</strong> {item.actionItems}</p>}
-      <p className="text-xs text-muted-foreground">
-        {item.targetType && item.targetId ? <>{linkLabel} · {item.targetId} · </> : null}
-        {item.authorName ?? `Author ${item.createdBy ?? ""}`} · {item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}
-      </p>
-      {item.type === "RISK_ISSUE" && <form className="grid gap-2 border-t pt-3 md:grid-cols-[1fr_auto]" onSubmit={event => {
-        event.preventDefault(); onUpdateRisk(status);
+  const targetName = target?.label ?? item.targetId;
+  const fields = [
+    { label: "Content", value: item.content },
+    { label: "Rationale", value: item.rationale },
+    { label: "Impact analysis", value: item.impactAnalysis },
+    { label: "Mitigation plan", value: item.mitigationPlan },
+    { label: "Action items", value: item.actionItems },
+  ];
+  return <Card className="min-w-0 gap-4" aria-label="Log details">
+    <CardHeader className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="outline">{logTypeLabel(item)}</Badge>
+        <Badge variant={item.status === "CLOSED" ? "secondary" : "default"}>{displayLabel(item.status)}</Badge>
+        {item.severity && <Badge variant={item.severity === "HIGH" || item.severity === "CRITICAL" ? "destructive" : "outline"}>
+          {displayLabel(item.severity)} severity
+        </Badge>}
+      </div>
+      <CardTitle className="break-words text-lg leading-snug">{item.title}</CardTitle>
+      <CardDescription>{item.authorName ?? "Unknown author"}
+        {item.createdAt && " · " + new Date(item.createdAt).toLocaleString()}</CardDescription>
+    </CardHeader>
+    <CardContent className="grid gap-4">
+      {(item.targetType && targetName || item.meetingDate) && <dl className="grid gap-3 rounded-lg bg-muted/30 p-3 text-sm">
+        {item.targetType && targetName && <div>
+          <dt className="text-xs text-muted-foreground">Linked {displayLabel(item.targetType).toLowerCase()}</dt>
+          <dd className="mt-1 break-words font-medium">{targetName}</dd>
+        </div>}
+        {item.meetingDate && <div>
+          <dt className="text-xs text-muted-foreground">Meeting</dt>
+          <dd className="mt-1 break-words">{new Date(item.meetingDate).toLocaleString()}
+            {!!item.attendees?.length && " · " + item.attendees.map(person => person.name).join(", ")}</dd>
+        </div>}
+      </dl>}
+      {fields.filter(field => field.value).map(field => <section key={field.label} className="grid gap-1">
+        <h3 className="text-sm font-semibold">{field.label}</h3>
+        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{field.value}</p>
+      </section>)}
+      {item.type === "RISK_ISSUE" && !readOnly && <form className="grid gap-2 border-t pt-4 sm:grid-cols-[1fr_auto]" onSubmit={event => {
+        event.preventDefault();
+        if (!updating && status !== item.status) onUpdateRisk(status);
       }}>
-        <select aria-label="Risk status" className="h-10 rounded-md border bg-background px-3" value={status} onChange={event => setStatus(event.target.value)}>
+        <select aria-label="Risk status" className="h-10 min-w-0 rounded-md border bg-background px-3 text-sm"
+          value={status} disabled={updating} onChange={event => setStatus(event.target.value)}>
           <option value="OPEN">Open</option><option value="IN_MITIGATION">In mitigation</option><option value="CLOSED">Closed</option>
         </select>
         <Button type="submit" variant="outline" disabled={updating || status === item.status}>{updating ? "Saving..." : "Update status"}</Button>
       </form>}
       {updateError !== undefined && <p role="alert" className="text-sm text-destructive">{getWorkspaceError(updateError)}</p>}
-    </div>
-  </details>;
+    </CardContent>
+  </Card>;
 }

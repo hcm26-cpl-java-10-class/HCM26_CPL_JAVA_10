@@ -64,7 +64,7 @@ public class ProjectAlertAccess {
                 .filter(team->admin(actor)||Objects.equals(team.getAssignedMentorId(),actor.getId())
                         ||Objects.equals(team.getTrainingClass().getMentorId(),actor.getId())
                         ||members.findByTeam_IdAndClassMember_User_Id(team.getId(),actor.getId())
-                        .filter(this::current).filter(member->member.getRole()!=null&&Set.of("PM","TEAM_LEADER","TEAM_LEAD").contains(member.getRole())).isPresent())
+                        .filter(this::current).filter(member->team.isLedBy(member.getClassMember().getId())).isPresent())
                 .toList();
     }
     private boolean classTenantAllowed(User actor,TrainingClass trainingClass) {

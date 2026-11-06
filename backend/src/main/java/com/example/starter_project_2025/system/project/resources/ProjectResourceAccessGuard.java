@@ -96,8 +96,8 @@ public class ProjectResourceAccessGuard {
     private boolean isMemberOrMentor(ProjectTeam team, Long userId) {
 
         return userId.equals(team.getAssignedMentorId())
-                || projectMembers.existsByTeam_IdAndClassMember_User_IdAndClassMember_Status(
-                        team.getId(), userId, ClassMemberStatus.ACTIVE);
+                || projectMembers.existsActiveMembership(
+                        team.getId(), team.getTrainingClass().getId(), userId, ClassMemberStatus.ACTIVE);
     }
 
     private UserPrincipal requirePrincipal() {

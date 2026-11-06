@@ -29,7 +29,8 @@ public class ProjectTemplateAccessService {
                 .orElseThrow(() -> new AuthenticationCredentialsNotFoundException("Please sign in"));
         boolean admin = hasRole(user, "ADMIN");
         if (!Boolean.TRUE.equals(user.getIsActive()) || Boolean.TRUE.equals(user.getLocked())
-                || (!admin && !hasRole(user, "PROGRAM_MANAGER")) || !can(user, action)) {
+                || (!admin && !hasRole(user, "PROGRAM_MANAGER") && !hasRole(user, "MENTOR")
+                && !hasRole(user, "TEACHER") && !hasRole(user, "TRAINER")) || !can(user, action)) {
             throw new AccessDeniedException("Project template access is not allowed");
         }
         Long tenantId = user.getTenantId();

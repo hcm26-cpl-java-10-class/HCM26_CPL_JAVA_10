@@ -127,6 +127,9 @@ public class ProjectTemplateSnapshot extends BaseEntity {
     @ExportField(name = "Project Id")
     Long projectId;
 
+    @Column(name = "parent_snapshot_id", updatable = false)
+    Long parentSnapshotId;
+
     /**
      * Import-only lookup of the owning template by its name.
      * <p>

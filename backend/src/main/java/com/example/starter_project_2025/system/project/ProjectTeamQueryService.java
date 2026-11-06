@@ -83,8 +83,7 @@ public class ProjectTeamQueryService {
                         memberIds.size(),
                         policy.allowMultiRole(),
                         policy.quotas(),
-                        team.getLeaderMemberId() != null ? team.getLeaderMemberId()
-                                : legacyLeader(assignments)
+                        ProjectTeamLeaderService.activeLeaderId(team, assignments)
                     );
                 })
                 .toList();
@@ -92,15 +91,8 @@ public class ProjectTeamQueryService {
                 "SUCCESS", sessionId, teamResponses, List.of());
     }
 
-    private Long legacyLeader(List<ProjectMember> assignments) {
-        List<Long> ids = assignments.stream()
-                .filter(row -> ProjectMemberRole.hasRole(row.getRole(), "PM"))
-                .map(row -> row.getClassMember().getId()).toList();
-        return ids.size() == 1 ? ids.get(0) : null;
-    }
-
     private ProjectTemplateConstraints.Capacity readTemplateCapacity(ProjectTeam team) {
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
             return null;
         }
@@ -114,7 +106,7 @@ public class ProjectTeamQueryService {
     }
 
     private ProjectTemplateConstraints.RolePolicy readTemplatePolicy(ProjectTeam team) {
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
             return ProjectTemplateConstraints.RolePolicy.singleRoleDefault();
         }

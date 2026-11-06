@@ -46,6 +46,12 @@ public class ProjectTeam extends BaseEntity {
     @Column(name = "project_template_version_id")
     Long projectTemplateVersionId;
 
+    @Column(name = "assigned_constraints_json", columnDefinition = "TEXT")
+    String assignedConstraintsJson;
+
+    @Column(name = "assigned_template_name", length = 255)
+    String assignedTemplateName;
+
     public Long getProjectId() {
         return project == null ? null : project.getId();
     }
@@ -55,6 +61,7 @@ public class ProjectTeam extends BaseEntity {
     }
 
     public String getProjectTemplateName() {
+        if (assignedTemplateName != null) return assignedTemplateName;
         return projectTemplate == null ? null : projectTemplate.getName();
     }
 
@@ -102,4 +109,8 @@ public class ProjectTeam extends BaseEntity {
     @Version
     @Column(nullable = false)
     Long version;
+
+    public boolean isLedBy(Long memberId) {
+        return memberId != null && memberId.equals(leaderMemberId);
+    }
 }
