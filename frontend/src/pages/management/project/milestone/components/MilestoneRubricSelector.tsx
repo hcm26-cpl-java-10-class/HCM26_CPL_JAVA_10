@@ -15,13 +15,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { MilestoneRubricOption } from "@/types";
 import { AlertTriangle, ClipboardCheck, ExternalLink, Eye, FileCheck2 } from "lucide-react";
-import { useState } from "react";
+import { useState, type Ref } from "react";
 
 const formatNumber = (value: number) => new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 2,
 }).format(value);
 
-export function getMilestoneRubricMetrics(rubric?: MilestoneRubricOption) {
+function getMilestoneRubricMetrics(rubric?: MilestoneRubricOption) {
   return {
     criteriaCount: rubric?.criteria.length ?? 0,
     totalWeight: rubric?.criteria.reduce((sum, criterion) => sum + Number(criterion.weight), 0) ?? 0,
@@ -36,6 +36,7 @@ interface MilestoneRubricSelectorProps {
   value: string;
   error?: string;
   disabled?: boolean;
+  triggerRef?: Ref<HTMLButtonElement>;
   onChange: (value: string) => void;
 }
 
@@ -46,6 +47,7 @@ export function MilestoneRubricSelector({
   value,
   error,
   disabled = false,
+  triggerRef,
   onChange,
 }: MilestoneRubricSelectorProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -80,7 +82,7 @@ export function MilestoneRubricSelector({
               Rubric version <span className="text-destructive">*</span>
             </Label>
             <Select value={value} onValueChange={onChange} disabled={disabled || !rubrics.length}>
-              <SelectTrigger id={id} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}>
+              <SelectTrigger id={id} ref={triggerRef} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}>
                 <SelectValue placeholder="Select a rubric version" />
               </SelectTrigger>
               <SelectContent>

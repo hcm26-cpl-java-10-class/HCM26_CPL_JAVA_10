@@ -47,10 +47,11 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     queryFn: ({ signal }) => workspaceApi.navigation(workspaceId, signal),
     enabled: validId, retry: false, staleTime: 0, gcTime: 0, refetchOnMount: "always"
   });
+  const refetchNavigation = navigation.refetch;
   const reloadAccess = useCallback(() => {
     setBlocked(tab); // Unmount the panel immediately, including any open action dialog.
-    void navigation.refetch().then(result => { if (result.isSuccess) setBlocked(undefined); });
-  }, [tab, navigation.refetch]);
+    void refetchNavigation().then(result => { if (result.isSuccess) setBlocked(undefined); });
+  }, [tab, refetchNavigation]);
   function changeTab(value: string) {
     setParams(previous => { const next = new URLSearchParams(previous);
       if (value === "overview") next.delete("tab"); else next.set("tab", value); return next;
@@ -139,7 +140,10 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                       <WorkspaceMasterMilestonesPanel workspaceId={workspaceId} onOpenMaster={selectProject} onChanged={() => void refresh()} />}
                     {!sharedMasterSelected && <WorkspaceMilestonesPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
                       teamId={context.teamId} access={current} projectScoped={projectScoped} readOnly={projectReadOnly}
-                      title={hierarchy.data?.assignmentId != null ? `${isMaster ? "Master" : "Module"} milestones — ${project?.name ?? context.projectName}` : undefined} />}
+                      projectStatus={project?.status ?? context.projectStatus ?? undefined}
+                      title={hierarchy.data?.assignmentId != null
+                        ? `${isMaster ? "Master" : "Module"} milestones — ${project?.name ?? context.projectName}`
+                        : `Milestones — ${context.projectName ?? context.teamName}`} />}
                   </>
                 : tab === "artifacts" ? <WorkspaceArtifactsPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
                     teamId={context.teamId} access={current} projectScoped={projectScoped} readOnly={projectReadOnly} />
