@@ -35,6 +35,8 @@ import java.util.UUID;
  *     are rejected explicitly, even if a matching MIME type is declared</li>
  *     <li>the size limit defaults to 25 MB and can be changed through
  *     {@code app.template-resource.upload.max-bytes}</li>
+ *     <li>template uploads are scanned with ClamAV when
+ *     {@code app.artifact.upload.clamav-host} is configured</li>
  * </ul>
  * The bytes are written under a generated {@code storageKey} so the original
  * file name is only metadata and can never escape the storage directory.
@@ -146,7 +148,7 @@ public class TemplateResourceFileStorage {
             throw new BusinessValidationException(Map.of("file", List.of("The file could not be read. Please try again")));
         }
 
-        if (template) {
+        if (template && scanner.isConfigured()) {
             try {
                 scanner.requireClean(bytes);
             } catch (ArtifactUploadRejectedException exception) {
@@ -154,6 +156,11 @@ public class TemplateResourceFileStorage {
             } catch (ArtifactUploadUnavailableException exception) {
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Resource scanning is unavailable");
             }
+        } else if (template) {
+            // No scanner host configured (local / demo environments): the upload is
+            // stored unscanned instead of failing with 503. A configured but
+            // unreachable scanner still blocks the upload above.
+            log.debug("ClamAV is not configured; storing template resource file without a malware scan");
         }
         return write(bytes, originalName, extension);
     }

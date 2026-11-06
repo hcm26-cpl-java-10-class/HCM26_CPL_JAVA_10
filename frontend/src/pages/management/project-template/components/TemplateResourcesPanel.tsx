@@ -106,6 +106,9 @@ export function TemplateResourcesPanel({ versionId, editable }: { versionId: num
       const saved = editing
         ? await templateResourceApi.update(versionId, editing.id, payload)
         : await templateResourceApi.create(versionId, payload);
+      // The resource is already persisted: keep editing it if the follow-up
+      // upload fails so a retry updates instead of creating a duplicate.
+      if (!editing) setEditing(saved);
       if (file) await templateResourceApi.uploadFile(versionId, saved.id, file);
       await refresh();
       setDialogOpen(false);
