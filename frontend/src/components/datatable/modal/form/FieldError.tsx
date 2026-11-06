@@ -4,9 +4,6 @@ interface FieldErrorProps {
   errors?: string[];
 }
 
-/**
- * Hiển thị danh sách lỗi validation cho một field.
- */
 export function FieldError({ errors }: FieldErrorProps) {
   if (!errors || errors.length === 0) return null;
   return (

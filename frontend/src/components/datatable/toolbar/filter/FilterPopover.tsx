@@ -46,7 +46,6 @@ export function FilterPopover({
       <PopoverContent className="w-80 p-0" align="start">
         {hasFilters ? (
           <>
-            {/* Header */}
             <div className="px-3 py-2.5 border-b flex items-center justify-between">
               <span className="text-sm font-medium flex items-center gap-2">
                 <Filter size={14} />
@@ -82,7 +81,6 @@ export function FilterPopover({
               </div>
             </div>
 
-            {/* Filter fields */}
             <div className="p-3">
               <Filters table={table} />
             </div>

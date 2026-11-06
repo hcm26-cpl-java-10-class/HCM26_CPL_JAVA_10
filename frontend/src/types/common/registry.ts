@@ -69,6 +69,8 @@ export interface EntityConfig {
      * project-template-version table).
      */
     extraRowActions?: (row: any) => ReactNode;
+
+    headerActions?: (props: { table: any }) => ReactNode;
 }
 
 const registry: EntityConfig[] = [];

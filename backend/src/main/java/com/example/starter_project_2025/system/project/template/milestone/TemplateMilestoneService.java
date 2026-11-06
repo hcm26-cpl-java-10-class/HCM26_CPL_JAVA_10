@@ -57,7 +57,7 @@ public class TemplateMilestoneService {
         }
         List<TemplateMilestone> plan = loadMilestones(templateId);
         var request = TemplateMilestonePlanRequest.from(template.getLockVersion(), plan);
-        validator.validate(request);
+        validator.validate(request, template.getParentTemplateId() == null);
         scheduleValidator.validate(request, template.getEstimatedDurationWeeks());
         rubrics.requirePublished(request, tenantOf(template, user));
         return plan.stream().map(item -> mapper.forProject(item, teamId, startsAt)).toList();
@@ -85,7 +85,7 @@ public class TemplateMilestoneService {
         if (template.getStatus() != ProjectTemplateStatus.DRAFT) {
             throw ProjectTemplateException.conflict("Only draft templates can be edited");
         }
-        validator.validate(request);
+        validator.validate(request, template.getParentTemplateId() == null);
         if (!template.getLockVersion().equals(request.lockVersion().longValueExact())) {
             throw ProjectTemplateException.conflict("This template has changed. Reload it before saving your changes");
         }
@@ -113,7 +113,7 @@ public class TemplateMilestoneService {
             milestone.setDescription(input.description() == null ? null : input.description().strip());
             milestone.setDueAfter(input.dueAfter().intValueExact());
             milestone.setDueUnit(input.dueUnit());
-            milestone.setWeight(input.weight());
+            milestone.setWeight(template.getParentTemplateId() == null ? input.weight() : java.math.BigDecimal.ZERO);
             milestone.setMandatory(input.mandatory());
             milestone.setRubricVersion(rubricVersions.get(input.rubricVersionId()));
             milestone.setOrderIndex(index);

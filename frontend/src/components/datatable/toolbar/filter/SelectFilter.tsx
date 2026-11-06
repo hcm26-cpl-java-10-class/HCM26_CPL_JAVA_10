@@ -28,7 +28,6 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
   const isIconField = field.type === "icon" || field.name === "icon";
   const isMultiple = field.filterMultiple !== false;
 
-  // Normalize value to always be an array for multi-select
   const selectedValues: string[] = useMemo(() => {
     if (value === undefined || value === null || value === "") return [];
     if (Array.isArray(value)) return value.map((v: any) => v?.toString());
@@ -126,7 +125,6 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-0 overflow-hidden" align="start">
-        {/* Search */}
         {options.length > 5 && (
           <div className="p-2 border-b">
             <div className="relative">
@@ -144,7 +142,6 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
           </div>
         )}
 
-        {/* Select all / Clear */}
         {filteredOptions.length > 0 && (
           <div className="px-2 py-1 border-b flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground">
@@ -175,7 +172,6 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
           </div>
         )}
 
-        {/* Options */}
         <ScrollArea className="h-[200px]">
           <div className="p-1">
             {filteredOptions.map((option) => {
@@ -210,7 +206,6 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
           </div>
         </ScrollArea>
 
-        {/* Selected preview */}
         {selectedValues.length > 0 && (
           <div className="p-1.5 border-t flex flex-wrap gap-1">
             {selectedLabels.slice(0, 3).map((label, i) => (

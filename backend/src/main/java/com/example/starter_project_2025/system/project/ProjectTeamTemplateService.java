@@ -323,7 +323,7 @@ public class ProjectTeamTemplateService {
 
     private TeamProjectTemplateResponse toTeamResponse(ProjectTeam team) {
         int memberCount = (int) projectMemberRepository.countByTeam_Id(team.getId());
-        ProjectTemplate template = team.getProjectTemplate();
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
 
         Integer minMembers = null;
         Integer maxMembers = null;

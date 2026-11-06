@@ -30,12 +30,13 @@ function MilestoneField({ path, label, required, errors, children }: {
   );
 }
 
-export function TemplateMilestoneEditor({ milestone, index, count, disabled, editable, errors, rubrics, onChange, onMove, onRemove }: {
+export function TemplateMilestoneEditor({ milestone, index, count, disabled, editable, weighted = true, errors, rubrics, onChange, onMove, onRemove }: {
   milestone: MilestoneValues;
   index: number;
   count: number;
   disabled: boolean;
   editable: boolean;
+  weighted?: boolean;
   errors: MilestonePlanErrors;
   rubrics: MilestoneRubricOption[];
   onChange: (patch: Partial<MilestoneValues>) => void;
@@ -78,7 +79,7 @@ export function TemplateMilestoneEditor({ milestone, index, count, disabled, edi
               placeholder="E.g. Requirements analysis" />
           </MilestoneField>
           <MilestoneField path={`${path}.description`} label="Description" errors={errors}>
-            <Textarea {...fieldProps("description")} rows={3} value={milestone.description}
+            <Textarea {...fieldProps("description")} maxLength={1000} rows={3} value={milestone.description}
               onChange={(event) => onChange({ description: event.target.value })} placeholder="Describe the expected outcome (optional)." />
           </MilestoneField>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -93,12 +94,14 @@ export function TemplateMilestoneEditor({ milestone, index, count, disabled, edi
                 <SelectContent><SelectItem value="DAYS">Days</SelectItem><SelectItem value="WEEKS">Weeks</SelectItem></SelectContent>
               </Select>
             </MilestoneField>
-            <MilestoneField path={`${path}.weight`} label="Weight (%)" required errors={errors}>
+            {weighted && <MilestoneField path={`${path}.weight`} label="Weight (%)" required errors={errors}>
               <Input {...fieldProps("weight")} inputMode="decimal" value={milestone.weight}
                 onChange={(event) => onChange({ weight: event.target.value })} placeholder="E.g. 25" />
-            </MilestoneField>
+            </MilestoneField>}
           </div>
-          <p className="text-xs text-muted-foreground">Due after the project start date. One week equals 7 days.</p>
+          <p className="text-xs text-muted-foreground">{weighted
+            ? "Due after the project start date. One week equals 7 days."
+            : "Due after the project is assigned. One week equals 7 days."}</p>
           <div className="flex items-center gap-2">
             <Checkbox {...fieldProps("mandatory")} checked={milestone.mandatory} disabled={disabled}
               onCheckedChange={(checked) => onChange({ mandatory: checked === true })} />

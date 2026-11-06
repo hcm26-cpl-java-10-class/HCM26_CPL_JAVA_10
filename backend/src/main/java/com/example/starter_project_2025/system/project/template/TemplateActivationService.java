@@ -38,6 +38,7 @@ public class TemplateActivationService {
     private final ProjectTemplateAuditRepository audits;
     private final ObjectMapper objectMapper;
     private final TemplateMilestoneRubrics rubrics;
+    private final TemplateHierarchyService hierarchy;
     /** US-07: activating a template publishes its newest DRAFT version. */
     private final ProjectTemplateSnapshotService snapshotService;
 
@@ -67,6 +68,7 @@ public class TemplateActivationService {
             checklist.items().forEach(item -> errors.putAll(item.errors()));
             throw new ProjectTemplateException(422, "Complete the required configuration before activating this template", errors);
         }
+        hierarchy.requirePublishedModules(template);
         String before = state(template, plan, tenantId);
         template.setStatus(ProjectTemplateStatus.ACTIVE);
         template = templates.saveAndFlush(template);
@@ -84,7 +86,7 @@ public class TemplateActivationService {
                 decimal(template.getEstimatedDurationWeeks()), null), false));
         var team = teamErrors(template);
         var input = TemplateMilestonePlanRequest.from(template.getLockVersion(), plan);
-        var milestoneErrors = errors(() -> milestoneValidator.validate(input));
+        var milestoneErrors = errors(() -> milestoneValidator.validate(input, template.getParentTemplateId() == null));
         milestoneErrors.putAll(errors(() -> scheduleValidator.validate(input, template.getEstimatedDurationWeeks())));
         if (milestoneErrors.isEmpty()) {
             milestoneErrors.putAll(errors(() -> rubrics.requirePublished(input, tenantId)));

@@ -64,7 +64,7 @@ export function toMilestoneValues(plan: TemplateMilestonePlan): MilestoneValues[
     description: milestone.description ?? "",
     dueAfter: String(milestone.dueAfter),
     dueUnit: milestone.dueUnit,
-    weight: String(milestone.weight),
+    weight: milestone.weight == null ? "" : String(milestone.weight),
     mandatory: milestone.mandatory,
     rubricVersionId: milestone.rubricVersionId ?? "",
     checklistItems: milestone.checklistItems.map((item) => ({
@@ -103,7 +103,7 @@ export function milestoneFieldId(path: string) {
   return `plan-${path.replace(/[.[\]]+/g, "-").replace(/-$/, "")}`;
 }
 
-export function validateMilestonePlan(milestones: MilestoneValues[], durationWeeks: number | null): MilestonePlanErrors {
+export function validateMilestonePlan(milestones: MilestoneValues[], durationWeeks: number | null, weighted = true): MilestonePlanErrors {
   const errors: MilestonePlanErrors = {};
   const validDuration = durationWeeks !== null && Number.isInteger(durationWeeks) && durationWeeks > 0;
   if (!validDuration) {
@@ -128,7 +128,7 @@ export function validateMilestonePlan(milestones: MilestoneValues[], durationWee
     if (milestone.dueUnit !== "DAYS" && milestone.dueUnit !== "WEEKS") {
       errors[`${path}.dueUnit`] = ["Select days or weeks"];
     }
-    if (weightHundredths(milestone.weight) === null) {
+    if (weighted && weightHundredths(milestone.weight) === null) {
       errors[`${path}.weight`] = ["Weight must be between 0 and 100 with up to 2 decimal places"];
     }
     if (!milestone.checklistItems.length || milestone.checklistItems.length > 100) {
@@ -151,7 +151,7 @@ export function validateMilestonePlan(milestones: MilestoneValues[], durationWee
     }
   });
   const total = totalWeightHundredths(milestones);
-  if (milestones.length && total !== null && total !== 10000) errors.totalWeight = ["Milestone weights must total 100%"];
+  if (weighted && milestones.length && total !== null && total !== 10000) errors.totalWeight = ["Milestone weights must total 100%"];
   return errors;
 }
 
@@ -163,7 +163,7 @@ function toLatePolicyPayload(policy: LatePolicyValues | null): TemplateLatePolic
   };
 }
 
-export function toMilestonePlanPayload(milestones: MilestoneValues[], lockVersion: number): TemplateMilestonePlanPayload {
+export function toMilestonePlanPayload(milestones: MilestoneValues[], lockVersion: number, weighted = true): TemplateMilestonePlanPayload {
   return {
     lockVersion,
     milestones: milestones.map((milestone) => ({
@@ -172,7 +172,7 @@ export function toMilestonePlanPayload(milestones: MilestoneValues[], lockVersio
       description: milestone.description.trim(),
       dueAfter: Number(milestone.dueAfter),
       dueUnit: milestone.dueUnit,
-      weight: Number(milestone.weight),
+      weight: weighted ? Number(milestone.weight) : null,
       mandatory: milestone.mandatory,
       rubricVersionId: milestone.rubricVersionId,
       checklistItems: milestone.checklistItems.map((item) => ({

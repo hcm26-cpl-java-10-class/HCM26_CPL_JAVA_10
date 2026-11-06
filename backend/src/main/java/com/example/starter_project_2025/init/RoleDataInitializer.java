@@ -40,43 +40,92 @@ public class RoleDataInitializer implements CommandLineRunner {
         ensurePermission("PEO", "TEAM_ALLOCATE");
         ensurePermission("EXAM", "TAKE");
         ensurePermission("ARTIFACT", "DRAFT_WRITE");
+        ensurePermission("COURSE_REPORT", "READ");
+        ensurePermission("STUDENT_SCORE", "RELEASE");
+        ensurePermission("STUDENT_SCORE", "VIEW_OWN");
+        ensurePermission("SCORE_APPEAL", "CREATE");
+        ensurePermission("SCORE_APPEAL", "VIEW_OWN");
+        ensurePermission("SCORE_APPEAL", "READ");
+        ensurePermission("SCORE_APPEAL", "REVIEW");
         List<Permission> allPermissions = permissionRepository.findAll();
 
-        upsertRole(
-                ADMIN_ROLE,
-                "Administrator with full system access",
-                allPermissions
-        );
-
+        upsertRole(ADMIN_ROLE, "Administrator with full system access", permissionRepository.findAll());
         upsertRole(
                 STUDENT_ROLE,
-                "Student with course access",
+                "Student with access to books, courses and exams",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_READ",
                         "COURSE_READ",
                         "ENROLLMENT_READ",
                         "ENROLLMENT_CREATE",
+                        "ENROLLMENT_DELETE",
                         "LESSON_READ",
+                        "LESSON_PROGRESS_READ",
+                        "LESSON_PROGRESS_UPDATE",
+                        "CERTIFICATE_READ",
+                        "LESSON_QUESTION_READ",
+                        "LESSON_QUESTION_CREATE",
+                        "LESSON_QUESTION_UPDATE",
+                        "LESSON_QUESTION_DELETE",
+                        "LESSON_REPORT_CREATE",
+                        "EXAM_READ",
                         "EXAM_TAKE",
+                        "INVITATION_READ",
+                        "STUDENT_SCORE_VIEW_OWN",
+                        "SCORE_APPEAL_CREATE",
+                        "SCORE_APPEAL_VIEW_OWN",
                         "WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
                         "MILESTONE_READ", "SPRINT_READ", "TASK_WRITE", "ARTIFACT_READ", "ARTIFACT_SUBMIT",
                         "ARTIFACT_DRAFT_WRITE",
                         "FEEDBACK_READ", "WORKSPACE_ACTIVITY_READ"
                 )
         );
-
         upsertRole(
                 TEACHER_ROLE,
-                "Teacher with learning resource management permissions",
+                "Teacher with book, course, section, syllabus and exam management permissions",
                 findPermissions(
                         "MENU_READ",
-                        "BOOK_CREATE", "BOOK_READ", "BOOK_UPDATE", "BOOK_DELETE",
-                        "COURSE_CREATE", "COURSE_READ", "COURSE_UPDATE", "COURSE_DELETE",
-                        "LESSON_CREATE", "LESSON_READ", "LESSON_UPDATE", "LESSON_DELETE",
-                        "EXAM_CREATE", "EXAM_READ", "EXAM_UPDATE", "EXAM_DELETE",
-                        "QUESTION_CREATE", "QUESTION_READ", "QUESTION_UPDATE", "QUESTION_DELETE",
-                        "INVITATION_CREATE", "INVITATION_READ", "INVITATION_UPDATE", "INVITATION_DELETE",
+                        "BOOK_CREATE",
+                        "BOOK_READ",
+                        "BOOK_UPDATE",
+                        "BOOK_DELETE",
+                        "EXAM_CREATE",
+                        "EXAM_READ",
+                        "EXAM_UPDATE",
+                        "EXAM_DELETE",
+                        "QUESTION_CREATE",
+                        "QUESTION_READ",
+                        "QUESTION_UPDATE",
+                        "QUESTION_DELETE",
+                        "INVITATION_CREATE",
+                        "INVITATION_READ",
+                        "INVITATION_UPDATE",
+                        "INVITATION_DELETE",
+                        "SCORE_APPEAL_READ",
+                        "SCORE_APPEAL_REVIEW",
+                        "USER_READ",
+                        "DEPARTMENT_READ",
+                        "DEPARTMENT_UPDATE",
+                        "DEPARTMENT_DELETE",
+                        "DEPARTMENT_CREATE",
+                        "COURSE_CREATE",
+                        "COURSE_READ",
+                        "COURSE_UPDATE",
+                        "COURSE_DELETE",
+                        "LESSON_CREATE",
+                        "LESSON_READ",
+                        "LESSON_UPDATE",
+                        "LESSON_DELETE",
+                        "CATEGORY_CREATE", "CATEGORY_READ", "CATEGORY_UPDATE", "CATEGORY_DELETE",
+                        "COURSE_REPORT_READ",
+                        "SECTION_CREATE", "SECTION_READ", "SECTION_UPDATE", "SECTION_DELETE",
+                        "SYLLABUS_CREATE", "SYLLABUS_READ", "SYLLABUS_UPDATE", "SYLLABUS_DELETE",
+                        "LESSON_QUESTION_READ", "LESSON_QUESTION_DELETE",
+                        "LESSON_ANSWER_CREATE", "LESSON_ANSWER_READ",
+                        "LESSON_ANSWER_UPDATE", "LESSON_ANSWER_DELETE",
+                        "LESSON_REPORT_READ", "LESSON_REPORT_UPDATE",
+                        "EXAM_TAKE",
                         "WORKSPACE_READ", "WORKSPACE_CREATE", "WORKSPACE_MEMBER_READ", "TEAM_READ", "TEAM_UPDATE",
                         "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
                         "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_REVIEW", "FEEDBACK_READ", "FEEDBACK_WRITE",
@@ -105,34 +154,38 @@ public class RoleDataInitializer implements CommandLineRunner {
         log.info("Ensured roles and permission mappings: ADMIN, STUDENT, TEACHER.");
     }
 
+    private void ensurePermission(String resource, String action) {
+        String name = resource + "_" + action;
+        if (permissionRepository.existsByName(name)) {
+            return;
+        }
+
+        permissionRepository.save(Permission.builder()
+                .name(name)
+                .resource(resource)
+                .action(action)
+                .description("Manually defined permission")
+                .build());
+    }
+
     private void upsertRole(String roleName, String description, Collection<Permission> permissions) {
         Role role = roleRepository.findByName(roleName).orElseGet(Role::new);
-
         role.setName(roleName);
         role.setDescription(description);
+        role.setIsSystem(true);
         role.setIsActive(true);
         role.setPermissions(new HashSet<>(permissions));
-
         roleRepository.save(role);
     }
 
     private List<Permission> findPermissions(String... permissionNames) {
         List<Permission> permissions = new ArrayList<>();
-
         for (String permissionName : permissionNames) {
             permissionRepository.findByName(permissionName).ifPresent(permissions::add);
         }
-
         return permissions;
     }
 
-    private void ensurePermission(String resource, String action) {
-        String name = resource + "_" + action;
-        if (permissionRepository.existsByName(name)) return;
-        permissionRepository.save(Permission.builder()
-                .name(name).resource(resource).action(action)
-                .description("Manually defined permission").build());
-    }
     private void ensureAllocationPermissionForRole(String roleName, String description) {
         Permission allocationPermission = permissionRepository.findByName("PEO_TEAM_ALLOCATE")
                 .orElseThrow(() -> new IllegalStateException(

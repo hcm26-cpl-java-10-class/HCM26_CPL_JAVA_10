@@ -1,7 +1,15 @@
 package com.example.starter_project_2025.system.project.resources;
 
 import com.example.starter_project_2025.exception.BusinessValidationException;
+import com.example.starter_project_2025.system.project.milestone.submission.service.ArtifactUploadRejectedException;
+import com.example.starter_project_2025.system.project.milestone.submission.service.ArtifactUploadUnavailableException;
+import com.example.starter_project_2025.system.project.milestone.submission.service.ClamAvScanner;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
@@ -33,7 +41,22 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class TemplateResourceFileStorage {
+
+    private static final long TEMPLATE_MAX_BYTES = 25L * 1024 * 1024;
+    private static final List<String> TEMPLATE_EXTENSIONS = List.of("pdf", "docx", "xlsx", "csv", "zip");
+
+    private final ProjectResourceStorage legacyStorage;
+    private final ClamAvScanner scanner;
+
+    public long templateMaxBytes() {
+        return Math.min(maxBytes, TEMPLATE_MAX_BYTES);
+    }
+
+    public List<String> templateExtensions() {
+        return TEMPLATE_EXTENSIONS;
+    }
 
     /** Extensions accepted for a template resource upload. */
     public static final List<String> ALLOWED_EXTENSIONS = List.of(
@@ -83,6 +106,16 @@ public class TemplateResourceFileStorage {
      * Validates the upload and writes it to the private storage directory.
      */
     public StoredTemplateFile store(MultipartFile file) {
+        return store(file, false);
+    }
+
+    public StoredTemplateFile storeTemplate(MultipartFile file) {
+        return store(file, true);
+    }
+
+    private StoredTemplateFile store(MultipartFile file, boolean template) {
+        List<String> extensions = template ? TEMPLATE_EXTENSIONS : ALLOWED_EXTENSIONS;
+        long limit = template ? templateMaxBytes() : maxBytes;
 
         if (file == null || file.isEmpty()) {
             throw rejected("Choose a file to upload");
@@ -95,12 +128,14 @@ public class TemplateResourceFileStorage {
             throw rejected("." + extension + " files are not allowed. Upload a PDF, DOCX, XLSX, CSV or ZIP file instead");
         }
 
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw rejected("Unsupported file type. Allowed formats: " + String.join(", ", ALLOWED_EXTENSIONS));
+        if (!extensions.contains(extension)) {
+            throw rejected("Unsupported file type. Allowed formats: " + String.join(", ", extensions));
         }
 
-        if (file.getSize() > maxBytes) {
-            throw rejected("File exceeds the " + humanSize(maxBytes) + " size limit");
+        if (file.getSize() > limit) {
+            String message = "File exceeds the " + humanSize(limit) + " per-file limit";
+            if (template) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, message);
+            throw rejected(message);
         }
 
         byte[] bytes;
@@ -111,6 +146,15 @@ public class TemplateResourceFileStorage {
             throw new BusinessValidationException(Map.of("file", List.of("The file could not be read. Please try again")));
         }
 
+        if (template) {
+            try {
+                scanner.requireClean(bytes);
+            } catch (ArtifactUploadRejectedException exception) {
+                throw rejected("The file was rejected by the malware scanner");
+            } catch (ArtifactUploadUnavailableException exception) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Resource scanning is unavailable");
+            }
+        }
         return write(bytes, originalName, extension);
     }
 
@@ -155,6 +199,19 @@ public class TemplateResourceFileStorage {
         try {
             Files.createDirectories(root);
             Files.write(destination, bytes);
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        if (status == STATUS_COMMITTED) return;
+                        try {
+                            Files.deleteIfExists(destination);
+                        } catch (IOException exception) {
+                            log.warn("Unable to remove an uncommitted resource upload", exception);
+                        }
+                    }
+                });
+            }
         } catch (IOException exception) {
             log.error("Unable to store template resource file {}", storageKey, exception);
             throw new BusinessValidationException(Map.of("file", List.of("The file could not be stored. Please try again")));
@@ -166,6 +223,14 @@ public class TemplateResourceFileStorage {
 
     /** Reads a previously stored file back. */
     public byte[] read(String storageKey) {
+        if (storageKey != null && storageKey.startsWith(LegacyResourceMigration.LEGACY_KEY_PREFIX)) {
+            try {
+                return legacyStorage.read(storageKey.substring(LegacyResourceMigration.LEGACY_KEY_PREFIX.length()))
+                        .getContentAsByteArray();
+            } catch (IOException exception) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "The resource file is unavailable");
+            }
+        }
 
         Path root = Path.of(storagePath).toAbsolutePath().normalize();
         Path source = root.resolve(storageKey).normalize();
@@ -179,27 +244,6 @@ public class TemplateResourceFileStorage {
         } catch (IOException exception) {
             throw new BusinessValidationException(Map.of("file",
                     List.of("The stored file is no longer available")));
-        }
-    }
-
-    /** Best-effort removal; a missing object is not an error. */
-    public void delete(String storageKey) {
-
-        if (storageKey == null || storageKey.isBlank()) {
-            return;
-        }
-
-        Path root = Path.of(storagePath).toAbsolutePath().normalize();
-        Path target = root.resolve(storageKey).normalize();
-
-        if (!target.startsWith(root)) {
-            return;
-        }
-
-        try {
-            Files.deleteIfExists(target);
-        } catch (IOException exception) {
-            log.warn("Unable to delete template resource file {}", storageKey, exception);
         }
     }
 

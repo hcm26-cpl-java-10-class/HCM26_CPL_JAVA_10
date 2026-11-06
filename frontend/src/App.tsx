@@ -7,7 +7,7 @@ import { RoleSwitchProvider } from "./contexts/RoleSwitchContext";
 import { usePermissions } from "./hooks/usePermissions";
 import { useActiveModuleGroups } from "./hooks/useSidebarMenus";
 import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
-import { routes } from "./router/component-registry";
+import { ROLE_HOME_PATHS, routes } from "./router/component-registry";
 import type { RootState } from "./store/store";
 import { getHomePathByRole } from "./utils/rbac.utils";
 
@@ -18,18 +18,15 @@ function AppRoutes() {
 
     const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions) : "/login";
 
-    // Create component lookup map from module-driven routes
     const componentRegistry = Object.fromEntries(
         routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
     );
 
-    // Get non-module routes (frontend-controlled)
     const staticRoutes = routes.filter((r) => !r.isModuleDriven);
-    const staticRoutePaths = new Set(staticRoutes.map((route) => route.path));
+    const staticRoutePaths = new Set(staticRoutes.map((r) => r.path));
 
     return (
         <Routes>
-            {/* Root redirect */}
             <Route path="/" element={<Navigate to={homePath} replace />} />
 
             {/* Dynamic routes from backend Module table */}
@@ -37,6 +34,9 @@ function AppRoutes() {
                 group.modules.map((m) => {
                     // Frontend-controlled routes already include their permission checks.
                     if (!m.url || staticRoutePaths.has(m.url)) return null;
+                    if ((ROLE_HOME_PATHS as readonly string[]).includes(m.url)) {
+                        return null;
+                    }
                     const Component = componentRegistry[m.url];
 
                     if (!Component) {
@@ -83,7 +83,6 @@ function AppRoutes() {
                 );
             })}
 
-            {/* Catch all */}
             <Route path="*" element={<NotFoundRedirect />} />
         </Routes>
     );

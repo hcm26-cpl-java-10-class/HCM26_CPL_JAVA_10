@@ -24,7 +24,7 @@ public class FinalProjectGrade {
     private Long tenantId;
     @Column(name = "project_id", nullable = false, updatable = false)
     private Long projectId;
-    @Column(name = "team_id", nullable = false, updatable = false)
+    @Column(name = "team_id", updatable = false)
     private Long teamId;
     @Column(name = "final_score", precision = 10, scale = 2)
     private BigDecimal finalScore;

@@ -24,5 +24,10 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long>, Jpa
     boolean existsByProjectIdAndTeamId(Long projectId, Long teamId);
     boolean existsByProjectId(Long projectId);
     Optional<Workspace> findFirstByTeamIdOrderByIdAsc(Long teamId);
+
+    @org.springframework.data.jpa.repository.Query("select w from Workspace w where w.team.id = :teamId and w.currentSlot = 1 and w.isActive = true")
+    Optional<Workspace> findCurrentByTeamId(@org.springframework.data.repository.query.Param("teamId") Long teamId);
+
+    List<Workspace> findAllByTeam_IdAndIsActiveTrueOrderByCreatedAtDescIdDesc(Long teamId);
 }
 

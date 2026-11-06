@@ -56,7 +56,7 @@ public class WorkspaceCreationTransaction {
         var chosen = selection.resolve(user, request, true);
         if (chosen.project() == null && team.getProjectTemplate() != null) {
             provisioning.provision(team, team.getProjectTemplate(), user.getId(), correlationId);
-            Workspace workspace = workspaces.findFirstByTeamIdOrderByIdAsc(team.getId())
+            Workspace workspace = workspaces.findCurrentByTeamId(team.getId())
                     .orElseThrow(() -> new IllegalStateException("The project workspace was not created"));
             workspace.setTaskKeyPrefix(normalizeTaskKeyPrefix(request.getTaskKeyPrefix()));
             workspaces.save(workspace);

@@ -11,6 +11,7 @@ import lombok.experimental.FieldDefaults;
 import java.util.Set;
 import java.util.UUID;
 
+import static com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY;
 import static com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY;
 
 @Getter
@@ -27,6 +28,22 @@ public class UserDTO extends BaseDTO {
 
     String userCode;
 
+    @NotBlank(groups = OnCreate.class, message = "Username is required")
+    @Pattern(regexp = "^[A-Za-z0-9._-]{3,50}$", groups = {OnCreate.class, OnUpdate.class},
+            message = "Username must be 3-50 characters: letters, digits, '.', '_' or '-'")
+    String username;
+
+    @NotBlank(groups = OnCreate.class, message = "Employee code is required")
+    @Size(max = 50, groups = {OnCreate.class, OnUpdate.class}, message = "Employee code must not exceed 50 characters")
+    String employeeCode;
+
+    @Size(max = 30, groups = {OnCreate.class, OnUpdate.class}, message = "Phone must not exceed 30 characters")
+    String phone;
+
+    @Size(max = 500, groups = {OnCreate.class, OnUpdate.class}, message = "Description must not exceed 500 characters")
+    String description;
+
+    @NotBlank(groups = OnCreate.class, message = "Password is required")
     @JsonProperty(access = WRITE_ONLY)
     @Size(min = 8, groups = {OnCreate.class, OnUpdate.class}, message = "Password must be at least 8 characters long")
     String password;
@@ -38,6 +55,22 @@ public class UserDTO extends BaseDTO {
 
     Long tenantId;
 
+    Long departmentId;
+
+    String departmentName;
+
+    Set<Long> departmentIds;
+
+    Set<String> departmentNames;
+
+    boolean clearDepartment;
+
     @NotEmpty(groups = OnCreate.class, message = "At least one role is required")
     Set<Long> roleIds;
+
+    @JsonProperty(access = READ_ONLY)
+    String status;
+
+    @JsonProperty(access = READ_ONLY)
+    Boolean isGuest;
 }

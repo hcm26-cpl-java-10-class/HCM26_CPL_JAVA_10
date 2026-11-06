@@ -14,6 +14,7 @@ export function ProjectTemplateCard({ row, onView, renderRowActions }: EntityCar
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
+            {template.parentTemplateId != null && <Badge variant="secondary">Module</Badge>}
             <ProjectTemplateStatusBadge status={template.status} />
             <Badge variant="outline">{template.versionLabel ?? `v${template.templateVersion}.0`}</Badge>
           </div>

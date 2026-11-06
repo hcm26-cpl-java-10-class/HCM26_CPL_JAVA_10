@@ -23,6 +23,11 @@ export interface WorkspaceResource {
   updatedAt?: string | null;
   updatedBy?: number | null;
   files: WorkspaceResourceFile[];
+  sourceTemplateId: number | null;
+  sourceName: string | null;
+  origin: "PROJECT" | "PARENT" | "SUB_PROJECT" | null;
+  projectId: number;
+  canManage: boolean;
 }
 
 export interface WorkspaceResourceCollection {

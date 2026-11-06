@@ -48,7 +48,7 @@ const attendeeRoleLabel = (role: ProjectLogAttendeeOption["role"]) => ({
 })[role];
 const attendeeRoles: ProjectLogAttendeeOption["role"][] = ["MEMBER", "MENTOR", "TRAINER", "CLASS_ADMIN"];
 
-export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number }) {
+export function WorkspaceProjectLogsPanel({ workspaceId, readOnly = false }: { workspaceId: number; readOnly?: boolean }) {
   const queryClient = useQueryClient();
   const [type, setType] = useState<ProjectLogType>();
   const [search, setSearch] = useState("");
@@ -152,6 +152,7 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
   }
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (readOnly) return;
     createMutation.mutate();
   }
   const targetOptions = eligibleTargets.filter(option => option.type === form.targetType);
@@ -204,16 +205,16 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
       <CardHeader><div className="flex flex-wrap items-center justify-between gap-3">
         <CardTitle>Risks, Decisions & Logs</CardTitle>
         <div className="flex gap-2">
-          <Button type="button" onClick={() => {
+          {!readOnly && <Button type="button" onClick={() => {
             setCreating(value => !value);
             createMutation.reset();
             if (!creating) void options.refetch();
           }}>
             {creating ? "Cancel" : "Create log"}
-          </Button>
+          </Button>}
         </div>
       </div></CardHeader>
-      {creating && <CardContent>
+      {creating && !readOnly && <CardContent>
         <form className="space-y-4" onSubmit={submit}>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1 text-sm">Log type
@@ -403,10 +404,10 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
       <p role="alert" className="text-sm text-destructive">{getWorkspaceError(query.error)}</p>
       <Button variant="outline" onClick={() => void query.refetch()}>Retry</Button>
     </CardContent></Card> : query.data?.content.length === 0 ? <Card><WorkspaceEmptyState icon={FileText}
-      title="No project logs yet" description="Create the first decision, risk or meeting note for this project."
-      action={<Button onClick={() => setCreating(true)}>Create first log</Button>} /></Card>
+      title="No project logs yet" description={readOnly ? "No logs were recorded for this workspace." : "Create the first decision, risk or meeting note for this project."}
+      action={readOnly ? undefined : <Button onClick={() => setCreating(true)}>Create first log</Button>} /></Card>
       : <div className="space-y-3">{query.data?.content.map(item =>
-        <LogCard key={item.id} item={item}
+        <LogCard key={item.id} item={item} readOnly={readOnly}
           onUpdateRisk={status => riskMutation.mutate({ item, status })}
           updating={riskMutation.isPending && riskMutation.variables?.item.id === item.id}
           updateError={riskMutation.isError && riskMutation.variables?.item.id === item.id ? riskMutation.error : undefined} />)}</div>}
@@ -438,8 +439,8 @@ export function WorkspaceProjectLogsPanel({ workspaceId }: { workspaceId: number
   </div>;
 }
 
-function LogCard({ item, onUpdateRisk, updating, updateError }: {
-  item: ProjectLog; onUpdateRisk: (status: string) => void; updating: boolean; updateError?: unknown;
+function LogCard({ item, onUpdateRisk, updating, updateError, readOnly }: {
+  item: ProjectLog; onUpdateRisk: (status: string) => void; updating: boolean; updateError?: unknown; readOnly: boolean;
 }) {
   const [status, setStatus] = useState(item.status);
   const typeLabel = item.type === "RISK_ISSUE"
@@ -467,7 +468,7 @@ function LogCard({ item, onUpdateRisk, updating, updateError }: {
         {item.targetType && item.targetId ? <>{linkLabel} · {item.targetId} · </> : null}
         {item.authorName ?? `Author ${item.createdBy ?? ""}`} · {item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}
       </p>
-      {item.type === "RISK_ISSUE" && <form className="grid gap-2 border-t pt-3 md:grid-cols-[1fr_auto]" onSubmit={event => {
+      {item.type === "RISK_ISSUE" && !readOnly && <form className="grid gap-2 border-t pt-3 md:grid-cols-[1fr_auto]" onSubmit={event => {
         event.preventDefault(); onUpdateRisk(status);
       }}>
         <select aria-label="Risk status" className="h-10 rounded-md border bg-background px-3" value={status} onChange={event => setStatus(event.target.value)}>

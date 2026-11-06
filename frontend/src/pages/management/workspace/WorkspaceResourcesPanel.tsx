@@ -4,7 +4,8 @@ import { workspaceApi } from "@/api/features/workspace.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import ConfirmDialog from "@/components/ui/confirmdialog";
 import type {
   WorkspaceResource,
@@ -17,12 +18,14 @@ import {
   ExternalLink,
   FileText,
   FolderOpen,
+  Info,
   Link2,
   Loader2,
   Paperclip,
   Pen,
   Plus,
   RefreshCw,
+  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -60,16 +63,15 @@ function categoryLabel(resource: WorkspaceResource) {
 export function WorkspaceResourcesPanel({
   workspaceId,
   projectId,
+  selectedProjectId,
   teamId,
   onAccessChanged,
-  embedded = false,
 }: {
   workspaceId: number;
   projectId?: number | null;
+  selectedProjectId?: number | null;
   teamId: number;
   onAccessChanged: () => void;
-  /** Render as a sub-section (used inside the Project brief card on Overview). */
-  embedded?: boolean;
 }) {
   const { user, activeRole } = usePermissions();
   const client = useQueryClient();
@@ -81,10 +83,12 @@ export function WorkspaceResourcesPanel({
   const [pendingDelete, setPendingDelete] = useState<WorkspaceResource | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [kindFilter, setKindFilter] = useState<"ALL" | "FILE" | "LINK">("ALL");
   const fileInputs = useRef<Record<number, HTMLInputElement | null>>({});
   const query = useQuery({
-    queryKey: ["workspace-resources", workspaceId, user.email, activeRole],
-    queryFn: ({ signal }) => workspaceApi.resources(workspaceId, signal),
+    queryKey: ["workspace-resources", workspaceId, user.email, activeRole, selectedProjectId],
+    queryFn: ({ signal }) => workspaceApi.resources(workspaceId, signal, selectedProjectId),
     retry: false,
     staleTime: 0,
     gcTime: 0,
@@ -93,11 +97,8 @@ export function WorkspaceResourcesPanel({
 
   const denied = sectionForbidden(query.error);
   useEffect(() => {
-    // Embedded instances must not force a navigation reload: a role without
-    // resource access would otherwise remount in a loop. The state card keeps
-    // a manual "Reload access" action instead.
-    if (denied && !embedded) onAccessChanged();
-  }, [denied, embedded, onAccessChanged]);
+    if (denied) onAccessChanged();
+  }, [denied, onAccessChanged]);
 
   if (denied || query.isError || query.isPending || query.isFetching) {
     return (
@@ -121,9 +122,33 @@ export function WorkspaceResourcesPanel({
     );
   }
 
-  const documents = data.items.filter((item) => item.kind === "FILE" || item.files.length > 0);
-  const links = data.items.filter((item) => item.kind === "LINK" && item.url);
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleItems = data.items.filter((item) => {
+    if (kindFilter !== "ALL" && item.kind !== kindFilter) return false;
+    if (!normalizedSearch) return true;
+    return [item.title, item.description, item.category, item.url, ...item.files.map((file) => file.fileName)]
+      .some((value) => value?.toLowerCase().includes(normalizedSearch));
+  });
+  const groups = new Map<string, WorkspaceResource[]>();
+  for (const item of visibleItems) {
+    const key = `${item.origin}:${item.sourceTemplateId ?? item.projectId}`;
+    const group = groups.get(key) ?? [];
+    group.push(item);
+    groups.set(key, group);
+  }
+  const sortedGroups = [...groups.values()].sort((first, second) =>
+    Number(second[0].origin === "PARENT") - Number(first[0].origin === "PARENT"));
   const empty = data.items.length === 0;
+  const fileCount = data.items.reduce((total, item) => total + item.files.length, 0);
+  const linkCount = data.items.filter((item) => item.kind === "LINK").length;
+  const documentCount = data.items.length - linkCount;
+  const updatedTimestamps = data.items
+    .map((item) => item.updatedAt)
+    .filter((value): value is string => !!value)
+    .sort();
+  const lastUpdated = updatedTimestamps.length
+    ? updatedTimestamps[updatedTimestamps.length - 1]
+    : null;
   const noProject = data.projectId == null;
   const canManage = data.canManage;
   const acceptedExtensions = data.allowedExtensions.map((extension) => `.${extension}`).join(",");
@@ -148,15 +173,17 @@ export function WorkspaceResourcesPanel({
     if (downloading != null) return;
     setDownloading(file.id);
     try {
-      const ticket = await workspaceApi.resourceDownloadTicket(workspaceId, resource.id, file.id);
+      const { blob, fileName } = await workspaceApi.downloadResource(workspaceId, resource.id, file.id);
+      const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
-      anchor.href = ticket.url;
-      anchor.download = ticket.fileName;
+      anchor.href = url;
+      anchor.download = fileName;
       anchor.rel = "noopener";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      toast.success(`Downloading ${ticket.fileName}`);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success(`Downloading ${fileName}`);
     } catch (error) {
       toast.error(getWorkspaceError(error));
     } finally {
@@ -192,7 +219,7 @@ export function WorkspaceResourcesPanel({
     try {
       const saved = editing
         ? await workspaceApi.updateResource(workspaceId, editing.id, payload)
-        : await workspaceApi.createResource(workspaceId, payload);
+        : await workspaceApi.createResource(workspaceId, payload, selectedProjectId);
       if (file) await replaceFiles(saved.id, editing?.files ?? [], file);
       await refresh();
       setDialogOpen(false);
@@ -247,7 +274,7 @@ export function WorkspaceResourcesPanel({
   };
 
   const manageActions = (resource: WorkspaceResource, compact = false) => {
-    if (!canManage) return null;
+    if (!resource.canManage) return null;
     return (
       <div className="flex flex-wrap gap-1">
         <input
@@ -273,57 +300,68 @@ export function WorkspaceResourcesPanel({
     );
   };
 
-  const manageHint = canManage ? (
-    <p className="text-xs text-muted-foreground">
-      You can add, edit or remove resources for this team only. The project template and other teams are not changed.
-      {" "}Allowed uploads: {data.allowedExtensions.join(", ")} · maximum {humanSize(data.maxFileBytes)} per file.
-    </p>
-  ) : null;
+  const filterOptions = [
+    { id: "ALL" as const, label: "All", count: data.items.length },
+    { id: "FILE" as const, label: "Documents", count: documentCount },
+    { id: "LINK" as const, label: "Links", count: linkCount },
+  ];
 
   return (
-    <div className={embedded ? "space-y-4" : "space-y-5"}>
-      {embedded ? (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="flex items-center gap-2 font-semibold"><BookOpen className="size-4 text-primary" />Resources</h3>
-            <div className="flex flex-wrap items-center gap-2">
-              {canManage && (
-                <Button size="sm" onClick={openCreate}><Plus />Add resource</Button>
+    <div className="space-y-5">
+      <Card className="gap-0 overflow-hidden py-0">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-muted/30 px-6 py-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <BookOpen className="size-5" />
+            </span>
+            <div className="min-w-0 space-y-1.5">
+              <h2 className="text-lg font-semibold leading-tight">Project resources</h2>
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                Documents, repositories and reference links shared with your team for this project.
+              </p>
+              {!noProject && !empty && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <FolderOpen className="size-3.5" />{data.items.length} {data.items.length === 1 ? "resource" : "resources"}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <FileText className="size-3.5" />{documentCount} {documentCount === 1 ? "document" : "documents"}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Link2 className="size-3.5" />{linkCount} {linkCount === 1 ? "link" : "links"}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Paperclip className="size-3.5" />{fileCount} {fileCount === 1 ? "file" : "files"}
+                  </span>
+                  {lastUpdated && <span>Updated {formatDate(lastUpdated)}</span>}
+                </div>
               )}
-              <Button variant="outline" size="sm" disabled={query.isFetching} onClick={() => void query.refetch()}>
-                <RefreshCw className={query.isFetching ? "animate-spin" : undefined} />Refresh
-              </Button>
             </div>
           </div>
-          {manageHint}
+          <div className="flex flex-wrap items-center gap-2">
+            {canManage && (
+              <Button onClick={openCreate}>
+                <Plus />
+                Add resource
+              </Button>
+            )}
+            <Button variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>
+              <RefreshCw className={query.isFetching ? "animate-spin" : undefined} />
+              {query.isFetching ? "Refreshing…" : "Refresh"}
+            </Button>
+          </div>
         </div>
-      ) : (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle>Project resources</CardTitle>
-                <CardDescription>
-                  Documents, repositories and reference links shared with your team for this project.
-                </CardDescription>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {canManage && (
-                  <Button onClick={openCreate}>
-                    <Plus />
-                    Add resource
-                  </Button>
-                )}
-                <Button variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>
-                  <RefreshCw className={query.isFetching ? "animate-spin" : undefined} />
-                  Refresh
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          {canManage && <CardContent className="pt-0">{manageHint}</CardContent>}
-        </Card>
-      )}
+        {canManage && (
+          <div className="flex flex-wrap items-center gap-2 px-6 py-3 text-xs text-muted-foreground">
+            <Info className="size-3.5 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1">
+              Changes apply to this team workspace only — the project template and other teams stay unchanged.
+            </span>
+            <Badge variant="outline">Allowed: {data.allowedExtensions.join(", ")}</Badge>
+            <Badge variant="outline">Max {humanSize(data.maxFileBytes)}</Badge>
+          </div>
+        )}
+      </Card>
 
       {noProject ? (
         <Card>
@@ -349,120 +387,162 @@ export function WorkspaceResourcesPanel({
           </CardContent>
         </Card>
       ) : (
-        <div className={embedded
-          ? "grid gap-4"
-          : "grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"}>
-          <Card>
-            <CardHeader>
-              <CardTitle>Documents</CardTitle>
-              <CardDescription>{documents.length} resource(s) with downloadable files</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {documents.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  No documents have been attached yet.
-                </p>
-              ) : (
-                documents.map((resource) => (
-                  <div key={resource.id} className="space-y-2 rounded-lg border p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0 space-y-1">
-                        <p className="break-words font-medium">{resource.title}</p>
-                        {resource.description && (
-                          <p className="break-words text-sm text-muted-foreground">{resource.description}</p>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline">{categoryLabel(resource)}</Badge>
-                        {manageActions(resource)}
-                      </div>
-                    </div>
-                    {resource.files.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No file attached yet.</p>
-                    ) : (
-                      <ul className="divide-y rounded-md border">
-                        {resource.files.map((file) => (
-                          <li
-                            key={file.id}
-                            className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm"
-                          >
-                            <span className="flex min-w-0 items-center gap-2">
-                              <FileText className="size-4 shrink-0 text-muted-foreground" />
-                              <span className="truncate">{file.fileName}</span>
-                              <span className="shrink-0 text-xs text-muted-foreground">
-                                {humanSize(file.sizeBytes)}
-                              </span>
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={downloading === file.id}
-                                onClick={() => void download(resource, file)}
-                              >
-                                {downloading === file.id ? <Loader2 className="animate-spin" /> : <Download />}
-                                Download
-                              </Button>
-                              {canManage && (
-                                <Button variant="ghost" size="sm" className="text-destructive"
-                                  onClick={() => void removeFile(resource, file)}>
-                                  <X />Remove
-                                </Button>
-                              )}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <p className="text-xs text-muted-foreground">Updated {formatDate(resource.updatedAt)}</p>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="relative w-full sm:max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Search by title, link or file name"
+                aria-label="Search resources"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/40 p-1" role="group" aria-label="Filter resources by type">
+              {filterOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={kindFilter === option.id}
+                  onClick={() => setKindFilter(option.id)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    kindFilter === option.id
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {option.label}
+                  <span className="rounded-full bg-muted px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+                    {option.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Links</CardTitle>
-              <CardDescription>Git repositories and shared documents</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {links.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  No external links have been shared yet.
-                </p>
-              ) : (
-                links.map((resource) => {
-                  const href = normalizeExternalUrl(resource.url);
-                  return (
-                    <div key={resource.id} className="space-y-2 rounded-lg border p-4 transition-colors hover:bg-muted/50">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <a
-                          href={href ?? "#"}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex min-w-0 items-center gap-2 font-medium hover:underline"
-                        >
-                          {categoryLabel(resource).toLowerCase() === "git" ? <Link2 className="size-4 shrink-0" /> : <ExternalLink className="size-4 shrink-0" />}
-                          <span className="break-all">{resource.title}</span>
-                        </a>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary">{categoryLabel(resource)}</Badge>
-                          {manageActions(resource, true)}
-                        </div>
-                      </div>
-                      {resource.description && (
-                        <p className="break-words text-sm text-muted-foreground">{resource.description}</p>
-                      )}
-                      <p className="break-all text-xs text-primary">{href ?? resource.url}</p>
-                      <p className="text-xs text-muted-foreground">Updated {formatDate(resource.updatedAt)}</p>
+          {visibleItems.length === 0 ? (
+            <Card>
+              <CardContent>
+                <WorkspaceEmptyState
+                  icon={Search}
+                  title="No matching resources"
+                  description="Try a different keyword or switch the filter back to all resource types."
+                  action={
+                    <Button variant="outline" onClick={() => { setSearch(""); setKindFilter("ALL"); }}>
+                      Clear filters
+                    </Button>
+                  }
+                />
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4" aria-busy={query.isFetching}>
+              {sortedGroups.map(group => {
+                const source = group[0];
+                const label = source.origin === "PARENT" ? "Master resources"
+                  : source.origin === "SUB_PROJECT" ? "Module resources" : "Project resources";
+                return <Card key={`${source.origin}:${source.sourceTemplateId ?? source.projectId}`}>
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                        <FolderOpen className="size-4 text-primary" />
+                        {label}
+                        {source.sourceName && (
+                          <span className="text-sm font-normal text-muted-foreground">· {source.sourceName}</span>
+                        )}
+                      </CardTitle>
+                      <Badge variant="secondary" className="tabular-nums">
+                        {group.length} {group.length === 1 ? "resource" : "resources"}
+                      </Badge>
                     </div>
-                  );
-                })
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                  </CardHeader>
+                  <CardContent className="grid items-stretch gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                    {group.map(resource => {
+                      const href = resource.kind === "LINK" ? normalizeExternalUrl(resource.url) : null;
+                      const isLink = resource.kind === "LINK";
+                      return <article
+                        key={resource.id}
+                        className="flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-4 transition-colors hover:border-primary/40 hover:shadow-sm"
+                      >
+                        <div className="flex min-w-0 items-start gap-3">
+                          <span className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${
+                            isLink
+                              ? "bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          }`}>
+                            {isLink ? <Link2 className="size-4" /> : <FileText className="size-4" />}
+                          </span>
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {href ? (
+                                <a href={href} target="_blank" rel="noopener noreferrer"
+                                  className="min-w-0 break-words font-medium hover:underline">
+                                  {resource.title}
+                                </a>
+                              ) : (
+                                <p className="min-w-0 break-words font-medium">{resource.title}</p>
+                              )}
+                              <Badge variant="outline">{categoryLabel(resource)}</Badge>
+                            </div>
+                            {resource.description && (
+                              <p className="break-words text-xs leading-5 text-muted-foreground">{resource.description}</p>
+                            )}
+                            {href && (
+                              <a href={href} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex min-w-0 items-center gap-1 break-all text-xs text-primary hover:underline">
+                                <ExternalLink className="size-3 shrink-0" />{href}
+                              </a>
+                            )}
+                          </div>
+                        </div>
+
+                        {resource.files.length > 0 ? (
+                          <ul className="divide-y rounded-lg border bg-muted/20">
+                            {resource.files.map(file => (
+                              <li key={file.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                                  <span className="truncate font-medium">{file.fileName}</span>
+                                  <span className="shrink-0 text-muted-foreground">{humanSize(file.sizeBytes)}</span>
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Button variant="ghost" size="sm" disabled={downloading === file.id}
+                                    onClick={() => void download(resource, file)}>
+                                    {downloading === file.id
+                                      ? <Loader2 className="size-3.5 animate-spin" />
+                                      : <Download className="size-3.5" />}
+                                    Download
+                                  </Button>
+                                  {resource.canManage && (
+                                    <Button variant="ghost" size="sm" className="text-destructive"
+                                      onClick={() => void removeFile(resource, file)}>
+                                      <X className="size-3.5" />
+                                      Remove
+                                    </Button>
+                                  )}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : !isLink && (
+                          <p className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                            No file attached yet.
+                          </p>
+                        )}
+
+                        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t pt-2">
+                          <p className="text-[11px] text-muted-foreground">Updated {formatDate(resource.updatedAt)}</p>
+                          {manageActions(resource, resource.kind === "LINK")}
+                        </div>
+                      </article>;
+                    })}
+                  </CardContent>
+                </Card>;
+              })}
+            </div>
+          )}
+        </>
       )}
 
       <WorkspaceResourceDialog

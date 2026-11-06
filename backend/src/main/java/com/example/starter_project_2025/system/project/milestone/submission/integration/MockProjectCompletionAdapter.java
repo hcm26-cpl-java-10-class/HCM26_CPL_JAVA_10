@@ -14,13 +14,18 @@ import java.util.*;
 public class MockProjectCompletionAdapter implements ProjectCompletionPort {
     private final Set<Long> completed = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
+    @Override public boolean isCompleted(Long projectId, Long tenantId) {
+        return MockMilestoneData.TENANT_ID.equals(tenantId) && completed.contains(projectId);
+    }
+
     @Override public boolean isActive(Long projectId, Long tenantId) {
         return MockMilestoneData.TENANT_ID.equals(tenantId) && !completed.contains(projectId);
     }
 
-    @Override public void complete(Long projectId, Long teamId, UUID actorId, Instant completedAt) {
-        completed.add(projectId);
+    @Override public boolean complete(Long projectId, Long tenantId, Long teamId, UUID actorId, Instant completedAt) {
+        if (!isActive(projectId, tenantId) || !completed.add(projectId)) return false;
         log.info("Mock BR-UNI-12 completion: project={}, team={}, actor={}, at={}",
                 projectId, teamId, actorId, completedAt);
+        return true;
     }
 }

@@ -51,6 +51,9 @@ interface MilestoneSubmissionHistoryItem {
 export function WorkspaceArtifactsPanel({
   workspaceId,
   teamId,
+  projectId,
+  projectScoped = false,
+  readOnly = false,
   access: _access,
   milestone,
   onRefreshMilestone,
@@ -61,6 +64,8 @@ export function WorkspaceArtifactsPanel({
   access?: WorkspaceSectionAccess;
   milestone?: MilestoneDetailResponse;
   onRefreshMilestone?: () => void;
+  projectScoped?: boolean;
+  readOnly?: boolean;
 }) {
   const navigate = useNavigate();
   const { activeRole, hasPermission } = usePermissions();
@@ -70,8 +75,9 @@ export function WorkspaceArtifactsPanel({
 
   // Load team milestones
   const milestonesQuery = useQuery({
-    queryKey: ["workspace-artifacts-milestones", teamId],
-    queryFn: () => milestoneApi.getTeamList(teamId, { page: 0, size: 100 }),
+    queryKey: ["workspace-artifacts-milestones", teamId, projectId],
+    queryFn: () => projectScoped && projectId ? milestoneApi.getList(String(projectId), { teamId, page: 0, size: 100 })
+      : milestoneApi.getTeamList(teamId, { page: 0, size: 100 }),
     enabled: !milestone && teamId > 0,
     retry: false,
   });
@@ -300,7 +306,7 @@ export function WorkspaceArtifactsPanel({
                               </Badge>
                             );
                           }
-                          if (status === "CHANGES_REQUESTED" && isStudent && hasPermission("ARTIFACT_SUBMIT")) {
+                          if (!readOnly && status === "CHANGES_REQUESTED" && isStudent && hasPermission("ARTIFACT_SUBMIT")) {
                             return (
                               <Button
                                 size="sm"
@@ -326,7 +332,7 @@ export function WorkspaceArtifactsPanel({
                       ) : (
                         <Button
                           size="sm"
-                          disabled={!hasPermission("ARTIFACT_SUBMIT") || submissionsQuery.isPending || submissionsQuery.isError || (m.lifecycleStatus !== "IN_PROGRESS" && m.lifecycleStatus !== "CHANGES_REQUESTED")}
+                          disabled={readOnly || !hasPermission("ARTIFACT_SUBMIT") || submissionsQuery.isPending || submissionsQuery.isError || (m.lifecycleStatus !== "IN_PROGRESS" && m.lifecycleStatus !== "CHANGES_REQUESTED")}
                           onClick={() => handleOpenSubmit(m.id)}
                           title={m.lifecycleStatus === "PLANNED" ? "Milestone chưa mở. Admin cần Open milestone trước khi nộp." : "Soạn thảo và nộp sản phẩm cho milestone"}
                         >
@@ -477,7 +483,7 @@ export function WorkspaceArtifactsPanel({
               <Button variant="outline" onClick={() => setHistoryMilestone(null)}>
                 Close
               </Button>
-              {isStudent && hasPermission("ARTIFACT_SUBMIT") && historyMilestone && activeMilestoneSubmissions[0]?.submission.status === "CHANGES_REQUESTED" && (
+              {!readOnly && isStudent && hasPermission("ARTIFACT_SUBMIT") && historyMilestone && activeMilestoneSubmissions[0]?.submission.status === "CHANGES_REQUESTED" && (
                 <Button onClick={() => handleOpenSubmit(historyMilestone.id)}>
                   <Send className="mr-1.5 size-4" /> Submit a new version
                 </Button>

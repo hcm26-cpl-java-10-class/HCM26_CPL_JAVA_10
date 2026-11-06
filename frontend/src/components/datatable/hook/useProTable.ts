@@ -261,8 +261,8 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
   );
 
   const relationFields = useMemo(
-    () => schema.fields.filter((f) => f.type === "relation" && f.relation),
-    [schema],
+      () => schema.fields.filter((f) => f.type === "relation" && f.relation),
+      [schema],
   );
 
   const permissionResource = useMemo(
@@ -677,7 +677,6 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
       { id, data: updateData },
       {
         onError: () => {
-          // Revert on error
           invalidate();
         },
       },

@@ -34,8 +34,9 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
   onSaved: (plan: TemplateMilestonePlan) => void;
   save?: (payload: TemplateMilestonePlanPayload) => Promise<TemplateMilestonePlan>;
 }) {
+  const weighted = plan.weightedMilestones !== false;
   const [milestones, setMilestones] = useState(() => toMilestoneValues(plan));
-  const [savedMilestones, setSavedMilestones] = useState(() => JSON.stringify(toMilestonePlanPayload(milestones, 0).milestones));
+  const [savedMilestones, setSavedMilestones] = useState(() => JSON.stringify(toMilestonePlanPayload(milestones, 0, weighted).milestones));
   const [lockVersion, setLockVersion] = useState(plan.lockVersion);
   const [durationWeeks, setDurationWeeks] = useState(plan.estimatedDurationWeeks);
   const [errors, setErrors] = useState<MilestonePlanErrors>({});
@@ -47,7 +48,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
     onSuccess: (saved) => {
       const savedValues = toMilestoneValues(saved);
       setMilestones(savedValues);
-      setSavedMilestones(JSON.stringify(toMilestonePlanPayload(savedValues, 0).milestones));
+      setSavedMilestones(JSON.stringify(toMilestonePlanPayload(savedValues, 0, weighted).milestones));
       setLockVersion(saved.lockVersion);
       setDurationWeeks(saved.estimatedDurationWeeks);
       setSubmitError(null);
@@ -64,7 +65,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
   });
   const total = totalWeightHundredths(milestones);
   const canEdit = editable && plan.editable;
-  const hasChanges = JSON.stringify(toMilestonePlanPayload(milestones, 0).milestones) !== savedMilestones;
+  const hasChanges = JSON.stringify(toMilestonePlanPayload(milestones, 0, weighted).milestones) !== savedMilestones;
   const disabled = !canEdit || mutation.isPending;
   const removing = milestones.find((milestone) => milestone.key === removeKey);
   const rubricOptions = [...rubrics];
@@ -89,7 +90,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
     event.preventDefault();
     if (submitting.current || !canEdit || !hasChanges) return;
     setSubmitError(null);
-    const nextErrors = validateMilestonePlan(milestones, durationWeeks);
+    const nextErrors = validateMilestonePlan(milestones, durationWeeks, weighted);
     setErrors(nextErrors);
     const firstError = Object.keys(nextErrors)[0];
     if (firstError) {
@@ -97,7 +98,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
       return;
     }
     submitting.current = true;
-    mutation.mutate(toMilestonePlanPayload(milestones, lockVersion));
+    mutation.mutate(toMilestonePlanPayload(milestones, lockVersion, weighted));
   };
 
   return (
@@ -111,8 +112,10 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle className="flex items-center gap-2"><Flag className="size-5" />Milestone configuration</CardTitle>
-              <CardDescription className="mt-2">Define delivery stages, assessment criteria and submission rules for this template.</CardDescription>
+              <CardTitle className="flex items-center gap-2"><Flag className="size-5" />{weighted ? "Master milestone configuration" : "Module milestone configuration"}</CardTitle>
+              <CardDescription className="mt-2">{weighted
+                ? "Shared stages for the master project. In split assignments, all teams can view them and class mentors manage their assessment."
+                : "Stages for this module only. The assigned team works on these separately from the shared master milestones."}</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               {editable && <Button type="button" size="sm" variant="outline" disabled={refreshingRubrics || mutation.isPending}
@@ -122,6 +125,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
           </div>
         </CardHeader>
         <CardContent id={milestoneFieldId("totalWeight")} tabIndex={-1} className="grid gap-3">
+          {weighted && <>
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className="font-medium">Total milestone weight</span>
             <span className={total === 10000 ? "font-semibold text-emerald-700 dark:text-emerald-400" : "font-semibold"}>
@@ -132,6 +136,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
             className={errors.totalWeight ? "[&_[data-slot=progress-indicator]]:bg-destructive" : undefined} />
           <div aria-live="polite"><FieldError errors={errors.totalWeight} /></div>
           <p className="text-xs text-muted-foreground">Milestone weights must total 100% when you save.</p>
+          </>}
           <div id={milestoneFieldId("estimatedDurationWeeks")} tabIndex={-1} className="grid gap-2">
             {durationWeeks !== null && durationWeeks > 0 && <p className="text-sm text-muted-foreground">
               Template duration: {durationWeeks} weeks ({durationWeeks * 7} days). Each milestone must be due within this period.
@@ -157,6 +162,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
           count={milestones.length}
           disabled={disabled}
           editable={canEdit}
+          weighted={weighted}
           errors={errors}
           rubrics={rubricOptions}
           onChange={(patch) => changeMilestone(index, patch)}
@@ -166,7 +172,8 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
       </div>
       {canEdit && <>
         <Button type="button" variant="outline" className="w-full border-dashed" disabled={disabled}
-          onClick={() => { setMilestones((current) => [...current, newMilestone(current.length === 0)]); setErrors({}); }}>
+          onClick={() => { setMilestones((current) => [...current, { ...newMilestone(current.length === 0),
+            ...(!weighted ? { weight: "", dueUnit: "DAYS" as const } : {}) }]); setErrors({}); }}>
           <Plus /> Add milestone
         </Button>
         <div className="flex justify-end rounded-xl border bg-background p-3">

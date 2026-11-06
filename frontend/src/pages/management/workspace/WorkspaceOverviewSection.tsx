@@ -4,11 +4,14 @@ import { workspaceApi } from "@/api/features/workspace.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { WorkspaceOverviewPanel } from "./WorkspaceOverviewPanel";
 import { WorkspaceSectionState, sectionForbidden } from "./WorkspaceSectionState";
+import type { WorkspaceProjectNode } from "@/types/features/project-assignment";
 
-export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canViewMembers, onViewMembers,
+export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canViewMembers, onViewMembers, selectedProject, onViewAccess,
   onAccessChanged }: {
   workspaceId: number; projectId?: number | null; teamId: number; canViewMembers: boolean; onViewMembers: () => void;
+  onViewAccess: () => void;
   onAccessChanged: () => void;
+  selectedProject?: WorkspaceProjectNode;
 }) {
   const { user, activeRole } = usePermissions();
   const query = useQuery({
@@ -24,7 +27,6 @@ export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canVi
   const workspace = query.data;
   if (!workspace || workspace.id !== workspaceId || workspace.teamId !== teamId || workspace.projectId !== projectId)
     return <WorkspaceSectionState error={new Error("Overview context does not match this workspace.")} retry={() => void query.refetch()} />;
-  return <WorkspaceOverviewPanel workspace={workspace}
-    canViewMembers={canViewMembers && workspace.can_view_members} onViewMembers={onViewMembers}
-    onAccessChanged={onAccessChanged} />;
+  return <WorkspaceOverviewPanel workspace={workspace} selectedProject={selectedProject}
+    canViewMembers={canViewMembers && workspace.can_view_members} onViewMembers={onViewMembers} onViewAccess={onViewAccess} />;
 }

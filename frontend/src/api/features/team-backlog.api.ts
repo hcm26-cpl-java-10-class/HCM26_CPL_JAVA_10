@@ -20,9 +20,10 @@ export const teamBacklogApi = {
    * Reads the workspace-scoped backlog board instead of the tenant-wide
    * `/sprints` and `/sprint-backlogs` pages.
    */
-  getBoard: async (teamId: number): Promise<TeamBacklogBoard> => {
+  getBoard: async (teamId: number, projectId?: number | null, workspaceId?: number): Promise<TeamBacklogBoard> => {
     const response = await axiosInstance.get<TeamBacklogBoard>(
       `/teams/${teamId}/backlog-board`,
+      { params: { ...(projectId != null ? { projectId } : {}), ...(workspaceId ? { workspaceId } : {}) } },
     );
     return response.data;
   },
