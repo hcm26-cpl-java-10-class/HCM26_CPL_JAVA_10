@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/select";
 import { EXAM_CATEGORY_LABEL, EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT, type ExamCategory, type ExamDTO, type ExamType, type ResultVisibility } from "@/types";
 import type { Dispatch, SetStateAction } from "react";
+import { ExamLinkFields } from "./ExamLinkFields";
 import {
   EXAM_CATEGORY_OPTIONS,
   EXAM_TYPE_LABEL,
@@ -114,6 +115,8 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
           </span>
         )}
       </label>
+
+      <ExamLinkFields cfg={cfg} setCfg={setCfg} />
 
       <div className="grid gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
         <SectionTitle>Attempts</SectionTitle>

@@ -11,6 +11,7 @@ import type {
     InvitationCreateRequest,
     InvitationDTO,
     InvitationStatus,
+    InvitationAuditLog,
     ReminderDTO,
     ReminderRequest,
 } from "@/types";
@@ -86,6 +87,17 @@ export const invitationApi = {
 
     resend: async (id: number): Promise<InvitationDTO> => {
         const response = await axiosInstance.post<InvitationDTO>(`/invitations/${id}/resend`);
+        return response.data;
+    },
+
+    remove: async (id: number): Promise<void> => {
+        await axiosInstance.delete(`/invitations/${id}`);
+    },
+
+    getAuditLogs: async (examId: number): Promise<InvitationAuditLog[]> => {
+        const response = await axiosInstance.get<InvitationAuditLog[]>(
+            `/exams/${examId}/invitations/audit`,
+        );
         return response.data;
     },
 

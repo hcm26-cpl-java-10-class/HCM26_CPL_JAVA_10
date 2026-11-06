@@ -12,15 +12,28 @@ export function MainLayout({
                                pathName,
                                pathLinks,
                                dense = false,
+                               focusMode = false,
                            }: {
     children: ReactNode;
     pathName?: Record<string, string>;
     pathLinks?: Record<string, string>;
     /** Tighter header / content padding (Course Online pages). */
     dense?: boolean;
+    /** Hide the navbar / breadcrumbs / sidebar (e.g. while taking an exam). */
+    focusMode?: boolean;
 }) {
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
+
+    if (focusMode) {
+        return (
+            <div className="flex h-screen max-h-[calc(100vh-18px)] flex-col overflow-hidden">
+                <main className="flex flex-1 min-h-0 flex-col overflow-y-auto px-6 pb-6 pt-4">
+                    {children}
+                </main>
+            </div>
+        );
+    }
 
     if (isStudentView) {
         return (

@@ -1,8 +1,11 @@
 package com.example.starter_project_2025.system.exam.controller;
 
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.exam.audit.InvitationAuditLog;
+import com.example.starter_project_2025.system.exam.audit.InvitationAuditService;
 import com.example.starter_project_2025.system.exam.domain.InvitationStatus;
 import com.example.starter_project_2025.system.exam.dto.*;
+import com.example.starter_project_2025.system.exam.service.ExamAccessGuard;
 import com.example.starter_project_2025.system.exam.service.InvitationService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -23,6 +26,8 @@ import java.util.List;
 public class InvitationController {
 
     private final InvitationService service;
+    private final InvitationAuditService invitationAuditService;
+    private final ExamAccessGuard examAccessGuard;
 
     @PostMapping("/exams/{examId}/invitations")
     @PreAuthorize("hasAuthority('INVITATION_CREATE')")
@@ -70,6 +75,16 @@ public class InvitationController {
         return ResponseEntity.ok(service.getInvitationsByExam(examId, filter, principal));
     }
 
+    @GetMapping("/exams/{examId}/invitations/audit")
+    @PreAuthorize("hasAuthority('INVITATION_READ')")
+    public ResponseEntity<List<InvitationAuditLog>> listAudit(
+            @PathVariable Long examId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        service.checkExamManagePermission(examId, principal);
+        return ResponseEntity.ok(invitationAuditService.listByExam(examId));
+    }
+
     @GetMapping("/invitations/{id}")
     @PreAuthorize("hasAuthority('INVITATION_READ')")
     public ResponseEntity<InvitationDTO> getById(
@@ -98,10 +113,23 @@ public class InvitationController {
         return ResponseEntity.ok(service.resendInvitation(id, principal));
     }
 
+    @DeleteMapping("/invitations/{id}")
+    @PreAuthorize("hasAuthority('INVITATION_DELETE')")
+    public ResponseEntity<Void> delete(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        service.deleteInvitation(id, principal);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping(value = "/invitations/{id}/qr", produces = MediaType.IMAGE_PNG_VALUE)
     @PreAuthorize("hasAuthority('INVITATION_READ')")
-    public ResponseEntity<byte[]> generateQR(@PathVariable Long id) {
-        byte[] png = service.generateQRCode(id);
+    public ResponseEntity<byte[]> generateQR(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        byte[] png = service.generateQRCode(id, principal);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.IMAGE_PNG)

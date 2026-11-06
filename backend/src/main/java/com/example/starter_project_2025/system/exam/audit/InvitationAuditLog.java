@@ -1,9 +1,5 @@
 package com.example.starter_project_2025.system.exam.audit;
 
-import java.time.LocalDateTime;
-
-import org.hibernate.annotations.CreationTimestamp;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,7 +14,16 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
 
+import java.time.LocalDateTime;
+
+/**
+ * Nhật ký thao tác trên lời mời.
+ *
+ * <p>Bảng riêng {@code exam_invitation_audit_log} (không dùng chung với bảng
+ * {@code invitation_audit_logs} của nhóm khác để tránh trùng schema khi merge).
+ */
 @Entity
 @Table(name = "exam_invitation_audit_log", indexes = {
         @Index(name = "idx_inv_audit_exam", columnList = "exam_id"),
@@ -35,12 +40,14 @@ public class InvitationAuditLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** id lời mời liên quan (null khi thao tác ở mức batch/cả đề). */
     @Column(name = "invitation_id")
     private Long invitationId;
 
     @Column(name = "exam_id")
     private Long examId;
 
+    /** người nhận lời mời (user id; null với lời mời ẩn danh). */
     @Column(name = "target_user_id")
     private Long targetUserId;
 
@@ -48,6 +55,7 @@ public class InvitationAuditLog {
     @Column(name = "action", length = 30, nullable = false)
     private InvitationAuditAction action;
 
+    /** id người thực hiện thao tác. */
     @Column(name = "performed_by")
     private Long performedBy;
 

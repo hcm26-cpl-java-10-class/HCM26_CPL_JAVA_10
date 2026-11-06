@@ -36,7 +36,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -75,52 +74,43 @@ public class InvitationService {
                 ZonedDateTime zdt = ZonedDateTime.parse(value, DateTimeFormatter.ISO_ZONED_DATE_TIME);
                 return zdt.withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
             } catch (DateTimeParseException e2) {
-                throw new BadRequestException("Invalid datetime format: " + value + ". Expected ISO format like '2024-12-31T23:59'");
+                throw new BadRequestException("Định dạng thời gian không hợp lệ: " + value + ". Cần định dạng ISO ví dụ '2024-12-31T23:59'");
             }
         }
     }
 
-    private void validateExamInvitable(Exam exam) {
-        if (exam.getEndTime() != null && LocalDateTime.now().isAfter(exam.getEndTime())) {
-            throw new BadRequestException("Kỳ thi đã kết thúc, không thể mời tham dự");
-        }
-    }
-
-    private LocalDateTime resolveExpiresAt(String rawExpiresAt, Exam exam) {
-        LocalDateTime expiresAt = rawExpiresAt != null && !rawExpiresAt.isBlank()
-                ? parseDateTime(rawExpiresAt)
-                : exam.getEndTime() != null ? exam.getEndTime() : LocalDateTime.now().plusDays(30);
-
-        if (expiresAt != null && LocalDateTime.now().isAfter(expiresAt)) {
-            throw new BadRequestException("Thời hạn lời mời không được nằm trong quá khứ");
-        }
-        if (exam.getEndTime() != null && expiresAt != null && expiresAt.isAfter(exam.getEndTime())) {
-            throw new BadRequestException("Thời hạn lời mời không được vượt quá thời gian kết thúc kỳ thi");
-        }
-        return expiresAt;
-    }
-
     @Transactional
     public InvitationDTO createInvitation(Long examId, InvitationCreateRequest request, UserPrincipal principal) {
+        return createInvitation(examId, request, principal, true);
+    }
+
+    /**
+     * @param sendEmail khi false thì lời mời được tạo ở trạng thái PENDING và không gửi mail
+     *                   (dùng cho import lịch thi tự động hoặc khi muốn gửi thủ công sau).
+     */
+    @Transactional
+    public InvitationDTO createInvitation(Long examId, InvitationCreateRequest request,
+                                          UserPrincipal principal, boolean sendEmail) {
         boolean isAdminOrTeacher = principal.getUser().getRoles().stream()
                 .anyMatch(r -> "ADMIN".equals(r.getName()) || "TEACHER".equals(r.getName()));
         if (!isAdminOrTeacher) {
-            throw new BadRequestException("Only ADMIN or TEACHER can create invitations");
+            throw new BadRequestException("Chỉ ADMIN hoặc TEACHER được tạo lời mời");
         }
 
         Exam exam = examRepository.findById(examId)
                 .filter(e -> Boolean.TRUE.equals(e.getIsActive()))
-                .orElseThrow(() -> new ResourceNotFoundException("Exam not found with id: " + examId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đề thi với id: " + examId));
 
         examAccessGuard.checkCanManage(exam, principal);
+
         validateExamInvitable(exam);
 
         User user = userRepository.findById(request.getUserId())
                 .filter(u -> Boolean.TRUE.equals(u.getIsActive()))
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + request.getUserId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với id: " + request.getUserId()));
 
         if (invitationRepository.existsByExamIdAndUserId(examId, user.getId())) {
-            throw new BadRequestException("Invitation already exists for this user and exam");
+            throw new BadRequestException("Lời mời cho người dùng này và đề thi này đã tồn tại");
         }
 
         LocalDateTime expiresAt = resolveExpiresAt(request.getExpiresAt(), exam);
@@ -139,11 +129,17 @@ public class InvitationService {
 
         invitation = invitationRepository.save(invitation);
 
-        emailService.sendExamInvitation(invitation, user);
+        invitationAuditService.record(invitation, InvitationAuditAction.CREATE, principal, null);
 
-        invitation.setStatus(InvitationStatus.SENT);
-        invitation.setSentAt(LocalDateTime.now());
-        return toDTO(invitationRepository.save(invitation));
+        if (sendEmail) {
+            emailService.sendExamInvitation(invitation, user);
+
+            invitation.setStatus(InvitationStatus.SENT);
+            invitation.setSentAt(LocalDateTime.now());
+            return toDTO(invitationRepository.save(invitation));
+        }
+
+        return toDTO(invitation);
     }
 
     @Transactional
@@ -151,14 +147,15 @@ public class InvitationService {
         boolean isAdminOrTeacher = principal.getUser().getRoles().stream()
                 .anyMatch(r -> "ADMIN".equals(r.getName()) || "TEACHER".equals(r.getName()));
         if (!isAdminOrTeacher) {
-            throw new BadRequestException("Only ADMIN or TEACHER can create batch invitations");
+            throw new BadRequestException("Chỉ ADMIN hoặc TEACHER được tạo lời mời hàng loạt");
         }
 
         Exam exam = examRepository.findById(examId)
                 .filter(e -> Boolean.TRUE.equals(e.getIsActive()))
-                .orElseThrow(() -> new ResourceNotFoundException("Exam not found with id: " + examId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đề thi với id: " + examId));
 
         examAccessGuard.checkCanManage(exam, principal);
+
         validateExamInvitable(exam);
 
         List<InvitationDTO> successful = new ArrayList<>();
@@ -166,12 +163,21 @@ public class InvitationService {
 
         for (InvitationCreateRequest invRequest : request.getInvitations()) {
             try {
-                InvitationDTO dto = createInvitation(examId, invRequest, principal);
+                InvitationDTO dto = createInvitation(examId, invRequest, principal, request.isSendEmail());
                 successful.add(dto);
             } catch (Exception e) {
                 errors.add("User ID " + invRequest.getUserId() + ": " + e.getMessage());
             }
         }
+
+        invitationAuditService.record(
+                exam.getId(),
+                null,
+                null,
+                InvitationAuditAction.BATCH_CREATE,
+                principal.getUser().getId(),
+                "Tạo " + successful.size() + "/" + request.getInvitations().size()
+                        + " lời mời (sendEmail=" + request.isSendEmail() + ")");
 
         return BatchInvitationResponse.builder()
                 .totalRequested(request.getInvitations().size())
@@ -379,23 +385,15 @@ public class InvitationService {
     }
 
     @Transactional(readOnly = true)
-    public List<InvitationDTO> getInvitationsByExam(
-            Long examId,
-            InvitationFilter filter,
-            UserPrincipal principal) {
+    public List<InvitationDTO> getInvitationsByExam(Long examId, InvitationFilter filter, UserPrincipal principal) {
         Exam exam = examRepository.findById(examId)
-                .orElseThrow(() -> new ResourceNotFoundException("Exam not found with id: " + examId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đề thi với id: " + examId));
+
         examAccessGuard.checkCanManage(exam, principal);
 
         List<Invitation> invitations;
 
-        if (filter != null && filter.getUserIds() != null && !filter.getUserIds().isEmpty()) {
-            invitations = new ArrayList<>();
-            for (Long userId : filter.getUserIds()) {
-                invitationRepository.findByExamIdAndUserId(examId, userId)
-                        .ifPresent(invitations::add);
-            }
-        } else if (filter != null && filter.getStatus() != null) {
+        if (filter != null && filter.getStatus() != null) {
             invitations = invitationRepository.findByExamIdAndStatus(examId, filter.getStatus());
         } else if (filter != null && Boolean.TRUE.equals(filter.getAnonymous())) {
             invitations = invitationRepository.findAnonymousByExamId(examId);
@@ -403,22 +401,48 @@ public class InvitationService {
             invitations = invitationRepository.findByExamId(examId);
         }
 
-        return invitations.stream().map(this::toDTO).toList();
+        return invitations.stream()
+                .map(i -> toDTO(i, canSeeAccessCode(i, principal)))
+                .toList();
+    }
+
+    /**
+     * Kiểm tra quyền quản lý đề thi (dùng cho các endpoint chỉ đọc như audit log).
+     */
+    @Transactional(readOnly = true)
+    public void checkExamManagePermission(Long examId, UserPrincipal principal) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đề thi với id: " + examId));
+        examAccessGuard.checkCanManage(exam, principal);
+    }
+
+    /**
+     * Admin xem được mọi mã truy cập; giáo viên chỉ xem được mã của lời mời do chính mình tạo.
+     */
+    private boolean canSeeAccessCode(Invitation invitation, UserPrincipal principal) {
+        if (examAccessGuard.isAdmin(principal)) {
+            return true;
+        }
+        Long currentUserId = principal != null && principal.getUser() != null
+                ? principal.getUser().getId() : null;
+        return currentUserId != null && currentUserId.equals(invitation.getCreatedBy());
     }
 
     @Transactional(readOnly = true)
     public List<InvitationDTO> getMyInvitations(@AuthenticationPrincipal UserPrincipal currentUser) {
         List<Invitation> invitations = invitationRepository.findByUserIdWithExamAndUser(currentUser.getUser().getId());
-        return invitations.stream().map(this::toDTO).toList();
+        return invitations.stream()
+                .map(i -> toDTO(i, canSeeAccessCode(i, currentUser)))
+                .toList();
     }
 
     @Transactional
     public InvitationDTO acceptInvitation(Long id, @AuthenticationPrincipal UserPrincipal currentUser) {
         Invitation invitation = invitationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời với id: " + id));
 
         if (invitation.getUser() == null || !invitation.getUser().getId().equals(currentUser.getUser().getId())) {
-            throw new BadRequestException("You are not authorized to accept this invitation");
+            throw new BadRequestException("Bạn không được phép chấp nhận lời mời này");
         }
 
         validateInvitationForAction(invitation);
@@ -434,10 +458,10 @@ public class InvitationService {
     @Transactional
     public InvitationDTO rejectInvitation(Long id, @AuthenticationPrincipal UserPrincipal currentUser) {
         Invitation invitation = invitationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời với id: " + id));
 
         if (invitation.getUser() == null || !invitation.getUser().getId().equals(currentUser.getUser().getId())) {
-            throw new BadRequestException("You are not authorized to reject this invitation");
+            throw new BadRequestException("Bạn không được phép từ chối lời mời này");
         }
 
         validateInvitationForAction(invitation);
@@ -451,12 +475,13 @@ public class InvitationService {
     @Transactional
     public InvitationDTO revokeInvitation(Long id, String reason, UserPrincipal principal) {
         Invitation invitation = invitationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời với id: " + id));
+
         examAccessGuard.checkCanManage(invitation.getExam(), principal);
 
         if (invitation.getStatus() == InvitationStatus.REVOKED ||
             invitation.getStatus() == InvitationStatus.COMPLETED) {
-            throw new BadRequestException("Cannot revoke invitation with status: " + invitation.getStatus());
+            throw new BadRequestException("Không thể thu hồi lời mời đang ở trạng thái: " + invitation.getStatus());
         }
 
         invitation.setStatus(InvitationStatus.REVOKED);
@@ -468,23 +493,26 @@ public class InvitationService {
         }
 
         InvitationDTO dto = toDTO(invitationRepository.save(invitation));
+
         invitationAuditService.record(invitation, InvitationAuditAction.REVOKE, principal, reason);
+
         return dto;
     }
 
     @Transactional
     public InvitationDTO resendInvitation(Long id, UserPrincipal principal) {
         Invitation invitation = invitationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời với id: " + id));
+
         examAccessGuard.checkCanManage(invitation.getExam(), principal);
 
         if (invitation.getUser() == null) {
-            throw new BadRequestException("Cannot resend anonymous invitation");
+            throw new BadRequestException("Không thể gửi lại lời mời ẩn danh");
         }
 
         if (invitation.getStatus() == InvitationStatus.REVOKED ||
             invitation.getStatus() == InvitationStatus.COMPLETED) {
-            throw new BadRequestException("Cannot resend invitation with status: " + invitation.getStatus());
+            throw new BadRequestException("Không thể gửi lại lời mời đang ở trạng thái: " + invitation.getStatus());
         }
 
         invitation.setToken(generateToken());
@@ -493,51 +521,61 @@ public class InvitationService {
         emailService.sendExamInvitation(invitation, invitation.getUser());
 
         invitation.setSentAt(LocalDateTime.now());
+        // Không reset trạng thái ACCEPTED: sinh viên đã xác nhận tham dự thì vẫn được vào phòng thi.
         if (invitation.getStatus() != InvitationStatus.ACCEPTED) {
             invitation.setStatus(InvitationStatus.SENT);
         }
 
         InvitationDTO dto = toDTO(invitationRepository.save(invitation));
+
         invitationAuditService.record(invitation, InvitationAuditAction.RESEND, principal,
                 "Gửi lại lời mời (lần " + invitation.getResendCount() + ")");
+
         return dto;
     }
 
     @Transactional
     public void deleteInvitation(Long id, UserPrincipal principal) {
         Invitation invitation = invitationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời với id: " + id));
+
         examAccessGuard.checkCanManage(invitation.getExam(), principal);
 
         if (invitation.getStatus() == InvitationStatus.ACCEPTED
                 || invitation.getStatus() == InvitationStatus.COMPLETED) {
-            throw new BadRequestException("Không thể xoá lời mời đã "
-                    + (invitation.getStatus() == InvitationStatus.ACCEPTED ? "được chấp nhận" : "hoàn thành")
-                    + " để giữ lịch sử thi");
+            throw new BadRequestException(
+                    "Không thể xoá lời mời đã " + (invitation.getStatus() == InvitationStatus.ACCEPTED
+                            ? "được chấp nhận" : "hoàn thành") + " để giữ lịch sử thi");
         }
 
+        // Dọn toàn bộ reminder đang gắn với lời mời này.
         List<ExamReminder> reminders = examReminderRepository.findByInvitationId(id);
-        for (ExamReminder reminder : reminders) {
-            reminder.setIsActive(false);
-            if (reminder.getStatus() == ReminderStatus.PENDING) {
-                reminder.setStatus(ReminderStatus.CANCELLED);
+        if (!reminders.isEmpty()) {
+            for (ExamReminder reminder : reminders) {
+                reminder.setIsActive(false);
+                if (reminder.getStatus() == ReminderStatus.PENDING) {
+                    reminder.setStatus(ReminderStatus.CANCELLED);
+                }
+                reminder.setLastError("Lời mời đã bị xoá");
+                examReminderRepository.save(reminder);
             }
-            reminder.setLastError("Lời mời đã bị xoá");
-            examReminderRepository.save(reminder);
         }
 
         invitationAuditService.record(invitation, InvitationAuditAction.DELETE, principal,
                 "Xoá lời mời, đã huỷ " + reminders.size() + " nhắc nhở");
+
         invitationRepository.delete(invitation);
     }
 
     @Transactional(readOnly = true)
-    public byte[] generateQRCode(Long invitationId) {
+    public byte[] generateQRCode(Long invitationId, UserPrincipal principal) {
         Invitation invitation = invitationRepository.findById(invitationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + invitationId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời với id: " + invitationId));
+
+        examAccessGuard.checkCanManage(invitation.getExam(), principal);
 
         if (!Boolean.TRUE.equals(invitation.getAnonymous())) {
-            throw new BadRequestException("QR code can only be generated for anonymous invitations");
+            throw new BadRequestException("Chỉ tạo được mã QR cho lời mời ẩn danh");
         }
 
         String url = buildAnonymousAccessUrl(invitation);
@@ -549,16 +587,19 @@ public class InvitationService {
         boolean isAdminOrTeacher = principal.getUser().getRoles().stream()
                 .anyMatch(r -> "ADMIN".equals(r.getName()) || "TEACHER".equals(r.getName()));
         if (!isAdminOrTeacher) {
-            throw new BadRequestException("Only ADMIN or TEACHER can create anonymous invitations");
+            throw new BadRequestException("Chỉ ADMIN hoặc TEACHER được tạo lời mời ẩn danh");
         }
 
         Exam exam = examRepository.findById(examId)
                 .filter(e -> Boolean.TRUE.equals(e.getIsActive()))
-                .orElseThrow(() -> new ResourceNotFoundException("Exam not found with id: " + examId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đề thi với id: " + examId));
 
         examAccessGuard.checkCanManage(exam, principal);
+
         validateExamInvitable(exam);
-        LocalDateTime expiresAt = resolveExpiresAt(request.getExpiresAt(), exam);
+
+        LocalDateTime expiresAt = resolveExpiresAt(
+                request.getExpiresAt() != null ? request.getExpiresAt() : null, exam);
 
         String accessCode = generateAccessCode();
 
@@ -579,26 +620,61 @@ public class InvitationService {
                 .accessCode(accessCode)
                 .availableFrom(parseDateTime(request.getAvailableFrom()))
                 .maxAccessTime(request.getMaxAccessTime() != null ?
-                    parseDateTime(request.getMaxAccessTime()) : defaultMaxAccessTime(exam))
-                .maxAccessAttempts(Optional.ofNullable(request.getMaxAccessAttempts()).orElse(1))
+                        parseDateTime(request.getMaxAccessTime())
+                        : defaultMaxAccessTime(exam))
+                .maxAccessAttempts(request.getMaxAccessAttempts() != null ?
+                        request.getMaxAccessAttempts() : 1)
                 .build();
 
         invitation = invitationRepository.save(invitation);
+
+        invitationAuditService.record(invitation, InvitationAuditAction.CREATE, principal,
+                "Tạo lời mời ẩn danh" + (guestEmail != null ? " cho " + guestEmail : ""));
 
         if (guestEmail != null) {
             emailService.sendAnonymousAccessLink(invitation, guestEmail);
         }
 
-        invitationAuditService.record(invitation, InvitationAuditAction.CREATE, principal,
-                "Tạo lời mời ẩn danh" + (guestEmail != null ? " cho " + guestEmail : ""));
         return toDTO(invitation, canSeeAccessCode(invitation, principal));
     }
 
+    /**
+     * Mặc định cửa sổ truy cập = thời gian bắt đầu đề + thời lượng thi.
+     */
     private LocalDateTime defaultMaxAccessTime(Exam exam) {
         if (exam.getStartTime() != null && exam.getDurationMinutes() > 0) {
             return exam.getStartTime().plusMinutes(exam.getDurationMinutes());
         }
         return exam.getEndTime();
+    }
+
+    /**
+     * Chặn mời tham dự khi kỳ thi đã kết thúc.
+     */
+    private void validateExamInvitable(Exam exam) {
+        if (exam.getEndTime() != null && LocalDateTime.now().isAfter(exam.getEndTime())) {
+            throw new BadRequestException("Kỳ thi đã kết thúc, không thể mời tham dự");
+        }
+    }
+
+    /**
+     * Tính thời điểm hết hạn của lời mời và kiểm tra tính hợp lệ.
+     */
+    private LocalDateTime resolveExpiresAt(String rawExpiresAt, Exam exam) {
+        LocalDateTime expiresAt;
+        if (rawExpiresAt != null && !rawExpiresAt.isBlank()) {
+            expiresAt = parseDateTime(rawExpiresAt);
+        } else {
+            expiresAt = exam.getEndTime() != null ? exam.getEndTime() : LocalDateTime.now().plusDays(30);
+        }
+
+        if (expiresAt != null && LocalDateTime.now().isAfter(expiresAt)) {
+            throw new BadRequestException("Thời hạn lời mời không được nằm trong quá khứ");
+        }
+        if (exam.getEndTime() != null && expiresAt != null && expiresAt.isAfter(exam.getEndTime())) {
+            throw new BadRequestException("Thời hạn lời mời không được vượt quá thời gian kết thúc kỳ thi");
+        }
+        return expiresAt;
     }
 
     private String blankToNull(String value) {
@@ -608,10 +684,10 @@ public class InvitationService {
     @Transactional
     public AnonymousAccessResponse verifyAccessCode(String accessCode) {
         Invitation invitation = invitationRepository.findByAccessCode(accessCode)
-                .orElseThrow(() -> new ResourceNotFoundException("Invalid access code"));
+                .orElseThrow(() -> new ResourceNotFoundException("Mã truy cập không hợp lệ"));
 
         if (!Boolean.TRUE.equals(invitation.getAnonymous())) {
-            throw new BadRequestException("Invalid access code");
+            throw new BadRequestException("Mã truy cập không hợp lệ");
         }
 
         if (invitation.getAvailableFrom() != null && LocalDateTime.now().isBefore(invitation.getAvailableFrom())) {
@@ -624,16 +700,18 @@ public class InvitationService {
             invitation.getStatus() == InvitationStatus.EXPIRED) {
             return AnonymousAccessResponse.builder()
                     .valid(false)
-                    .message("This invitation has been revoked or expired")
+                    .message("Lời mời đã bị thu hồi hoặc đã hết hạn")
                     .build();
         }
 
         if (invitation.getExpiresAt() != null && LocalDateTime.now().isAfter(invitation.getExpiresAt())) {
             invitation.setStatus(InvitationStatus.EXPIRED);
             invitationRepository.save(invitation);
+            invitationAuditService.record(invitation, InvitationAuditAction.EXPIRE, null,
+                    "Hết hạn khi xác minh mã truy cập");
             return AnonymousAccessResponse.builder()
                     .valid(false)
-                    .message("This invitation has expired")
+                    .message("Lời mời đã hết hạn")
                     .build();
         }
 
@@ -641,21 +719,21 @@ public class InvitationService {
             && LocalDateTime.now().isAfter(invitation.getMaxAccessTime())) {
             invitation.setStatus(InvitationStatus.EXPIRED);
             invitationRepository.save(invitation);
+            invitationAuditService.record(invitation, InvitationAuditAction.EXPIRE, null,
+                    "Hết hạn khi xác minh mã truy cập");
             return AnonymousAccessResponse.builder()
                     .valid(false)
-                    .message("The access window for this link has closed")
+                    .message("Cửa sổ truy cập của lời mời đã đóng")
                     .build();
         }
 
         int remaining = invitation.getMaxAccessAttempts() - invitation.getAccessAttemptCount();
 
+        // Không trả về examTitle/studentName ở endpoint public để tránh lộ thông tin kỳ thi.
         return AnonymousAccessResponse.builder()
                 .valid(true)
-                .accessCode(accessCode)
-                .examTitle(invitation.getExam().getTitle())
-                .studentName(invitation.getGuestName())
                 .accessAttemptsRemaining(Math.max(0, remaining))
-                .message("Access code is valid")
+                .message("Mã truy cập hợp lệ")
                 .build();
     }
 
@@ -667,10 +745,10 @@ public class InvitationService {
             String studentEmail
     ) {
         Invitation invitation = invitationRepository.lockByAccessCode(accessCode)
-                .orElseThrow(() -> new ResourceNotFoundException("Invalid access code"));
+                .orElseThrow(() -> new ResourceNotFoundException("Mã truy cập không hợp lệ"));
 
         if (!Boolean.TRUE.equals(invitation.getAnonymous())) {
-            throw new BadRequestException("Invalid access code");
+            throw new BadRequestException("Mã truy cập không hợp lệ");
         }
 
         validateInvitationForAction(invitation);
@@ -697,13 +775,13 @@ public class InvitationService {
         }
 
         if (invitation.getAccessAttemptCount() >= invitation.getMaxAccessAttempts()) {
-            throw new BadRequestException("Maximum access attempts reached for this invitation");
+            throw new BadRequestException("Đã hết số lần truy cập cho lời mời này");
         }
 
         if (fingerprint != null) {
             anonymousSessionRepository.findByInvitationIdAndFingerprint(invitation.getId(), fingerprint)
                     .ifPresent(session -> {
-                        throw new BadRequestException("This device has already accessed this exam");
+                        throw new BadRequestException("Thiết bị này đã truy cập kỳ thi này");
                     });
         }
 
@@ -728,7 +806,7 @@ public class InvitationService {
 
         anonymousSessionRepository.save(session);
 
-        return buildSessionResponse(session, invitation, "Session created successfully");
+        return buildSessionResponse(session, invitation, "Tạo phiên thi thành công");
     }
 
     private Optional<AnonymousSession> reusableSessionFor(Invitation invitation, User guestUser) {
@@ -761,20 +839,16 @@ public class InvitationService {
     @Transactional(readOnly = true)
     public InvitationDTO getById(Long id, UserPrincipal principal) {
         Invitation invitation = invitationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
-        examAccessGuard.checkCanManage(invitation.getExam(), principal);
-        return toDTO(invitation, canSeeAccessCode(invitation, principal));
-    }
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời với id: " + id));
 
-    private boolean canSeeAccessCode(Invitation invitation, UserPrincipal principal) {
-        return examAccessGuard.isAdmin(principal)
-                || (principal != null && principal.getUser() != null
-                && Objects.equals(invitation.getCreatedBy(), principal.getUser().getId()));
+        examAccessGuard.checkCanManage(invitation.getExam(), principal);
+
+        return toDTO(invitation, canSeeAccessCode(invitation, principal));
     }
 
     private void validateInvitationForAction(Invitation invitation) {
         if (invitation.getStatus() == InvitationStatus.REVOKED) {
-            throw new BadRequestException("Invitation has been revoked");
+            throw new BadRequestException("Lời mời đã bị thu hồi");
         }
         if (invitation.getAvailableFrom() != null && LocalDateTime.now().isBefore(invitation.getAvailableFrom())) {
             throw new BadRequestException("Ca thi chưa bắt đầu. Vui lòng quay lại vào lúc " + invitation.getAvailableFrom());
@@ -783,19 +857,19 @@ public class InvitationService {
             (invitation.getExpiresAt() != null && LocalDateTime.now().isAfter(invitation.getExpiresAt()))) {
             invitation.setStatus(InvitationStatus.EXPIRED);
             invitationRepository.save(invitation);
-            throw new BadRequestException("Invitation has expired");
+            throw new BadRequestException("Lời mời đã hết hạn");
         }
         if (invitation.getStatus() == InvitationStatus.ACCEPTED) {
-            throw new BadRequestException("Invitation has already been accepted");
+            throw new BadRequestException("Lời mời đã được chấp nhận");
         }
         if (invitation.getStatus() == InvitationStatus.REJECTED) {
-            throw new BadRequestException("Invitation has already been rejected");
+            throw new BadRequestException("Lời mời đã bị từ chối");
         }
         if (invitation.getMaxAccessTime() != null
             && LocalDateTime.now().isAfter(invitation.getMaxAccessTime())) {
             invitation.setStatus(InvitationStatus.EXPIRED);
             invitationRepository.save(invitation);
-            throw new BadRequestException("Access window for this invitation has closed");
+            throw new BadRequestException("Cửa sổ truy cập của lời mời đã đóng");
         }
     }
 
@@ -806,11 +880,11 @@ public class InvitationService {
     private String generateAccessCode() {
         String code;
         do {
-            StringBuilder builder = new StringBuilder(ACCESS_CODE_LENGTH);
+            StringBuilder sb = new StringBuilder(ACCESS_CODE_LENGTH);
             for (int i = 0; i < ACCESS_CODE_LENGTH; i++) {
-                builder.append(ACCESS_CODE_CHARS.charAt(random.nextInt(ACCESS_CODE_CHARS.length())));
+                sb.append(ACCESS_CODE_CHARS.charAt(random.nextInt(ACCESS_CODE_CHARS.length())));
             }
-            code = builder.toString();
+            code = sb.toString();
         } while (invitationRepository.existsByAccessCode(code));
         return code;
     }
@@ -827,7 +901,7 @@ public class InvitationService {
             MatrixToImageWriter.writeToStream(bitMatrix, "PNG", outputStream);
             return outputStream.toByteArray();
         } catch (WriterException | java.io.IOException e) {
-            throw new RuntimeException("Failed to generate QR code", e);
+            throw new RuntimeException("Không thể tạo mã QR", e);
         }
     }
 
@@ -835,6 +909,10 @@ public class InvitationService {
         return toDTO(invitation, true);
     }
 
+    /**
+     * @param canSeeAccessCode khi false, accessCode được mask (null) để không lộ mã truy cập
+     *                         cho giáo viên không phải người tạo lời mời.
+     */
     private InvitationDTO toDTO(Invitation invitation, boolean canSeeAccessCode) {
         InvitationDTO dto = new InvitationDTO();
         dto.setId(invitation.getId());
@@ -853,7 +931,6 @@ public class InvitationService {
         dto.setUserFullName(invitation.getUser() != null ? invitation.getUser().getFullName() : invitation.getGuestName());
         dto.setUserEmail(invitation.getUser() != null ? invitation.getUser().getEmail() : invitation.getGuestEmail());
 
-        dto.setToken(invitation.getToken());
         dto.setStatus(invitation.getStatus());
         dto.setSentAt(invitation.getSentAt());
         dto.setAvailableFrom(invitation.getAvailableFrom());

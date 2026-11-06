@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookmarkPlus, CalendarClock, ClipboardCheck, Clock, ListChecks, Plus, Search, Trophy, User } from "lucide-react";
+import { BookmarkPlus, BookOpen, CalendarClock, ClipboardCheck, Clock, ListChecks, Plus, Search, Trophy, User } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -39,6 +39,13 @@ import {
 const PAGE_SIZE = 9;
 
 type ExamStatus = "UPCOMING" | "OPEN" | "CLOSED";
+
+/** "Course › Section/Lesson" label of the course an exam belongs to ("—" when it is not linked). */
+const courseLabel = (exam: ExamDTO): string => {
+  if (!exam.courseName) return "—";
+  const place = exam.lessonTitle || exam.sectionTitle;
+  return place ? `${exam.courseName} › ${place}` : exam.courseName;
+};
 
 const examStatus = (exam: ExamDTO): ExamStatus => {
   const now = Date.now();
@@ -286,6 +293,7 @@ export default function ExamManagementPage() {
                   <div className="grid gap-2 border-t pt-3">
                     <InfoRow icon={CalendarClock} label="Created" value={formatDateTime(exam.createdAt)} />
                     <InfoRow icon={User} label="Created by" value={exam.createdByName || "—"} />
+                    <InfoRow icon={BookOpen} label="Course" value={courseLabel(exam)} />
                     <InfoRow icon={Clock} label="Duration" value={`${exam.durationMinutes} mins`} />
                     <InfoRow icon={ListChecks} label="Questions" value={exam.questionIds?.length ?? exam.questions?.length ?? 0} />
                     <InfoRow icon={Trophy} label="Max score" value={exam.maxScore ?? 10} />

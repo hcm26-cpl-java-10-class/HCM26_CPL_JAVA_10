@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Calendar, CheckCircle2, Clock3, Sparkles } from "lucide-react";
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 
 export type ScheduleMode = "FLEXIBLE" | "FIXED_SHIFT";
 

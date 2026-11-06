@@ -26,6 +26,10 @@ export interface ExamConfigForm {
   singleSession: boolean;
   cameraProctoring: boolean;
   notifyOnViolation: boolean;
+  /** Optional link to a course / section / lesson ("" = not linked). */
+  courseId: string;
+  sectionId: string;
+  lessonId: string;
 }
 
 export const DEFAULT_CONFIG: ExamConfigForm = {
@@ -51,6 +55,9 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   singleSession: true,
   cameraProctoring: false,
   notifyOnViolation: false,
+  courseId: "",
+  sectionId: "",
+  lessonId: "",
 };
 
 export const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -115,6 +122,9 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   singleSession: exam.singleSession ?? false,
   cameraProctoring: exam.cameraProctoring ?? false,
   notifyOnViolation: exam.notifyOnViolation ?? false,
+  courseId: exam.courseId != null ? String(exam.courseId) : "",
+  sectionId: exam.sectionId != null ? String(exam.sectionId) : "",
+  lessonId: exam.lessonId != null ? String(exam.lessonId) : "",
 });
 
 /** Required selects that must be chosen by the teacher (no default value). */
@@ -215,5 +225,9 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
     singleSession: cfg.singleSession,
     cameraProctoring: cfg.cameraProctoring,
     notifyOnViolation: cfg.notifyOnViolation,
+    // null (not undefined) so that clearing the link on an existing exam is sent to the server
+    courseId: cfg.courseId ? Number(cfg.courseId) : null,
+    sectionId: cfg.sectionId ? Number(cfg.sectionId) : null,
+    lessonId: cfg.lessonId ? Number(cfg.lessonId) : null,
   };
 }

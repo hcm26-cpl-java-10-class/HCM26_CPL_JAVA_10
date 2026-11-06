@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.exam.job;
 
+import com.example.starter_project_2025.system.exam.audit.InvitationAuditAction;
+import com.example.starter_project_2025.system.exam.audit.InvitationAuditService;
 import com.example.starter_project_2025.system.exam.domain.Invitation;
 import com.example.starter_project_2025.system.exam.domain.InvitationRepository;
 import com.example.starter_project_2025.system.exam.domain.InvitationStatus;
@@ -18,6 +20,7 @@ import java.util.List;
 public class InvitationExpiryJob {
 
     private final InvitationRepository invitationRepository;
+    private final InvitationAuditService invitationAuditService;
 
     @Scheduled(fixedRateString = "${app.invitation.expiry-interval-ms:300000}")
     @Transactional
@@ -34,6 +37,11 @@ public class InvitationExpiryJob {
                 invitation.setStatus(InvitationStatus.EXPIRED);
             }
             invitationRepository.saveAll(expired);
+
+            for (Invitation invitation : expired) {
+                invitationAuditService.record(invitation, InvitationAuditAction.EXPIRE, null,
+                        "Hết hạn lời mời tự động");
+            }
 
             log.info("InvitationExpiryJob expired {} invitation(s)", expired.size());
         } catch (Exception e) {

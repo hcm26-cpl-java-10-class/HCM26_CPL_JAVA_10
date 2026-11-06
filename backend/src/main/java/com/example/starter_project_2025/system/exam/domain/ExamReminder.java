@@ -45,6 +45,11 @@ public class ExamReminder extends BaseEntity {
     @Column(length = 500)
     private String lastError;
 
+    /**
+     * Thời điểm sớm nhất được thử gửi lại reminder đã fail (backoff).
+     */
+    private LocalDateTime nextRetryAt;
+
     @Builder.Default
     @Column(nullable = false)
     private Boolean isActive = true;

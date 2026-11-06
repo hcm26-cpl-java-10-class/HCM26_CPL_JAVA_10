@@ -9,6 +9,7 @@ import com.example.starter_project_2025.system.exam.domain.ExamType;
 import com.example.starter_project_2025.system.exam.domain.LatePolicy;
 import com.example.starter_project_2025.system.exam.domain.ResultVisibility;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -27,6 +28,18 @@ import static com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY;
 
 @Getter @Setter
 public class ExamDTO extends BaseDTO {
+
+    /** Ten nguoi tao (chi de hien thi, he thong tu dien). */
+    @JsonProperty(access = READ_ONLY)
+    private String createdByName;
+
+    /** So bai da nop dang cho giao vien cham (chi de hien thi). */
+    @JsonProperty(access = READ_ONLY)
+    private Long pendingGradingCount;
+
+    /** Da co sinh vien lam bai hay chua (dung de khoa sua/them/xoa cau hoi; chi de hien thi). */
+    @JsonProperty(access = READ_ONLY)
+    private Boolean hasAttempts;
 
     @NotBlank(groups = OnCreate.class)
     @Size(max = 200, groups = {OnCreate.class, OnUpdate.class})
@@ -88,6 +101,39 @@ public class ExamDTO extends BaseDTO {
     private Boolean blockCopyPaste;
     private Boolean requireFullscreen;
     private Boolean singleSession;
+    private Boolean cameraProctoring;
+    private Boolean notifyOnViolation;
+
+    // ---- Lien ket voi course / section / lesson (tuy chon) ----
+    private Long courseId;
+    private Long sectionId;
+    private Long lessonId;
+    /** Ten hien thi (chi doc, he thong tu dien). */
+    @JsonProperty(access = READ_ONLY)
+    private String courseName;
+    @JsonProperty(access = READ_ONLY)
+    private String sectionTitle;
+    @JsonProperty(access = READ_ONLY)
+    private String lessonTitle;
+
+    /** true khi request co gui it nhat mot trong courseId/sectionId/lessonId (ke ca gia tri null = go lien ket). */
+    @JsonIgnore
+    private boolean courseLinkProvided;
+
+    public void setCourseId(Long courseId) {
+        this.courseId = courseId;
+        this.courseLinkProvided = true;
+    }
+
+    public void setSectionId(Long sectionId) {
+        this.sectionId = sectionId;
+        this.courseLinkProvided = true;
+    }
+
+    public void setLessonId(Long lessonId) {
+        this.lessonId = lessonId;
+        this.courseLinkProvided = true;
+    }
 
     @JsonProperty(access = READ_ONLY)
     private Boolean hasPassword;

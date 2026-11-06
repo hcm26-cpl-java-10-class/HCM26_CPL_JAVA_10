@@ -7,9 +7,18 @@ import org.springframework.stereotype.Component;
 
 import java.util.Objects;
 
+/**
+ * Data scope cho module Lời mời.
+ *
+ * <p>Quy tắc: chỉ ADMIN hoặc giáo viên đã tạo đề thi mới được quản lý lời mời của đề đó.
+ * Các vai trò khác (sinh viên, trợ giảng...) không được phép đọc/ghi trên tài nguyên này.
+ */
 @Component
 public class ExamAccessGuard {
 
+    /**
+     * @return true nếu người dùng hiện tại được phép quản lý đề thi & lời mời của đề.
+     */
     public boolean canManage(Exam exam, UserPrincipal principal) {
         if (exam == null || principal == null || principal.getUser() == null) {
             return false;
@@ -24,32 +33,44 @@ public class ExamAccessGuard {
         return currentUserId != null && Objects.equals(exam.getCreatedBy(), currentUserId);
     }
 
+    /**
+     * Chỉ ADMIN và TEACHER mới được phép quản lý lời mời.
+     * Sinh viên dù có trùng id với chủ đề thi cũng không được phép.
+     */
     private boolean hasManageRole(UserPrincipal principal) {
-        return principal.getUser().getRoles() != null
-                && principal.getUser().getRoles().stream()
-                .anyMatch(role -> "ADMIN".equals(role.getName()) || "TEACHER".equals(role.getName()));
+        if (principal.getUser().getRoles() == null) {
+            return false;
+        }
+        return principal.getUser().getRoles().stream()
+                .anyMatch(r -> "ADMIN".equals(r.getName()) || "TEACHER".equals(r.getName()));
     }
 
+    /**
+     * Ném {@link BadRequestException} nếu người dùng hiện tại không được phép quản lý đề.
+     */
     public void checkCanManage(Exam exam, UserPrincipal principal) {
         if (!canManage(exam, principal)) {
             throw new BadRequestException("Bạn không có quyền quản lý lời mời của đề thi này");
         }
     }
 
+    /**
+     * Giao vien (TEACHER) khong phai ADMIN: chi duoc thay/quan ly de thi do chinh minh tao.
+     * ADMIN thay tat ca; cac vai tro khac (vd. sinh vien) khong bi gioi han o day.
+     */
     public boolean isOwnerScoped(UserPrincipal principal) {
         if (principal == null || principal.getUser() == null || principal.getUser().getRoles() == null) {
             return false;
         }
-        boolean teacher = principal.getUser().getRoles().stream()
-                .anyMatch(role -> "TEACHER".equals(role.getName()));
+        boolean teacher = principal.getUser().getRoles().stream().anyMatch(r -> "TEACHER".equals(r.getName()));
         return teacher && !isAdmin(principal);
     }
 
     public boolean isAdmin(UserPrincipal principal) {
-        return principal != null
-                && principal.getUser() != null
-                && principal.getUser().getRoles() != null
-                && principal.getUser().getRoles().stream()
-                .anyMatch(role -> "ADMIN".equals(role.getName()));
+        if (principal == null || principal.getUser() == null || principal.getUser().getRoles() == null) {
+            return false;
+        }
+        return principal.getUser().getRoles().stream()
+                .anyMatch(r -> "ADMIN".equals(r.getName()));
     }
 }

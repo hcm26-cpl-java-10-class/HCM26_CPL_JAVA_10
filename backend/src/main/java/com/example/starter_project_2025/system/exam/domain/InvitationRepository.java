@@ -18,12 +18,22 @@ public interface InvitationRepository extends BaseCrudRepository<Invitation, Lon
 
     Optional<Invitation> findByAccessCode(String accessCode);
 
-    boolean existsByAccessCode(String accessCode);
-
     Optional<Invitation> findByExamIdAndUserId(Long examId, Long userId);
 
-    @Query("SELECT i FROM Invitation i WHERE i.status = 'PENDING' AND i.expiresAt < :now")
+    @Query("SELECT i FROM Invitation i WHERE i.status IN ('PENDING','SENT') AND i.expiresAt < :now")
     List<Invitation> findAllExpiredPendingInvitations(@Param("now") LocalDateTime now);
+
+    boolean existsByAccessCode(String accessCode);
+
+    /**
+     * Tìm lời mời (chưa hoàn tất) tương ứng với một lượt thi của sinh viên.
+     * Bao gồm cả lời mời ẩn danh (guestUserId) và lời mời gắn với user thật.
+     */
+    @Query("SELECT i FROM Invitation i WHERE i.exam.id = :examId "
+            + "AND (i.user.id = :studentId OR i.guestUserId = :studentId) "
+            + "AND i.status <> 'COMPLETED' AND i.status <> 'REVOKED' ORDER BY i.id DESC")
+    List<Invitation> findOpenByExamIdAndStudentId(@Param("examId") Long examId,
+                                                   @Param("studentId") Long studentId);
 
     @Query("SELECT i FROM Invitation i WHERE i.exam.id = :examId AND i.anonymous = true")
     List<Invitation> findAnonymousByExamId(@Param("examId") Long examId);

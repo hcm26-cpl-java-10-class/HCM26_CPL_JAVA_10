@@ -105,16 +105,15 @@ function ExamEditRoute() {
     return createElement(Navigate, { to: "/not-found-page", replace: true });
   }
 
-  return createElement(
-    MainLayout,
-    { pathName: { exams: "Assessment Management" } },
-    createElement(
+  return createElement(MainLayout, {
+    pathName: { exams: "Assessment Management" },
+    children: createElement(
       "section",
       { className: "mx-auto w-full max-w-5xl p-4" },
       createElement("h1", { className: "mb-4 text-2xl font-semibold" }, "Edit Exam"),
       createElement(ExamEditPanel, { examId: id }),
     ),
-  );
+  });
 }
 
 export const ROLE_HOME_PATHS = [

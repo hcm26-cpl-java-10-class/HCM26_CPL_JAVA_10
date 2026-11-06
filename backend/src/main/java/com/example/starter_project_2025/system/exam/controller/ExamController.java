@@ -4,16 +4,19 @@ import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.base.crud.controller.BaseCrudController;
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
 import com.example.starter_project_2025.base.crud.dto.OnUpdate;
+import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
 import org.springframework.validation.annotation.Validated;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamFilter;
+import com.example.starter_project_2025.system.exam.dto.ExamInvitationOverviewDTO;
 import com.example.starter_project_2025.system.exam.service.ExamServiceImpl;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,6 +45,14 @@ public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter
     public ResponseEntity<ExamDTO> addQuestions(@PathVariable Long id,
                                                 @Valid @RequestBody AddQuestionsRequest req) {
         return ResponseEntity.ok(service.addQuestions(id, req.questionIds()));
+    }
+
+    @GetMapping("/invitations/overview")
+    @PreAuthorize("hasAuthority('INVITATION_READ')")
+    public ResponseEntity<List<ExamInvitationOverviewDTO>> listInvitationOverviews(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(service.listInvitationOverviews(principal));
     }
 
     @DeleteMapping("/{id}/questions/{questionId}")
