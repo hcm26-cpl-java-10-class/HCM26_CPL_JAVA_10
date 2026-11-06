@@ -15,9 +15,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * US-10/US-11: the student (team leader) view of a DRAFT team. A student only
- * sees / edits the DRAFT teams they lead (role {@code PM}); the service
- * re-checks ownership on every write.
+ * US-10/US-11: student access to team configuration is gated by publication.
  */
 @RestController
 @RequiredArgsConstructor

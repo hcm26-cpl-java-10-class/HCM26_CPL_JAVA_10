@@ -96,11 +96,7 @@ public interface ProjectMemberRepository
             @Param("statuses") Collection<ProjectTeamStatus> statuses
     );
 
-    /**
-     * US-10: DRAFT teams in which the given user holds the leadership role
-     * (team roles use {@code PM} for the team leader). US-11 stores multiple
-     * roles as a comma separated value, so the leader can also hold BA/DEV/QA.
-     */
+    /** US-10: teams in which the user is the designated leader. */
     @Query("""
         select pm
         from ProjectMember pm
@@ -110,18 +106,14 @@ public interface ProjectMemberRepository
         where pm.classMember.user.id = :userId
           and pm.classMember.status = :memberStatus
           and team.status = :teamStatus
-          and (
-              pm.role = :role
-              or pm.role like concat(:role, ',%')
-              or pm.role like concat('%,', :role)
-              or pm.role like concat('%,', :role, ',%')
-          )
+          and pm.isActive = true
+          and pm.classMember.isActive = true
+          and team.leaderMemberId = pm.classMember.id
         order by team.id
         """)
     List<ProjectMember> findLeaderTeams(
             @Param("userId") Long userId,
             @Param("memberStatus") ClassMemberStatus memberStatus,
-            @Param("teamStatus") ProjectTeamStatus teamStatus,
-            @Param("role") String role
+            @Param("teamStatus") ProjectTeamStatus teamStatus
     );
 }

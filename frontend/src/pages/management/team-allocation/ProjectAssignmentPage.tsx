@@ -18,7 +18,8 @@ export default function ProjectAssignmentPage() {
   const sessionId = positiveId(search.get("sessionId"));
   const teamId = positiveId(search.get("teamId"));
   const backTo = classId == null ? "/team-allocation" : "/team-allocation/classes/" + classId
-    + (sessionId == null ? "" : "?sessionId=" + sessionId + (teamId == null ? "" : "&teamId=" + teamId));
+    + (sessionId == null ? "" : "/setup?sessionId=" + sessionId + "&tab=review"
+      + (teamId == null ? "" : "&teamId=" + teamId));
 
   return (
     <MainLayout pathName={{ "team-allocation": "Phân nhóm dự án", assign: "Gán Master Project" }}>

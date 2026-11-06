@@ -200,6 +200,8 @@ public class TemplateConfigurationService {
     }
 
     public ProjectTemplate duplicate(ProjectTemplate source, ProjectTemplateSnapshot version, String name, Long tenantId) {
+        ProjectTemplate parent = java.util.Objects.equals(source.getTenantId(), tenantId) ? source.getParentTemplate() : null;
+        validator.validateModuleParent(parent);
         ObjectNode content = parse(version.getContentJson());
         ObjectNode fallback = parse(capture(source));
         fallback.fieldNames().forEachRemaining(field -> {
@@ -222,7 +224,7 @@ public class TemplateConfigurationService {
                 configuration.level(), configuration.estimatedDurationWeeks() == null ? null
                         : BigDecimal.valueOf(configuration.estimatedDurationWeeks()), null), false);
         var template = templates.saveAndFlush(ProjectTemplate.builder().tenantId(tenantId).code(code).name(name)
-                .parentTemplate(java.util.Objects.equals(source.getTenantId(), tenantId) ? source.getParentTemplate() : null)
+                .parentTemplate(parent)
                 .technologyStack(content.path("technologyStack").isTextual() ? content.path("technologyStack").asText() : null)
                 .description(configuration.description()).category(configuration.category()).level(configuration.level())
                 .estimatedDurationWeeks(configuration.estimatedDurationWeeks())
