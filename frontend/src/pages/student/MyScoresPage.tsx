@@ -24,7 +24,7 @@ function formatSubmittedAt(value?: string | null): string {
 }
 
 const examCategories = [
-  { value: "ASSESSMENT", label: "Assessment" },
+  { value: "ASSIGNMENT", label: "Assignment" },
   { value: "QUIZ", label: "Quiz" },
   { value: "MIDTERM", label: "Midterm" },
   { value: "FINAL_TEST", label: "Final Test" },
