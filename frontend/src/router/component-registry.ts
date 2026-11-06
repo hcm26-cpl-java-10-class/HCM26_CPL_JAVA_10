@@ -102,16 +102,18 @@ function ExamEditRoute() {
   const id = Number(examId);
 
   if (!Number.isSafeInteger(id) || id < 1) {
-    return <Navigate to="/not-found-page" replace />;
+    return createElement(Navigate, { to: "/not-found-page", replace: true });
   }
 
-  return (
-    <MainLayout pathName={{ exams: "Assessment Management" }}>
-      <section className="mx-auto w-full max-w-5xl p-4">
-        <h1 className="mb-4 text-2xl font-semibold">Edit Exam</h1>
-        <ExamEditPanel examId={id} />
-      </section>
-    </MainLayout>
+  return createElement(
+    MainLayout,
+    { pathName: { exams: "Assessment Management" } },
+    createElement(
+      "section",
+      { className: "mx-auto w-full max-w-5xl p-4" },
+      createElement("h1", { className: "mb-4 text-2xl font-semibold" }, "Edit Exam"),
+      createElement(ExamEditPanel, { examId: id }),
+    ),
   );
 }
 

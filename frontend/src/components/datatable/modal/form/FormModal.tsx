@@ -13,13 +13,6 @@ import { FormFieldRenderer } from "./FormFieldRenderer";
 import { validateForm } from "./validateForm";
 
 type SectionField = {
-  const resolveDefaultValue = (field: FieldSchema) => {
-    if (field.defaultValue !== undefined) return field.defaultValue;
-    if (field.type === "boolean") return false;
-    if (field.type === "relation" && field.relation?.multiple) return [];
-    if (field.type === "number") return "";
-    return "";
-  };
   name: string;
   fullWidth?: boolean;
 };
@@ -53,7 +46,6 @@ const sideMenuFormLayouts: Record<string, FormLayout> = {
         title: "Navigation And Access",
         description: "Define route and required permission to display this menu.",
         fields: [
-    const [touchedServerErrorFields, setTouchedServerErrorFields] = useState<Set<string>>(new Set());
           { name: "url" },
           { name: "requiredPermission" },
         ],
