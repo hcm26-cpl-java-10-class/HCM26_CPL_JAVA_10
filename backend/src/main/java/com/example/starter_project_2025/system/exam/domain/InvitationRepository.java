@@ -18,6 +18,8 @@ public interface InvitationRepository extends BaseCrudRepository<Invitation, Lon
 
     Optional<Invitation> findByAccessCode(String accessCode);
 
+    boolean existsByAccessCode(String accessCode);
+
     Optional<Invitation> findByExamIdAndUserId(Long examId, Long userId);
 
     @Query("SELECT i FROM Invitation i WHERE i.status = 'PENDING' AND i.expiresAt < :now")

@@ -3,6 +3,8 @@ package com.example.starter_project_2025.system.exam.service;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.exam.audit.InvitationAuditAction;
+import com.example.starter_project_2025.system.exam.audit.InvitationAuditService;
 import com.example.starter_project_2025.system.exam.domain.*;
 import com.example.starter_project_2025.system.exam.dto.*;
 import com.example.starter_project_2025.system.notification.service.EmailService;
@@ -34,6 +36,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -77,6 +80,26 @@ public class InvitationService {
         }
     }
 
+    private void validateExamInvitable(Exam exam) {
+        if (exam.getEndTime() != null && LocalDateTime.now().isAfter(exam.getEndTime())) {
+            throw new BadRequestException("Kỳ thi đã kết thúc, không thể mời tham dự");
+        }
+    }
+
+    private LocalDateTime resolveExpiresAt(String rawExpiresAt, Exam exam) {
+        LocalDateTime expiresAt = rawExpiresAt != null && !rawExpiresAt.isBlank()
+                ? parseDateTime(rawExpiresAt)
+                : exam.getEndTime() != null ? exam.getEndTime() : LocalDateTime.now().plusDays(30);
+
+        if (expiresAt != null && LocalDateTime.now().isAfter(expiresAt)) {
+            throw new BadRequestException("Thời hạn lời mời không được nằm trong quá khứ");
+        }
+        if (exam.getEndTime() != null && expiresAt != null && expiresAt.isAfter(exam.getEndTime())) {
+            throw new BadRequestException("Thời hạn lời mời không được vượt quá thời gian kết thúc kỳ thi");
+        }
+        return expiresAt;
+    }
+
     @Transactional
     public InvitationDTO createInvitation(Long examId, InvitationCreateRequest request, UserPrincipal principal) {
         boolean isAdminOrTeacher = principal.getUser().getRoles().stream()
@@ -88,6 +111,9 @@ public class InvitationService {
         Exam exam = examRepository.findById(examId)
                 .filter(e -> Boolean.TRUE.equals(e.getIsActive()))
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found with id: " + examId));
+
+        examAccessGuard.checkCanManage(exam, principal);
+        validateExamInvitable(exam);
 
         User user = userRepository.findById(request.getUserId())
                 .filter(u -> Boolean.TRUE.equals(u.getIsActive()))
@@ -131,6 +157,9 @@ public class InvitationService {
         Exam exam = examRepository.findById(examId)
                 .filter(e -> Boolean.TRUE.equals(e.getIsActive()))
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found with id: " + examId));
+
+        examAccessGuard.checkCanManage(exam, principal);
+        validateExamInvitable(exam);
 
         List<InvitationDTO> successful = new ArrayList<>();
         List<String> errors = new ArrayList<>();
@@ -350,7 +379,14 @@ public class InvitationService {
     }
 
     @Transactional(readOnly = true)
-    public List<InvitationDTO> getInvitationsByExam(Long examId, InvitationFilter filter) {
+    public List<InvitationDTO> getInvitationsByExam(
+            Long examId,
+            InvitationFilter filter,
+            UserPrincipal principal) {
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found with id: " + examId));
+        examAccessGuard.checkCanManage(exam, principal);
+
         List<Invitation> invitations;
 
         if (filter != null && filter.getUserIds() != null && !filter.getUserIds().isEmpty()) {
@@ -413,9 +449,10 @@ public class InvitationService {
     }
 
     @Transactional
-    public InvitationDTO revokeInvitation(Long id, String reason) {
+    public InvitationDTO revokeInvitation(Long id, String reason, UserPrincipal principal) {
         Invitation invitation = invitationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
+        examAccessGuard.checkCanManage(invitation.getExam(), principal);
 
         if (invitation.getStatus() == InvitationStatus.REVOKED ||
             invitation.getStatus() == InvitationStatus.COMPLETED) {
@@ -430,13 +467,16 @@ public class InvitationService {
             emailService.sendExamRevoked(invitation);
         }
 
-        return toDTO(invitationRepository.save(invitation));
+        InvitationDTO dto = toDTO(invitationRepository.save(invitation));
+        invitationAuditService.record(invitation, InvitationAuditAction.REVOKE, principal, reason);
+        return dto;
     }
 
     @Transactional
-    public InvitationDTO resendInvitation(Long id) {
+    public InvitationDTO resendInvitation(Long id, UserPrincipal principal) {
         Invitation invitation = invitationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
+        examAccessGuard.checkCanManage(invitation.getExam(), principal);
 
         if (invitation.getUser() == null) {
             throw new BadRequestException("Cannot resend anonymous invitation");
@@ -453,9 +493,42 @@ public class InvitationService {
         emailService.sendExamInvitation(invitation, invitation.getUser());
 
         invitation.setSentAt(LocalDateTime.now());
-        invitation.setStatus(InvitationStatus.SENT);
+        if (invitation.getStatus() != InvitationStatus.ACCEPTED) {
+            invitation.setStatus(InvitationStatus.SENT);
+        }
 
-        return toDTO(invitationRepository.save(invitation));
+        InvitationDTO dto = toDTO(invitationRepository.save(invitation));
+        invitationAuditService.record(invitation, InvitationAuditAction.RESEND, principal,
+                "Gửi lại lời mời (lần " + invitation.getResendCount() + ")");
+        return dto;
+    }
+
+    @Transactional
+    public void deleteInvitation(Long id, UserPrincipal principal) {
+        Invitation invitation = invitationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
+        examAccessGuard.checkCanManage(invitation.getExam(), principal);
+
+        if (invitation.getStatus() == InvitationStatus.ACCEPTED
+                || invitation.getStatus() == InvitationStatus.COMPLETED) {
+            throw new BadRequestException("Không thể xoá lời mời đã "
+                    + (invitation.getStatus() == InvitationStatus.ACCEPTED ? "được chấp nhận" : "hoàn thành")
+                    + " để giữ lịch sử thi");
+        }
+
+        List<ExamReminder> reminders = examReminderRepository.findByInvitationId(id);
+        for (ExamReminder reminder : reminders) {
+            reminder.setIsActive(false);
+            if (reminder.getStatus() == ReminderStatus.PENDING) {
+                reminder.setStatus(ReminderStatus.CANCELLED);
+            }
+            reminder.setLastError("Lời mời đã bị xoá");
+            examReminderRepository.save(reminder);
+        }
+
+        invitationAuditService.record(invitation, InvitationAuditAction.DELETE, principal,
+                "Xoá lời mời, đã huỷ " + reminders.size() + " nhắc nhở");
+        invitationRepository.delete(invitation);
     }
 
     @Transactional(readOnly = true)
@@ -483,6 +556,10 @@ public class InvitationService {
                 .filter(e -> Boolean.TRUE.equals(e.getIsActive()))
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found with id: " + examId));
 
+        examAccessGuard.checkCanManage(exam, principal);
+        validateExamInvitable(exam);
+        LocalDateTime expiresAt = resolveExpiresAt(request.getExpiresAt(), exam);
+
         String accessCode = generateAccessCode();
 
         String guestName = blankToNull(request.getStudentName());
@@ -494,9 +571,7 @@ public class InvitationService {
                 .token(generateToken())
                 .status(InvitationStatus.SENT)
                 .sentAt(LocalDateTime.now())
-                .expiresAt(request.getExpiresAt() != null ?
-                        parseDateTime(request.getExpiresAt()) :
-                        exam.getEndTime() != null ? exam.getEndTime() : LocalDateTime.now().plusDays(30))
+                .expiresAt(expiresAt)
                 .note(request.getNote())
                 .anonymous(true)
                 .guestName(guestName)
@@ -504,9 +579,8 @@ public class InvitationService {
                 .accessCode(accessCode)
                 .availableFrom(parseDateTime(request.getAvailableFrom()))
                 .maxAccessTime(request.getMaxAccessTime() != null ?
-                        parseDateTime(request.getMaxAccessTime()) : null)
-                .maxAccessAttempts(request.getMaxAccessAttempts() != null ?
-                        request.getMaxAccessAttempts() : 1)
+                    parseDateTime(request.getMaxAccessTime()) : defaultMaxAccessTime(exam))
+                .maxAccessAttempts(Optional.ofNullable(request.getMaxAccessAttempts()).orElse(1))
                 .build();
 
         invitation = invitationRepository.save(invitation);
@@ -515,7 +589,16 @@ public class InvitationService {
             emailService.sendAnonymousAccessLink(invitation, guestEmail);
         }
 
-        return toDTO(invitation);
+        invitationAuditService.record(invitation, InvitationAuditAction.CREATE, principal,
+                "Tạo lời mời ẩn danh" + (guestEmail != null ? " cho " + guestEmail : ""));
+        return toDTO(invitation, canSeeAccessCode(invitation, principal));
+    }
+
+    private LocalDateTime defaultMaxAccessTime(Exam exam) {
+        if (exam.getStartTime() != null && exam.getDurationMinutes() > 0) {
+            return exam.getStartTime().plusMinutes(exam.getDurationMinutes());
+        }
+        return exam.getEndTime();
     }
 
     private String blankToNull(String value) {
@@ -676,9 +759,17 @@ public class InvitationService {
     }
 
     @Transactional(readOnly = true)
-    public InvitationDTO getById(Long id) {
-        return toDTO(invitationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id)));
+    public InvitationDTO getById(Long id, UserPrincipal principal) {
+        Invitation invitation = invitationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Invitation not found with id: " + id));
+        examAccessGuard.checkCanManage(invitation.getExam(), principal);
+        return toDTO(invitation, canSeeAccessCode(invitation, principal));
+    }
+
+    private boolean canSeeAccessCode(Invitation invitation, UserPrincipal principal) {
+        return examAccessGuard.isAdmin(principal)
+                || (principal != null && principal.getUser() != null
+                && Objects.equals(invitation.getCreatedBy(), principal.getUser().getId()));
     }
 
     private void validateInvitationForAction(Invitation invitation) {
@@ -713,11 +804,15 @@ public class InvitationService {
     }
 
     private String generateAccessCode() {
-        StringBuilder sb = new StringBuilder(ACCESS_CODE_LENGTH);
-        for (int i = 0; i < ACCESS_CODE_LENGTH; i++) {
-            sb.append(ACCESS_CODE_CHARS.charAt(random.nextInt(ACCESS_CODE_CHARS.length())));
-        }
-        return sb.toString();
+        String code;
+        do {
+            StringBuilder builder = new StringBuilder(ACCESS_CODE_LENGTH);
+            for (int i = 0; i < ACCESS_CODE_LENGTH; i++) {
+                builder.append(ACCESS_CODE_CHARS.charAt(random.nextInt(ACCESS_CODE_CHARS.length())));
+            }
+            code = builder.toString();
+        } while (invitationRepository.existsByAccessCode(code));
+        return code;
     }
 
     private String buildAnonymousAccessUrl(Invitation invitation) {
@@ -737,6 +832,10 @@ public class InvitationService {
     }
 
     private InvitationDTO toDTO(Invitation invitation) {
+        return toDTO(invitation, true);
+    }
+
+    private InvitationDTO toDTO(Invitation invitation, boolean canSeeAccessCode) {
         InvitationDTO dto = new InvitationDTO();
         dto.setId(invitation.getId());
         dto.setIsActive(invitation.getIsActive());
@@ -768,7 +867,7 @@ public class InvitationService {
         dto.setAnonymous(invitation.getAnonymous());
         dto.setGuestName(invitation.getGuestName());
         dto.setGuestEmail(invitation.getGuestEmail());
-        dto.setAccessCode(invitation.getAccessCode());
+        dto.setAccessCode(canSeeAccessCode ? invitation.getAccessCode() : null);
         dto.setMaxAccessTime(invitation.getMaxAccessTime());
         dto.setMaxAccessAttempts(invitation.getMaxAccessAttempts());
         dto.setAccessAttemptCount(invitation.getAccessAttemptCount());

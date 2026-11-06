@@ -59,35 +59,43 @@ public class InvitationController {
     public ResponseEntity<List<InvitationDTO>> listByExam(
             @PathVariable Long examId,
             @RequestParam(required = false) InvitationStatus status,
-            @RequestParam(required = false) Boolean anonymous
+            @RequestParam(required = false) Boolean anonymous,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         InvitationFilter filter = InvitationFilter.builder()
                 .status(status)
                 .anonymous(anonymous)
                 .build();
 
-        return ResponseEntity.ok(service.getInvitationsByExam(examId, filter));
+        return ResponseEntity.ok(service.getInvitationsByExam(examId, filter, principal));
     }
 
     @GetMapping("/invitations/{id}")
     @PreAuthorize("hasAuthority('INVITATION_READ')")
-    public ResponseEntity<InvitationDTO> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(service.getById(id));
+    public ResponseEntity<InvitationDTO> getById(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(service.getById(id, principal));
     }
 
     @PatchMapping("/invitations/{id}/revoke")
     @PreAuthorize("hasAuthority('INVITATION_DELETE')")
     public ResponseEntity<InvitationDTO> revoke(
             @PathVariable Long id,
-            @RequestParam(required = false) String reason
+            @RequestParam(required = false) String reason,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-        return ResponseEntity.ok(service.revokeInvitation(id, reason));
+        return ResponseEntity.ok(service.revokeInvitation(id, reason, principal));
     }
 
     @PostMapping("/invitations/{id}/resend")
     @PreAuthorize("hasAuthority('INVITATION_UPDATE')")
-    public ResponseEntity<InvitationDTO> resend(@PathVariable Long id) {
-        return ResponseEntity.ok(service.resendInvitation(id));
+    public ResponseEntity<InvitationDTO> resend(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(service.resendInvitation(id, principal));
     }
 
     @GetMapping(value = "/invitations/{id}/qr", produces = MediaType.IMAGE_PNG_VALUE)
