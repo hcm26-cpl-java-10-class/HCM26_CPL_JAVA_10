@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { SaveSubmissionDraftRequest, SubmissionArtifactType, SubmissionDetail } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, CalendarClock, ExternalLink, Link2, Plus, RotateCcw, Save, Send, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SubmissionStatusBadge } from "@/pages/management/project/milestone-submission/components/SubmissionStatusBadge";
@@ -96,11 +96,17 @@ export function StudentSubmissionPage() {
   const client = useQueryClient();
   const submitKey = useRef<string | null>(null);
   const query = useQuery({ queryKey: ["student-submission", submissionId], queryFn: () => milestoneSubmissionApi.getMyDetail(submissionId as string), enabled: Boolean(submissionId), retry: false });
-  const [form, setForm] = useState<SaveSubmissionDraftRequest | null>(null);
+  const [form, setForm] = useState<SaveSubmissionDraftRequest | null>(() =>
+    query.data?.status === "DRAFT" ? toForm(query.data) : null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [error, setError] = useState<string>();
 
-  useEffect(() => { if (query.data?.status === "DRAFT") setForm(toForm(query.data)); }, [query.data?.id, query.data?.currentVersion.id, query.data?.status]);
+  const formSourceKey = JSON.stringify([query.data?.id, query.data?.currentVersion.id, query.data?.status]);
+  const [previousFormSourceKey, setPreviousFormSourceKey] = useState(formSourceKey);
+  if (previousFormSourceKey !== formSourceKey) {
+    setPreviousFormSourceKey(formSourceKey);
+    setForm(query.data?.status === "DRAFT" ? toForm(query.data) : null);
+  }
 
   const store = (data: SubmissionDetail) => {
     client.setQueryData(["student-submission", submissionId], data);

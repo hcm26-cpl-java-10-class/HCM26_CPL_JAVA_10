@@ -40,7 +40,7 @@ import {
   X,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import {
   SPRINT_BACKLOG_PRIORITY_OPTIONS,
@@ -220,8 +220,16 @@ export function BacklogItemDetailSheet({
   });
 
   const detail = detailQuery.data;
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(() => open && detail ? toDraft(detail) : null);
   const [saving, setSaving] = useState(false);
+  const [editorSource, setEditorSource] = useState({ itemId: item?.id, detail, open });
+
+  // Reset during the render that receives a new record, rather than painting
+  // the previous item's editor first and resetting it in an effect afterwards.
+  if (editorSource.itemId !== item?.id || editorSource.detail !== detail || editorSource.open !== open) {
+    setEditorSource({ itemId: item?.id, detail, open });
+    setDraft(open && detail ? toDraft(detail) : null);
+  }
 
   /**
    * Assignee candidates of the item: the team of the open workspace when the
@@ -251,21 +259,6 @@ export function BacklogItemDetailSheet({
   /** Members offered by the picker (the board list wins when it is present). */
   const assigneeOptions =
     assignees.length > 0 ? assignees : assigneeOptionsQuery.data ?? [];
-
-  /** Switching to another item resets the editor until its record is loaded. */
-  useEffect(() => {
-    setDraft(null);
-  }, [item?.id]);
-
-  /**
-   * Mirrors the server record into the editor. Re-runs after every refetch so
-   * the panel always shows the persisted values.
-   */
-  useEffect(() => {
-    if (open && detail) {
-      setDraft(toDraft(detail));
-    }
-  }, [detail, open]);
 
   if (!item) {
     return null;

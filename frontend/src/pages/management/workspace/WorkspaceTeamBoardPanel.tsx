@@ -14,7 +14,7 @@ import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, History, LayoutGrid, List, Plus, RefreshCw, Search, UserRound } from "lucide-react";
 import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
 import type { BacklogPriority, SprintBacklogWorkType, SprintPlanningItem } from "@/types";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -155,7 +155,7 @@ function auditSummary(action: string, beforeState?: string | null, afterState?: 
 
 export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOnly = false, canUpdate, canMove, canDelete, onCreateWorkItem }: { workspaceId: number; teamId: number; projectId?: number | null; readOnly?: boolean; canUpdate: boolean; canMove: boolean; canDelete: boolean; onCreateWorkItem?: () => void }) {
   const queryClient = useQueryClient();
-  const [sprintId, setSprintId] = useState<number>();
+  const [requestedSprintId, setSprintId] = useState<number>();
   const [memberFilter, setMemberFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [priorityFilter, setPriorityFilter] = useState("ALL");
@@ -167,7 +167,11 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
   const [detailItem, setDetailItem] = useState<SprintPlanningItem | null>(null);
   const [historyItem, setHistoryItem] = useState<{ id: number; title: string } | null>(null);
-  useEffect(() => setHistoryItem(null), [teamId]);
+  const [historyTeamId, setHistoryTeamId] = useState(teamId);
+  if (historyTeamId !== teamId) {
+    setHistoryTeamId(teamId);
+    setHistoryItem(null);
+  }
   const historyQuery = useQuery({
     queryKey: ["sprint-backlog-audit", historyItem?.id],
     queryFn: () => sprintBacklogApi.getAuditLogs(historyItem!.id),
@@ -190,20 +194,12 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
-  const sprints = query.data?.sprints ?? [];
-
-  useEffect(() => {
-    if (!sprints.length) {
-      setSprintId(undefined);
-      return;
-    }
-    setSprintId((current) => sprints.some((sprint) => sprint.id === current)
-      ? current
-      : preferredSprint(sprints)?.id);
-  }, [sprints]);
+  const sprints = useMemo(() => query.data?.sprints ?? [], [query.data?.sprints]);
+  const sprintId = sprints.some((sprint) => sprint.id === requestedSprintId)
+    ? requestedSprintId : preferredSprint(sprints)?.id;
 
   const selectedSprint = sprints.find((sprint) => sprint.id === sprintId);
-  const allItems = query.data?.items ?? [];
+  const allItems = useMemo(() => query.data?.items ?? [], [query.data?.items]);
   const boardItems = useMemo(() => allItems.filter((item) =>
     item.sprintId === sprintId || item.sprintId == null,
   ), [allItems, sprintId]);
@@ -244,9 +240,9 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     retry: false,
   })) });
   const itemTitleById = new Map(allSprintItems.filter((item) => item.id != null).map((item) => [item.id!, item.title ?? "Work item"]));
-  const activity = useMemo(() => auditQueries.flatMap((result) =>
+  const activity = auditQueries.flatMap((result) =>
     (result.data ?? []).map((entry) => ({ ...entry, itemTitle: itemTitleById.get(entry.sprintBacklogId) ?? "Work item" })),
-  ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10), [auditQueries, allSprintItems]);
+  ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10);
 
   const moveItem = async (item: SprintBacklogDTO, target: BoardColumnKey) => {
     if (!canUpdate || savingItemId != null || item.id == null) return;
@@ -352,7 +348,12 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     });
   };
 
-  useEffect(() => setListPage(0), [sprintId, memberFilter, searchTerm, sortBy, statusFilter, priorityFilter]);
+  const filterKey = JSON.stringify([teamId, sprintId, memberFilter, searchTerm, sortBy, statusFilter, priorityFilter]);
+  const [previousFilterKey, setPreviousFilterKey] = useState(filterKey);
+  if (previousFilterKey !== filterKey) {
+    setPreviousFilterKey(filterKey);
+    setListPage(0);
+  }
 
   return <div className="space-y-3">
     <Card className="gap-0 overflow-hidden border-border py-0 shadow-sm">
