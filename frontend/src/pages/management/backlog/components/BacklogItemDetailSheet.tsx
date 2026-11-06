@@ -297,7 +297,7 @@ export function BacklogItemDetailSheet({
       await refreshBacklogItem(queryClient, saved);
       await onChanged?.();
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Không thể cập nhật công việc."));
+      toast.error(extractErrorMessage(error, "Could not update the work item."));
       // Restore the last persisted values (the draft otherwise keeps the input).
       if (detail) {
         setDraft(toDraft(detail));
@@ -325,7 +325,7 @@ export function BacklogItemDetailSheet({
     const description = draft?.description ?? "";
 
     if (description.length > MAX_DESCRIPTION_LENGTH) {
-      toast.error("Mô tả không được vượt quá 1000 ký tự");
+      toast.error("Description must not exceed 1,000 characters");
       return;
     }
 
@@ -527,11 +527,11 @@ export function BacklogItemDetailSheet({
 
       toast.success(
         targetId === null
-          ? "Đã chuyển công việc về Backlog."
-          : "Đã chuyển công việc sang Sprint.",
+          ? "Work item moved to the backlog."
+          : "Work item moved to the sprint.",
       );
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Không thể chuyển công việc."));
+      toast.error(extractErrorMessage(error, "Could not move the work item."));
     } finally {
       setSaving(false);
     }
@@ -544,11 +544,11 @@ export function BacklogItemDetailSheet({
 
     try {
       await sprintBacklogApi.delete(String(item.id));
-      toast.success("Đã xóa công việc.");
+      toast.success("Work item deleted.");
       await onDeleted?.();
       onClose(false);
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Không thể xóa công việc."));
+      toast.error(extractErrorMessage(error, "Could not delete the work item."));
     } finally {
       setSaving(false);
     }
@@ -559,9 +559,9 @@ export function BacklogItemDetailSheet({
 
     try {
       await navigator.clipboard.writeText(itemKey);
-      toast.success(`Đã sao chép ${itemKey}.`);
+      toast.success(`Copied ${itemKey}.`);
     } catch {
-      toast.error("Không thể sao chép.");
+      toast.error("Could not copy to the clipboard.");
     }
   };
 
@@ -805,7 +805,7 @@ export function BacklogItemDetailSheet({
                       : "text-muted-foreground",
                   )}
                 >
-                  {draft.description.length}/{MAX_DESCRIPTION_LENGTH} ký tự
+                  {draft.description.length}/{MAX_DESCRIPTION_LENGTH} characters
                 </p>
                 <Button
                   type="button"
