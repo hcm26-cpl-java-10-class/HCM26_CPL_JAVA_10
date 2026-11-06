@@ -87,6 +87,7 @@ import CertificateDetailPage from "@/pages/management/demo/certificate/pages/Cer
 import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
 import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage.tsx";
 import DepartmentManagementPage from "@/pages/management/demo/department";
+import CourseGradeDetailPage from "@/pages/student/CourseGradeDetailPage";
 
 export interface RouteConfig {
   path: string;
@@ -437,6 +438,13 @@ export const routes: RouteConfig[] = [
     component: MyScoresPage,
     requiredPermission: "STUDENT_SCORE_VIEW_OWN",
     isModuleDriven: true,
+  },
+
+  {
+    path: "/my-scores/:courseId",
+    component: CourseGradeDetailPage,
+    requiredPermission: "STUDENT_SCORE_VIEW_OWN",
+    isModuleDriven: false,
   },
 
   {
