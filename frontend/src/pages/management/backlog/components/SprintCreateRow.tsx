@@ -125,8 +125,8 @@ const WORK_TYPES = Object.keys(
   BACKLOG_WORK_TYPE_META,
 ) as SprintBacklogWorkType[];
 
-/** Business rule of UFR-PRJ-003-02 (description <= 2000 characters). */
-const MAX_DESCRIPTION_LENGTH = 2000;
+/** Business rule of UFR-PRJ-003-02 (description <= 1000 characters). */
+const MAX_DESCRIPTION_LENGTH = 1000;
 /** Business rule of UFR-PRJ-003-02 (title 1..250 characters). */
 const MAX_TITLE_LENGTH = 250;
 
@@ -626,12 +626,13 @@ export function SprintCreateRow({
         </Button>
         </div>
 
-        {/* Structured description (1 - 2000 characters), optional. */}
+        {/* Structured description (1 - 1000 characters), optional. */}
         <div className="flex items-start gap-2 px-1 pb-0.5">
           <Textarea
             value={descriptionDraft}
+            maxLength={MAX_DESCRIPTION_LENGTH}
             rows={2}
-            placeholder="Detailed description (optional, up to 2000 characters)…"
+            placeholder="Detailed description (optional, up to 1000 characters)…"
             aria-label="Backlog item description"
             aria-invalid={Boolean(fieldErrors.description)}
             className={cn(
@@ -639,7 +640,7 @@ export function SprintCreateRow({
               fieldErrors.description && "border-destructive/70",
             )}
             onChange={(event) => {
-              setDescriptionDraft(event.target.value);
+              setDescriptionDraft(event.target.value.slice(0, MAX_DESCRIPTION_LENGTH));
               clearFieldError("description");
               if (error) setError(null);
             }}

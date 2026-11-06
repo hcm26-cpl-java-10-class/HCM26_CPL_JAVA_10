@@ -40,7 +40,7 @@ import {
   X,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import {
   SPRINT_BACKLOG_PRIORITY_OPTIONS,
@@ -61,8 +61,8 @@ const NO_MILESTONE = "none";
 /** Sentinel of the assignee picker (Radix forbids an empty SelectItem value). */
 const NO_ASSIGNEE = "none";
 
-/** Business rule of UFR-PRJ-003-02: description <= 2000 characters. */
-const MAX_DESCRIPTION_LENGTH = 2000;
+/** Business rule of UFR-PRJ-003-02: description <= 1000 characters. */
+const MAX_DESCRIPTION_LENGTH = 1000;
 
 interface BacklogItemDetailSheetProps {
   open: boolean;
@@ -220,8 +220,16 @@ export function BacklogItemDetailSheet({
   });
 
   const detail = detailQuery.data;
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(() => open && detail ? toDraft(detail) : null);
   const [saving, setSaving] = useState(false);
+  const [editorSource, setEditorSource] = useState({ itemId: item?.id, detail, open });
+
+  // Reset during the render that receives a new record, rather than painting
+  // the previous item's editor first and resetting it in an effect afterwards.
+  if (editorSource.itemId !== item?.id || editorSource.detail !== detail || editorSource.open !== open) {
+    setEditorSource({ itemId: item?.id, detail, open });
+    setDraft(open && detail ? toDraft(detail) : null);
+  }
 
   /**
    * Assignee candidates of the item: the team of the open workspace when the
@@ -251,21 +259,6 @@ export function BacklogItemDetailSheet({
   /** Members offered by the picker (the board list wins when it is present). */
   const assigneeOptions =
     assignees.length > 0 ? assignees : assigneeOptionsQuery.data ?? [];
-
-  /** Switching to another item resets the editor until its record is loaded. */
-  useEffect(() => {
-    setDraft(null);
-  }, [item?.id]);
-
-  /**
-   * Mirrors the server record into the editor. Re-runs after every refetch so
-   * the panel always shows the persisted values.
-   */
-  useEffect(() => {
-    if (open && detail) {
-      setDraft(toDraft(detail));
-    }
-  }, [detail, open]);
 
   if (!item) {
     return null;
@@ -297,7 +290,7 @@ export function BacklogItemDetailSheet({
       await refreshBacklogItem(queryClient, saved);
       await onChanged?.();
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Không thể cập nhật công việc."));
+      toast.error(extractErrorMessage(error, "Could not update the work item."));
       // Restore the last persisted values (the draft otherwise keeps the input).
       if (detail) {
         setDraft(toDraft(detail));
@@ -324,13 +317,8 @@ export function BacklogItemDetailSheet({
   const commitDescription = () => {
     const description = draft?.description ?? "";
 
-    if (description.trim().length > MAX_DESCRIPTION_LENGTH) {
-      toast.error("Mô tả không được vượt quá 2000 ký tự");
-      setDraft((previous) =>
-        previous
-          ? { ...previous, description: detail?.description ?? "" }
-          : previous,
-      );
+    if (description.length > MAX_DESCRIPTION_LENGTH) {
+      toast.error("Description must not exceed 1,000 characters");
       return;
     }
 
@@ -532,11 +520,11 @@ export function BacklogItemDetailSheet({
 
       toast.success(
         targetId === null
-          ? "Đã chuyển công việc về Backlog."
-          : "Đã chuyển công việc sang Sprint.",
+          ? "Work item moved to the backlog."
+          : "Work item moved to the sprint.",
       );
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Không thể chuyển công việc."));
+      toast.error(extractErrorMessage(error, "Could not move the work item."));
     } finally {
       setSaving(false);
     }
@@ -549,11 +537,11 @@ export function BacklogItemDetailSheet({
 
     try {
       await sprintBacklogApi.delete(String(item.id));
-      toast.success("Đã xóa công việc.");
+      toast.success("Work item deleted.");
       await onDeleted?.();
       onClose(false);
     } catch (error) {
-      toast.error(extractErrorMessage(error, "Không thể xóa công việc."));
+      toast.error(extractErrorMessage(error, "Could not delete the work item."));
     } finally {
       setSaving(false);
     }
@@ -564,9 +552,9 @@ export function BacklogItemDetailSheet({
 
     try {
       await navigator.clipboard.writeText(itemKey);
-      toast.success(`Đã sao chép ${itemKey}.`);
+      toast.success(`Copied ${itemKey}.`);
     } catch {
-      toast.error("Không thể sao chép.");
+      toast.error("Could not copy to the clipboard.");
     }
   };
 
@@ -575,9 +563,9 @@ export function BacklogItemDetailSheet({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="flex w-full flex-col gap-0 p-0 sm:max-w-xl"
+        className="flex h-dvh max-h-dvh w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
       >
-        <div className="flex items-center gap-2 border-b px-4 py-2.5">
+        <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
           {/* Rows show the work type as an icon only; the detail view names it. */}
           <span className={cn("shrink-0", workType.iconClass)}>
             <WorkTypeIcon className="h-4 w-4" />
@@ -682,7 +670,7 @@ export function BacklogItemDetailSheet({
             )}
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <div className="px-5 py-4">
               <Input
                 value={draft.title}
@@ -774,19 +762,23 @@ export function BacklogItemDetailSheet({
             </div>
 
             <div className="px-5 pb-5">
-              <h3 className="text-sm font-semibold text-foreground">
+              <h3 id="work-item-description-label" className="text-sm font-semibold text-foreground">
                 Description
               </h3>
               <Textarea
                 value={draft.description}
                 disabled={!canEdit || saving}
                 placeholder="Add a description…"
+                aria-labelledby="work-item-description-label"
+                maxLength={MAX_DESCRIPTION_LENGTH}
                 rows={4}
-                className="mt-1 min-h-20 resize-y border-transparent bg-muted/30 text-sm shadow-none hover:border-input"
+                className="mt-1 field-sizing-fixed h-40 min-h-40 max-h-40 resize-none overflow-y-auto overscroll-contain border-transparent bg-muted/30 text-sm shadow-none hover:border-input"
                 onChange={(event) =>
                   setDraft((previous) =>
                     previous
-                      ? { ...previous, description: event.target.value }
+                      ? event.target.value.length <= MAX_DESCRIPTION_LENGTH || event.target.value.length < previous.description.length
+                        ? { ...previous, description: event.target.value }
+                        : previous
                       : previous,
                   )
                 }
@@ -806,7 +798,7 @@ export function BacklogItemDetailSheet({
                       : "text-muted-foreground",
                   )}
                 >
-                  {draft.description.length}/{MAX_DESCRIPTION_LENGTH} ký tự
+                  {draft.description.length}/{MAX_DESCRIPTION_LENGTH} characters
                 </p>
                 <Button
                   type="button"
@@ -822,7 +814,7 @@ export function BacklogItemDetailSheet({
                   type="button"
                   size="xs"
                   className="h-6 px-2 text-[11px]"
-                  disabled={!canEdit || saving || !descriptionDirty}
+                  disabled={!canEdit || saving || !descriptionDirty || draft.description.length > MAX_DESCRIPTION_LENGTH}
                   onClick={commitDescription}
                 >
                   Save

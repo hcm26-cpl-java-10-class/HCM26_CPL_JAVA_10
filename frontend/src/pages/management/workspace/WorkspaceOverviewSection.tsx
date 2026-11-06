@@ -21,7 +21,9 @@ export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canVi
   });
   const denied = sectionForbidden(query.error);
   useEffect(() => { if (denied) onAccessChanged(); }, [denied, onAccessChanged]);
-  if (query.isError || query.isPending || query.isFetching)
+  // A focus/reconnect refetch must not unmount the Git/resource editors and
+  // discard unsaved input. Initial loading and access errors still hide them.
+  if (query.isError || query.isPending)
     return <WorkspaceSectionState loading={!query.isError && query.isFetching} denied={denied} error={query.error}
       retry={() => denied ? onAccessChanged() : void query.refetch()} />;
   const workspace = query.data;
