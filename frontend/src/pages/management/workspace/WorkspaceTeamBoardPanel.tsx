@@ -6,14 +6,15 @@ import { milestoneApi } from "@/api/features/milestone.api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SprintBacklogDTO, SprintBacklogStatus, SprintDTO } from "@/types";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, LayoutGrid, List, Plus, RefreshCw, Search, UserRound } from "lucide-react";
+import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, History, LayoutGrid, List, Plus, RefreshCw, Search, UserRound } from "lucide-react";
 import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
 import type { BacklogPriority, SprintBacklogWorkType, SprintPlanningItem } from "@/types";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import axios from "axios";
 
@@ -50,13 +51,13 @@ function preferredSprint(sprints: SprintDTO[]): SprintDTO | undefined {
 function formatDate(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "short" }).format(date);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(date);
 }
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("vi-VN", {
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-GB", {
     day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
   }).format(date);
 }
@@ -106,7 +107,7 @@ function statusLabel(status?: string | null) {
 function auditValueLabel(key: string, value: unknown) {
   if (key === "status" && typeof value === "string") return statusLabel(value);
   if (key === "priority" && typeof value === "string") return priorityLabel(value);
-  if (key === "assigneeProjectMemberId") return value == null ? "Chưa phân công" : `Thành viên #${String(value)}`;
+  if (key === "assigneeProjectMemberId") return value == null ? "Unassigned" : `Member #${String(value)}`;
   if (key === "sprintId") return value == null ? "Backlog" : `Sprint #${String(value)}`;
   if (key === "estimatedHours") return value == null ? "—" : `${String(value)}h`;
   return value == null ? "—" : String(value);
@@ -125,21 +126,21 @@ function parseAuditState(state?: string | null): Record<string, unknown> | undef
 }
 
 const auditFieldLabels: Record<string, string> = {
-  status: "Trạng thái",
-  priority: "Ưu tiên",
-  assigneeProjectMemberId: "Người phụ trách",
+  status: "Status",
+  priority: "Priority",
+  assigneeProjectMemberId: "Assignee",
   sprintId: "Sprint",
-  title: "Tiêu đề",
-  estimatedHours: "Ước tính",
+  title: "Title",
+  estimatedHours: "Estimate",
 };
 
-function auditSummary(action: string, beforeState?: string | null, afterState?: string | null) {
+function auditSummary(action: string, beforeState?: string | null, afterState?: string | null, maxChanges = 3) {
   const before = parseAuditState(beforeState);
   const after = parseAuditState(afterState);
-  const actionLabel = action === "CREATE" ? "đã tạo work item"
-    : action === "DELETE" ? "đã xóa work item" : "đã cập nhật work item";
+  const actionLabel = action === "CREATE" ? "created the work item"
+    : action === "DELETE" ? "deleted the work item" : "updated the work item";
 
-  if (!before && after) return { actionLabel, changes: [`Tạo: ${String(after.title ?? "Work item")}`] };
+  if (!before && after) return { actionLabel, changes: [`Created: ${String(after.title ?? "Work item")}`] };
   if (before && after) {
     const changes = Object.entries(auditFieldLabels).flatMap(([key, label]) => {
       const oldValue = before[key];
@@ -147,14 +148,14 @@ function auditSummary(action: string, beforeState?: string | null, afterState?: 
       if (oldValue === newValue || (oldValue == null && newValue == null)) return [];
       return [`${label}: ${auditValueLabel(key, oldValue)} → ${auditValueLabel(key, newValue)}`];
     });
-    return { actionLabel, changes: changes.length ? changes.slice(0, 3) : ["Đã lưu thay đổi"] };
+    return { actionLabel, changes: changes.length ? changes.slice(0, maxChanges) : ["Changes saved"] };
   }
   return { actionLabel, changes: [] as string[] };
 }
 
 export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOnly = false, canUpdate, canMove, canDelete, onCreateWorkItem }: { workspaceId: number; teamId: number; projectId?: number | null; readOnly?: boolean; canUpdate: boolean; canMove: boolean; canDelete: boolean; onCreateWorkItem?: () => void }) {
   const queryClient = useQueryClient();
-  const [sprintId, setSprintId] = useState<number>();
+  const [requestedSprintId, setSprintId] = useState<number>();
   const [memberFilter, setMemberFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [priorityFilter, setPriorityFilter] = useState("ALL");
@@ -165,6 +166,19 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
   const [draggedItem, setDraggedItem] = useState<SprintBacklogDTO | null>(null);
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
   const [detailItem, setDetailItem] = useState<SprintPlanningItem | null>(null);
+  const [historyItem, setHistoryItem] = useState<{ id: number; title: string } | null>(null);
+  const [historyTeamId, setHistoryTeamId] = useState(teamId);
+  if (historyTeamId !== teamId) {
+    setHistoryTeamId(teamId);
+    setHistoryItem(null);
+  }
+  const historyQuery = useQuery({
+    queryKey: ["sprint-backlog-audit", historyItem?.id],
+    queryFn: () => sprintBacklogApi.getAuditLogs(historyItem!.id),
+    enabled: historyItem !== null,
+    staleTime: 0,
+    retry: false,
+  });
   const milestonesQuery = useQuery({
     queryKey: ["backlog-milestone-options", teamId],
     queryFn: () => milestoneApi.getBacklogOptions(teamId),
@@ -180,20 +194,12 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
-  const sprints = query.data?.sprints ?? [];
-
-  useEffect(() => {
-    if (!sprints.length) {
-      setSprintId(undefined);
-      return;
-    }
-    setSprintId((current) => sprints.some((sprint) => sprint.id === current)
-      ? current
-      : preferredSprint(sprints)?.id);
-  }, [sprints]);
+  const sprints = useMemo(() => query.data?.sprints ?? [], [query.data?.sprints]);
+  const sprintId = sprints.some((sprint) => sprint.id === requestedSprintId)
+    ? requestedSprintId : preferredSprint(sprints)?.id;
 
   const selectedSprint = sprints.find((sprint) => sprint.id === sprintId);
-  const allItems = query.data?.items ?? [];
+  const allItems = useMemo(() => query.data?.items ?? [], [query.data?.items]);
   const boardItems = useMemo(() => allItems.filter((item) =>
     item.sprintId === sprintId || item.sprintId == null,
   ), [allItems, sprintId]);
@@ -234,9 +240,9 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     retry: false,
   })) });
   const itemTitleById = new Map(allSprintItems.filter((item) => item.id != null).map((item) => [item.id!, item.title ?? "Work item"]));
-  const activity = useMemo(() => auditQueries.flatMap((result) =>
+  const activity = auditQueries.flatMap((result) =>
     (result.data ?? []).map((entry) => ({ ...entry, itemTitle: itemTitleById.get(entry.sprintBacklogId) ?? "Work item" })),
-  ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10), [auditQueries, allSprintItems]);
+  ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10);
 
   const moveItem = async (item: SprintBacklogDTO, target: BoardColumnKey) => {
     if (!canUpdate || savingItemId != null || item.id == null) return;
@@ -246,10 +252,10 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
 
     const allowed = transitionOptions(currentStatus);
     if (!allowed.includes(target)) {
-      const nextStatuses = allowed.map(statusLabel).join(", ") || "không có";
+      const nextStatuses = allowed.map(statusLabel).join(", ") || "none";
       toast.error(
-        `Không thể chuyển từ ${statusLabel(currentStatus)} sang ${statusLabel(target)}. ` +
-        `Trạng thái tiếp theo hợp lệ: ${nextStatuses}.`,
+        `Cannot move from ${statusLabel(currentStatus)} to ${statusLabel(target)}. ` +
+        `Allowed next statuses: ${nextStatuses}.`,
       );
       setDraggedItem(null);
       return;
@@ -260,13 +266,13 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
       await sprintBacklogApi.update(String(item.id), { status: target } as SprintBacklogDTO);
       await query.refetch();
       await queryClient.invalidateQueries({ queryKey: ["sprint-backlog-audit"] });
-      toast.success("Đã cập nhật work item trên Board.");
+      toast.success("Work item updated on the board.");
     } catch (error) {
       const msg =
         axios.isAxiosError(error) &&
         typeof (error.response?.data as Record<string, unknown>)?.message === "string"
           ? (error.response!.data as Record<string, string>).message
-          : "Không cập nhật được work item. Dữ liệu hiện tại vẫn được giữ nguyên.";
+          : "Could not update the work item. Your existing data has been preserved.";
       toast.error(msg);
     } finally {
       setSavingItemId(null);
@@ -282,10 +288,10 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     // Validate transition before calling API.
     const allowed = transitionOptions(current);
     if (!allowed.includes(target)) {
-      const nextStatuses = allowed.map(statusLabel).join(", ") || "không có";
+      const nextStatuses = allowed.map(statusLabel).join(", ") || "none";
       toast.error(
-        `Không thể chuyển từ ${statusLabel(current)} sang ${statusLabel(target)}. ` +
-        `Trạng thái tiếp theo hợp lệ: ${nextStatuses}.`,
+        `Cannot move from ${statusLabel(current)} to ${statusLabel(target)}. ` +
+        `Allowed next statuses: ${nextStatuses}.`,
       );
       return;
     }
@@ -342,57 +348,64 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     });
   };
 
-  useEffect(() => setListPage(0), [sprintId, memberFilter, searchTerm, sortBy, statusFilter, priorityFilter]);
+  const filterKey = JSON.stringify([teamId, sprintId, memberFilter, searchTerm, sortBy, statusFilter, priorityFilter]);
+  const [previousFilterKey, setPreviousFilterKey] = useState(filterKey);
+  if (previousFilterKey !== filterKey) {
+    setPreviousFilterKey(filterKey);
+    setListPage(0);
+  }
 
-  return <div className="space-y-4">
-    <Card className="overflow-hidden border-slate-200 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b bg-gradient-to-r from-sky-50 to-white p-5">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">
+  return <div className="space-y-3">
+    <Card className="gap-0 overflow-hidden border-border py-0 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-gradient-to-r from-primary/5 to-background px-4 py-3">
+        <div className="min-w-0 flex-1 basis-48">
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             <span>Workspace · Team #{teamId}</span>
-            <Badge className="border-0 bg-emerald-100 text-emerald-800">Sprint Board</Badge>
+            <Badge className="border-0 bg-emerald-100 px-1.5 py-0 text-[9px] text-emerald-800">Sprint Board</Badge>
           </div>
-          <h2 className="mt-1 truncate text-xl font-bold text-slate-900">{selectedSprint?.name ?? "Kanban Board"}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Theo dõi các work item của sprint và backlog nhóm.</p>
+          <div className="mt-0.5 flex min-w-0 items-baseline gap-2">
+            <h2 className="truncate text-base font-semibold text-foreground">{selectedSprint?.name ?? "Kanban Board"}</h2>
+            <p className="hidden truncate text-xs text-muted-foreground xl:block">Track sprint work and your team's backlog.</p>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {!readOnly && onCreateWorkItem ? <Button size="sm" onClick={onCreateWorkItem}><Plus className="size-4" />Tạo work item</Button> : null}
-          <div className="rounded-lg bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
-            <strong className="block text-slate-900">Sprint {selectedSprint ? `#${selectedSprint.id}` : "—"}</strong>
-            {formatDate(selectedSprint?.startDate)} – {formatDate(selectedSprint?.endDate)}
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 xl:w-auto">
+          <div className="flex h-8 items-center gap-2 rounded-md border bg-background px-2.5 text-xs text-muted-foreground">
+            <strong className="whitespace-nowrap font-semibold text-foreground">Sprint {selectedSprint ? `#${selectedSprint.id}` : "—"}</strong>
+            <span className="hidden whitespace-nowrap border-l pl-2 sm:inline">{formatDate(selectedSprint?.startDate)} – {formatDate(selectedSprint?.endDate)}</span>
           </div>
-          <select aria-label="Chọn Sprint" className="h-10 max-w-64 rounded-md border bg-white px-3 text-sm" value={sprintId ?? ""}
+          <select aria-label="Select sprint" className="h-8 min-w-0 max-w-52 rounded-md border bg-background px-2 text-xs" value={sprintId ?? ""}
             onChange={(event) => setSprintId(Number(event.target.value))} disabled={query.isPending || !sprints.length}>
-            {!sprints.length ? <option value="">Team chưa có Sprint</option> : null}
+            {!sprints.length ? <option value="">No sprints available</option> : null}
             {sprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} · {sprint.status}</option>)}
           </select>
-          <Button variant="outline" size="icon" aria-label="Làm mới Board" onClick={() => void query.refetch()} disabled={query.isFetching}>
+          <Button variant="outline" size="icon-sm" aria-label="Refresh board" onClick={() => void query.refetch()} disabled={query.isFetching}>
             <RefreshCw className={`size-4 ${query.isFetching ? "animate-spin" : ""}`} />
           </Button>
+          {!readOnly && onCreateWorkItem ? <Button size="sm" className="h-8" onClick={onCreateWorkItem}><Plus className="size-3.5" />Create work item</Button> : null}
         </div>
       </div>
-      <div className="grid grid-cols-2 divide-x divide-y bg-slate-50/80 sm:grid-cols-3 sm:divide-y-0">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t bg-muted/25 px-4 py-2">
         <Metric label="Sprint tasks" value={allSprintItems.length} />
         <Metric label="Done" value={`${doneCount} / ${allSprintItems.length}`} />
-        <div className="p-3 sm:p-4"><div className="text-[11px] font-semibold uppercase text-slate-500">Completion</div><div className="mt-2 flex items-center gap-2"><div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${completion}%` }} /></div><span className="text-xs font-semibold">{completion}%</span></div></div>
+        <div className="flex items-center gap-2 text-xs"><span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Completion</span><div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted sm:w-32" role="progressbar" aria-label="Sprint completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={completion}><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${completion}%` }} /></div><span className="font-semibold tabular-nums text-emerald-700">{completion}%</span></div>
+        <div className="ml-auto flex items-center gap-1.5 text-xs text-violet-700"><Activity className="size-3.5" /><span>Activity Trail</span><Badge variant="secondary" className="bg-violet-100 px-1.5 py-0 text-[10px] text-violet-700">{activity.length}</Badge></div>
       </div>
     </Card>
 
     {query.isPending ? <div className="grid grid-cols-1 gap-3 md:grid-cols-3 2xl:grid-cols-5">{visibleColumns.map((column) => <Skeleton key={column.key} className="h-72" />)}</div>
-      : query.isError ? <div role="alert" className="flex items-center justify-between rounded-xl border border-destructive/30 p-4 text-sm text-destructive"><span>Không tải được sprint và work items của team.</span><Button variant="outline" size="sm" onClick={() => void query.refetch()}>Thử lại</Button></div>
-      : !sprints.length ? <Card><div className="p-12 text-center text-sm text-muted-foreground">Team chưa có Sprint. Tạo Sprint và thêm work items ở tab Backlog.</div></Card>
-      : <div className="grid items-stretch gap-4 2xl:grid-cols-[minmax(0,1fr)_19rem]">
-        <div className="min-w-0 space-y-3">
-          <div className="flex items-center justify-between rounded-xl border bg-white p-3 shadow-sm">
+      : query.isError ? <div role="alert" className="flex items-center justify-between rounded-xl border border-destructive/30 p-4 text-sm text-destructive"><span>Could not load the team's sprints and work items.</span><Button variant="outline" size="sm" onClick={() => void query.refetch()}>Try again</Button></div>
+      : !sprints.length ? <Card><div className="p-12 text-center text-sm text-muted-foreground">This team has no sprints yet. Create a sprint and add work items in the Backlog tab.</div></Card>
+      : <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2 shadow-sm">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-lg border bg-slate-50 p-1" role="group" aria-label="Chế độ hiển thị">
-                <Button type="button" size="sm" variant={viewMode === "board" ? "default" : "ghost"} onClick={() => setViewMode("board")}><LayoutGrid className="size-4" />Board</Button>
-                <Button type="button" size="sm" variant={viewMode === "list" ? "default" : "ghost"} onClick={() => setViewMode("list")}><List className="size-4" />List</Button>
+              <div className="inline-flex rounded-lg border bg-muted/30 p-0.5" role="group" aria-label="Display mode">
+                <Button type="button" size="sm" className="h-7 px-2.5 text-xs" variant={viewMode === "board" ? "default" : "ghost"} onClick={() => setViewMode("board")}><LayoutGrid className="size-3.5" />Board</Button>
+                <Button type="button" size="sm" className="h-7 px-2.5 text-xs" variant={viewMode === "list" ? "default" : "ghost"} onClick={() => setViewMode("list")}><List className="size-3.5" />List</Button>
               </div>
-              <label className="flex h-10 min-w-52 items-center gap-2 rounded-lg border px-3 text-sm text-muted-foreground">
-                <UserRound className="size-4" />
-                <select aria-label="Lọc theo thành viên" className="w-full bg-transparent outline-none" value={memberFilter} onChange={(event) => setMemberFilter(event.target.value)}>
-                  <option value="ALL">Tất cả thành viên</option><option value="UNASSIGNED">Chưa phân công</option>
+              <label className="flex h-8 w-44 items-center gap-2 rounded-md border bg-background px-2.5 text-xs text-muted-foreground">
+                <UserRound className="size-3.5 shrink-0" />
+                <select aria-label="Filter by team member" className="w-full bg-transparent outline-none" value={memberFilter} onChange={(event) => setMemberFilter(event.target.value)}>
+                  <option value="ALL">All members</option><option value="UNASSIGNED">Unassigned</option>
                   {memberIds.map((id) => {
                     const displayName = query.data?.members.find((member) => member.projectMemberId === id)?.displayName
                       ?? boardItems.find((item) => item.assigneeProjectMemberId === id)?.assigneeDisplayName;
@@ -401,24 +414,26 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
                 </select>
               </label>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Tìm work item" className="h-10 w-52 pl-9" placeholder="Tìm công việc..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} /></label>
-              {viewMode === "list" ? <label className="sr-only" htmlFor="workspace-board-sort">Sắp xếp</label> : null}
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+              <label className="relative min-w-0 flex-1 sm:flex-none"><Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search work items" className="h-8 w-full bg-background pl-8 text-xs sm:w-52" placeholder="Search work items..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} /></label>
+              {viewMode === "list" ? <label className="sr-only" htmlFor="workspace-board-sort">Sort order</label> : null}
               {viewMode === "list" ? <>
-                <label className="sr-only" htmlFor="workspace-board-status">Lọc trạng thái</label>
-                <select id="workspace-board-status" className="h-10 rounded-md border bg-white px-3 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                  <option value="ALL">Mọi trạng thái</option>
+                <label className="sr-only" htmlFor="workspace-board-status">Filter by status</label>
+                <select id="workspace-board-status" className="h-8 rounded-md border bg-background px-2 text-xs" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <option value="ALL">All statuses</option>
                   {DEFAULT_COLUMNS.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}
                 </select>
-                <label className="sr-only" htmlFor="workspace-board-priority">Lọc ưu tiên</label>
-                <select id="workspace-board-priority" className="h-10 rounded-md border bg-white px-3 text-sm" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="ALL">All priorities</option><option value="URGENT">Urgent</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>
-                <label className="sr-only" htmlFor="workspace-board-sort">Sắp xếp</label>
-                <select id="workspace-board-sort" className="h-10 rounded-md border bg-white px-3 text-sm" value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}><option value="title">Tên A–Z</option><option value="priority">Ưu tiên</option><option value="status">Trạng thái</option></select>
+                <label className="sr-only" htmlFor="workspace-board-priority">Filter by priority</label>
+                <select id="workspace-board-priority" className="h-8 rounded-md border bg-background px-2 text-xs" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="ALL">All priorities</option><option value="URGENT">Urgent</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>
+                <label className="sr-only" htmlFor="workspace-board-sort">Sort order</label>
+                <select id="workspace-board-sort" className="h-8 rounded-md border bg-background px-2 text-xs" value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}><option value="title">Name A–Z</option><option value="priority">Priority</option><option value="status">Status</option></select>
               </> : null}
             </div>
-            {selectedSprint?.status !== "ACTIVE" ? <span className="text-xs text-muted-foreground">Sprint chưa bắt đầu. Start sprint ở tab Backlog để chuyển sang ACTIVE.</span> : null}
           </div>
-          {viewMode === "board" ? <div className="overflow-x-auto pb-2">
+          {selectedSprint?.status !== "ACTIVE" ? <p className="px-1 text-xs text-muted-foreground">This sprint has not started. Start it in the Backlog tab to make it active.</p> : null}
+        <div className="grid items-stretch gap-4 2xl:grid-cols-[minmax(0,1fr)_19rem]">
+        <div className="min-w-0">
+          {viewMode === "board" ? <div className="overflow-x-auto overscroll-x-contain pb-2" role="region" aria-label="Kanban columns" tabIndex={0}>
             <div className="grid min-w-[1000px] items-stretch gap-2" style={{ gridTemplateColumns: `repeat(${visibleColumns.length}, minmax(0, 1fr))` }}>
               {visibleColumns.map(({ key, label, icon: Icon, color }) => {
                 const items = sprintItems.filter((item) => item.status === key);
@@ -440,15 +455,15 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
                       }}
                       tabIndex={0}
                       aria-label={`Open details for ${item.title ?? "work item"}`}
-                      className={`cursor-pointer rounded-xl border bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${savingItemId === item.id ? "opacity-50" : ""}`}>
+                      className={`flex shrink-0 cursor-pointer flex-col rounded-xl border bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${savingItemId === item.id ? "opacity-50" : ""}`}>
                       <p className="font-mono text-[10px] text-muted-foreground">#{item.id ?? "—"}</p>
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                      <div className="flex min-h-5 items-center gap-1.5 text-[10px]">
                         {item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : null}
                         {item.priority ? <Badge variant="outline" className={priorityStyle(item.priority)}>{priorityLabel(item.priority)}</Badge> : null}
                       </div>
-                      <h4 className="mt-2 break-words text-sm font-semibold text-slate-800">{item.title || "Untitled work item"}</h4>
-                      {item.description ? <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-muted-foreground">{item.description}</p> : null}
-                      {item.milestoneName ? <p className="mt-2 truncate text-xs text-slate-500">{item.milestoneName}</p> : null}
+                      <h4 className="mt-2 line-clamp-2 h-10 break-words text-sm font-semibold leading-5 text-slate-800" title={item.title || "Untitled work item"}>{item.title || "Untitled work item"}</h4>
+                      <p className="mt-1 line-clamp-3 h-12 whitespace-pre-wrap break-words text-xs leading-4 text-muted-foreground">{item.description || ""}</p>
+                      <p className="mt-2 h-4 truncate text-xs leading-4 text-slate-500" title={item.milestoneName || undefined}>{item.milestoneName || ""}</p>
                       <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2 text-[11px] text-muted-foreground">
                         {canUpdate ? <>
                         <label className="flex min-w-0 items-center gap-1.5" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onDragStart={(event) => event.preventDefault()}>
@@ -463,14 +478,14 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
                         {item.estimatedHours != null ? <span>{item.estimatedHours}h</span> : null}
                       </div>
                     </article>)}
-                    {items.length === 0 ? <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed bg-white/50 px-3 text-center text-xs text-muted-foreground">Chưa có công việc</div> : null}
+                    {items.length === 0 ? <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed bg-white/50 px-3 text-center text-xs text-muted-foreground">No work items</div> : null}
                   </div>
                 </section>;
               })}
             </div>
           </div> : <div className="overflow-x-auto rounded-xl border bg-white">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Work item</th><th className="px-4 py-3">Loại</th><th className="px-4 py-3">Ưu tiên</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3">Người phụ trách</th><th className="px-4 py-3 text-right">Ước tính</th></tr></thead>
+              <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Work item</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Priority</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Assignee</th><th className="px-4 py-3 text-right">Estimate</th><th className="px-4 py-3">Actions</th></tr></thead>
               <tbody className="divide-y">{listItems.map((item) => <tr key={item.id} className="hover:bg-slate-50/80">
                 <td className="max-w-md px-4 py-3"><p className="text-[10px] font-mono text-muted-foreground">#{item.id ?? "—"}</p><p className="font-medium text-slate-800">{item.title || "Untitled work item"}</p>{item.milestoneName ? <p className="mt-1 truncate text-xs text-muted-foreground">{item.milestoneName}</p> : null}</td>
                 <td className="px-4 py-3">{item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : "—"}</td>
@@ -478,28 +493,69 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
                 <td className="px-4 py-3">{canUpdate ? <select aria-label={`Status for ${item.title ?? "work item"}`} className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700" value={item.status ?? "TODO"} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void updateStatus(item, event.target.value as SprintBacklogStatus)}>{([...new Set([item.status ?? "TODO", ...transitionOptions(item.status ?? "TODO")])] as SprintBacklogStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select> : <Badge variant="outline" className={item.status === "DONE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : item.status === "REVIEW" ? "border-amber-200 bg-amber-50 text-amber-800" : item.status === "IN_PROGRESS" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}>{statusLabel(item.status)}</Badge>}</td>
                 <td className="px-4 py-3 text-slate-600">{canUpdate ? <select aria-label={`Assign ${item.title ?? "work item"}`} className="max-w-40 bg-transparent" value={item.assigneeProjectMemberId ?? ""} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void assignItem(item, event.target.value)}><option value="">Unassigned</option>{workItemAssigneeOptions(item, query.data?.members ?? []).map((member) => <option key={member.projectMemberId} value={member.projectMemberId} disabled={member.disabled} title={member.disabled ? "Not available for new assignments" : undefined}>{member.displayName}</option>)}</select> : workItemAssigneeLabel(item, query.data?.members ?? [])}</td>
                 <td className="px-4 py-3 text-right text-slate-600">{item.estimatedHours != null ? `${item.estimatedHours}h` : "—"}</td>
+                <td className="px-4 py-3"><Button type="button" variant="outline" size="sm" disabled={item.id == null}
+                  aria-label={`History: ${item.title || "Untitled work item"}`}
+                  onClick={() => { if (item.id != null) setHistoryItem({ id: item.id, title: item.title || "Untitled work item" }); }}>
+                  <History className="size-3.5" />History
+                </Button></td>
               </tr>)}</tbody>
             </table>
-            {filteredItems.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">Không tìm thấy work item phù hợp.</p> : null}
-            {filteredItems.length > 0 ? <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-muted-foreground"><span>{filteredItems.length} work item · Trang {listPage + 1}/{pageCount}</span><div className="flex gap-1"><Button variant="outline" size="icon" aria-label="Trang trước" disabled={listPage === 0} onClick={() => setListPage((page) => Math.max(0, page - 1))}><ChevronLeft className="size-4" /></Button><Button variant="outline" size="icon" aria-label="Trang sau" disabled={listPage + 1 >= pageCount} onClick={() => setListPage((page) => Math.min(pageCount - 1, page + 1))}><ChevronRight className="size-4" /></Button></div></div> : null}
+            {filteredItems.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">No matching work items found.</p> : null}
+            {filteredItems.length > 0 ? <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-muted-foreground"><span>{filteredItems.length} work items · Page {listPage + 1}/{pageCount}</span><div className="flex gap-1"><Button variant="outline" size="icon" aria-label="Previous page" disabled={listPage === 0} onClick={() => setListPage((page) => Math.max(0, page - 1))}><ChevronLeft className="size-4" /></Button><Button variant="outline" size="icon" aria-label="Next page" disabled={listPage + 1 >= pageCount} onClick={() => setListPage((page) => Math.min(pageCount - 1, page + 1))}><ChevronRight className="size-4" /></Button></div></div> : null}
           </div>}
         </div>
-        <aside className="rounded-2xl border bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between"><h3 className="flex items-center gap-2 font-bold"><Activity className="size-4 text-violet-600" />Activity Trail</h3><Badge variant="outline">{activity.length}</Badge></div>
-          <p className="mt-1 text-xs text-muted-foreground">Lịch sử gần đây của work items trong sprint</p>
-          {activity.length ? <ol className="mt-4 max-h-[32rem] space-y-4 overflow-y-auto">{activity.map((entry) => {
+        <aside aria-label="Activity Trail" className="flex h-[32rem] min-h-[24rem] max-h-[70vh] flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
+          <div className="shrink-0 border-b bg-violet-50/40 px-4 py-3"><div className="flex items-center justify-between"><h3 className="flex items-center gap-2 text-sm font-semibold"><Activity className="size-4 text-violet-600" />Activity Trail</h3><Badge variant="secondary" className="bg-violet-100 text-violet-700">{activity.length}</Badge></div>
+          <p className="mt-1 text-[11px] text-muted-foreground">Recent work item activity in this sprint</p></div>
+          {activity.length ? <ol className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4">{activity.map((entry) => {
             const summary = auditSummary(entry.action, entry.beforeState, entry.afterState);
-            return <li key={entry.id} className="border-l-2 border-sky-100 pl-3 text-xs">
-              <div className="flex items-start justify-between gap-2"><p className="font-medium text-slate-800">{entry.actorEmail || `Thành viên #${entry.actorId ?? "—"}`} {summary.actionLabel}</p><time className="shrink-0 text-muted-foreground">{formatDateTime(entry.createdAt)}</time></div>
-              <p className="mt-1 truncate text-slate-600">{entry.itemTitle}</p>
-              {summary.changes.map((change) => <p key={change} className="mt-1 text-muted-foreground">{change}</p>)}
-              {entry.correlationId ? <details className="mt-1 text-[10px] text-muted-foreground"><summary className="cursor-pointer">Chi tiết giao dịch</summary><code className="mt-1 block break-all">{entry.correlationId}</code></details> : null}
+            const activityColor = DEFAULT_COLUMNS.find(column => column.key === parseAuditState(entry.afterState)?.status)?.color ?? "bg-primary";
+            return <li key={entry.id} className="relative border-l border-border pl-4 text-xs">
+              <span className={`absolute -left-1 top-1 size-2 rounded-full ring-2 ring-background ${activityColor}`} />
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1"><p className="min-w-0 break-words font-medium text-foreground">{entry.actorEmail || `Member #${entry.actorId ?? "—"}`}</p><time className="text-[10px] text-muted-foreground">{formatDateTime(entry.createdAt)}</time></div>
+              <p className="mt-1 text-[11px] text-muted-foreground">{summary.actionLabel}</p>
+              <p className="mt-1 line-clamp-2 font-medium italic text-muted-foreground">{entry.itemTitle}</p>
+              {summary.changes.map((change) => <p key={change} className="mt-1 rounded bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">{change}</p>)}
+              {entry.correlationId ? <details className="mt-1 text-[10px] text-muted-foreground"><summary className="cursor-pointer">Transaction details</summary><code className="mt-1 block break-all">{entry.correlationId}</code></details> : null}
             </li>;
-          })}</ol> : <p className="mt-4 rounded-xl border border-dashed p-5 text-center text-xs text-muted-foreground">Chưa có hoạt động được ghi nhận.</p>}
+          })}</ol> : <p className="m-4 rounded-lg border border-dashed p-5 text-center text-xs text-muted-foreground">No activity has been recorded yet.</p>}
         </aside>
-      </div>}
-
-
+      </div></div>}
+    <Dialog open={historyItem !== null} onOpenChange={(open) => { if (!open) setHistoryItem(null); }}>
+      <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden sm:max-w-2xl">
+        <DialogHeader className="shrink-0 pr-6">
+          <DialogTitle>Change history</DialogTitle>
+          <DialogDescription className="break-words">#{historyItem?.id} · {historyItem?.title}</DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 overflow-y-auto overscroll-contain" aria-live="polite" aria-busy={historyQuery.isFetching}>
+          {historyQuery.isPending ? <p className="py-8 text-center text-sm text-muted-foreground">Loading history…</p>
+            : historyQuery.isError ? <div role="alert" className="space-y-3 rounded-lg border border-destructive/30 p-4 text-sm">
+              <p>Could not load history. Check your connection or access permissions, then try again.</p>
+              <Button type="button" variant="outline" size="sm" disabled={historyQuery.isFetching} onClick={() => void historyQuery.refetch()}>Try again</Button>
+            </div>
+            : !historyQuery.data?.length ? <p className="py-8 text-center text-sm text-muted-foreground">No changes have been recorded for this work item yet.</p>
+              : <ol className="space-y-3">{[...historyQuery.data].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || b.id - a.id).map((entry) => {
+                const summary = auditSummary(entry.action, entry.beforeState, entry.afterState, Infinity);
+                return <li key={entry.id} className="space-y-2 rounded-lg border p-4 text-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="min-w-0 break-words font-medium">{entry.actorEmail || `Member #${entry.actorId ?? "—"}`} {summary.actionLabel}</p>
+                    <time dateTime={entry.createdAt} className="text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</time>
+                  </div>
+                  {summary.changes.map((change) => <p key={change} className="break-words text-muted-foreground">{change}</p>)}
+                  <details className="text-xs text-muted-foreground">
+                    <summary className="cursor-pointer">Transaction details</summary>
+                    <p className="mt-2 break-all">Action: {entry.action} · Actor ID: {entry.actorId ?? "—"}</p>
+                    <p className="mt-1 break-all">Correlation ID: {entry.correlationId || "—"}</p>
+                    <p className="mt-2 font-medium">Before change</p>
+                    <pre className="mt-1 whitespace-pre-wrap break-all rounded bg-muted p-2">{entry.beforeState || "—"}</pre>
+                    <p className="mt-2 font-medium">After change</p>
+                    <pre className="mt-1 whitespace-pre-wrap break-all rounded bg-muted p-2">{entry.afterState || "—"}</pre>
+                  </details>
+                </li>;
+              })}</ol>}
+        </div>
+      </DialogContent>
+    </Dialog>
 
     {/* Backlog Item Detail Sheet for editing on click (Fix Bug #39) */}
     <BacklogItemDetailSheet
@@ -537,5 +593,5 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
 }
 
 function Metric({ label, value }: { label: string; value: string | number }) {
-  return <div className="p-3 sm:p-4"><div className="text-[11px] font-semibold uppercase text-slate-500">{label}</div><div className="mt-1 text-xl font-bold text-slate-900">{value}</div></div>;
+  return <div className="flex items-center gap-2 text-xs"><span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span><span className="font-semibold tabular-nums text-foreground">{value}</span></div>;
 }
