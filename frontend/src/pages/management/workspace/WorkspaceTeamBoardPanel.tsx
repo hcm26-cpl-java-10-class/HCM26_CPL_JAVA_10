@@ -6,11 +6,12 @@ import { milestoneApi } from "@/api/features/milestone.api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SprintBacklogDTO, SprintBacklogStatus, SprintDTO } from "@/types";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, LayoutGrid, List, Plus, RefreshCw, Search, UserRound } from "lucide-react";
+import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, History, LayoutGrid, List, Plus, RefreshCw, Search, UserRound } from "lucide-react";
 import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
 import type { BacklogPriority, SprintBacklogWorkType, SprintPlanningItem } from "@/types";
 import { useEffect, useMemo, useState } from "react";
@@ -106,7 +107,7 @@ function statusLabel(status?: string | null) {
 function auditValueLabel(key: string, value: unknown) {
   if (key === "status" && typeof value === "string") return statusLabel(value);
   if (key === "priority" && typeof value === "string") return priorityLabel(value);
-  if (key === "assigneeProjectMemberId") return value == null ? "Chưa phân công" : `Thành viên #${String(value)}`;
+  if (key === "assigneeProjectMemberId") return value == null ? "Unassigned" : `Member #${String(value)}`;
   if (key === "sprintId") return value == null ? "Backlog" : `Sprint #${String(value)}`;
   if (key === "estimatedHours") return value == null ? "—" : `${String(value)}h`;
   return value == null ? "—" : String(value);
@@ -125,21 +126,21 @@ function parseAuditState(state?: string | null): Record<string, unknown> | undef
 }
 
 const auditFieldLabels: Record<string, string> = {
-  status: "Trạng thái",
-  priority: "Ưu tiên",
-  assigneeProjectMemberId: "Người phụ trách",
+  status: "Status",
+  priority: "Priority",
+  assigneeProjectMemberId: "Assignee",
   sprintId: "Sprint",
-  title: "Tiêu đề",
-  estimatedHours: "Ước tính",
+  title: "Title",
+  estimatedHours: "Estimate",
 };
 
-function auditSummary(action: string, beforeState?: string | null, afterState?: string | null) {
+function auditSummary(action: string, beforeState?: string | null, afterState?: string | null, maxChanges = 3) {
   const before = parseAuditState(beforeState);
   const after = parseAuditState(afterState);
-  const actionLabel = action === "CREATE" ? "đã tạo work item"
-    : action === "DELETE" ? "đã xóa work item" : "đã cập nhật work item";
+  const actionLabel = action === "CREATE" ? "created the work item"
+    : action === "DELETE" ? "deleted the work item" : "updated the work item";
 
-  if (!before && after) return { actionLabel, changes: [`Tạo: ${String(after.title ?? "Work item")}`] };
+  if (!before && after) return { actionLabel, changes: [`Created: ${String(after.title ?? "Work item")}`] };
   if (before && after) {
     const changes = Object.entries(auditFieldLabels).flatMap(([key, label]) => {
       const oldValue = before[key];
@@ -147,7 +148,7 @@ function auditSummary(action: string, beforeState?: string | null, afterState?: 
       if (oldValue === newValue || (oldValue == null && newValue == null)) return [];
       return [`${label}: ${auditValueLabel(key, oldValue)} → ${auditValueLabel(key, newValue)}`];
     });
-    return { actionLabel, changes: changes.length ? changes.slice(0, 3) : ["Đã lưu thay đổi"] };
+    return { actionLabel, changes: changes.length ? changes.slice(0, maxChanges) : ["Changes saved"] };
   }
   return { actionLabel, changes: [] as string[] };
 }
@@ -165,6 +166,15 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
   const [draggedItem, setDraggedItem] = useState<SprintBacklogDTO | null>(null);
   const [savingItemId, setSavingItemId] = useState<number | null>(null);
   const [detailItem, setDetailItem] = useState<SprintPlanningItem | null>(null);
+  const [historyItem, setHistoryItem] = useState<{ id: number; title: string } | null>(null);
+  useEffect(() => setHistoryItem(null), [teamId]);
+  const historyQuery = useQuery({
+    queryKey: ["sprint-backlog-audit", historyItem?.id],
+    queryFn: () => sprintBacklogApi.getAuditLogs(historyItem!.id),
+    enabled: historyItem !== null,
+    staleTime: 0,
+    retry: false,
+  });
   const milestonesQuery = useQuery({
     queryKey: ["backlog-milestone-options", teamId],
     queryFn: () => milestoneApi.getBacklogOptions(teamId),
@@ -440,15 +450,15 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
                       }}
                       tabIndex={0}
                       aria-label={`Open details for ${item.title ?? "work item"}`}
-                      className={`cursor-pointer rounded-xl border bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${savingItemId === item.id ? "opacity-50" : ""}`}>
+                      className={`flex shrink-0 cursor-pointer flex-col rounded-xl border bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${savingItemId === item.id ? "opacity-50" : ""}`}>
                       <p className="font-mono text-[10px] text-muted-foreground">#{item.id ?? "—"}</p>
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                      <div className="flex min-h-5 items-center gap-1.5 text-[10px]">
                         {item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : null}
                         {item.priority ? <Badge variant="outline" className={priorityStyle(item.priority)}>{priorityLabel(item.priority)}</Badge> : null}
                       </div>
-                      <h4 className="mt-2 break-words text-sm font-semibold text-slate-800">{item.title || "Untitled work item"}</h4>
-                      {item.description ? <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-muted-foreground">{item.description}</p> : null}
-                      {item.milestoneName ? <p className="mt-2 truncate text-xs text-slate-500">{item.milestoneName}</p> : null}
+                      <h4 className="mt-2 line-clamp-2 h-10 break-words text-sm font-semibold leading-5 text-slate-800" title={item.title || "Untitled work item"}>{item.title || "Untitled work item"}</h4>
+                      <p className="mt-1 line-clamp-3 h-12 whitespace-pre-wrap break-words text-xs leading-4 text-muted-foreground">{item.description || ""}</p>
+                      <p className="mt-2 h-4 truncate text-xs leading-4 text-slate-500" title={item.milestoneName || undefined}>{item.milestoneName || ""}</p>
                       <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2 text-[11px] text-muted-foreground">
                         {canUpdate ? <>
                         <label className="flex min-w-0 items-center gap-1.5" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onDragStart={(event) => event.preventDefault()}>
@@ -470,7 +480,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
             </div>
           </div> : <div className="overflow-x-auto rounded-xl border bg-white">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Work item</th><th className="px-4 py-3">Loại</th><th className="px-4 py-3">Ưu tiên</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3">Người phụ trách</th><th className="px-4 py-3 text-right">Ước tính</th></tr></thead>
+              <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Work item</th><th className="px-4 py-3">Loại</th><th className="px-4 py-3">Ưu tiên</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3">Người phụ trách</th><th className="px-4 py-3 text-right">Ước tính</th><th className="px-4 py-3">Actions</th></tr></thead>
               <tbody className="divide-y">{listItems.map((item) => <tr key={item.id} className="hover:bg-slate-50/80">
                 <td className="max-w-md px-4 py-3"><p className="text-[10px] font-mono text-muted-foreground">#{item.id ?? "—"}</p><p className="font-medium text-slate-800">{item.title || "Untitled work item"}</p>{item.milestoneName ? <p className="mt-1 truncate text-xs text-muted-foreground">{item.milestoneName}</p> : null}</td>
                 <td className="px-4 py-3">{item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : "—"}</td>
@@ -478,6 +488,11 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
                 <td className="px-4 py-3">{canUpdate ? <select aria-label={`Status for ${item.title ?? "work item"}`} className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700" value={item.status ?? "TODO"} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void updateStatus(item, event.target.value as SprintBacklogStatus)}>{([...new Set([item.status ?? "TODO", ...transitionOptions(item.status ?? "TODO")])] as SprintBacklogStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select> : <Badge variant="outline" className={item.status === "DONE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : item.status === "REVIEW" ? "border-amber-200 bg-amber-50 text-amber-800" : item.status === "IN_PROGRESS" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}>{statusLabel(item.status)}</Badge>}</td>
                 <td className="px-4 py-3 text-slate-600">{canUpdate ? <select aria-label={`Assign ${item.title ?? "work item"}`} className="max-w-40 bg-transparent" value={item.assigneeProjectMemberId ?? ""} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void assignItem(item, event.target.value)}><option value="">Unassigned</option>{workItemAssigneeOptions(item, query.data?.members ?? []).map((member) => <option key={member.projectMemberId} value={member.projectMemberId} disabled={member.disabled} title={member.disabled ? "Not available for new assignments" : undefined}>{member.displayName}</option>)}</select> : workItemAssigneeLabel(item, query.data?.members ?? [])}</td>
                 <td className="px-4 py-3 text-right text-slate-600">{item.estimatedHours != null ? `${item.estimatedHours}h` : "—"}</td>
+                <td className="px-4 py-3"><Button type="button" variant="outline" size="sm" disabled={item.id == null}
+                  aria-label={`History: ${item.title || "Untitled work item"}`}
+                  onClick={() => { if (item.id != null) setHistoryItem({ id: item.id, title: item.title || "Untitled work item" }); }}>
+                  <History className="size-3.5" />History
+                </Button></td>
               </tr>)}</tbody>
             </table>
             {filteredItems.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">Không tìm thấy work item phù hợp.</p> : null}
@@ -498,8 +513,41 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
           })}</ol> : <p className="mt-4 rounded-xl border border-dashed p-5 text-center text-xs text-muted-foreground">Chưa có hoạt động được ghi nhận.</p>}
         </aside>
       </div>}
-
-
+    <Dialog open={historyItem !== null} onOpenChange={(open) => { if (!open) setHistoryItem(null); }}>
+      <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden sm:max-w-2xl">
+        <DialogHeader className="shrink-0 pr-6">
+          <DialogTitle>Change history</DialogTitle>
+          <DialogDescription className="break-words">#{historyItem?.id} · {historyItem?.title}</DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 overflow-y-auto overscroll-contain" aria-live="polite" aria-busy={historyQuery.isFetching}>
+          {historyQuery.isPending ? <p className="py-8 text-center text-sm text-muted-foreground">Loading history…</p>
+            : historyQuery.isError ? <div role="alert" className="space-y-3 rounded-lg border border-destructive/30 p-4 text-sm">
+              <p>Could not load history. Check your connection or access permissions, then try again.</p>
+              <Button type="button" variant="outline" size="sm" disabled={historyQuery.isFetching} onClick={() => void historyQuery.refetch()}>Try again</Button>
+            </div>
+            : !historyQuery.data?.length ? <p className="py-8 text-center text-sm text-muted-foreground">No changes have been recorded for this work item yet.</p>
+              : <ol className="space-y-3">{[...historyQuery.data].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || b.id - a.id).map((entry) => {
+                const summary = auditSummary(entry.action, entry.beforeState, entry.afterState, Infinity);
+                return <li key={entry.id} className="space-y-2 rounded-lg border p-4 text-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="min-w-0 break-words font-medium">{entry.actorEmail || `Member #${entry.actorId ?? "—"}`} {summary.actionLabel}</p>
+                    <time dateTime={entry.createdAt} className="text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</time>
+                  </div>
+                  {summary.changes.map((change) => <p key={change} className="break-words text-muted-foreground">{change}</p>)}
+                  <details className="text-xs text-muted-foreground">
+                    <summary className="cursor-pointer">Transaction details</summary>
+                    <p className="mt-2 break-all">Action: {entry.action} · Actor ID: {entry.actorId ?? "—"}</p>
+                    <p className="mt-1 break-all">Correlation ID: {entry.correlationId || "—"}</p>
+                    <p className="mt-2 font-medium">Before change</p>
+                    <pre className="mt-1 whitespace-pre-wrap break-all rounded bg-muted p-2">{entry.beforeState || "—"}</pre>
+                    <p className="mt-2 font-medium">After change</p>
+                    <pre className="mt-1 whitespace-pre-wrap break-all rounded bg-muted p-2">{entry.afterState || "—"}</pre>
+                  </details>
+                </li>;
+              })}</ol>}
+        </div>
+      </DialogContent>
+    </Dialog>
 
     {/* Backlog Item Detail Sheet for editing on click (Fix Bug #39) */}
     <BacklogItemDetailSheet
