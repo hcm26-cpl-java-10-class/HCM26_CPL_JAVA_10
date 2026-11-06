@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project.template;
 
+import com.example.starter_project_2025.system.project.ProjectTemplate;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,6 +35,13 @@ public class ProjectTemplateValidator {
         }
         if (!errors.isEmpty()) {
             throw new ProjectTemplateException(422, "Please correct the highlighted fields", errors);
+        }
+    }
+
+    void validateModuleParent(ProjectTemplate parent) {
+        if (parent != null && parent.getParentTemplateId() != null) {
+            String message = "Only master templates can contain modules";
+            throw new ProjectTemplateException(422, message, Map.of("parentTemplateId", List.of(message)));
         }
     }
 

@@ -50,7 +50,7 @@ export function ProjectAssignmentPanel({ classId, sessionId }: { classId: number
           <DialogDescription>Quản lý phần việc chung và đánh giá cấp Master.</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
-          {managedMaster != null && <WorkspaceMasterMilestonesPanel masterProjectId={managedMaster} returnTo={classUrl + sessionQuery}
+          {managedMaster != null && <WorkspaceMasterMilestonesPanel masterProjectId={managedMaster} returnTo={classUrl + "/setup" + sessionQuery + "&tab=review"}
             onChanged={() => {
               void masters.refetch();
               void client.invalidateQueries({ queryKey: ["workspace-project-hierarchy"] });

@@ -15,6 +15,7 @@ import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +69,6 @@ public class TemplateActivationService {
             checklist.items().forEach(item -> errors.putAll(item.errors()));
             throw new ProjectTemplateException(422, "Complete the required configuration before activating this template", errors);
         }
-        hierarchy.requirePublishedModules(template);
         String before = state(template, plan, tenantId);
         template.setStatus(ProjectTemplateStatus.ACTIVE);
         template = templates.saveAndFlush(template);
@@ -91,10 +91,14 @@ public class TemplateActivationService {
         if (milestoneErrors.isEmpty()) {
             milestoneErrors.putAll(errors(() -> rubrics.requirePublished(input, tenantId)));
         }
-        List<TemplateActivationChecklist.Item> items = List.of(
+        var moduleIssues = hierarchy.moduleActivationIssues(template);
+        List<TemplateActivationChecklist.Item> items = new ArrayList<>(List.of(
                 item("overview", "General information", overview),
                 item("team-constraints", "Team constraints and role quotas", team),
-                item("milestones", "Milestones, rubrics and late policies", milestoneErrors));
+                item("milestones", "Milestones, rubrics and late policies", milestoneErrors)));
+        if (template.getParentTemplateId() == null || !moduleIssues.isEmpty()) {
+            items.add(item("modules", "Active child modules", moduleIssues.isEmpty() ? Map.of() : Map.of("modules", moduleIssues)));
+        }
         boolean draft = template.getStatus() == ProjectTemplateStatus.DRAFT;
         return new TemplateActivationChecklist(template.getId(), template.getLockVersion(), template.getStatus(),
                 draft && items.stream().allMatch(TemplateActivationChecklist.Item::passed), draft && canActivate, items);

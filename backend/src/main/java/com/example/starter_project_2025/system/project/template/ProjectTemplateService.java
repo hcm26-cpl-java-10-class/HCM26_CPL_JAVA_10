@@ -259,6 +259,7 @@ public class ProjectTemplateService {
         if (id == null) return null;
         ProjectTemplate parent = templates.findForTemplateUpdate(id, user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Parent template was not found"));
+        validator.validateModuleParent(parent);
         if (parent.getStatus() == ProjectTemplateStatus.ARCHIVED) {
             throw ProjectTemplateException.conflict("Archived templates cannot receive new modules");
         }
