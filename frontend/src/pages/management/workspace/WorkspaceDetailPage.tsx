@@ -1,14 +1,14 @@
 import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ArrowLeft, Hash, RefreshCw, Users } from "lucide-react";
 import { workspaceApi } from "@/api/features/workspace.api";
 import { projectAssignmentApi } from "@/api/features/project-assignment.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { WorkspaceSectionKey } from "@/types/features/workspace";
 import { WORKSPACE_SECTIONS, WorkspaceStatusBadge } from "./workspace.shared";
@@ -40,6 +40,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const selected = params.get("tab") ?? "overview";
   const tab: WorkspaceSectionKey = WORKSPACE_SECTIONS.find(section => section.id === selected)?.id ?? "overview";
   const [blocked, setBlocked] = useState<WorkspaceSectionKey>();
+  const [showAccess, setShowAccess] = useState(false);
   const validId = Number.isSafeInteger(workspaceId) && workspaceId > 0;
   const navigation = useQuery({
     queryKey: ["workspace-navigation", workspaceId, user.email, activeRole],
@@ -91,36 +92,42 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     await Promise.all(["workspace-detail", "workspace-members", "workspace-section", "workspace-resources"].map(key =>
       queryClient.invalidateQueries({ queryKey: [key, workspaceId] })));
   }
-  return <MainLayout pathName={{ management: "Management", workspaces: "Workspace",
+  return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background" pathName={{ management: "Management", workspaces: "Workspace",
     [String(workspaceId)]: navigation.isError ? "Workspace details" : context?.projectName ?? context?.teamName ?? "Workspace details" }}>
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <Button variant="outline" asChild><Link to="/management/workspaces/candidates"><ArrowLeft />Workspace list</Link></Button>
-        <Button variant="outline" disabled={!validId || navigation.isFetching} onClick={() => void refresh()}><RefreshCw />Refresh access</Button>
+        <Button variant="outline" size="sm" asChild><Link to="/management/workspaces/candidates"><ArrowLeft />Workspace list</Link></Button>
+        <Button variant="outline" size="sm" disabled={!validId || navigation.isFetching} onClick={() => void refresh()}><RefreshCw className={navigation.isFetching ? "animate-spin" : undefined} />Refresh access</Button>
       </div>
       {invalidProject ? <p role="alert" className="rounded-lg border p-5 text-destructive">The selected project is outside this workspace.</p>
         : !validId || navigation.isError || navigation.isPending || hierarchy.isError || hierarchy.isPending || !validContext
         ? <WorkspaceSectionState loading={validId && (navigation.isPending || hierarchy.isPending)} denied={sectionForbidden(navigation.error ?? hierarchy.error)}
             error={navigation.error ?? hierarchy.error} retry={() => void refresh()} />
         : <>
-          <Card><CardHeader><div className="flex items-center justify-between gap-3">
-            <div className="space-y-2"><Badge variant="outline">{context.projectCode ?? "TEAM-ONLY"}</Badge>
-              <CardTitle>{context.projectName ?? "Team workspace"}</CardTitle><p className="text-sm text-muted-foreground">{context.teamName}</p></div>
-            {context.projectStatus && <WorkspaceStatusBadge status={context.projectStatus} />}
-          </div></CardHeader></Card>
+          <section aria-label="Workspace heading" className="flex flex-wrap items-start justify-between gap-3 pt-1">
+            <div className="min-w-0 flex-1 basis-60 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="max-w-full gap-1 border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400"><Hash className="size-3" /><span className="min-w-0 whitespace-normal break-words">{context.projectCode ?? "TEAM-ONLY"}</span></Badge>
+                <span className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground"><Users className="mt-0.5 size-3.5 shrink-0" /><span className="break-words">{context.teamName}</span></span>
+              </div>
+              <h1 className="break-words text-xl font-bold leading-8 tracking-tight sm:text-2xl">{context.projectName ?? "Team workspace"}</h1>
+            </div>
+            {context.projectStatus && <div className="pt-1 sm:pt-6"><WorkspaceStatusBadge status={context.projectStatus} colored /></div>}
+          </section>
           {hierarchy.data && <WorkspaceProjectHierarchy data={hierarchy.data} selectedId={projectId} onSelect={selectProject} />}
           {projectScoped && projectId && !sharedMasterSelected && <ProjectCompletionPanel key={`${projectId}:${context.teamId}`} workspaceId={workspaceId}
             projectId={projectId} teamId={context.teamId} readOnly={projectReadOnly} onChanged={() => void refresh()}
             title={`${isMaster ? "Master" : "Module"} completion — ${project?.name ?? context.projectName}`} />}
-          <Tabs value={tab} onValueChange={changeTab} className="gap-5">
-            <div className="overflow-x-auto border-b pb-1"><TabsList variant="line" aria-label="Workspace sections"
-              className="w-max min-w-full justify-start">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) =>
+          <Tabs value={tab} onValueChange={changeTab} className="min-w-0 gap-5">
+            <div className="min-w-0 overflow-x-auto overflow-y-hidden border-b"><TabsList aria-label="Workspace sections"
+              className="h-10 w-max min-w-full justify-start gap-1 rounded-none bg-transparent p-0 align-top group-data-[orientation=horizontal]/tabs:h-10">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) =>
               <TabsTrigger key={id} value={id} disabled={!sections.find(item => item.key === id)?.canRead}
-                className="gap-2 px-4 py-2"><Icon />{label}</TabsTrigger>)}</TabsList></div>
+                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><Icon className="size-4" />{label}</TabsTrigger>)}</TabsList></div>
             <TabsContent key={tab} value={tab} className="space-y-5">
               {denied || !current ? <WorkspaceSectionState denied retry={reloadAccess} />
                 : tab === "overview" ? <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId} selectedProject={projectScoped ? project : undefined}
                     teamId={context.teamId} canViewMembers={!!members?.canRead} onViewMembers={() => changeTab("members")}
+                    onViewAccess={() => setShowAccess(true)}
                     onAccessChanged={reloadAccess} />
                 : tab === "members" ? <WorkspaceMembersPanel workspaceId={workspaceId} teamId={context.teamId}
                     classId={context.classId} allocationSessionId={context.allocationSessionId} canViewMembers
@@ -154,6 +161,12 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
             </TabsContent>
           </Tabs>
         </>}
+      <Dialog open={showAccess} onOpenChange={setShowAccess}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
+          <DialogHeader><DialogTitle>Quyền truy cập Workspace</DialogTitle><DialogDescription>Các mục có thể truy cập theo vai trò đang sử dụng.</DialogDescription></DialogHeader>
+          <ul className="divide-y rounded-lg border">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) => <li key={id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"><span className="flex items-center gap-2 text-xs"><Icon className="size-4 text-muted-foreground" />{label}</span><Badge variant={sections.find(item => item.key === id)?.canRead ? "secondary" : "outline"} className="text-[10px]">{sections.find(item => item.key === id)?.canRead ? "Có thể xem" : "Không có quyền"}</Badge></li>)}</ul>
+        </DialogContent>
+      </Dialog>
     </div>
   </MainLayout>;
 }

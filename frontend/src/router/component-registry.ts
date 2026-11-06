@@ -55,6 +55,7 @@ import { createElement} from "react";
 import { Navigate } from "react-router-dom";
 import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
+import ProjectReportsPage from "@/pages/management/project-reports";
 import ProjectTemplateListPage from "@/pages/management/project-template";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
@@ -107,6 +108,7 @@ export const routes: RouteConfig[] = [
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
+  { path: "/management/reports/projects", component: ProjectReportsPage, requiredPermission: "PROJECT_REPORT_READ" },
   { path: "/tasks/create", component: TaskManagementPage, requiredPermission: "TASK_CREATE" },
   { path: "/tasks/:id/edit", component: TaskManagementPage, requiredPermission: "TASK_UPDATE" },
   { path: "/tasks/:id/detail", component: TaskManagementPage, requiredPermission: "TASK_READ" },

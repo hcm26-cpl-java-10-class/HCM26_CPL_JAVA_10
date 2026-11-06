@@ -3407,7 +3407,9 @@ function SavedTeamCard({
                       ? "Nhóm không còn ở trạng thái DRAFT"
                       : assignTemplateError.reason === "MIN_MEMBERS_NOT_MET"
                         ? "Nhóm chưa đủ sĩ số tối thiểu"
-                        : "Sĩ số nhóm vượt quá sức chứa của đề bài"}
+                        : assignTemplateError.reason === "MAX_MEMBERS_EXCEEDED"
+                          ? "Sĩ số nhóm vượt quá sức chứa của đề bài"
+                          : "Không thể gán đề bài cho nhóm"}
                   </p>
                   <p className="mt-1 text-muted-foreground">
                     {assignTemplateError.message}

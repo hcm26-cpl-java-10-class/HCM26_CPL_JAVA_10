@@ -6,9 +6,10 @@ import { WorkspaceOverviewPanel } from "./WorkspaceOverviewPanel";
 import { WorkspaceSectionState, sectionForbidden } from "./WorkspaceSectionState";
 import type { WorkspaceProjectNode } from "@/types/features/project-assignment";
 
-export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canViewMembers, onViewMembers, selectedProject,
+export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canViewMembers, onViewMembers, selectedProject, onViewAccess,
   onAccessChanged }: {
   workspaceId: number; projectId?: number | null; teamId: number; canViewMembers: boolean; onViewMembers: () => void;
+  onViewAccess: () => void;
   onAccessChanged: () => void;
   selectedProject?: WorkspaceProjectNode;
 }) {
@@ -27,5 +28,5 @@ export function WorkspaceOverviewSection({ workspaceId, projectId, teamId, canVi
   if (!workspace || workspace.id !== workspaceId || workspace.teamId !== teamId || workspace.projectId !== projectId)
     return <WorkspaceSectionState error={new Error("Overview context does not match this workspace.")} retry={() => void query.refetch()} />;
   return <WorkspaceOverviewPanel workspace={workspace} selectedProject={selectedProject}
-    canViewMembers={canViewMembers && workspace.can_view_members} onViewMembers={onViewMembers} />;
+    canViewMembers={canViewMembers && workspace.can_view_members} onViewMembers={onViewMembers} onViewAccess={onViewAccess} />;
 }

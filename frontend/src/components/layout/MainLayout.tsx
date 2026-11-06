@@ -6,14 +6,17 @@ import { StudentNavbar } from "@/components/layout/StudentNavbar";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 export function MainLayout({
                                children,
                                pathName,
                                pathLinks,
+                               contentClassName,
                            }: {
     children: ReactNode;
     pathName?: Record<string, string>;
+    contentClassName?: string;
     pathLinks?: Record<string, string>;
 }) {
     const { activeRole } = usePermissions();
@@ -28,7 +31,7 @@ export function MainLayout({
                     <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} variant="student" />
                 </header>
 
-                <main className="flex-1 px-6 pb-6 pt-4">
+                <main className={cn("flex-1 px-6 pb-6 pt-4", contentClassName)}>
                     {children}
                 </main>
             </div>
@@ -49,7 +52,7 @@ export function MainLayout({
                     </div>
                 </header>
 
-                <main className="min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6">
+                <main className={cn("min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6", contentClassName)}>
                     {children}
                 </main>
             </SidebarInset>
