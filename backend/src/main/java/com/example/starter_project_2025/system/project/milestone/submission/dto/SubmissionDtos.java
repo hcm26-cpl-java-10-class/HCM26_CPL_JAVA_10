@@ -98,7 +98,7 @@ public final class SubmissionDtos {
 
     public record CreateVersionRequest(
             @NotBlank @Size(max = 160) String title,
-            @Size(max = 2000) String notes,
+            @Size(max = 1000, message = "Summary must not exceed 1000 characters") String notes,
             @Size(max = 1000) String submissionUrl,
             List<@Valid ArtifactRequest> artifacts) {
         public CreateVersionRequest(String title, String notes, String submissionUrl) {
@@ -108,7 +108,7 @@ public final class SubmissionDtos {
 
     public record UpdateDraftRequest(
             @NotBlank @Size(max = 160) String title,
-            @Size(max = 2000) String notes,
+            @Size(max = 1000, message = "Summary must not exceed 1000 characters") String notes,
             @Size(max = 1000) String submissionUrl,
             @Size(max = 20) List<@Valid ArtifactRequest> artifacts) { }
 

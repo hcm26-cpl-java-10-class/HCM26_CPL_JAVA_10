@@ -230,17 +230,8 @@ function isTeamMemberRole(role: string | null | undefined): role is TeamMemberRo
   return role === "PM" || role === "BA" || role === "DEV" || role === "QA";
 }
 
-const TEAM_ROLE_OPTIONS: TeamMemberRole[] = ["PM", "BA", "DEV", "QA"];
-
 /** Backend uses Integer.MAX_VALUE for an unbounded max quota. */
 const UNBOUNDED_ROLE_QUOTA = 2_147_483_647;
-
-const TEAM_ROLE_LABEL: Record<TeamMemberRole, string> = {
-  PM: "PM (Leader)",
-  BA: "BA",
-  DEV: "Dev",
-  QA: "QA",
-};
 
 /** US-11: member roles from the new `roles` array, falling back to `role`. */
 function memberRolesOf(member: {
@@ -316,6 +307,7 @@ export default function TeamAllocationSetupPage() {
     return {
       sessionId: Number.isSafeInteger(sessionId) && sessionId > 0 ? sessionId : null,
       teamId: Number.isSafeInteger(teamId) && teamId > 0 ? teamId : null,
+      review: params.get("tab") === "review",
     };
   }, [location.search]);
   const requestedSessionRef = useRef(allocationLink.sessionId);
@@ -349,7 +341,9 @@ export default function TeamAllocationSetupPage() {
   const [activeMentorReason, setActiveMentorReason] = useState("");
   const [activeMentorSelection, setActiveMentorSelection] = useState("");
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
-  const [activeWorkspace, setActiveWorkspace] = useState<"build" | "review">("build");
+  const [activeWorkspace, setActiveWorkspace] = useState<"build" | "review">(
+    allocationLink.review || allocationLink.teamId !== null ? "review" : "build",
+  );
   const [transferTarget, setTransferTarget] = useState<{
     teamId: number;
     memberId: number;
@@ -1488,9 +1482,16 @@ export default function TeamAllocationSetupPage() {
                           <p className="text-xs text-muted-foreground">
                             {autoPreview.eligibleCount} học viên · {autoPreview.teams.length} nhóm ·
                             sức chứa chuẩn {autoPreview.standardMax} ·
-                            {autoPreview.teams.filter((team) => team.members.length > autoPreview.standardMax).length} nhóm thêm 1 học viên do số dư.
+                            {autoPreview.eligibleCount % autoPreview.standardMax > 0
+                              ? `nhóm phần dư có ${autoPreview.eligibleCount % autoPreview.standardMax} học viên.`
+                              : "không có học viên dư."}
                             Các nhóm Draft đã lưu được giữ nguyên.
                           </p>
+                          {autoPreview.eligibleCount % autoPreview.standardMax > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Nhóm phần dư có thể cần điều chỉnh thành viên để đáp ứng sĩ số tối thiểu của đề bài trước khi công bố.
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" size="sm" variant="outline"
@@ -1529,8 +1530,9 @@ export default function TeamAllocationSetupPage() {
                                 })}>
                                 <ChevronDown className={`size-4 shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`} />
                                 <span className="min-w-0 flex-1 truncate">{team.teamName} · {team.members.length} học viên</span>
-                                {team.members.length > autoPreview.standardMax && (
-                                  <Badge variant="secondary" className="shrink-0">Thêm 1 do số dư</Badge>
+                                {index === autoPreview.teams.length - 1 &&
+                                  team.members.length < autoPreview.standardMax && (
+                                  <Badge variant="secondary" className="shrink-0">Nhóm phần dư</Badge>
                                 )}
                               </button>
                               {expanded && (
@@ -1655,6 +1657,25 @@ export default function TeamAllocationSetupPage() {
                                 </span>
                               )}
                             </label>
+                            {memberPickerTeam.savedTeamId === undefined && (
+                              <label className="block space-y-1 text-xs font-medium">
+                                Leader
+                                <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                                  value={memberPickerTeam.leaderMemberId ?? ""}
+                                  disabled={memberPickerTeam.memberIds.length === 0 || saveDraftMutation.isPending}
+                                  onChange={(event) => {
+                                    const leaderMemberId = event.target.value ? Number(event.target.value) : null;
+                                    setDraftTeams((current) => current.map((team) =>
+                                      team.localId === memberPickerTeam.localId ? { ...team, leaderMemberId } : team,
+                                    ));
+                                  }}>
+                                  <option value="">Chọn Leader khi phân vai</option>
+                                  {memberPickerTeam.memberIds.map((memberId) => (
+                                    <option key={memberId} value={memberId}>{nameForMember(memberId)}</option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
                           </div>
                           {memberPickerTeam.memberIds.length >
                             (memberPickerTeam.effectiveMaxMembers ?? session.maxMembers) && (
@@ -3007,7 +3028,6 @@ function SavedTeamCard({
       ]),
     ),
   );
-  const [localRoleErrors, setLocalRoleErrors] = useState<number[]>([]);
   const isDraft = team.status === "DRAFT";
   const isActive = team.status === "ACTIVE";
   const canChooseLeader = canManageRoles && (isDraft || (isActive && team.leaderMemberId == null));
@@ -3054,9 +3074,8 @@ function SavedTeamCard({
   ) => {
     setMemberRoles((current) => ({
       ...current,
-      [memberId]: TEAM_ROLE_OPTIONS.filter((role) => roles.includes(role)),
+      [memberId]: roles,
     }));
-    setLocalRoleErrors((current) => current.filter((id) => id !== memberId));
     onRoleChange(team.teamId, memberId);
   };
   const transferTargets = allTeams.filter((candidate) =>
@@ -3075,10 +3094,8 @@ function SavedTeamCard({
         memberRolesOf(member),
       ]),
     ));
-    setLocalRoleErrors([]);
   }, [team.members]);
   const invalidRoleMemberIds = new Set([
-    ...localRoleErrors,
     ...(roleSaveError?.invalidMemberIds ?? []),
     ...(roleSaveError?.multiRoleMemberIds ?? []),
   ]);
@@ -3274,7 +3291,6 @@ function SavedTeamCard({
                   </div>
                 )}
               </div>
-              {roleSaveError && <p role="alert" className="text-xs text-destructive">{roleSaveError.message}</p>}
               {members.length === 0 ? (
                 <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Nhóm chưa có thành viên.</p>
               ) : (
@@ -3297,102 +3313,25 @@ function SavedTeamCard({
                         <span className="min-w-0 truncate font-medium">{member.fullName}{member.userCode ? ` · ${member.userCode}` : ""}</span>
                         {leader && <Badge className="shrink-0">Leader</Badge>}
                       </span>
-                      <span className="flex shrink-0 items-center gap-2">
+                      <span className="flex flex-wrap items-center gap-2">
+                        {canChooseLeader && !leader && (
+                          <Button type="button" size="sm" variant="outline" disabled={memberEditPending}
+                            onClick={() => onAssignLeader(member.memberId, member.fullName)}>
+                            <ShieldCheck className="size-4" /> Chỉ định Leader
+                          </Button>
+                        )}
                         {canManageRoles ? (
-                          allowMultiRole ? (
-                            <details
-                              className={`relative min-w-36 rounded-md ${
-                                invalidRoleMemberIds.has(member.memberId)
-                                  ? "ring-1 ring-destructive"
-                                  : ""
-                              }`}
-                            >
-                              <summary
-                                className="flex h-8 cursor-pointer list-none items-center justify-between gap-2 rounded-md border bg-background px-2 text-xs font-medium [&::-webkit-details-marker]:hidden"
-                                aria-label={`Chọn nhiều vai trò cho ${member.fullName}`}
-                              >
-                                <span className="max-w-28 truncate">
-                                  {selectedRoles.length > 0
-                                    ? selectedRoles.map((role) => TEAM_ROLE_LABEL[role]).join(", ")
-                                    : "Chọn vai trò"}
-                                </span>
-                                <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-                              </summary>
-                              <div
-                                role="group"
-                                aria-label={`Vai trò của ${member.fullName}`}
-                                className="absolute right-0 z-20 mt-1 min-w-44 rounded-md border bg-popover p-2 text-popover-foreground shadow-lg"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                {TEAM_ROLE_OPTIONS.map((role) => (
-                                  <label
-                                    key={role}
-                                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs font-medium hover:bg-muted"
-                                  >
-                                    <Checkbox
-                                      checked={selectedRoles.includes(role)}
-                                      disabled={rolesPending}
-                                      onCheckedChange={(checked) => updateMemberRoles(
-                                        member.memberId,
-                                        checked
-                                          ? [...selectedRoles, role]
-                                          : selectedRoles.filter((selectedRole) => selectedRole !== role),
-                                      )}
-                                      aria-label={`${TEAM_ROLE_LABEL[role]} của ${member.fullName}`}
-                                    />
-                                    {TEAM_ROLE_LABEL[role]}
-                                  </label>
-                                ))}
-                              </div>
-                            </details>
-                          ) : (
-                            <span
-                              role="radiogroup"
-                              aria-label={`Vai trò của ${member.fullName}`}
-                              className={`flex flex-wrap items-center gap-2 rounded-md ${
-                                invalidRoleMemberIds.has(member.memberId)
-                                  ? "ring-1 ring-destructive"
-                                  : ""
-                              }`}
-                            >
-                              <label className="flex cursor-pointer items-center gap-1 text-xs font-medium">
-                                <input
-                                  type="radio"
-                                  name={`team-${team.teamId}-member-${member.memberId}-role`}
-                                  value=""
-                                  checked={selectedRoles.length === 0}
-                                  disabled={rolesPending}
-                                  onChange={() => updateMemberRoles(member.memberId, [])}
-                                />
-                                Chưa gán
-                              </label>
-                              {TEAM_ROLE_OPTIONS.map((role) => (
-                                <label key={role} className="flex cursor-pointer items-center gap-1 text-xs font-medium">
-                                  <input
-                                    type="radio"
-                                    name={`team-${team.teamId}-member-${member.memberId}-role`}
-                                    value={role}
-                                    checked={selectedRoles[0] === role}
-                                    disabled={rolesPending}
-                                    onChange={() => updateMemberRoles(member.memberId, [role])}
-                                  />
-                                  {TEAM_ROLE_LABEL[role]}
-                                </label>
-                              ))}
-                            </span>
-                          )
+                          <span className={invalidRoleMemberIds.has(member.memberId) ? "rounded-md ring-1 ring-destructive" : undefined}>
+                            <TeamMemberRoleInput label={`Vai trò của ${member.fullName}`} selected={selectedRoles}
+                              multiple={allowMultiRole} disabled={memberEditPending} placeholder="Chọn vai trò"
+                              onChange={(roles) => updateMemberRoles(member.memberId, roles)} />
+                          </span>
                         ) : (
                           <span className="flex flex-wrap gap-1">
-                            {selectedRoles.length === 0 ? (
-                              <Badge variant="outline">Chưa gán</Badge>
-                            ) : selectedRoles.map((role) => (
-                              <Badge key={role} variant="secondary">{role}</Badge>
-                            ))}
+                            {selectedRoles.length === 0 ? <Badge variant="outline">Chưa gán</Badge>
+                              : selectedRoles.map((role) => <Badge key={role} variant="secondary">{role}</Badge>)}
                           </span>
                         )}
-                        <span className="text-xs text-muted-foreground">
-                          #{member.memberId}
-                        </span>
                         {isActive && canManageMembers && (
                           <Button
                             type="button"
@@ -3474,61 +3413,10 @@ function SavedTeamCard({
                       )}
                   </div>
                 )}
-                {localRoleErrors.length > 0 && (
-                  <div
-                    role="alert"
-                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-                  >
-                    Vui lòng chọn ít nhất một vai trò cho mỗi thành viên
-                    {localRoleErrors.length > 0 ? ` (${localRoleErrors.length} thành viên)` : ""}.
-                  </div>
-                )}
-                {isActive && (
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={rolesPending}
-                  onClick={() => {
-                    const missingRoleMemberIds = members
-                      .filter((member) =>
-                        (memberRoles[member.memberId]
-                          ?? memberRolesOf(member)).length === 0)
-                      .map((member) => member.memberId);
-                    const multiRoleMemberIds = allowMultiRole
-                      ? []
-                      : members
-                        .filter((member) =>
-                          (memberRoles[member.memberId]
-                            ?? memberRolesOf(member)).length > 1)
-                        .map((member) => member.memberId);
-                    if (missingRoleMemberIds.length || multiRoleMemberIds.length) {
-                      setLocalRoleErrors([
-                        ...missingRoleMemberIds,
-                        ...multiRoleMemberIds,
-                      ]);
-                      toast.error(
-                        missingRoleMemberIds.length
-                          ? "Mỗi thành viên cần ít nhất một vai trò."
-                          : "Đề bài không cho phép kiêm nhiệm vai trò.",
-                      );
-                      return;
-                    }
-                    onUpdateRoles(
-                      team.teamId,
-                      team.version,
-                      members.map((member) => ({
-                        memberId: member.memberId,
-                        roles: memberRoles[member.memberId]
-                          ?? memberRolesOf(member),
-                      })),
-                    );
-                  }}
-                >
-                  {rolesPending
-                    ? <LoaderCircle className="size-4 animate-spin" />
-                    : <Save className="size-4" />}
-                  Lưu vai trò
-                </Button>
+                {memberRolesChanged && !validRoles && (
+                  <p className="text-xs text-destructive">{allowMultiRole
+                    ? "Mỗi thành viên cần ít nhất một vai trò."
+                    : "Mỗi thành viên cần đúng một vai trò."}</p>
                 )}
               </div>
             )}
