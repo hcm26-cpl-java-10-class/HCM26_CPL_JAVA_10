@@ -651,8 +651,8 @@ class WorkspaceSectionsIntegrationTest {
         mvc.perform(put("/api/teams/{teamId}/backlog-board/items/{id}/assignee", teamId, itemId)
                         .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("projectMemberId", assigneeId))))
-                // This controller uses the existing global validation envelope (400).
-                .andExpect(status().isBadRequest())
+                // Assignment validation follows the team's current 422 contract.
+                .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("active member")));
         mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").value(assigneeId));
