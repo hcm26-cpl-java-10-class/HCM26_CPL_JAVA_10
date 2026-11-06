@@ -82,10 +82,10 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
             </div>
             {query.data?.content.map(milestone => (
               <div key={milestone.id} className={`grid min-h-12 gap-2 border-b px-3 py-3 text-left last:border-b-0 hover:bg-muted/40 lg:items-center lg:gap-4 ${rowColumns}`}>
-                <button type="button" className="min-w-0 truncate text-left text-sm font-medium hover:underline" title={milestone.title} onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}?workspaceId=${workspaceId}`)}>{milestone.title}</button>
-                <p className="min-w-0 truncate text-xs text-muted-foreground" title={milestone.description || "No description available."}>{milestone.description || "No description available."}</p>
-                <p className="flex min-w-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground"><CalendarClock className="size-3 shrink-0" />{new Date(milestone.deadline).toLocaleString("en-GB")}</p>
-                <Badge variant="outline" className="h-6 w-fit px-2 text-[11px]"><MilestoneStatusBadge status={milestone.lifecycleStatus} /></Badge>
+                <button type="button" className="min-w-0 truncate text-left text-sm font-medium leading-5 hover:underline" title={milestone.title} onClick={() => navigate(`/teams/${teamId}/milestones/${milestone.id}?workspaceId=${workspaceId}`)}>{milestone.title}</button>
+                <p className="min-w-0 line-clamp-2 text-sm leading-5 text-muted-foreground" title={milestone.description || "No description available."}>{milestone.description || "No description available."}</p>
+                <p className="flex min-w-0 items-center gap-1 whitespace-nowrap text-sm leading-5 text-muted-foreground"><CalendarClock className="size-4 shrink-0" />{new Date(milestone.deadline).toLocaleString("en-GB")}</p>
+                <Badge variant="outline" className="h-6 w-fit px-2 text-xs"><MilestoneStatusBadge status={milestone.lifecycleStatus} /></Badge>
                 <div className="flex min-w-0 flex-wrap items-center gap-1 lg:justify-end">
                   {!isStudent && (milestone.lifecycleStatus === "PLANNED" || milestone.lifecycleStatus === "IN_PROGRESS" || milestone.lifecycleStatus === "CHANGES_REQUESTED") && <>
                     <Button size="icon" variant="ghost" className="size-8" title="Edit milestone" aria-label={`Edit ${milestone.title}`} onClick={() => navigate(milestone.lifecycleStatus === "PLANNED"

@@ -9,9 +9,11 @@ import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 export function MainLayout({
                                children,
                                pathName,
+                               mainClassName,
                            }: {
     children: React.ReactNode;
     pathName?: Record<string, string>;
+    mainClassName?: string;
 }) {
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
@@ -25,7 +27,7 @@ export function MainLayout({
                     <DynamicBreadcrumbs pathTitles={pathName} variant="student" />
                 </header>
 
-                <main className="flex-1 px-6 pb-6 pt-4">
+                <main className={`flex-1 px-6 pb-6 pt-4 ${mainClassName ?? ""}`}>
                     {children}
                 </main>
             </div>
@@ -46,7 +48,7 @@ export function MainLayout({
                     </div>
                 </header>
 
-                <main className="min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6">
+                <main className={`min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6 ${mainClassName ?? ""}`}>
                     {children}
                 </main>
             </SidebarInset>
