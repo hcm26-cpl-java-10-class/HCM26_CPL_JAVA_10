@@ -12,7 +12,7 @@ import { ReportOverview } from "./ReportOverview";
 import { ReportMasters } from "./ReportMasters";
 import { ReportExports } from "./ReportExports";
 import { ReportFilterToolbar } from "./ReportFilters";
-import { reportDate, reportErrorMessage } from "./report-ui";
+import { reportDate, reportErrorMessage } from "./report-utils";
 
 const defaults: ReportFilters = { risk: "ALL", includeCancelled: true, page: 0, size: 10 };
 function LoadingReport() {
@@ -46,7 +46,7 @@ function ReportContent({ owner }: { owner: string }) {
         <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-blue-600 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300"><BarChart3 className="size-6" /></div>
         <div><p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Project Management</p>
           <h1 className="text-2xl font-semibold tracking-tight lg:text-[28px]">Project Dashboard</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Theo dõi tiến độ, kết quả bàn giao và những dự án cần được quan tâm.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Theo dõi phân công Master và Sub-project, trạng thái dự án, backlog và các cảnh báo.</p>
         </div>
       </div>
       <Button variant="outline" className="h-10 bg-card shadow-none" disabled={fetching} onClick={() => void refresh()}><RefreshCw className={fetching ? "size-4 animate-spin" : "size-4"} />Làm mới dữ liệu</Button>
@@ -60,15 +60,15 @@ function ReportContent({ owner }: { owner: string }) {
         <section aria-label="Danh sách dự án" className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5"><div className="flex size-9 items-center justify-center rounded-lg border bg-card"><Layers3 className="size-4 text-muted-foreground" /></div>
-              <div><h2 className="font-semibold tracking-tight">Dự án theo đề bài và lớp</h2><p className="mt-0.5 text-xs text-muted-foreground">Mở một nhóm đề bài để xem từng team và milestone.</p></div></div>
-            <span className="rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground"><strong className="font-semibold text-foreground">{query.data.total}</strong> nhóm đề bài trong kết quả</span>
+              <div><h2 className="font-semibold tracking-tight">Master Project và các Project con</h2><p className="mt-0.5 text-xs text-muted-foreground">Mở Master để xem phân công, trạng thái và backlog từng Sub-project.</p></div></div>
+            <span className="rounded-full border bg-card px-3 py-1.5 text-xs text-muted-foreground"><strong className="font-semibold text-foreground">{query.data.total}</strong> Master Project trong kết quả</span>
           </div>
           {!query.data.content.length ? <Card className="shadow-none"><CardContent className="flex flex-col items-center py-10 text-center">
             <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-muted"><FolderSearch className="size-6 text-muted-foreground" /></div>
             <h3 className="font-semibold">Chưa có dự án phù hợp</h3><p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">Thử điều chỉnh bộ lọc hoặc kiểm tra các team đã được công bố trong phạm vi bạn phụ trách.</p>
             <Button className="mt-4" variant="outline" onClick={reset}>Đặt lại bộ lọc</Button>
           </CardContent></Card> : <ReportMasters masters={query.data.content} timeZone={query.data.timeZone} />}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm"><p className="text-xs text-muted-foreground">Trang <strong className="font-medium text-foreground">{query.data.page + 1}</strong> / {pages} · {query.data.total} nhóm đề bài</p><div className="flex gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm"><p className="text-xs text-muted-foreground">Trang <strong className="font-medium text-foreground">{query.data.page + 1}</strong> / {pages} · {query.data.total} Master Project</p><div className="flex gap-2">
             <Button variant="outline" size="sm" className="bg-card" disabled={query.isFetching || !applied.page} onClick={() => setApplied({ ...applied, page: (applied.page ?? 0) - 1 })}><ArrowLeft className="size-3.5" />Trước</Button>
             <Button variant="outline" size="sm" className="bg-card" disabled={query.isFetching || ((applied.page ?? 0) + 1) * query.data.size >= query.data.total} onClick={() => setApplied({ ...applied, page: (applied.page ?? 0) + 1 })}>Sau<ArrowRight className="size-3.5" /></Button></div></div>
         </section>

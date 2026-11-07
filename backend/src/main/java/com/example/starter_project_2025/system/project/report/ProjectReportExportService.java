@@ -16,7 +16,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -31,6 +30,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import static com.example.starter_project_2025.system.project.report.ProjectReportDtos.*;
 import static com.example.starter_project_2025.system.project.report.ProjectReportExportJob.State;
@@ -42,7 +42,6 @@ public class ProjectReportExportService {
     private record Claim(UUID id,Long actor,Long tenant,String filters,String format) { }
     private final ProjectReportScopeService scope;
     private final ProjectReportService reports;
-    private final ProjectReportProgressPolicy progress;
     private final ProjectReportSettings settings;
     private final ProjectReportExportRepository jobs;
     private final ProjectReportExportWriter writer;
@@ -59,7 +58,7 @@ public class ProjectReportExportService {
         if(!Set.of("EXCEL","CSV").contains(format))throw error(422,"Chọn định dạng EXCEL hoặc CSV");
         Filter raw=(request.filters()==null?Filter.empty():request.filters()).normalized();
         Filter filter=new Filter(raw.programId(),raw.cohortId(),raw.classId(),raw.mentorId(),raw.templateId(),raw.sourceVersionId(),raw.teamId(),raw.projectId(),
-                raw.status(),raw.risk(),raw.includeCancelled(),raw.createdFrom(),raw.createdTo(),raw.q(),0,10);
+                raw.status(),raw.risk(),raw.includeCancelled(),raw.createdFrom(),raw.createdTo(),raw.q(),0,10,raw.masterStatus());
         String encoded=encode(filter),fingerprint=hash(format+":"+encoded);
         em.find(User.class,actor.id(),LockModeType.PESSIMISTIC_WRITE);
         var existing=jobs.findByActorIdAndRequestId(actor.id(),key);
@@ -95,8 +94,8 @@ public class ProjectReportExportService {
             if(!claim.tenant().equals(snapshot.actor().tenantId()))throw error(403,"Tenant đã thay đổi");
             byte[] bytes=writer.write(claim.format(),rows(snapshot));
             Set<String> includedMasters=snapshot.matching().stream().map(SubProject::masterKey).collect(Collectors.toSet());
-            // Master averages also contain other scoped teams, so downloading must revalidate those contributors too.
-            String contributors=encode(snapshot.all().stream().filter(r->includedMasters.contains(r.masterKey())).map(SubProject::id).toList());
+            // Master backlog totals include every authorized descendant, including rows hidden by a detail filter.
+            String contributors=encode(snapshot.all().stream().filter(r->!r.contextOnly()&&includedMasters.contains(r.masterKey())).map(SubProject::id).toList());
             tx().executeWithoutResult(status->{var job=em.find(ProjectReportExportJob.class,id,LockModeType.PESSIMISTIC_WRITE);
                 if(job==null||job.getStatus()!=State.RUNNING)return;
                 Instant now=clock.instant();job.setFileContent(bytes);job.setProjectIds(contributors);job.setGeneratedAt(snapshot.asOf());
@@ -119,7 +118,7 @@ public class ProjectReportExportService {
             }
             if(job.getStatus()!=State.READY||job.getFileContent()==null)return new Attempt(null,error(409,"Báo cáo chưa sẵn sàng tải"));
             try {
-                Set<Long> current=scope.teams(actor).stream().map(t->t.getProjectId()).collect(Collectors.toSet());
+                Set<Long> current=reports.readableProjectIds(actor);
                 List<Long> contributors=Arrays.asList(json.readValue(job.getProjectIds(),Long[].class));
                 if(!current.containsAll(contributors)){audit(job,"DOWNLOAD_DENIED");return new Attempt(null,error(403,"Phạm vi xem báo cáo đã thay đổi; hãy tạo lại báo cáo"));}
             } catch(ResponseStatusException failure){throw failure;} catch(Exception invalid){return new Attempt(null,error(409,"Không thể kiểm tra phạm vi của báo cáo; hãy tạo lại"));}
@@ -138,16 +137,23 @@ public class ProjectReportExportService {
         });
     }
     private List<ProjectReportExportRow> rows(ProjectReportService.Snapshot snapshot) {
-        Map<String,List<SubProject>> grouped=snapshot.all().stream().collect(Collectors.groupingBy(SubProject::masterKey));
+        Map<Long,Master> masters=reports.masters(snapshot).stream().collect(Collectors.toMap(Master::id,Function.identity()));
         return snapshot.matching().stream().map(row->{
-            BigDecimal master=progress.round(progress.average(grouped.get(row.masterKey()).stream().filter(r->r.status()!=Status.CANCELLED).map(SubProject::progress).toList()));
-            return new ProjectReportExportRow(row.programName(),row.cohortName(),row.className(),row.templateName(),row.sourceVersion(),row.code(),row.name(),row.teamName(),row.mentorName(),row.status().name(),
-                    percent(row.progress()),percent(master),String.valueOf(row.acceptedMilestones()),String.valueOf(row.milestones().size()),String.valueOf(row.overdueMilestones()),
-                    String.valueOf(row.lateMilestones()),String.valueOf(row.atRiskMilestones()),row.milestones().stream().map(m->m.title()+": "+percent(m.progress())+"%").collect(Collectors.joining("; ")),
-                    String.join("; ",row.notes()),snapshot.asOf().atZone(settings.zone()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+            var master=masters.get(row.masterId());var backlog=row.backlog();var rollup=master.backlog();
+            return ProjectReportExportRow.builder().program(row.programName()).cohort(row.cohortName()).schoolClass(row.className())
+                    .masterCode(master.code()).master(master.name()).masterStatus(master.status().name()).template(master.templateName())
+                    .sourceVersion(master.sourceVersion()).level(row.parentProjectId()==null?"MASTER":"SUB_PROJECT")
+                    .parentId(row.parentProjectId()==null?"":row.parentProjectId().toString()).projectCode(row.code()).project(row.name())
+                    .team(row.teamName()).mentor(row.mentorName()).status(row.status().name())
+                    .total(backlog.total()).todo(backlog.todo()).inProgress(backlog.inProgress()).review(backlog.review()).done(backlog.done()).other(backlog.other())
+                    .masterTotal(rollup.total()).masterTodo(rollup.todo()).masterInProgress(rollup.inProgress()).masterReview(rollup.review()).masterDone(rollup.done())
+                    .accepted(row.acceptedMilestones()).milestones(row.milestones().size()).overdue(row.overdueMilestones()).late(row.lateMilestones())
+                    .inactiveMembers(row.inactiveMembers().stream().map(InactiveMember::name).collect(Collectors.joining("; ")))
+                    .milestoneDetails(row.milestones().stream().map(m->m.title()+": "+m.status()+"; backlog="+m.backlog().total()
+                            +"; todo="+m.backlog().todo()+"; in progress="+m.backlog().inProgress()+"; review="+m.backlog().review()+"; done="+m.backlog().done()).collect(Collectors.joining(" | ")))
+                    .asOf(snapshot.asOf().atZone(settings.zone()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)).build();
         }).toList();
     }
-    private String percent(BigDecimal value){return value==null?"Chưa đủ cấu hình":value.toPlainString();}
     private ProjectReportExportJob owned(UUID id,ProjectReportScopeService.Actor actor,boolean lock) {
         var job=lock?em.find(ProjectReportExportJob.class,id,LockModeType.PESSIMISTIC_WRITE):em.find(ProjectReportExportJob.class,id);
         if(job==null||!job.getActorId().equals(actor.id())||!job.getTenantId().equals(actor.tenantId()))throw error(404,"Không tìm thấy báo cáo");return job;

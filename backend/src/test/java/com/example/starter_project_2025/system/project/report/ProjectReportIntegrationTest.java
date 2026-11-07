@@ -136,17 +136,22 @@ class ProjectReportIntegrationTest {
                     .getSingleResult()).isEqualTo("Project Management");
         });
     }
-    @Test void groupsAssignmentCopiesByPublishedSourceAndComputesWeightedProgressAndExclusiveKpi() throws Exception {
-        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.summary.teams").value(2))
-                .andExpect(jsonPath("$.summary.classes").value(1)).andExpect(jsonPath("$.summary.projects").value(2))
-                .andExpect(jsonPath("$.summary.averageProgress").value(75))
-                .andExpect(jsonPath("$.summary.completionRate").value(50)).andExpect(jsonPath("$.statuses.IN_PROGRESS").value(1))
-                .andExpect(jsonPath("$.statuses.DONE").value(1)).andExpect(jsonPath("$.content[0].progress").value(75));
-        var rows=body(report(admin)).get("content").get(0).get("projects");
-        assertThat(rows).hasSize(2);assertThat(rows.findValuesAsText("progress")).contains("50.0","100");
+    @Test void independentRootsDoNotMergeEvenWhenClassAndTemplateAreTheSame() throws Exception {
+        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2))
+                .andExpect(jsonPath("$.summary.teams").value(2)).andExpect(jsonPath("$.summary.classes").value(1))
+                .andExpect(jsonPath("$.summary.subProjects").value(0)).andExpect(jsonPath("$.statuses.ACTIVE").value(2))
+                .andExpect(jsonPath("$.summary.backlog.total").value(2))
+                .andExpect(jsonPath("$.summary.averageProgress").doesNotExist()).andExpect(jsonPath("$.summary.completionRate").doesNotExist());
+        var masters=body(report(admin)).get("content");
+        assertThat(masters).hasSize(2);assertThat(masters.get(0).get("projects")).isEmpty();
+        assertThat(masters.get(0).get("id")).isNotEqualTo(masters.get(1).get("id"));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",classId.toString()).param("status","ACTIVE"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",classId.toString()).param("masterStatus","ACTIVE"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2));
     }
     @Test void mentorScopeIgnoresClassWideAssignmentAndForeignTenantAndOptionsUseSameScope() throws Exception {
-        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.summary.teams").value(1)).andExpect(jsonPath("$.content[0].progress").value(50));
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.summary.teams").value(1)).andExpect(jsonPath("$.summary.backlog.total").value(2));
         mvc.perform(get("/api/project-reports/options").header("Authorization","Bearer "+mentor)).andExpect(status().isOk()).andExpect(jsonPath("$.teams.length()").value(1));
         mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+mentor).param("teamId",teamB.toString())).andExpect(status().isForbidden());
         report(student).andExpect(status().isForbidden());
@@ -156,36 +161,50 @@ class ProjectReportIntegrationTest {
         tx.executeWithoutResult(status->{var s=new UserDataScope();s.setUser(em.find(User.class,managerId));s.setTenantId(tenantId);s.setScopeType(UserScopeType.PROGRAM);s.setTargetId(801L);em.persist(s);});
         report(manager).andExpect(status().isOk()).andExpect(jsonPath("$.summary.teams").value(2));
     }
-    @Test void riskFilteringRetainsFullScopedMasterProgressAndReflectsLiveWorkChanges() throws Exception {
+    @Test void overdueFilterUsesCurrentRiskAndTaskChangesDoNotCompleteTheProject() throws Exception {
         tx.executeWithoutResult(status->em.find(Milestone.class,milestoneA).editActive("Late",now.minusSeconds(1),UUID.randomUUID(),now));
         mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",classId.toString()).param("risk","OVERDUE"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].matchingTeams").value(1)).andExpect(jsonPath("$.content[0].scopedTeams").value(2))
-                .andExpect(jsonPath("$.content[0].progress").value(75)).andExpect(jsonPath("$.summary.overdueProjects").value(1));
-        tx.executeWithoutResult(status->em.createQuery("update SprintBacklog b set b.status=:done where b.projectId=:project").setParameter("done",SprintBacklogStatus.DONE).setParameter("project",projectA).executeUpdate());
-        report(admin).andExpect(jsonPath("$.content[0].progress").value(100)).andExpect(jsonPath("$.statuses.IN_PROGRESS").value(1));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(projectA)).andExpect(jsonPath("$.content[0].backlog.total").value(2))
+                .andExpect(jsonPath("$.summary.overdueProjects").value(1)).andExpect(jsonPath("$.statuses.ACTIVE").value(1));
+        tx.executeWithoutResult(status->em.createQuery("update SprintBacklog b set b.status=:done where b.projectId=:project")
+                .setParameter("done",SprintBacklogStatus.DONE).setParameter("project",projectA).executeUpdate());
+        report(admin).andExpect(jsonPath("$.summary.backlog.done").value(2)).andExpect(jsonPath("$.statuses.ACTIVE").value(2));
     }
-    @Test void onTimeSubmittedIsNotOverdueButAcceptedLateSubmissionRemainsHistory() throws Exception {
+    @Test void onTimeSubmittedIsNotOverdueAndAcceptedLateSubmissionDoesNotChangeProjectState() throws Exception {
         tx.executeWithoutResult(status->{var a=em.find(Milestone.class,milestoneA);a.editActive(null,now.minusSeconds(60),UUID.randomUUID(),now);a.setExecutionStatus(MilestoneExecutionStatus.REVIEW,UUID.randomUUID(),now);
             em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,milestoneA,UUID.randomUUID(),1,null,null,null,"[]","[]",now.minusSeconds(120),false,null));
             em.persist(MilestoneArtifactSubmission.submit(tenantId,projectB,teamB,milestoneB,UUID.randomUUID(),1,null,null,null,"[]","[]",now.minusSeconds(30),true,null));});
-        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.summary.overdueProjects").value(0)).andExpect(jsonPath("$.summary.lateProjects").value(1))
-                .andExpect(jsonPath("$.statuses.SUBMITTED").value(1)).andExpect(jsonPath("$.summary.completionRate").value(50));
+        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.summary.overdueProjects").value(0))
+                .andExpect(jsonPath("$.summary.lateProjects").value(1)).andExpect(jsonPath("$.statuses.ACTIVE").value(2))
+                .andExpect(jsonPath("$.statuses.COMPLETED").value(0));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",classId.toString()).param("risk","OVERDUE"))
+                .andExpect(jsonPath("$.total").value(0));
     }
-    @Test void planningAndCancelledAreExcludedFromCompletionDenominatorAndCancelledFromAverage() throws Exception {
-        tx.executeWithoutResult(status->{team(em.find(TrainingClass.class,classId),mentorId,ProjectStatus.PLANNING,sourceId);team(em.find(TrainingClass.class,classId),mentorId,ProjectStatus.CANCELLED,sourceId);});
-        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.summary.completionRate").value(50)).andExpect(jsonPath("$.statuses.NOT_STARTED").value(1))
-                .andExpect(jsonPath("$.statuses.CANCELLED").value(1)).andExpect(jsonPath("$.content[0].progress").value(50));
+    @Test void plannedAndCancelledProjectsKeepTheirOwnStatesAndDraftTeamsRemainVisible() throws Exception {
+        tx.executeWithoutResult(status->{var planned=team(em.find(TrainingClass.class,classId),mentorId,ProjectStatus.PLANNING,sourceId);planned.setStatus(ProjectTeamStatus.DRAFT);
+            team(em.find(TrainingClass.class,classId),mentorId,ProjectStatus.CANCELLED,sourceId);});
+        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.summary.masters").value(4))
+                .andExpect(jsonPath("$.statuses.PLANNING").value(1)).andExpect(jsonPath("$.statuses.CANCELLED").value(1))
+                .andExpect(jsonPath("$.statuses.ACTIVE").value(2));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",classId.toString()).param("includeCancelled","false"))
+                .andExpect(jsonPath("$.total").value(3)).andExpect(jsonPath("$.statuses.CANCELLED").value(0));
     }
-    @Test void invalidWeightsStayUnknownAndDraftWithoutDeadlineDoesNotBreakReports() throws Exception {
-        tx.executeWithoutResult(status->{var a=em.find(ProjectTeam.class,teamA);var m=milestone(a,null,false);m.configureAssessment(null,LatePenaltyBasis.FIXED);});
-        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.summary.missingProgressProjects").value(1)).andExpect(jsonPath("$.content[0].progress").isEmpty());
+    @Test void erdMilestoneWithNoBacklogKeepsItsAcceptedStateWithoutInventedProgress() throws Exception {
+        tx.executeWithoutResult(status->{var a=em.find(ProjectTeam.class,teamA);var m=milestone(a,null,true);m.configureAssessment(null,LatePenaltyBasis.FIXED);});
+        var data=body(report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.summary.backlog.total").value(2))
+                .andExpect(jsonPath("$.statuses.ACTIVE").value(2)));
+        var a=data.get("content").findParents("key").stream().filter(row->row.get("id").asLong()==projectA).findFirst().orElseThrow();
+        var noBacklog=a.get("project").get("milestones").get(1);
+        assertThat(noBacklog.get("status").asText()).isEqualTo("ACCEPTED");assertThat(noBacklog.get("backlog").get("total").asLong()).isZero();
+        assertThat(noBacklog.has("progress")).isFalse();
         mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("createdFrom","2026-11-01").param("createdTo","2026-10-01")).andExpect(status().isUnprocessableEntity());
     }
     @Test void backgroundExcelExportsAllPagesAndSameRequestIsIdempotent() throws Exception {
         tx.executeWithoutResult(status->team(em.find(TrainingClass.class,classId),mentorId,ProjectStatus.ACTIVE,version(null).getId()));
         mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",classId.toString()).param("size","1"))
-                .andExpect(jsonPath("$.content.length()").value(1)).andExpect(jsonPath("$.total").value(2))
-                .andExpect(jsonPath("$.summary.projects").value(3)).andExpect(jsonPath("$.summary.teams").value(3))
+                .andExpect(jsonPath("$.content.length()").value(1)).andExpect(jsonPath("$.total").value(3))
+                .andExpect(jsonPath("$.summary.masters").value(3)).andExpect(jsonPath("$.summary.teams").value(3))
                 .andExpect(jsonPath("$.summary.classes").value(1));
         var key=UUID.randomUUID();var id=export("EXCEL",key);assertThat(export("EXCEL",key)).isEqualTo(id);exports.process(id);
         mvc.perform(get("/api/project-reports/exports/{id}",id).header("Authorization","Bearer "+admin)).andExpect(jsonPath("$.status").value("READY")).andExpect(jsonPath("$.rowCount").value(3));
@@ -205,7 +224,7 @@ class ProjectReportIntegrationTest {
         mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin)).andExpect(status().isGone());
         var job=jobs.findById(id).orElseThrow();assertThat(job.getFileContent()).isNull();assertThat(job.getStatus()).isEqualTo(ProjectReportExportJob.State.EXPIRED);
     }
-    @Test void exportDownloadRechecksContributorsToMasterAverageAndPermissionRevocation() throws Exception {
+    @Test void exportDownloadRechecksProjectScopeAndPermissionRevocation() throws Exception {
         tx.executeWithoutResult(status->em.find(Milestone.class,milestoneA).editActive(null,now.minusSeconds(1),UUID.randomUUID(),now));
         var result=mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+mentor).header("Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"format\":\"CSV\",\"filters\":{\"risk\":\"OVERDUE\"}}"));
@@ -217,19 +236,19 @@ class ProjectReportIntegrationTest {
         mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin)).andExpect(status().isOk()).andExpect(jsonPath("$.summary.teams").value(0));
         mvc.perform(get("/api/project-reports/exports").header("Authorization","Bearer "+admin)).andExpect(status().isForbidden());
     }
-    @Test void weightedTaskRollupAvoidsMultiplyingCountsWhenThereAreSeveralSubmissions() throws Exception {
-        tx.executeWithoutResult(status->{var team=em.find(ProjectTeam.class,teamA);var first=em.find(Milestone.class,milestoneA);
-            first.configureAssessment(new BigDecimal("40"),LatePenaltyBasis.FIXED);
-            var second=milestone(team,now.plusSeconds(48*3600),false);second.configureAssessment(new BigDecimal("60"),LatePenaltyBasis.FIXED);
+    @Test void backlogRollupAvoidsMultiplyingItemsWhenThereAreSeveralSubmissions() throws Exception {
+        tx.executeWithoutResult(status->{var team=em.find(ProjectTeam.class,teamA);milestone(team,null,true);
             var author=UUID.randomUUID();
             for(long version=1;version<=2;version++)em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,milestoneA,author,version,null,null,null,"[]","[]",now.minusSeconds(version),false,null));
         });
-        var data=body(report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.content[0].progress").value(60)).andExpect(jsonPath("$.summary.atRiskProjects").value(1)));
-        var project=data.get("content").get(0).get("projects").findParents("weightingMode").stream().filter(p->p.get("id").asLong()==projectA).findFirst().orElseThrow();
-        assertThat(project.get("progress").asDouble()).isEqualTo(20);
-        var first=project.get("milestones").get(0);assertThat(first.get("totalTasks").asInt()).isEqualTo(2);assertThat(first.get("doneTasks").asInt()).isEqualTo(1);
+        var data=body(report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.summary.backlog.total").value(2))
+                .andExpect(jsonPath("$.summary.backlog.todo").value(1)).andExpect(jsonPath("$.summary.backlog.done").value(1)));
+        var a=data.get("content").findParents("key").stream().filter(row->row.get("id").asLong()==projectA).findFirst().orElseThrow();
+        var first=a.get("project").get("milestones").get(0);
+        assertThat(first.get("backlog").get("total").asLong()).isEqualTo(2);
     }
-    @Test void downloadChecksHiddenTeamsThatContributedToFilteredMastersAverage() throws Exception {
+    @Test void downloadChecksHiddenModulesThatContributedToFilteredMasterBacklog() throws Exception {
+        splitHierarchy();
         tx.executeWithoutResult(status->{var s=new UserDataScope();s.setUser(em.find(User.class,managerId));s.setTenantId(tenantId);s.setScopeType(UserScopeType.PROGRAM);s.setTargetId(801L);em.persist(s);
             em.find(Milestone.class,milestoneA).editActive(null,now.minusSeconds(1),UUID.randomUUID(),now);});
         var result=mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+manager).header("Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
@@ -264,4 +283,129 @@ class ProjectReportIntegrationTest {
         String response=report(admin).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(response).doesNotContain("Secret template","Secret version");
     }
+    Project module(Project parent,ProjectTeam owner,String code,ProjectStatus state) {
+        var project=new Project();project.setTenantId(tenantId);project.setClassId(classId);project.setCode(code+"-"+UUID.randomUUID());
+        project.setName(code);project.setStatus(state);project.setParentProject(parent);project.setAssignmentId(9001L);project.setTeamId(owner.getId());
+        em.persist(project);em.flush();
+        var assignment=new com.example.starter_project_2025.system.project.resources.TeamSubprojectAssignment();
+        assignment.setProject(project);assignment.setTeam(owner);em.persist(assignment);
+        return project;
+    }
+    void work(Project project,SprintBacklogStatus state) {
+        var item=new SprintBacklog();item.setProjectId(project.getId());item.setStatus(state);item.setTitle("Direct work");em.persist(item);
+    }
+    Long splitHierarchy() {
+        return tx.execute(status->{
+            var root=new Project();root.setTenantId(tenantId);root.setClassId(classId);root.setCode("EC-"+UUID.randomUUID());root.setName("Split commerce");
+            root.setStatus(ProjectStatus.ACTIVE);root.setAssignmentId(9001L);root.setTemplateSnapshotId(version(sourceId).getId());em.persist(root);em.flush();
+            var a=em.find(Project.class,projectA);a.setParentProject(root);a.setAssignmentId(9001L);a.setName("Auth");
+            var b=em.find(Project.class,projectB);b.setParentProject(root);b.setAssignmentId(9001L);b.setName("Payment");
+            work(root,SprintBacklogStatus.REVIEW);work(b,SprintBacklogStatus.IN_PROGRESS);return root.getId();
+        });
+    }
+    @Test void wholeAssignmentHasOneMasterThreeModulesAndOneTeamWithDirectAndChildBacklog() throws Exception {
+        tx.executeWithoutResult(status->{
+            var team=em.find(ProjectTeam.class,teamA);var root=team.getProject();root.setName("Whole commerce");root.setAssignmentId(9001L);
+            work(module(root,team,"MOD-AUTH",ProjectStatus.PLANNING),SprintBacklogStatus.IN_PROGRESS);
+            var catalog=module(root,team,"MOD-CATALOG",ProjectStatus.ACTIVE);catalog.setTeamId(null);
+            work(catalog,SprintBacklogStatus.REVIEW); // Mapping-only ownership is still part of WHOLE.
+            work(module(root,team,"MOD-PAYMENT",ProjectStatus.COMPLETED),SprintBacklogStatus.TODO);
+        });
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("q","Whole commerce"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.summary.teams").value(1))
+                .andExpect(jsonPath("$.summary.subProjects").value(3)).andExpect(jsonPath("$.statuses.ACTIVE").value(1))
+                .andExpect(jsonPath("$.statuses.COMPLETED").value(0)).andExpect(jsonPath("$.summary.backlog.total").value(5))
+                .andExpect(jsonPath("$.summary.backlog.todo").value(2)).andExpect(jsonPath("$.summary.backlog.inProgress").value(1))
+                .andExpect(jsonPath("$.summary.backlog.review").value(1)).andExpect(jsonPath("$.summary.backlog.done").value(1))
+                .andExpect(jsonPath("$.content[0].project.backlog.total").value(2)).andExpect(jsonPath("$.content[0].projects.length()").value(3));
+    }
+    @Test void splitRollupPreservesMasterStateAndIncludesOnlyAuthorizedModulesBeforeAggregation() throws Exception {
+        var root=splitHierarchy();
+        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(root)).andExpect(jsonPath("$.content[0].projects.length()").value(2))
+                .andExpect(jsonPath("$.content[0].scopedTeams").value(2)).andExpect(jsonPath("$.content[0].backlog.total").value(4));
+        var data=body(report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.summary.teams").value(1)).andExpect(jsonPath("$.content[0].projects.length()").value(1))
+                .andExpect(jsonPath("$.content[0].backlog.total").value(3)).andExpect(jsonPath("$.content[0].project.teamId").isEmpty()));
+        assertThat(data.get("content").get(0).get("projects").get(0).get("id").asLong()).isEqualTo(projectA);
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+mentor).param("projectId",projectB.toString())).andExpect(status().isForbidden());
+    }
+    @Test void childOverdueFilterReturnsParentAndMatchingChildWhileKeepingFullVisibleMasterBacklog() throws Exception {
+        splitHierarchy();
+        tx.executeWithoutResult(status->em.find(Milestone.class,milestoneA).editActive(null,now.minusSeconds(1),UUID.randomUUID(),now));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",classId.toString()).param("risk","OVERDUE"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)).andExpect(jsonPath("$.content[0].projects.length()").value(1))
+                .andExpect(jsonPath("$.content[0].projects[0].id").value(projectA)).andExpect(jsonPath("$.content[0].backlog.total").value(4))
+                .andExpect(jsonPath("$.content[0].status").value("ACTIVE")).andExpect(jsonPath("$.summary.subProjects").value(1));
+    }
+    @Test void moduleStatusFilterAndMasterStatusFilterUseSeparateProjectStates() throws Exception {
+        splitHierarchy();
+        tx.executeWithoutResult(status->em.find(Project.class,projectB).setStatus(ProjectStatus.COMPLETED));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",classId.toString()).param("status","COMPLETED"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].projects.length()").value(1))
+                .andExpect(jsonPath("$.content[0].projects[0].id").value(projectB)).andExpect(jsonPath("$.statuses.ACTIVE").value(1))
+                .andExpect(jsonPath("$.statuses.COMPLETED").value(0));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",classId.toString()).param("masterStatus","COMPLETED"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+    }
+    @Test void deeperDescendantsAreIncludedOnceAndUnreadableAncestorWorkIsExcluded() throws Exception {
+        tx.executeWithoutResult(status->{
+            var root=em.find(Project.class,projectB);var a=em.find(Project.class,projectA);a.setParentProject(root);
+            var team=em.find(ProjectTeam.class,teamA);var nested=module(a,team,"Nested module",ProjectStatus.ACTIVE);work(nested,SprintBacklogStatus.REVIEW);
+            work(root,SprintBacklogStatus.DONE);
+        });
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(projectB)).andExpect(jsonPath("$.content[0].project.contextOnly").value(true))
+                .andExpect(jsonPath("$.content[0].backlog.total").value(3)).andExpect(jsonPath("$.content[0].projects.length()").value(2))
+                .andExpect(jsonPath("$.content[0].projects[1].depth").value(2));
+    }
+    @Test void hierarchyExcelContainsMasterAndModuleRowsWithCountsAndNoProgressColumns() throws Exception {
+        splitHierarchy();var id=export("EXCEL",UUID.randomUUID());exports.process(id);
+        byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
+            var sheet=workbook.getSheetAt(0);assertThat(sheet.getPhysicalNumberOfRows()).isEqualTo(4);
+            StringBuilder text=new StringBuilder();sheet.forEach(row->row.forEach(cell->text.append(cell.toString()).append("|")));
+            assertThat(text.toString()).contains("Split commerce","Auth","Payment","MASTER","SUB_PROJECT","ACTIVE","Backlog").doesNotContain("Progress (%)","Master progress");
+        }
+    }
+    @Test void unassignedDirectBacklogWithTeamMembersDoesNotBreakDashboardOrCreateInactivity() throws Exception {
+        tx.executeWithoutResult(status->{
+            var team=em.find(ProjectTeam.class,teamA);
+            var learner=user(em.find(Tenant.class,tenantId),roles.findByName("STUDENT").orElseThrow(),"Learner");
+            var cm=new ClassMember();cm.setTrainingClass(team.getTrainingClass());cm.setUser(learner);cm.setStatus(ClassMemberStatus.ACTIVE);em.persist(cm);
+            var member=new ProjectMember();member.setTeam(team);member.setClassMember(cm);member.setRole("MEMBER");em.persist(member);
+            work(team.getProject(),SprintBacklogStatus.TODO);
+            work(module(team.getProject(),team,"Unassigned module",ProjectStatus.ACTIVE),SprintBacklogStatus.REVIEW);
+        });
+        mvc.perform(get("/api/project-reports/options").header("Authorization","Bearer "+mentor)).andExpect(status().isOk());
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.summary.backlog.total").value(4))
+                .andExpect(jsonPath("$.summary.backlog.todo").value(2)).andExpect(jsonPath("$.summary.backlog.review").value(1))
+                .andExpect(jsonPath("$.summary.inactiveMembers").value(0));
+    }
+    @Test void inactivityIsScopedToAssignedModuleAndReadsDoNotChangeTeamsOrSendAlerts() throws Exception {
+        Long[] ids=tx.execute(status->{
+            var team=em.find(ProjectTeam.class,teamA);var project=module(team.getProject(),team,"Quiet module",ProjectStatus.ACTIVE);
+            var user=user(em.find(Tenant.class,tenantId),roles.findByName("STUDENT").orElseThrow(),"Quiet student");
+            var cm=new ClassMember();cm.setTrainingClass(team.getTrainingClass());cm.setUser(user);cm.setStatus(ClassMemberStatus.ACTIVE);em.persist(cm);
+            var member=new ProjectMember();member.setTeam(team);member.setClassMember(cm);member.setRole("MEMBER");em.persist(member);em.flush();
+            var item=new SprintBacklog();item.setProjectId(project.getId());item.setTitle("Waiting work");item.setStatus(SprintBacklogStatus.TODO);item.setAssigneeProjectMemberId(member.getId());em.persist(item);em.flush();
+            var at=java.sql.Timestamp.valueOf(LocalDateTime.ofInstant(now.minus(Duration.ofDays(10)),ZoneId.systemDefault()));
+            em.createNativeQuery("update project_members set created_at=:at where id=:id").setParameter("at",at).setParameter("id",member.getId()).executeUpdate();
+            em.createNativeQuery("update sprint_backlog set created_at=:at where sprint_backlog_id=:id").setParameter("at",at).setParameter("id",item.getId()).executeUpdate();
+            work(project,SprintBacklogStatus.TODO);
+            return new Long[]{project.getId(),user.getId()};
+        });
+        Long before=tx.execute(status->em.createQuery("select count(b) from ProjectAlertBatch b",Long.class).getSingleResult());
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+mentor).param("risk","INACTIVE_MEMBERS"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.summary.inactiveMembers").value(1))
+                .andExpect(jsonPath("$.content[0].projects[0].id").value(ids[0]))
+                .andExpect(jsonPath("$.content[0].projects[0].backlog.total").value(2))
+                .andExpect(jsonPath("$.content[0].projects[0].inactiveMembers[0].userId").value(ids[1]));
+        tx.executeWithoutResult(status->{
+            assertThat(em.find(ProjectTeam.class,teamA).getProjectId()).isEqualTo(projectA);
+            assertThat(em.createQuery("select count(b) from ProjectAlertBatch b",Long.class).getSingleResult()).isEqualTo(before);
+        });
+    }
+
 }

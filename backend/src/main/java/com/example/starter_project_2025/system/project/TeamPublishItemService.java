@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
@@ -51,6 +52,7 @@ public class TeamPublishItemService {
                         "ProjectTeam", "id", teamId));
 
         if (team.getStatus() == ProjectTeamStatus.ACTIVE) {
+            activateAssignedProject(team);
             return;
         }
         if (session.getStatus() != TeamAllocationSessionStatus.OPEN) {
@@ -122,6 +124,7 @@ public class TeamPublishItemService {
         String beforeState = serialize(snapshot(team, assignments, ProjectTeamStatus.DRAFT));
         team.setAssignedMentorId(assignedMentorId);
         team.setStatus(ProjectTeamStatus.ACTIVE);
+        activateAssignedProject(team);
         teamRepository.saveAndFlush(team);
         for (ProjectMember assignment : assignments) {
             historyService.record(
@@ -157,6 +160,16 @@ public class TeamPublishItemService {
                 .correlationId(correlationId)
                 .status("PENDING")
                 .build());
+    }
+
+    private void activateAssignedProject(ProjectTeam team) {
+        var project = team.getProject();
+        if (project != null && project.getStatus() == ProjectStatus.PLANNING
+                && Boolean.TRUE.equals(project.getIsActive())
+                && java.util.Objects.equals(project.getTenantId(), team.getTrainingClass().getTenantId())
+                && (project.getTeamId() == null || project.getTeamId().equals(team.getId()))) {
+            project.setStatus(ProjectStatus.ACTIVE);
+        }
     }
 
     /** US-11: publishing also enforces the template role quota minimums. */

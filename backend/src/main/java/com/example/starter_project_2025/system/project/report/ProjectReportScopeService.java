@@ -59,7 +59,7 @@ public class ProjectReportScopeService {
     public List<ProjectTeam> teams(Actor actor) {
         // A Mentor's class-wide assignment does not grant access to other teams in that class.
         return em.createQuery("select distinct t from ProjectTeam t join fetch t.trainingClass c join fetch t.project p "
-                + "left join fetch t.projectTemplate tpl where t.isActive=true and t.status=com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE "
+                + "left join fetch t.projectTemplate tpl where t.isActive=true "
                 + "and c.isActive=true and p.isActive=true and c.tenantId=:tenant and p.tenantId=:tenant "
                 + "and (tpl.id is null or tpl.tenantId is null or tpl.tenantId=:tenant) "
                 + "and (:admin=true or t.assignedMentorId=:actor or (:manager=true and ("
