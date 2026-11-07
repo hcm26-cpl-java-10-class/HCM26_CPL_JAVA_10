@@ -91,7 +91,7 @@ public class AutoAllocationService {
         for (AutoAllocationConfirmRequest.Team draft : request.teams()) {
             if (draft == null || draft.teamName() == null || draft.teamName().isBlank()
                     || draft.teamName().length() > 255 || draft.memberIds() == null
-                    || draft.memberIds().size() > max + 1) {
+                    || draft.memberIds().size() > max) {
                 throw stale();
             }
             actualSizes.add(draft.memberIds().size());
@@ -106,7 +106,7 @@ public class AutoAllocationService {
         for (AutoAllocationConfirmRequest.Team draft : request.teams()) {
             ProjectTeam team = ProjectTeam.builder().trainingClass(session.getTrainingClass())
                     .allocationSession(session).teamName(draft.teamName().trim())
-                    .maxMembers(Math.addExact(max, 1)).allocationSource(TeamAllocationSource.AUTO)
+                    .maxMembers(max).allocationSource(TeamAllocationSource.AUTO)
                     .status(ProjectTeamStatus.DRAFT).build();
             created.add(team);
         }

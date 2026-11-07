@@ -5,10 +5,7 @@ import com.example.starter_project_2025.system.project.cohort.CohortRepository;
 import com.example.starter_project_2025.system.project.cohort.CohortStatus;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.domain.ProjectStatus;
-import com.example.starter_project_2025.system.project.team.Team;
-import com.example.starter_project_2025.system.project.team.TeamMember;
-import com.example.starter_project_2025.system.project.team.TeamMemberRepository;
-import com.example.starter_project_2025.system.project.team.TeamRepository;
+import com.example.starter_project_2025.system.project.trainingclass.*;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
@@ -77,8 +74,11 @@ class WorkspaceAcceptanceIntegrationTest {
     @Autowired TenantRepository tenants;
     @Autowired ProjectRepository projects;
     @Autowired CohortRepository cohorts;
-    @Autowired TeamRepository teams;
-    @Autowired TeamMemberRepository members;
+    @Autowired ProjectTeamRepository teams;
+    @Autowired ProjectMemberRepository members;
+    @Autowired TrainingClassRepository classes;
+    @Autowired ClassMemberRepository classMembers;
+    @Autowired TeamAllocationSessionRepository allocationSessions;
     @Autowired UserRepository users;
     @Autowired RoleRepository roles;
     @Autowired PermissionRepository permissions;
@@ -91,7 +91,7 @@ class WorkspaceAcceptanceIntegrationTest {
     @SpyBean WorkspaceOutboxRepository outbox;
     @SpyBean WorkspaceActivityRepository activities;
     @SpyBean WorkspaceCreationRequestRepository requests;
-    Long tenantId, projectId, teamId, cohortId, actorId, roleId, membershipId;
+    Long tenantId, projectId, teamId, cohortId, actorId, roleId, membershipId, classId, sessionId;
     String token, email;
 
     @BeforeEach
@@ -117,12 +117,20 @@ class WorkspaceAcceptanceIntegrationTest {
             project.setCode("PRJ-" + UUID.randomUUID()); project.setName("Campus portal"); project.setDescription("Existing project brief");
             project.setTenant(tenant); project.setCohort(cohort); project.setStatus(ProjectStatus.PLANNING);
             projectId = projects.saveAndFlush(project).getId();
-            Team team = new Team();
-            team.setCode("TEAM-" + UUID.randomUUID()); team.setName("Atlas"); team.setTenant(tenant); team.setProject(project);
+            var trainingClass = new TrainingClass();
+            trainingClass.setCode("AC-" + UUID.randomUUID()); trainingClass.setName("Acceptance class");
+            trainingClass.setTenantId(tenantId); trainingClass.setProgramId(1L);
+            trainingClass.setCohortId(cohortId); trainingClass.setCohortName("SE18A");
+            trainingClass.setStatus(TrainingClassStatus.ONGOING);
+            classId = classes.saveAndFlush(trainingClass).getId();
+            var session = new TeamAllocationSession();
+            session.setTrainingClass(trainingClass); session.setMaxMembers(5);
+            session.setStatus(TeamAllocationSessionStatus.PUBLISHED);
+            sessionId = allocationSessions.saveAndFlush(session).getId();
+            ProjectTeam team = newTeam("Atlas");
+            team.setProject(project);
             teamId = teams.saveAndFlush(team).getId();
-            TeamMember member = new TeamMember();
-            member.setTeam(team); member.setUser(actor);
-            membershipId = members.saveAndFlush(member).getId();
+            membershipId = addMember(team, actor).getId();
             token = token(email);
         });
         assertCleanCreationState();
@@ -177,20 +185,40 @@ class WorkspaceAcceptanceIntegrationTest {
     }
     Long unassignedTeam(boolean withMember) {
         return tx.execute(status -> {
-            Team team = new Team();
-            team.setCode("UNASSIGNED-" + UUID.randomUUID()); team.setName("Unassigned " + UUID.randomUUID());
-            team.setTenant(tenants.findById(tenantId).orElseThrow()); team.setMentor(users.findById(actorId).orElseThrow());
+            ProjectTeam team = newTeam("Unassigned " + UUID.randomUUID());
+            team.setAssignedMentorId(actorId);
             teams.saveAndFlush(team);
             if (withMember) {
-                TeamMember member = new TeamMember(); member.setTeam(team); member.setUser(users.findById(actorId).orElseThrow());
-                members.saveAndFlush(member);
+                addMember(team, users.findById(actorId).orElseThrow());
             }
             return team.getId();
         });
     }
 
+    ProjectTeam newTeam(String name) {
+        var team = new ProjectTeam();
+        team.setTeamName(name); team.setTrainingClass(classes.findById(classId).orElseThrow());
+        team.setAllocationSession(allocationSessions.findById(sessionId).orElseThrow());
+        team.setMaxMembers(5); team.setStatus(ProjectTeamStatus.ACTIVE);
+        return team;
+    }
 
-    @Test void unassignedTeamChoosesAnyFreeProjectAndBindsOnlyOnCommit() throws Exception {
+    ProjectMember addMember(ProjectTeam team, User user) {
+        var classMember = classMembers.findAll().stream()
+                .filter(row -> row.getTrainingClass().getId().equals(classId) && row.getUser().getId().equals(user.getId()))
+                .findFirst().orElseGet(() -> {
+                    var row = new ClassMember();
+                    row.setTrainingClass(team.getTrainingClass()); row.setUser(user); row.setStatus(ClassMemberStatus.ACTIVE);
+                    return classMembers.saveAndFlush(row);
+                });
+        var member = new ProjectMember(); member.setTeam(team); member.setClassMember(classMember);
+        return members.saveAndFlush(member);
+    }
+
+
+    // Project/template assignment belongs to team allocation. Workspace creation
+    // uses the team's current assignment and does not bind a request projectId.
+    @Test void unassignedTeamCreatesTeamOnlyWorkspaceWithoutBindingRequestProject() throws Exception {
         tx.executeWithoutResult(status -> teams.findById(teamId).orElseThrow().setProject(null));
         Long unassigned = unassignedTeam();
         var before = creationCounts();
@@ -199,9 +227,9 @@ class WorkspaceAcceptanceIntegrationTest {
         mvc.perform(get("/api/workspaces/candidates/page").param("onlyUncreated", "true").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content[?(@.teamId == " + unassigned + ")].projectId").value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.nullValue())));
         mvc.perform(get("/api/workspaces/projects").param("teamId", unassigned.toString()).header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.projectId == " + projectId + ")].name").value(org.hamcrest.Matchers.contains("Campus portal")));
+                .andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
         mvc.perform(post("/api/workspaces/confirm").header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON).content(body(projectId, unassigned)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.projectId").value(projectId)).andExpect(jsonPath("$.eligibleForWorkspace").value(true));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.projectId").isEmpty()).andExpect(jsonPath("$.eligibleForWorkspace").value(true));
         tx.executeWithoutResult(status -> {
             assertThat(teams.findById(unassigned).orElseThrow().getProject()).isNull();
             assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.PLANNING);
@@ -210,23 +238,23 @@ class WorkspaceAcceptanceIntegrationTest {
         var created = create("bind-project", body(projectId, unassigned));
         assertThat(created.getResponse().getStatus()).isEqualTo(201);
         tx.executeWithoutResult(status -> {
-            assertThat(teams.findById(unassigned).orElseThrow().getProject().getId()).isEqualTo(projectId);
-            assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.ACTIVE);
+            assertThat(teams.findById(unassigned).orElseThrow().getProject()).isNull();
+            assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.PLANNING);
         });
+        assertThat(json.readTree(created.getResponse().getContentAsString()).get("projectId").isNull()).isTrue();
         mvc.perform(get("/api/workspaces/projects").param("teamId", teamId.toString()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.projectId == " + projectId + ")]").isEmpty());
-        assertThat(create("occupied-project", body()).getResponse().getStatus()).isEqualTo(422);
+        assertThat(create("independent-team", body()).getResponse().getStatus()).isEqualTo(201);
         assertThat(create("duplicate-team", body(projectId, unassigned)).getResponse().getStatus()).isEqualTo(409);
     }
 
-    @Test void projectIsReservedForItsTeamEvenBeforeWorkspaceExists() throws Exception {
+    @Test void requestProjectCannotReassignAnotherTeamAndAssignedProjectRemainsUnique() throws Exception {
         Long otherTeam = unassignedTeam();
         var before = creationCounts();
         mvc.perform(get("/api/workspaces/projects").param("teamId", otherTeam.toString()).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.projectId == " + projectId + ")]").isEmpty());
         mvc.perform(post("/api/workspaces/confirm").header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON).content(body(projectId, otherTeam)))
-                .andExpect(status().isUnprocessableEntity());
-        assertThat(create("reserved-project", body(projectId, otherTeam)).getResponse().getStatus()).isEqualTo(422);
+                .andExpect(status().isOk()).andExpect(jsonPath("$.projectId").isEmpty());
         assertThat(creationCounts()).isEqualTo(before);
         assertThatThrownBy(() -> tx.executeWithoutResult(status -> teams.findById(otherTeam).orElseThrow()
                 .setProject(projects.findById(projectId).orElseThrow()))).isInstanceOf(DataIntegrityViolationException.class);
@@ -234,17 +262,21 @@ class WorkspaceAcceptanceIntegrationTest {
         assertThat(created("owner-project").get("projectId").asLong()).isEqualTo(projectId);
     }
 
-    @Test void teamWithAssignedProjectCannotSelectAnotherProject() throws Exception {
+    @Test void teamWithAssignedProjectAlwaysUsesThatAssignment() throws Exception {
         mvc.perform(get("/api/workspaces/projects").param("teamId", teamId.toString()).header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].projectId").value(projectId));
+                .andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
         Long otherProject = tx.execute(status -> {
             Project project = new Project(); project.setName("Other project"); project.setCode("OTHER-" + UUID.randomUUID());
             project.setTenant(tenants.findById(tenantId).orElseThrow()); project.setStatus(ProjectStatus.PLANNING);
             return projects.saveAndFlush(project).getId();
         });
         mvc.perform(post("/api/workspaces/confirm").header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON).content(body(otherProject, teamId))).andExpect(status().isUnprocessableEntity());
-        assertThat(create("replace-project", body(otherProject, teamId)).getResponse().getStatus()).isEqualTo(422);
+                .contentType(MediaType.APPLICATION_JSON).content(body(otherProject, teamId)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.projectId").value(projectId));
+        var result = create("keep-assigned-project", body(otherProject, teamId));
+        assertThat(result.getResponse().getStatus()).isEqualTo(201);
+        assertThat(json.readTree(result.getResponse().getContentAsString()).get("projectId").asLong()).isEqualTo(projectId);
+        tx.executeWithoutResult(status -> assertThat(projects.findById(otherProject).orElseThrow().getStatus()).isEqualTo(ProjectStatus.PLANNING));
     }
 
     @Test void emptyTeamCannotConfirmOrCreateWithProject() throws Exception {
@@ -268,7 +300,7 @@ class WorkspaceAcceptanceIntegrationTest {
         confirm();
         var before = creationCounts();
         tx.executeWithoutResult(status -> members.findById(membershipId).orElseThrow().setIsActive(false));
-        tx.executeWithoutResult(status -> teams.findById(teamId).orElseThrow().setMentor(users.findById(actorId).orElseThrow()));
+        tx.executeWithoutResult(status -> teams.findById(teamId).orElseThrow().setAssignedMentorId(actorId));
         assertThat(create("last-member-removed", body()).getResponse().getStatus()).isEqualTo(422);
         assertThat(creationCounts()).isEqualTo(before);
         tx.executeWithoutResult(status -> assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.PLANNING));
@@ -277,7 +309,7 @@ class WorkspaceAcceptanceIntegrationTest {
 
 
 
-    @Test void twoTeamsRacingForSameProjectProduceOnlyOneWorkspace() throws Exception {
+    @Test void independentTeamsCreateSeparateTeamOnlyWorkspacesWithoutTakingRequestProject() throws Exception {
         tx.executeWithoutResult(status -> teams.findById(teamId).orElseThrow().setProject(null));
         Long otherTeam = unassignedTeam();
         var ready = new CountDownLatch(2);
@@ -288,9 +320,10 @@ class WorkspaceAcceptanceIntegrationTest {
             assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
             start.countDown();
             assertThat(List.of(first.get(20, TimeUnit.SECONDS).getResponse().getStatus(), second.get(20, TimeUnit.SECONDS).getResponse().getStatus()))
-                    .containsExactlyInAnyOrder(201, 422);
+                    .containsExactly(201, 201);
         }
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM workspaces WHERE project_id = ?", Long.class, projectId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM workspaces WHERE project_id = ?", Long.class, projectId)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM workspaces WHERE tenant_id = ? AND project_id IS NULL", Long.class, tenantId)).isEqualTo(2);
     }
 
     @Test
@@ -298,7 +331,7 @@ class WorkspaceAcceptanceIntegrationTest {
         var before = creationCounts();
         mvc.perform(get("/api/workspaces/candidates").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].teamName").value("Atlas"));
-        tx.executeWithoutResult(status -> teams.findById(teamId).orElseThrow().setName("Renamed after list"));
+        tx.executeWithoutResult(status -> teams.findById(teamId).orElseThrow().setTeamName("Renamed after list"));
         mvc.perform(post("/api/workspaces/confirm").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content(body()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.projectId").value(projectId))
@@ -308,7 +341,7 @@ class WorkspaceAcceptanceIntegrationTest {
     }
 
     @Test
-    void ac06CreatesActiveProjectAndWorkspaceWithEightSectionsAndNoSampleData() throws Exception {
+    void ac06CreatesActiveProjectAndWorkspaceWithCurrentSectionsAndNoSampleData() throws Exception {
         Map<String, Long> before = new HashMap<>();
         for (String table : jdbc.queryForList("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'PUBLIC' AND TABLE_TYPE = 'BASE TABLE'", String.class)) {
             if (!table.toLowerCase(Locale.ROOT).startsWith("workspace") && !table.equalsIgnoreCase("workspaces"))
@@ -320,21 +353,21 @@ class WorkspaceAcceptanceIntegrationTest {
         assertThat(response.get("tenantId").asLong()).isEqualTo(tenantId);
         assertThat(response.get("createdBy").asLong()).isEqualTo(actorId);
         assertThat(response.get("createdAt").asText()).isNotBlank();
-        assertThat(response.get("sections")).hasSize(8);
+        assertThat(response.get("sections")).hasSize(WorkspaceSection.values().length);
         tx.executeWithoutResult(status -> {
             assertThat(workspaces.findById(id).orElseThrow().getSections()).containsExactly(WorkspaceSection.values());
             assertThat(projects.findById(projectId).orElseThrow().getStatus()).isEqualTo(ProjectStatus.ACTIVE);
         });
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM workspace_sections WHERE workspace_id = ?", Long.class, id)).isEqualTo(8L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM workspace_sections WHERE workspace_id = ?", Long.class, id)).isEqualTo((long) WorkspaceSection.values().length);
         before.forEach((table, count) -> assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM \"" + table + "\"", Long.class)).as(table).isEqualTo(count));
         for (int refresh = 0; refresh < 2; refresh++) {
             mvc.perform(get("/api/workspaces/{id}", id).header("Authorization", "Bearer " + token))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id))
-                    .andExpect(jsonPath("$.sections.length()").value(8)).andExpect(jsonPath("$.member_count").value(1))
+                    .andExpect(jsonPath("$.sections.length()").value(WorkspaceSection.values().length)).andExpect(jsonPath("$.member_count").value(1))
                     .andExpect(jsonPath("$.activities").isEmpty());
         }
         tx.executeWithoutResult(status -> members.findById(membershipId).orElseThrow().setIsActive(false));
-        tx.executeWithoutResult(status -> teams.findById(teamId).orElseThrow().setMentor(users.findById(actorId).orElseThrow()));
+        tx.executeWithoutResult(status -> teams.findById(teamId).orElseThrow().setAssignedMentorId(actorId));
         mvc.perform(get("/api/workspaces/{id}", id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.member_count").value(0));
     }
@@ -410,7 +443,7 @@ class WorkspaceAcceptanceIntegrationTest {
         confirm();
         var before = creationCounts();
         tx.executeWithoutResult(transaction -> projects.findById(projectId).orElseThrow().setStatus(ProjectStatus.valueOf(status)));
-        assertThat(create("changed-status", body()).getResponse().getStatus()).isEqualTo(409);
+        assertThat(create("changed-status", body()).getResponse().getStatus()).isEqualTo(422);
         assertThat(creationCounts()).isEqualTo(before);
     }
 
@@ -458,7 +491,7 @@ class WorkspaceAcceptanceIntegrationTest {
     }
 
     @Test
-    void ac11InvalidSelection422AndForeignTenant403() throws Exception {
+    void ac11ForeignTenantAssignmentIs403AndWritesNothing() throws Exception {
         confirm();
         var before = creationCounts();
         Long otherProject = tx.execute(status -> {
@@ -467,11 +500,13 @@ class WorkspaceAcceptanceIntegrationTest {
             project.setName("Other"); project.setCode("OTHER"); project.setTenant(original.getTenant()); project.setStatus(ProjectStatus.ACTIVE);
             return projects.saveAndFlush(project).getId();
         });
-        assertThat(create("invalid-selection", body(otherProject, teamId)).getResponse().getStatus()).isEqualTo(422);
+        mvc.perform(post("/api/workspaces/confirm").header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(body(otherProject, teamId)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.projectId").value(projectId));
         tx.executeWithoutResult(status -> {
             var foreign = tenants.saveAndFlush(Tenant.builder().code("OTHER-" + UUID.randomUUID()).name("Other").build());
             projects.findById(projectId).orElseThrow().setTenant(foreign);
-            teams.findById(teamId).orElseThrow().setTenant(foreign);
+            classes.findById(classId).orElseThrow().setTenantId(foreign.getId());
         });
         assertThat(create("foreign-tenant", body()).getResponse().getStatus()).isEqualTo(403);
         assertThat(creationCounts()).isEqualTo(before);
@@ -532,9 +567,15 @@ class WorkspaceAcceptanceIntegrationTest {
     @Test
     void ac01And02ScopeFiltersAndCountsAgreeWithoutDuplicates() throws Exception {
         Long outside = tx.execute(status -> {
-            var team = teams.findById(teamId).orElseThrow();
-            Team other = new Team();
-            other.setName("Outside"); other.setCode("OUT"); other.setTenant(team.getTenant());
+            ProjectTeam other = newTeam("Outside");
+            var otherClass = new TrainingClass();
+            otherClass.setCode("OUT-" + UUID.randomUUID()); otherClass.setName("Different cohort class");
+            otherClass.setTenantId(tenantId); otherClass.setProgramId(1L); otherClass.setStatus(TrainingClassStatus.ONGOING);
+            classes.saveAndFlush(otherClass);
+            var otherSession = new TeamAllocationSession(); otherSession.setTrainingClass(otherClass);
+            otherSession.setMaxMembers(5); otherSession.setStatus(TeamAllocationSessionStatus.PUBLISHED);
+            allocationSessions.saveAndFlush(otherSession);
+            other.setTrainingClass(otherClass); other.setAllocationSession(otherSession);
             return teams.saveAndFlush(other).getId();
         });
         mvc.perform(get("/api/workspaces/candidates/page").param("size", "1").param("cohortId", cohortId.toString())
@@ -579,10 +620,10 @@ class WorkspaceAcceptanceIntegrationTest {
         tx.executeWithoutResult(status -> {
             members.deleteById(membershipId);
             var team = teams.findById(teamId).orElseThrow();
-            team.setMentor(users.findById(actorId).orElseThrow());
+            team.setAssignedMentorId(actorId);
             User teammate = new User(); teammate.setEmail(UUID.randomUUID() + "@teammate.test"); teammate.setFirstName("Active"); teammate.setLastName("Member");
-            teammate.setTenant(team.getTenant()); teammate.setPasswordHash("unused"); users.saveAndFlush(teammate);
-            TeamMember member = new TeamMember(); member.setTeam(team); member.setUser(teammate); members.saveAndFlush(member);
+            teammate.setTenant(tenants.findById(tenantId).orElseThrow()); teammate.setPasswordHash("unused"); users.saveAndFlush(teammate);
+            addMember(team, teammate);
         });
         mvc.perform(get("/api/workspaces/candidates").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].teamId").value(teamId));

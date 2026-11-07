@@ -75,10 +75,49 @@ export function tenantToday(timeZone: string): string {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+const tenantStartCache = new Map<string, number>();
+
+/** First instant of a calendar date in the tenant zone, including dates with DST changes. */
+export function tenantStartOfDay(date: string, timeZone: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const anchor = new Date(`${date}T00:00:00Z`).getTime();
+  if (Number.isNaN(anchor)) return null;
+
+  const key = `${timeZone}:${date}`;
+  const cached = tenantStartCache.get(key);
+  if (cached !== undefined) return new Date(cached);
+
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const localDate = (instant: number) => {
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(instant)).map((part) => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  };
+
+  // Every IANA offset is within 24 hours. Find the first millisecond in the date,
+  // so a midnight gap or repeated hour follows the same rule as LocalDate.atStartOfDay.
+  let low = anchor - 2 * 86_400_000;
+  let high = anchor + 2 * 86_400_000;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (localDate(middle) < date) low = middle + 1;
+    else high = middle;
+  }
+
+  tenantStartCache.set(key, low);
+  return new Date(low);
+}
+
 export function milestoneFormSchemaForTenant(timeZone: string) {
   return milestoneFormSchema.superRefine((value, context) => {
     if (value.startDate && value.startDate <= tenantToday(timeZone)) {
       context.addIssue({ code: "custom", path: ["startDate"], message: "Start date must be after today in the tenant time zone" });
+    }
+    const start = tenantStartOfDay(value.startDate, timeZone);
+    const deadline = value.deadline ? new Date(value.deadline) : null;
+    if (start && deadline && !Number.isNaN(deadline.getTime()) && start.getTime() >= deadline.getTime()) {
+      context.addIssue({ code: "custom", path: ["startDate"], message: "Start date must be before the deadline" });
     }
   });
 }

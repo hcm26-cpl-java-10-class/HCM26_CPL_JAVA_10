@@ -109,4 +109,8 @@ public class ProjectTeam extends BaseEntity {
     @Version
     @Column(nullable = false)
     Long version;
+
+    public boolean isLedBy(Long memberId) {
+        return memberId != null && memberId.equals(leaderMemberId);
+    }
 }

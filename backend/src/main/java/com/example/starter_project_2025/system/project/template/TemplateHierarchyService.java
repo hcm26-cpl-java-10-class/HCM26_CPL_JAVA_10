@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -110,17 +111,29 @@ public class TemplateHierarchyService {
     }
 
     public void requirePublishedModules(ProjectTemplate template) {
-        requirePublishedModules(template, new HashSet<>());
+        List<String> issues = moduleActivationIssues(template);
+        if (!issues.isEmpty()) {
+            throw new ProjectTemplateException(422, "Publish the child modules before publishing this template",
+                    Map.of("modules", issues));
+        }
     }
 
-    private void requirePublishedModules(ProjectTemplate template, Set<Long> path) {
-        if (!path.add(template.getId())) throw invalidHierarchy();
+    public List<String> moduleActivationIssues(ProjectTemplate template) {
+        List<String> issues = new ArrayList<>();
+        collectModuleActivationIssues(template, new HashSet<>(), issues);
+        return List.copyOf(issues);
+    }
+
+    private void collectModuleActivationIssues(ProjectTemplate template, Set<Long> path, List<String> issues) {
+        if (!path.add(template.getId())) {
+            issues.add("The template hierarchy is invalid");
+            return;
+        }
         for (ProjectTemplate child : children(template)) {
             if (child.getStatus() != ProjectTemplateStatus.ACTIVE || published(child) == null) {
-                throw new ProjectTemplateException(422, "Publish the child modules before publishing this template",
-                        Map.of("modules", List.of("Module " + child.getCode() + " must have an active published version")));
+                issues.add("Module " + child.getCode() + " must have an active published version");
             }
-            requirePublishedModules(child, path);
+            collectModuleActivationIssues(child, path, issues);
         }
         path.remove(template.getId());
     }

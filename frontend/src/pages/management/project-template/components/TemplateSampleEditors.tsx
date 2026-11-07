@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { TemplateSuggestedRole } from "@/types/features/project-template";
-import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, PanelLeftClose, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { sampleFieldId, type BacklogItemValues, type SampleContentErrors } from "../sample-content.utils";
 
@@ -32,13 +32,18 @@ function Actions({ index, count, disabled, editable, onMove, onRemove, label }: 
 
 export function TemplateBacklogEditor(props: EditorProps & {
   item: BacklogItemValues; roles: TemplateSuggestedRole[]; onChange: (patch: Partial<BacklogItemValues>) => void;
+  onCollapse: () => void;
 }) {
-  const { item, index, disabled, errors, roles, onChange } = props;
+  const { item, index, disabled, errors, roles, onChange, onCollapse } = props;
   const path = `backlogItems[${index}]`;
   const fieldProps = (field: string) => ({ id: sampleFieldId(`${path}.${field}`), "aria-invalid": !!errors[`${path}.${field}`], "aria-describedby": `${sampleFieldId(`${path}.${field}`)}-error` });
   return <Card><CardHeader><div className="flex items-start justify-between gap-3"><div className="min-w-0">
     <p className="text-xs text-muted-foreground">Backlog item {index + 1}</p><CardTitle className="mt-1 break-words text-base">{item.title.trim() || "New backlog item"}</CardTitle>
-  </div><Actions {...props} label="backlog item" /></div></CardHeader><CardContent>
+  </div><div className="flex shrink-0 items-center gap-1">
+    <Actions {...props} label="backlog item" />
+    <Button type="button" variant="ghost" size="icon-sm" aria-label="Collapse backlog item" title="Collapse backlog item"
+      onClick={onCollapse}><PanelLeftClose /></Button>
+  </div></div></CardHeader><CardContent>
     <fieldset disabled={disabled} className="grid gap-4">
       <FieldError errors={errors[path] ?? errors[`${path}.id`]} />
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">

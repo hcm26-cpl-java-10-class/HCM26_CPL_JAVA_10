@@ -116,7 +116,27 @@ class TeamAllocationLifecycleIntegrationTest {
                 .andExpect(jsonPath("$.statuses.PLANNING").value(0));
     }
     @Test void failedPublishDoesNotActivateProjectBeforeReadinessValidation() throws Exception {
+        tx.executeWithoutResult(status->em.find(ProjectTeam.class,teamId).setLeaderMemberId(null));
+        mvc.perform(post(path()+"/"+sessionId+"/publish-session").header("Authorization","Bearer "+admin)
+                .header("X-Idempotency-Key",UUID.randomUUID().toString())).andExpect(status().isUnprocessableEntity());
+        assertStates(ProjectTeamStatus.DRAFT,ProjectStatus.PLANNING);
+    }
+    @Test void publishingAllowsAnActiveLeaderWhoseProjectRoleIsDev() throws Exception {
         tx.executeWithoutResult(status->em.find(ProjectMember.class,memberId).setRole("DEV"));
+        mvc.perform(post(path()+"/"+sessionId+"/publish-session").header("Authorization","Bearer "+admin)
+                .header("X-Idempotency-Key",UUID.randomUUID().toString())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.failedItems").isEmpty());
+        assertStates(ProjectTeamStatus.ACTIVE,ProjectStatus.ACTIVE);
+        tx.executeWithoutResult(status->assertThat(em.find(ProjectMember.class,memberId).getRole()).isEqualTo("DEV"));
+    }
+    @Test void publishingStillRejectsTeamsExceedingTheTemplateRoleMaximum() throws Exception {
+        tx.executeWithoutResult(status->{
+            em.find(ProjectMember.class,memberId).setRole("DEV");
+            em.find(ProjectTemplate.class,templateId).setConstraintsJson("{\"min_members\":1,\"max_members\":5,\"role_quotas\":{\"DEV\":{\"min\":0,\"max\":1}}}");
+            var learner=user(em.find(Tenant.class,tenantId),"STUDENT","Second learner");
+            var cm=new ClassMember();cm.setTrainingClass(em.find(TrainingClass.class,classId));cm.setUser(learner);cm.setStatus(ClassMemberStatus.ACTIVE);em.persist(cm);
+            var member=new ProjectMember();member.setTeam(em.find(ProjectTeam.class,teamId));member.setClassMember(cm);member.setRole("DEV");em.persist(member);
+        });
         mvc.perform(post(path()+"/"+sessionId+"/publish-session").header("Authorization","Bearer "+admin)
                 .header("X-Idempotency-Key",UUID.randomUUID().toString())).andExpect(status().isUnprocessableEntity());
         assertStates(ProjectTeamStatus.DRAFT,ProjectStatus.PLANNING);

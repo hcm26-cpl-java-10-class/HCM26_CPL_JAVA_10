@@ -14,11 +14,21 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
 public class HierarchyDemoTeams {
     public record Classroom(TrainingClass trainingClass, TeamAllocationSession session, List<ProjectTeam> teams) { }
+
+    private static final List<String> DEMO_ROLES = List.of("PM", "BA", "DEV", "QA");
+    private static final Map<String, List<String>> DEMO_STUDENT_NAMES = Map.of(
+            "Auth", List.of("Nguyễn Minh Anh", "Trần Gia Bảo", "Lê Quang Huy", "Phạm Thu Hà"),
+            "Payment", List.of("Võ Hoàng Nam", "Đặng Ngọc Linh", "Phan Đức Anh", "Bùi Thảo Vy"),
+            "Catalog", List.of("Đỗ Hải Đăng", "Hồ Khánh Linh", "Ngô Tuấn Kiệt", "Dương Yến Nhi"),
+            "Whole", List.of("Vũ Minh Khang", "Lý Bảo Trân", "Cao Nhật Minh", "Đinh Phương Thảo"),
+            "Busy", List.of("Trương Gia Hưng", "Nguyễn Ngọc Mai", "Trần Quốc Bảo", "Lê Hải Yến"));
+
     private final UserRepository users;
     private final RoleRepository roles;
     private final PasswordEncoder passwords;
@@ -59,14 +69,20 @@ public class HierarchyDemoTeams {
             ProjectTeam team = teams.saveAndFlush(ProjectTeam.builder().trainingClass(trainingClass).allocationSession(session)
                     .teamName("Team 0" + (index + 1) + " - " + label + (ready ? " (ready)" : " (assigned)"))
                     .status(ProjectTeamStatus.DRAFT).assignedMentorId(mentor.getId()).maxMembers(8).build());
-            for (String role : List.of("PM", "BA", "DEV", "QA")) {
+            List<String> studentNames = DEMO_STUDENT_NAMES.get(label);
+            for (int roleIndex = 0; roleIndex < DEMO_ROLES.size(); roleIndex++) {
+                String role = DEMO_ROLES.get(roleIndex);
+                String studentName = studentNames.get(roleIndex);
+                int separator = studentName.indexOf(' ');
                 String email = "hier." + prefix + "." + label.toLowerCase(Locale.ROOT) + "." + role.toLowerCase(Locale.ROOT) + "@example.com";
-                User student = user(tenant, email, label, role + (ready ? " Ready" : " Assigned"), List.of("STUDENT"), password);
+                User student = user(tenant, email, studentName.substring(0, separator), studentName.substring(separator + 1),
+                        List.of("STUDENT"), password);
                 ClassMember member = classMembers.saveAndFlush(ClassMember.builder().trainingClass(trainingClass).user(student)
                         .status(ClassMemberStatus.ACTIVE).joinedAt(LocalDateTime.now()).build());
                 projectMembers.saveAndFlush(ProjectMember.builder().team(team).classMember(member).role(role).build());
+                if ("DEV".equals(role)) team.setLeaderMemberId(member.getId());
             }
-            roster.add(team);
+            roster.add(teams.saveAndFlush(team));
         }
         return new Classroom(trainingClass, session, List.copyOf(roster));
     }

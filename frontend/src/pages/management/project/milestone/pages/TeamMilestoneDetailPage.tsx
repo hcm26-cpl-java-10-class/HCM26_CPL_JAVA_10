@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, CalendarClock, Clock3, Globe2, ListChecks, RotateCw } from "lucide-react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { milestoneApi } from "@/api/features/milestone.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,7 @@ export function TeamMilestoneDetailPage() {
   const teamId = Number(teamIdParam);
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { hasPermission } = usePermissions();
   const workspaceId = params.get("workspaceId");
   const query = useQuery({
@@ -27,7 +28,12 @@ export function TeamMilestoneDetailPage() {
     enabled: teamId > 0 && !!milestoneId,
     retry: false,
   });
-  const back = () => navigate(workspaceId ? `/management/workspaces/${workspaceId}?tab=milestones` : "/milestones/teams");
+  const routeReturn = (location.state as { returnTo?: unknown } | null)?.returnTo;
+  const workspaceReturn = typeof routeReturn === "string" && workspaceId
+    && routeReturn.startsWith(`/management/workspaces/${workspaceId}?`)
+    && new URLSearchParams(routeReturn.split("?")[1]).get("tab") === "milestones"
+    ? routeReturn : null;
+  const back = () => navigate(workspaceReturn ?? (workspaceId ? `/management/workspaces/${workspaceId}?tab=milestones` : "/milestones/teams"));
 
   if (query.isPending) return <MainLayout pathName={{ milestones: "Milestone" }}>
     <div className="mx-auto grid w-full max-w-6xl gap-6"><Skeleton className="h-40 rounded-xl" /><div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]"><Skeleton className="h-80 rounded-xl" /><Skeleton className="h-64 rounded-xl" /></div></div>

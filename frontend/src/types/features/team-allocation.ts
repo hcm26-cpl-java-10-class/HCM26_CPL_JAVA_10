@@ -207,6 +207,7 @@ export interface TeamListResponse {
 export interface DraftTeamInput {
   teamName: string;
   assignedMentorId: number | null;
+  leaderMemberId?: number | null;
   members: Array<{
     memberId: number;
     role: string | null;
