@@ -218,7 +218,7 @@ export default function ArtifactDraftPage() {
   const saveError = saveMutation.isError ? getMilestoneApiError(saveMutation.error) : null;
   const submissionError = submissionMutation.isError ? getMilestoneApiError(submissionMutation.error) : null;
 
-  return <MainLayout pathName={{ projects: "Dự án", [projectId ?? "project"]: milestone.project.name, milestones: "Milestone", [milestone.id]: milestone.title, submit: "Chuẩn bị artifact" }}>
+  return <MainLayout pathName={{ projects: "Dự án", [projectId ?? "project"]: milestone.project?.name ?? "Không gian nhóm", milestones: "Milestone", [milestone.id]: milestone.title, submit: "Chuẩn bị artifact" }}>
     <main className="mx-auto grid w-full max-w-5xl gap-5">
       {reviewSubmissionQuery.data?.status === "CHANGES_REQUESTED" ? <Alert className="border-amber-400 bg-amber-50 dark:bg-amber-950/20"><RotateCcw /><AlertTitle>Đang chuẩn bị bài nộp lại Version {reviewSubmissionQuery.data.currentVersionNumber + 1}</AlertTitle><AlertDescription><p>{reviewSubmissionQuery.data.reviews[0]?.overallFeedback || "Hãy cập nhật sản phẩm theo feedback của reviewer."}</p><Button className="mt-2" size="sm" variant="outline" onClick={() => navigate(`/student/milestone-submissions/${reviewSubmissionQuery.data?.id}`)}>Xem toàn bộ feedback</Button></AlertDescription></Alert> : null}
       {!workspaceQuery.data.canSubmit && !submission && <Alert><AlertCircle /><AlertTitle>Milestone chưa mở nhận bài</AlertTitle><AlertDescription>Bạn chỉ có thể chuẩn bị và nộp artifact khi milestone đang IN_PROGRESS hoặc được yêu cầu nộp lại và còn trong hạn.</AlertDescription></Alert>}

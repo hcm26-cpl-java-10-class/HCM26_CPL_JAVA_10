@@ -149,7 +149,7 @@ export interface MilestoneDetailResponse {
   scheduledStartAt?: string | null;
   weight?: number | null;
   id: string;
-  project: MilestoneProjectOption;
+  project: MilestoneProjectOption | null;
   teamId?: number;
   title: string;
   description?: string | null;

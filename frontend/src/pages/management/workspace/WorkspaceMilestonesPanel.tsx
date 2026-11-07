@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 import { getMilestoneApiError } from "@/pages/management/project/milestone/milestone.utils";
+import { milestoneStatusStyles } from "@/pages/management/project/milestone/milestone-status.styles";
 import type { MilestoneLifecycleStatus, MilestoneListItem } from "@/types";
 import type { WorkspaceSectionAccess } from "@/types/features/workspace";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
@@ -40,18 +41,6 @@ const sortOptions = [
   { value: "title:desc", label: "Name: Z–A" },
   { value: "createdAt:desc", label: "Newest created" },
 ] as const;
-const statusColor: Record<MilestoneLifecycleStatus, string> = {
-  PLANNED: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
-  IN_PROGRESS: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300",
-  SUBMITTED: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300",
-  CHANGES_REQUESTED: "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-300",
-  ACCEPTED: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300",
-  REJECTED: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300",
-};
-const statusDot: Record<MilestoneLifecycleStatus, string> = {
-  PLANNED: "bg-slate-400", IN_PROGRESS: "bg-amber-400", SUBMITTED: "bg-blue-500",
-  CHANGES_REQUESTED: "bg-orange-500", ACCEPTED: "bg-emerald-500", REJECTED: "bg-red-500",
-};
 const rowColumns = "lg:grid-cols-[minmax(180px,1.15fr)_minmax(180px,1.35fr)_minmax(170px,0.95fr)_minmax(135px,0.75fr)_minmax(170px,0.85fr)]";
 const dateFormatter = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
@@ -61,8 +50,8 @@ function formatDeadline(value: string) {
 }
 
 function StatusBadge({ status }: { status: MilestoneLifecycleStatus }) {
-  return <Badge variant="outline" className={cn("w-fit rounded-full px-3 py-1 text-xs font-semibold", statusColor[status])}>
-    {statuses.find((item) => item.value === status)?.label ?? status}
+  return <Badge variant="outline" className={cn("w-fit rounded-full px-3 py-1 text-xs font-semibold", milestoneStatusStyles[status].badge)}>
+    {milestoneStatusStyles[status].label}
   </Badge>;
 }
 
@@ -266,7 +255,7 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
             && new Date(milestone.deadline).getTime() < query.dataUpdatedAt;
           return <div key={milestone.id} className={cn("grid gap-3 border-b px-4 py-4 last:border-b-0 hover:bg-muted/20 lg:items-center lg:gap-5", rowColumns)}>
             <div className="flex min-w-0 items-start gap-3">
-              <span aria-hidden="true" className={cn("mt-2 size-2.5 shrink-0 rounded-full", statusDot[milestone.lifecycleStatus])} />
+              <span aria-hidden="true" className={cn("mt-2 size-2.5 shrink-0 rounded-full", milestoneStatusStyles[milestone.lifecycleStatus].dot)} />
               <div className="min-w-0"><button type="button" className="break-words text-left font-semibold leading-5 hover:underline" onClick={() => openDetail(milestone.id)}>{milestone.title}</button>
                 <p className="mt-1 text-xs text-muted-foreground">{milestone.mandatory ? "Mandatory milestone" : "Optional milestone"}</p></div>
             </div>
