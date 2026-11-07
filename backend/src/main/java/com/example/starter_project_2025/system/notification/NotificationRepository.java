@@ -20,8 +20,12 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     boolean existsByEventKey(String eventKey);
 
     @Modifying
+    @Query("update Notification notification set notification.targetUrl = :targetUrl "
+            + "where notification.eventKey = :eventKey")
+    int updateTargetUrlByEventKey(@Param("eventKey") String eventKey, @Param("targetUrl") String targetUrl);
+
+    @Modifying
     @Query("update Notification notification set notification.readAt = :readAt "
             + "where notification.user.id = :userId and notification.readAt is null")
     int markAllRead(@Param("userId") Long userId, @Param("readAt") LocalDateTime readAt);
 }
-

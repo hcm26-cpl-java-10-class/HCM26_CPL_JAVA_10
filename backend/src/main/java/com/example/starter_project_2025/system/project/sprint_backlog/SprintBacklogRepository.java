@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +23,10 @@ public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklo
     boolean existsInWorkspaceStatus(@Param("teamId") Long teamId, @Param("projectId") Long projectId,
                                    @Param("status") SprintBacklogStatus status);
     boolean existsByMilestone_Id(java.util.UUID milestoneId);
+    long countByMilestone_IdAndIsActiveTrueAndStatusNotAndEndDateBefore(
+            java.util.UUID milestoneId, SprintBacklogStatus status, LocalDateTime deadline);
+    List<SprintBacklog> findAllByIsActiveTrueAndStatusInAndEndDateBeforeAndAssigneeProjectMemberIdIsNotNull(
+            Collection<SprintBacklogStatus> statuses, LocalDateTime deadline);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select item from SprintBacklog item where item.id = :id")
