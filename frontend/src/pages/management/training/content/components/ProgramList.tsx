@@ -4,6 +4,7 @@ import type { TrainingProgramItem, ProgramStatus } from "@/types/features/conten
 import { ProgramDetailModal } from "./ProgramDetailModal";
 import { ProgramImportDialog } from "./ProgramImportDialog";
 import { ProgramExportDialog } from "./ProgramExportDialog";
+import { ProgramTopicsCell } from "./ProgramTopicsCell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -284,7 +285,7 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs w-16">Version</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Name</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs w-28">Region</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs w-[200px]">Topic</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs w-[220px]">Topics</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs w-32">Last Modified</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs w-24">Status</th>
                 <th className="w-10"></th>
@@ -327,18 +328,12 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{p.region || "—"}</td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1 max-w-[190px]">
-                        {(p.subjects || []).slice(0, 4).map((s) => (
-                          <span key={s.subjectId} className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded font-mono">
-                            {s.code}
-                          </span>
-                        ))}
-                        {(p.subjects?.length || 0) > 4 && (
-                          <span className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded">
-                            +{(p.subjects?.length || 0) - 4}...
-                          </span>
-                        )}
-                      </div>
+                      <ProgramTopicsCell
+                        subjects={p.subjects}
+                        programCode={p.code}
+                        programName={p.name}
+                        onViewDetail={() => handleOpenDetail(p)}
+                      />
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
                       {p.updatedAt ? new Date(p.updatedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}

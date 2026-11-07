@@ -3,6 +3,7 @@ import { topicApi } from "@/api/features/topic.api";
 import type { TopicItem } from "@/types/features/content";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,7 @@ import {
   Eye,
   RefreshCw,
   Power,
+  Clock,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -48,6 +50,32 @@ import { TopicExportDialog } from "./TopicExportDialog";
 interface TopicListProps {
   onViewDetail?: (topic: TopicItem) => void;
 }
+
+const renderTechnicalGroupBadge = (group?: string) => {
+  if (!group) return <span className="text-gray-400 text-xs">—</span>;
+  const g = group.toLowerCase();
+  let color = "bg-gray-100 text-gray-700 border-gray-200";
+  if (g.includes("java")) {
+    color = "bg-blue-50 text-blue-700 border-blue-200";
+  } else if (g.includes("react") || g.includes("frontend")) {
+    color = "bg-cyan-50 text-cyan-700 border-cyan-200";
+  } else if (g.includes("backend")) {
+    color = "bg-indigo-50 text-indigo-700 border-indigo-200";
+  } else if (g.includes("database")) {
+    color = "bg-emerald-50 text-emerald-700 border-emerald-200";
+  } else if (g.includes("devops")) {
+    color = "bg-violet-50 text-violet-700 border-violet-200";
+  } else if (g.includes("testing") || g.includes("qa")) {
+    color = "bg-amber-50 text-amber-700 border-amber-200";
+  } else if (g.includes("soft")) {
+    color = "bg-rose-50 text-rose-700 border-rose-200";
+  }
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border ${color}`}>
+      {group}
+    </span>
+  );
+};
 
 export function TopicList({ onViewDetail }: TopicListProps = {}) {
   const [topics, setTopics] = useState<TopicItem[]>([]);
@@ -258,9 +286,9 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
             <SlidersHorizontal className="size-4" />
             Filter
             {activeFilters > 0 && (
-              <span className="ml-0.5 px-1.5 py-0 text-[10px] bg-purple-600 text-white rounded-full">
+              <Badge className="ml-0.5 px-1.5 py-0 text-[10px] bg-purple-600 text-white rounded-full">
                 {activeFilters}
-              </span>
+              </Badge>
             )}
           </Button>
 
@@ -344,142 +372,154 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
       )}
 
       {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-        <table className="w-full text-left text-sm border-collapse">
-          <thead className="bg-[#5b52e0] text-white">
-            <tr>
-              <th className="p-3 font-semibold">Topic Code</th>
-              <th className="p-3 font-semibold">Topic Name</th>
-              <th className="p-3 font-semibold">Version</th>
-              <th className="p-3 font-semibold">Technical Group</th>
-              <th className="p-3 font-semibold text-right">Duration (Hours)</th>
-              <th className="p-3 font-semibold text-center">Status</th>
-              <th className="p-3 font-semibold text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {loading ? (
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <td colSpan={7} className="text-center p-8 text-gray-500">
-                  <RefreshCw className="size-5 animate-spin mx-auto mb-2 text-[#5b52e0]" />
-                  Loading topics...
-                </td>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs w-8">#</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs w-[150px]">Topic Code</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Topic Name</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs w-20">Version</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs w-36">Technical Group</th>
+                <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs w-28">Duration</th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-600 text-xs w-24">Status</th>
+                <th className="w-10"></th>
               </tr>
-            ) : topics.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="text-center p-8 text-gray-500">
-                  No topics found
-                </td>
-              </tr>
-            ) : (
-              topics.map((t) => (
-                <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="p-3 font-mono font-medium text-gray-900">
-                    <button
-                      onClick={() => handleOpenDetail(t)}
-                      className="text-[#5b52e0] hover:underline cursor-pointer"
-                    >
-                      {t.code}
-                    </button>
-                  </td>
-                  <td className="p-3 font-medium text-gray-800">
-                    <button
-                      onClick={() => handleOpenDetail(t)}
-                      className="text-left hover:text-[#5b52e0] transition-colors cursor-pointer"
-                    >
-                      {t.name}
-                    </button>
-                  </td>
-                  <td className="p-3">
-                    <span className="inline-block px-2 py-0.5 text-xs font-mono bg-purple-50 text-purple-700 border border-purple-200 rounded">
-                      v{t.version}
-                    </span>
-                  </td>
-                  <td className="p-3 text-gray-600">{t.technicalGroup || "—"}</td>
-                  <td className="p-3 text-right font-mono text-gray-700">{t.durationHours}h</td>
-                  <td className="p-3 text-center">
-                    <span
-                      onClick={() => handleToggleStatus(t)}
-                      title="Click to toggle status"
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors ${
-                        t.isActive
-                          ? "bg-green-100 text-green-800 hover:bg-green-200"
-                          : "bg-red-100 text-red-800 hover:bg-red-200"
-                      }`}
-                    >
-                      {t.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="p-3 text-center">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="size-8 text-gray-500 hover:text-gray-900">
-                          <MoreVertical className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onClick={() => handleOpenDetail(t)} className="gap-2 text-xs">
-                          <Eye className="size-3.5 text-gray-500" /> View Schedule
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleOpenEdit(t)} className="gap-2 text-xs">
-                          <Edit2 className="size-3.5 text-blue-500" /> Edit Topic
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleOpenClone(t)} className="gap-2 text-xs">
-                          <Copy className="size-3.5 text-purple-500" /> Clone Version
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => handleToggleStatus(t)}
-                          className={`gap-2 text-xs font-medium cursor-pointer ${
-                            t.isActive
-                              ? "text-orange-600 focus:text-orange-600"
-                              : "text-emerald-600 focus:text-emerald-600"
-                          }`}
-                        >
-                          <Power className="size-3.5" />
-                          {t.isActive ? "Inactive Topic" : "Active Topic"}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleDeleteTopic(t)} className="gap-2 text-xs text-red-600">
-                          <Trash2 className="size-3.5" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-16 text-gray-400">
+                    <RefreshCw className="size-5 animate-spin mx-auto mb-2 text-purple-500" />
+                    Loading topics...
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        <div>
-          Showing {topics.length > 0 ? page * 10 + 1 : 0} to {Math.min((page + 1) * 10, totalElements)} of {totalElements} topics
+              ) : topics.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-16 text-gray-400 text-sm">
+                    No topics found
+                  </td>
+                </tr>
+              ) : (
+                topics.map((t, idx) => (
+                  <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 text-gray-500 text-xs">{page * 10 + idx + 1}</td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => handleOpenDetail(t)}
+                        className="font-mono text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline text-left cursor-pointer"
+                      >
+                        {t.code}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => handleOpenDetail(t)}
+                        className="text-gray-900 hover:text-purple-700 hover:underline text-left font-medium text-sm line-clamp-1 cursor-pointer"
+                      >
+                        {t.name}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 text-xs font-mono">
+                      <span className="inline-block px-1.5 py-0.5 text-[11px] font-mono bg-purple-50 text-purple-700 border border-purple-200 rounded">
+                        v{t.version}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">{renderTechnicalGroupBadge(t.technicalGroup)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="inline-flex items-center gap-1 font-mono text-xs text-gray-700">
+                        <Clock className="size-3 text-gray-400" />
+                        {t.durationHours}h
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleStatus(t)}
+                        title="Click to toggle status"
+                        className="cursor-pointer"
+                      >
+                        {t.isActive ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200 hover:bg-green-200 transition-colors">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200 transition-colors">
+                            Inactive
+                          </span>
+                        )}
+                      </button>
+                    </td>
+                    <td className="px-2 py-3 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="size-7 text-gray-400 hover:text-gray-600">
+                            <MoreVertical className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem onClick={() => handleOpenDetail(t)} className="gap-2 text-xs">
+                            <Eye className="size-3.5 text-gray-500" /> View Schedule
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenEdit(t)} className="gap-2 text-xs">
+                            <Edit2 className="size-3.5 text-blue-500" /> Edit Topic
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenClone(t)} className="gap-2 text-xs">
+                            <Copy className="size-3.5 text-purple-500" /> Clone Version
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => handleToggleStatus(t)}
+                            className={`gap-2 text-xs font-medium cursor-pointer ${
+                              t.isActive
+                                ? "text-orange-600 focus:text-orange-600"
+                                : "text-emerald-600 focus:text-emerald-600"
+                            }`}
+                          >
+                            <Power className="size-3.5" />
+                            {t.isActive ? "Deactivate Topic" : "Activate Topic"}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleDeleteTopic(t)} className="gap-2 text-xs text-red-600">
+                            <Trash2 className="size-3.5" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page === 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            className="h-8 text-xs"
-          >
-            Previous
-          </Button>
-          <span className="px-2 font-mono">
-            Page {page + 1} of {totalPages}
+
+        {/* Footer pagination */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-500">
+          <span>
+            Showing {topics.length > 0 ? page * 10 + 1 : 0} to {Math.min((page + 1) * 10, totalElements)} of {totalElements} entries
           </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage((p) => p + 1)}
-            className="h-8 text-xs"
-          >
-            Next
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-3 text-xs"
+              disabled={page <= 0}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              Previous
+            </Button>
+            <span className="px-2 font-medium">{page + 1} / {totalPages}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-3 text-xs"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       </div>
 
