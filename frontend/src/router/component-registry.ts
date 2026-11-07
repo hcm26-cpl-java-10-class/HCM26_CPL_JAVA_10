@@ -1,3 +1,4 @@
+import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -152,6 +153,11 @@ export const routes: RouteConfig[] = [
 
   // EXAMS
   {
+    path: "/exams/curriculum",
+    component: ExamCurriculumPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+  {
     path: "/exams",
     component: ExamManagementPage,
     isModuleDriven: true,
@@ -178,6 +184,11 @@ export const routes: RouteConfig[] = [
   },
   {
     path: "/exams/:examId/questions",
+    component: ExamDetailPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+  {
+    path: "/exams/:examId/edit",
     component: ExamDetailPage,
     requiredPermission: "EXAM_UPDATE",
   },

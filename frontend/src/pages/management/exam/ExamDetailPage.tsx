@@ -12,21 +12,22 @@ import ResultStatisticsPage from "./ResultStatisticsPage";
 import EssayAttemptListPage from "./grading/EssayAttemptListPage";
 import InvitationsPage from "./invitation";
 
-type TabKey = "edit" | "questions" | "grading" | "invitations" | "statistics";
+type TabKey = "questions" | "grading" | "invitations" | "statistics" | "edit";
 
 /** Each tab has its own URL, so a tab can be bookmarked and the browser Back button works. */
-const TABS: { key: TabKey; label: string; segment: string; icon: typeof Pencil }[] = [
-  { key: "edit", label: "Edit", segment: "", icon: Pencil },
+const TABS: { key: TabKey; label: string; segment: string; icon: typeof BookOpen }[] = [
   { key: "questions", label: "Questions", segment: "questions", icon: BookOpen },
   { key: "grading", label: "Grading", segment: "grading", icon: ClipboardCheck },
   { key: "invitations", label: "Invitations", segment: "invitations", icon: Mail },
   { key: "statistics", label: "Statistics", segment: "result-statistics", icon: BarChart3 },
+  { key: "edit", label: "Edit", segment: "edit", icon: Pencil },
 ];
 
 function tabFromPath(pathname: string, examId: string): TabKey {
   const rest = pathname.split(`/exams/${examId}`)[1] ?? "";
   const segment = rest.split("/").filter(Boolean)[0] ?? "";
-  return TABS.find((tab) => tab.segment === segment)?.key ?? "edit";
+  if (!segment) return "questions";
+  return TABS.find((tab) => tab.segment === segment)?.key ?? "questions";
 }
 
 export default function ExamDetailPage() {
@@ -86,7 +87,7 @@ export default function ExamDetailPage() {
               type="button"
               role="tab"
               aria-selected={active === key}
-              onClick={() => navigate(`/exams/${examId}${segment ? `/${segment}` : ""}`)}
+              onClick={() => navigate(`/exams/${examId}/${segment}`)}
               className={`flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                 active === key ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
@@ -110,14 +111,13 @@ export default function ExamDetailPage() {
         </div>
 
         <div role="tabpanel">
-          {active === "edit" && <ExamEditPanel examId={id} />}
           {active === "questions" && <ExamQuestionsPanel examId={id} />}
-          {/* These pages draw their own layout; inside a tab they must not draw the sidebar again. */}
           <EmbeddedLayoutContext.Provider value>
             {active === "grading" && <EssayAttemptListPage />}
             {active === "invitations" && <InvitationsPage />}
             {active === "statistics" && <ResultStatisticsPage />}
           </EmbeddedLayoutContext.Provider>
+          {active === "edit" && <ExamEditPanel examId={id} />}
         </div>
       </main>
     </div>

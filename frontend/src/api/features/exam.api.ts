@@ -62,6 +62,21 @@ export const examApi = {
     const response = await axiosInstance.get<CourseExam[]>(`/courses/${courseId}/exams`, { params });
     return response.data;
   },
+  linkToCurriculum: async (
+    courseId: number,
+    examId: number,
+    params: { sectionId?: number; lessonId?: number }
+  ): Promise<CourseExam> => {
+    const response = await axiosInstance.put<CourseExam>(`/courses/${courseId}/exams/${examId}/link`, null, { params });
+    return response.data;
+  },
+  unlinkFromCurriculum: async (courseId: number, examId: number, unlinkFromCourse = false): Promise<void> => {
+    await axiosInstance.delete(`/courses/${courseId}/exams/${examId}/link`, { params: { unlinkFromCourse } });
+  },
+  getAvailableExamsForCourse: async (courseId: number): Promise<CourseExam[]> => {
+    const response = await axiosInstance.get<CourseExam[]>(`/courses/${courseId}/exams/available`);
+    return response.data;
+  },
   getMyPublishedExamScores: async (): Promise<PublishedExamScore[]> => {
     const response = await axiosInstance.get<PublishedExamScore[]>("/exams/my-scores");
     return response.data;

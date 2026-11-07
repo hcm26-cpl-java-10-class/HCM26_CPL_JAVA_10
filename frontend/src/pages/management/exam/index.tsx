@@ -22,7 +22,7 @@ import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookmarkPlus, BookOpen, CalendarClock, ClipboardCheck, Clock, ListChecks, Plus, Search, Trophy, User } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ExamConfigFields } from "./ExamConfigFields";
 import {
@@ -83,6 +83,7 @@ function InfoRow({ icon: Icon, label, value }: { icon: typeof Clock; label: stri
 export default function ExamManagementPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [examSearch, setExamSearch] = useState("");
   const [examCategoryFilter, setExamCategoryFilter] = useState<ExamCategory | "ALL">("ALL");
   const [courseFilter, setCourseFilter] = useState<string>("ALL");
@@ -167,13 +168,23 @@ export default function ExamManagementPage() {
         <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
           <div>
             <p className="text-sm text-muted-foreground">Assessment Management</p>
-            <h1 className="mt-1 text-2xl font-semibold">Exams List</h1>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight">
+              Exams & Assessments
+            </h1>
           </div>
 
           <div className="flex items-center gap-2">
             <Button onClick={openCreateDialog}>
               <Plus className="mr-2 size-4" />
               Create Exam
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => navigate("/exams/curriculum")}
+            >
+              <BookOpen className="mr-2 size-4 text-indigo-500" />
+              Curriculum Mapping
             </Button>
 
             <Button
@@ -185,7 +196,6 @@ export default function ExamManagementPage() {
             </Button>
           </div>
         </header>
-
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="relative w-full max-w-md">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

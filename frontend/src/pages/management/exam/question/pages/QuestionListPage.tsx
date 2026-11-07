@@ -85,7 +85,7 @@ function formatDateTime(value?: string | null): string {
 }
 
 /** Render question choices / answers preview when expanded */
-function QuestionAnswersPreview({ question }: { question: QuestionDTO }) {
+export function QuestionAnswersPreview({ question }: { question: QuestionDTO }) {
     if (question.type === "ESSAY") {
         const criteria = question.gradingCriteria ?? [];
         if (criteria.length === 0) {
