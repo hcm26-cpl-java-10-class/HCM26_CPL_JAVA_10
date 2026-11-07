@@ -5,10 +5,13 @@ import com.example.starter_project_2025.system.exam.dto.CourseExamDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamLinkOptionDTO;
 import com.example.starter_project_2025.system.exam.service.ExamCourseLinkService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,6 +36,42 @@ public class CourseExamController {
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         return linkService.listByCourse(courseId, sectionId, lessonId, principal);
+    }
+
+    /** Gan mot bai thi vao course / section / lesson */
+    @PutMapping("/courses/{courseId}/exams/{examId}/link")
+    @PreAuthorize("hasAuthority('EXAM_UPDATE')")
+    public ResponseEntity<CourseExamDTO> linkExam(
+            @PathVariable Long courseId,
+            @PathVariable Long examId,
+            @RequestParam(required = false) Long sectionId,
+            @RequestParam(required = false) Long lessonId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(linkService.linkExam(courseId, examId, sectionId, lessonId, principal));
+    }
+
+    /** Go mot bai thi khoi section / lesson (hoac go khoi course) */
+    @DeleteMapping("/courses/{courseId}/exams/{examId}/link")
+    @PreAuthorize("hasAuthority('EXAM_UPDATE')")
+    public ResponseEntity<Void> unlinkExam(
+            @PathVariable Long courseId,
+            @PathVariable Long examId,
+            @RequestParam(required = false, defaultValue = "false") boolean unlinkFromCourse,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        linkService.unlinkExam(courseId, examId, unlinkFromCourse, principal);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Danh sach bai thi co the gan vao course nay */
+    @GetMapping("/courses/{courseId}/exams/available")
+    @PreAuthorize("hasAuthority('EXAM_READ')")
+    public List<CourseExamDTO> availableExams(
+            @PathVariable Long courseId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return linkService.availableExams(courseId, principal);
     }
 
     @GetMapping("/exams/link-options/courses")

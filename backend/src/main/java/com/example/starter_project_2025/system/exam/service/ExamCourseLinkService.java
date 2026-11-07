@@ -129,6 +129,82 @@ public class ExamCourseLinkService {
                 .toList();
     }
 
+    @Transactional
+    public CourseExamDTO linkExam(Long courseId, Long examId, Long sectionId, Long lessonId, UserPrincipal principal) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+        checkCanLink(course);
+
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
+        Section section = null;
+        Lesson lesson = null;
+
+        if (lessonId != null) {
+            lesson = lessonRepository.findById(lessonId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
+            section = lesson.getSection();
+            if (!course.getId().equals(section.getCourse().getId())) {
+                throw new IllegalArgumentException("Lesson does not belong to this course");
+            }
+            if (sectionId != null && !sectionId.equals(section.getId())) {
+                throw new IllegalArgumentException("Lesson does not belong to the selected section");
+            }
+        } else if (sectionId != null) {
+            section = sectionRepository.findById(sectionId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Section not found"));
+            if (!course.getId().equals(section.getCourse().getId())) {
+                throw new IllegalArgumentException("Section does not belong to this course");
+            }
+        }
+
+        exam.setCourse(course);
+        exam.setSection(section);
+        exam.setLesson(lesson);
+        examRepository.save(exam);
+
+        Long userId = principal == null || principal.getUser() == null ? null : principal.getUser().getId();
+        boolean staff = examAccessGuard.isAdmin(principal) || isInstructor(course, userId);
+        return toCourseExam(exam, staff);
+    }
+
+    @Transactional
+    public void unlinkExam(Long courseId, Long examId, boolean unlinkFromCourse, UserPrincipal principal) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+        checkCanLink(course);
+
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
+        if (unlinkFromCourse) {
+            exam.setCourse(null);
+            exam.setSection(null);
+            exam.setLesson(null);
+        } else {
+            exam.setSection(null);
+            exam.setLesson(null);
+        }
+        examRepository.save(exam);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CourseExamDTO> availableExams(Long courseId, UserPrincipal principal) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+        checkCanLink(course);
+
+        Long userId = principal == null || principal.getUser() == null ? null : principal.getUser().getId();
+        boolean isAdmin = examAccessGuard.isAdmin(principal);
+
+        return examRepository.findAll().stream()
+                .filter(e -> isAdmin || (userId != null && userId.equals(e.getCreatedBy())))
+                .filter(e -> e.getCourse() == null || courseId.equals(e.getCourse().getId()))
+                .map(e -> toCourseExam(e, true))
+                .toList();
+    }
+
     private CourseExamDTO toCourseExam(Exam e, boolean staff) {
         return new CourseExamDTO(
                 e.getId(),
