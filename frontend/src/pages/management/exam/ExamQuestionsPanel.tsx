@@ -559,75 +559,187 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
         </section>
       </div>
 
-      {/* Preview: full screen, shows everything we have about the question */}
+      {/* Question Preview Modal */}
       <Dialog open={previewQuestion !== null} onOpenChange={(open) => { if (!open) setPreviewQuestion(null); }}>
-        <DialogContent className="h-screen max-h-screen w-screen max-w-none overflow-y-auto rounded-none p-6 sm:max-w-none">
-          <DialogHeader>
-            <DialogTitle>Question preview{previewQuestion ? ` #${previewQuestion.id}` : ""}</DialogTitle>
-            <DialogDescription>{previewQuestion && <QuestionMeta q={previewQuestion} />}</DialogDescription>
+        <DialogContent className="flex max-h-[85vh] w-full max-w-2xl flex-col gap-0 p-0 sm:max-w-3xl overflow-hidden rounded-xl border bg-card shadow-2xl">
+          <DialogHeader className="border-b px-6 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 pr-6">
+              <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+                <span>Question Preview</span>
+                <span className="text-muted-foreground font-mono text-sm">#{previewQuestion?.id}</span>
+              </DialogTitle>
+              {previewQuestion && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="font-medium text-xs">
+                    {TYPE_LABEL[previewQuestion.type]}
+                  </Badge>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                    previewQuestion.difficulty === "EASY"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+                      : previewQuestion.difficulty === "MEDIUM"
+                      ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                      : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                  }`}>
+                    {DIFFICULTY_LABEL[previewQuestion.difficulty]}
+                  </span>
+                  <Badge variant="outline" className="text-xs">
+                    Weight: {previewQuestion.points}
+                  </Badge>
+                </div>
+              )}
+            </div>
+            {previewQuestion?.topic && (
+              <DialogDescription className="text-xs text-muted-foreground mt-1">
+                Topic: <span className="font-medium text-foreground">{previewQuestion.topic}</span>
+              </DialogDescription>
+            )}
           </DialogHeader>
+
           {previewQuestion && (
-            <div className="mx-auto grid w-full max-w-5xl content-start gap-5">
-              <section className="grid gap-2 rounded-md border p-4">
-                <h3 className="text-xs font-semibold uppercase text-muted-foreground">Information</h3>
-                <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                  {[
-                    ["ID", `#${previewQuestion.id}`],
-                    ["Type", TYPE_LABEL[previewQuestion.type]],
-                    ["Difficulty", DIFFICULTY_LABEL[previewQuestion.difficulty]],
-                    ["Topic", previewQuestion.topic?.trim() || "-"],
-                    ["Weight", String(previewQuestion.points)],
-                    ["Status", previewQuestion.isActive ? "Active" : "Inactive"],
-                    ["Created at", formatDateTime(previewQuestion.createdAt)],
-                    ...(previewQuestion.createdBy != null ? [["Created by", `User #${previewQuestion.createdBy}`]] : []),
-                    ["Last updated", formatDateTime(previewQuestion.updatedAt)],
-                    ...(previewQuestion.updatedBy != null ? [["Updated by", `User #${previewQuestion.updatedBy}`]] : []),
-                    ...(previewQuestion.sourceQuestionId != null ? [["Copied from question", `#${previewQuestion.sourceQuestionId}`]] : []),
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex gap-2">
-                      <dt className="w-32 shrink-0 text-muted-foreground">{label}</dt>
-                      <dd className="min-w-0 break-words font-medium">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
-
-              <section className="grid gap-2">
-                <h3 className="text-xs font-semibold uppercase text-muted-foreground">Content</h3>
-                <p className="whitespace-pre-wrap break-words text-sm">{previewQuestion.content}</p>
-                {previewQuestion.imageUrl && <img src={previewQuestion.imageUrl} alt="" className="max-h-96 rounded-md border object-contain" />}
-              </section>
-
-              <section className="grid gap-2">
-                <h3 className="text-xs font-semibold uppercase text-muted-foreground">
-                  {previewQuestion.type === "CODING" ? "Coding details" : previewQuestion.type === "ESSAY" ? "Essay" : "Answers"}
-                </h3>
-                <QuestionAnswers question={previewQuestion} />
-                {previewQuestion.type === "ESSAY" && (previewQuestion.gradingCriteria ?? []).length > 0 && (
-                  <div className="overflow-x-auto rounded-md border">
-                    <table className="w-full text-left text-sm">
-                      <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
-                        <tr>
-                          <th className="px-3 py-2">Grading criterion</th>
-                          <th className="px-3 py-2">Description</th>
-                          <th className="w-24 px-3 py-2">Weight</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(previewQuestion.gradingCriteria ?? []).map((c, i) => (
-                          <tr key={i} className="border-b last:border-b-0">
-                            <td className="px-3 py-2 font-medium">{c.name}</td>
-                            <td className="px-3 py-2 text-muted-foreground">{c.description || "-"}</td>
-                            <td className="px-3 py-2">{c.weightPercentage}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+              {/* Question Content */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Question Content
+                </h4>
+                <div className="rounded-lg border bg-muted/20 p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap break-words">
+                  {previewQuestion.content}
+                </div>
+                {previewQuestion.imageUrl && (
+                  <div className="mt-3 overflow-hidden rounded-lg border bg-muted/10 p-2">
+                    <img
+                      src={previewQuestion.imageUrl}
+                      alt="Question illustration"
+                      className="max-h-72 w-auto mx-auto rounded object-contain"
+                    />
                   </div>
                 )}
-              </section>
+              </div>
+
+              {/* Answers / Rubric / Coding */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {previewQuestion.type === "CODING"
+                    ? "Coding Specifications & Test Cases"
+                    : previewQuestion.type === "ESSAY"
+                    ? "Essay Guidelines & Rubric"
+                    : "Answer Choices"}
+                </h4>
+                <div className="rounded-lg border bg-card p-4">
+                  <QuestionAnswers question={previewQuestion} />
+
+                  {previewQuestion.type === "ESSAY" && (previewQuestion.gradingCriteria ?? []).length > 0 && (
+                    <div className="mt-4 overflow-hidden rounded-md border text-xs">
+                      <table className="w-full text-left">
+                        <thead className="border-b bg-muted/60 text-muted-foreground font-medium">
+                          <tr>
+                            <th className="px-3 py-2">Criterion</th>
+                            <th className="px-3 py-2">Description</th>
+                            <th className="w-20 px-3 py-2 text-right">Weight</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {previewQuestion.gradingCriteria!.map((c, i) => (
+                            <tr key={i} className="hover:bg-muted/30">
+                              <td className="px-3 py-2 font-medium">{c.name}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{c.description || "—"}</td>
+                              <td className="px-3 py-2 text-right font-mono">{c.weightPercentage}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Compact Information Section */}
+              <div className="rounded-lg border bg-muted/30 p-3.5 text-xs text-muted-foreground space-y-2">
+                <div className="font-semibold uppercase tracking-wider text-[11px] text-muted-foreground">
+                  Additional Details
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <span className="block text-[11px] text-muted-foreground/80">Status</span>
+                    <span className="font-medium text-foreground">
+                      {previewQuestion.isActive ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[11px] text-muted-foreground/80">Created At</span>
+                    <span className="font-medium text-foreground">
+                      {formatDateTime(previewQuestion.createdAt)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[11px] text-muted-foreground/80">Last Updated</span>
+                    <span className="font-medium text-foreground">
+                      {formatDateTime(previewQuestion.updatedAt)}
+                    </span>
+                  </div>
+                  {previewQuestion.sourceQuestionId != null && (
+                    <div>
+                      <span className="block text-[11px] text-muted-foreground/80">Source Question</span>
+                      <span className="font-medium text-foreground">#{previewQuestion.sourceQuestionId}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
+
+          <DialogFooter className="flex items-center justify-between border-t bg-muted/10 px-6 py-3">
+            <div className="text-xs text-muted-foreground">
+              {previewQuestion && (
+                sourceIdsInExam.has(previewQuestion.id) ? (
+                  <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-500/40 bg-emerald-500/10">
+                    <Check className="mr-1 size-3" /> In Assessment
+                  </Badge>
+                ) : stagedIds.has(previewQuestion.id) ? (
+                  <Badge variant="outline" className="text-xs text-blue-600 border-blue-500/40 bg-blue-500/10">
+                    <Check className="mr-1 size-3" /> Staged (pending save)
+                  </Badge>
+                ) : null
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {previewQuestion && !sourceIdsInExam.has(previewQuestion.id) && !activeExamStarted && (
+                stagedIds.has(previewQuestion.id) ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs text-destructive hover:bg-destructive/10"
+                    onClick={() => unstageQuestion(previewQuestion.id)}
+                  >
+                    Remove from staged
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="text-xs gap-1"
+                    onClick={() => {
+                      stageQuestion(previewQuestion);
+                      toast.success("Added question to assessment staging list");
+                    }}
+                  >
+                    <Plus className="size-3.5" />
+                    Add to Assessment
+                  </Button>
+                )
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPreviewQuestion(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

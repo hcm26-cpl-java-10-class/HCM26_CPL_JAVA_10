@@ -1,4 +1,3 @@
-
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -12,15 +11,11 @@ import { Dashboard } from "@/pages/management/dashboard";
 import CurriculumManagementPage from "@/pages/management/demo/curriculum";
 import RolePermissionMatrixPage from "@/pages/management/rbac/permission/RolePermissionMatrixPage";
 import ExamManagementPage from "@/pages/management/exam";
-import { ExamEditPanel } from "@/pages/management/exam/ExamEditPanel";
+import ExamDetailPage from "@/pages/management/exam/ExamDetailPage";
 import ExamTemplatesPage from "@/pages/management/exam/templates";
-import QuestionListPage from "@/pages/management/exam/question/pages/QuestionListPage";
-import ResultStatisticsPage from "@/pages/management/exam/ResultStatisticsPage";
-import EssayAttemptListPage from "@/pages/management/exam/grading/EssayAttemptListPage";
 import EssayAttemptDetailPage from "@/pages/management/exam/grading/EssayAttemptDetailPage";
 import ExamSimilarityPage from "@/pages/management/exam/similarity/ExamSimilarityPage";
 import ScoreAppealsPage from "@/pages/management/exam/appeals";
-import InvitationsPage from "@/pages/management/exam/invitation";
 import UnifiedInvitationsPage, {
   StudentInvitationsRedirect,
 } from "@/pages/invitations/InvitationsPage";
@@ -52,7 +47,7 @@ import { StudentSubmissionPage } from "@/pages/student/milestone-submission/Stud
 import { StudentSubmissionListPage } from "@/pages/student/milestone-submission/StudentSubmissionListPage";
 import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
 import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
-import { createElement} from "react";
+import { createElement } from "react";
 import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
 import ProjectTemplateListPage from "@/pages/management/project-template";
@@ -66,10 +61,9 @@ import ExamReviewPage from "@/pages/student/ExamReviewPage";
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
 import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
-import { MainLayout } from "@/components/layout/MainLayout";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
-import { Navigate, useParams } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
@@ -96,25 +90,6 @@ export interface RouteConfig {
   requiredPermissions?: string[];
   isPublic?: boolean;
   isModuleDriven?: boolean;
-}
-
-function ExamEditRoute() {
-  const { examId } = useParams<{ examId: string }>();
-  const id = Number(examId);
-
-  if (!Number.isSafeInteger(id) || id < 1) {
-    return createElement(Navigate, { to: "/not-found-page", replace: true });
-  }
-
-  return createElement(MainLayout, {
-    pathName: { exams: "Assessment Management" },
-    children: createElement(
-        "section",
-        { className: "mx-auto w-full max-w-5xl p-4" },
-        createElement("h1", { className: "mb-4 text-2xl font-semibold" }, "Edit Exam"),
-        createElement(ExamEditPanel, { examId: id }),
-    ),
-  });
 }
 
 export const ROLE_HOME_PATHS = [
@@ -198,23 +173,27 @@ export const routes: RouteConfig[] = [
   // One page per exam with 5 tabs: Edit, Questions, Grading, Invitations, Statistics.
   {
     path: "/exams/:examId",
-    component: ExamEditRoute,
+    component: ExamDetailPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+  {
+    path: "/exams/:examId/questions",
+    component: ExamDetailPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+  {
+    path: "/exams/:examId/grading",
+    component: ExamDetailPage,
     requiredPermission: "EXAM_UPDATE",
   },
   {
     path: "/exams/:examId/invitations",
-    component: InvitationsPage,
+    component: ExamDetailPage,
     requiredPermission: "INVITATION_READ",
   },
   {
-    path: "/exams/:examId/questions",
-    component: QuestionListPage,
-    requiredPermission: "EXAM_UPDATE",
-  },
-
-  {
-    path: "/exams/:examId/grading",
-    component: EssayAttemptListPage,
+    path: "/exams/:examId/result-statistics",
+    component: ExamDetailPage,
     requiredPermission: "EXAM_UPDATE",
   },
 
@@ -227,12 +206,6 @@ export const routes: RouteConfig[] = [
   {
     path: "/exams/:examId/grading/:attemptId",
     component: EssayAttemptDetailPage,
-    requiredPermission: "EXAM_UPDATE",
-  },
-
-  {
-    path: "/exams/:examId/result-statistics",
-    component: ResultStatisticsPage,
     requiredPermission: "EXAM_UPDATE",
   },
 

@@ -5,7 +5,8 @@ import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
 import { StudentNavbar } from "@/components/layout/StudentNavbar";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
-import type { ReactNode } from "react";
+import { useContext, type ReactNode } from "react";
+import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 
 export function MainLayout({
                                children,
@@ -22,6 +23,11 @@ export function MainLayout({
     /** Hide the navbar / breadcrumbs / sidebar (e.g. while taking an exam). */
     focusMode?: boolean;
 }) {
+    const isEmbedded = useContext(EmbeddedLayoutContext);
+    if (isEmbedded) {
+        return <>{children}</>;
+    }
+
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
 

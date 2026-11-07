@@ -85,6 +85,7 @@ export default function ExamManagementPage() {
   const navigate = useNavigate();
   const [examSearch, setExamSearch] = useState("");
   const [examCategoryFilter, setExamCategoryFilter] = useState<ExamCategory | "ALL">("ALL");
+  const [courseFilter, setCourseFilter] = useState<string>("ALL");
   const [examPage, setExamPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState<ExamStatus | "ALL">("ALL");
   const [sortKey, setSortKey] = useState("createdAt,desc");
@@ -94,16 +95,35 @@ export default function ExamManagementPage() {
   const [cfg, setCfg] = useState<ExamConfigForm>(DEFAULT_CONFIG);
   const [showErrors, setShowErrors] = useState(false);
 
+  const coursesQuery = useQuery({
+    queryKey: ["exam-link-courses"],
+    queryFn: () => examApi.getLinkCourses(),
+    staleTime: 60_000,
+  });
+  const courseOptions = coursesQuery.data ?? [];
+
   // The status is worked out from the open/close time, so when it is filtered we load all exams
   // (a teacher has few) and filter / page them here.
   const clientFiltering = statusFilter !== "ALL";
   const examsQuery = useQuery({
-    queryKey: ["exam-management", clientFiltering ? 0 : examPage, examSearch, examCategoryFilter, sortKey, clientFiltering],
-    queryFn: () => examApi.getPage(
-      { page: clientFiltering ? 0 : examPage, size: clientFiltering ? 500 : PAGE_SIZE, sort: sortKey },
+    queryKey: [
+      "exam-management",
+      clientFiltering ? 0 : examPage,
       examSearch,
-      examCategoryFilter === "ALL" ? undefined : { category: examCategoryFilter },
-    ),
+      examCategoryFilter,
+      courseFilter,
+      sortKey,
+      clientFiltering,
+    ],
+    queryFn: () =>
+      examApi.getPage(
+        { page: clientFiltering ? 0 : examPage, size: clientFiltering ? 500 : PAGE_SIZE, sort: sortKey },
+        examSearch,
+        {
+          ...(examCategoryFilter === "ALL" ? {} : { category: examCategoryFilter }),
+          ...(courseFilter === "ALL" ? {} : { courseId: Number(courseFilter) }),
+        },
+      ),
   });
 
   const createExamMutation = useMutation({
@@ -126,7 +146,11 @@ export default function ExamManagementPage() {
   const examRows = clientFiltering ? statusRows.slice(examPage * PAGE_SIZE, (examPage + 1) * PAGE_SIZE) : statusRows;
   const examTotalPages = clientFiltering ? Math.ceil(statusRows.length / PAGE_SIZE) : examsQuery.data?.totalPages ?? 0;
   const examTotal = clientFiltering ? statusRows.length : examsQuery.data?.totalElements ?? 0;
-  const hasFilters = examSearch !== "" || examCategoryFilter !== "ALL" || statusFilter !== "ALL";
+  const hasFilters =
+    examSearch !== "" ||
+    examCategoryFilter !== "ALL" ||
+    statusFilter !== "ALL" ||
+    courseFilter !== "ALL";
 
   const openCreateDialog = () => {
     setNewTitle("");
@@ -176,6 +200,27 @@ export default function ExamManagementPage() {
               }}
             />
           </div>
+
+          <Select
+            value={courseFilter}
+            onValueChange={(value) => {
+              setCourseFilter(value);
+              setExamPage(0);
+            }}
+          >
+            <SelectTrigger aria-label="Filter by course" className="w-full max-w-[13rem]">
+              <SelectValue placeholder="All courses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All courses</SelectItem>
+              {courseOptions.map((course) => (
+                <SelectItem key={course.id} value={String(course.id)}>
+                  {course.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Select value={examCategoryFilter} onValueChange={(value) => {
             setExamCategoryFilter(value as ExamCategory | "ALL");
             setExamPage(0);
@@ -190,6 +235,7 @@ export default function ExamManagementPage() {
               ))}
             </SelectContent>
           </Select>
+
           <Select value={statusFilter} onValueChange={(value) => {
             setStatusFilter(value as ExamStatus | "ALL");
             setExamPage(0);
@@ -204,6 +250,7 @@ export default function ExamManagementPage() {
               <SelectItem value="CLOSED">Closed</SelectItem>
             </SelectContent>
           </Select>
+
           <Select value={sortKey} onValueChange={(value) => {
             setSortKey(value);
             setExamPage(0);
@@ -246,6 +293,7 @@ export default function ExamManagementPage() {
                 setExamSearch("");
                 setExamCategoryFilter("ALL");
                 setStatusFilter("ALL");
+                setCourseFilter("ALL");
                 setExamPage(0);
               }}>
                 Clear filters
