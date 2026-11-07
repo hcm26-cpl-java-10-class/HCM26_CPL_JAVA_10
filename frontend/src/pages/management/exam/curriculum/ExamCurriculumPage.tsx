@@ -244,7 +244,21 @@ export default function ExamCurriculumPage() {
   };
 
   return (
-    <div className="w-full flex-1 flex flex-col space-y-5">
+    <MainLayout>
+      <div className="flex flex-col gap-6 p-6">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Assessment Management
+            </p>
+            <h1 className="text-2xl font-bold tracking-tight">Curriculum Mapping</h1>
+            <p className="text-sm text-muted-foreground">
+              Organize and distribute assessments across courses, sections, and lessons.
+            </p>
+          </div>
+        </header>
+
+        <div className="w-full flex-1 flex flex-col space-y-5">
       {/* ----------------- When NO course is selected: Course Hub Dashboard ----------------- */}
       {!courseId ? (
         <div className="space-y-5">
