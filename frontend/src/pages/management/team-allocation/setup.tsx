@@ -3379,6 +3379,7 @@ function SavedTeamCard({
                 Gán đề bài dự án để áp dụng định suất và quy tắc kiêm nhiệm vai trò.
               </p>
             )}
+            {team.projectTemplateId != null && (
             <section className="min-w-0 space-y-2">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium">Danh sách thành viên ({members.length})</p>
@@ -3503,14 +3504,9 @@ function SavedTeamCard({
                 </ul>
               )}
             </section>
-            {canManageRoles && members.length > 0 && (
+            )}
+            {canManageRoles && members.length > 0 && team.projectTemplateId != null && (
               <div className="space-y-2">
-                {!team.projectTemplateId && (
-                  <p className="text-xs text-muted-foreground">
-                    Nhóm chưa gán đề bài: mặc định mỗi thành viên chỉ chọn 1 vai trò.
-                    Gán đề bài để áp dụng định suất và quy tắc kiêm nhiệm của đề bài.
-                  </p>
-                )}
                 {roleSaveError && (
                   <div
                     role="alert"

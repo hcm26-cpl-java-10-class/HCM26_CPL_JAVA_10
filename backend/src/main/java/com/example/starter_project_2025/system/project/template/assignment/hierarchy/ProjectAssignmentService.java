@@ -115,7 +115,7 @@ public class ProjectAssignmentService {
         assignment.setRequestHash(requestHash);
         assignment.setCreatedBy(actorId);
         assignments.saveAndFlush(assignment);
-        AssignmentDtos.Result result = writer.create(assignment, root, selected, authentication);
+        AssignmentDtos.Result result = writer.create(assignment, root, selected);
         try {
             String response = json.writeValueAsString(result);
             assignment.setResponseJson(response);
