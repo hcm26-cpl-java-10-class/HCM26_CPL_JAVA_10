@@ -1,11 +1,24 @@
-import { ResourceFormDialog } from "@/components/resources/ResourceFormDialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type {
   ResourceKind,
   TemplateResource,
   TemplateResourceCollection,
   TemplateResourcePayload,
 } from "@/types/features/project-template-resource";
-import { Save, Upload } from "lucide-react";
+import { AlertCircle, Loader2, Save, Upload } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 interface TemplateResourceDialogProps {
@@ -72,11 +85,7 @@ export function TemplateResourceDialog({
     setFileInputKey((key) => key + 1);
   }, [open, resource]);
 
-  const set = (patch: Partial<Values>) => {
-    setValues((current) => ({ ...current, ...patch }));
-    if (patch.title !== undefined) setErrors((current) => ({ ...current, title: undefined }));
-    if (patch.url !== undefined) setErrors((current) => ({ ...current, url: undefined }));
-  };
+  const set = (patch: Partial<Values>) => setValues((current) => ({ ...current, ...patch }));
 
   const validate = () => {
     const next: Errors = {};
@@ -107,29 +116,87 @@ export function TemplateResourceDialog({
     }, file);
   };
 
+  const fileError = errors.file;
+  const accepted = collection.allowedExtensions.map((extension) => `.${extension}`).join(",");
+
   return (
-    <ResourceFormDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      idPrefix="template-resource"
-      locale="en"
-      modalTitle={resource ? "Edit template resource" : "Add template resource"}
-      modalDescription="Resources are attached to this template version. Existing projects keep the resources they were assigned with."
-      saving={saving}
-      error={error}
-      submitLabel={resource ? "Save changes" : "Add resource"}
-      submitIcon={file ? Upload : Save}
-      values={values}
-      errors={errors}
-      collection={collection}
-      maxFileSizeLabel={humanSize(collection.maxFileBytes)}
-      fileResetKey={fileInputKey}
-      onChange={set}
-      onFileChange={(next) => {
-        setFile(next);
-        setErrors((current) => ({ ...current, file: undefined }));
-      }}
-      onSubmit={(event) => void submit(event)}
-    />
+    <Dialog open={open} onOpenChange={(value) => { if (!saving) onOpenChange(value); }}>
+      <DialogContent showCloseButton={!saving} className="sm:max-w-lg">
+        <form onSubmit={(event) => void submit(event)} className="grid gap-4">
+          <DialogHeader>
+            <DialogTitle>{resource ? "Edit template resource" : "Add template resource"}</DialogTitle>
+            <DialogDescription>
+              Resources are attached to this template version. Existing projects keep the resources they were assigned with.
+            </DialogDescription>
+          </DialogHeader>
+
+          {error && <Alert variant="destructive"><AlertCircle /><AlertDescription>{error}</AlertDescription></Alert>}
+
+          <div className="grid gap-2">
+            <Label htmlFor="resource-title">Title <span className="text-destructive">*</span></Label>
+            <Input id="resource-title" value={values.title} maxLength={255} disabled={saving}
+              aria-invalid={!!errors.title} onChange={(event) => { set({ title: event.target.value }); setErrors((current) => ({ ...current, title: undefined })); }} />
+            {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="resource-kind">Type</Label>
+              <Select value={values.kind} disabled={saving}
+                onValueChange={(value: ResourceKind) => set({ kind: value })}>
+                <SelectTrigger id="resource-kind"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="LINK">Link</SelectItem>
+                  <SelectItem value="FILE">File</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="resource-category">Category</Label>
+              <Input id="resource-category" value={values.category} maxLength={50} placeholder="Git, Docs, Figma..."
+                disabled={saving} onChange={(event) => set({ category: event.target.value })} />
+            </div>
+          </div>
+
+          {values.kind === "LINK" && (
+            <div className="grid gap-2">
+              <Label htmlFor="resource-url">URL <span className="text-destructive">*</span></Label>
+              <Input id="resource-url" value={values.url} maxLength={1000} placeholder="https://"
+                disabled={saving} aria-invalid={!!errors.url}
+                onChange={(event) => { set({ url: event.target.value }); setErrors((current) => ({ ...current, url: undefined })); }} />
+              {errors.url && <p className="text-xs text-destructive">{errors.url}</p>}
+            </div>
+          )}
+
+          <div className="grid gap-2">
+            <Label htmlFor="resource-description">Description</Label>
+            <Textarea id="resource-description" value={values.description} maxLength={1000} rows={3}
+              disabled={saving} onChange={(event) => set({ description: event.target.value })} />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="resource-file">Attach file <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+            <Input key={fileInputKey} id="resource-file" type="file" accept={accepted} disabled={saving}
+              aria-invalid={!!fileError}
+              onChange={(event) => {
+                setFile(event.target.files?.[0] ?? null);
+                setErrors((current) => ({ ...current, file: undefined }));
+              }} />
+            <p className="text-xs text-muted-foreground">
+              {collection.allowedExtensions.join(", ")} · maximum {humanSize(collection.maxFileBytes)}
+            </p>
+            {fileError && <p className="text-xs text-destructive">{fileError}</p>}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? <Loader2 className="animate-spin" /> : file ? <Upload /> : <Save />}
+              {resource ? "Save changes" : "Add resource"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
