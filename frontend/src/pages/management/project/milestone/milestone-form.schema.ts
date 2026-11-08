@@ -8,8 +8,7 @@ export const MILESTONE_FORM_LIMITS = {
   checklistItems: 100,
 } as const;
 
-export const milestoneFormSchema = z
-  .object({
+const milestoneFormFields = {
     title: z.string().trim().min(1, "Milestone name is required").max(MILESTONE_FORM_LIMITS.title, "Milestone name must not exceed 120 characters"),
     description: z.string().max(MILESTONE_FORM_LIMITS.description, "Description must not exceed 1,000 characters"),
     deadline: z.string().min(1, "Deadline is required"),
@@ -38,8 +37,9 @@ export const milestoneFormSchema = z
       allowed: z.boolean(),
       maxAttempts: z.number().int("Attempts must be a whole number").min(2, "At least 2 attempts are required").max(99, "Attempts must not exceed 99").optional(),
     }),
-  })
-  .superRefine((value, context) => {
+};
+
+function validateScheduleRules(value: Pick<MilestoneFormValues, "deadline" | "latePolicy">, context: z.RefinementCtx) {
     const deadline = value.deadline ? new Date(value.deadline) : null;
 
     if (deadline && Number.isNaN(deadline.getTime())) {
@@ -64,8 +64,9 @@ export const milestoneFormSchema = z
         context.addIssue({ code: "custom", path: ["latePolicy", "penaltyPercent"], message: "Late penalty is required" });
       }
     }
+}
 
-  });
+export const milestoneFormSchema = z.object(milestoneFormFields).superRefine(validateScheduleRules);
 
 export function tenantToday(timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -110,7 +111,10 @@ export function tenantStartOfDay(date: string, timeZone: string): Date | null {
 }
 
 export function milestoneFormSchemaForTenant(timeZone: string) {
-  return milestoneFormSchema.superRefine((value, context) => {
+  return milestoneFormSchema.superRefine((value, context) => validateTenantSchedule(value, context, timeZone));
+}
+
+function validateTenantSchedule(value: Pick<MilestoneFormValues, "startDate" | "deadline">, context: z.RefinementCtx, timeZone: string) {
     if (value.startDate && value.startDate <= tenantToday(timeZone)) {
       context.addIssue({ code: "custom", path: ["startDate"], message: "Start date must be after today in the tenant time zone" });
     }
@@ -119,7 +123,24 @@ export function milestoneFormSchemaForTenant(timeZone: string) {
     if (start && deadline && !Number.isNaN(deadline.getTime()) && start.getTime() >= deadline.getTime()) {
       context.addIssue({ code: "custom", path: ["startDate"], message: "Start date must be before the deadline" });
     }
-  });
+}
+
+export function milestoneStepSchemaForTenant(step: number, timeZone: string) {
+  if (step === 0) {
+    return z.object({ title: milestoneFormFields.title, description: milestoneFormFields.description, mandatory: milestoneFormFields.mandatory });
+  }
+  if (step === 1) {
+    return z.object({
+      startDate: milestoneFormFields.startDate,
+      deadline: milestoneFormFields.deadline,
+      latePolicy: milestoneFormFields.latePolicy,
+      resubmissionPolicy: milestoneFormFields.resubmissionPolicy,
+    }).superRefine((value, context) => {
+      validateScheduleRules(value, context);
+      validateTenantSchedule(value, context, timeZone);
+    });
+  }
+  return z.object({ checklist: milestoneFormFields.checklist, rubricSnapshotId: milestoneFormFields.rubricSnapshotId });
 }
 
 export interface MilestoneFormValues {

@@ -47,7 +47,7 @@ public class SubmissionVersionService {
             throw new MilestoneConflictException("A new version can only be created after changes are requested");
         }
         if (!queryService.canRequestChanges(submission)) {
-            throw validation("submission", "Cannot create a new version because the milestone is outside its late policy or attempt limit");
+            throw validation("submission", "Cannot create a new version: " + queryService.resubmissionBlockMessage(submission));
         }
         var now = milestoneClock.instant();
         int number = submission.openNextDraft(now);

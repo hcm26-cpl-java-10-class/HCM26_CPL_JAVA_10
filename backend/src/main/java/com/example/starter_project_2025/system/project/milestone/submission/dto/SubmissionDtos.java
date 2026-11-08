@@ -36,7 +36,10 @@ public final class SubmissionDtos {
                          Instant lateUntil, BigDecimal latePenaltyPercent, long lockVersion,
                          ProductInfo product, Version currentVersion, List<Version> versions, Rubric rubric,
                          List<Review> reviews, Map<String, Boolean> availableActions,
-                         com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus milestoneLifecycleStatus) { }
+                         com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus milestoneLifecycleStatus,
+                         /* Why requestChanges / createNextVersion are unavailable; null when allowed. */
+                         com.example.starter_project_2025.system.project.milestone.submission.domain.ResubmissionBlockReason resubmissionBlockedReason,
+                         String resubmissionBlockedMessage) { }
 
     /** Immutable product snapshot created by the artifact-submission workflow. */
     public record ProductInfo(long version, String repositoryUrl, String deploymentUrl,

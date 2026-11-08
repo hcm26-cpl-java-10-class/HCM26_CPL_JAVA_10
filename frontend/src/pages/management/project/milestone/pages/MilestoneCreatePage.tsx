@@ -292,7 +292,7 @@ export function MilestoneCreatePage() {
   return (
     <MainLayout pathName={{ projects: "Projects", milestones: "Milestones", new: "Create", [projectId ?? `team-${scopedTeamId}`]: optionsQuery.data.project?.name ?? "Team workspace" }}>
       <div className="mx-auto grid w-full max-w-7xl gap-6">
-        <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
+        <Card className="border-indigo-100 bg-gradient-to-r from-indigo-50/80 via-background to-background dark:border-indigo-900 dark:from-indigo-950/30">
           <CardHeader className="gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">{optionsQuery.data.project?.status ?? "TEAM_ONLY"}</Badge>

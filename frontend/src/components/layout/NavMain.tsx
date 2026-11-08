@@ -1,5 +1,6 @@
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState } from "react";
 
 import {
     Collapsible,
@@ -22,6 +23,24 @@ type NavItem = {
     isActive?: boolean;
 };
 
+const GROUP_STATE_KEY = "sidebar_group_state";
+
+function readGroupState(): Record<string, boolean> {
+    try {
+        return JSON.parse(localStorage.getItem(GROUP_STATE_KEY) ?? "{}") ?? {};
+    } catch {
+        return {};
+    }
+}
+
+function writeGroupState(title: string, open: boolean) {
+    try {
+        localStorage.setItem(GROUP_STATE_KEY, JSON.stringify({ ...readGroupState(), [title]: open }));
+    } catch {
+        // storage unavailable; group state simply won't persist
+    }
+}
+
 export function NavMain({
     title,
     items,
@@ -32,6 +51,20 @@ export function NavMain({
     sidebarState: "expanded" | "collapsed";
 }) {
     const groupActive = items.some((i) => i.isActive);
+    const [open, setOpen] = useState(() => groupActive || (readGroupState()[title] ?? true));
+
+    const [prevGroupActive, setPrevGroupActive] = useState(groupActive);
+
+    // Always reveal the group that contains the current page.
+    if (groupActive !== prevGroupActive) {
+        setPrevGroupActive(groupActive);
+        if (groupActive) setOpen(true);
+    }
+
+    const handleOpenChange = (next: boolean) => {
+        setOpen(next);
+        writeGroupState(title, next);
+    };
 
     if (sidebarState !== "expanded") {
         return (
@@ -80,7 +113,8 @@ export function NavMain({
         <Collapsible
             key={title}
             asChild
-            defaultOpen={true}
+            open={open}
+            onOpenChange={handleOpenChange}
             className="group/collapsible"
         >
             <SidebarMenuItem>
