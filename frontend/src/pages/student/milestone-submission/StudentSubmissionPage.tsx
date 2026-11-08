@@ -11,10 +11,11 @@ import { Textarea } from "@/components/ui/textarea";
 import type { SaveSubmissionDraftRequest, SubmissionArtifactType, SubmissionDetail } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, CalendarClock, ExternalLink, Link2, Plus, RotateCcw, Save, Send, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { SubmissionStatusBadge } from "@/pages/management/project/milestone-submission/components/SubmissionStatusBadge";
+import { describeResubmissionBlock } from "@/utils/resubmission.utils";
 
 type ArtifactDraft = { type: SubmissionArtifactType; name: string; url: string };
 
@@ -96,11 +97,17 @@ export function StudentSubmissionPage() {
   const client = useQueryClient();
   const submitKey = useRef<string | null>(null);
   const query = useQuery({ queryKey: ["student-submission", submissionId], queryFn: () => milestoneSubmissionApi.getMyDetail(submissionId as string), enabled: Boolean(submissionId), retry: false });
-  const [form, setForm] = useState<SaveSubmissionDraftRequest | null>(null);
+  const [form, setForm] = useState<SaveSubmissionDraftRequest | null>(() =>
+    query.data?.status === "DRAFT" ? toForm(query.data) : null);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [error, setError] = useState<string>();
 
-  useEffect(() => { if (query.data?.status === "DRAFT") setForm(toForm(query.data)); }, [query.data?.id, query.data?.currentVersion.id, query.data?.status]);
+  const formSourceKey = JSON.stringify([query.data?.id, query.data?.currentVersion.id, query.data?.status]);
+  const [previousFormSourceKey, setPreviousFormSourceKey] = useState(formSourceKey);
+  if (previousFormSourceKey !== formSourceKey) {
+    setPreviousFormSourceKey(formSourceKey);
+    setForm(query.data?.status === "DRAFT" ? toForm(query.data) : null);
+  }
 
   const store = (data: SubmissionDetail) => {
     client.setQueryData(["student-submission", submissionId], data);
@@ -140,7 +147,7 @@ export function StudentSubmissionPage() {
         <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>{item.teamName} · Version {item.currentVersionNumber}</CardDescription></div><SubmissionStatusBadge status={item.status} /></div></CardHeader><CardContent className="flex flex-wrap gap-4 text-sm text-muted-foreground"><span className="flex items-center gap-2"><CalendarClock className="size-4" /> Deadline: {new Date(item.deadline).toLocaleString()}</span>{item.lateUntil ? <span>Late policy closes: {new Date(item.lateUntil).toLocaleString()}</span> : null}<span>Attempt: {item.submissionAttempts}{item.maxSubmissionAttempts ? `/${item.maxSubmissionAttempts}` : ""}</span></CardContent></Card>
         {latestFeedback ? <Card className="border-amber-500/40"><CardHeader><CardTitle>Review feedback</CardTitle><CardDescription className="whitespace-pre-wrap text-foreground">{latestFeedback.overallFeedback || "Review the criterion-level feedback below."}</CardDescription></CardHeader><CardContent className="grid gap-2">{latestFeedback.evaluations.filter((value) => value.feedback).map((value) => <div key={value.criterionId} className="rounded-lg bg-muted/50 p-3"><p className="font-medium">{value.criterionName}</p><p className="whitespace-pre-wrap text-sm text-muted-foreground">{value.feedback}</p></div>)}</CardContent></Card> : null}
         <SubmissionVersionHistory item={item} />
-        <Card><CardHeader><CardTitle>Prepare version {item.currentVersionNumber + 1}</CardTitle><CardDescription>The artifact form creates a new version and preserves the reviewed version.</CardDescription></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{item.availableActions.createNextVersion ? "You can still resubmit within the allowed window and attempt limit." : "The resubmission window is closed or the attempt limit has been reached."}</p><Button disabled={!item.availableActions.createNextVersion} onClick={() => navigate(artifactPath)}><RotateCcw className="size-4" /> Prepare resubmission</Button></CardContent></Card>
+        <Card><CardHeader><CardTitle>Prepare version {item.currentVersionNumber + 1}</CardTitle><CardDescription>The artifact form creates a new version and preserves the reviewed version.</CardDescription></CardHeader><CardContent className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{item.availableActions.createNextVersion ? `You can still resubmit${item.maxSubmissionAttempts ? ` (${item.submissionAttempts}/${item.maxSubmissionAttempts} attempts used)` : ""}.` : `Resubmission is unavailable: ${describeResubmissionBlock(item)}`}</p><Button disabled={!item.availableActions.createNextVersion} onClick={() => navigate(artifactPath)}><RotateCcw className="size-4" /> Prepare resubmission</Button></CardContent></Card>
       </div>
     </MainLayout>
   );
@@ -164,7 +171,7 @@ export function StudentSubmissionPage() {
         <Button variant="ghost" className="w-fit" onClick={() => navigate(-1)}><ArrowLeft className="size-4" /> Back</Button>
         <Card className="border-primary/20"><CardHeader><div className="flex flex-wrap justify-between gap-3"><div><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>Student submission · Version {item.currentVersionNumber} · Attempt {item.submissionAttempts + 1}{item.maxSubmissionAttempts ? `/${item.maxSubmissionAttempts}` : ""}</CardDescription></div><SubmissionStatusBadge status={item.status} /></div></CardHeader></Card>
         {error ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Check the submission</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
-        <Card><CardHeader><CardTitle>Submission content</CardTitle><CardDescription>Save as draft at any time. Only “Submit to reviewer” locks this version.</CardDescription></CardHeader><CardContent className="grid gap-4"><div className="grid gap-2"><Label>Submission title</Label><Input maxLength={160} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></div><div className="grid gap-2"><Label>Summary of work and changes</Label><Textarea rows={5} maxLength={2000} value={form.notes ?? ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></div></CardContent></Card>
+        <Card><CardHeader><CardTitle>Submission content</CardTitle><CardDescription>Save as draft at any time. Only “Submit to reviewer” locks this version.</CardDescription></CardHeader><CardContent className="grid gap-4"><div className="grid gap-2"><Label>Submission title</Label><Input maxLength={160} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></div><div className="grid gap-2"><Label>Summary of work and changes</Label><Textarea rows={5} maxLength={1000} className="field-sizing-fixed h-40 max-h-40 resize-none overflow-y-auto" value={form.notes ?? ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} /><p className="text-xs text-muted-foreground">{(form.notes ?? "").length}/1000 characters</p></div></CardContent></Card>
         <Card><CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Artifacts</CardTitle><CardDescription>Add repository, documentation and demo links.</CardDescription></div><Button variant="outline" size="sm" onClick={() => setForm({ ...form, artifacts: [...form.artifacts, { type: "OTHER", name: "", url: "" }] })}><Plus className="size-4" /> Add link</Button></div></CardHeader><CardContent className="grid gap-3">{form.artifacts.length ? form.artifacts.map((artifact, index) => <div key={index} className="grid gap-3 rounded-xl border p-3 md:grid-cols-[170px_1fr_1.4fr_auto]"><select className="h-10 rounded-md border bg-background px-3 text-sm" value={artifact.type} onChange={(event) => updateArtifact(index, { type: event.target.value as SubmissionArtifactType })}><option value="REPOSITORY">Repository</option><option value="DOCUMENTATION">Documentation</option><option value="DEMO">Demo</option><option value="OTHER">Other</option></select><Input value={artifact.name} placeholder="Artifact name" onChange={(event) => updateArtifact(index, { name: event.target.value })} /><Input type="url" value={artifact.url} placeholder="https://..." onChange={(event) => updateArtifact(index, { url: event.target.value })} /><Button variant="ghost" size="icon" aria-label="Remove artifact" onClick={() => setForm({ ...form, artifacts: form.artifacts.filter((_, position) => position !== index) })}><Trash2 className="size-4" /></Button></div>) : <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground"><Link2 className="mx-auto mb-2 size-6" />No artifact links yet.</div>}</CardContent></Card>
         <Card><CardHeader><CardTitle>Acceptance checklist</CardTitle><CardDescription>These criteria are assessed and checked by the reviewer after submission.</CardDescription></CardHeader><CardContent className="grid gap-3">{item.currentVersion.checklist.map((checklist, index) => <div key={checklist.id ?? index} className="rounded-xl border p-3"><span className="font-medium">{checklist.content}</span>{checklist.mandatory ? <span className="ml-2 text-sm text-muted-foreground">Required</span> : null}</div>)}</CardContent></Card>
         <SubmissionVersionHistory item={item} />

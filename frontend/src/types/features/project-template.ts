@@ -212,7 +212,6 @@ export interface ProjectTemplateDTO {
   code: string;
   name: string;
   description: string;
-  technologyStack?: string | null;
   parentTemplateId?: number | null;
   removed?: boolean;
   category: string;
@@ -233,7 +232,6 @@ export interface ProjectTemplatePayload {
   code: string;
   name: string;
   description: string;
-  technologyStack?: string;
   parentTemplateId?: number | null;
   category: string;
   level: ProjectTemplateLevel;
@@ -274,7 +272,7 @@ export interface ProjectTemplateOptions {
   canArchive: boolean;
 }
 
-export type TemplateConfigurationSection = "overview" | "team-constraints" | "milestones";
+export type TemplateConfigurationSection = "overview" | "team-constraints" | "milestones" | "modules";
 
 export interface TemplateActivationChecklist {
   templateId: number;

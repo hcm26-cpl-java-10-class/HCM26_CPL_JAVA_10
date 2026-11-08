@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { TemplateMilestoneTimeUnit } from "@/types/features/project-template";
 import type { MilestoneRubricOption } from "@/types/features/milestone";
 import { MilestoneRubricSelector } from "@/pages/management/project/milestone/components/MilestoneRubricSelector";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, PanelLeftClose, Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { milestoneFieldId, type MilestonePlanErrors, type MilestoneValues } from "../milestone-plan.utils";
 import { TemplateLatePolicyEditor } from "./TemplateLatePolicyEditor";
@@ -30,7 +30,7 @@ function MilestoneField({ path, label, required, errors, children }: {
   );
 }
 
-export function TemplateMilestoneEditor({ milestone, index, count, disabled, editable, weighted = true, errors, rubrics, onChange, onMove, onRemove }: {
+export function TemplateMilestoneEditor({ milestone, index, count, disabled, editable, weighted = true, errors, rubrics, onChange, onMove, onRemove, onCollapse }: {
   milestone: MilestoneValues;
   index: number;
   count: number;
@@ -42,6 +42,7 @@ export function TemplateMilestoneEditor({ milestone, index, count, disabled, edi
   onChange: (patch: Partial<MilestoneValues>) => void;
   onMove: (direction: -1 | 1) => void;
   onRemove: () => void;
+  onCollapse: () => void;
 }) {
   const path = `milestones[${index}]`;
   const fieldProps = (field: string) => ({
@@ -61,14 +62,18 @@ export function TemplateMilestoneEditor({ milestone, index, count, disabled, edi
             <p className="text-xs text-muted-foreground">Milestone {index + 1}</p>
             <CardTitle className="mt-1 break-words text-base leading-relaxed">{milestone.title.trim() || "New milestone"}</CardTitle>
           </div>
-          {editable && <div className="flex shrink-0 gap-1">
+          <div className="flex shrink-0 gap-1">
+            {editable && <>
             <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move milestone ${index + 1} up`}
               disabled={disabled || index === 0} onClick={() => onMove(-1)}><ArrowUp /></Button>
             <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move milestone ${index + 1} down`}
               disabled={disabled || index === count - 1} onClick={() => onMove(1)}><ArrowDown /></Button>
             <Button type="button" variant="ghost" size="icon-sm" className="text-destructive" aria-label={`Remove milestone ${index + 1}`}
               disabled={disabled} onClick={onRemove}><Trash2 /></Button>
-          </div>}
+            </>}
+            <Button type="button" variant="outline" size="icon-sm" aria-label="Collapse milestone" title="Collapse milestone"
+              onClick={onCollapse}><PanelLeftClose /></Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="grid gap-5">

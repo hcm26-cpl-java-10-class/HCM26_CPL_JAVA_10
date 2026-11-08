@@ -14,6 +14,7 @@ export interface AllocationSession {
 export interface AutoAllocationPreview {
   sessionId: number;
   standardMax: number;
+  minMembers: number;
   eligibleCount: number;
   fingerprint: string;
   teams: Array<{
@@ -207,6 +208,7 @@ export interface TeamListResponse {
 export interface DraftTeamInput {
   teamName: string;
   assignedMentorId: number | null;
+  leaderMemberId?: number | null;
   members: Array<{
     memberId: number;
     role: string | null;

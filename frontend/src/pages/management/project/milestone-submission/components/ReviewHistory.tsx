@@ -11,8 +11,8 @@ export function ReviewHistory({ reviews }: { reviews: SubmissionReviewHistory[] 
     <Card>
       <CardHeader><CardTitle className="flex items-center gap-2"><History className="size-5" /> Review history</CardTitle><CardDescription>Previous decisions are grouped by immutable submission version.</CardDescription></CardHeader>
       <CardContent className="grid gap-3">
-        {reviews.map((review, index) => (
-          <details key={review.id} className="group rounded-xl border" open={index === 0}>
+        {reviews.map((review) => (
+          <details key={review.id} className="group rounded-xl border">
             <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4">
               <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">Version {review.versionNumber}</span><Badge variant={review.decision === "REJECT" ? "destructive" : review.decision === "ACCEPT" ? "default" : "secondary"}>{review.decision.replace("_", " ")}</Badge><span className="text-sm text-muted-foreground">by {review.reviewerName}</span></div>
               <div className="flex items-center gap-3 text-sm"><span>{review.finalScore} pts</span><span className="text-muted-foreground">{date(review.reviewedAt)}</span><ChevronDown className="size-4 transition group-open:rotate-180" /></div>

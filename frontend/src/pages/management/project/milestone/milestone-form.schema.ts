@@ -8,8 +8,7 @@ export const MILESTONE_FORM_LIMITS = {
   checklistItems: 100,
 } as const;
 
-export const milestoneFormSchema = z
-  .object({
+const milestoneFormFields = {
     title: z.string().trim().min(1, "Milestone name is required").max(MILESTONE_FORM_LIMITS.title, "Milestone name must not exceed 120 characters"),
     description: z.string().max(MILESTONE_FORM_LIMITS.description, "Description must not exceed 1,000 characters"),
     deadline: z.string().min(1, "Deadline is required"),
@@ -38,8 +37,9 @@ export const milestoneFormSchema = z
       allowed: z.boolean(),
       maxAttempts: z.number().int("Attempts must be a whole number").min(2, "At least 2 attempts are required").max(99, "Attempts must not exceed 99").optional(),
     }),
-  })
-  .superRefine((value, context) => {
+};
+
+function validateScheduleRules(value: Pick<MilestoneFormValues, "deadline" | "latePolicy">, context: z.RefinementCtx) {
     const deadline = value.deadline ? new Date(value.deadline) : null;
 
     if (deadline && Number.isNaN(deadline.getTime())) {
@@ -64,8 +64,9 @@ export const milestoneFormSchema = z
         context.addIssue({ code: "custom", path: ["latePolicy", "penaltyPercent"], message: "Late penalty is required" });
       }
     }
+}
 
-  });
+export const milestoneFormSchema = z.object(milestoneFormFields).superRefine(validateScheduleRules);
 
 export function tenantToday(timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -75,12 +76,71 @@ export function tenantToday(timeZone: string): string {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+const tenantStartCache = new Map<string, number>();
+
+/** First instant of a calendar date in the tenant zone, including dates with DST changes. */
+export function tenantStartOfDay(date: string, timeZone: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const anchor = new Date(`${date}T00:00:00Z`).getTime();
+  if (Number.isNaN(anchor)) return null;
+
+  const key = `${timeZone}:${date}`;
+  const cached = tenantStartCache.get(key);
+  if (cached !== undefined) return new Date(cached);
+
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const localDate = (instant: number) => {
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(instant)).map((part) => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  };
+
+  // Every IANA offset is within 24 hours. Find the first millisecond in the date,
+  // so a midnight gap or repeated hour follows the same rule as LocalDate.atStartOfDay.
+  let low = anchor - 2 * 86_400_000;
+  let high = anchor + 2 * 86_400_000;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (localDate(middle) < date) low = middle + 1;
+    else high = middle;
+  }
+
+  tenantStartCache.set(key, low);
+  return new Date(low);
+}
+
 export function milestoneFormSchemaForTenant(timeZone: string) {
-  return milestoneFormSchema.superRefine((value, context) => {
+  return milestoneFormSchema.superRefine((value, context) => validateTenantSchedule(value, context, timeZone));
+}
+
+function validateTenantSchedule(value: Pick<MilestoneFormValues, "startDate" | "deadline">, context: z.RefinementCtx, timeZone: string) {
     if (value.startDate && value.startDate <= tenantToday(timeZone)) {
       context.addIssue({ code: "custom", path: ["startDate"], message: "Start date must be after today in the tenant time zone" });
     }
-  });
+    const start = tenantStartOfDay(value.startDate, timeZone);
+    const deadline = value.deadline ? new Date(value.deadline) : null;
+    if (start && deadline && !Number.isNaN(deadline.getTime()) && start.getTime() >= deadline.getTime()) {
+      context.addIssue({ code: "custom", path: ["startDate"], message: "Start date must be before the deadline" });
+    }
+}
+
+export function milestoneStepSchemaForTenant(step: number, timeZone: string) {
+  if (step === 0) {
+    return z.object({ title: milestoneFormFields.title, description: milestoneFormFields.description, mandatory: milestoneFormFields.mandatory });
+  }
+  if (step === 1) {
+    return z.object({
+      startDate: milestoneFormFields.startDate,
+      deadline: milestoneFormFields.deadline,
+      latePolicy: milestoneFormFields.latePolicy,
+      resubmissionPolicy: milestoneFormFields.resubmissionPolicy,
+    }).superRefine((value, context) => {
+      validateScheduleRules(value, context);
+      validateTenantSchedule(value, context, timeZone);
+    });
+  }
+  return z.object({ checklist: milestoneFormFields.checklist, rubricSnapshotId: milestoneFormFields.rubricSnapshotId });
 }
 
 export interface MilestoneFormValues {

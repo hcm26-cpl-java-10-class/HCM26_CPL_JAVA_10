@@ -539,6 +539,36 @@ class MilestoneIntegrationTest {
     }
 
     @Test
+    void teamListSupportsWorkspaceSearchSortPaginationAndTenantDeadlineFilter() throws Exception {
+        ZoneId tenantZone = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate firstDate = LocalDate.now(tenantZone).plusDays(3);
+        LocalDate secondDate = firstDate.plusDays(1);
+        createMilestone("Team alpha delivery", firstDate.atTime(12, 0).atZone(tenantZone).toInstant(), "team-list-alpha");
+        createMilestone("Team beta delivery", secondDate.atTime(12, 0).atZone(tenantZone).toInstant(), "team-list-beta");
+        String teamEndpoint = "/api/teams/" + MockMilestoneData.TEAM_ID + "/milestones";
+
+        mockMvc.perform(get(teamEndpoint).header("Authorization", "Bearer " + teacherToken)
+                        .param("search", "team").param("lifecycleStatus", "PLANNED")
+                        .param("sort", "deadline:desc").param("page", "0").param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.content[0].title").value("Team beta delivery"));
+
+        mockMvc.perform(get(teamEndpoint).header("Authorization", "Bearer " + teacherToken)
+                        .param("search", "team").param("sort", "deadline:desc")
+                        .param("page", "1").param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].title").value("Team alpha delivery"));
+
+        mockMvc.perform(get(teamEndpoint).header("Authorization", "Bearer " + teacherToken)
+                        .param("deadlineFrom", firstDate.toString()).param("deadlineTo", firstDate.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("Team alpha delivery"));
+    }
+
+    @Test
     void rejectsInvalidMilestoneFilters() throws Exception {
         mockMvc.perform(get(endpoint())
                         .header("Authorization", "Bearer " + teacherToken)

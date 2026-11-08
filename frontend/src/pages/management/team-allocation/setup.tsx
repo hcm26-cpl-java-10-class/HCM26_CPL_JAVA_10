@@ -1,8 +1,6 @@
 import { teamAllocationApi, trainingClassApi } from "@/api";
-import { teamTemplateApi } from "@/api/features/team-template.api";
-import { TemplatePickerPanel } from "./TemplatePickerPanel";
-import { MasterProjectAssignmentPanel } from "./MasterProjectAssignmentPanel";
-import type { TemplateCandidate } from "@/types/features/template-candidate";
+import { ProjectAssignmentPanel } from "./ProjectAssignmentPanel";
+import { TeamMemberRoleInput } from "./AssignmentTeamRoles";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,7 +34,6 @@ import type {
   TeamMemberRole,
   TeamReadinessIssue,
   TeamRoleQuotaViolation,
-  TeamTemplateApiError,
   TransferTeamMemberRequest,
 } from "@/types/features/team-allocation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -68,7 +65,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject, ReactNode } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 interface LocalDraftTeam {
@@ -78,6 +75,7 @@ interface LocalDraftTeam {
   assignedMentorId: number | null;
   memberIds: number[];
   memberRoles: Record<number, string | null>;
+  leaderMemberId: number | null;
   effectiveMaxMembers?: number;
 }
 
@@ -87,9 +85,6 @@ interface SaveTeamDetailsPayload {
   teamVersion: number;
   mentorId: number | null;
   mentorChanged: boolean;
-  projectTemplateId: number | null;
-  projectTemplateVersionId?: number;
-  templateChanged: boolean;
   rolesChanged: boolean;
   roles: Array<{ memberId: number; roles: TeamMemberRole[] }>;
 }
@@ -231,51 +226,12 @@ function makeIdempotencyKey() {
   return crypto.randomUUID();
 }
 
-/** US-10: maps `ERR_TEAM_CAPACITY_EXCEEDED` / `ERR_TEAM_NOT_DRAFT` bodies. */
-function getTemplateFailure(error: unknown): TeamTemplateApiError {
-  if (axios.isAxiosError<TeamTemplateApiError>(error)) {
-    const data = error.response?.data;
-    return {
-      status: error.response?.status ?? 0,
-      errorCode: data?.errorCode ?? "ERR_REQUEST_FAILED",
-      reason: data?.reason ?? null,
-      message:
-        data?.message ??
-        error.message ??
-        "Không thể gán đề bài. Vui lòng thử lại.",
-      teamId: data?.teamId ?? null,
-      projectTemplateId: data?.projectTemplateId ?? null,
-      projectTemplateName: data?.projectTemplateName ?? null,
-      memberCount: data?.memberCount ?? null,
-      minMembers: data?.minMembers ?? null,
-      maxMembers: data?.maxMembers ?? null,
-    };
-  }
-
-  return {
-    status: 0,
-    errorCode: "ERR_REQUEST_FAILED",
-    message: error instanceof Error
-      ? error.message
-      : "Không thể gán đề bài. Vui lòng thử lại.",
-  };
-}
-
 function isTeamMemberRole(role: string | null | undefined): role is TeamMemberRole {
   return role === "PM" || role === "BA" || role === "DEV" || role === "QA";
 }
 
-const TEAM_ROLE_OPTIONS: TeamMemberRole[] = ["PM", "BA", "DEV", "QA"];
-
 /** Backend uses Integer.MAX_VALUE for an unbounded max quota. */
 const UNBOUNDED_ROLE_QUOTA = 2_147_483_647;
-
-const TEAM_ROLE_LABEL: Record<TeamMemberRole, string> = {
-  PM: "PM (Leader)",
-  BA: "BA",
-  DEV: "Dev",
-  QA: "QA",
-};
 
 /** US-11: member roles from the new `roles` array, falling back to `role`. */
 function memberRolesOf(member: {
@@ -283,13 +239,13 @@ function memberRolesOf(member: {
   roles?: TeamMemberRole[];
 }): TeamMemberRole[] {
   if (member.roles?.length) return member.roles;
-  return isTeamMemberRole(member.role) ? [member.role] : [];
+  return (member.role ?? "").split(",").map((role) => role.trim()).filter(isTeamMemberRole);
 }
 
 function hasCompleteTeamRoles(team: AllocationTeam) {
   const rolesComplete = team.members?.length === team.memberIds.length &&
     team.members.every((member) => memberRolesOf(member).length > 0);
-  return rolesComplete && roleQuotaGaps(team).length === 0;
+  return team.leaderMemberId != null && rolesComplete && roleQuotaGaps(team).length === 0;
 }
 
 /** US-11: local preview of the template quota gaps (backend is authoritative). */
@@ -338,6 +294,17 @@ function getStoredKey(
   return ref.current.key;
 }
 
+function describeAutoTeamSizes(preview: AutoAllocationPreview): string {
+  const counts = new Map<number, number>();
+  for (const team of preview.teams) {
+    counts.set(team.members.length, (counts.get(team.members.length) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort(([a], [b]) => b - a)
+    .map(([size, teams]) => `${teams} nhóm ${size} người`)
+    .join(", ");
+}
+
 export default function TeamAllocationSetupPage() {
   const { hasPermission } = usePermissions();
   const { classId: classIdParam } = useParams<{ classId: string }>();
@@ -351,6 +318,7 @@ export default function TeamAllocationSetupPage() {
     return {
       sessionId: Number.isSafeInteger(sessionId) && sessionId > 0 ? sessionId : null,
       teamId: Number.isSafeInteger(teamId) && teamId > 0 ? teamId : null,
+      review: params.get("tab") === "review",
     };
   }, [location.search]);
   const requestedSessionRef = useRef(allocationLink.sessionId);
@@ -384,7 +352,9 @@ export default function TeamAllocationSetupPage() {
   const [activeMentorReason, setActiveMentorReason] = useState("");
   const [activeMentorSelection, setActiveMentorSelection] = useState("");
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
-  const [activeWorkspace, setActiveWorkspace] = useState<"build" | "review">("build");
+  const [activeWorkspace, setActiveWorkspace] = useState<"build" | "review">(
+    allocationLink.review || allocationLink.teamId !== null ? "review" : "build",
+  );
   const [transferTarget, setTransferTarget] = useState<{
     teamId: number;
     memberId: number;
@@ -424,9 +394,6 @@ export default function TeamAllocationSetupPage() {
     PublishTeamsResponse["failedItems"]
   >([]);
   const [lastWarnings, setLastWarnings] = useState<DraftWarning[]>([]);
-  const [templateAssignErrors, setTemplateAssignErrors] = useState<
-    Record<number, TeamTemplateApiError>
-  >({});
   const saveKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const restoredDraftKeyRef = useRef<string | null>(null);
 
@@ -624,6 +591,7 @@ export default function TeamAllocationSetupPage() {
         teams: newDrafts.map((team) => ({
           teamName: team.teamName.trim(),
           assignedMentorId: team.assignedMentorId,
+          leaderMemberId: team.leaderMemberId,
           members: team.memberIds.map((memberId) => ({
             memberId,
             role: team.memberRoles[memberId] ?? "DEV",
@@ -936,24 +904,11 @@ export default function TeamAllocationSetupPage() {
     },
   });
 
-  // Save every editable field of one saved team (template, roles, mentor)
-  // without publishing it. The template is assigned first so the returned
-  // optimistic-lock version can be reused by the role update.
+  // Save the mentor and member roles without publishing the team.
   const saveTeamDetailsMutation = useMutation({
     mutationFn: async (payload: SaveTeamDetailsPayload) => {
       if (classId === null || sessionId === null) {
         throw new Error("Không có phiên phân nhóm.");
-      }
-      let expectedVersion = payload.teamVersion;
-      if (payload.templateChanged && payload.projectTemplateId !== null) {
-        const assigned = await teamAllocationApi.assignProjectTemplate(
-          classId,
-          sessionId,
-          payload.teamId,
-          payload.projectTemplateId,
-          payload.projectTemplateVersionId,
-        );
-        expectedVersion = assigned.version;
       }
       if (payload.rolesChanged) {
         await teamAllocationApi.updateTeamRoles(
@@ -961,7 +916,7 @@ export default function TeamAllocationSetupPage() {
           sessionId,
           payload.teamId,
           {
-            expectedVersion,
+            expectedVersion: payload.teamVersion,
             members: payload.roles.map((member) => ({
               memberId: member.memberId,
               roles: member.roles,
@@ -985,11 +940,6 @@ export default function TeamAllocationSetupPage() {
         delete next[payload.teamId];
         return next;
       });
-      setTemplateAssignErrors((current) => {
-        const next = { ...current };
-        delete next[payload.teamId];
-        return next;
-      });
       setReadiness(null);
       setReadinessError(null);
       await Promise.all([
@@ -1004,18 +954,6 @@ export default function TeamAllocationSetupPage() {
     },
     onError: (error, payload) => {
       const failure = getApiFailure(error);
-      if (
-        failure.code === "ERR_TEAM_CAPACITY_EXCEEDED" ||
-        failure.code === "ERR_TEAM_NOT_DRAFT"
-      ) {
-        const templateFailure = getTemplateFailure(error);
-        setTemplateAssignErrors((current) => ({
-          ...current,
-          [payload.teamId]: templateFailure,
-        }));
-        toast.error(templateFailure.message ?? "Không thể gán đề bài.");
-        return;
-      }
       const invalidMemberIds = failure.status === 422
         ? failure.invalidMemberIds?.length
           ? failure.invalidMemberIds
@@ -1032,61 +970,6 @@ export default function TeamAllocationSetupPage() {
       );
     },
   });
-
-  // US-10: assign the selected project template to a DRAFT team.
-  const assignTemplateMutation = useMutation({
-    mutationFn: ({
-      teamId,
-      projectTemplateId,
-      versionId,
-    }: {
-      teamId: number;
-      projectTemplateId: number;
-      versionId?: number;
-    }) => {
-      if (classId === null || sessionId === null) {
-        throw new Error("Không có phiên phân nhóm.");
-      }
-      return teamAllocationApi.assignProjectTemplate(
-        classId,
-        sessionId,
-        teamId,
-        projectTemplateId,
-        versionId,
-      );
-    },
-    onSuccess: async (updated) => {
-      setTemplateAssignErrors((current) => {
-        const next = { ...current };
-        delete next[updated.teamId];
-        return next;
-      });
-      setReadiness(null);
-      setReadinessError(null);
-      await queryClient.invalidateQueries({
-        queryKey: ["team-allocation", "teams", classId, sessionId],
-      });
-      toast.success(
-        `Đã gán đề bài “${updated.projectTemplateName ?? "đề bài"}” cho nhóm ${updated.teamName}.`,
-      );
-    },
-    onError: (error, variables) => {
-      const failure = getTemplateFailure(error);
-      setTemplateAssignErrors((current) => ({
-        ...current,
-        [variables.teamId]: failure,
-      }));
-      toast.error(failure.message ?? "Không thể gán đề bài.");
-    },
-  });
-
-  const clearTemplateAssignError = (teamId: number) => {
-    setTemplateAssignErrors((current) => {
-      const next = { ...current };
-      delete next[teamId];
-      return next;
-    });
-  };
 
   const transferMemberMutation = useMutation({
     mutationFn: ({
@@ -1194,6 +1077,7 @@ export default function TeamAllocationSetupPage() {
         assignedMentorId: rememberedMentorId,
         memberIds: [],
         memberRoles: {},
+        leaderMemberId: null,
       },
     ]);
     setMemberPickerTeamId(localId);
@@ -1244,6 +1128,7 @@ export default function TeamAllocationSetupPage() {
         memberIds: checked
           ? [...team.memberIds, memberId]
           : team.memberIds.filter((id) => id !== memberId),
+        leaderMemberId: !checked && team.leaderMemberId === memberId ? null : team.leaderMemberId,
         memberRoles: checked
           ? { ...team.memberRoles, [memberId]: "DEV" }
           : Object.fromEntries(
@@ -1284,6 +1169,7 @@ export default function TeamAllocationSetupPage() {
       teamName: team.teamName,
       assignedMentorId: team.assignedMentorId,
       memberIds: [...team.memberIds],
+      leaderMemberId: team.leaderMemberId ?? null,
       memberRoles: Object.fromEntries(
         (team.members ?? []).map((member) => [member.memberId, member.role ?? "DEV"]),
       ),
@@ -1606,8 +1492,8 @@ export default function TeamAllocationSetupPage() {
                           <h3 className="text-sm font-semibold">Xem trước chia tự động</h3>
                           <p className="text-xs text-muted-foreground">
                             {autoPreview.eligibleCount} học viên · {autoPreview.teams.length} nhóm ·
-                            sức chứa chuẩn {autoPreview.standardMax} ·
-                            {autoPreview.teams.filter((team) => team.members.length > autoPreview.standardMax).length} nhóm thêm 1 học viên do số dư.
+                            sĩ số mỗi nhóm {autoPreview.minMembers}–{autoPreview.standardMax} ·
+                            {describeAutoTeamSizes(autoPreview)}.
                             Các nhóm Draft đã lưu được giữ nguyên.
                           </p>
                         </div>
@@ -1648,8 +1534,9 @@ export default function TeamAllocationSetupPage() {
                                 })}>
                                 <ChevronDown className={`size-4 shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`} />
                                 <span className="min-w-0 flex-1 truncate">{team.teamName} · {team.members.length} học viên</span>
-                                {team.members.length > autoPreview.standardMax && (
-                                  <Badge variant="secondary" className="shrink-0">Thêm 1 do số dư</Badge>
+                                {index === autoPreview.teams.length - 1 &&
+                                  team.members.length < autoPreview.standardMax && (
+                                  <Badge variant="secondary" className="shrink-0">Nhóm phần dư</Badge>
                                 )}
                               </button>
                               {expanded && (
@@ -1774,6 +1661,25 @@ export default function TeamAllocationSetupPage() {
                                 </span>
                               )}
                             </label>
+                            {memberPickerTeam.savedTeamId === undefined && (
+                              <label className="block space-y-1 text-xs font-medium">
+                                Leader
+                                <select className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                                  value={memberPickerTeam.leaderMemberId ?? ""}
+                                  disabled={memberPickerTeam.memberIds.length === 0 || saveDraftMutation.isPending}
+                                  onChange={(event) => {
+                                    const leaderMemberId = event.target.value ? Number(event.target.value) : null;
+                                    setDraftTeams((current) => current.map((team) =>
+                                      team.localId === memberPickerTeam.localId ? { ...team, leaderMemberId } : team,
+                                    ));
+                                  }}>
+                                  <option value="">Chọn Leader khi phân vai</option>
+                                  {memberPickerTeam.memberIds.map((memberId) => (
+                                    <option key={memberId} value={memberId}>{nameForMember(memberId)}</option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
                           </div>
                           {memberPickerTeam.memberIds.length >
                             (memberPickerTeam.effectiveMaxMembers ?? session.maxMembers) && (
@@ -1990,11 +1896,7 @@ export default function TeamAllocationSetupPage() {
               {sessionId !== null &&
                 (hasPermission("PEO_TEAM_ALLOCATE") || hasPermission("PRJ_WORKSPACE_MANAGE")) && (
                 <div className="shrink-0">
-                  <MasterProjectAssignmentPanel
-                    classId={classId}
-                    sessionId={sessionId}
-                    onAssigned={() => { void teamsQuery.refetch(); }}
-                  />
+                  <ProjectAssignmentPanel key={sessionId} classId={classId} sessionId={sessionId} />
                 </div>
               )}
               <Card className="flex min-h-0 flex-1 flex-col">
@@ -2243,20 +2145,6 @@ export default function TeamAllocationSetupPage() {
                             hasPermission("PEO_TEAM_ALLOCATE") ||
                             hasPermission("PRJ_WORKSPACE_MANAGE")
                           }
-                          assignTemplatePending={assignTemplateMutation.isPending}
-                          assignTemplateError={templateAssignErrors[team.teamId]}
-                          onAssignTemplate={async (projectTemplateId, versionId) => {
-                            await assignTemplateMutation.mutateAsync({
-                              teamId: team.teamId,
-                              projectTemplateId,
-                              versionId,
-                            });
-                          }}
-                          onClearAssignTemplateError={() =>
-                            clearTemplateAssignError(team.teamId)
-                          }
-                          canCreateNewSession={hasPermission("PEO_TEAM_ALLOCATE")}
-                          onCreateNewSession={() => navigate(`/team-allocation/classes/${classId}`)}
                         />
                       ))}
                     </div>
@@ -3093,12 +2981,6 @@ function SavedTeamCard({
   leaderPending,
   onAssignLeader,
   canAssignTemplate,
-  assignTemplatePending,
-  assignTemplateError,
-  onAssignTemplate,
-  onClearAssignTemplateError,
-  canCreateNewSession,
-  onCreateNewSession,
 }: {
   classId: number;
   sessionId: number;
@@ -3134,35 +3016,12 @@ function SavedTeamCard({
   leaderPending: boolean;
   onAssignLeader: (memberId: number, memberName: string) => void;
   canAssignTemplate: boolean;
-  assignTemplatePending: boolean;
-  assignTemplateError?: TeamTemplateApiError;
-  onAssignTemplate: (projectTemplateId: number, versionId?: number) => Promise<void>;
-  onClearAssignTemplateError: () => void;
-  canCreateNewSession: boolean;
-  onCreateNewSession: () => void;
 }) {
   const [selectedToAdd, setSelectedToAdd] = useState("");
   const [selectedMentor, setSelectedMentor] = useState(
     team.assignedMentorId === null ? "" : String(team.assignedMentorId),
   );
-  const [selectedTemplate, setSelectedTemplate] = useState(
-    team.projectTemplateId == null ? "" : String(team.projectTemplateId),
-  );
-  const [selectedCandidate, setSelectedCandidate] = useState<TemplateCandidate | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(openInitially);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const identity = usePermissions();
-  const templatesQuery = useQuery({
-    queryKey: ["template-candidates", "quick-options", identity.user.email,
-      identity.activeRole, classId, sessionId, team.teamId],
-    queryFn: ({ signal }) => teamTemplateApi.search(classId, sessionId,
-      team.teamId, { q: "", level: "", category: "", page: 0, size: 50 }, signal),
-    enabled: detailsOpen && team.status === "DRAFT" && canAssignTemplate,
-    retry: false,
-  });
-  const templates = templatesQuery.data?.content ?? [];
-  const templatesLoading = templatesQuery.isLoading;
-  const templatesError = templatesQuery.isError ? "Không tải được danh sách đề bài." : null;
   const allowMultiRole = team.allowMultiRole ?? false;
   const roleQuotas = team.roleQuotas ?? [];
   const [memberRoles, setMemberRoles] = useState<Record<number, TeamMemberRole[]>>(
@@ -3173,9 +3032,10 @@ function SavedTeamCard({
       ]),
     ),
   );
-  const [localRoleErrors, setLocalRoleErrors] = useState<number[]>([]);
   const isDraft = team.status === "DRAFT";
   const isActive = team.status === "ACTIVE";
+  const canChooseLeader = canManageRoles && (isDraft || (isActive && team.leaderMemberId == null));
+  const memberEditPending = leaderPending || rolesPending || savePending || membershipPending || (isDraft && pending);
   const members = team.members?.length
     ? team.members.map((member) => ({
         ...member,
@@ -3199,29 +3059,27 @@ function SavedTeamCard({
   const mentorValue = team.assignedMentorId === null
     ? ""
     : String(team.assignedMentorId);
-  const templateValue = team.projectTemplateId == null
-    ? ""
-    : String(team.projectTemplateId);
   const mentorChanged = selectedMentor !== mentorValue;
-  const templateChanged =
-    selectedTemplate !== "" && selectedTemplate !== templateValue;
   const memberRolesChanged = members.some((member) => {
     const savedRoles = memberRolesOf(member);
     const nextRoles = memberRoles[member.memberId] ?? savedRoles;
     return nextRoles.length !== savedRoles.length ||
       nextRoles.some((role) => !savedRoles.includes(role));
   });
-  const hasPendingChanges =
-    mentorChanged || templateChanged || memberRolesChanged;
+  const rolesPayload = members.map((member) => ({
+    memberId: member.memberId,
+    roles: memberRoles[member.memberId] ?? member.roles,
+  }));
+  const validRoles = rolesPayload.every(({ roles }) => team.allowMultiRole ? roles.length > 0 : roles.length === 1);
+  const hasPendingChanges = mentorChanged || memberRolesChanged;
   const updateMemberRoles = (
     memberId: number,
     roles: TeamMemberRole[],
   ) => {
     setMemberRoles((current) => ({
       ...current,
-      [memberId]: TEAM_ROLE_OPTIONS.filter((role) => roles.includes(role)),
+      [memberId]: roles,
     }));
-    setLocalRoleErrors((current) => current.filter((id) => id !== memberId));
     onRoleChange(team.teamId, memberId);
   };
   const transferTargets = allTeams.filter((candidate) =>
@@ -3234,22 +3092,14 @@ function SavedTeamCard({
     );
   }, [team.assignedMentorId]);
   useEffect(() => {
-    setSelectedTemplate(
-      team.projectTemplateId == null ? "" : String(team.projectTemplateId),
-    );
-    setSelectedCandidate(null);
-  }, [team.projectTemplateId]);
-  useEffect(() => {
     setMemberRoles(Object.fromEntries(
       (team.members ?? []).map((member) => [
         member.memberId,
         memberRolesOf(member),
       ]),
     ));
-    setLocalRoleErrors([]);
-  }, [team.version, team.members]);
+  }, [team.members]);
   const invalidRoleMemberIds = new Set([
-    ...localRoleErrors,
     ...(roleSaveError?.invalidMemberIds ?? []),
     ...(roleSaveError?.multiRoleMemberIds ?? []),
   ]);
@@ -3318,14 +3168,8 @@ function SavedTeamCard({
         </div>
       )}
       </div>
-      <Dialog open={detailsOpen} onOpenChange={(value) => {
-        setDetailsOpen(value);
-        if (!value) setPickerOpen(false);
-      }}>
-        <DialogContent className={pickerOpen
-          ? "flex max-h-[min(90vh,850px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
-          : "flex w-[calc(100%-2rem)] max-h-[calc(90vh+50px)] flex-col overflow-hidden sm:max-w-3xl"}>
-          <div className={pickerOpen ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="max-h-[85vh] w-[calc(100vw-2rem)] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <DialogTitle className="text-2xl font-bold">{team.teamName}</DialogTitle>
@@ -3397,134 +3241,21 @@ function SavedTeamCard({
                   {team.projectTemplateId ? "Đã gán" : "Chưa gán"}
                 </Badge>
               </div>
-              {assignTemplateError && (
-                <div
-                  role="alert"
-                  className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-                >
-                  <p className="font-medium">
-                    {assignTemplateError.errorCode === "ERR_TEAM_NOT_DRAFT"
-                      ? "Nhóm không còn ở trạng thái DRAFT"
-                      : assignTemplateError.reason === "MIN_MEMBERS_NOT_MET"
-                        ? "Nhóm chưa đủ sĩ số tối thiểu"
-                        : assignTemplateError.reason === "MAX_MEMBERS_EXCEEDED"
-                          ? "Sĩ số nhóm vượt quá sức chứa của đề bài"
-                          : "Không thể gán đề bài cho nhóm"}
-                  </p>
-                  <p className="mt-1 text-muted-foreground">
-                    {assignTemplateError.message}
-                  </p>
-                  {assignTemplateError.minMembers != null &&
-                    assignTemplateError.maxMembers != null && (
-                    <p className="mt-1 text-muted-foreground">
-                      Yêu cầu {assignTemplateError.minMembers}–
-                      {assignTemplateError.maxMembers} thành viên · hiện có{" "}
-                      {assignTemplateError.memberCount ?? 0}.
-                    </p>
-                  )}
-                </div>
-              )}
-              {isDraft && (
-                <div className="flex flex-wrap gap-2">
-                  <select
-                    aria-label={`Chọn đề bài cho ${team.teamName}`}
-                    className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
-                    value={selectedTemplate}
-                    disabled={!canAssignTemplate || assignTemplatePending || templatesLoading}
-                    onChange={(event) => {
-                      setSelectedTemplate(event.target.value);
-                      setSelectedCandidate(null);
-                      onClearAssignTemplateError();
-                    }}
-                  >
-                    <option value="">
-                      {templatesLoading ? "Đang tải đề bài..." : "Chọn đề bài"}
-                    </option>
-                    {team.projectTemplateId != null && !templates.some((option) => option.templateId === team.projectTemplateId) && (
-                      <option value={team.projectTemplateId}>
-                        {team.projectTemplateName ?? `#${team.projectTemplateId}`}
-                      </option>
-                    )}
-                    {templates.map((option) => (
-                      <option key={option.templateId} value={option.templateId}>
-                        {option.name} ({option.minMembers}–{option.maxMembers} thành viên)
-                      </option>
-                    ))}
-                    {selectedCandidate && !templates.some((option) => option.templateId === selectedCandidate.templateId) && (
-                      <option value={selectedCandidate.templateId}>
-                        {selectedCandidate.name} ({selectedCandidate.minMembers}–{selectedCandidate.maxMembers} thành viên)
-                      </option>
-                    )}
-                  </select>
-                  <Button type="button" size="sm" variant="outline"
-                    disabled={!canAssignTemplate || assignTemplatePending}
-                    onClick={() => setPickerOpen(true)}>
-                    <Search className="size-4" /> Tìm đề bài
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={
-                      !canAssignTemplate ||
-                      assignTemplatePending ||
-                      !selectedTemplate ||
-                      selectedTemplate ===
-                        (team.projectTemplateId == null
-                          ? ""
-                          : String(team.projectTemplateId))
-                    }
-                    onClick={() => {
-                      const candidate: TemplateCandidate | undefined = selectedCandidate ?? templates.find(
-                        (option) => option.templateId === Number(selectedTemplate));
-                      void onAssignTemplate(Number(selectedTemplate), candidate?.versionId).catch(() => {});
-                    }}
-                  >
-                    {assignTemplatePending
-                      ? <LoaderCircle className="size-4 animate-spin" />
-                      : <Save className="size-4" />}
-                    Gán đề bài
-                  </Button>
-                </div>
-              )}
-              {isDraft && selectedCandidate && templateChanged && (
-                <p role="status" className="rounded-md bg-primary/5 px-3 py-2 text-xs text-primary">
-                  Đang chọn “{selectedCandidate.name}” ({selectedCandidate.version}). Bấm Gán đề bài hoặc Lưu để xác nhận.
-                </p>
-              )}
-              {templatesError && (
-                <p className="text-xs text-destructive">{templatesError}</p>
-              )}
-              {!isDraft && (
-                <div className="space-y-1.5 rounded-lg bg-muted/50 p-2.5">
-                  <p className="text-xs text-muted-foreground">
-                    Nhóm đang ở trạng thái <strong>{team.status}</strong> nên không thể đổi
-                    đề bài. Đề bài chỉ được gán khi nhóm còn ở trạng thái DRAFT (trước khi
-                    publish phiên).
-                  </p>
-                  {canCreateNewSession ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setDetailsOpen(false);
-                        onCreateNewSession();
-                      }}
-                    >
-                      <Plus className="size-4" />
-                      Tạo phiên phân nhóm mới để gán đề bài
-                    </Button>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Liên hệ Mentor/Program Manager để tạo phiên phân nhóm mới.
-                    </p>
-                  )}
-                </div>
-              )}
-              {!canAssignTemplate && isDraft && (
-                <p className="text-xs text-muted-foreground">
-                  Bạn không có quyền gán đề bài cho nhóm này.
-                </p>
-              )}
+              <p className="text-sm font-medium">
+                {team.projectTemplateName ?? "Chưa gán đề bài"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Sĩ số hiện tại: {team.memberCount ?? team.memberIds.length} thành viên
+                {team.minMembers != null && team.maxMembers != null
+                  ? ` · Đề bài yêu cầu ${team.minMembers}–${team.maxMembers} thành viên`
+                  : ""}
+              </p>
+              {canAssignTemplate && (isDraft || isActive) && <Button size="sm" variant="outline" asChild>
+                <Link to={"/team-allocation/classes/" + classId + "/assign?sessionId=" + sessionId
+                  + "&teamId=" + team.teamId}>
+                  Gán Master Project
+                </Link>
+              </Button>}
             </div>
             {team.projectTemplateId == null && (
               <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -3572,8 +3303,6 @@ function SavedTeamCard({
                     const selectedRoles = memberRoles[member.memberId]
                       ?? memberRolesOf(member);
                     const leader = team.leaderMemberId === member.memberId;
-                    const canAssignLeader = isDraft &&
-                      (canManageMembers || canManageRoles) && !leader;
                     return (
                     <li key={member.memberId}>
                       <Tooltip>
@@ -3588,102 +3317,25 @@ function SavedTeamCard({
                         <span className="min-w-0 truncate font-medium">{member.fullName}{member.userCode ? ` · ${member.userCode}` : ""}</span>
                         {leader && <Badge className="shrink-0">Leader</Badge>}
                       </span>
-                      <span className="flex shrink-0 items-center gap-2">
+                      <span className="flex flex-wrap items-center gap-2">
+                        {canChooseLeader && !leader && (
+                          <Button type="button" size="sm" variant="outline" disabled={memberEditPending}
+                            onClick={() => onAssignLeader(member.memberId, member.fullName)}>
+                            <ShieldCheck className="size-4" /> Chỉ định Leader
+                          </Button>
+                        )}
                         {canManageRoles ? (
-                          allowMultiRole ? (
-                            <details
-                              className={`relative min-w-36 rounded-md ${
-                                invalidRoleMemberIds.has(member.memberId)
-                                  ? "ring-1 ring-destructive"
-                                  : ""
-                              }`}
-                            >
-                              <summary
-                                className="flex h-8 cursor-pointer list-none items-center justify-between gap-2 rounded-md border bg-background px-2 text-xs font-medium [&::-webkit-details-marker]:hidden"
-                                aria-label={`Chọn nhiều vai trò cho ${member.fullName}`}
-                              >
-                                <span className="max-w-28 truncate">
-                                  {selectedRoles.length > 0
-                                    ? selectedRoles.map((role) => TEAM_ROLE_LABEL[role]).join(", ")
-                                    : "Chọn vai trò"}
-                                </span>
-                                <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-                              </summary>
-                              <div
-                                role="group"
-                                aria-label={`Vai trò của ${member.fullName}`}
-                                className="absolute right-0 z-20 mt-1 min-w-44 rounded-md border bg-popover p-2 text-popover-foreground shadow-lg"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                {TEAM_ROLE_OPTIONS.map((role) => (
-                                  <label
-                                    key={role}
-                                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs font-medium hover:bg-muted"
-                                  >
-                                    <Checkbox
-                                      checked={selectedRoles.includes(role)}
-                                      disabled={rolesPending}
-                                      onCheckedChange={(checked) => updateMemberRoles(
-                                        member.memberId,
-                                        checked
-                                          ? [...selectedRoles, role]
-                                          : selectedRoles.filter((selectedRole) => selectedRole !== role),
-                                      )}
-                                      aria-label={`${TEAM_ROLE_LABEL[role]} của ${member.fullName}`}
-                                    />
-                                    {TEAM_ROLE_LABEL[role]}
-                                  </label>
-                                ))}
-                              </div>
-                            </details>
-                          ) : (
-                            <span
-                              role="radiogroup"
-                              aria-label={`Vai trò của ${member.fullName}`}
-                              className={`flex flex-wrap items-center gap-2 rounded-md ${
-                                invalidRoleMemberIds.has(member.memberId)
-                                  ? "ring-1 ring-destructive"
-                                  : ""
-                              }`}
-                            >
-                              <label className="flex cursor-pointer items-center gap-1 text-xs font-medium">
-                                <input
-                                  type="radio"
-                                  name={`team-${team.teamId}-member-${member.memberId}-role`}
-                                  value=""
-                                  checked={selectedRoles.length === 0}
-                                  disabled={rolesPending}
-                                  onChange={() => updateMemberRoles(member.memberId, [])}
-                                />
-                                Chưa gán
-                              </label>
-                              {TEAM_ROLE_OPTIONS.map((role) => (
-                                <label key={role} className="flex cursor-pointer items-center gap-1 text-xs font-medium">
-                                  <input
-                                    type="radio"
-                                    name={`team-${team.teamId}-member-${member.memberId}-role`}
-                                    value={role}
-                                    checked={selectedRoles[0] === role}
-                                    disabled={rolesPending}
-                                    onChange={() => updateMemberRoles(member.memberId, [role])}
-                                  />
-                                  {TEAM_ROLE_LABEL[role]}
-                                </label>
-                              ))}
-                            </span>
-                          )
+                          <span className={invalidRoleMemberIds.has(member.memberId) ? "rounded-md ring-1 ring-destructive" : undefined}>
+                            <TeamMemberRoleInput label={`Vai trò của ${member.fullName}`} selected={selectedRoles}
+                              multiple={allowMultiRole} disabled={memberEditPending} placeholder="Chọn vai trò"
+                              onChange={(roles) => updateMemberRoles(member.memberId, roles)} />
+                          </span>
                         ) : (
                           <span className="flex flex-wrap gap-1">
-                            {selectedRoles.length === 0 ? (
-                              <Badge variant="outline">Chưa gán</Badge>
-                            ) : selectedRoles.map((role) => (
-                              <Badge key={role} variant="secondary">{role}</Badge>
-                            ))}
+                            {selectedRoles.length === 0 ? <Badge variant="outline">Chưa gán</Badge>
+                              : selectedRoles.map((role) => <Badge key={role} variant="secondary">{role}</Badge>)}
                           </span>
                         )}
-                        <span className="text-xs text-muted-foreground">
-                          #{member.memberId}
-                        </span>
                         {isActive && canManageMembers && (
                           <Button
                             type="button"
@@ -3725,12 +3377,6 @@ function SavedTeamCard({
                               </p>
                             </div>
                             <p className="text-xs text-muted-foreground">{team.teamName} · Thành viên trong nhóm</p>
-                            {leader ? <Badge>Leader/PM hiện tại</Badge> : canAssignLeader ? (
-                              <Button type="button" size="sm" className="w-full" disabled={leaderPending}
-                                onClick={() => onAssignLeader(member.memberId, member.fullName)}>
-                                <ShieldCheck className="size-4" /> Chỉ định làm Leader
-                              </Button>
-                            ) : null}
                           </div>
                         </TooltipContent>
                       </Tooltip>
@@ -3771,61 +3417,10 @@ function SavedTeamCard({
                       )}
                   </div>
                 )}
-                {localRoleErrors.length > 0 && (
-                  <div
-                    role="alert"
-                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-                  >
-                    Vui lòng chọn ít nhất một vai trò cho mỗi thành viên
-                    {localRoleErrors.length > 0 ? ` (${localRoleErrors.length} thành viên)` : ""}.
-                  </div>
-                )}
-                {isActive && (
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={rolesPending}
-                  onClick={() => {
-                    const missingRoleMemberIds = members
-                      .filter((member) =>
-                        (memberRoles[member.memberId]
-                          ?? memberRolesOf(member)).length === 0)
-                      .map((member) => member.memberId);
-                    const multiRoleMemberIds = allowMultiRole
-                      ? []
-                      : members
-                        .filter((member) =>
-                          (memberRoles[member.memberId]
-                            ?? memberRolesOf(member)).length > 1)
-                        .map((member) => member.memberId);
-                    if (missingRoleMemberIds.length || multiRoleMemberIds.length) {
-                      setLocalRoleErrors([
-                        ...missingRoleMemberIds,
-                        ...multiRoleMemberIds,
-                      ]);
-                      toast.error(
-                        missingRoleMemberIds.length
-                          ? "Mỗi thành viên cần ít nhất một vai trò."
-                          : "Đề bài không cho phép kiêm nhiệm vai trò.",
-                      );
-                      return;
-                    }
-                    onUpdateRoles(
-                      team.teamId,
-                      team.version,
-                      members.map((member) => ({
-                        memberId: member.memberId,
-                        roles: memberRoles[member.memberId]
-                          ?? memberRolesOf(member),
-                      })),
-                    );
-                  }}
-                >
-                  {rolesPending
-                    ? <LoaderCircle className="size-4 animate-spin" />
-                    : <Save className="size-4" />}
-                  Lưu vai trò
-                </Button>
+                {memberRolesChanged && !validRoles && (
+                  <p className="text-xs text-destructive">{allowMultiRole
+                    ? "Mỗi thành viên cần ít nhất một vai trò."
+                    : "Mỗi thành viên cần đúng một vai trò."}</p>
                 )}
               </div>
             )}
@@ -3893,26 +3488,16 @@ function SavedTeamCard({
                 </Button>
                 <Button
                   disabled={
-                    pending ||
-                    savePending ||
+                    memberEditPending ||
+                    (memberRolesChanged && !validRoles) ||
                     !hasPendingChanges
                   }
                   onClick={() => {
-                    const rolesPayload = members.map((member) => ({
-                      memberId: member.memberId,
-                      roles: memberRoles[member.memberId]
-                        ?? memberRolesOf(member),
-                    }));
                     onSaveAll({
                       teamId: team.teamId,
                       teamVersion: team.version,
                       mentorId: selectedMentor ? Number(selectedMentor) : null,
                       mentorChanged,
-                      projectTemplateId: selectedTemplate
-                        ? Number(selectedTemplate)
-                        : null,
-                      projectTemplateVersionId: selectedCandidate?.versionId,
-                      templateChanged,
                       rolesChanged: memberRolesChanged,
                       roles: rolesPayload,
                     });
@@ -3925,19 +3510,14 @@ function SavedTeamCard({
                 </Button>
               </>
             )}
+            {isActive && canManageRoles && (
+              <Button disabled={memberEditPending || !memberRolesChanged || !validRoles}
+                onClick={() => onUpdateRoles(team.teamId, team.version, rolesPayload)}>
+                {rolesPending ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}
+                Lưu vai trò
+              </Button>
+            )}
           </DialogFooter>
-          </div>
-          <TemplatePickerPanel classId={classId} sessionId={sessionId}
-            teamId={team.teamId} teamName={team.teamName}
-            memberCount={team.memberIds.length} active={pickerOpen}
-            selectedTemplateId={selectedTemplate ? Number(selectedTemplate) : null}
-            onBack={() => setPickerOpen(false)}
-            onSelect={(candidate) => {
-              setSelectedTemplate(String(candidate.templateId));
-              setSelectedCandidate(candidate);
-              onClearAssignTemplateError();
-              setPickerOpen(false);
-            }} />
         </DialogContent>
       </Dialog>
     </>

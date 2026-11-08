@@ -65,10 +65,11 @@ export function ProjectTemplateDetailPage() {
     ? versionQuery.data?.template : template;
   const canEdit = options.isSuccess && options.data?.canUpdate === true && !query.isError && !!template?.editable
     && options.hasPermission("PROJECT_TEMPLATE_UPDATE");
-  const canActivate = options.isSuccess && options.data?.canActivate === true && !query.isError
-    && template?.readOnly !== true
-    && template?.status === "DRAFT" && (options.activeRole === "ADMIN" || options.activeRole === "PROGRAM_MANAGER")
+  const canActivateTemplate = options.isSuccess && options.data?.canActivate === true && !query.isError
+    && !!template && !template.readOnly && template.status !== "ARCHIVED"
+    && (options.activeRole === "ADMIN" || options.activeRole === "PROGRAM_MANAGER")
     && options.hasPermission("PROJECT_TEMPLATE_ACTIVATE");
+  const canActivate = canActivateTemplate && template?.status === "DRAFT";
   const canArchive = options.isSuccess && options.data?.canArchive === true && !query.isError
     && template?.readOnly !== true
     && template?.status === "ACTIVE" && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE");
@@ -164,7 +165,6 @@ export function ProjectTemplateDetailPage() {
                         {[
                           ["Domain / category", template.category],
                           ["Level", templateLevelLabel(template.level)],
-                          ["Technical stack", template.technologyStack || "Not specified"],
                           ["Estimated duration", template.estimatedDurationWeeks == null ? "—" : `${template.estimatedDurationWeeks} weeks`],
                           ["Tenant", options.data?.tenantName],
                           ["Created at", formatDate(template.createdAt)],
@@ -194,6 +194,7 @@ export function ProjectTemplateDetailPage() {
                   <TemplateSampleContentPanel templateId={template.id} editable={canEdit} />
                 </TabsContent>
                 <TabsContent value="modules"><TemplateModulesPanel templateId={template.id}
+                  canActivate={canActivateTemplate}
                   canCreate={!!options.data?.canCreate && !template.readOnly && template.status !== "ARCHIVED"} /></TabsContent>
                 <TabsContent value="resources">
                   {!options.hasPermission("PROJECT_TEMPLATE_VERSION_READ") ? <Alert><AlertDescription>Version access is required to view resources.</AlertDescription></Alert>

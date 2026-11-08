@@ -26,6 +26,10 @@ function errorDetails(error: unknown): { message: string; fields: Record<string,
     if (body?.errors && typeof body.errors === "object") {
       for (const [key, value] of Object.entries(body.errors)) if (typeof value === "string") fields[key] = value;
     }
+    if (fields.repositoryWebUrl) {
+      fields.repositoryUrl = "For this self-hosted SSH server, use its HTTPS clone URL so the repository page can be opened.";
+      delete fields.repositoryWebUrl;
+    }
     return {
       message: status === 403 ? "You do not have permission to access this repository or perform this action."
         : status === 409 ? "Another user changed the repository. Reload the latest configuration before saving."
@@ -45,7 +49,7 @@ export function WorkspaceGitRepositoryPanel({ workspaceId }: { workspaceId: numb
   const query = useQuery({ queryKey: key, queryFn: ({ signal }) => workspaceGitApi.get(workspaceId, signal), retry: false });
   const [editing, setEditing] = useState(false);
   const [confirmUnlink, setConfirmUnlink] = useState<number | null>(null);
-  const [form, setForm] = useState<WorkspaceGitInput>({ version: 0, repositoryUrl: "", defaultBranch: "main", repositoryWebUrl: "" });
+  const [form, setForm] = useState<WorkspaceGitInput>({ version: 0, repositoryUrl: "", defaultBranch: "main" });
   const success = (config: WorkspaceGitConfig, message: string) => {
     client.setQueryData(key, config);
     setEditing(false); setConfirmUnlink(null);

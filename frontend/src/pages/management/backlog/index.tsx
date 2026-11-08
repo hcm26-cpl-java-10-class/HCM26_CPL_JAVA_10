@@ -38,7 +38,8 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import type { DragEvent } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { extractErrorMessage } from "../sprint/hooks/useSprintPlanningBoard";
 import { sprintSchema } from "../sprint/sprint.schema";
@@ -254,6 +255,7 @@ export function BacklogBoard({
   workspaceId,
 }: BacklogBoardProps) {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { hasAllPermissions, user } = usePermissions();
 
   const canCreate = !readOnly && hasAllPermissions(["SPRINT_CREATE"]);
@@ -527,7 +529,47 @@ export function BacklogBoard({
     projectNames,
     scopedProjectId,
     sprints,
+    teamId,
     taskKeyPrefix,
+  ]);
+
+  useEffect(() => {
+    const rawItemId = searchParams.get("itemId");
+    const boardLoading = teamId != null ? teamQuery.isLoading : itemsQuery.isLoading;
+    const boardError = teamId != null ? teamQuery.isError : itemsQuery.isError;
+    if (
+      !rawItemId ||
+      boardLoading ||
+      boardError
+    ) {
+      return;
+    }
+
+    const itemId = Number(rawItemId);
+    const section = Number.isSafeInteger(itemId)
+      ? sections.find((candidate) => candidate.allItems.some((item) => item.id === itemId))
+      : undefined;
+    const item = section?.allItems.find((candidate) => candidate.id === itemId);
+
+    if (!item || !section) {
+      toast.error("Could not find the backlog item linked from this notification.");
+    } else {
+      setDetailItem(item);
+      setCollapsed((previous) => ({ ...previous, [section.key]: false }));
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("itemId");
+    setSearchParams(nextParams, { replace: true });
+  }, [
+    teamQuery.isError,
+    teamQuery.isLoading,
+    itemsQuery.isError,
+    itemsQuery.isLoading,
+    searchParams,
+    sections,
+    setSearchParams,
+    teamId,
   ]);
 
   const allCollapsed =

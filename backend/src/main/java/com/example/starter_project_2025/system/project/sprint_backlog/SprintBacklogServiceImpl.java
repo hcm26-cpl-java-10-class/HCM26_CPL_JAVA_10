@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -49,7 +50,7 @@ import java.util.UUID;
  *     AC03); a milestone of another project than the sprint is rejected
  *     (422)</li>
  *     <li>title mandatory, 1..200 characters (422)</li>
- *     <li>description optional, at most 2000 characters (422)</li>
+ *     <li>description optional, at most 1000 characters (422)</li>
  *     <li>start date &lt; end date when both are provided (422)</li>
  *     <li>status one of {@link SprintBacklogStatus}; the team may move an item
  *     to <em>any</em> status of the workflow (no forward-only transition matrix)</li>
@@ -72,7 +73,7 @@ public class SprintBacklogServiceImpl
         implements SprintBacklogService {
 
     static final int MAX_TITLE_LENGTH = 200;
-    static final int MAX_DESCRIPTION_LENGTH = 2000;
+    static final int MAX_DESCRIPTION_LENGTH = 1000;
 
     static final String SPRINT_ID_FIELD = "sprintId";
     static final String PROJECT_ID_FIELD = "projectId";
@@ -258,7 +259,12 @@ public class SprintBacklogServiceImpl
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
         validateTitle(title, errors);
-        validateDescription(description, errors);
+        // Preserve existing longer descriptions on unrelated partial updates.
+        // New or changed descriptions must obey the current character limit.
+        if (request.getDescription() != null
+                && !Objects.equals(description, backlog.getDescription())) {
+            validateDescription(description, errors);
+        }
         validateDates(startDate, endDate, errors);
         validateReporter(reporterId, errors);
         validateEstimatedHours(estimatedHours, errors);
