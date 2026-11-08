@@ -150,7 +150,10 @@ export default function EnrollmentManagementPage() {
                                                     </p>
                                                 )}
                                                 <EnrollmentProgressBar enrollmentId={enrollment.id} />
-                                                <Button asChild className="w-full">
+                                                <Button
+                                                    asChild
+                                                    className="w-full bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+                                                >
                                                     <Link to={`/enrollments/${enrollment.id}/learn`}>
                                                         <BookOpen className="size-4" /> Continue learning
                                                     </Link>
