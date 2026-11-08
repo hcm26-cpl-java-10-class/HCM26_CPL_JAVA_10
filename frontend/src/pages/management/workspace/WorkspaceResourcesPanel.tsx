@@ -31,9 +31,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { normalizeExternalUrl } from "@/lib/utils";
+import { ResourceFormDialog } from "@/components/resources/ResourceFormDialog";
 import { WorkspaceEmptyState, getWorkspaceError } from "./workspace.shared";
 import { WorkspaceSectionState, sectionForbidden } from "./WorkspaceSectionState";
-import { WorkspaceResourceDialog } from "./WorkspaceResourceDialog";
 
 function humanSize(bytes: number) {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -45,14 +45,6 @@ function formatDate(value?: string | null) {
   if (!value) return "Not available";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString("en-GB");
-}
-
-function categoryLabel(resource: WorkspaceResource) {
-  const raw = resource.category?.trim();
-  if (raw) return raw;
-  if (resource.url?.toLowerCase().includes("github")) return "Git";
-  if (resource.url?.toLowerCase().includes("docs.google")) return "Docs";
-  return resource.kind === "FILE" ? "Document" : "Link";
 }
 
 /**
@@ -129,7 +121,7 @@ export function WorkspaceResourcesPanel({
   const visibleItems = data.items.filter((item) => {
     if (kindFilter !== "ALL" && item.kind !== kindFilter) return false;
     if (!normalizedSearch) return true;
-    return [item.title, item.description, item.category, item.url, ...item.files.map((file) => file.fileName)]
+    return [item.title, item.description, item.url, ...item.files.map((file) => file.fileName)]
       .some((value) => value?.toLowerCase().includes(normalizedSearch));
   });
   const groups = new Map<string, WorkspaceResource[]>();
@@ -486,7 +478,7 @@ export function WorkspaceResourcesPanel({
                               ) : (
                                 <p className="min-w-0 break-words font-medium">{resource.title}</p>
                               )}
-                              <Badge variant="outline">{categoryLabel(resource)}</Badge>
+                              <Badge variant="outline">{resource.kind}</Badge>
                             </div>
                             {resource.description && (
                               <p className="break-words text-xs leading-5 text-muted-foreground">{resource.description}</p>
@@ -548,9 +540,13 @@ export function WorkspaceResourcesPanel({
         </>
       )}
 
-      <WorkspaceResourceDialog
+      <ResourceFormDialog
         open={dialogOpen}
         onOpenChange={(value) => { if (!saving) setDialogOpen(value); }}
+        idPrefix="workspace-resource"
+        modalTitle={editing ? "Edit workspace resource" : "Add workspace resource"}
+        modalDescription="Resources are shared with the team in this workspace. Files are downloaded through short-lived links."
+        submitLabel={editing ? "Save changes" : "Add resource"}
         resource={editing}
         collection={data}
         saving={saving}
