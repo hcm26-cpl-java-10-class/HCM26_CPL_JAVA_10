@@ -340,7 +340,11 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
   if (course.enrolled) {
     if (enrollment) {
       action = (
-        <Button asChild size="lg" className="w-full">
+        <Button
+          asChild
+          size="lg"
+          className="w-full bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+        >
           <Link to={`/enrollments/${enrollment.id}/learn`}>
             <PlayCircle className="size-5" /> Continue learning
           </Link>
@@ -370,7 +374,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
     action = (
       <Button
         size="lg"
-        className="w-full"
+        className="w-full bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
         disabled={enrollMutation.isPending}
         onClick={() => enrollMutation.mutate(course.id)}
       >

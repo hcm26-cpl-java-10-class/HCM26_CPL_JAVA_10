@@ -148,7 +148,7 @@ export function CourseCard({
             </Button>
           )}
           {showEnrollmentAction && (course.enrolled && enrollmentId !== undefined ? (
-            <Button asChild className="flex-1">
+            <Button asChild className="flex-1 bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700">
               <Link to={`/enrollments/${enrollmentId}/learn`}>
                 <PlayCircle className="size-4" /> Continue learning
               </Link>
@@ -156,7 +156,11 @@ export function CourseCard({
           ) : (
             <>
               {!course.enrolled && canEnroll && (
-                <Button className="flex-1" disabled={isEnrolling} onClick={() => onEnroll(course.id)}>
+                <Button
+                  className="flex-1 bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+                  disabled={isEnrolling}
+                  onClick={() => onEnroll(course.id)}
+                >
                   {isEnrolling ? "Enrolling..." : "Enroll"}
                 </Button>
               )}
