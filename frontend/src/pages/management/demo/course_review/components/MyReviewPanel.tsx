@@ -85,6 +85,11 @@ export function MyReviewPanel({
 }: MyReviewPanelProps) {
   const [rating, setRating] = useState(review.rating);
   const [comment, setComment] = useState(review.comment ?? "");
+  const [isExpanded, setIsExpanded] = useState(false);
+  const COMMENT_PREVIEW_LENGTH = 180;
+
+  const shouldShowMore =
+    (review.comment?.length ?? 0) > COMMENT_PREVIEW_LENGTH;
 
   const handleCancel = () => {
     setRating(review.rating);
@@ -125,15 +130,29 @@ export function MyReviewPanel({
         </div>
 
         {review.comment ? (
-          <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
-            {review.comment}
-          </p>
-        ) : (
-          <p className="text-sm italic text-muted-foreground">
-            No written comment.
-          </p>
-        )}
-      </div>
+            <div>
+                <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                {isExpanded || !shouldShowMore
+                    ? review.comment
+                    : `${review.comment.slice(0, COMMENT_PREVIEW_LENGTH).trimEnd()}...`}
+                </p>
+
+                {shouldShowMore && (
+                <button
+                    type="button"
+                    onClick={() => setIsExpanded((prev) => !prev)}
+                    className="mt-2 text-sm font-medium text-primary hover:underline"
+                >
+                    {isExpanded ? "Show less" : "Show more"}
+                </button>
+                )}
+            </div>
+            ) : (
+            <p className="text-sm italic text-muted-foreground">
+                No written comment.
+            </p>
+            )}
+        </div>
     );
   }
 
