@@ -294,6 +294,17 @@ function getStoredKey(
   return ref.current.key;
 }
 
+function describeAutoTeamSizes(preview: AutoAllocationPreview): string {
+  const counts = new Map<number, number>();
+  for (const team of preview.teams) {
+    counts.set(team.members.length, (counts.get(team.members.length) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort(([a], [b]) => b - a)
+    .map(([size, teams]) => `${teams} nhóm ${size} người`)
+    .join(", ");
+}
+
 export default function TeamAllocationSetupPage() {
   const { hasPermission } = usePermissions();
   const { classId: classIdParam } = useParams<{ classId: string }>();
@@ -1481,17 +1492,10 @@ export default function TeamAllocationSetupPage() {
                           <h3 className="text-sm font-semibold">Xem trước chia tự động</h3>
                           <p className="text-xs text-muted-foreground">
                             {autoPreview.eligibleCount} học viên · {autoPreview.teams.length} nhóm ·
-                            sức chứa chuẩn {autoPreview.standardMax} ·
-                            {autoPreview.eligibleCount % autoPreview.standardMax > 0
-                              ? `nhóm phần dư có ${autoPreview.eligibleCount % autoPreview.standardMax} học viên.`
-                              : "không có học viên dư."}
+                            sĩ số mỗi nhóm {autoPreview.minMembers}–{autoPreview.standardMax} ·
+                            {describeAutoTeamSizes(autoPreview)}.
                             Các nhóm Draft đã lưu được giữ nguyên.
                           </p>
-                          {autoPreview.eligibleCount % autoPreview.standardMax > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              Nhóm phần dư có thể cần điều chỉnh thành viên để đáp ứng sĩ số tối thiểu của đề bài trước khi công bố.
-                            </p>
-                          )}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" size="sm" variant="outline"

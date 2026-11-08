@@ -43,15 +43,14 @@ public class AutoAllocationService {
     public AutoAllocationPreview preview(Long classId, Long sessionId, Authentication actor) {
         TeamAllocationSession session = session(classId, sessionId, actor, false);
         List<ClassMember> eligible = eligible(session);
-        validateCapacity(session, eligible);
+        ProjectTemplateConstraints.Capacity window = capacityWindow(session);
         if (eligible.isEmpty()) {
             throw new AutoAllocationException(HttpStatus.CONFLICT, "ERR_NO_ELIGIBLE_MEMBERS",
                     "Không còn học viên hợp lệ chưa có nhóm trong phiên này.");
         }
-        Collections.shuffle(eligible, new SecureRandom());
-        int max = session.getMaxMembers();
         int count = eligible.size();
-        List<Integer> sizes = AutoAllocationMath.teamSizes(count, max);
+        List<Integer> sizes = sizes(count, window);
+        Collections.shuffle(eligible, new SecureRandom());
         List<AutoAllocationPreview.Team> result = new ArrayList<>();
         int offset = 0;
         for (int i = 0; i < sizes.size(); i++) {
@@ -62,7 +61,8 @@ public class AutoAllocationService {
             result.add(new AutoAllocationPreview.Team("Nhóm tự động " + (i + 1), members));
             offset += size;
         }
-        return new AutoAllocationPreview(sessionId, max, count, fingerprint(session, eligible), result);
+        return new AutoAllocationPreview(sessionId, window.maxMembers(), window.minMembers(), count,
+                fingerprint(session, window, eligible), result);
     }
 
     @Transactional
@@ -75,14 +75,16 @@ public class AutoAllocationService {
             classMembers.findAllByIdInAndStatusForUpdate(classId, activeIds, ClassMemberStatus.ACTIVE);
         }
         List<ClassMember> eligible = eligible(session);
-        validateCapacity(session, eligible);
+        ProjectTemplateConstraints.Capacity window = capacityWindow(session);
         if (request == null || request.teams() == null || request.teams().isEmpty()
-                || request.fingerprint() == null || !request.fingerprint().equals(fingerprint(session, eligible))) {
+                || request.fingerprint() == null
+                || !request.fingerprint().equals(fingerprint(session, window, eligible))) {
             throw stale();
         }
-        int max = session.getMaxMembers();
+        int max = window.maxMembers();
         int count = eligible.size();
-        List<Integer> sizes = AutoAllocationMath.teamSizes(count, max);
+        if (count == 0) throw stale();
+        List<Integer> sizes = sizes(count, window);
         int groups = sizes.size();
         if (request.teams().size() != groups) throw stale();
         Map<Long, ClassMember> byId = eligible.stream().collect(Collectors.toMap(ClassMember::getId, Function.identity()));
@@ -176,22 +178,43 @@ public class AutoAllocationService {
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
-    private void validateCapacity(TeamAllocationSession session, List<ClassMember> eligible) {
-        long activeCount = classMembers.findAllByTrainingClass_IdAndStatusOrderByIdAsc(
-                session.getTrainingClass().getId(), ClassMemberStatus.ACTIVE).stream()
-                .filter(AllocationStudentEligibility::isEligible).count();
-        if (session.getMaxMembers() == null || session.getMaxMembers() <= 0
-                || session.getMaxMembers() > activeCount || session.getMaxMembers() == Integer.MAX_VALUE) {
+    /**
+     * Team size window for auto allocation: the session capacity is the upper
+     * bound (it may override the template), the template {@code min_members}
+     * is the lower bound so generated teams pass the publish readiness check.
+     */
+    private ProjectTemplateConstraints.Capacity capacityWindow(TeamAllocationSession session) {
+        Integer max = session.getMaxMembers();
+        if (max == null || max <= 0 || max == Integer.MAX_VALUE) {
             throw new AutoAllocationException(HttpStatus.UNPROCESSABLE_ENTITY,
                     "ERR_INVALID_TEAM_SIZE", "Số lượng thành viên/nhóm không hợp lệ.");
         }
+        ProjectTemplate template = session.getProjectTemplate();
+        int min = template == null || template.getConstraintsJson() == null
+                || template.getConstraintsJson().isBlank()
+                ? ProjectTemplateConstraints.DEFAULT_MIN_MEMBERS
+                : ProjectTemplateConstraints.parse(mapper, template, max).minMembers();
+        if (min > max) {
+            throw new AutoAllocationException(HttpStatus.UNPROCESSABLE_ENTITY, "ERR_INVALID_TEAM_SIZE",
+                    "Sĩ số tối đa của phiên (" + max + ") nhỏ hơn sĩ số tối thiểu của đề bài (" + min + ").");
+        }
+        return new ProjectTemplateConstraints.Capacity(min, max);
     }
 
-    private String fingerprint(TeamAllocationSession session, List<ClassMember> members) {
+    private List<Integer> sizes(int count, ProjectTemplateConstraints.Capacity window) {
+        return AutoAllocationMath.teamSizes(count, window.minMembers(), window.maxMembers())
+                .orElseThrow(() -> new AutoAllocationException(HttpStatus.UNPROCESSABLE_ENTITY,
+                        "ERR_ALLOCATION_INFEASIBLE",
+                        "Không thể chia " + count + " học viên thành các nhóm " + window.window()
+                                + " người. Hãy điều chỉnh sĩ số tối đa của phiên hoặc phân nhóm thủ công."));
+    }
+
+    private String fingerprint(TeamAllocationSession session, ProjectTemplateConstraints.Capacity window,
+            List<ClassMember> members) {
         String existingTeams = teams.findAllByAllocationSession_IdOrderByIdAsc(session.getId()).stream()
                 .map(team -> team.getId() + ":" + team.getVersion() + ":" + team.getStatus())
                 .collect(Collectors.joining(","));
-        String source = session.getId() + ":" + session.getMaxMembers() + ":" + members.stream()
+        String source = session.getId() + ":" + window.window() + ":" + members.stream()
                 .map(member -> member.getId().toString()).sorted().collect(Collectors.joining(","))
                 + ":" + existingTeams;
         try {
