@@ -46,13 +46,11 @@ public class ProjectResourceServiceImpl
     static final int MAX_TITLE_LENGTH = 255;
     static final int MAX_DESCRIPTION_LENGTH = 1000;
     static final int MAX_URL_LENGTH = 1000;
-    static final int MAX_CATEGORY_LENGTH = 50;
 
     static final String TITLE_FIELD = "title";
     static final String DESCRIPTION_FIELD = "description";
     static final String KIND_FIELD = "kind";
     static final String URL_FIELD = "url";
-    static final String CATEGORY_FIELD = "category";
     static final String ORDER_INDEX_FIELD = "orderIndex";
     static final String PROJECT_ID_FIELD = "projectId";
 
@@ -74,7 +72,7 @@ public class ProjectResourceServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        return new String[]{TITLE_FIELD, DESCRIPTION_FIELD, CATEGORY_FIELD};
+        return new String[]{TITLE_FIELD, DESCRIPTION_FIELD};
     }
 
     // ---------------------------------------------------------------------
@@ -87,7 +85,7 @@ public class ProjectResourceServiceImpl
         normalize(entity);
         resolveProject(entity, ctx);
         validate(entity.getTitle(), entity.getDescription(), entity.getKind(),
-                entity.getUrl(), entity.getCategory(), entity.getOrderIndex(), ctx);
+                entity.getUrl(), entity.getOrderIndex(), ctx);
 
         if (entity.getIsActive() == null) {
             entity.setIsActive(true);
@@ -106,17 +104,15 @@ public class ProjectResourceServiceImpl
                 ? request.getDescription().trim() : entity.getDescription();
         ResourceKind kind = request.getKind() != null ? request.getKind() : entity.getKind();
         String url = request.getUrl() != null ? request.getUrl().trim() : entity.getUrl();
-        String category = request.getCategory() != null ? request.getCategory().trim() : entity.getCategory();
         Integer orderIndex = request.getOrderIndex() != null ? request.getOrderIndex() : entity.getOrderIndex();
 
-        validate(title, description, kind, url, category, orderIndex, ctx);
+        validate(title, description, kind, url, orderIndex, ctx);
 
         // Keep the trimmed values so the mapper persists exactly what was validated.
         request.setTitle(title);
         request.setDescription(description);
         request.setKind(kind);
         request.setUrl(url);
-        request.setCategory(category);
         request.setOrderIndex(orderIndex);
     }
 
@@ -185,16 +181,11 @@ public class ProjectResourceServiceImpl
             String pattern = "%" + search.trim().toLowerCase(Locale.ROOT) + "%";
             spec = spec.and((root, query, cb) -> cb.or(
                     cb.like(cb.lower(root.get("title")), pattern),
-                    cb.like(cb.lower(root.get("description")), pattern),
-                    cb.like(cb.lower(root.get("category")), pattern)));
+                    cb.like(cb.lower(root.get("description")), pattern)));
         }
 
         if (safe.getKind() != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("kind"), safe.getKind()));
-        }
-
-        if (safe.getCategory() != null) {
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("category"), safe.getCategory()));
         }
 
         if (safe.getTitle() != null && !safe.getTitle().isBlank()) {
@@ -246,10 +237,6 @@ public class ProjectResourceServiceImpl
             entity.setUrl(entity.getUrl().trim());
         }
 
-        if (entity.getCategory() != null) {
-            entity.setCategory(entity.getCategory().trim());
-        }
-
         if (entity.getKind() == null) {
             entity.setKind(ResourceKind.LINK);
         }
@@ -280,7 +267,6 @@ public class ProjectResourceServiceImpl
                           String description,
                           ResourceKind kind,
                           String url,
-                          String category,
                           Integer orderIndex,
                           ValidationContext ctx) {
 
@@ -303,10 +289,6 @@ public class ProjectResourceServiceImpl
 
         if (url != null && url.length() > MAX_URL_LENGTH) {
             ctx.add(URL_FIELD, "Url must not exceed " + MAX_URL_LENGTH + " characters");
-        }
-
-        if (category != null && category.length() > MAX_CATEGORY_LENGTH) {
-            ctx.add(CATEGORY_FIELD, "Category must not exceed " + MAX_CATEGORY_LENGTH + " characters");
         }
 
         if (orderIndex != null && orderIndex < 0) {

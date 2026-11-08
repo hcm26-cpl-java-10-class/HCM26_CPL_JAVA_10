@@ -24,7 +24,6 @@ public final class WorkspaceResourceDtos {
                                String description,
                                String kind,
                                String url,
-                               String category,
                                Integer orderIndex,
                                LocalDateTime updatedAt,
                                Long updatedBy,
@@ -55,7 +54,6 @@ public final class WorkspaceResourceDtos {
                                   String description,
                                   String kind,
                                   String url,
-                                  String category,
                                   Integer orderIndex) {
     }
 
