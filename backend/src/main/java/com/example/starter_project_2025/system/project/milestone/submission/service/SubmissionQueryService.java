@@ -141,7 +141,8 @@ public class SubmissionQueryService {
     private SubmissionDtos.Detail toDetail(MilestoneSubmission value, SubmissionVersion current,
                                            List<SubmissionVersion> versionList, RubricVersion rubric,
                                            List<MilestoneReview> reviewList) {
-        boolean requestAllowed = canRequestChanges(value);
+        ResubmissionBlockReason blockReason = resubmissionBlockReason(value);
+        boolean requestAllowed = blockReason == null;
         Map<String, Boolean> actions = new LinkedHashMap<>();
         actions.put("accept", value.getStatus() == SubmissionStatus.SUBMITTED);
         actions.put("reject", value.getStatus() == SubmissionStatus.SUBMITTED);
@@ -150,8 +151,10 @@ public class SubmissionQueryService {
         actions.put("submit", value.getStatus() == SubmissionStatus.DRAFT
                 && submissionWindow.canSubmitNow(value.getMilestone()));
         if (value.getTeamId() == null && masterAccess.requireClassMaster(value.getProjectId()).getStatus()
-                != com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE)
+                != com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE) {
             actions.replaceAll((action, allowed) -> false);
+            if (blockReason == null) blockReason = ResubmissionBlockReason.PROJECT_NOT_ACTIVE;
+        }
 
         return new SubmissionDtos.Detail(value.getId(), value.getProjectId(), value.getMilestone().getId(),
                 value.getMilestone().getTitle(), value.getMilestone().getDescription(),
@@ -163,7 +166,10 @@ public class SubmissionQueryService {
                 value.getMilestone().getLatePolicyType().name(), value.getMilestone().getLateUntil(),
                 value.getMilestone().getLatePenaltyPercent(), value.getLockVersion(), product(value, current), map(current),
                 versionList.stream().map(this::map).toList(), map(rubric),
-                reviewList.stream().map(this::map).toList(), actions, value.getMilestone().lifecycleStatus());
+                reviewList.stream().map(this::map).toList(), actions, value.getMilestone().lifecycleStatus(),
+                blockReason,
+                blockReason == null ? null : blockReason.message(value.getSubmissionAttempts(),
+                        value.getMilestone().getMaxSubmissionAttempts()));
     }
 
     private SubmissionDtos.ProductInfo product(MilestoneSubmission submission, SubmissionVersion current) {
@@ -194,16 +200,32 @@ public class SubmissionQueryService {
     }
 
     boolean canRequestChanges(MilestoneSubmission value) {
+        return resubmissionBlockReason(value) == null;
+    }
+
+    /** Returns why changes cannot be requested for this submission, or {@code null} when they can. */
+    ResubmissionBlockReason resubmissionBlockReason(MilestoneSubmission value) {
         var milestone = value.getMilestone();
-        if (!milestone.isActive() || milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN) return false;
+        if (!milestone.isActive()) return ResubmissionBlockReason.MILESTONE_INACTIVE;
+        if (milestone.getStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneStatus.OPEN)
+            return ResubmissionBlockReason.MILESTONE_NOT_OPEN;
         if (milestone.lifecycleStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.SUBMITTED
                 && milestone.lifecycleStatus() != com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.CHANGES_REQUESTED
                 && !(milestone.lifecycleStatus() == com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.PLANNED
-                    && value.getStatus() == SubmissionStatus.SUBMITTED)) return false;
-        if (!milestone.isAllowResubmission()) return false;
+                    && value.getStatus() == SubmissionStatus.SUBMITTED))
+            return ResubmissionBlockReason.MILESTONE_NOT_UNDER_REVIEW;
+        if (!milestone.isAllowResubmission()) return ResubmissionBlockReason.RESUBMISSION_DISABLED;
         if (milestone.getMaxSubmissionAttempts() != null
-                && value.getSubmissionAttempts() >= milestone.getMaxSubmissionAttempts()) return false;
-        return true;
+                && value.getSubmissionAttempts() >= milestone.getMaxSubmissionAttempts())
+            return ResubmissionBlockReason.ATTEMPT_LIMIT_REACHED;
+        return null;
+    }
+
+    /** Human-readable explanation of {@link #resubmissionBlockReason}, or {@code null} when not blocked. */
+    String resubmissionBlockMessage(MilestoneSubmission value) {
+        ResubmissionBlockReason reason = resubmissionBlockReason(value);
+        return reason == null ? null
+                : reason.message(value.getSubmissionAttempts(), value.getMilestone().getMaxSubmissionAttempts());
     }
 
     private SubmissionDtos.Version map(SubmissionVersion value) {

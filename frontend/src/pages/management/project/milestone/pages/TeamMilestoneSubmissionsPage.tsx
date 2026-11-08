@@ -505,7 +505,7 @@ export default function TeamMilestoneSubmissionsPage() {
                               onClick={() => handleReview(latestReviewId)}
                             >
                               <ClipboardCheck className="mr-1 size-3.5" />
-                              Review
+                              Review latest submission
                               <ArrowRight className="ml-1 size-3" />
                             </Button>
                           ) : canViewCompletedReview && latestReviewId ? (
@@ -777,7 +777,7 @@ export default function TeamMilestoneSubmissionsPage() {
                   >
                     <ClipboardCheck className="size-4" />
                     {selectedSubmission.submission.status === "SUBMITTED"
-                      ? "Review submission"
+                      ? "Review latest submission"
                       : "View review result"}
                     <ArrowRight className="size-4" />
                   </Button>

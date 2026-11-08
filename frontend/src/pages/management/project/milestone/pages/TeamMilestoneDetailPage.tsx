@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, RotateCw } from "lucide-react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { milestoneApi } from "@/api/features/milestone.api";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MilestoneDetailError } from "../components/MilestoneDetailError";
 import { MilestoneDetailView } from "../components/MilestoneDetailView";
+import { getMilestoneApiError } from "../milestone.utils";
 
 export function TeamMilestoneDetailPage() {
   const { teamId: teamIdParam, milestoneId } = useParams<{ teamId: string; milestoneId: string }>();
@@ -31,7 +30,7 @@ export function TeamMilestoneDetailPage() {
 
   if (query.isPending) return <MainLayout pathName={{ milestones: "Milestone" }}><div className="mx-auto grid max-w-6xl gap-5"><Skeleton className="h-52 rounded-xl" /><Skeleton className="h-10 w-full rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div></MainLayout>;
   if (query.isError || !query.data) return <MainLayout pathName={{ milestones: "Milestone" }}>
-    <Card className="mx-auto max-w-2xl"><CardContent className="grid justify-items-start gap-4 p-6"><AlertCircle className="size-5 text-destructive" /><div><h2 className="font-semibold">Could not load milestone</h2><p className="mt-1 text-sm text-muted-foreground">The milestone may have been removed, or your account may not have access.</p></div><div className="flex gap-2"><Button variant="outline" onClick={back}><ArrowLeft />Back</Button><Button onClick={() => void query.refetch()}><RotateCw />Try again</Button></div></CardContent></Card>
+    <MilestoneDetailError error={getMilestoneApiError(query.error)} onBack={back} onRetry={() => void query.refetch()} />
   </MainLayout>;
 
   const milestone = query.data;
