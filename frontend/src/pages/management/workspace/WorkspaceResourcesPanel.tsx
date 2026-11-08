@@ -124,15 +124,17 @@ export function WorkspaceResourcesPanel({
     return [item.title, item.description, item.url, ...item.files.map((file) => file.fileName)]
       .some((value) => value?.toLowerCase().includes(normalizedSearch));
   });
-  const groups = new Map<string, WorkspaceResource[]>();
+  // One card per project: resources copied from a project template and resources
+  // added directly in the workspace are listed together, without telling them apart.
+  const groups = new Map<number, WorkspaceResource[]>();
   for (const item of visibleItems) {
-    const key = `${item.origin}:${item.sourceTemplateId ?? item.projectId}`;
-    const group = groups.get(key) ?? [];
+    const group = groups.get(item.projectId) ?? [];
     group.push(item);
-    groups.set(key, group);
+    groups.set(item.projectId, group);
   }
-  const sortedGroups = [...groups.values()].sort((first, second) =>
-    Number(second[0].origin === "PARENT") - Number(first[0].origin === "PARENT"));
+  // The workspace's own project comes first; module (sub-project) groups follow by id.
+  const sortedGroups = [...groups.entries()].sort(([firstId], [secondId]) =>
+    Number(secondId !== data.projectId) - Number(firstId !== data.projectId) || firstId - secondId);
   const empty = data.items.length === 0;
   const fileCount = data.items.reduce((total, item) => total + item.files.length, 0);
   const linkCount = data.items.filter((item) => item.kind === "LINK").length;
@@ -433,18 +435,17 @@ export function WorkspaceResourcesPanel({
             </Card>
           ) : (
             <div className="space-y-4" aria-busy={query.isFetching}>
-              {sortedGroups.map(group => {
-                const source = group[0];
-                const label = source.origin === "PARENT" ? "Master resources"
-                  : source.origin === "SUB_PROJECT" ? "Module resources" : "Project resources";
-                return <Card key={`${source.origin}:${source.sourceTemplateId ?? source.projectId}`}>
+              {sortedGroups.map(([groupId, group]) => {
+                const label = groupId === data.projectId ? "Project resources" : "Module resources";
+                const name = group[0].sourceName;
+                return <Card key={groupId}>
                   <CardHeader className="pb-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <CardTitle className="flex flex-wrap items-center gap-2 text-base">
                         <FolderOpen className="size-4 text-primary" />
                         {label}
-                        {source.sourceName && (
-                          <span className="text-sm font-normal text-muted-foreground">· {source.sourceName}</span>
+                        {name && (
+                          <span className="text-sm font-normal text-muted-foreground">· {name}</span>
                         )}
                       </CardTitle>
                       <Badge variant="secondary" className="tabular-nums">

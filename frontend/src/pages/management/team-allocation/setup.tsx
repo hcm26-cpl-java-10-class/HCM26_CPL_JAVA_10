@@ -305,6 +305,22 @@ function describeAutoTeamSizes(preview: AutoAllocationPreview): string {
     .join(", ");
 }
 
+/**
+ * Next free "Nhóm N" name, counting saved teams as well as unsaved drafts so a
+ * new team never reuses a name that already exists in the session (for example
+ * right after "Lưu nhóm DRAFT").
+ */
+function nextDraftTeamName(usedNames: Iterable<string>): string {
+  const usedNumbers = new Set<number>();
+  for (const name of usedNames) {
+    const match = /^nhóm\s*(\d+)$/i.exec(name.trim());
+    if (match) usedNumbers.add(Number(match[1]));
+  }
+  let index = 1;
+  while (usedNumbers.has(index)) index += 1;
+  return `Nhóm ${index}`;
+}
+
 export default function TeamAllocationSetupPage() {
   const { hasPermission } = usePermissions();
   const { classId: classIdParam } = useParams<{ classId: string }>();
@@ -1046,6 +1062,16 @@ export default function TeamAllocationSetupPage() {
       .filter((team) => team.status === "DRAFT" || team.status === "ACTIVE")
       .flatMap((team) => team.memberIds),
   );
+  /**
+   * Học viên đã được xếp vào một nhóm DRAFT/ACTIVE đã lưu hoặc một nhóm nháp khác.
+   * Dùng chung cho cả việc disable checkbox lẫn kiểm tra khi toggle.
+   */
+  const blockedMemberIds = new Set([
+    ...otherSavedTeamMemberIds,
+    ...draftTeams
+      .filter((team) => team.localId !== memberPickerTeam?.localId)
+      .flatMap((team) => team.memberIds),
+  ]);
   const memberById = new Map(
     [...members, ...(rosterQuery.data ?? [])].map((member) => [member.memberId, member]),
   );
@@ -1073,7 +1099,10 @@ export default function TeamAllocationSetupPage() {
       ...current,
       {
         localId,
-        teamName: `Nhóm ${current.length + 1}`,
+        teamName: nextDraftTeamName([
+          ...savedTeams.map((team) => team.teamName),
+          ...current.map((team) => team.teamName),
+        ]),
         assignedMentorId: rememberedMentorId,
         memberIds: [],
         memberRoles: {},
@@ -1112,6 +1141,14 @@ export default function TeamAllocationSetupPage() {
     const targetTeam = draftTeams.find((item) => item.localId === teamId);
     if (!targetTeam) return;
     if (checked && !targetTeam.memberIds.includes(memberId)) {
+      // Chặn cả khi checkbox bị bỏ qua: học viên đã thuộc nhóm khác trong phiên.
+      if (blockedMemberIds.has(memberId)) {
+        toast.warning(
+          "Học viên đã thuộc một nhóm khác trong phiên phân nhóm này.",
+          { duration: 2500 },
+        );
+        return;
+      }
       const maxMembers = targetTeam.effectiveMaxMembers ?? session?.maxMembers ?? 0;
       if (maxMembers > 0 && targetTeam.memberIds.length >= maxMembers) {
         toast.warning(
@@ -1851,8 +1888,7 @@ export default function TeamAllocationSetupPage() {
                               {filteredMembers.map((member) => {
                                 const selected = memberPickerTeam.memberIds.includes(member.memberId);
                                 const assignedToOtherTeam = !selected &&
-                                  (draftMemberIds.has(member.memberId) ||
-                                    otherSavedTeamMemberIds.has(member.memberId) ||
+                                  (blockedMemberIds.has(member.memberId) ||
                                     (memberPickerTeam.savedTeamId !== undefined &&
                                       (rosterQuery.data ?? []).some(
                                         (rosterMember) =>
