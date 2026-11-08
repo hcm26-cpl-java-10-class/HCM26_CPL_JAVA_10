@@ -7,6 +7,8 @@ import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.notification.NotificationService;
+import com.example.starter_project_2025.system.analytics.student.StudentLearningActivity;
+import com.example.starter_project_2025.system.analytics.student.StudentLearningActivityRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -28,6 +31,7 @@ public class LessonProgressService {
     private final LessonRepository lessonRepository;
     private final NotificationService notificationService;
     private final CertificateService certificateService;
+    private final StudentLearningActivityRepository activityRepository;
 
     @Transactional(readOnly = true)
     public LessonProgressDTO getProgress(Long userId, Long enrollmentId) {
@@ -162,6 +166,10 @@ public class LessonProgressService {
         enrollment.setLastLessonId(lessonId);
         enrollment.setLastAccessedAt(accessedAt);
         enrollmentRepository.save(enrollment);
+        StudentLearningActivity activity = new StudentLearningActivity();
+        activity.setEnrollment(enrollment);
+        activity.setOccurredAt(Instant.now());
+        activityRepository.save(activity);
     }
 
     private LessonProgressDTO buildProgress(CourseEnrollment enrollment) {
