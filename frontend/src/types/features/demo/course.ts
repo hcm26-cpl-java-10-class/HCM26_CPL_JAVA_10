@@ -49,6 +49,8 @@ export interface CatalogCourse {
   totalDuration: number;
   isFree: boolean;
   enrolled: boolean;
+  averageRating: number;
+  totalReviews: number;
 }
 
 export type CatalogSort = "createdAt,desc" | "name,asc" | "name,desc";

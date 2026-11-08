@@ -15,6 +15,7 @@ import { LessonReportDialog } from "../lesson/components/LessonReportDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { LessonProgressSidebar } from "./LessonProgressSidebar";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
+import { CourseReviewPrompt } from "../course_review/components/CourseReviewPrompt";
 
 export function CourseLearningPage() {
   const { id } = useParams();
@@ -157,18 +158,26 @@ export function CourseLearningPage() {
             />
             <main className="min-w-0 rounded-2xl border bg-card p-5 sm:p-7">
               <p className="text-sm text-muted-foreground">{progressQuery.data.courseName}</p>
-              {progressQuery.data.progressPercentage === 100 && courseCertificate?.verificationToken && (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
-                  <div>
-                    <p className="font-semibold">Course completed</p>
-                    <p className="text-sm opacity-80">Your certificate is ready.</p>
-                  </div>
-                  <Button asChild>
-                    <Link to={`/my-certificates/${encodeURIComponent(courseCertificate.verificationToken)}`}>
-                      <Award className="size-4" /> View certificate
-                    </Link>
-                  </Button>
-                </div>
+              {progressQuery.data.progressPercentage === 100 && (
+                <>
+                  {courseCertificate?.verificationToken && (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
+                      <div>
+                        <p className="font-semibold">Course completed</p>
+                        <p className="text-sm opacity-80">Your certificate is ready.</p>
+                      </div>
+                      <Button asChild>
+                        <Link to={`/my-certificates/${encodeURIComponent(courseCertificate.verificationToken)}`}>
+                          <Award className="size-4" /> View certificate
+                        </Link>
+                      </Button>
+                    </div>
+                  )}
+
+                  <CourseReviewPrompt
+                    courseId={progressQuery.data.courseId}
+                  />               
+                </>
               )}
               {currentLesson && (
                 <div className="mt-3">

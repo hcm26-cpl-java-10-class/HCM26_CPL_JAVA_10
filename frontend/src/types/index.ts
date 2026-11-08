@@ -33,3 +33,4 @@ export * from "./features/demo/qna";
 
 export * from "./features/demo/lesson-report";
 export * from "./features/demo/lesson";
+export * from "./features/demo/course_review";

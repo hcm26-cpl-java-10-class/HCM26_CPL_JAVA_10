@@ -56,6 +56,7 @@ import {
   formatTotalDuration,
   getErrorStatus,
 } from "../utils/course.utils.ts";
+import { CourseReviewsSection } from "../../course_review/components/CourseReviewsSection.tsx";
 
 const CONTENT_ICON: Record<LessonContentType, LucideIcon> = {
   VIDEO: Video,
@@ -218,15 +219,19 @@ export function CourseDetailContent({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <div className="space-y-6">
-        {hero}
-        {information}
+    <div className="space-y-6">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-6">
+          {hero}
+          {information}
+        </div>
+
+        <aside className="lg:sticky lg:top-4 lg:self-start">
+          <CourseActionCard course={course} />
+        </aside>
       </div>
 
-      <aside className="lg:sticky lg:top-4 lg:self-start">
-        <CourseActionCard course={course} />
-      </aside>
+      <CourseReviewsSection courseId={course.id} />
     </div>
   );
 }

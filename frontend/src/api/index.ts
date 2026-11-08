@@ -23,3 +23,4 @@ export * from "./features/demo/qna.api";
 export * from "./features/score-appeal.api";
 
 export * from "./features/demo/lesson-report.api";
+export * from "./features/demo/course_review.api";
