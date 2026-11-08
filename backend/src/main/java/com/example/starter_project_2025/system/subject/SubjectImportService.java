@@ -178,6 +178,68 @@ public class SubjectImportService {
         return result;
     }
 
+    /**
+     * Import subject/topics from parsed & edited row list with strict all-or-nothing rollback semantics:
+     * If ANY row fails validation or persistence, the whole operation is rejected and rolled back.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @PreAuthorize("hasAuthority('SUBJECT_CREATE')")
+    public ImportResult commitRows(List<SubjectDTO> rows) {
+        if (rows == null || rows.isEmpty()) {
+            throw new BadRequestException("Danh sách môn học không được để trống.");
+        }
+
+        Set<String> seenKeys = new HashSet<>();
+        int rowNumber = 1;
+        for (SubjectDTO row : rows) {
+            String code = row.getCode();
+            String name = row.getName();
+            String version = row.getVersion();
+            Integer duration = row.getDurationHours();
+
+            if (code == null || code.isBlank()) {
+                throw new BadRequestException("Dòng " + rowNumber + ": Mã môn học (Code) không được để trống.");
+            }
+            if (name == null || name.isBlank()) {
+                throw new BadRequestException("Dòng " + rowNumber + ": Tên môn học (Name) không được để trống.");
+            }
+            if (version == null || version.isBlank()) {
+                throw new BadRequestException("Dòng " + rowNumber + ": Phiên bản (Version) không được để trống.");
+            }
+            if (duration == null || duration <= 0) {
+                throw new BadRequestException("Dòng " + rowNumber + ": Thời lượng (Hours) phải lớn hơn 0.");
+            }
+
+            var violations = validator.validate(row, Default.class, OnCreate.class);
+            if (!violations.isEmpty()) {
+                throw new BadRequestException("Dòng " + rowNumber + ": " + violations.iterator().next().getMessage());
+            }
+
+            String normCode = SubjectIdentity.normalizeCode(code);
+            String normVersion = SubjectIdentity.normalizeVersion(version);
+            String key = normCode + "#" + normVersion;
+            if (seenKeys.contains(key)) {
+                throw new BadRequestException("Dòng " + rowNumber + ": Trùng mã và phiên bản trong danh sách: " + normCode + " (v" + normVersion + ")");
+            }
+            seenKeys.add(key);
+
+            boolean existsInDb = subjectRepository.existsByNormalizedIdentity(
+                    normCode, SubjectIdentity.versionAliases(normVersion), null);
+            if (existsInDb) {
+                throw new BadRequestException("Dòng " + rowNumber + ": Môn học với mã '" + normCode + "' phiên bản '" + normVersion + "' đã tồn tại trong hệ thống.");
+            }
+
+            rowNumber++;
+        }
+
+        ImportResult result = new ImportResult();
+        for (SubjectDTO row : rows) {
+            subjectService.create(row);
+            result.setSuccessCount(result.getSuccessCount() + 1);
+        }
+        return result;
+    }
+
     private List<Map<String, String>> parseFile(MultipartFile file) {
         try (InputStream input = file.getInputStream()) {
             return parserFactory.getParser(file.getOriginalFilename()).parse(input);

@@ -105,6 +105,13 @@ public class SubjectController
         return subjectImportService.importFile(file);
     }
 
+    @PostMapping("/import/commit")
+    @PreAuthorize("hasAuthority('SUBJECT_CREATE')")
+    @Operation(summary = "Import dữ liệu môn học đã qua preview và chỉnh sửa")
+    public ImportResult commitImport(@RequestBody List<SubjectDTO> items) {
+        return subjectImportService.commitRows(items);
+    }
+
     @GetMapping("/import/template")
     @PreAuthorize("hasAuthority('SUBJECT_READ')")
     @Operation(summary = "Tải file mẫu import môn học (Excel)")

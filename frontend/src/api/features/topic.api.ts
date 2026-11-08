@@ -86,6 +86,11 @@ export const topicApi = {
     return res.data;
   },
 
+  commitImport: async (items: Partial<TopicItem>[]): Promise<any> => {
+    const res = await axiosInstance.post(`${path}/import/commit`, items);
+    return res.data;
+  },
+
   downloadImportTemplate: async (): Promise<Blob> => {
     const res = await axiosInstance.get(`${path}/import/template`, {
       responseType: "blob",

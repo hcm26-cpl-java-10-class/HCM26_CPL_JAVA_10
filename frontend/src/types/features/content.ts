@@ -68,9 +68,12 @@ export interface TrainingProgramRequest {
 export interface ProgramImportPreviewRow {
   rowNumber: number;
   programCode: string;
+  programName?: string;
   programVersion: string;
+  region?: string;
   subjectCode: string;
   subjectVersion: string;
+  orderIndex?: number;
   valid: boolean;
   errors: string[];
 }

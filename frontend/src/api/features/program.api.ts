@@ -116,4 +116,12 @@ export const programApi = {
     );
     return res.data;
   },
+
+  commitImport: async (items: any[]): Promise<{ importedPrograms: number; message: string }> => {
+    const res = await axiosInstance.post<{ importedPrograms: number; message: string }>(
+      `${path}/import/commit`,
+      items
+    );
+    return res.data;
+  },
 };

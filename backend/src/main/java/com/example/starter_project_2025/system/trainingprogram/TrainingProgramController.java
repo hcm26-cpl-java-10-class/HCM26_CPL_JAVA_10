@@ -201,6 +201,21 @@ public class TrainingProgramController {
         );
     }
 
+    @PostMapping("/import/commit")
+    @PreAuthorize("hasAuthority('PROGRAM_CREATE')")
+    public ResponseEntity<Map<String, Object>> commitImport(
+            @RequestBody List<TrainingProgramImportService.ProgramImportRowDto> items) {
+
+        int imported = importService.commitRows(items);
+
+        return ResponseEntity.ok(
+                Map.of(
+                        "importedPrograms", imported,
+                        "message", "Import thành công " + imported + " chương trình."
+                )
+        );
+    }
+
     @GetMapping("/import/template")
     @PreAuthorize("hasAuthority('PROGRAM_READ')")
     public ResponseEntity<byte[]> importTemplate() throws IOException {

@@ -12,10 +12,14 @@ public record ProgramImportPreviewResponse(
     public record RowResult(
             int rowNumber,
             String programCode,
+            String programName,
             String programVersion,
+            String region,
             String subjectCode,
             String subjectVersion,
+            Integer orderIndex,
             boolean valid,
             List<String> errors
     ) {}
 }
+

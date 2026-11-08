@@ -27,6 +27,17 @@ public class TrainingProgramImportService {
     private final SubjectRepository subjectRepository;
     private final TrainingProgramService programService;
 
+    public record ProgramImportRowDto(
+            int number,
+            String programCode,
+            String programName,
+            String programVersion,
+            String region,
+            String subjectCode,
+            String subjectVersion,
+            Integer orderIndex
+    ) {}
+
     private record Row(
             int number,
             String code,
@@ -53,9 +64,12 @@ public class TrainingProgramImportService {
                     return new ProgramImportPreviewResponse.RowResult(
                             row.number(),
                             row.code(),
+                            row.name(),
                             row.version(),
+                            row.region(),
                             row.subjectCode(),
                             row.subjectVersion(),
+                            row.orderIndex(),
                             rowErrors.isEmpty(),
                             rowErrors
                     );
@@ -73,6 +87,109 @@ public class TrainingProgramImportService {
                 invalid == 0,
                 result
         );
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public int commitRows(List<ProgramImportRowDto> dtos) {
+        if (dtos == null || dtos.isEmpty()) {
+            throw new IllegalArgumentException("Danh sách chương trình đào tạo không được để trống.");
+        }
+
+        List<Row> rows = dtos.stream()
+                .map(d -> new Row(
+                        d.number() > 0 ? d.number() : 1,
+                        d.programCode(),
+                        d.programName(),
+                        d.programVersion(),
+                        d.region(),
+                        d.subjectCode(),
+                        d.subjectVersion(),
+                        d.orderIndex()
+                ))
+                .toList();
+
+        Map<Integer, List<String>> errors = validate(rows);
+        if (!errors.isEmpty()) {
+            var firstEntry = errors.entrySet().iterator().next();
+            throw new IllegalArgumentException(
+                    "Import bị từ chối (Rollback toàn bộ): Dòng " + firstEntry.getKey() + " có lỗi: " + String.join(", ", firstEntry.getValue())
+            );
+        }
+
+        Map<Key, List<Row>> groups = rows.stream()
+                .collect(Collectors.groupingBy(
+                        row -> new Key(
+                                normCode(row.code()),
+                                normVersion(row.version())
+                        ),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        List<TrainingProgramRequest> requests = new ArrayList<>();
+
+        for (List<Row> group : groups.values()) {
+            Row first = group.get(0);
+
+            List<ProgramSubjectRequest> subjects = group.stream()
+                    .sorted(Comparator.comparing(Row::orderIndex))
+                    .map(row -> {
+                        Subject subject = subjectRepository
+                                .findByCodeAndVersion(
+                                        row.subjectCode().trim(),
+                                        row.subjectVersion().trim()
+                                )
+                                .orElseThrow(() ->
+                                        new IllegalArgumentException(
+                                                "Không tìm thấy môn "
+                                                        + row.subjectCode()
+                                                        + " phiên bản "
+                                                        + row.subjectVersion()
+                                        )
+                                );
+
+                        if (!Boolean.TRUE.equals(subject.getIsActive())) {
+                            throw new IllegalArgumentException(
+                                    "Môn học "
+                                            + row.subjectCode()
+                                            + " đang INACTIVE."
+                            );
+                        }
+
+                        if (subject.getDurationHours() == null
+                                || subject.getDurationHours() <= 0) {
+                            throw new IllegalArgumentException(
+                                    "Thời lượng môn "
+                                            + row.subjectCode()
+                                            + " phải lớn hơn 0."
+                            );
+                        }
+
+                        return new ProgramSubjectRequest(
+                                subject.getId(),
+                                row.orderIndex()
+                        );
+                    })
+                    .toList();
+
+            requests.add(new TrainingProgramRequest(
+                    first.code().trim(),
+                    first.name().trim(),
+                    first.version().trim(),
+                    first.region() == null ? null : first.region().trim(),
+                    null,
+                    null,
+                    null,
+                    ProgramStatus.ACTIVE,
+                    subjects
+            ));
+        }
+
+        for (TrainingProgramRequest request : requests) {
+            programService.create(request);
+        }
+
+        return requests.size();
     }
 
     @Transactional
