@@ -100,7 +100,7 @@ export default function ExamSimilarityPage() {
     };
 
     return (
-        <MainLayout pathName={{ exams: "Exam Management", grading: "Essay Grading", similarity: "Plagiarism Detection" }}>
+        <MainLayout pathName={{ exams: "Assessment Management", grading: "Essay Grading", similarity: "Plagiarism Detection" }}>
             <div className="space-y-6">
                 {/* Header */}
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b pb-4">
@@ -269,7 +269,7 @@ export default function ExamSimilarityPage() {
                         <AlertTriangle className="size-8 mx-auto mb-2" />
                         <h3 className="font-semibold">Failed to load similarity scan results</h3>
                         <p className="text-sm mt-1">
-                            {(similarityQuery.error as any)?.response?.data?.message || (similarityQuery.error as any)?.message || "Please check exam ID and permissions."}
+                            {(similarityQuery.error as any)?.response?.data?.message || (similarityQuery.error as any)?.message || "Please check assessment ID and permissions."}
                         </p>
                         <Button variant="outline" className="mt-4" onClick={() => void similarityQuery.refetch()}>
                             Try Again

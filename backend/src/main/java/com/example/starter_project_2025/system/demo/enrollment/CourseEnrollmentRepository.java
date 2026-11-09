@@ -23,6 +23,17 @@ public interface CourseEnrollmentRepository
 
     List<CourseEnrollment> findAllByCourse_Id(Long courseId);
 
+    /**
+     * Danh sách học viên (role STUDENT, đang active) đã đăng ký một lớp (course).
+     * Dùng làm nguồn danh sách để mời dự thi hàng loạt theo lớp.
+     */
+    @Query("select e from CourseEnrollment e join fetch e.user "
+            + "where e.course.id = :courseId and e.user.isActive = true "
+            + "and exists (select r.id from User u join u.roles r "
+            + "where u.id = e.user.id and r.name = 'STUDENT') "
+            + "order by e.user.firstName asc, e.user.lastName asc")
+    List<CourseEnrollment> findActiveStudentsByCourse(
+            @Param("courseId") Long courseId);
     Optional<CourseEnrollment> findByIdAndUser_Id(
             Long enrollmentId,
             Long userId

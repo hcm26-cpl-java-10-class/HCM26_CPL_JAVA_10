@@ -52,43 +52,41 @@ public final class JavaHarness {
     }
 
     /** Ten bien trong main khong duoc trung ten tham so (them dau _ neu trung). */
-    private static final java.util.Set<String> MAIN_LOCALS = java.util.Set.of("args", "br", "lines", "out", "result");
+    private static final java.util.Set<String> MAIN_LOCALS = java.util.Set.of("args", "sc", "out", "result");
 
     private static String mainClass(CodeSpecDTO spec) {
-        int n = spec.getParams().size();
         String ret = spec.getReturnType().trim();
 
         // Chi sinh cac ham phu that su can dung (theo kieu tham so / kieu tra ve).
         java.util.Set<String> parsers = new java.util.LinkedHashSet<>();
-        java.util.Set<String> joiners = new java.util.LinkedHashSet<>();
         for (CodeSpecDTO.Param p : spec.getParams()) {
             String t = p.getType().trim();
             if (isArray(t)) parsers.add(t);
         }
-        if (isArray(ret)) joiners.add(ret);
 
         StringBuilder sb = new StringBuilder();
         sb.append("class Main {\n");
         sb.append("    public static void main(String[] args) throws Exception {\n");
-        sb.append("        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n");
-        sb.append("        // Each parameter is on its own line of stdin, in declaration order.\n");
-        sb.append("        String[] lines = new String[").append(n).append("];\n");
-        sb.append("        for (int i = 0; i < lines.length; i++) {\n");
-        sb.append("            String line = br.readLine();\n");
-        sb.append("            lines[i] = line == null ? \"\" : line;\n");
-        sb.append("        }\n");
+        sb.append("        Scanner sc = new Scanner(System.in);\n");
         StringBuilder call = new StringBuilder();
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < spec.getParams().size(); i++) {
             CodeSpecDTO.Param p = spec.getParams().get(i);
             String type = p.getType().trim();
             String name = mainVar(p.getName().trim());
-            sb.append("        ").append(type).append(' ').append(name).append(" = ")
-              .append(parse(type, "lines[" + i + "]")).append(";\n");
+            if (type.equals("char")) {
+                // Dong rong -> dau cach (nextLine().charAt(0) se loi khi dong rong).
+                sb.append("        String ").append(name).append("Line = sc.nextLine();\n");
+                sb.append("        char ").append(name).append(" = ").append(name)
+                  .append("Line.isEmpty() ? ' ' : ").append(name).append("Line.charAt(0);\n");
+            } else {
+                sb.append("        ").append(type).append(' ').append(name).append(" = ")
+                  .append(parse(type)).append(";\n");
+            }
             if (i > 0) call.append(", ");
             call.append(name);
         }
         sb.append("\n");
-        sb.append("        // Hide anything the student prints, so only the result below is written to stdout.\n");
+        sb.append("        // Ignore anything the student prints; only the result is written to stdout.\n");
         sb.append("        PrintStream out = System.out;\n");
         sb.append("        System.setOut(new PrintStream(OutputStream.nullOutputStream()));\n");
         sb.append("        ").append(ret).append(" result = Solution.").append(spec.getFunctionName().trim())
@@ -101,9 +99,9 @@ public final class JavaHarness {
             sb.append("\n");
             sb.append(parserMethod(t));
         }
-        for (String t : joiners) {
+        if (isArray(ret)) {
             sb.append("\n");
-            sb.append(joinMethod(t));
+            sb.append(joinMethod(ret));
         }
         sb.append("}\n");
         return sb.toString();
@@ -162,17 +160,18 @@ public final class JavaHarness {
                 + "    }\n";
     }
 
-    private static String parse(String type, String expr) {
+    /** Cau lenh doc mot tham so tu mot dong stdin (char duoc xu ly rieng trong mainClass). */
+    private static String parse(String type) {
+        String line = "sc.nextLine()";
         return switch (type) {
-            case "int" -> "Integer.parseInt(" + expr + ".trim())";
-            case "long" -> "Long.parseLong(" + expr + ".trim())";
-            case "double" -> "Double.parseDouble(" + expr + ".trim())";
-            case "boolean" -> "Boolean.parseBoolean(" + expr + ".trim())";
-            case "char" -> expr + ".isEmpty() ? ' ' : " + expr + ".charAt(0)";
-            case "int[]" -> "parseInts(" + expr + ")";
-            case "boolean[]" -> "parseBooleans(" + expr + ")";
-            case "String[]" -> "parseStrings(" + expr + ")";
-            default -> expr;
+            case "int" -> "Integer.parseInt(" + line + ".trim())";
+            case "long" -> "Long.parseLong(" + line + ".trim())";
+            case "double" -> "Double.parseDouble(" + line + ".trim())";
+            case "boolean" -> "Boolean.parseBoolean(" + line + ".trim())";
+            case "int[]" -> "parseInts(" + line + ")";
+            case "boolean[]" -> "parseBooleans(" + line + ")";
+            case "String[]" -> "parseStrings(" + line + ")";
+            default -> line;
         };
     }
 

@@ -9,6 +9,7 @@ import type {
   CourseDTO,
   CourseFilter,
 } from "@/types";
+import type { CourseMyScoresDTO } from "@/types/features/course-my-scores";
 
 const path = "/courses";
 const catalogPath = "/catalog/courses";
@@ -43,6 +44,13 @@ export const courseApi = Object.assign({}, base, {
   /** Cây danh mục active cho bộ lọc (STUDENT không có CATEGORY_READ nên không gọi /categories/tree). */
   getCatalogCategories: async (): Promise<CategoryTreeDTO[]> => {
     const response = await axiosInstance.get<CategoryTreeDTO[]>(`${catalogPath}/categories`);
+    return response.data;
+  },
+
+  getMyScores: async (): Promise<CourseMyScoresDTO[]> => {
+    const response = await axiosInstance.get<CourseMyScoresDTO[]>(
+        `${path}/my-scores`
+    );
     return response.data;
   },
 });

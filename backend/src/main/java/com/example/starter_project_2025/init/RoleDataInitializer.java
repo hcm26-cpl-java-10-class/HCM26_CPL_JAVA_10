@@ -37,6 +37,7 @@ public class RoleDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        ensurePermission("COURSE_REPORT", "READ");
         ensurePermission("PEO", "TEAM_ALLOCATE");
         ensurePermission("EXAM", "TAKE");
         ensurePermission("ARTIFACT", "DRAFT_WRITE");

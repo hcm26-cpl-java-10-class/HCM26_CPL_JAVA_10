@@ -247,7 +247,7 @@ public class GlobalExceptionHandler {
                 null,
                 null,
                 LocalDateTime.now()));
-    }
+        }
 
     /** Giữ đúng status (401/404/...) thay vì bị handler RuntimeException đổi hết thành 400. */
     @ExceptionHandler(ResponseStatusException.class)
