@@ -60,23 +60,46 @@ public class SubjectImportService {
                 try {
                     duration = Integer.parseInt(durationStr.trim());
                     if (duration <= 0) {
-                        errors.add("Thời lượng (Hours) phải lớn hơn 0");
+                        errors.add("Duration (Hours) must be a positive integer greater than 0");
+                    } else if (duration > 1000) {
+                        errors.add("Duration (Hours) cannot exceed 1000");
                     }
                 } catch (Exception e) {
-                    errors.add("Thời lượng (Hours) phải là số nguyên");
+                    errors.add("Duration (Hours) must be a valid integer");
                 }
             } else {
-                errors.add("Thời lượng (Hours) không được để trống");
+                errors.add("Duration (Hours) is required");
             }
 
             if (code == null || code.isBlank()) {
-                errors.add("Mã môn học (Code) không được để trống");
+                errors.add("Topic Code is required");
+            } else if (code.trim().length() > 50) {
+                errors.add("Topic Code cannot exceed 50 characters");
             }
+
             if (name == null || name.isBlank()) {
-                errors.add("Tên môn học (Name) không được để trống");
+                errors.add("Topic Name is required");
+            } else if (name.trim().length() > 255) {
+                errors.add("Topic Name cannot exceed 255 characters");
             }
+
             if (version == null || version.isBlank()) {
-                errors.add("Phiên bản (Version) không được để trống");
+                errors.add("Version is required");
+            } else if (version.trim().length() > 20) {
+                errors.add("Version cannot exceed 20 characters");
+            }
+
+            if (technicalGroup != null && !technicalGroup.isBlank()) {
+                String tg = technicalGroup.trim();
+                if (tg.matches("^[0-9]+(\\.[0-9]+)?$")) {
+                    errors.add("Technical Group must be text (cannot be only numbers)");
+                } else if (tg.length() > 100) {
+                    errors.add("Technical Group cannot exceed 100 characters");
+                }
+            }
+
+            if (description != null && description.length() > 1000) {
+                errors.add("Description cannot exceed 1000 characters");
             }
 
             // Bean validation via DTO
@@ -96,7 +119,7 @@ public class SubjectImportService {
             if (normCode != null && !normCode.isBlank() && normVersion != null && !normVersion.isBlank()) {
                 String key = normCode + "#" + normVersion;
                 if (seenKeys.contains(key)) {
-                    errors.add("Trùng mã và phiên bản với dòng trước đó trong file: " + normCode + " (v" + normVersion + ")");
+                    errors.add("Duplicate Code and Version in import file: " + normCode + " (v" + normVersion + ")");
                 } else {
                     seenKeys.add(key);
                 }
@@ -105,7 +128,7 @@ public class SubjectImportService {
                 boolean existsInDb = subjectRepository.existsByNormalizedIdentity(
                         normCode, SubjectIdentity.versionAliases(normVersion), null);
                 if (existsInDb) {
-                    errors.add("Môn học với mã '" + normCode + "' phiên bản '" + normVersion + "' đã tồn tại trong hệ thống.");
+                    errors.add("Topic with Code '" + normCode + "' and Version '" + normVersion + "' already exists in system.");
                 }
             }
 
@@ -151,9 +174,9 @@ public class SubjectImportService {
 
         if (!preview.canImport()) {
             throw new BadRequestException(
-                    "Import bị từ chối (Rollback toàn bộ): Phát hiện "
+                    "Import rejected (Strict Rollback): Found "
                             + preview.invalidRows()
-                            + " dòng có lỗi. Theo quy định, 100% dòng phải hợp lệ mới được phép Import."
+                            + " row(s) with errors. 100% of rows must be valid to import."
             );
         }
 
@@ -170,7 +193,7 @@ public class SubjectImportService {
             } catch (Exception error) {
                 // If anything fails here, transaction rolls back automatically
                 log.error("Error creating subject row {}: {}", rowNumber, error.getMessage(), error);
-                throw new BadRequestException("Lỗi lưu dòng " + rowNumber + ": " + rowErrorMessage(error));
+                throw new BadRequestException("Error saving row " + rowNumber + ": " + rowErrorMessage(error));
             }
             rowNumber++;
         }
@@ -186,7 +209,7 @@ public class SubjectImportService {
     @PreAuthorize("hasAuthority('SUBJECT_CREATE')")
     public ImportResult commitRows(List<SubjectDTO> rows) {
         if (rows == null || rows.isEmpty()) {
-            throw new BadRequestException("Danh sách môn học không được để trống.");
+            throw new BadRequestException("Import topic list cannot be empty.");
         }
 
         Set<String> seenKeys = new HashSet<>();
@@ -195,38 +218,59 @@ public class SubjectImportService {
             String code = row.getCode();
             String name = row.getName();
             String version = row.getVersion();
+            String technicalGroup = row.getTechnicalGroup();
             Integer duration = row.getDurationHours();
 
             if (code == null || code.isBlank()) {
-                throw new BadRequestException("Dòng " + rowNumber + ": Mã môn học (Code) không được để trống.");
+                throw new BadRequestException("Row " + rowNumber + ": Topic Code is required.");
+            } else if (code.trim().length() > 50) {
+                throw new BadRequestException("Row " + rowNumber + ": Topic Code cannot exceed 50 characters.");
             }
+
             if (name == null || name.isBlank()) {
-                throw new BadRequestException("Dòng " + rowNumber + ": Tên môn học (Name) không được để trống.");
+                throw new BadRequestException("Row " + rowNumber + ": Topic Name is required.");
+            } else if (name.trim().length() > 255) {
+                throw new BadRequestException("Row " + rowNumber + ": Topic Name cannot exceed 255 characters.");
             }
+
             if (version == null || version.isBlank()) {
-                throw new BadRequestException("Dòng " + rowNumber + ": Phiên bản (Version) không được để trống.");
+                throw new BadRequestException("Row " + rowNumber + ": Version is required.");
+            } else if (version.trim().length() > 20) {
+                throw new BadRequestException("Row " + rowNumber + ": Version cannot exceed 20 characters.");
             }
+
+            if (technicalGroup != null && !technicalGroup.isBlank()) {
+                String tg = technicalGroup.trim();
+                if (tg.matches("^[0-9]+(\\.[0-9]+)?$")) {
+                    throw new BadRequestException("Row " + rowNumber + ": Technical Group must be text (cannot be only numbers).");
+                } else if (tg.length() > 100) {
+                    throw new BadRequestException("Row " + rowNumber + ": Technical Group cannot exceed 100 characters.");
+                }
+            }
+
             if (duration == null || duration <= 0) {
-                throw new BadRequestException("Dòng " + rowNumber + ": Thời lượng (Hours) phải lớn hơn 0.");
+                throw new BadRequestException("Row " + rowNumber + ": Duration (Hours) must be a positive integer greater than 0.");
+            } else if (duration > 1000) {
+                throw new BadRequestException("Row " + rowNumber + ": Duration (Hours) cannot exceed 1000.");
             }
 
             var violations = validator.validate(row, Default.class, OnCreate.class);
             if (!violations.isEmpty()) {
-                throw new BadRequestException("Dòng " + rowNumber + ": " + violations.iterator().next().getMessage());
+                throw new BadRequestException("Row " + rowNumber + ": " + violations.iterator().next().getMessage());
             }
 
             String normCode = SubjectIdentity.normalizeCode(code);
             String normVersion = SubjectIdentity.normalizeVersion(version);
             String key = normCode + "#" + normVersion;
             if (seenKeys.contains(key)) {
-                throw new BadRequestException("Dòng " + rowNumber + ": Trùng mã và phiên bản trong danh sách: " + normCode + " (v" + normVersion + ")");
+                throw new BadRequestException("Row " + rowNumber + ": Duplicate Code '" + normCode + "' and Version '" + normVersion + "' in import data.");
             }
             seenKeys.add(key);
 
             boolean existsInDb = subjectRepository.existsByNormalizedIdentity(
                     normCode, SubjectIdentity.versionAliases(normVersion), null);
             if (existsInDb) {
-                throw new BadRequestException("Dòng " + rowNumber + ": Môn học với mã '" + normCode + "' phiên bản '" + normVersion + "' đã tồn tại trong hệ thống.");
+                throw new BadRequestException("Row " + rowNumber + ": Topic with Code '" + normCode + "' and Version '" + normVersion + "' already exists in system.");
             }
 
             rowNumber++;

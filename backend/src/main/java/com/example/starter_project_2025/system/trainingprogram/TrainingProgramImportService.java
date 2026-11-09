@@ -92,7 +92,7 @@ public class TrainingProgramImportService {
     @Transactional(rollbackFor = Exception.class)
     public int commitRows(List<ProgramImportRowDto> dtos) {
         if (dtos == null || dtos.isEmpty()) {
-            throw new IllegalArgumentException("Danh sách chương trình đào tạo không được để trống.");
+            throw new IllegalArgumentException("Training program list cannot be empty.");
         }
 
         List<Row> rows = dtos.stream()
@@ -112,7 +112,7 @@ public class TrainingProgramImportService {
         if (!errors.isEmpty()) {
             var firstEntry = errors.entrySet().iterator().next();
             throw new IllegalArgumentException(
-                    "Import bị từ chối (Rollback toàn bộ): Dòng " + firstEntry.getKey() + " có lỗi: " + String.join(", ", firstEntry.getValue())
+                    "Import rejected (Strict Rollback): Row " + firstEntry.getKey() + " has error: " + String.join(", ", firstEntry.getValue())
             );
         }
 
@@ -199,9 +199,9 @@ public class TrainingProgramImportService {
 
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException(
-                    "Import bị từ chối vì có "
+                    "Import rejected (Strict Rollback): Found "
                             + errors.size()
-                            + " dòng lỗi. Hãy preview và sửa file trước khi import."
+                            + " invalid row(s). Please preview and fix all errors before importing."
             );
         }
 
@@ -312,54 +312,54 @@ public class TrainingProgramImportService {
 
             if (blank(first.code())) {
                 group.forEach(row ->
-                        add(errors, row.number(), "Thiếu programCode.")
+                        add(errors, row.number(), "Program Code is required.")
                 );
             }
 
             if (blank(first.name())) {
                 group.forEach(row ->
-                        add(errors, row.number(), "Thiếu programName.")
+                        add(errors, row.number(), "Program Name is required.")
                 );
             }
 
             if (blank(first.version())) {
                 group.forEach(row ->
-                        add(errors, row.number(), "Thiếu programVersion.")
+                        add(errors, row.number(), "Program Version is required.")
                 );
             }
 
             if (first.code() != null && first.code().length() > 50) {
                 group.forEach(row ->
                         add(errors, row.number(),
-                                "programCode tối đa 50 ký tự.")
+                                "Program Code cannot exceed 50 characters.")
                 );
             }
 
             if (first.name() != null && first.name().length() > 255) {
                 group.forEach(row ->
                         add(errors, row.number(),
-                                "programName tối đa 255 ký tự.")
+                                "Program Name cannot exceed 255 characters.")
                 );
             }
 
             if (first.version() != null && first.version().length() > 30) {
                 group.forEach(row ->
                         add(errors, row.number(),
-                                "programVersion tối đa 30 ký tự.")
+                                "Program Version cannot exceed 30 characters.")
                 );
             }
 
             if (first.region() != null && first.region().length() > 100) {
                 group.forEach(row ->
                         add(errors, row.number(),
-                                "region tối đa 100 ký tự.")
+                                "Region cannot exceed 100 characters.")
                 );
             }
 
             if (existingPrograms.contains(entry.getKey())) {
                 group.forEach(row ->
                         add(errors, row.number(),
-                                "Chương trình code/version đã tồn tại trong hệ thống.")
+                                "Training Program with Code and Version already exists in system.")
                 );
             }
 
@@ -375,21 +375,21 @@ public class TrainingProgramImportService {
                         normText(first.region())
                 )) {
                     add(errors, row.number(),
-                            "Thông tin chương trình phải giống nhau trên các dòng cùng code/version.");
+                            "Program details must be identical across rows sharing the same Code and Version.");
                 }
 
                 if (blank(row.subjectCode())
                         || blank(row.subjectVersion())) {
                     add(errors, row.number(),
-                            "Thiếu subjectCode hoặc subjectVersion.");
+                            "Subject Code and Subject Version are required.");
                 }
 
                 if (row.orderIndex() == null || row.orderIndex() < 1) {
                     add(errors, row.number(),
-                            "orderIndex phải là số nguyên dương.");
+                            "Order index must be a positive integer greater than 0.");
                 } else if (!order.add(row.orderIndex())) {
                     add(errors, row.number(),
-                            "orderIndex bị trùng trong chương trình.");
+                            "Duplicate order index within program.");
                 }
 
                 String identity = normCode(row.subjectCode())
@@ -398,7 +398,7 @@ public class TrainingProgramImportService {
 
                 if (!subjects.add(identity)) {
                     add(errors, row.number(),
-                            "Môn học bị trùng trong chương trình.");
+                            "Duplicate subject within program.");
                 }
 
                 if (!blank(row.subjectCode())
@@ -412,21 +412,22 @@ public class TrainingProgramImportService {
 
                     if (subject.isEmpty()) {
                         add(errors, row.number(),
-                                "Môn học không tồn tại trong hệ thống: "
+                                "Subject does not exist in system: "
                                         + row.subjectCode()
-                                        + " - "
-                                        + row.subjectVersion());
+                                        + " (v"
+                                        + row.subjectVersion()
+                                        + ")");
                     } else {
                         if (!Boolean.TRUE.equals(subject.get().getIsActive())) {
                             add(errors, row.number(),
-                                    "Môn học đang ở trạng thái INACTIVE: "
+                                    "Subject is currently INACTIVE: "
                                             + row.subjectCode());
                         }
 
                         if (subject.get().getDurationHours() == null
                                 || subject.get().getDurationHours() <= 0) {
                             add(errors, row.number(),
-                                    "Thời lượng môn học phải lớn hơn 0: "
+                                    "Subject duration must be greater than 0: "
                                             + row.subjectCode());
                         }
                     }
@@ -438,7 +439,7 @@ public class TrainingProgramImportService {
                 if (current != expected++) {
                     group.forEach(row ->
                             add(errors, row.number(),
-                                    "orderIndex phải liên tục từ 1 đến N.")
+                                    "Order index must be consecutive from 1 to N.")
                     );
                     break;
                 }

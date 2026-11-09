@@ -73,12 +73,12 @@ export function ProgramImportDialog({
     );
 
     if (!hasValidExt) {
-      setGeneralError("Chỉ chấp nhận file Excel (.xlsx, .xls), CSV (.csv) hoặc TXT (.txt)");
+      setGeneralError("Only Excel (.xlsx, .xls), CSV (.csv), and Text (.txt) files are supported");
       return false;
     }
 
     if (selectedFile.size > MAX_FILE_SIZE) {
-      setGeneralError("Dung lượng file không được vượt quá 50MB");
+      setGeneralError("File size cannot exceed 50MB");
       return false;
     }
 
@@ -97,22 +97,24 @@ export function ProgramImportDialog({
     try {
       const previewData: ProgramImportPreview = await programApi.previewImport(selectedFile);
       const parsedRows = previewData.rows || [];
-      setRows(parsedRows);
-      setOriginalRows(JSON.parse(JSON.stringify(parsedRows)));
+      const validatedRows = revalidateRows(parsedRows, parsedRows);
+      setRows(validatedRows);
+      setOriginalRows(JSON.parse(JSON.stringify(validatedRows)));
 
-      if (previewData.invalidRows > 0) {
+      const invalidCount = validatedRows.filter((r) => !r.valid).length;
+      if (invalidCount > 0) {
         toast.warning(
-          `File có ${previewData.invalidRows} dòng bị lỗi. Quy tắc Rollback: Cần sửa hết lỗi trực tiếp trên bảng hoặc xóa dòng lỗi để được phép Import!`
+          `File has ${invalidCount} invalid row(s). Strict Rollback: All errors must be fixed before import!`
         );
-      } else if (previewData.totalRows === 0) {
-        setGeneralError("File rỗng, không tìm thấy dữ liệu dòng nào.");
+      } else if (validatedRows.length === 0) {
+        setGeneralError("The uploaded file contains no data rows.");
       } else {
-        toast.success(`Xem trước hoàn tất: ${previewData.validRows} dòng hợp lệ.`);
+        toast.success(`Preview ready: ${validatedRows.length} valid row(s).`);
       }
     } catch (err: any) {
       const errMsg =
         err?.response?.data?.message ||
-        "Không thể đọc hoặc kiểm tra file. Vui lòng kiểm tra lại định dạng.";
+        "Failed to read or parse file. Please verify file format.";
       setGeneralError(errMsg);
       toast.error(errMsg);
     } finally {
@@ -155,21 +157,24 @@ export function ProgramImportDialog({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "training-program-import-template.xlsx";
+      a.download = "training-program-template.xlsx";
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success("Đã tải xuống file mẫu import chương trình đào tạo");
+      toast.success("Training program template downloaded");
     } catch (err) {
-      toast.error("Không thể tải file mẫu. Vui lòng thử lại.");
+      toast.error("Failed to download template. Please try again.");
     } finally {
       setDownloadingTemplate(false);
     }
   };
 
-  // Re-validate all rows client-side whenever edited
-  const revalidateRows = (currentRows: ProgramImportPreviewRow[]): ProgramImportPreviewRow[] => {
+  // Comprehensive client-side re-validation
+  const revalidateRows = (
+    currentRows: ProgramImportPreviewRow[],
+    baseOriginal: ProgramImportPreviewRow[] = originalRows
+  ): ProgramImportPreviewRow[] => {
     return currentRows.map((row) => {
       const errors: string[] = [];
       const pCode = (row.programCode || "").trim();
@@ -177,28 +182,73 @@ export function ProgramImportDialog({
       const pVersion = (row.programVersion || "").trim();
       const sCode = (row.subjectCode || "").trim();
       const sVersion = (row.subjectVersion || "").trim();
-      const order = Number(row.orderIndex);
+      const rawOrder = row.orderIndex;
 
-      if (!pCode) errors.push("Thiếu programCode");
-      if (!pName) errors.push("Thiếu programName");
-      if (!pVersion) errors.push("Thiếu programVersion");
-      if (!sCode) errors.push("Thiếu subjectCode");
-      if (!sVersion) errors.push("Thiếu subjectVersion");
-
-      if (row.orderIndex == null || isNaN(order) || order < 1) {
-        errors.push("orderIndex phải là số nguyên dương");
+      // 1. Program Code validation
+      if (!pCode) {
+        errors.push("Program Code is required");
+      } else if (pCode.length > 50) {
+        errors.push("Program Code cannot exceed 50 characters");
       }
 
-      // Preserve backend errors if values haven't changed
+      // 2. Program Name validation
+      if (!pName) {
+        errors.push("Program Name is required");
+      } else if (pName.length > 255) {
+        errors.push("Program Name cannot exceed 255 characters");
+      }
+
+      // 3. Program Version validation
+      if (!pVersion) {
+        errors.push("Program Version is required");
+      } else if (pVersion.length > 30) {
+        errors.push("Program Version cannot exceed 30 characters");
+      }
+
+      // 4. Region validation
+      if (row.region && row.region.length > 100) {
+        errors.push("Region cannot exceed 100 characters");
+      }
+
+      // 5. Subject Code validation
+      if (!sCode) {
+        errors.push("Subject Code is required");
+      } else if (sCode.length > 50) {
+        errors.push("Subject Code cannot exceed 50 characters");
+      }
+
+      // 6. Subject Version validation
+      if (!sVersion) {
+        errors.push("Subject Version is required");
+      } else if (sVersion.length > 20) {
+        errors.push("Subject Version cannot exceed 20 characters");
+      }
+
+      // 7. Order Index validation (positive integer >= 1, no negative numbers)
+      if (rawOrder === undefined || rawOrder === null || String(rawOrder).trim() === "") {
+        errors.push("Order index is required");
+      } else {
+        const num = Number(rawOrder);
+        if (isNaN(num)) {
+          errors.push("Order index must be a valid number");
+        } else if (num < 1) {
+          errors.push("Order index must be a positive integer greater than 0 (no negative numbers)");
+        } else if (!Number.isInteger(num)) {
+          errors.push("Order index must be an integer");
+        }
+      }
+
+      // 8. Preserve backend system database errors if row keys were not altered
       if (row.errors) {
         for (const e of row.errors) {
+          const lower = e.toLowerCase();
           if (
-            e.includes("đã tồn tại") ||
-            e.includes("không tồn tại") ||
-            e.includes("INACTIVE") ||
-            e.includes("trùng trong chương trình")
+            lower.includes("already exists") ||
+            lower.includes("does not exist") ||
+            lower.includes("inactive") ||
+            lower.includes("duplicate subject")
           ) {
-            const orig = originalRows.find((o) => o.rowNumber === row.rowNumber);
+            const orig = baseOriginal.find((o) => o.rowNumber === row.rowNumber);
             if (
               orig &&
               orig.programCode === row.programCode &&
@@ -240,7 +290,7 @@ export function ProgramImportDialog({
       const next = prev.filter((_, i) => i !== index);
       return revalidateRows(next);
     });
-    toast.info("Đã xóa 1 dòng dữ liệu khỏi danh sách xem trước.");
+    toast.info("Deleted 1 row from preview list.");
   };
 
   const handleAddRow = () => {
@@ -256,7 +306,7 @@ export function ProgramImportDialog({
         subjectVersion: "1.0",
         orderIndex: prev.length + 1,
         valid: false,
-        errors: ["Thiếu programCode", "Thiếu programName", "Thiếu subjectCode"],
+        errors: ["Program Code is required", "Program Name is required", "Subject Code is required"],
       };
       return revalidateRows([...prev, newRow]);
     });
@@ -265,7 +315,7 @@ export function ProgramImportDialog({
   const handleResetRows = () => {
     if (originalRows.length > 0) {
       setRows(JSON.parse(JSON.stringify(originalRows)));
-      toast.info("Đã khôi phục dữ liệu ban đầu từ file.");
+      toast.info("Restored original file data.");
     }
   };
 
@@ -278,7 +328,7 @@ export function ProgramImportDialog({
   const handleImport = async () => {
     if (!canImport) {
       toast.error(
-        "Chặn Import: Còn dòng chứa lỗi. Hệ thống áp dụng quy tắc Rollback toàn bộ (All-or-Nothing), bạn cần sửa hoặc xóa hết dòng lỗi trước khi Import."
+        "Import Blocked: Errors detected. Strict Rollback policy requires 100% valid rows before importing."
       );
       return;
     }
@@ -298,14 +348,14 @@ export function ProgramImportDialog({
 
       const res = await programApi.commitImport(payload);
       toast.success(
-        res.message || `Import thành công! Đã lưu ${res.importedPrograms || validRows} chương trình.`
+        res.message || `Import successful! Saved ${res.importedPrograms || validRows} program(s).`
       );
       handleClose();
       onImported();
     } catch (err: any) {
       const errMsg =
         err?.response?.data?.message ||
-        "Quá trình import thất bại. Toàn bộ thay đổi đã được rollback.";
+        "Import failed. All changes have been rolled back.";
       toast.error(errMsg);
     } finally {
       setIsImporting(false);
@@ -318,7 +368,7 @@ export function ProgramImportDialog({
         <DialogHeader className="pb-2">
           <DialogTitle className="text-xl font-bold">Import Training Programs</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Tải lên file Excel/CSV hoặc xem trước, chỉnh sửa trực tiếp các dòng/cột trước khi lưu
+            Upload an Excel, CSV, or Text file to bulk import training programs, or preview and edit data inline before saving.
           </DialogDescription>
         </DialogHeader>
 
@@ -330,7 +380,7 @@ export function ProgramImportDialog({
                 Download Template
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Tải file mẫu Excel chuẩn định dạng cho chương trình đào tạo
+                Download standard Excel template with sample program structure
               </p>
             </div>
             <Button
@@ -340,7 +390,7 @@ export function ProgramImportDialog({
               onClick={handleDownloadTemplate}
               disabled={downloadingTemplate || isImporting}
               className="h-9 w-9 p-0 border-gray-300 rounded-lg shrink-0 hover:bg-muted"
-              title="Tải file mẫu"
+              title="Download Template"
             >
               {downloadingTemplate ? (
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -372,10 +422,10 @@ export function ProgramImportDialog({
                 <Upload className="h-5 w-5 text-gray-500" />
               </div>
               <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                Nhấp để chọn file hoặc kéo thả file vào đây
+                Click to upload or drag and drop file here
               </p>
               <p className="text-xs text-muted-foreground">
-                Hỗ trợ định dạng Excel (.xlsx, .xls), CSV (.csv) hoặc TXT (.txt) tối đa 50MB
+                Supports Excel (.xlsx, .xls), CSV (.csv), or Text (.txt) up to 50MB
               </p>
 
               <input
@@ -408,10 +458,10 @@ export function ProgramImportDialog({
                   onClick={() => handleFileProcess(file)}
                   disabled={isPreviewing || isImporting}
                   className="h-8 gap-1.5 text-xs text-purple-700 border-purple-200 hover:bg-purple-50"
-                  title="Tải lại file từ đầu"
+                  title="Reload and re-parse file"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${isPreviewing ? "animate-spin" : ""}`} />
-                  Tải lại
+                  Reload
                 </Button>
                 <Button
                   variant="ghost"
@@ -419,7 +469,7 @@ export function ProgramImportDialog({
                   onClick={clearFile}
                   disabled={isImporting || isPreviewing}
                   className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600"
-                  title="Đổi file khác"
+                  title="Remove file"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -437,7 +487,7 @@ export function ProgramImportDialog({
               {isPreviewing && (
                 <div className="py-8 flex flex-col items-center justify-center gap-2 text-muted-foreground border rounded-xl bg-muted/10">
                   <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
-                  <p className="text-xs font-medium">Đang phân tích và kiểm tra dữ liệu file (Preview)...</p>
+                  <p className="text-xs font-medium">Analyzing file data & checking validations (Preview)...</p>
                 </div>
               )}
 
@@ -449,7 +499,7 @@ export function ProgramImportDialog({
                     <div className="grid grid-cols-3 gap-2 flex-1 text-center text-xs">
                       <div className="rounded-xl border bg-muted/30 p-2">
                         <div className="text-muted-foreground uppercase text-[10px] font-semibold tracking-wide">
-                          Tổng số dòng
+                          TOTAL ROWS
                         </div>
                         <div className="text-lg font-bold text-gray-900 dark:text-gray-100 mt-0.5 font-mono">
                           {totalRows}
@@ -457,7 +507,7 @@ export function ProgramImportDialog({
                       </div>
                       <div className="rounded-xl border border-emerald-200 bg-emerald-500/10 p-2 text-emerald-700 dark:text-emerald-400">
                         <div className="uppercase text-[10px] font-semibold tracking-wide">
-                          Hợp lệ
+                          VALID
                         </div>
                         <div className="text-lg font-bold mt-0.5 font-mono">
                           {validRows}
@@ -465,7 +515,7 @@ export function ProgramImportDialog({
                       </div>
                       <div className="rounded-xl border border-rose-200 bg-rose-500/10 p-2 text-rose-700 dark:text-rose-400">
                         <div className="uppercase text-[10px] font-semibold tracking-wide">
-                          Lỗi (Cần sửa)
+                          INVALID (NEEDS FIX)
                         </div>
                         <div className="text-lg font-bold mt-0.5 font-mono">
                           {invalidRows}
@@ -482,7 +532,7 @@ export function ProgramImportDialog({
                         className="h-8 gap-1 text-xs"
                       >
                         <Plus className="h-3.5 w-3.5" />
-                        Thêm dòng
+                        Add Row
                       </Button>
                       <Button
                         type="button"
@@ -490,10 +540,10 @@ export function ProgramImportDialog({
                         size="sm"
                         onClick={handleResetRows}
                         className="h-8 gap-1 text-xs text-muted-foreground hover:text-foreground"
-                        title="Khôi phục dữ liệu ban đầu từ file"
+                        title="Reset to original file data"
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
-                        Khôi phục
+                        Reset
                       </Button>
                     </div>
                   </div>
@@ -504,10 +554,10 @@ export function ProgramImportDialog({
                       <ShieldAlert className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
                       <div>
                         <p className="font-bold text-red-800 dark:text-red-200 text-sm">
-                          Quy tắc Rollback an toàn (All-or-Nothing)
+                          Strict Rollback Policy (All-or-Nothing)
                         </p>
                         <p className="mt-1 text-red-700 dark:text-red-300 leading-relaxed">
-                          Phát hiện <strong>{invalidRows}</strong> dòng có lỗi. Để đảm bảo dữ liệu không bị sai lệch, hệ thống <strong>tuyệt đối không cho phép import</strong> khi còn bất kỳ dòng nào bị lỗi. Bạn có thể <strong>sửa trực tiếp các ô lỗi</strong> trên bảng bên dưới hoặc xóa dòng lỗi để đưa số lỗi về 0.
+                          Detected <strong>{invalidRows}</strong> invalid row(s). To protect database integrity, <strong>import is strictly blocked</strong> while any errors remain. You can <strong>edit cells directly</strong> in the table below or delete invalid rows to enable Import.
                         </p>
                       </div>
                     </div>
@@ -515,7 +565,7 @@ export function ProgramImportDialog({
                     <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
                       <span>
-                        Tất cả <strong>{validRows}</strong> dòng đều hợp lệ! Bạn có thể nhấn <strong>Import</strong> để lưu vào hệ thống.
+                        All <strong>{validRows}</strong> row(s) are valid! You can now click <strong>Import</strong> to save them to the database.
                       </span>
                     </div>
                   )}
@@ -527,21 +577,29 @@ export function ProgramImportDialog({
                         <thead className="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold border-b border-gray-300 dark:border-gray-700 shadow-sm">
                           <tr>
                             <th className="p-2 w-10 text-center bg-gray-100 dark:bg-gray-800">#</th>
-                            <th className="p-2 w-20 bg-gray-100 dark:bg-gray-800">Trạng thái</th>
-                            <th className="p-2 w-32 min-w-[120px] bg-gray-100 dark:bg-gray-800">Mã CT *</th>
-                            <th className="p-2 w-44 min-w-[160px] bg-gray-100 dark:bg-gray-800">Tên CT *</th>
+                            <th className="p-2 w-20 bg-gray-100 dark:bg-gray-800">Status</th>
+                            <th className="p-2 w-32 min-w-[120px] bg-gray-100 dark:bg-gray-800">Program Code *</th>
+                            <th className="p-2 w-44 min-w-[160px] bg-gray-100 dark:bg-gray-800">Program Name *</th>
                             <th className="p-2 w-20 min-w-[70px] bg-gray-100 dark:bg-gray-800">Version *</th>
-                            <th className="p-2 w-24 min-w-[80px] bg-gray-100 dark:bg-gray-800">Khu vực</th>
-                            <th className="p-2 w-28 min-w-[110px] bg-gray-100 dark:bg-gray-800">Mã môn *</th>
-                            <th className="p-2 w-20 min-w-[70px] bg-gray-100 dark:bg-gray-800">Ver môn *</th>
-                            <th className="p-2 w-20 min-w-[70px] bg-gray-100 dark:bg-gray-800">Thứ tự *</th>
-                            <th className="p-2 min-w-[200px] bg-gray-100 dark:bg-gray-800">Lỗi chi tiết</th>
-                            <th className="p-2 w-10 text-center bg-gray-100 dark:bg-gray-800">Xóa</th>
+                            <th className="p-2 w-24 min-w-[80px] bg-gray-100 dark:bg-gray-800">Region</th>
+                            <th className="p-2 w-28 min-w-[110px] bg-gray-100 dark:bg-gray-800">Subject Code *</th>
+                            <th className="p-2 w-20 min-w-[70px] bg-gray-100 dark:bg-gray-800">Subject Ver *</th>
+                            <th className="p-2 w-20 min-w-[70px] bg-gray-100 dark:bg-gray-800">Order *</th>
+                            <th className="p-2 min-w-[200px] bg-gray-100 dark:bg-gray-800">Error Details</th>
+                            <th className="p-2 w-10 text-center bg-gray-100 dark:bg-gray-800">Action</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                           {rows.map((row, idx) => {
                             const isRowInvalid = !row.valid;
+                            const numOrder = Number(row.orderIndex);
+                            const isOrderInvalid =
+                              row.orderIndex == null ||
+                              String(row.orderIndex).trim() === "" ||
+                              isNaN(numOrder) ||
+                              numOrder < 1 ||
+                              !Number.isInteger(numOrder);
+
                             return (
                               <tr
                                 key={idx}
@@ -557,22 +615,23 @@ export function ProgramImportDialog({
                                 <td className="p-2">
                                   {row.valid ? (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                                      <CheckCircle2 className="h-3 w-3" /> Hợp lệ
+                                      <CheckCircle2 className="h-3 w-3" /> Valid
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
-                                      <AlertCircle className="h-3 w-3" /> Có lỗi
+                                      <AlertCircle className="h-3 w-3" /> Invalid
                                     </span>
                                   )}
                                 </td>
                                 <td className="p-1">
                                   <input
                                     type="text"
+                                    maxLength={50}
                                     value={row.programCode || ""}
                                     onChange={(e) => handleCellChange(idx, "programCode", e.target.value)}
-                                    placeholder="JAVA_BACKEND..."
+                                    placeholder="Program Code..."
                                     className={`w-full px-2 py-1 text-xs rounded border transition-colors ${
-                                      !row.programCode?.trim()
+                                      !row.programCode?.trim() || row.programCode.trim().length > 50
                                         ? "border-red-400 bg-red-50 text-red-900 focus:ring-1 focus:ring-red-500"
                                         : "border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
                                     }`}
@@ -581,11 +640,12 @@ export function ProgramImportDialog({
                                 <td className="p-1">
                                   <input
                                     type="text"
+                                    maxLength={255}
                                     value={row.programName || ""}
                                     onChange={(e) => handleCellChange(idx, "programName", e.target.value)}
-                                    placeholder="Java Backend Specialist..."
+                                    placeholder="Program Name..."
                                     className={`w-full px-2 py-1 text-xs rounded border transition-colors ${
-                                      !row.programName?.trim()
+                                      !row.programName?.trim() || row.programName.trim().length > 255
                                         ? "border-red-400 bg-red-50 text-red-900 focus:ring-1 focus:ring-red-500"
                                         : "border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
                                     }`}
@@ -594,11 +654,12 @@ export function ProgramImportDialog({
                                 <td className="p-1">
                                   <input
                                     type="text"
+                                    maxLength={30}
                                     value={row.programVersion || ""}
                                     onChange={(e) => handleCellChange(idx, "programVersion", e.target.value)}
                                     placeholder="1.0"
                                     className={`w-full px-2 py-1 text-xs rounded border transition-colors ${
-                                      !row.programVersion?.trim()
+                                      !row.programVersion?.trim() || row.programVersion.trim().length > 30
                                         ? "border-red-400 bg-red-50 text-red-900 focus:ring-1 focus:ring-red-500"
                                         : "border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
                                     }`}
@@ -607,6 +668,7 @@ export function ProgramImportDialog({
                                 <td className="p-1">
                                   <input
                                     type="text"
+                                    maxLength={100}
                                     value={row.region || ""}
                                     onChange={(e) => handleCellChange(idx, "region", e.target.value)}
                                     placeholder="HCM / HN..."
@@ -616,11 +678,12 @@ export function ProgramImportDialog({
                                 <td className="p-1">
                                   <input
                                     type="text"
+                                    maxLength={50}
                                     value={row.subjectCode || ""}
                                     onChange={(e) => handleCellChange(idx, "subjectCode", e.target.value)}
-                                    placeholder="L1_AL_PSE..."
+                                    placeholder="Subject Code..."
                                     className={`w-full px-2 py-1 text-xs rounded border transition-colors ${
-                                      !row.subjectCode?.trim()
+                                      !row.subjectCode?.trim() || row.subjectCode.trim().length > 50
                                         ? "border-red-400 bg-red-50 text-red-900 focus:ring-1 focus:ring-red-500"
                                         : "border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
                                     }`}
@@ -629,11 +692,12 @@ export function ProgramImportDialog({
                                 <td className="p-1">
                                   <input
                                     type="text"
+                                    maxLength={20}
                                     value={row.subjectVersion || ""}
                                     onChange={(e) => handleCellChange(idx, "subjectVersion", e.target.value)}
                                     placeholder="1.0"
                                     className={`w-full px-2 py-1 text-xs rounded border transition-colors ${
-                                      !row.subjectVersion?.trim()
+                                      !row.subjectVersion?.trim() || row.subjectVersion.trim().length > 20
                                         ? "border-red-400 bg-red-50 text-red-900 focus:ring-1 focus:ring-red-500"
                                         : "border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
                                     }`}
@@ -644,10 +708,13 @@ export function ProgramImportDialog({
                                     type="number"
                                     min="1"
                                     value={row.orderIndex ?? ""}
-                                    onChange={(e) => handleCellChange(idx, "orderIndex", e.target.value ? Number(e.target.value) : "")}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      handleCellChange(idx, "orderIndex", val === "" ? "" : Number(val));
+                                    }}
                                     placeholder="1, 2..."
                                     className={`w-full px-2 py-1 text-xs rounded border transition-colors text-right ${
-                                      row.orderIndex == null || Number(row.orderIndex) < 1
+                                      isOrderInvalid
                                         ? "border-red-400 bg-red-50 text-red-900 focus:ring-1 focus:ring-red-500"
                                         : "border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
                                     }`}
@@ -671,7 +738,7 @@ export function ProgramImportDialog({
                                     size="sm"
                                     onClick={() => handleDeleteRow(idx)}
                                     className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600"
-                                    title="Xóa dòng này"
+                                    title="Delete row"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
@@ -697,7 +764,7 @@ export function ProgramImportDialog({
             disabled={isImporting}
             className="rounded-lg text-sm"
           >
-            Đóng
+            Cancel
           </Button>
 
           <Button
@@ -711,17 +778,17 @@ export function ProgramImportDialog({
             }`}
             title={
               invalidRows > 0
-                ? "Không thể import vì còn dòng bị lỗi (Quy tắc Rollback toàn bộ)"
-                : "Import dữ liệu hợp lệ vào hệ thống"
+                ? "Cannot import: Invalid rows exist (Strict Rollback Policy)"
+                : "Import valid data to system"
             }
           >
             {isImporting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang Import...
+                Importing...
               </>
             ) : (
-              `Import (${validRows} dòng)`
+              `Import (${validRows} row${validRows === 1 ? "" : "s"})`
             )}
           </Button>
         </DialogFooter>

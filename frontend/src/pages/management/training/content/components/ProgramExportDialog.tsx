@@ -80,10 +80,10 @@ export function ProgramExportDialog({
       window.URL.revokeObjectURL(url);
 
       const opt = exportOptions.find((o) => o.format === selectedFormat);
-      toast.success(`Đã xuất file ${opt?.label || selectedFormat} thành công!`);
+      toast.success(`Exported ${opt?.label || selectedFormat} file successfully!`);
       onOpenChange(false);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Xuất file thất bại");
+      toast.error(err?.response?.data?.message || "Failed to export file");
     } finally {
       setIsExporting(false);
     }
@@ -173,7 +173,7 @@ export function ProgramExportDialog({
             {isExporting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Đang xuất file...
+                Exporting...
               </>
             ) : (
               <>

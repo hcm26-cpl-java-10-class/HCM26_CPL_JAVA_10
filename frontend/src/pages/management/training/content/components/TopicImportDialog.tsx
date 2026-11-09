@@ -73,12 +73,12 @@ export function TopicImportDialog({
     );
 
     if (!hasValidExt) {
-      setGeneralError("Chỉ chấp nhận file Excel (.xlsx, .xls) hoặc CSV (.csv)");
+      setGeneralError("Only Excel (.xlsx, .xls) and CSV (.csv) files are supported");
       return false;
     }
 
     if (selectedFile.size > MAX_FILE_SIZE) {
-      setGeneralError("Dung lượng file không được vượt quá 50MB");
+      setGeneralError("File size cannot exceed 50MB");
       return false;
     }
 
@@ -97,22 +97,24 @@ export function TopicImportDialog({
     try {
       const previewData: TopicImportPreview = await topicApi.previewImport(selectedFile);
       const parsedRows = previewData.rows || [];
-      setRows(parsedRows);
-      setOriginalRows(JSON.parse(JSON.stringify(parsedRows)));
+      const validatedRows = revalidateRows(parsedRows, parsedRows);
+      setRows(validatedRows);
+      setOriginalRows(JSON.parse(JSON.stringify(validatedRows)));
 
-      if (previewData.invalidRows > 0) {
+      const invalidCount = validatedRows.filter((r) => !r.valid).length;
+      if (invalidCount > 0) {
         toast.warning(
-          `File có ${previewData.invalidRows} dòng bị lỗi. Quy tắc Rollback: Cần sửa hết lỗi trực tiếp trên bảng hoặc xóa dòng lỗi để được phép Import!`
+          `File has ${invalidCount} invalid row(s). Strict Rollback: All errors must be fixed before import!`
         );
-      } else if (previewData.totalRows === 0) {
-        setGeneralError("File rỗng, không tìm thấy dữ liệu dòng nào.");
+      } else if (validatedRows.length === 0) {
+        setGeneralError("The uploaded file contains no data rows.");
       } else {
-        toast.success(`Xem trước hoàn tất: ${previewData.validRows} dòng hợp lệ.`);
+        toast.success(`Preview ready: ${validatedRows.length} valid row(s).`);
       }
     } catch (err: any) {
       const errMsg =
         err?.response?.data?.message ||
-        "Không thể đọc hoặc kiểm tra file. Vui lòng kiểm tra lại định dạng.";
+        "Failed to read or parse file. Please verify file format.";
       setGeneralError(errMsg);
       toast.error(errMsg);
     } finally {
@@ -160,16 +162,19 @@ export function TopicImportDialog({
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success("Đã tải xuống file mẫu import môn học");
+      toast.success("Topic import template downloaded");
     } catch (err) {
-      toast.error("Không thể tải file mẫu. Vui lòng thử lại.");
+      toast.error("Failed to download template. Please try again.");
     } finally {
       setDownloadingTemplate(false);
     }
   };
 
-  // Re-validate all rows client-side whenever edited
-  const revalidateRows = (currentRows: TopicImportPreviewRow[]): TopicImportPreviewRow[] => {
+  // Comprehensive client-side re-validation
+  const revalidateRows = (
+    currentRows: TopicImportPreviewRow[],
+    baseOriginal: TopicImportPreviewRow[] = originalRows
+  ): TopicImportPreviewRow[] => {
     const seenKeys = new Map<string, number>();
 
     return currentRows.map((row, idx) => {
@@ -177,30 +182,75 @@ export function TopicImportDialog({
       const code = (row.code || "").trim();
       const name = (row.name || "").trim();
       const version = (row.version || "").trim();
-      const duration = Number(row.durationHours);
+      const techGroup = (row.technicalGroup || "").trim();
+      const rawDuration = row.durationHours;
 
-      if (!code) errors.push("Mã môn học (Code) không được để trống");
-      if (!name) errors.push("Tên môn học (Name) không được để trống");
-      if (!version) errors.push("Phiên bản (Version) không được để trống");
-
-      if (row.durationHours == null || isNaN(duration) || duration <= 0) {
-        errors.push("Thời lượng (Hours) phải là số nguyên lớn hơn 0");
+      // 1. Topic Code validation
+      if (!code) {
+        errors.push("Topic Code is required");
+      } else if (code.length > 50) {
+        errors.push("Topic Code cannot exceed 50 characters");
       }
 
+      // 2. Topic Name validation
+      if (!name) {
+        errors.push("Topic Name is required");
+      } else if (name.length > 255) {
+        errors.push("Topic Name cannot exceed 255 characters");
+      }
+
+      // 3. Version validation
+      if (!version) {
+        errors.push("Version is required");
+      } else if (version.length > 20) {
+        errors.push("Version cannot exceed 20 characters");
+      }
+
+      // 4. Technical Group validation (must be text, cannot be purely numeric, max 100 chars)
+      if (techGroup) {
+        if (/^[0-9]+(\.[0-9]+)?$/.test(techGroup)) {
+          errors.push("Technical Group must be text (cannot be only numbers)");
+        } else if (techGroup.length > 100) {
+          errors.push("Technical Group cannot exceed 100 characters");
+        }
+      }
+
+      // 5. Duration validation (positive integer > 0, <= 1000, no negative numbers)
+      if (rawDuration === undefined || rawDuration === null || String(rawDuration).trim() === "") {
+        errors.push("Duration (Hours) is required");
+      } else {
+        const num = Number(rawDuration);
+        if (isNaN(num)) {
+          errors.push("Duration must be a valid number");
+        } else if (num <= 0) {
+          errors.push("Duration must be a positive integer greater than 0 (no negative numbers)");
+        } else if (!Number.isInteger(num)) {
+          errors.push("Duration must be an integer number of hours");
+        } else if (num > 1000) {
+          errors.push("Duration cannot exceed 1000 hours");
+        }
+      }
+
+      // 6. Description length
+      if (row.description && row.description.length > 1000) {
+        errors.push("Description cannot exceed 1000 characters");
+      }
+
+      // 7. Duplicate check within preview table
       if (code && version) {
         const key = `${code.toUpperCase()}#${version.toUpperCase()}`;
         if (seenKeys.has(key)) {
-          errors.push(`Trùng mã '${code}' và phiên bản '${version}' với dòng #${seenKeys.get(key)}`);
+          errors.push(`Duplicate Code '${code}' and Version '${version}' with row #${seenKeys.get(key)}`);
         } else {
           seenKeys.set(key, row.rowNumber || idx + 1);
         }
       }
 
-      // Preserve backend existing DB error if not modified
-      if (row.errors && row.errors.some((e) => e.includes("đã tồn tại trong hệ thống"))) {
-        const orig = originalRows.find((o) => o.rowNumber === row.rowNumber);
+      // 8. Preserve existing database duplicate error if code & version were not changed
+      if (row.errors && row.errors.some((e) => e.toLowerCase().includes("already exists"))) {
+        const orig = baseOriginal.find((o) => o.rowNumber === row.rowNumber);
         if (orig && orig.code === row.code && orig.version === row.version) {
-          errors.push(`Môn học với mã '${code}' phiên bản '${version}' đã tồn tại trong hệ thống.`);
+          errors.push(`Topic with Code '${code}' and Version '${version}' already exists in system.`);
         }
       }
 
@@ -233,7 +283,7 @@ export function TopicImportDialog({
       const next = prev.filter((_, i) => i !== index);
       return revalidateRows(next);
     });
-    toast.info("Đã xóa 1 dòng dữ liệu khỏi danh sách xem trước.");
+    toast.info("Deleted 1 row from preview list.");
   };
 
   const handleAddRow = () => {
@@ -249,7 +299,7 @@ export function TopicImportDialog({
         description: "",
         status: "ACTIVE",
         valid: false,
-        errors: ["Mã môn học (Code) không được để trống", "Tên môn học (Name) không được để trống"],
+        errors: ["Topic Code is required", "Topic Name is required"],
       };
       return revalidateRows([...prev, newRow]);
     });
@@ -258,7 +308,7 @@ export function TopicImportDialog({
   const handleResetRows = () => {
     if (originalRows.length > 0) {
       setRows(JSON.parse(JSON.stringify(originalRows)));
-      toast.info("Đã khôi phục dữ liệu ban đầu từ file.");
+      toast.info("Restored original file data.");
     }
   };
 
@@ -271,7 +321,7 @@ export function TopicImportDialog({
   const handleImport = async () => {
     if (!canImport) {
       toast.error(
-        "Chặn Import: Còn dòng chứa lỗi. Hệ thống áp dụng quy tắc Rollback toàn bộ (All-or-Nothing), bạn cần sửa hoặc xóa hết dòng lỗi trước khi Import."
+        "Import Blocked: Errors detected. Strict Rollback policy requires 100% valid rows before importing."
       );
       return;
     }
@@ -290,14 +340,14 @@ export function TopicImportDialog({
 
       const res = await topicApi.commitImport(payload);
       toast.success(
-        `Import thành công! Đã thêm ${res.successCount || validRows} môn học vào hệ thống.`
+        `Import successful! Added ${res.successCount || validRows} topic(s) to system.`
       );
       handleClose();
       onSuccess?.();
     } catch (err: any) {
       const errMsg =
         err?.response?.data?.message ||
-        "Quá trình import thất bại. Toàn bộ thay đổi đã được rollback.";
+        "Import failed. All changes have been rolled back.";
       toast.error(errMsg);
     } finally {
       setIsImporting(false);
@@ -310,7 +360,7 @@ export function TopicImportDialog({
         <DialogHeader className="pb-2">
           <DialogTitle className="text-xl font-bold">Import Topics</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Tải lên file Excel/CSV hoặc xem trước, chỉnh sửa trực tiếp các dòng/cột trước khi lưu
+            Upload an Excel or CSV file to bulk import topics, or preview and edit data inline before saving.
           </DialogDescription>
         </DialogHeader>
 
@@ -322,7 +372,7 @@ export function TopicImportDialog({
                 Download Template
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Tải file mẫu Excel chuẩn định dạng cho môn học/topic
+                Download standard Excel template with sample data format
               </p>
             </div>
             <Button
@@ -332,7 +382,7 @@ export function TopicImportDialog({
               onClick={handleDownloadTemplate}
               disabled={downloadingTemplate || isImporting}
               className="h-9 w-9 p-0 border-gray-300 rounded-lg shrink-0 hover:bg-muted"
-              title="Tải file mẫu"
+              title="Download Template"
             >
               {downloadingTemplate ? (
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -364,10 +414,10 @@ export function TopicImportDialog({
                 <Upload className="h-5 w-5 text-gray-500" />
               </div>
               <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                Nhấp để chọn file hoặc kéo thả file vào đây
+                Click to upload or drag and drop file here
               </p>
               <p className="text-xs text-muted-foreground">
-                Hỗ trợ định dạng Excel (.xlsx, .xls) hoặc CSV (.csv) dung lượng tối đa 50MB
+                Supports Excel (.xlsx, .xls) and CSV (.csv) up to 50MB
               </p>
 
               <input
@@ -400,10 +450,10 @@ export function TopicImportDialog({
                   onClick={() => handleFileProcess(file)}
                   disabled={isPreviewing || isImporting}
                   className="h-8 gap-1.5 text-xs text-purple-700 border-purple-200 hover:bg-purple-50"
-                  title="Tải lại file từ đầu"
+                  title="Reload and re-parse file"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${isPreviewing ? "animate-spin" : ""}`} />
-                  Tải lại
+                  Reload
                 </Button>
                 <Button
                   variant="ghost"
@@ -411,7 +461,7 @@ export function TopicImportDialog({
                   onClick={clearFile}
                   disabled={isImporting || isPreviewing}
                   className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600"
-                  title="Đổi file khác"
+                  title="Remove file"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -429,7 +479,7 @@ export function TopicImportDialog({
               {isPreviewing && (
                 <div className="py-8 flex flex-col items-center justify-center gap-2 text-muted-foreground border rounded-xl bg-muted/10">
                   <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
-                  <p className="text-xs font-medium">Đang phân tích và kiểm tra dữ liệu file (Preview)...</p>
+                  <p className="text-xs font-medium">Analyzing file data & checking validations (Preview)...</p>
                 </div>
               )}
 
@@ -441,7 +491,7 @@ export function TopicImportDialog({
                     <div className="grid grid-cols-3 gap-2 flex-1 text-center text-xs">
                       <div className="rounded-xl border bg-muted/30 p-2">
                         <div className="text-muted-foreground uppercase text-[10px] font-semibold tracking-wide">
-                          Tổng số dòng
+                          TOTAL ROWS
                         </div>
                         <div className="text-lg font-bold text-gray-900 dark:text-gray-100 mt-0.5 font-mono">
                           {totalRows}
@@ -449,7 +499,7 @@ export function TopicImportDialog({
                       </div>
                       <div className="rounded-xl border border-emerald-200 bg-emerald-500/10 p-2 text-emerald-700 dark:text-emerald-400">
                         <div className="uppercase text-[10px] font-semibold tracking-wide">
-                          Hợp lệ
+                          VALID
                         </div>
                         <div className="text-lg font-bold mt-0.5 font-mono">
                           {validRows}
@@ -457,7 +507,7 @@ export function TopicImportDialog({
                       </div>
                       <div className="rounded-xl border border-rose-200 bg-rose-500/10 p-2 text-rose-700 dark:text-rose-400">
                         <div className="uppercase text-[10px] font-semibold tracking-wide">
-                          Lỗi (Cần sửa)
+                          INVALID (NEEDS FIX)
                         </div>
                         <div className="text-lg font-bold mt-0.5 font-mono">
                           {invalidRows}
@@ -474,7 +524,7 @@ export function TopicImportDialog({
                         className="h-8 gap-1 text-xs"
                       >
                         <Plus className="h-3.5 w-3.5" />
-                        Thêm dòng
+                        Add Row
                       </Button>
                       <Button
                         type="button"
@@ -482,10 +532,10 @@ export function TopicImportDialog({
                         size="sm"
                         onClick={handleResetRows}
                         className="h-8 gap-1 text-xs text-muted-foreground hover:text-foreground"
-                        title="Khôi phục dữ liệu ban đầu từ file"
+                        title="Reset to original file data"
                       >
                         <RotateCcw className="h-3.5 w-3.5" />
-                        Khôi phục
+                        Reset
                       </Button>
                     </div>
                   </div>
@@ -496,10 +546,10 @@ export function TopicImportDialog({
                       <ShieldAlert className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
                       <div>
                         <p className="font-bold text-red-800 dark:text-red-200 text-sm">
-                          Quy tắc Rollback an toàn (All-or-Nothing)
+                          Strict Rollback Policy (All-or-Nothing)
                         </p>
                         <p className="mt-1 text-red-700 dark:text-red-300 leading-relaxed">
-                          Phát hiện <strong>{invalidRows}</strong> dòng có lỗi. Để đảm bảo dữ liệu không bị sai lệch, hệ thống <strong>tuyệt đối không cho phép import</strong> khi còn bất kỳ dòng nào bị lỗi. Bạn có thể <strong>sửa trực tiếp các ô lỗi</strong> trên bảng bên dưới hoặc nhấn nút xóa dòng lỗi để đưa số lỗi về 0.
+                          Detected <strong>{invalidRows}</strong> invalid row(s). To protect database integrity, <strong>import is strictly blocked</strong> while any errors remain. You can <strong>edit cells directly</strong> in the table below or delete invalid rows to enable Import.
                         </p>
                       </div>
                     </div>
@@ -507,7 +557,7 @@ export function TopicImportDialog({
                     <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
                       <span>
-                        Tất cả <strong>{validRows}</strong> dòng đều hợp lệ! Bạn có thể nhấn <strong>Import</strong> để lưu vào hệ thống.
+                        All <strong>{validRows}</strong> row(s) are valid! You can now click <strong>Import</strong> to save them to the database.
                       </span>
                     </div>
                   )}
@@ -519,20 +569,31 @@ export function TopicImportDialog({
                         <thead className="sticky top-0 z-20 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-semibold border-b border-gray-300 dark:border-gray-700 shadow-sm">
                           <tr>
                             <th className="p-2 w-10 text-center bg-gray-100 dark:bg-gray-800">#</th>
-                            <th className="p-2 w-20 bg-gray-100 dark:bg-gray-800">Trạng thái</th>
-                            <th className="p-2 w-32 min-w-[120px] bg-gray-100 dark:bg-gray-800">Mã (Code) *</th>
-                            <th className="p-2 w-48 min-w-[170px] bg-gray-100 dark:bg-gray-800">Tên (Name) *</th>
+                            <th className="p-2 w-20 bg-gray-100 dark:bg-gray-800">Status</th>
+                            <th className="p-2 w-32 min-w-[120px] bg-gray-100 dark:bg-gray-800">Topic Code *</th>
+                            <th className="p-2 w-48 min-w-[170px] bg-gray-100 dark:bg-gray-800">Topic Name *</th>
                             <th className="p-2 w-20 min-w-[70px] bg-gray-100 dark:bg-gray-800">Version *</th>
-                            <th className="p-2 w-28 min-w-[100px] bg-gray-100 dark:bg-gray-800">Nhóm kỹ thuật</th>
-                            <th className="p-2 w-24 min-w-[80px] bg-gray-100 dark:bg-gray-800">Thời lượng (h) *</th>
-                            <th className="p-2 w-24 min-w-[90px] bg-gray-100 dark:bg-gray-800">Trạng thái</th>
-                            <th className="p-2 min-w-[200px] bg-gray-100 dark:bg-gray-800">Lỗi chi tiết</th>
-                            <th className="p-2 w-10 text-center bg-gray-100 dark:bg-gray-800">Xóa</th>
+                            <th className="p-2 w-28 min-w-[100px] bg-gray-100 dark:bg-gray-800">Technical Group</th>
+                            <th className="p-2 w-24 min-w-[80px] bg-gray-100 dark:bg-gray-800">Duration (h) *</th>
+                            <th className="p-2 w-24 min-w-[90px] bg-gray-100 dark:bg-gray-800">Status</th>
+                            <th className="p-2 min-w-[200px] bg-gray-100 dark:bg-gray-800">Error Details</th>
+                            <th className="p-2 w-10 text-center bg-gray-100 dark:bg-gray-800">Action</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                           {rows.map((row, idx) => {
                             const isRowInvalid = !row.valid;
+                            const tg = (row.technicalGroup || "").trim();
+                            const isTgNumeric = tg && /^[0-9]+(\.[0-9]+)?$/.test(tg);
+                            const numDuration = Number(row.durationHours);
+                            const isDurationInvalid =
+                              row.durationHours == null ||
+                              String(row.durationHours).trim() === "" ||
+                              isNaN(numDuration) ||
+                              numDuration <= 0 ||
+                              !Number.isInteger(numDuration) ||
+                              numDuration > 1000;
+
                             return (
                               <tr
                                 key={idx}
@@ -548,22 +609,23 @@ export function TopicImportDialog({
                                 <td className="p-2">
                                   {row.valid ? (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                                      <CheckCircle2 className="h-3 w-3" /> Hợp lệ
+                                      <CheckCircle2 className="h-3 w-3" /> Valid
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
-                                      <AlertCircle className="h-3 w-3" /> Có lỗi
+                                      <AlertCircle className="h-3 w-3" /> Invalid
                                     </span>
                                   )}
                                 </td>
                                 <td className="p-1">
                                   <input
                                     type="text"
+                                    maxLength={50}
                                     value={row.code || ""}
                                     onChange={(e) => handleCellChange(idx, "code", e.target.value)}
-                                    placeholder="Mã..."
+                                    placeholder="Topic Code..."
                                     className={`w-full px-2 py-1 text-xs rounded border transition-colors ${
-                                      !row.code?.trim()
+                                      !row.code?.trim() || row.code.trim().length > 50
                                         ? "border-red-400 bg-red-50 text-red-900 focus:ring-1 focus:ring-red-500"
                                         : "border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
                                     }`}
@@ -572,11 +634,12 @@ export function TopicImportDialog({
                                 <td className="p-1">
                                   <input
                                     type="text"
+                                    maxLength={255}
                                     value={row.name || ""}
                                     onChange={(e) => handleCellChange(idx, "name", e.target.value)}
-                                    placeholder="Tên môn học..."
+                                    placeholder="Topic Name..."
                                     className={`w-full px-2 py-1 text-xs rounded border transition-colors ${
-                                      !row.name?.trim()
+                                      !row.name?.trim() || row.name.trim().length > 255
                                         ? "border-red-400 bg-red-50 text-red-900 focus:ring-1 focus:ring-red-500"
                                         : "border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
                                     }`}
@@ -585,11 +648,12 @@ export function TopicImportDialog({
                                 <td className="p-1">
                                   <input
                                     type="text"
+                                    maxLength={20}
                                     value={row.version || ""}
                                     onChange={(e) => handleCellChange(idx, "version", e.target.value)}
                                     placeholder="1.0"
                                     className={`w-full px-2 py-1 text-xs rounded border transition-colors ${
-                                      !row.version?.trim()
+                                      !row.version?.trim() || row.version.trim().length > 20
                                         ? "border-red-400 bg-red-50 text-red-900 focus:ring-1 focus:ring-red-500"
                                         : "border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
                                     }`}
@@ -598,21 +662,30 @@ export function TopicImportDialog({
                                 <td className="p-1">
                                   <input
                                     type="text"
+                                    maxLength={100}
                                     value={row.technicalGroup || ""}
                                     onChange={(e) => handleCellChange(idx, "technicalGroup", e.target.value)}
-                                    placeholder="Java / React..."
-                                    className="w-full px-2 py-1 text-xs rounded border border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
+                                    placeholder="e.g. Java, Frontend..."
+                                    className={`w-full px-2 py-1 text-xs rounded border transition-colors ${
+                                      isTgNumeric || (row.technicalGroup && row.technicalGroup.length > 100)
+                                        ? "border-red-400 bg-red-50 text-red-900 focus:ring-1 focus:ring-red-500"
+                                        : "border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
+                                    }`}
                                   />
                                 </td>
                                 <td className="p-1">
                                   <input
                                     type="number"
                                     min="1"
+                                    max="1000"
                                     value={row.durationHours ?? ""}
-                                    onChange={(e) => handleCellChange(idx, "durationHours", e.target.value ? Number(e.target.value) : "")}
-                                    placeholder="Giờ"
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      handleCellChange(idx, "durationHours", val === "" ? "" : Number(val));
+                                    }}
+                                    placeholder="Hours"
                                     className={`w-full px-2 py-1 text-xs rounded border transition-colors text-right ${
-                                      row.durationHours == null || Number(row.durationHours) <= 0
+                                      isDurationInvalid
                                         ? "border-red-400 bg-red-50 text-red-900 focus:ring-1 focus:ring-red-500"
                                         : "border-gray-200 dark:border-gray-700 bg-transparent focus:border-purple-500"
                                     }`}
@@ -646,7 +719,7 @@ export function TopicImportDialog({
                                     size="sm"
                                     onClick={() => handleDeleteRow(idx)}
                                     className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600"
-                                    title="Xóa dòng này"
+                                    title="Delete row"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
@@ -672,7 +745,7 @@ export function TopicImportDialog({
             disabled={isImporting}
             className="rounded-lg text-sm"
           >
-            Đóng
+            Cancel
           </Button>
 
           <Button
@@ -686,17 +759,17 @@ export function TopicImportDialog({
             }`}
             title={
               invalidRows > 0
-                ? "Không thể import vì còn dòng bị lỗi (Quy tắc Rollback toàn bộ)"
-                : "Import dữ liệu hợp lệ vào hệ thống"
+                ? "Cannot import: Invalid rows exist (Strict Rollback Policy)"
+                : "Import valid data to system"
             }
           >
             {isImporting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Đang Import...
+                Importing...
               </>
             ) : (
-              `Import (${validRows} dòng)`
+              `Import (${validRows} row${validRows === 1 ? "" : "s"})`
             )}
           </Button>
         </DialogFooter>
