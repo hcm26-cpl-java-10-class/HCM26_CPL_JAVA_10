@@ -14,9 +14,8 @@ import java.time.LocalDateTime;
 public class ExamConfigValidator {
 
     public void validate(Exam existing, ExamDTO r, Integer totalPoints, ValidationContext ctx) {
-        // Tinh nang dat lich da bi go bo: bo qua start/end.
-        LocalDateTime start = null;
-        LocalDateTime end = null;
+        LocalDateTime start = r.getStartTime() != null ? r.getStartTime() : (existing == null ? null : existing.getStartTime());
+        LocalDateTime end = r.getEndTime() != null ? r.getEndTime() : (existing == null ? null : existing.getEndTime());
         Integer duration = r.getDurationMinutes() != null ? r.getDurationMinutes()
                 : (existing == null ? null : Integer.valueOf(existing.getDurationMinutes()));
         Integer maxAttempts = r.getMaxAttempts() != null ? r.getMaxAttempts()
@@ -33,6 +32,22 @@ public class ExamConfigValidator {
                 : (existing == null ? null : existing.getLatePenaltyPercent());
         Integer lateGraceMinutes = r.getLateGraceMinutes() != null ? r.getLateGraceMinutes()
                 : (existing == null ? 0 : existing.getLateGraceMinutes());
+
+        LocalDateTime now = LocalDateTime.now();
+
+        if (r.getStartTime() != null) {
+            boolean isNewOrChanged = (existing == null || existing.getStartTime() == null || !existing.getStartTime().isEqual(r.getStartTime()));
+            if (isNewOrChanged && r.getStartTime().isBefore(now.minusMinutes(1))) {
+                ctx.add("startTime", "Thời gian mở không được ở trong quá khứ");
+            }
+        }
+
+        if (r.getEndTime() != null) {
+            boolean isNewOrChanged = (existing == null || existing.getEndTime() == null || !existing.getEndTime().isEqual(r.getEndTime()));
+            if (isNewOrChanged && r.getEndTime().isBefore(now)) {
+                ctx.add("endTime", "Thời gian đóng không được ở trong quá khứ");
+            }
+        }
 
         if (start != null && end != null) {
             if (!start.isBefore(end)) {
@@ -56,6 +71,9 @@ public class ExamConfigValidator {
             }
         }
 
+        if (latePolicy != LatePolicy.NOT_ALLOWED && end == null) {
+            ctx.add("latePolicy", "Cần đặt thời gian đóng (endTime) để áp dụng chính sách nộp muộn");
+        }
         if (latePolicy == LatePolicy.ALLOWED_WITH_PENALTY && (penalty == null || penalty < 1 || penalty > 100)) {
             ctx.add("latePenaltyPercent", "Nộp muộn có trừ điểm cần phần trăm trừ từ 1 đến 100");
         }

@@ -32,7 +32,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @ResourceMenu(
         title = "Score Appeals",
-        group = "Assessment Management",
+        group = "Exam Management",
         icon = "message",
         url = "/exams/appeals",
         order = 6,

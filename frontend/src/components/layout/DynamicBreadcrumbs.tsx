@@ -47,7 +47,7 @@ function isLikelyIdentifier(segment: string) {
     const numericPattern = /^\d+$/;
     const uuidPattern =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    const tokenLikePattern = /^[A-Za-z0-9_-]{16,}$/;
+    const tokenLikePattern = /^(?=.*\d)[A-Za-z0-9_-]{16,}$/;
 
     return numericPattern.test(segment) || uuidPattern.test(segment) || tokenLikePattern.test(segment);
 }

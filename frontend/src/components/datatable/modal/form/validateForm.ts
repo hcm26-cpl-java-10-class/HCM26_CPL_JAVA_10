@@ -58,9 +58,20 @@ export function getEffectiveRule(field: FieldSchema): EffectiveFieldValidation {
   }
 
   const maxLength =
-    own.maxLength === null ? undefined : own.maxLength ?? defaultMax;
+    own.maxLength === null
+      ? undefined
+      : own.maxLength ?? field.maxLength ?? defaultMax;
 
-  return { ...own, url: isUrl, email: isEmail, maxLength };
+  return {
+    ...own,
+    // Legacy flat FieldSchema flags are still supported by existing schemas.
+    required: own.required ?? field.required,
+    requiredMessage: own.requiredMessage ?? field.requiredMessage,
+    minLength: own.minLength ?? field.minLength,
+    url: isUrl,
+    email: isEmail,
+    maxLength,
+  };
 }
 
 /**

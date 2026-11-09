@@ -1,8 +1,8 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAutoPageSize } from "@/components/datatable/hook/useAutoPageSize";
-import type { EntityCardRendererProps } from "@/types";
+import type { EntityCardLayout, EntityCardRendererProps, FieldSchema } from "@/types";
 import { ChevronRight } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Loading from "./common/Loading";
 import NoResult from "./common/NoResult";
 import { ConfirmDeleteModal } from "./modal/ConfirmDeleteModal";
@@ -25,10 +25,42 @@ interface ProTableProps<TData = any> {
 
     headerActions?: React.ReactNode;
 
+    /** Optional: extra buttons rendered next to the header actions / Create button */
+    extraHeaderActions?: React.ReactNode;
+
+    /**
+     * Optional: actions shown in browse mode, where the regular toolbar actions
+     * are hidden (read-only card view). Used to expose a single "Create" button.
+     */
+    browseActions?: React.ReactNode;
+
+    /** Optional: Complete override of row actions. If provided, you have full control */
     renderRowActions?: (row: TData) => React.ReactNode;
 
+    actionsColumnWidth?: number;
+
+    /**
+     * Optional: extra entity-specific row buttons appended after the default
+     * view / edit / delete actions (e.g. "Clone template").
+     */
+    renderExtraRowActions?: (row: TData) => React.ReactNode;
+
+    /** Optional: per-field cell override (Task table). */
+    renderCell?: (row: TData, field: FieldSchema) => React.ReactNode;
+
+    /** Optional: denser toolbar layout (Task table). */
+    compactToolbar?: boolean;
+
+    /** Optional: render cards instead of the table on small screens (Task table). */
+    responsiveCards?: boolean;
+
+    /** Optional: Custom card renderer for card view */
     renderCard?: (props: EntityCardRendererProps) => React.ReactNode;
 
+    /** Optional: Card view layout. "list" renders full-width stacked rows. */
+    cardLayout?: EntityCardLayout;
+
+    /** Optional: Override default view action. If not provided, uses internal modal view */
     onView?: (row: TData) => void;
 
     onEdit?: (row: TData) => void;
@@ -51,11 +83,38 @@ interface ProTableProps<TData = any> {
 
     hideActions?: boolean;
 
-    /** Ẩn toàn bộ toolbar (search, sort, filter, actions). */
-    hideToolbar?: boolean;
+    /** Hide only the default Create action while retaining import/export actions */
+    hideCreate?: boolean;
 
+    /** UI mode for datatable. browse mode is card-first with simplified controls. */
     mode?: "default" | "browse";
 
+    /** Enable row/card selection. */
+    selectable?: boolean;
+
+    /** Show the row number column/card index. */
+    showIndex?: boolean;
+
+    /** Optional domain-specific list states. */
+    renderLoading?: React.ReactNode;
+    renderEmpty?: React.ReactNode;
+    renderError?: React.ReactNode;
+
+    /** Hide pagination for empty or error states when needed. */
+    showPagination?: boolean;
+
+    /**
+     * Optional: keep row actions (view / edit / delete) and the boolean toggle
+     * enabled in browse mode. Only takes effect together with `mode="browse"`.
+     */
+    browseRowActions?: boolean;
+
+    /**
+     * Optional: Expandable row configuration.
+     * Expansion is auto-enabled when any field in the schema has `expandable: true`.
+     * Use `renderExpandedRow` to customise the expanded content; if omitted,
+     * the expandable field's value is rendered automatically via CellRenderer.
+     */
     expandable?: {
 
         renderExpandedRow?: (row: TData) => React.ReactNode;
@@ -65,8 +124,16 @@ interface ProTableProps<TData = any> {
 export function ProTable<TData = any>({
     table,
     headerActions,
+    extraHeaderActions,
+    browseActions,
     renderRowActions,
+    actionsColumnWidth,
+    renderExtraRowActions,
+    renderCell,
+    compactToolbar = false,
+    responsiveCards = false,
     renderCard,
+    cardLayout = "grid",
     onView,
     onEdit,
     onDelete,
@@ -75,12 +142,21 @@ export function ProTable<TData = any>({
     autoPageSize = true,
     rowHeight = 49,
     hideActions = false,
-    hideToolbar = false,
+    hideCreate = false,
     mode = "default",
+    selectable = true,
+    showIndex = true,
+    renderLoading,
+    renderEmpty,
+    renderError,
+    showPagination = true,
+    browseRowActions = false,
     expandable,
 }: ProTableProps<TData>) {
     const { schema } = table;
     const isBrowseMode = mode === "browse";
+    /** Browse mode normally hides row actions; entities can opt back in. */
+    const allowBrowseRowActions = isBrowseMode && browseRowActions;
 
     const isExpandable: boolean = schema.fields.some((f: any) => f.expandable === true);
 
@@ -108,7 +184,19 @@ export function ProTable<TData = any>({
     const [deleteItem, setDeleteItem] = useState<TData | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [detailRow, setDetailRow] = useState<TData | null>(null);
-    const [viewMode, setViewMode] = useState<ViewMode>(isBrowseMode ? "card" : "table");
+    const [viewMode, setViewMode] = useState<ViewMode>(() =>
+        isBrowseMode || (responsiveCards && window.matchMedia("(max-width: 640px)").matches)
+            ? "card"
+            : "table",
+    );
+
+    useEffect(() => {
+        if (!responsiveCards || isBrowseMode) return;
+        const media = window.matchMedia("(max-width: 640px)");
+        const changeView = (event: MediaQueryListEvent) => setViewMode(event.matches ? "card" : "table");
+        media.addEventListener("change", changeView);
+        return () => media.removeEventListener("change", changeView);
+    }, [responsiveCards, isBrowseMode]);
 
     useEffect(() => {
         if (isBrowseMode) {
@@ -184,7 +272,10 @@ export function ProTable<TData = any>({
     const hasRowActions = canViewRow || canEditRow || canDeleteRow;
 
     const showActionsColumn = !hideActions && hasRowActions;
-    const ACTION_COLUMN_WIDTH = 152;
+    // Entities that add their own row buttons (e.g. Project Template Versions
+    // with "Create new version" + "Clone") need a wider action column, otherwise
+    // the trailing icon button is clipped by the cell's overflow-hidden.
+    const ACTION_COLUMN_WIDTH = actionsColumnWidth ?? (renderExtraRowActions ? 236 : 152);
 
     const defaultRenderRowActions = (row: TData) => (
         <RowActions
@@ -195,6 +286,7 @@ export function ProTable<TData = any>({
             viewPermission={table.permission?.keys?.read}
             editPermission={table.permission?.keys?.update}
             deletePermission={table.permission?.keys?.delete}
+            extra={renderExtraRowActions?.(row)}
         />
     );
 
@@ -202,24 +294,27 @@ export function ProTable<TData = any>({
     const effectiveViewMode: ViewMode = isBrowseMode ? "card" : viewMode;
     const cardRowClickHandler =
         onRowClick || (isBrowseMode ? ((onView || setDetailRow) as (row: TData) => void) : undefined);
+    const listState = table.error
+        ? (renderError ?? <NoResult message="Unable to load data" />)
+        : table.loading
+          ? (renderLoading ?? <Loading />)
+          : (renderEmpty ?? <NoResult />);
 
     return (
-        <div
-            className={`grid gap-4 h-full font-inter ${
-                hideToolbar ? "grid-rows-[1fr_auto]" : "grid-rows-[auto_1fr_auto]"
-            }`}
-        >
-            {!hideToolbar && (
-                <Toolbar
-                    table={table}
-                    headerActions={headerActions}
-                    viewMode={effectiveViewMode}
-                    onViewModeChange={setViewMode}
-                    showViewModeToggle={!isBrowseMode}
-                    showActions={!isBrowseMode}
-                    showCardColumnToggle={!isBrowseMode}
-                />
-            )}
+        <div className="grid gap-4 h-full font-inter grid-rows-[auto_1fr_auto]">
+            <Toolbar
+                table={table}
+                headerActions={headerActions}
+                extraHeaderActions={extraHeaderActions}
+                browseActions={browseActions}
+                viewMode={effectiveViewMode}
+                onViewModeChange={setViewMode}
+                showViewModeToggle={!isBrowseMode}
+                showActions={!isBrowseMode}
+                showCardColumnToggle={!isBrowseMode}
+                compact={compactToolbar}
+                hideCreate={hideCreate}
+            />
 
             <div
                 ref={containerRef}
@@ -232,8 +327,8 @@ export function ProTable<TData = any>({
                         <Table className="table-fixed">
                             <colgroup>
                                 {isExpandable && <col style={{ width: 40 }} />}
-                                <col style={{ width: 20 }} />
-                                <col style={{ width: 50 }} />
+                                {selectable && <col style={{ width: 20 }} />}
+                                {showIndex && <col style={{ width: 50 }} />}
                                 {table.visibleFields.map((f: any) => (
                                     <col key={f.name} style={{ width: columnWidths[f.name] || 150 }} />
                                 ))}
@@ -242,12 +337,16 @@ export function ProTable<TData = any>({
                             <TableHeader className="bg-background z-40 sticky top-0 shadow-xs">
                                 <TableRow>
                                     {isExpandable && <TableHead style={{ width: 40 }} />}
-                                    <TableHead style={{ width: 20 }}>
-                                        <SelectAllCheckbox table={table} idField={schema.idField} />
-                                    </TableHead>
-                                    <TableHead style={{ width: 50 }} className="text-center">
-                                        #
-                                    </TableHead>
+                                    {selectable && (
+                                        <TableHead style={{ width: 20 }}>
+                                            <SelectAllCheckbox table={table} idField={schema.idField} />
+                                        </TableHead>
+                                    )}
+                                    {showIndex && (
+                                        <TableHead style={{ width: 50 }} className="text-center">
+                                            #
+                                        </TableHead>
+                                    )}
                                     {table.visibleFields.map((f: any) => (
                                         <SortableHeader
                                             key={f.name}
@@ -292,13 +391,13 @@ export function ProTable<TData = any>({
                                         const isExpanded = isExpandable && expandedRows.has(id);
                                         const expandColSpan =
                                             (isExpandable ? 1 : 0) +
-                                            1 +
-                                            1 +
+                                            (selectable ? 1 : 0) +
+                                            (showIndex ? 1 : 0) +
                                             table.visibleFields.length +
                                             (showActionsColumn ? 1 : 0);
 
                                         return (
-                                            <>
+                                            <Fragment key={id}>
                                                 <TableRow
                                                     key={id}
                                                     className="group w-full odd:bg-accent even:bg-background [&>td]:h-[inherit] [&>td]:overflow-hidden"
@@ -337,32 +436,42 @@ export function ProTable<TData = any>({
                                                         </TableCell>
                                                     )}
 
-                                                    <TableCell>
-                                                        <RowSelection id={id} table={table} />
-                                                    </TableCell>
+                                                    {selectable && (
+                                                        <TableCell>
+                                                            <RowSelection id={id} table={table} />
+                                                        </TableCell>
+                                                    )}
 
-                                                    <TableCell className="text-center text-muted-foreground">
-                                                        {(table.page || 0) * (table.size || 10) + index + 1}
-                                                    </TableCell>
+                                                    {showIndex && (
+                                                        <TableCell className="text-center text-muted-foreground">
+                                                            {(table.page || 0) * (table.size || 10) + index + 1}
+                                                        </TableCell>
+                                                    )}
 
-                                                    {table.visibleFields.map((f: any) => (
-                                                        <CellRenderer
-                                                            key={f.name}
-                                                            field={f}
-                                                            value={row[f.name]}
-                                                            relationOptions={table.relationOptions}
-                                                            disableBooleanToggle={!(table.permission?.canUpdate ?? true)}
-                                                            onBooleanToggle={(fieldName, newValue) => {
-                                                                if (!(table.permission?.canUpdate ?? true)) return;
-                                                                table.patchField(id, fieldName, newValue);
-                                                            }}
-                                                            dateFormat={
-                                                                f.type === "date"
-                                                                    ? (dateFormats[f.name] ?? "datetime")
-                                                                    : undefined
-                                                            }
-                                                        />
-                                                    ))}
+                                                    {table.visibleFields.map((f: any) => {
+                                                        const content = renderCell?.(row, f);
+                                                        return content !== undefined ? (
+                                                            <TableCell key={f.name}>{content}</TableCell>
+                                                        ) : (
+                                                            <CellRenderer
+                                                                key={f.name}
+                                                                field={f}
+                                                                value={row[f.name]}
+                                                                row={row}
+                                                                relationOptions={table.relationOptions}
+                                                                disableBooleanToggle={!(table.permission?.canUpdate ?? true)}
+                                                                onBooleanToggle={(fieldName, newValue) => {
+                                                                    if (!(table.permission?.canUpdate ?? true)) return;
+                                                                    table.patchField(id, fieldName, newValue);
+                                                                }}
+                                                                dateFormat={
+                                                                    f.type === "date"
+                                                                        ? (dateFormats[f.name] ?? "datetime")
+                                                                        : undefined
+                                                                }
+                                                            />
+                                                        );
+                                                    })}
 
                                                     {showActionsColumn && (
                                                         <TableCell
@@ -396,6 +505,7 @@ export function ProTable<TData = any>({
                                                                                   <CellRenderer
                                                                                       field={f}
                                                                                       value={row[f.name]}
+                                                                                      row={row}
                                                                                       relationOptions={
                                                                                           table.relationOptions
                                                                                       }
@@ -434,7 +544,7 @@ export function ProTable<TData = any>({
                                                         </TableCell>
                                                     </TableRow>
                                                 )}
-                                            </>
+                                            </Fragment>
                                         );
                                     })}
                                 </TableBody>
@@ -443,7 +553,7 @@ export function ProTable<TData = any>({
 
                         {!table.data?.length && (
                             <div className="flex-1 flex items-center justify-center">
-                                {table.loading ? <Loading /> : <NoResult />}
+                                {listState}
                             </div>
                         )}
                     </>
@@ -453,50 +563,57 @@ export function ProTable<TData = any>({
                             <CardView
                                 table={table}
                                 onRowClick={cardRowClickHandler}
-                                showActions={!isBrowseMode && showActionsColumn}
+                                showActions={
+                                    (!isBrowseMode || allowBrowseRowActions) && showActionsColumn
+                                }
                                 renderRowActions={
-                                    !isBrowseMode && showActionsColumn ? finalRenderRowActions : undefined
+                                    (!isBrowseMode || allowBrowseRowActions) && showActionsColumn
+                                        ? finalRenderRowActions
+                                        : undefined
                                 }
                                 onView={onView || setDetailRow}
                                 onEdit={onEdit || table.openEdit}
                                 onDelete={onDelete || setDeleteItem}
                                 disableBooleanToggle={
-                                    isBrowseMode || !(table.permission?.canUpdate ?? true)
+                                    (isBrowseMode && !allowBrowseRowActions) ||
+                                    !(table.permission?.canUpdate ?? true)
                                 }
-                                selectable={!isBrowseMode}
-                                showIndex={!isBrowseMode}
+                                selectable={!isBrowseMode && selectable}
+                                showIndex={!isBrowseMode && showIndex}
                                 renderCard={renderCard}
+                                layout={cardLayout}
                                 onBooleanToggle={(id, fieldName, newValue) => {
-                                    if (isBrowseMode) return;
+                                    if (isBrowseMode && !allowBrowseRowActions) return;
                                     if (!(table.permission?.canUpdate ?? true)) return;
                                     table.patchField(id, fieldName, newValue);
                                 }}
                             />
                         ) : (
                             <div className="flex-1 flex items-center justify-center">
-                                {table.loading ? <Loading /> : <NoResult />}
+                                {listState}
                             </div>
                         )}
                     </>
                 )}
             </div>
 
-            <Pagination
-                table={table}
-                isAutoSize={isAutoSize}
-                autoSize={calculatedSize}
-                showSelectionSummary={!isBrowseMode}
-                onPageSizeChange={(value) => {
-                    if (value === "auto") {
-                        setIsAutoSize(true);
-                        table.setSize(calculatedSize);
-                    } else {
-                        setIsAutoSize(false);
-                        table.setSize(Number(value));
-                    }
-                    table.setPage(0);
-                }}
-            />
+            {showPagination && (
+                <Pagination
+                    table={table}
+                    isAutoSize={isAutoSize}
+                    autoSize={calculatedSize}
+                    showSelectionSummary={!isBrowseMode && selectable}
+                    onPageSizeChange={(value) => {
+                        if (value === "auto") {
+                            setIsAutoSize(true);
+                            table.setSize(calculatedSize);
+                        } else {
+                            setIsAutoSize(false);
+                            table.setSize(Number(value));
+                        }
+                    }}
+                />
+            )}
 
             {renderFormModal ? (
                 renderFormModal({

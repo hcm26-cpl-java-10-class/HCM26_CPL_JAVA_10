@@ -25,7 +25,7 @@ final class CodingScoring {
     private CodingScoring() {
     }
 
-    /** Diem cua cau theo ty le test dat (N test => moi test 1/N diem cau). */
+    /** Diem cua cau theo ty le test dat (10 test => moi test 10% diem cau). */
     static BigDecimal score(ExamAttempt attempt, ExamAttemptQuestion question, GradeResult result) {
         BigDecimal weight = BigDecimal.valueOf(question.getPoints())
                 .multiply(BigDecimal.valueOf(result.passed()))

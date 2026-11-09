@@ -103,10 +103,10 @@ export default function CertificateDetailPage() {
 
   if (certificateQuery.isLoading) {
     return (
-      <MainLayout pathName={{ certificates: "My Certificates" }}>
-        <div className="mx-auto max-w-7xl space-y-5 p-6">
+      <MainLayout dense pathName={{ certificates: "My Certificates" }}>
+        <div className="mx-auto max-w-7xl space-y-3 p-4">
           <div className="h-8 w-64 animate-pulse rounded bg-muted" />
-          <div className="grid gap-8 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <div className="h-96 animate-pulse rounded-2xl bg-muted" />
             <div className="h-130 animate-pulse rounded-2xl bg-muted" />
           </div>
@@ -117,8 +117,8 @@ export default function CertificateDetailPage() {
 
   if (certificateQuery.isError || !certificate) {
     return (
-      <MainLayout pathName={{ certificates: "My Certificates" }}>
-        <div className="mx-auto max-w-3xl p-8 text-center">
+      <MainLayout dense pathName={{ certificates: "My Certificates" }}>
+        <div className="mx-auto max-w-3xl p-4 text-center">
           <ShieldCheck className="mx-auto size-12 text-muted-foreground" />
           <h1 className="mt-4 text-2xl font-bold">
             Certificate Not Found
@@ -133,8 +133,8 @@ export default function CertificateDetailPage() {
 
   if (!certificate.valid) {
     return (
-      <MainLayout pathName={{ certificates: "My Certificates" }}>
-        <div className="mx-auto max-w-3xl p-8 text-center">
+      <MainLayout dense pathName={{ certificates: "My Certificates" }}>
+        <div className="mx-auto max-w-3xl p-4 text-center">
           <ShieldCheck className="mx-auto size-12 text-destructive" />
           <h1 className="mt-4 text-2xl font-bold">
             Certificate Could Not Be Verified
@@ -148,19 +148,19 @@ export default function CertificateDetailPage() {
   }
 
   return (
-    <MainLayout pathName={{ certificates: "My Certificates" }}>
-      <div className="mx-auto max-w-350 space-y-6 p-4 pb-10 sm:p-6 lg:p-8">
+    <MainLayout dense pathName={{ certificates: "My Certificates" }}>
+      <div className="mx-auto max-w-350 space-y-3 p-4 pb-10 sm:p-4 lg:p-4">
         {/* Page heading */}
-        <header className="mb-6">
+        <header className="mb-3">
             <h1 className="text-4xl font-medium text-slate-900">
                 {certificate?.courseName ?? "Certificate"}
             </h1>
         </header>
 
-        <div className="grid items-start gap-8 lg:grid-cols-[0.9fr_1.3fr]">
+        <div className="grid items-start gap-4 lg:grid-cols-[0.9fr_1.3fr]">
           {/* Left: certificate information */}
-          <section className="space-y-5">
-            <div className="rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
+          <section className="space-y-3">
+            <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-4">
               <div className="flex items-start gap-4">
                 <div className="relative flex size-16 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
                   <span className="text-xl font-semibold">
@@ -188,7 +188,7 @@ export default function CertificateDetailPage() {
                 </div>
               </div>
 
-              <div className="mt-7 border-t pt-6">
+              <div className="mt-7 border-t pt-3">
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Course Completed
                 </p>
@@ -209,7 +209,7 @@ export default function CertificateDetailPage() {
                 </div>
               </div>
 
-              <div className="mt-6 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+              <div className="mt-3 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
                 <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
                 <div>
                   <p className="font-semibold">Certificate Verified</p>
@@ -248,7 +248,7 @@ export default function CertificateDetailPage() {
           {/* Right: certificate preview */}
           <section className="min-w-0 space-y-4">
             <div className="certificate-print-area relative overflow-hidden border border-blue-200 bg-white text-slate-900 shadow-lg">
-              <div className="relative aspect-[1.414/1] min-h-90 overflow-hidden p-5 sm:p-8 lg:p-10">
+              <div className="relative aspect-[1.414/1] min-h-90 overflow-hidden p-4 sm:p-4 lg:p-10">
                 {/* Decorative background */}
                 <div className="pointer-events-none absolute left-0 top-0 size-24 bg-linear-to-br from-blue-100 to-transparent" />
                 <div className="pointer-events-none absolute bottom-0 right-0 size-40 bg-linear-to-tl from-blue-100 to-transparent" />
@@ -278,7 +278,7 @@ export default function CertificateDetailPage() {
                   </div>
 
                   {/* Ribbon */}
-                  <div className="absolute right-0 top-14 hidden w-20 flex-col items-center bg-blue-700 px-2 py-5 text-center text-white sm:flex lg:right-3 lg:top-16 lg:w-24">
+                  <div className="absolute right-0 top-14 hidden w-20 flex-col items-center bg-blue-700 px-2 py-3 text-center text-white sm:flex lg:right-3 lg:top-16 lg:w-24">
                     <GraduationCap className="size-7" />
                     <span className="mt-2 text-[9px] font-semibold leading-3 tracking-wide">
                       COURSE
@@ -290,7 +290,7 @@ export default function CertificateDetailPage() {
                   </div>
 
                   {/* Main certificate text */}
-                  <div className="mt-8 max-w-[88%] sm:mt-10 sm:max-w-[78%]">
+                  <div className="mt-4 max-w-[88%] sm:mt-10 sm:max-w-[78%]">
                     <p className="text-xl font-medium leading-tight tracking-wide text-indigo-800 sm:text-3xl lg:text-4xl">
                       Certificate of Completion
                     </p>
@@ -313,7 +313,7 @@ export default function CertificateDetailPage() {
                   </div>
 
                   {/* Issue date and verification link */}
-                  <div className="relative mt-auto grid gap-4 border-t border-blue-100 pt-4 sm:mt-8 sm:grid-cols-2 sm:gap-5 sm:pt-5">
+                  <div className="relative mt-auto grid gap-4 border-t border-blue-100 pt-4 sm:mt-4 sm:grid-cols-2 sm:gap-3 sm:pt-5">
                     <div className="flex items-start gap-2">
                       <CalendarDays className="mt-0.5 size-4 shrink-0 text-blue-700 sm:size-5" />
                       <div>

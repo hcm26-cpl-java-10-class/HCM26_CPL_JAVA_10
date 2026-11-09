@@ -20,6 +20,7 @@ public class SyllabusCloService {
     private final SyllabusRepository syllabuses;
     private final SyllabusCloRepository clos;
     private final SyllabusWorkflowService workflow;
+    private final SyllabusTopicCloLinkRepository coverageLinks;
 
     // =========================
     // DTOs
@@ -265,6 +266,7 @@ public class SyllabusCloService {
 
         SyllabusClo clo = requireClo(syllabusId, cloId);
 
+        coverageLinks.deleteAllForClo(cloId);
         clos.delete(clo);
     }
 }

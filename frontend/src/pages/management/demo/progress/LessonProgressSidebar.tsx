@@ -21,7 +21,7 @@ export function LessonProgressSidebar({
   }, new Map());
 
   return (
-    <aside className="space-y-5 rounded-2xl border bg-card p-4">
+    <aside className="space-y-3 rounded-2xl border bg-card p-4">
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm font-medium">
           <span>Course progress</span>
@@ -33,7 +33,7 @@ export function LessonProgressSidebar({
         </p>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-3">
         {[...sections.entries()].map(([sectionId, lessons]) => (
           <section key={sectionId} className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

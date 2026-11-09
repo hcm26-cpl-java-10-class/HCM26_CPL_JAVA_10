@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import type { FieldSchema } from "@/types";
 import { FormFieldRenderer } from "./FormFieldRenderer";
-import { validateForm } from "./validateForm";
 
 type SectionField = {
   name: string;
@@ -83,6 +82,16 @@ const sideMenuFormLayouts: Record<string, FormLayout> = {
   },
 };
 
+const resolveDefaultValue = (field: FieldSchema) => {
+  if (field.defaultValue !== undefined) return field.defaultValue;
+  if (field.type === "boolean") return false;
+  if (field.type === "relation" && field.relation?.multiple) return [];
+  if (field.type === "number") return "";
+  return "";
+};
+
+const EMPTY_FIELD_ERRORS: Record<string, string[]> = {};
+
 /** Field dạng chọn/bật tắt: validate ngay khi đổi giá trị (blur của Radix Select không đáng tin). */
 const CHOICE_TYPES = new Set(["select", "icon", "relation", "boolean"]);
 
@@ -107,17 +116,36 @@ export function FormModal({
   title = "Form",
   isSubmitting = false,
   relationOptions = {},
-  fieldErrors = {},
+  fieldErrors,
 }: FormModalProps) {
+  const serverErrors = fieldErrors ?? EMPTY_FIELD_ERRORS;
+
   const [form, setForm] = useState<Record<string, any>>({});
   const [clientErrors, setClientErrors] = useState<Record<string, string[]>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  /**
+   * Server-side errors (422 / 404 / 409) that the user already reacted to: once
+   * a field is edited again the stale highlight is dropped, so a Milestone that
+   * was rejected as "no longer existing" stops being red as soon as another one
+   * is picked - while the rest of the form is preserved.
+   */
+  const [touchedServerErrorFields, setTouchedServerErrorFields] = useState<
+    Set<string>
+  >(new Set());
+
+  useEffect(() => {
+    setTouchedServerErrorFields(new Set());
+  }, [serverErrors]);
+
+  /** `initial` is only given when an existing record is edited. */
+  const isEditMode = Boolean(initial);
 
   const editableFields: FieldSchema[] = schema.fields.filter(
     (f: FieldSchema) =>
       f.editable !== false &&
       f.type !== "dynamic" &&
-      !f.dynamicChild
+      !f.dynamicChild &&
+      !(isEditMode ? f.hideOnEdit : f.hideOnCreate)
   );
   const activeLayout = sideMenuFormLayouts[schema.entityName as string];
   const editableFieldMap = new Map(
@@ -135,22 +163,14 @@ export function FormModal({
           return;
         }
 
-        if (field.type === "boolean") next[field.name] = false;
-        else if (field.type === "relation" && field.relation?.multiple)
-          next[field.name] = [];
-        else if (field.type === "number") next[field.name] = "";
-        else next[field.name] = "";
+        next[field.name] = resolveDefaultValue(field);
       });
 
       setForm(next);
     } else {
       const defaults: Record<string, any> = {};
       editableFields.forEach((f) => {
-        if (f.type === "boolean") defaults[f.name] = false;
-        else if (f.type === "relation" && f.relation?.multiple)
-          defaults[f.name] = [];
-        else if (f.type === "number") defaults[f.name] = "";
-        else defaults[f.name] = "";
+        defaults[f.name] = resolveDefaultValue(f);
       });
       setForm(defaults);
     }
@@ -158,14 +178,60 @@ export function FormModal({
     setTouched({});
   }, [initial, open]);
 
+  const validateForm = (
+    values: Record<string, any>,
+    fields: FieldSchema[] = editableFields,
+  ) => {
+    const errors: Record<string, string[]> = {};
+
+    fields.forEach((field) => {
+      const value = values[field.name];
+      const isEmpty =
+        value === undefined ||
+        value === null ||
+        (typeof value === "string" && !value.trim()) ||
+        (Array.isArray(value) && value.length === 0);
+
+      if (field.required && isEmpty) {
+        errors[field.name] = [
+          field.requiredMessage ?? `${field.label} là bắt buộc`,
+        ];
+        return;
+      }
+
+      if (!isEmpty && typeof value === "string") {
+        if (field.minLength && value.trim().length < field.minLength) {
+          errors[field.name] = [
+            `${field.label} phải có ít nhất ${field.minLength} ký tự`,
+          ];
+        }
+
+        if (field.maxLength && value.length > field.maxLength) {
+          errors[field.name] = [
+            field.maxLengthMessage ??
+              `${field.label} không vượt quá ${field.maxLength} ký tự`,
+          ];
+        }
+      }
+    });
+
+    const crossFieldErrors: Record<string, string[]> =
+      (schema.validate?.(values) as Record<string, string[]> | undefined) ?? {};
+
+    Object.entries(crossFieldErrors).forEach(([fieldName, messages]) => {
+      if (messages && messages.length) {
+        errors[fieldName] = messages;
+      }
+    });
+
+    return errors;
+  };
+
   /** Validate đúng 1 field với state form mới nhất, cập nhật lỗi của field đó. */
   const validateSingleField = (name: string, nextForm: Record<string, any>) => {
     const field = editableFieldMap.get(name);
     if (!field) return;
-    const errors = validateForm([field], nextForm, {
-      isEdit: !!initial,
-      initial,
-    });
+    const errors = validateForm(nextForm, [field]);
     setClientErrors((prev) => {
       const { [name]: _removed, ...rest } = prev;
       return errors[name] ? { ...rest, [name]: errors[name] } : rest;
@@ -175,6 +241,12 @@ export function FormModal({
   const updateField = (name: string, value: any) => {
     const nextForm = { ...form, [name]: value };
     setForm(nextForm);
+    setTouchedServerErrorFields((prev) => {
+      if (prev.has(name)) return prev;
+      const next = new Set(prev);
+      next.add(name);
+      return next;
+    });
 
     const field = editableFieldMap.get(name);
     const isChoice = !!field && CHOICE_TYPES.has(field.type);
@@ -198,7 +270,13 @@ export function FormModal({
     validateSingleField(field.name, form);
   };
 
-  const mergedErrors: Record<string, string[]> = { ...fieldErrors, ...clientErrors };
+  const mergedErrors: Record<string, string[]> = { ...serverErrors, ...clientErrors };
+
+  touchedServerErrorFields.forEach((fieldName) => {
+    if (!clientErrors[fieldName]) {
+      delete mergedErrors[fieldName];
+    }
+  });
 
   const handleSubmit = () => {
     if (schema.entityName === "student") {
@@ -229,39 +307,67 @@ export function FormModal({
       return;
     }
 
-    setClientErrors({});
-    const errors = validateForm(editableFields, form, {
-      isEdit: !!initial,
-      initial,
-    });
+    const errors = validateForm(form);
     setClientErrors(errors);
     if (Object.keys(errors).length > 0) return;
     onSubmit(form);
   };
 
-  const getFieldErrors = (fieldName: string) =>
-    clientErrors[fieldName]?.length ? clientErrors[fieldName] : fieldErrors[fieldName];
+  const getFieldErrors = (fieldName: string) => mergedErrors[fieldName];
 
   const hasError = (fieldName: string) =>
     Boolean(mergedErrors[fieldName]?.length);
 
-  const renderField = (field: FieldSchema) => (
-    <div key={field.name} onBlur={() => handleFieldBlur(field)}>
-    <FormFieldRenderer
-      field={field}
-      value={form[field.name]}
-      errorClass={
-        hasError(field.name)
-          ? "border-destructive focus-visible:ring-destructive"
-          : ""
-      }
-      fieldErrors={getFieldErrors(field.name)}
-      relationOptions={relationOptions}
-      initial={initial}
-      onChange={updateField}
-    />
-    </div>
-  );
+  /**
+   * A field can offer different option lists while creating / editing (e.g. a
+   * status that is fixed on create). The current value is kept in the list so a
+   * record whose stored value is no longer selectable still displays it.
+   */
+  const resolveFieldOptions = (field: FieldSchema) => {
+    const modeOptions = isEditMode ? field.editOptions : field.createOptions;
+
+    if (!modeOptions) {
+      return null;
+    }
+
+    const currentOption = (field.options ?? []).find(
+      (option) => String(option.value) === String(form[field.name]),
+    );
+
+    if (
+      currentOption &&
+      !modeOptions.some(
+        (option) => String(option.value) === String(currentOption.value),
+      )
+    ) {
+      return [currentOption, ...modeOptions];
+    }
+
+    return modeOptions;
+  };
+
+  const renderField = (field: FieldSchema) => {
+    const modeOptions = resolveFieldOptions(field);
+    const resolvedField = modeOptions ? { ...field, options: modeOptions } : field;
+
+    return (
+      <div key={field.name} onBlur={() => handleFieldBlur(field)}>
+        <FormFieldRenderer
+          field={resolvedField}
+          value={form[field.name]}
+          errorClass={
+            hasError(field.name)
+              ? "border-destructive focus-visible:ring-destructive"
+              : ""
+          }
+          fieldErrors={getFieldErrors(field.name)}
+          relationOptions={relationOptions}
+          initial={initial}
+          onChange={updateField}
+        />
+      </div>
+    );
+  };
 
   const configuredFieldNames = new Set(
     activeLayout?.sections.flatMap((section) =>

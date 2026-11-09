@@ -15,7 +15,6 @@ import { LessonReportDialog } from "../lesson/components/LessonReportDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { LessonProgressSidebar } from "./LessonProgressSidebar";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
-import { CourseReviewPrompt } from "../course_review/components/CourseReviewPrompt";
 
 export function CourseLearningPage() {
   const { id } = useParams();
@@ -122,10 +121,11 @@ export function CourseLearningPage() {
 
   return (
     <MainLayout
+      dense
       pathName={{ enrollments: coursesLabel, learn: "Learn" }}
       pathLinks={{ enrollments: coursesPath }}
     >
-      <div className="mx-auto w-full max-w-7xl space-y-5">
+      <div className="mx-auto w-full max-w-7xl space-y-3">
         <Button asChild variant="ghost" className="-ml-3">
           <Link to={coursesPath}>
             <ArrowLeft className="size-4" /> Back to {coursesLabel.toLowerCase()}
@@ -137,7 +137,7 @@ export function CourseLearningPage() {
             Loading course...
           </p>
         ) : progressQuery.isError || !progressQuery.data ? (
-          <div role="alert" className="space-y-3 rounded-xl border border-destructive/30 p-6">
+          <div role="alert" className="space-y-3 rounded-xl border border-destructive/30 p-4">
             <p className="text-sm text-destructive">Could not load this course.</p>
             <Button variant="outline" onClick={() => void progressQuery.refetch()}>
               Try again
@@ -150,34 +150,26 @@ export function CourseLearningPage() {
             <p className="mt-2 text-sm text-muted-foreground">This course has no lessons yet.</p>
           </div>
         ) : (
-          <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="grid gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
             <LessonProgressSidebar
               progress={progressQuery.data}
               activeLessonId={activeLessonId}
               onLessonSelect={selectLesson}
             />
-            <main className="min-w-0 rounded-2xl border bg-card p-5 sm:p-7">
+            <main className="min-w-0 rounded-2xl border bg-card p-4 sm:p-7">
               <p className="text-sm text-muted-foreground">{progressQuery.data.courseName}</p>
-              {progressQuery.data.progressPercentage === 100 && (
-                <>
-                  {courseCertificate?.verificationToken && (
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
-                      <div>
-                        <p className="font-semibold">Course completed</p>
-                        <p className="text-sm opacity-80">Your certificate is ready.</p>
-                      </div>
-                      <Button asChild>
-                        <Link to={`/my-certificates/${encodeURIComponent(courseCertificate.verificationToken)}`}>
-                          <Award className="size-4" /> View certificate
-                        </Link>
-                      </Button>
-                    </div>
-                  )}
-
-                  <CourseReviewPrompt
-                    courseId={progressQuery.data.courseId}
-                  />               
-                </>
+              {progressQuery.data.progressPercentage === 100 && courseCertificate?.verificationToken && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
+                  <div>
+                    <p className="font-semibold">Course completed</p>
+                    <p className="text-sm opacity-80">Your certificate is ready.</p>
+                  </div>
+                  <Button asChild>
+                    <Link to={`/my-certificates/${encodeURIComponent(courseCertificate.verificationToken)}`}>
+                      <Award className="size-4" /> View certificate
+                    </Link>
+                  </Button>
+                </div>
               )}
               {currentLesson && (
                 <div className="mt-3">
@@ -235,7 +227,7 @@ export function CourseLearningPage() {
                       </div>
                     </section>
                   )}
-                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
                     <Button
                       variant="outline"
                       disabled={currentLessonIndex <= 0}
@@ -275,7 +267,7 @@ export function CourseLearningPage() {
                     focusQuestionId={
                       currentLesson.lessonId === requestedLessonId ? requestedQuestionId : undefined
                     }
-                    className="mt-8 border-t pt-6"
+                    className="mt-4 border-t pt-3"
                   />
                 </div>
               )}

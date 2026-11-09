@@ -14,8 +14,10 @@ import java.util.stream.Collectors;
 public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
 
     @Override
+    @Mapping(target = "tenantId", source = "tenantId")
     @IgnoreAuditFields
     @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "userCode", ignore = true)
     User toEntity(UserDTO request);
 
     @Override
@@ -25,11 +27,13 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
     @Mapping(target = "departmentIds", expression = "java(mapDepartmentIds(user))")
     @Mapping(target = "departmentNames", expression = "java(mapDepartmentNames(user))")
     @Mapping(target = "password", ignore = true)
+    @Mapping(target = "userCode", source = "userCode")
     @Mapping(target = "clearDepartment", ignore = true)
     UserDTO toResponse(User user);
 
     @Override
     @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "userCode", ignore = true)
     @Mapping(target = "departments", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget User user, UserDTO dto);

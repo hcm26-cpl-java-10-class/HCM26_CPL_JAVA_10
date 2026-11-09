@@ -212,10 +212,10 @@ export default function EnrollmentLogPage() {
     if (isAdminStudentPreview) return <Navigate to="/courses" replace />;
 
     return (
-        <MainLayout pathName={{ "enrollment-logs": "Enrollment Logs" }}>
-            <div className="space-y-6">
+        <MainLayout dense pathName={{ "enrollment-logs": "Enrollment Logs" }}>
+            <div className="space-y-3">
                 {/* Header */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-wider text-primary">System Audit Trail</p>
                         <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Enrollment Logs</h1>
@@ -226,7 +226,7 @@ export default function EnrollmentLogPage() {
                 </div>
 
                 {/* KPI Cards */}
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     {summaryCards.map((card) => {
                         const Icon = card.icon;
                         return (
@@ -244,7 +244,7 @@ export default function EnrollmentLogPage() {
                 </div>
 
                 {/* Filter Container */}
-                <div className="rounded-xl border bg-card p-5 shadow-sm space-y-4">
+                <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <Tabs
                             value={activeTab}
@@ -275,7 +275,7 @@ export default function EnrollmentLogPage() {
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
-                        <div className="sm:col-span-2 space-y-1.5">
+                        <div className="sm:col-span-2 space-y-1">
                             <span className="text-xs font-medium text-muted-foreground">Search</span>
                             <div className="relative">
                                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -288,7 +288,7 @@ export default function EnrollmentLogPage() {
                             </div>
                         </div>
 
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                             <span className="text-xs font-medium text-muted-foreground">Status</span>
                             <Select value={status} onValueChange={(val) => handleFilterChange(setStatus, val)}>
                                 <SelectTrigger className="h-9 text-xs">
@@ -306,7 +306,7 @@ export default function EnrollmentLogPage() {
 
                         {/* Chỉ hiển thị Department filter ở tab Department Logs */}
                         {isDepartmentTab && (
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                                 <span className="text-xs font-medium text-muted-foreground">Department</span>
                                 <Select value={departmentId} onValueChange={(val) => handleFilterChange(setDepartmentId, val)}>
                                     <SelectTrigger className="h-9 text-xs">
@@ -322,7 +322,7 @@ export default function EnrollmentLogPage() {
                             </div>
                         )}
 
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                             <span className="text-xs font-medium text-muted-foreground">Course</span>
                             <Select value={courseId} onValueChange={(val) => handleFilterChange(setCourseId, val)}>
                                 <SelectTrigger className="h-9 text-xs">
@@ -338,7 +338,7 @@ export default function EnrollmentLogPage() {
                         </div>
 
                         {!isDepartmentTab && (
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                                 <span className="text-xs font-medium text-muted-foreground">Source</span>
                                 <Select value={source} onValueChange={(val) => handleFilterChange(setSource, val)}>
                                     <SelectTrigger className="h-9 text-xs">
@@ -354,7 +354,7 @@ export default function EnrollmentLogPage() {
                             </div>
                         )}
 
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                             <span className="text-xs font-medium text-muted-foreground">From Date</span>
                             <Input
                                 type="date"
@@ -364,7 +364,7 @@ export default function EnrollmentLogPage() {
                             />
                         </div>
 
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                             <span className="text-xs font-medium text-muted-foreground">To Date</span>
                             <Input
                                 type="date"
@@ -382,25 +382,25 @@ export default function EnrollmentLogPage() {
                         <table className="min-w-full text-left text-sm">
                             <thead className="sticky top-0 z-10 border-b bg-muted text-xs uppercase tracking-wider text-muted-foreground shadow-[0_1px_0_0_var(--border)]">
                             <tr>
-                                <th className="px-4 py-3 font-semibold">Type</th>
-                                <th className="px-4 py-3 font-semibold">Actor</th>
-                                <th className="px-4 py-3 font-semibold">{isDepartmentTab ? "Department" : "Student"}</th>
-                                <th className="px-4 py-3 font-semibold">Course</th>
+                                <th className="px-4 py-2 font-semibold">Type</th>
+                                <th className="px-4 py-2 font-semibold">Actor</th>
+                                <th className="px-4 py-2 font-semibold">{isDepartmentTab ? "Department" : "Student"}</th>
+                                <th className="px-4 py-2 font-semibold">Course</th>
                                 {isDepartmentTab ? (
-                                    <th className="px-4 py-3 text-right font-semibold">Students</th>
+                                    <th className="px-4 py-2 text-right font-semibold">Students</th>
                                 ) : (
-                                    <th className="px-4 py-3 font-semibold">Source</th>
+                                    <th className="px-4 py-2 font-semibold">Source</th>
                                 )}
-                                <th className="px-4 py-3 font-semibold">Timestamp</th>
-                                <th className="px-4 py-3 font-semibold">Status</th>
-                                <th className="px-4 py-3 text-right font-semibold">Action</th>
+                                <th className="px-4 py-2 font-semibold">Timestamp</th>
+                                <th className="px-4 py-2 font-semibold">Status</th>
+                                <th className="px-4 py-2 text-right font-semibold">Action</th>
                             </tr>
                             </thead>
 
                             <tbody className="divide-y divide-border/60">
                             {isLoading ? (
                                 <tr>
-                                    <td colSpan={colCount} className="px-4 py-12 text-center text-muted-foreground">
+                                    <td colSpan={colCount} className="px-4 py-4 text-center text-muted-foreground">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                                             <span>Loading logs...</span>
@@ -409,20 +409,20 @@ export default function EnrollmentLogPage() {
                                 </tr>
                             ) : isError ? (
                                 <tr>
-                                    <td colSpan={colCount} className="px-4 py-12 text-center text-destructive">
+                                    <td colSpan={colCount} className="px-4 py-4 text-center text-destructive">
                                         Failed to fetch logs.
                                     </td>
                                 </tr>
                             ) : rows.length === 0 ? (
                                 <tr>
-                                    <td colSpan={colCount} className="px-4 py-12 text-center text-muted-foreground">
+                                    <td colSpan={colCount} className="px-4 py-4 text-center text-muted-foreground">
                                         No logs match current query.
                                     </td>
                                 </tr>
                             ) : (
                                 rows.map((row) => (
                                     <tr key={row.id} className="transition-colors hover:bg-muted/30">
-                                        <td className="px-4 py-3 align-middle">
+                                        <td className="px-4 py-2 align-middle">
                                             <Badge variant="outline" className={`font-mono text-[11px] ${
                                                 row.type === "ENROLLMENT"
                                                     ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
@@ -432,7 +432,7 @@ export default function EnrollmentLogPage() {
                                             </Badge>
                                         </td>
 
-                                        <td className="px-4 py-3 align-middle">
+                                        <td className="px-4 py-2 align-middle">
                                             <div className="flex items-center gap-2">
                                                 <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                                                     {(row.actorName?.[0] ?? "S").toUpperCase()}
@@ -444,41 +444,41 @@ export default function EnrollmentLogPage() {
                                             </div>
                                         </td>
 
-                                        <td className="px-4 py-3 align-middle">
+                                        <td className="px-4 py-2 align-middle">
                                             <div className="font-medium text-foreground">
                                                 {isDepartmentTab ? row.departmentName ?? "-" : row.targetName ?? "-"}
                                             </div>
                                             <div className="text-xs text-muted-foreground">{row.targetType ?? "-"}</div>
                                         </td>
 
-                                        <td className="px-4 py-3 align-middle font-medium text-foreground">
+                                        <td className="px-4 py-2 align-middle font-medium text-foreground">
                                             {row.courseName ?? "-"}
                                         </td>
 
                                         {isDepartmentTab ? (
-                                            <td className="px-4 py-3 text-right align-middle">
+                                            <td className="px-4 py-2 text-right align-middle">
                                                 <span className="inline-flex items-center gap-1.5 font-semibold text-foreground">
                                                     <Users className="size-3.5 text-muted-foreground" />
                                                     {(row.studentCount ?? 0).toLocaleString()}
                                                 </span>
                                             </td>
                                         ) : (
-                                            <td className="px-4 py-3 align-middle text-xs font-mono text-muted-foreground">
+                                            <td className="px-4 py-2 align-middle text-xs font-mono text-muted-foreground">
                                                 {row.source ?? "-"}
                                             </td>
                                         )}
 
-                                        <td className="px-4 py-3 align-middle whitespace-nowrap text-xs text-muted-foreground">
+                                        <td className="px-4 py-2 align-middle whitespace-nowrap text-xs text-muted-foreground">
                                             {formatDate(row.createdAt)}
                                         </td>
 
-                                        <td className="px-4 py-3 align-middle">
+                                        <td className="px-4 py-2 align-middle">
                                             <Badge variant="outline" className={`text-[11px] ${getStatusBadge(row.status)}`}>
                                                 {row.status ?? "N/A"}
                                             </Badge>
                                         </td>
 
-                                        <td className="px-4 py-3 align-middle text-right">
+                                        <td className="px-4 py-2 align-middle text-right">
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
@@ -496,7 +496,7 @@ export default function EnrollmentLogPage() {
                     </div>
 
                     {/* Pagination */}
-                    <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between text-xs text-muted-foreground">
+                    <div className="flex flex-col gap-3 border-t px-4 py-2 sm:flex-row sm:items-center sm:justify-between text-xs text-muted-foreground">
                         <div>
                             Showing <span className="font-medium text-foreground">{rows.length > 0 ? page * pageSize + 1 : 0}</span> to{" "}
                             <span className="font-medium text-foreground">{Math.min((page + 1) * pageSize, totalElements)}</span> of{" "}
@@ -563,7 +563,7 @@ export default function EnrollmentLogPage() {
 
             {/* Detail: student enrollment */}
             <Sheet open={!!selected && selected.type !== "DEPARTMENT"} onOpenChange={(open) => !open && setSelected(null)}>
-                <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-6">
+                <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-4">
                     <SheetHeader className="border-b pb-4">
                         <SheetTitle className="text-xl font-bold flex items-center justify-between">
                             <span>Log Details Inspection</span>
@@ -576,7 +576,7 @@ export default function EnrollmentLogPage() {
                     </SheetHeader>
 
                     {selected && (
-                        <div className="mt-6 space-y-5 text-sm">
+                        <div className="mt-3 space-y-3 text-sm">
                             <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
                                 <div className="flex items-center gap-2 font-semibold text-foreground">
                                     <User className="size-4 text-primary" /> Actor Info

@@ -30,6 +30,9 @@ public class InvitationDTO extends BaseDTO {
     @JsonProperty(access = READ_ONLY)
     private String userEmail;
 
+    @JsonProperty(access = READ_ONLY)
+    private String token;
+
     private InvitationStatus status;
 
     @JsonProperty(access = READ_ONLY)

@@ -153,6 +153,7 @@ export default function SyllabusDetailPage() {
             qc.invalidateQueries({ queryKey: ["syllabus", syllabusId] }),
             qc.invalidateQueries({ queryKey: ["syllabuses"] }),
             qc.invalidateQueries({ queryKey: ["syllabus-progress", syllabusId] }),
+            qc.invalidateQueries({ queryKey: ["syllabus-coverage", syllabusId] }),
         ]);
         setValidation(null);
     }
@@ -536,7 +537,6 @@ export default function SyllabusDetailPage() {
                         <SyllabusWorkflowPanel syllabusId={syllabusId} />
 
                         <CloPanel syllabusId={syllabusId} readOnly={published} />
-
 
 
                         {/* Sections Toolbar */}

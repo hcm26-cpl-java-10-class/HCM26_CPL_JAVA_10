@@ -706,11 +706,12 @@ export default function CurriculumManagementPage() {
 
     return (
         <MainLayout
+            dense
             pathName={{
                 curriculum: "Curriculum",
             }}
         >
-            <div className="mx-auto w-full max-w-6xl space-y-6">
+            <div className="mx-auto w-full max-w-6xl space-y-3">
                 {/* Back */}
                 <Button asChild variant="ghost" size="sm">
                     <Link
@@ -774,7 +775,7 @@ export default function CurriculumManagementPage() {
                 </div>
 
                 {/* Select Course */}
-                <div className="rounded-xl border bg-card p-5">
+                <div className="rounded-xl border bg-card p-4">
                     <label
                         htmlFor="course-select"
                         className="mb-2 block text-sm font-medium"
@@ -816,7 +817,7 @@ export default function CurriculumManagementPage() {
                 </div>
 
                 {/* Sections */}
-                <div className="space-y-4">
+                <div className="space-y-3">
                     <div className="flex items-center gap-2">
                         <BookOpen className="size-5" />
 
@@ -847,17 +848,17 @@ export default function CurriculumManagementPage() {
                         )}
 
                     {!courseId ? (
-                        <div className="rounded-xl border p-8 text-center text-muted-foreground">
+                        <div className="rounded-xl border p-4 text-center text-muted-foreground">
                             Please select a course.
                         </div>
                     ) : sectionsQuery.isLoading ? (
-                        <div className="rounded-xl border p-8 text-center">
+                        <div className="rounded-xl border p-4 text-center">
                             Loading sections...
                         </div>
                     ) : sectionsQuery.isError ? (
                         <div
                             role="alert"
-                            className="rounded-xl border p-8 text-center"
+                            className="rounded-xl border p-4 text-center"
                         >
                             <p className="mb-3 text-destructive">
                                 Failed to load sections.
@@ -871,7 +872,7 @@ export default function CurriculumManagementPage() {
                             </Button>
                         </div>
                     ) : sections.length === 0 ? (
-                        <div className="rounded-xl border border-dashed p-10 text-center">
+                        <div className="rounded-xl border border-dashed p-4 text-center">
                             <BookOpen className="mx-auto mb-3 size-8 text-muted-foreground" />
 
                             <h3 className="font-semibold">
@@ -912,7 +913,7 @@ export default function CurriculumManagementPage() {
                             return (
                                 <div
                                     key={section.id}
-                                    className="space-y-4 rounded-xl border bg-card p-5"
+                                    className="space-y-3 rounded-xl border bg-card p-4"
                                 >
                                     {/* Section Header */}
                                     <div className="flex flex-wrap items-center justify-between gap-3">

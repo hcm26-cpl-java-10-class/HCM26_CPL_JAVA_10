@@ -112,7 +112,7 @@ function AdminCertificatePage() {
               tooltip="View detail"
               icon={<Eye size={10} className="text-gray-500" />}
             />
-          )}        
+          )}
         />
 
         <DetailModal

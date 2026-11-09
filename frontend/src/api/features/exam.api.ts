@@ -8,8 +8,6 @@ import type {
   EssayGradingSummary,
   ExamDTO,
   ExamFilter,
-  ExamCategory,
-  ExamInvitationOverview,
   GradeSubmissionRequest,
   QuestionDTO,
   QuestionFilter,
@@ -22,7 +20,6 @@ const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 export interface PublishedExamScore {
   examId: number;
   examTitle: string;
-  category: ExamCategory;
   attemptNumber: number;
   objectiveScore: number | null;
   finalScore: number | null;
@@ -38,10 +35,6 @@ export interface PublishedExamScore {
 
 export const examApi = {
   ...examBase,
-  listInvitationOverviews: async (): Promise<ExamInvitationOverview[]> => {
-    const response = await axiosInstance.get<ExamInvitationOverview[]>("/exams/invitations/overview");
-    return response.data;
-  },
   getMyPublishedExamScores: async (): Promise<PublishedExamScore[]> => {
     const response = await axiosInstance.get<PublishedExamScore[]>("/exams/my-scores");
     return response.data;
