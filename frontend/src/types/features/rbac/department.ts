@@ -1,6 +1,5 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
 
-export interface DepartmentDTO extends BaseDTO {
 export interface Department extends BaseDTO {
   code?: string;
   name?: string;

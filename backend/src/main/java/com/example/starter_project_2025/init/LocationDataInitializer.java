@@ -2,6 +2,7 @@ package com.example.starter_project_2025.init;
 
 import com.example.starter_project_2025.system.rbac.location.Location;
 import com.example.starter_project_2025.system.rbac.location.LocationRepository;
+import com.example.starter_project_2025.system.rbac.location.LocationStatus;
 import com.example.starter_project_2025.system.rbac.permission.Permission;
 import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
@@ -31,10 +32,10 @@ public class LocationDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        // 1. Ensure Permissions & Gán cho Role ADMIN
+
         ensurePermissionsAndAssignToAdmin();
 
-        // 2. Ensure Seed Locations
+
         Location vn = ensure("VN", "Việt Nam (Hệ thống Cơ sở)", null);
 
         Location hn = ensure("CAMPUS_HN", "Cơ sở Hà Nội", vn);
@@ -53,6 +54,7 @@ public class LocationDataInitializer implements CommandLineRunner {
         ensure("HCM_ALP_R102", "Phòng học 102", hcmBuildingAlpha);
 
         ensure("DN_MAIN", "Tòa nhà Trung tâm Đà Nẵng", dn);
+
 
         assignUserToLocation("admin@example.com", hnF2);
         assignUserToLocation("teacher@example.com", hcmR101);
@@ -97,19 +99,22 @@ public class LocationDataInitializer implements CommandLineRunner {
             Location location = Location.builder()
                     .code(code)
                     .name(name)
-                    .parentId(parent != null ? parent.getId() : null)
-                    .status("ACTIVE")
+                    .status(LocationStatus.ACTIVE)
                     .build();
+
+            
+            location.setParentLocation(parent);
+
             return locationRepository.save(location);
         });
     }
 
     private void assignUserToLocation(String email, Location location) {
+        if (location == null) return;
+
         userRepository.findByEmail(email).ifPresent(user -> {
-            if (location.getUsers() == null) {
-                location.setUsers(new HashSet<>());
-            }
-            location.getUsers().add(user);
+
+            location.addUser(user);
             locationRepository.save(location);
             log.info("Assigned user {} to location {}", email, location.getName());
         });
