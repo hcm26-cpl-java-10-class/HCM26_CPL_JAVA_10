@@ -39,6 +39,16 @@ public class LocationDTO extends BaseDTO {
     @JsonProperty(access = READ_ONLY)
     String parentLocationName;
 
+    // --- Bổ sung các thông tin hiển thị từ Entity mới ---
+
+    @JsonProperty(access = READ_ONLY)
+    String path; // Hiển thị đường dẫn cây: "VN / HN / Cơ sở 1"
+
+    @JsonProperty(access = READ_ONLY)
+    Integer level; // Độ sâu phân cấp
+
+    LocationStatus status;
+
     @JsonProperty(access = READ_ONLY)
     Integer totalUsers;
 

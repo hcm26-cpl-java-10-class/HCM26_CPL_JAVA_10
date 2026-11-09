@@ -36,7 +36,7 @@ public class LocationServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        return new String[]{"code", "name"};
+        return new String[]{"code", "name", "path"};
     }
 
     @Override
@@ -45,20 +45,13 @@ public class LocationServiceImpl
 
         if (locationRepository.existsByCode(request.getCode())) {
             ctx.add("code", "Location code is already in use");
+            return;
         }
 
-        Long parentId = resolveParentId(request.getParentLocationId(), null, ctx);
-
-        location.setCode(request.getCode());
-        location.setName(request.getName());
-        location.setParentId(parentId);
-
-        if (location.getIsActive() == null) {
-            location.setIsActive(true);
-        }
-
-        if (location.getStatus() == null) {
-            location.setStatus("ACTIVE");
+        // Thiết lập Parent theo quan hệ đối tượng
+        Location parent = resolveParent(request.getParentLocationId(), null, ctx);
+        if (!ctx.hasErrors()) {
+            location.setParentLocation(parent);
         }
     }
 
@@ -66,20 +59,20 @@ public class LocationServiceImpl
     protected void beforeUpdate(Location location, LocationDTO request, ValidationContext ctx) {
         normalize(request);
 
+        // Kiểm tra trùng code khi sửa
         if (request.getCode() != null && !request.getCode().equals(location.getCode())) {
             if (locationRepository.existsByCode(request.getCode())) {
                 ctx.add("code", "Location code is already in use");
             }
         }
 
-        Long parentId = resolveParentId(request.getParentLocationId(), location.getId(), ctx);
+        // Cập nhật thông tin qua Domain Method (Encapsulation)
+        location.updateInfo(request.getName(), request.getDescription());
 
+        // Cập nhật quan hệ Parent
+        Location newParent = resolveParent(request.getParentLocationId(), location.getId(), ctx);
         if (!ctx.hasErrors()) {
-            location.setParentId(parentId);
-        }
-
-        if (location.getIsActive() == null) {
-            location.setIsActive(true);
+            location.setParentLocation(newParent);
         }
     }
 
@@ -87,7 +80,8 @@ public class LocationServiceImpl
     protected void beforeDelete(Location location) {
         ValidationContext ctx = new ValidationContext();
 
-        if (locationRepository.existsByParentId(location.getId())) {
+        // Dùng quan hệ đối tượng Hibernate thay vì query parentId
+        if (location.getChildren() != null && !location.getChildren().isEmpty()) {
             ctx.add("id", "Cannot delete a location that still has child locations");
         }
 
@@ -99,35 +93,26 @@ public class LocationServiceImpl
     public List<LocationTreeDTO> getTree() {
         checkPermission(CrudAction.READ);
 
-        List<Location> all = locationRepository.findAll();
-
-        Map<Long, List<Location>> childrenByParent = new HashMap<>();
-        List<Location> roots = new ArrayList<>();
-
-        for (Location loc : all) {
-            Long parentId = loc.getParentId();
-            if (parentId == null) {
-                roots.add(loc);
-            } else {
-                childrenByParent.computeIfAbsent(parentId, k -> new ArrayList<>()).add(loc);
-            }
-        }
+        // Lấy danh sách vị trí gốc (Root) từ Repository
+        List<Location> roots = locationRepository.findByParentIsNull();
 
         return roots.stream()
                 .sorted(Comparator.comparing(Location::getName, String.CASE_INSENSITIVE_ORDER))
-                .map(loc -> toNode(loc, childrenByParent))
+                .map(this::toNode)
                 .toList();
     }
 
-    private LocationTreeDTO toNode(Location loc, Map<Long, List<Location>> childrenByParent) {
-        List<LocationTreeDTO> children = childrenByParent
-                .getOrDefault(loc.getId(), List.of())
-                .stream()
-                .sorted(Comparator.comparing(Location::getName, String.CASE_INSENSITIVE_ORDER))
-                .map(child -> toNode(child, childrenByParent))
-                .toList();
+    /**
+     * Chuyển đổi đệ quy từ Entity sang DTO dựa trên navigation properties (OOP)
+     */
+    private LocationTreeDTO toNode(Location loc) {
+        List<LocationTreeDTO> children = (loc.getChildren() == null) ? List.of() :
+                loc.getChildren().stream()
+                        .sorted(Comparator.comparing(Location::getName, String.CASE_INSENSITIVE_ORDER))
+                        .map(this::toNode)
+                        .toList();
 
-        List<UserSummaryDTO> userSummaries = loc.getUsers() == null ? List.of() :
+        List<UserSummaryDTO> userSummaries = (loc.getUsers() == null) ? List.of() :
                 loc.getUsers().stream()
                         .map(u -> {
                             String roleName = (u.getRoles() != null && !u.getRoles().isEmpty())
@@ -144,11 +129,14 @@ public class LocationServiceImpl
                         })
                         .toList();
 
+        Long parentId = (loc.getParent() != null) ? loc.getParent().getId() : null;
+
         return LocationTreeDTO.builder()
                 .id(loc.getId())
                 .code(loc.getCode())
                 .name(loc.getName())
-                .parentId(loc.getParentId())
+                .path(loc.getPath())
+                .level(loc.getLevel())
                 .status(loc.getStatus())
                 .users(userSummaries)
                 .totalUsers(userSummaries.size())
@@ -165,7 +153,8 @@ public class LocationServiceImpl
         }
     }
 
-    private Long resolveParentId(Long parentId, Long currentId, ValidationContext ctx) {
+
+    private Location resolveParent(Long parentId, Long currentId, ValidationContext ctx) {
         if (parentId == null) {
             return null;
         }
@@ -175,27 +164,23 @@ public class LocationServiceImpl
             return null;
         }
 
-        Optional<Location> parent = locationRepository.findById(parentId);
-
-        if (parent.isEmpty()) {
+        Location parent = locationRepository.findById(parentId).orElse(null);
+        if (parent == null) {
             ctx.add("parentLocationId", "Parent location does not exist");
             return null;
         }
 
         if (currentId != null) {
-            Long cursorId = parent.get().getParentId();
-            Set<Long> visited = new HashSet<>();
-
-            while (cursorId != null && visited.add(cursorId)) {
-                if (cursorId.equals(currentId)) {
+            Location cursor = parent;
+            while (cursor != null) {
+                if (Objects.equals(cursor.getId(), currentId)) {
                     ctx.add("parentLocationId", "Parent location cannot be a descendant of this location");
                     return null;
                 }
-                Optional<Location> cursorLoc = locationRepository.findById(cursorId);
-                cursorId = cursorLoc.map(Location::getParentId).orElse(null);
+                cursor = cursor.getParent();
             }
         }
 
-        return parentId;
+        return parent;
     }
 }
