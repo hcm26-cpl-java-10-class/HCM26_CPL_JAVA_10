@@ -2,6 +2,7 @@ package com.example.starter_project_2025.service;
 
 import com.example.starter_project_2025.security.UserDetailsServiceImpl;
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.audit.AuditLogService;
 import com.example.starter_project_2025.system.auth.authentication.AuthMapper;
 import com.example.starter_project_2025.system.auth.authentication.AuthServiceImpl;
 import com.example.starter_project_2025.system.auth.authentication.SsoAccessPolicy;
@@ -18,7 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -57,6 +57,8 @@ public class AuthServiceLastLoginTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private SsoAccessPolicy ssoAccessPolicy;
+    @Mock
+    private AuditLogService auditLogService;
 
     private AuthServiceImpl authService;
 
@@ -77,7 +79,8 @@ public class AuthServiceLastLoginTest {
                 userRepository,
                 roleRepository,
                 passwordEncoder,
-                ssoAccessPolicy
+                ssoAccessPolicy,
+                auditLogService
         );
 
         Role adminRole = Role.builder()

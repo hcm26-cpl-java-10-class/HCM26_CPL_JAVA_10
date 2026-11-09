@@ -85,7 +85,9 @@ class LearningDemoIntegrationTest {
 
     @Test void realServiceSeedsFourAndPreservesIdsMetadataAndEnrollmentsOnRerun() throws Exception {
         initializer().run();
-        var controller = new CourseController(courses, courseRepository);
+        var importServiceMock = mock(CourseBundleImportService.class);
+        var exportControllerMock = mock(CourseBundleExportController.class);
+        var controller = new CourseController(courses, courseRepository, importServiceMock, exportControllerMock);
         var list = controller.getAll(PageRequest.of(0, 10), null, null).getBody();
         assertNotNull(list);
         assertEquals(4, list.getTotalElements());
@@ -144,7 +146,6 @@ class LearningDemoIntegrationTest {
     }
 
     @Test void documentsExistingBackendXlsxLimitationsWithoutChangingCourseCode() throws Exception {
-        // Course has no @ExportEntity or @ImportField annotations in the supplied workspace.
         var exporter = new GenericExportService(List.of(new ExcelExporter()), mock(ExportConfigBuilder.class));
         var exportFailure = assertThrows(IllegalArgumentException.class, () -> exporter.export(FileFormat.EXCEL, List.<Course>of(), Course.class, new MockHttpServletResponse()));
         assertTrue(exportFailure.getMessage().contains("@ExportEntity"));
@@ -163,8 +164,6 @@ class LearningDemoIntegrationTest {
         var result = importer.importFile(new MockMultipartFile("file", "courses.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes), Course.class, courseRepository);
         assertEquals(0, result.getSuccessCount());
         assertEquals(1, result.getFailureCount());
-        // The deliberately rejected import leaves a failed entity in Hibernate's
-        // session. Discard only this test's managed state before checking storage.
         entityManager.clear();
         assertEquals(before, courseRepository.count());
     }
