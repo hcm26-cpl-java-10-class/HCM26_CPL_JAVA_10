@@ -20,6 +20,8 @@ import AuditPage from "@/pages/management/training/audit";
 import TraineePage from "@/pages/management/training/trainee";
 import LogWorkPage from "@/pages/management/training/log-work";
 import ContentPage from "@/pages/management/training/content";
+import TopicManagementPage from "@/pages/management/training/topic/TopicManagementPage";
+import ProgramManagementPage from "@/pages/management/training/program/ProgramManagementPage";
 import ReportsPage from "@/pages/management/training/reports";
 import ClassListPage from "@/pages/management/training/class/ClassListPage";
 import ClassDetailPage from "@/pages/management/training/class/ClassDetailPage";
@@ -37,9 +39,12 @@ export const routes: RouteConfig[] = [
   { path: "/training/audit", component: AuditPage, isModuleDriven: true },
   { path: "/training/trainee", component: TraineePage, isModuleDriven: true },
   { path: "/training/log-work", component: LogWorkPage, isModuleDriven: true },
-  { path: "/training/content", component: ContentPage, isModuleDriven: true },
-  { path: "/subjects", component: ContentPage, requiredPermission: "SUBJECT_READ", isModuleDriven: true },
-  { path: "/programs", component: ContentPage, requiredPermission: "PROGRAM_READ", isModuleDriven: true },
+  { path: "/training/content", component: TopicManagementPage, isModuleDriven: true },
+  { path: "/subjects", component: TopicManagementPage, requiredPermission: "SUBJECT_READ", isModuleDriven: true },
+  { path: "/topics", component: TopicManagementPage, requiredPermission: "SUBJECT_READ" },
+  { path: "/training/topics", component: TopicManagementPage, requiredPermission: "SUBJECT_READ" },
+  { path: "/programs", component: ProgramManagementPage, requiredPermission: "PROGRAM_READ", isModuleDriven: true },
+  { path: "/training/programs", component: ProgramManagementPage, requiredPermission: "PROGRAM_READ" },
   { path: "/class-setup", component: ContentPage, requiredPermission: "CLASS_READ", isModuleDriven: true },
   { path: "/training/reports", component: ReportsPage, isModuleDriven: true },
   // Class List is a sidebar module (registered by the backend as /classes); the detail pages are reached from it

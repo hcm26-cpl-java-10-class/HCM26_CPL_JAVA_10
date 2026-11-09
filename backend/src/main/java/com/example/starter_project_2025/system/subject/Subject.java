@@ -40,11 +40,11 @@ import lombok.experimental.SuperBuilder;
 @ExportEntity(fileName = "subjects", sheetName = "Subjects")
 @ResourcePermission("SUBJECT")
 @ResourceMenu(
-    title = "Subjects",
-    group = "Subject Management",
+    title = "Topics & Syllabus",
+    group = "Training Operations",
     icon = "book-open",
     url = "/subjects",
-    order = 1,
+    order = 3,
     permission = "SUBJECT_READ"
 )
 public class Subject extends BaseEntity {

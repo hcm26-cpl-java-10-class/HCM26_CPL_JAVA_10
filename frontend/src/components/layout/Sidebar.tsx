@@ -25,7 +25,8 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
             : []),
         { title: "Training Calendar", url: "/calendar/adjust", icon: iconMap.calendar },
         { title: "Weekly Timetable", url: "/calendar/preview", icon: iconMap.calendar },
-        { title: "Content", url: "/training/content", icon: iconMap["book-open"] },
+        { title: "Topics & Syllabus", url: "/subjects", icon: iconMap["book-open"] },
+        { title: "Training Programs", url: "/programs", icon: iconMap.layers },
     ];
 
     const placeholders: NavItem[] = [
@@ -37,12 +38,20 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
 
     const mappedActive = activeSections.map((section): NavItem => {
         const existing = remaining.find(
-            (item) => item.title.toLowerCase() === section.title.toLowerCase() || (item.url && item.url === section.url),
+            (item) => item.title.toLowerCase() === section.title.toLowerCase() ||
+                (item.url && (item.url === section.url ||
+                    (section.url === "/subjects" && (item.url === "/subjects" || item.url === "/training/content" || item.url === "/training/topics")) ||
+                    (section.url === "/programs" && (item.url === "/programs" || item.url === "/training/programs"))
+                )),
         );
         if (existing) {
             return {
                 ...existing,
-                isActive: pathname === existing.url || pathname.startsWith(`${existing.url}/`),
+                title: section.title,
+                icon: section.icon,
+                url: section.url,
+                isActive: pathname === section.url || pathname.startsWith(`${section.url}/`) ||
+                    pathname === existing.url || pathname.startsWith(`${existing.url}/`),
             };
         }
         return {
