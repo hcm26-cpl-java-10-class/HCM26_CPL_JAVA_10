@@ -9,6 +9,8 @@ import java.util.Optional;
 public interface CourseEnrollmentRepository
         extends BaseCrudRepository<CourseEnrollment, Long> {
 
+    List<CourseEnrollment> findAllByCourse_Id(Long courseId);
+
     boolean existsByUser_IdAndCourse_Id(Long userId, Long courseId);
 
     boolean existsByUser_Id(Long userId);

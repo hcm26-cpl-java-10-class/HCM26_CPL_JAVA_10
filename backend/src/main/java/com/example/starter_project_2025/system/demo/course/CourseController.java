@@ -42,6 +42,8 @@ public class CourseController
 
     CourseService courseService;
     CourseRepository courseRepository;
+    CourseBundleImportService courseBundleImportService;
+    CourseBundleExportController courseBundleExportController;
 
     @Override
     protected BaseCrudService<Long, CourseDTO, CourseFilter> getService() {
@@ -102,6 +104,12 @@ public class CourseController
         return super.delete(id);
     }
 
+    @PostMapping(value="/import-bundle", consumes="multipart/form-data")
+    @PreAuthorize("hasAuthority('COURSE_CREATE') and (!#updateExisting or hasAuthority('COURSE_UPDATE'))")
+    public ImportResult importBundle(@RequestParam("file") MultipartFile file, @RequestParam(defaultValue="false") boolean updateExisting) {
+        return courseBundleImportService.importBundle(file, updateExisting);
+    }
+
     @Override
     @GetMapping("/export")
     @PreAuthorize("hasAuthority('COURSE_READ')")
@@ -109,13 +117,18 @@ public class CourseController
             @RequestParam(defaultValue = "EXCEL") FileFormat format,
             HttpServletResponse response
     ) throws IOException {
-        super.exportFile(format, response);
+        if (format == FileFormat.EXCEL) {
+            var exported = courseBundleExportController.export();
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setHeader("Content-Disposition", "attachment; filename=course-bundle.xlsx");
+            response.getOutputStream().write(exported.getBody());
+        } else super.exportFile(format, response);
     }
 
     @Override
     @PostMapping(value = "/import", consumes = "multipart/form-data")
     @PreAuthorize("hasAuthority('COURSE_CREATE')")
     public ImportResult importFile(@RequestParam("file") MultipartFile file) {
-        return super.importFile(file);
+        return courseBundleImportService.importBundle(file, false);
     }
 }

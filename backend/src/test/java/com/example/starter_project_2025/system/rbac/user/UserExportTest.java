@@ -6,8 +6,9 @@ import com.example.starter_project_2025.base.dataio.exporter.component.ExportShe
 import com.example.starter_project_2025.base.dataio.exporter.metadata.ExportMetadataCache;
 import com.example.starter_project_2025.base.dataio.exporter.resolver.ExportValueResolver;
 import com.example.starter_project_2025.base.dataio.exporter.resolver.RelationResolverEngine;
-import com.example.starter_project_2025.system.rbac.department.Department;
 import com.example.starter_project_2025.system.rbac.role.Role;
+import org.hibernate.proxy.HibernateProxy;
+import org.hibernate.proxy.LazyInitializer;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -18,6 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 /** Export: the Password column exists but is always empty, and relations are written out. */
 class UserExportTest {
@@ -56,29 +60,39 @@ class UserExportTest {
     }
 
     @Test
-    void rolesAndDepartmentsAreWritten_evenWhenLazyLoadingHandsOverAProxyLikeSubclass() {
+    void rolesAreWritten_evenWhenLazyLoadingHandsOverAProxyLikeSubclass() {
         Role role = new Role();
         role.setName("STUDENT");
 
-        // A Hibernate proxy is a generated subclass without the entity's own fields. This anonymous
-        // subclass behaves the same way, and used to make the whole export fail (empty file).
-        Department proxyLike = new Department() { };
-        proxyLike.setCode("FPT");
-        proxyLike.setName("FPT Academy");
+        // 1. Test generated subclass reflection: subclass without entity fields (tests findField superclass traversal)
+        Role proxyLike = new Role() { };
+        proxyLike.setName("TEACHER");
+
+        // 2. Test actual HibernateProxy unproxying: proxy implementing HibernateProxy interface
+        Role realAdminRole = new Role();
+        realAdminRole.setName("ADMIN");
+        Role hibernateProxy = mock(Role.class, withSettings().extraInterfaces(HibernateProxy.class));
+        LazyInitializer lazyInitializer = mock(LazyInitializer.class);
+        when(((HibernateProxy) hibernateProxy).asHibernateProxy()).thenReturn((HibernateProxy) hibernateProxy);
+        when(((HibernateProxy) hibernateProxy).getHibernateLazyInitializer()).thenReturn(lazyInitializer);
+        when(lazyInitializer.getImplementation()).thenReturn(realAdminRole);
 
         User user = new User();
         user.setEmail("a@example.com");
         Set<Role> roles = new HashSet<>();
         roles.add(role);
+        roles.add(proxyLike);
+        roles.add(hibernateProxy);
         user.setRoles(roles);
-        Set<Department> departments = new HashSet<>();
-        departments.add(proxyLike);
-        user.setDepartments(departments);
 
         ExportSheetConfig<User> config = builder.build(User.class);
 
-        assertEquals("STUDENT", cell(config, "Roles", user));
-        assertEquals("FPT", cell(config, "Departments", user));
+        Object rolesValue = cell(config, "Roles", user);
+        assertNotNull(rolesValue, "Roles column value must not be null");
+        String rolesStr = rolesValue.toString();
+        assertTrue(rolesStr.contains("STUDENT"), "Roles export should contain STUDENT");
+        assertTrue(rolesStr.contains("TEACHER"), "Roles export should contain TEACHER from proxy subclass");
+        assertTrue(rolesStr.contains("ADMIN"), "Roles export should contain ADMIN from HibernateProxy");
         assertNotNull(cell(config, "Email", user));
     }
 }

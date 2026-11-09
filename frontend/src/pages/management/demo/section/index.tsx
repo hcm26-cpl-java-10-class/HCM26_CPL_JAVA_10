@@ -1,0 +1,3 @@
+import {createBaseApiService} from "@/api/base-service.api";
+import type {EntityConfig} from "@/types";
+export const entityConfig:EntityConfig={name:"Section",path:"/curriculum",api:createBaseApiService({path:"/sections"}),schema:{entityName:"section",idField:"id",fields:[{name:"courseId",label:"Course ID",type:"number"},{name:"title",label:"Section Title",type:"text"},{name:"orderIndex",label:"Order Index",type:"number"}]}};

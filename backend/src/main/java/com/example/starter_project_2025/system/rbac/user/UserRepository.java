@@ -25,7 +25,13 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     boolean existsByEmailIgnoreCase(String email);
 
-    boolean existsByDepartmentsId(Long departmentId);
+    /** Profile affiliations are scalar values; accept a department code or display name. */
+    @Query("""
+            select (count(u) > 0) from User u
+            where lower(trim(u.department)) = lower(trim(:code))
+               or lower(trim(u.department)) = lower(trim(:name))
+            """)
+    boolean existsByDepartmentCodeOrName(@Param("code") String code, @Param("name") String name);
 
     Long countByIsActive(Boolean isActive);
 
@@ -33,4 +39,17 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
     Long countByIsActiveAndLocked(Boolean isActive, Boolean locked);
 
     long countByRolesId(Long roleId);
+
+    @Query("""
+    SELECT u.id
+    FROM User u
+    WHERE LOWER(CONCAT(
+        COALESCE(u.firstName, ''), ' ',
+        COALESCE(u.lastName, '')
+    )) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+    """)
+    List<Long> findIdsByActorName(@Param("keyword") String keyword);
 }

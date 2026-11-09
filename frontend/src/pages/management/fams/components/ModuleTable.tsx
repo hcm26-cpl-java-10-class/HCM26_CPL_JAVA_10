@@ -200,7 +200,7 @@ export const ModuleTable: React.FC<ModuleTableProps> = ({
                             onClick={() => setCurrentPage(pageNumber)}
                             className={`h-8 w-8 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
                                 pageNumber === safeCurrentPage
-                                    ? "bg-orange-500 text-white font-semibold shadow-xs"
+                                    ? "bg-blue-600 text-white font-semibold shadow-xs"
                                     : "border border-gray-200 dark:border-border text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-accent"
                             }`}
                         >

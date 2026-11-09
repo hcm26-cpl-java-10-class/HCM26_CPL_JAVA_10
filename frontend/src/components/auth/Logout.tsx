@@ -12,12 +12,12 @@ export const Logout = () => {
 
     useEffect(() => {
         const performLogout = async () => {
-            if (isAuthenticated) {
-                await authApi.logout();
+            try {
+                if (isAuthenticated) await authApi.logout();
+            } finally {
+                dispatch(setLogout());
+                navigate("/login", { replace: true });
             }
-
-            dispatch(setLogout());
-            navigate("/login", { replace: true });
         };
 
         performLogout();

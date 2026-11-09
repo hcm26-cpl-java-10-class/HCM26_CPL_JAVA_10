@@ -33,6 +33,13 @@ import lombok.experimental.SuperBuilder;
         permission = "LESSON_READ"
 )
 public class Lesson extends BaseEntity {
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "section_id")
+    com.example.starter_project_2025.system.demo.section.Section section;
+    @Column(length=30) String contentType;
+    @Column(length=500) String contentUrl;
+    @Lob String textContent;
+    @Column Integer durationSeconds;
 
     @Column(nullable = false, length = 200)
     String title;

@@ -1,0 +1,2 @@
+package com.example.starter_project_2025.system.demo.progress;
+public interface LessonProgressRepository extends org.springframework.data.jpa.repository.JpaRepository<LessonProgress,Long> { java.util.List<LessonProgress> findAllByEnrollment_Id(Long id); }

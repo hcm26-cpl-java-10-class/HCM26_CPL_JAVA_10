@@ -1,0 +1,1 @@
+package com.example.starter_project_2025.system.demo.lessonreport; public interface LessonReportRepository extends org.springframework.data.jpa.repository.JpaRepository<LessonReport,Long> {}

@@ -1,5 +1,8 @@
 import type { RootState } from "@/store/store";
-import { normalizeRole, uniqueRoles } from "@/utils/rbac.utils";
+import {
+  availableAccountViews,
+  normalizeRole,
+} from "@/utils/rbac.utils";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 
@@ -20,7 +23,7 @@ const RoleSwitchContext = createContext<RoleSwitchContextType | undefined>(
 export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { isAuthenticated, role, roles, rolePermissions } = useSelector(
+  const { isAuthenticated, permissions } = useSelector(
     (state: RootState) => state.auth,
   );
 
@@ -30,20 +33,7 @@ export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
     return normalizedRole || null;
   });
 
-  const primaryRole = normalizeRole(role);
-
-  const availableRoles = useMemo(() => {
-    const roleCandidates = uniqueRoles(
-      [
-        ...Object.keys(rolePermissions ?? {}),
-        ...(roles ?? []),
-        primaryRole,
-      ],
-      primaryRole,
-    );
-
-    return roleCandidates;
-  }, [primaryRole, rolePermissions, roles]);
+  const availableRoles = useMemo(() => availableAccountViews(permissions), [permissions]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -79,8 +69,8 @@ export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.setItem(VIEW_ROLE_STORAGE_KEY, normalizedRole);
   };
 
-  const activeRole = viewRole || primaryRole || availableRoles[0] || null;
-  const isPreviewMode = !!viewRole && normalizeRole(viewRole) !== primaryRole;
+  const activeRole = viewRole && availableRoles.includes(viewRole) ? viewRole : availableRoles[0] || null;
+  const isPreviewMode = false;
 
   return (
     <RoleSwitchContext.Provider

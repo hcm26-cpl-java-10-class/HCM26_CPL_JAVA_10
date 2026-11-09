@@ -18,6 +18,7 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
 
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('ADMIN_ACCESS') and hasAuthority('USER_READ')")
     @GetMapping("/stats")
     @Operation(summary = "Get dashboard statistics", description = "Retrieve system-wide statistics for the dashboard")
     public ResponseEntity<DashboardStatsDTO> getDashboardStats() {

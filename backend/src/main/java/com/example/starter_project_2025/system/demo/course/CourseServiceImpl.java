@@ -20,6 +20,14 @@ public class CourseServiceImpl
 
     CourseMapper courseMapper;
     CourseRepository courseRepository;
+    com.example.starter_project_2025.system.demo.category.CategoryRepository categoryRepository;
+    private void resolveMetadata(Course course, CourseDTO request) {
+        if(request.getCategory()!=null){
+            java.util.Set<com.example.starter_project_2025.system.demo.category.Category> categories=new java.util.HashSet<>();
+            for(String token:request.getCategory().split("[,;|]")){String code=token.trim();if(!code.isEmpty())categories.add(categoryRepository.findByCodeIgnoreCase(code).orElseGet(()->categoryRepository.save(com.example.starter_project_2025.system.demo.category.Category.builder().code(code).name(code).isActive(true).build())));}
+            course.setCategories(categories);
+        }
+    }
 
     @Override
     protected BaseCrudRepository<Course, Long> getRepository() {
@@ -33,11 +41,12 @@ public class CourseServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        return new String[]{"name", "description", "instructor"};
+        return new String[]{"name", "description", "instructor", "category", "instructorEmail"};
     }
 
     @Override
     protected void beforeCreate(Course course, CourseDTO request, ValidationContext ctx) {
+        resolveMetadata(course, request);
         if (courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
         }
@@ -45,6 +54,7 @@ public class CourseServiceImpl
 
     @Override
     protected void beforeUpdate(Course course, CourseDTO request, ValidationContext ctx) {
+        resolveMetadata(course, request);
         if (request.getName() != null &&
                 !request.getName().equals(course.getName()) &&
                 courseRepository.existsByName(request.getName())) {
