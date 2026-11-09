@@ -26,6 +26,7 @@ public class ExternalApiController {
 
     ExternalApiService externalApiService;
     CalendarExcelExporter calendarExcelExporter;
+    com.example.starter_project_2025.system.training.ClassOperationDatabaseService classOperationDatabaseService;
 
     @GetMapping("/classes/{id}/calendars/{calendarId}/export")
     @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_READ')")
@@ -222,46 +223,46 @@ public class ExternalApiController {
         return ResponseEntity.ok(externalApiService.fetchClassBudget(id));
     }
 
-    // ======================== OPERATION & MILESTONES ========================
+    // ======================== OPERATION & MILESTONES (H2 DATABASE) ========================
 
     @GetMapping("/classes/{id}/operation")
-    @Operation(summary = "Fetch operating info and milestones for class")
+    @Operation(summary = "Fetch operating info and milestones for class from H2 database")
     public ResponseEntity<Object> getClassOperation(@PathVariable Long id) {
-        return ResponseEntity.ok(externalApiService.fetchClassOperation(id));
+        return ResponseEntity.ok(classOperationDatabaseService.getOperation(id));
     }
 
     @PutMapping("/classes/{id}/operation")
-    @Operation(summary = "Update operating info and milestones for class")
-    public ResponseEntity<Object> saveClassOperation(@PathVariable Long id, @RequestBody Object body) {
-        return ResponseEntity.ok(externalApiService.saveClassOperation(id, body));
+    @Operation(summary = "Update operating info and milestones for class in H2 database")
+    public ResponseEntity<Object> saveClassOperation(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(classOperationDatabaseService.saveOperation(id, body));
     }
 
-    // ======================== TOPIC ASSESSMENTS ========================
+    // ======================== TOPIC ASSESSMENTS (H2 DATABASE) ========================
 
     @GetMapping("/classes/{id}/topic-assessments")
-    @Operation(summary = "Fetch topic assessment configuration")
+    @Operation(summary = "Fetch topic assessment configuration from H2 database")
     public ResponseEntity<Object> getTopicAssessments(@PathVariable Long id) {
-        return ResponseEntity.ok(externalApiService.fetchTopicAssessments(id));
+        return ResponseEntity.ok(classOperationDatabaseService.getTopicAssessments(id));
     }
 
     @PutMapping("/classes/{id}/topic-assessments")
-    @Operation(summary = "Update or confirm topic assessment configuration")
-    public ResponseEntity<Object> saveTopicAssessments(@PathVariable Long id, @RequestBody Object body) {
-        return ResponseEntity.ok(externalApiService.saveTopicAssessments(id, body));
+    @Operation(summary = "Update or confirm topic assessment configuration in H2 database")
+    public ResponseEntity<Object> saveTopicAssessments(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(classOperationDatabaseService.saveTopicAssessments(id, body));
     }
 
-    // ======================== ACTIVITIES ========================
+    // ======================== ACTIVITIES (H2 DATABASE) ========================
 
     @GetMapping("/classes/{id}/activities")
-    @Operation(summary = "Fetch activities for class")
+    @Operation(summary = "Fetch activities for class from H2 database")
     public ResponseEntity<Object> getClassActivities(@PathVariable Long id) {
-        return ResponseEntity.ok(externalApiService.fetchClassActivities(id));
+        return ResponseEntity.ok(classOperationDatabaseService.getActivities(id));
     }
 
     @PostMapping("/classes/{id}/activities")
-    @Operation(summary = "Add activity/comment for class")
-    public ResponseEntity<Object> addClassActivity(@PathVariable Long id, @RequestBody Object body) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(externalApiService.addClassActivity(id, body));
+    @Operation(summary = "Add activity/comment for class into H2 database")
+    public ResponseEntity<Object> addClassActivity(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(classOperationDatabaseService.addActivity(id, body));
     }
 
     // ======================== AUDIT ========================

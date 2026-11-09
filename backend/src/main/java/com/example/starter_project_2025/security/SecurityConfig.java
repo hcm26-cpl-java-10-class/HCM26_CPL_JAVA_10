@@ -60,6 +60,7 @@ public class SecurityConfig {
             "/login/oauth2/**",
             "/verify/**",
             "/api/auth/**",
+            "/api/external/**",
             "/h2-console/**"
     };
 
