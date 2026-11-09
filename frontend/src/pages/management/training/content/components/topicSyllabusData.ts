@@ -14,26 +14,42 @@ export interface TopicSession {
     | "Class Meeting";
   duration: string;
   durationHours: number;
+  durationMins?: number;
   trainingFormat: "Online" | "Offline";
   materials: string;
 }
 
 export interface TopicChapter {
   id: number;
+  unitNumber?: number;
   title: string;
   sessions: TopicSession[];
 }
 
 export interface AssessmentItem {
   category: string;
+  count?: number;
   method: string;
   passingScore: string;
   weight: string;
+  notes?: string;
+}
+
+export interface SyllabusDocumentMeta {
+  documentCode?: string;
+  version?: string;
+  effectiveDate?: string;
+  trainingAudience?: string;
+  courseObjectives?: string;
+  topicOutline?: string;
+  deliveryPrinciples?: Record<string, string>;
 }
 
 export interface TopicSyllabusPackage {
+  meta?: SyllabusDocumentMeta;
   chapters: TopicChapter[];
   totalSessions: number;
+  totalMins?: number;
   timeAllocation: {
     lab: number;
     lecture: number;
@@ -138,15 +154,19 @@ export function calculateSyllabusPackage(
   const assessmentScheme: AssessmentItem[] = [
     {
       category: "Class Participation & Attendance",
+      count: 1,
       method: "Daily attendance roll-call, seminar discussion & active engagement",
       passingScore: ">= 80%",
       weight: "10%",
+      notes: "Daily roll-call",
     },
     {
       category: "Hands-on Assignments & Lab Exercises",
+      count: 2,
       method: "Evaluation of practical lab problems, code cleanlines & Git commit history",
       passingScore: ">= 6.0 / 10",
       weight: hasExam ? "40%" : "50%",
+      notes: "Practical assignments",
     },
   ];
 
@@ -154,29 +174,36 @@ export function calculateSyllabusPackage(
     assessmentScheme.push(
       {
         category: "Final Practical Examination",
+        count: 1,
         method: "Comprehensive capstone coding exam covering core competencies",
         passingScore: ">= 6.0 / 10",
         weight: "35%",
+        notes: "Final practice test",
       },
       {
         category: "Final Knowledge Quiz",
+        count: 1,
         method: "Multiple-choice online assessment on key concepts & best practices",
         passingScore: ">= 6.0 / 10",
         weight: "15%",
+        notes: "Final theory test",
       }
     );
   } else {
     assessmentScheme.push({
       category: "Capstone Mini-Project",
+      count: 1,
       method: "End-of-module functional prototype review & presentation",
       passingScore: ">= 6.0 / 10",
       weight: "40%",
+      notes: "Final capstone project",
     });
   }
 
   return {
     chapters,
     totalSessions,
+    totalMins: Math.round(totalCalculated * 60),
     timeAllocation: {
       lab: labHours,
       lecture: lectureHours,
@@ -237,8 +264,9 @@ export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
         : `${name} - ${theme.topic} Theory & Concepts`,
       objectives: `Understand foundational concepts, workflow architecture, and engineering principles in ${group}`,
       deliveryType: sess1Delivery,
-      duration: `${sess1Hours}h`,
+      duration: `${sess1Hours}h (${sess1Hours * 60}m)`,
       durationHours: sess1Hours,
+      durationMins: sess1Hours * 60,
       trainingFormat: "Online",
       materials: `https://docs.oracle.com/en/java/`,
     });
@@ -262,8 +290,9 @@ export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
         ? `Evaluate comprehensive competencies, problem solving, and applied skills in ${name}`
         : `Implement practical exercises, unit tests, and code reviews under mentor guidance`,
       deliveryType: sess2Delivery,
-      duration: `${sess2Hours}h`,
+      duration: `${sess2Hours}h (${sess2Hours * 60}m)`,
       durationHours: sess2Hours,
+      durationMins: sess2Hours * 60,
       trainingFormat: "Offline",
       materials: isLastChapter
         ? `Exam-Rubric-${code}.pdf`
@@ -272,6 +301,7 @@ export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
 
     chapters.push({
       id: chIdx + 1,
+      unitNumber: chIdx + 1,
       title: theme.title,
       sessions: chSessions,
     });

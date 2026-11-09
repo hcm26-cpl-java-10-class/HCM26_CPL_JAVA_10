@@ -48,6 +48,7 @@ import { TopicDetailModal } from "./TopicDetailModal";
 import { TopicImportDialog } from "./TopicImportDialog";
 import { TopicExportDialog } from "./TopicExportDialog";
 import { TopicSyllabusEditorDialog } from "./TopicSyllabusEditorDialog";
+import { SyllabusImportDialog } from "./SyllabusImportDialog";
 
 interface TopicListProps {
   onViewDetail?: (topic: TopicItem) => void;
@@ -97,6 +98,7 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
   const [cloningTopic, setCloningTopic] = useState<TopicItem | null>(null);
   const [newVersion, setNewVersion] = useState("");
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isSyllabusImportOpen, setIsSyllabusImportOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [detailTopic, setDetailTopic] = useState<TopicItem | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -306,6 +308,16 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
             )}
           </Button>
 
+          {/* Import Syllabus (FSOFT Format) */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 text-indigo-700 border-indigo-200 hover:bg-indigo-50 font-medium"
+            onClick={() => setIsSyllabusImportOpen(true)}
+          >
+            <Upload className="size-4 text-indigo-600" /> Import Syllabus
+          </Button>
+
           {/* Import Button */}
           <Button
             variant="outline"
@@ -313,7 +325,7 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
             className="gap-2 bg-white border-gray-300"
             onClick={() => setIsImportOpen(true)}
           >
-            <Upload className="size-4" /> Import
+            <Upload className="size-4" /> Import CSV
           </Button>
 
           {/* Export Button */}
@@ -745,6 +757,13 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
       <TopicImportDialog
         open={isImportOpen}
         onOpenChange={setIsImportOpen}
+        onSuccess={loadTopics}
+      />
+
+      {/* Syllabus Import Dialog (FSOFT Format) */}
+      <SyllabusImportDialog
+        open={isSyllabusImportOpen}
+        onOpenChange={setIsSyllabusImportOpen}
         onSuccess={loadTopics}
       />
 

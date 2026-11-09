@@ -1,13 +1,29 @@
 import { useState, useMemo, useEffect } from "react";
 import type { TopicItem } from "@/types/features/content";
 import { Button } from "@/components/ui/button";
-import { Download, ArrowLeft, ChevronDown, ChevronUp, ExternalLink, BookOpen, Layers, Plus, Clock } from "lucide-react";
+import {
+  Download,
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  BookOpen,
+  Layers,
+  Plus,
+  Clock,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  ShieldCheck,
+} from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
 import { topicApi } from "@/api/features/topic.api";
 import { getTopicSyllabusPackage } from "./topicSyllabusData";
 import type { TopicSyllabusPackage } from "./topicSyllabusData";
 import { TopicSyllabusEditorDialog } from "./TopicSyllabusEditorDialog";
+import { SyllabusImportDialog } from "./SyllabusImportDialog";
+import { exportFsoftSyllabusCsv } from "./syllabusParser";
 
 interface TopicDetailViewProps {
   topic: TopicItem;
@@ -24,17 +40,22 @@ const PIE_COLORS = {
 export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps) {
   const [activeTab, setActiveTab] = useState<"syllabus" | "schedule">("syllabus");
   const [isOutlineEditorOpen, setIsOutlineEditorOpen] = useState(false);
+  const [isSyllabusImportOpen, setIsSyllabusImportOpen] = useState(false);
 
   // Dynamic syllabus data generated specifically for this topic
   const [syllabusPackage, setSyllabusPackage] = useState<TopicSyllabusPackage>(() =>
     getTopicSyllabusPackage(topic)
   );
 
-  useEffect(() => {
+  const reloadSyllabus = () => {
     setSyllabusPackage(getTopicSyllabusPackage(topic));
+  };
+
+  useEffect(() => {
+    reloadSyllabus();
   }, [topic]);
 
-  const { chapters, totalSessions, timeAllocation, assessmentScheme } = syllabusPackage;
+  const { chapters, timeAllocation, assessmentScheme, meta } = syllabusPackage;
 
   // Track expanded state for all chapters
   const [expandedChapters, setExpandedChapters] = useState<Record<number, boolean>>({});
@@ -42,7 +63,6 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
   const toggleChapter = (chapterId: number) => {
     setExpandedChapters((prev) => ({
       ...prev,
-      // Default first two open if not explicitly toggled
       [chapterId]: prev[chapterId] !== undefined ? !prev[chapterId] : false,
     }));
   };
@@ -51,8 +71,8 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
     if (expandedChapters[chapterId] !== undefined) {
       return expandedChapters[chapterId];
     }
-    // Default open first 2 chapters, rest closed
-    return idx < 2;
+    // Default open first 3 chapters, rest closed
+    return idx < 3;
   };
 
   const totalH = timeAllocation.total;
@@ -70,7 +90,26 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
     { name: "Exam", value: examHours, color: PIE_COLORS.exam },
   ].filter(d => d.value > 0), [labHours, lectureHours, examHours]);
 
-  const handleDownload = async () => {
+  const handleExportFsoftCsv = () => {
+    try {
+      const csvContent = exportFsoftSyllabusCsv(topic, syllabusPackage);
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${topic.code}_FSOFT_Syllabus_v${topic.version || "1.0"}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Exported official FSOFT Syllabus CSV successfully!");
+    } catch (err: any) {
+      console.error("Export CSV failed", err);
+      toast.error("Failed to export syllabus CSV");
+    }
+  };
+
+  const handleDownloadExcel = async () => {
     try {
       const blob = await topicApi.exportFile("EXCEL");
       const url = window.URL.createObjectURL(blob);
@@ -86,54 +125,112 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
     }
   };
 
+  const deliveryPrinciples = meta?.deliveryPrinciples || {
+    Trainees: "Qualified entry test and passed interview of Fresher program; Less than or equals 20 students in the class",
+    Trainer: "Trainer and mentor has a good knowledge of the programming language that has been evaluated by FA",
+    Training: "Trainee actively self-learn at day 1 of each topic; Trainer conducts the workshop at day 2; Final test at end of course",
+    "Re-Test": "Only allow each student to retake the test up to 2 times; Re-exam follows the same structure as Final Test",
+    Marking: "Trainer marks students on Assignments, Final Exam Theory, Final Exam Practice (score >=6 capped at 6 for re-take)",
+    "Waiver Criteria": "Students pass the quick test; Trainer Audit: rank B or up",
+  };
+
   return (
     <div className="space-y-6">
       {/* Top action bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Button
           variant="ghost"
           size="sm"
           onClick={onBack}
-          className="gap-1.5 text-gray-600 hover:text-gray-900 -ml-2"
+          className="gap-1.5 text-gray-600 hover:text-gray-900 -ml-2 text-xs"
         >
           <ArrowLeft className="size-4" />
-          Back to Syllabus / Topic List
+          Back to Topics &amp; Syllabus
         </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsSyllabusImportOpen(true)}
+            className="text-gray-700 hover:text-indigo-600 hover:border-indigo-300 gap-1.5 text-xs h-8"
+          >
+            <Upload className="size-3.5 text-indigo-600" />
+            Import Syllabus (CSV)
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportFsoftCsv}
+            className="text-gray-700 hover:text-indigo-600 hover:border-indigo-300 gap-1.5 text-xs h-8"
+          >
+            <Download className="size-3.5 text-indigo-600" />
+            Export FSOFT CSV
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
             onClick={() => setIsOutlineEditorOpen(true)}
-            className="text-gray-700 hover:text-[#5b52e0] hover:border-[#5b52e0] gap-1.5"
+            className="text-gray-700 hover:text-[#5b52e0] hover:border-[#5b52e0] gap-1.5 text-xs h-8"
           >
-            <BookOpen className="size-4 text-[#5b52e0]" />
+            <BookOpen className="size-3.5 text-[#5b52e0]" />
             Edit Outline
           </Button>
+
           {onEdit && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => onEdit(topic)}
-              className="text-gray-700"
+              className="text-gray-700 text-xs h-8"
             >
               Edit Topic
             </Button>
           )}
+
           <Button
-            onClick={handleDownload}
-            className="bg-[#5b52e0] hover:bg-[#4d44cb] text-white px-5 py-2 rounded-lg font-medium shadow-sm gap-2"
+            onClick={handleDownloadExcel}
+            className="bg-[#5b52e0] hover:bg-[#4d44cb] text-white px-4 h-8 rounded-lg font-medium shadow-sm gap-1.5 text-xs"
           >
-            <Download className="size-4" />
-            Download
+            <Download className="size-3.5" />
+            Download Excel
           </Button>
         </div>
       </div>
 
       {/* Main Container Card */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden p-6 space-y-6">
-        <h1 className="text-xl font-bold text-gray-800">Topic Detail</h1>
+        {/* Document Governance Header */}
+        <div className="flex flex-wrap items-center justify-between border-b border-gray-100 pb-4 gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-indigo-600 text-white">
+                {topic.code}
+              </span>
+              <h1 className="text-lg font-bold text-gray-900">{topic.name}</h1>
+              <span className="text-xs px-2 py-0.5 rounded bg-gray-100 font-mono text-gray-600">
+                v{topic.version || "1.0"}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1 flex items-center gap-3">
+              <span>Doc Code: <b>{meta?.documentCode || "26e-BM/HR/HDCV/FSOFT"}</b></span>
+              <span>&bull;</span>
+              <span>Effective Date: {meta?.effectiveDate || "24/04/2020"}</span>
+            </p>
+          </div>
 
-        {/* Tab Sub-navigation (matching nav_07.jpg) */}
+          <div className="flex items-center gap-3 text-xs">
+            <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-200 text-[11px]">
+              {topic.technicalGroup || "Java"}
+            </span>
+            <span className="text-gray-500">
+              Allocated: <b className="text-gray-800">{totalH}h</b> ({chapters.reduce((acc, c) => acc + c.sessions.length, 0)} sessions)
+            </span>
+          </div>
+        </div>
+
+        {/* Tab Sub-navigation */}
         <div className="flex border-b border-gray-200 -mt-2">
           <button
             onClick={() => setActiveTab("syllabus")}
@@ -143,7 +240,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                 : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
-            Syllabus Detail
+            Syllabus Detail &amp; Principles
           </button>
           <button
             onClick={() => setActiveTab("schedule")}
@@ -153,7 +250,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                 : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
-            Schedule Detail
+            Schedule Detail Matrix ({chapters.reduce((acc, c) => acc + c.sessions.length, 0)} Sessions)
           </button>
         </div>
 
@@ -164,68 +261,68 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
               {/* Left: 1. General Info */}
               <div>
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">1. General Info</h2>
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">1. General Info &amp; Governance</h2>
                 <div className="border border-gray-200 rounded-lg overflow-hidden bg-white text-xs divide-y divide-gray-100">
                   <div className="flex">
-                    <div className="w-40 px-4 py-3 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
-                      Code
+                    <div className="w-40 px-4 py-2.5 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
+                      Topic Code
                     </div>
-                    <div className="px-4 py-3 font-mono font-medium text-gray-800 flex-1">
+                    <div className="px-4 py-2.5 font-mono font-medium text-gray-800 flex-1">
                       {topic.code}
                     </div>
                   </div>
 
                   <div className="flex">
-                    <div className="w-40 px-4 py-3 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
-                      Name
+                    <div className="w-40 px-4 py-2.5 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
+                      Topic Name
                     </div>
-                    <div className="px-4 py-3 font-medium text-gray-800 flex-1">
+                    <div className="px-4 py-2.5 font-medium text-gray-800 flex-1">
                       {topic.name}
                     </div>
                   </div>
 
                   <div className="flex">
-                    <div className="w-40 px-4 py-3 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
+                    <div className="w-40 px-4 py-2.5 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
                       Version
                     </div>
-                    <div className="px-4 py-3 font-mono text-gray-800 flex-1">
-                      {topic.version}
+                    <div className="px-4 py-2.5 font-mono text-gray-800 flex-1">
+                      {topic.version || "1.0"}
                     </div>
                   </div>
 
                   <div className="flex">
-                    <div className="w-40 px-4 py-3 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
+                    <div className="w-40 px-4 py-2.5 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
                       Technical Group
                     </div>
-                    <div className="px-4 py-3 text-gray-800 flex-1">
+                    <div className="px-4 py-2.5 text-gray-800 flex-1">
                       {topic.technicalGroup || "JAVA"}
                     </div>
                   </div>
 
                   <div className="flex">
-                    <div className="w-40 px-4 py-3 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
-                      Total Session/Day
+                    <div className="w-40 px-4 py-2.5 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
+                      Training Audience
                     </div>
-                    <div className="px-4 py-3 text-gray-800 flex-1 font-medium">
-                      {totalSessions > 0 ? totalSessions : "0 (Not scheduled)"}
+                    <div className="px-4 py-2.5 text-gray-800 flex-1 leading-relaxed">
+                      {meta?.trainingAudience || "Trainees who are software developers (SD) with basic background and skills on programming language"}
                     </div>
                   </div>
 
                   <div className="flex">
-                    <div className="w-40 px-4 py-3 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
+                    <div className="w-40 px-4 py-2.5 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
+                      Total Sessions &amp; Hours
+                    </div>
+                    <div className="px-4 py-2.5 text-gray-800 flex-1 font-medium">
+                      {chapters.reduce((acc, c) => acc + c.sessions.length, 0)} Sessions &bull; {totalH} Hours ({totalH * 60} mins)
+                    </div>
+                  </div>
+
+                  <div className="flex">
+                    <div className="w-40 px-4 py-2.5 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
                       Pass Criteria
                     </div>
-                    <div className="px-4 py-3 text-gray-800 flex-1">
-                      Total topic GPA &gt;= 6/10
-                    </div>
-                  </div>
-
-                  <div className="flex">
-                    <div className="w-40 px-4 py-3 font-semibold text-gray-500 bg-gray-50 border-r border-gray-100">
-                      Re-Test Number
-                    </div>
-                    <div className="px-4 py-3 text-gray-800 flex-1">
-                      2 Times
+                    <div className="px-4 py-2.5 text-gray-800 flex-1">
+                      Total topic GPA &gt;= 6/10 (100% video, quiz, labs, and final test completed)
                     </div>
                   </div>
                 </div>
@@ -233,7 +330,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
 
               {/* Right: 2. Time Allocation */}
               <div>
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">2. Time Allocation</h2>
+                <h2 className="text-sm font-semibold text-gray-700 mb-3">2. Time Allocation Matrix</h2>
                 {pieData.length === 0 ? (
                   <div className="border border-gray-200 rounded-lg p-8 bg-white text-center">
                     <div className="size-12 rounded-full bg-gray-100 text-gray-400 flex items-center justify-center mx-auto mb-3">
@@ -241,33 +338,44 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                     </div>
                     <h4 className="text-xs font-semibold text-gray-700">No Time Allocation Available</h4>
                     <p className="text-[11px] text-gray-400 mt-1 mb-4 max-w-xs mx-auto">
-                      Time distribution between Lecture, Lab, and Exam will appear once schedule sessions are added.
+                      Time distribution will appear automatically when schedule sessions are imported or configured.
                     </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsOutlineEditorOpen(true)}
-                      className="text-[#5b52e0] border-[#5b52e0]/30 hover:bg-purple-50 text-xs gap-1.5"
-                    >
-                      <BookOpen className="size-3.5" />
-                      Configure Schedule Outline
-                    </Button>
+                    <div className="flex items-center justify-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsSyllabusImportOpen(true)}
+                        className="text-xs gap-1.5"
+                      >
+                        <Upload className="size-3.5" />
+                        Import CSV
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsOutlineEditorOpen(true)}
+                        className="text-[#5b52e0] border-[#5b52e0]/30 hover:bg-purple-50 text-xs gap-1.5"
+                      >
+                        <BookOpen className="size-3.5" />
+                        Configure Outline
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="border border-gray-200 rounded-lg p-5 bg-white">
                     <div className="flex flex-col sm:flex-row items-center gap-6">
-                      <div className="w-48 h-48 relative flex-shrink-0">
-                        <ResponsiveContainer width="100%" height={192}>
+                      <div className="w-44 h-44 relative flex-shrink-0">
+                        <ResponsiveContainer width="100%" height={176}>
                           <PieChart>
                             <Pie
                               data={pieData}
                               cx="50%"
                               cy="50%"
-                              outerRadius={80}
+                              outerRadius={75}
                               dataKey="value"
                               label={({ percent }) =>
                                 percent != null && percent > 0.05
-                                  ? `${(percent * 100).toFixed(1)}%`
+                                  ? `${(percent * 100).toFixed(0)}%`
                                   : ""
                               }
                               labelLine={false}
@@ -289,21 +397,30 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                       </div>
 
                       <div className="space-y-2 text-xs flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="size-3 rounded-full bg-[#4361ee] flex-shrink-0" />
-                          <span className="text-gray-700">Assignment/Lab: <b>{labHours}h</b> ({labPct}%)</span>
+                        <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                          <span className="flex items-center gap-2 text-gray-700">
+                            <span className="size-2.5 rounded-full bg-[#4361ee]" />
+                            Assignment/Lab:
+                          </span>
+                          <span className="font-semibold text-gray-800">{labHours}h ({labPct}%)</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="size-3 rounded-full bg-[#2ec4b6] flex-shrink-0" />
-                          <span className="text-gray-700">Concept/Lecture: <b>{lectureHours}h</b> ({lecturePct}%)</span>
+                        <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                          <span className="flex items-center gap-2 text-gray-700">
+                            <span className="size-2.5 rounded-full bg-[#2ec4b6]" />
+                            Concept/Lecture:
+                          </span>
+                          <span className="font-semibold text-gray-800">{lectureHours}h ({lecturePct}%)</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="size-3 rounded-full bg-[#ff9f1c] flex-shrink-0" />
-                          <span className="text-gray-700">Exam: <b>{examHours}h</b> ({examPct}%)</span>
+                        <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                          <span className="flex items-center gap-2 text-gray-700">
+                            <span className="size-2.5 rounded-full bg-[#ff9f1c]" />
+                            Exam &amp; Quiz:
+                          </span>
+                          <span className="font-semibold text-gray-800">{examHours}h ({examPct}%)</span>
                         </div>
-                        <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
-                          <span className="size-3 rounded-full bg-red-500 flex-shrink-0" />
-                          <span className="text-red-600 font-bold">Total: {totalH}h</span>
+                        <div className="flex items-center justify-between pt-2">
+                          <span className="font-bold text-gray-900">Total Program Duration:</span>
+                          <span className="font-bold text-indigo-600 text-sm">{totalH}h</span>
                         </div>
                       </div>
                     </div>
@@ -312,101 +429,166 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
               </div>
             </div>
 
-            {/* Bottom: 3. Assessment Scheme */}
+            {/* Course Objectives Box */}
+            <div className="bg-gray-50/70 border border-gray-200 rounded-xl p-5 space-y-2">
+              <h2 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <BookOpen className="size-4 text-indigo-600" />
+                Course Objectives &amp; Scope
+              </h2>
+              <p className="text-xs text-gray-600 whitespace-pre-line leading-relaxed">
+                {topic.description ||
+                  meta?.courseObjectives ||
+                  "This topic is to introduce about programming language knowledge; adapt trainees with skills, lessons and practices which is specifically used in the Fsoft projects."}
+              </p>
+            </div>
+
+            {/* 3. Assessment Scheme Table */}
             <div>
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">3. Assessment Scheme</h2>
+              <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <CheckCircle2 className="size-4 text-emerald-600" />
+                3. Assessment Scheme &amp; Passing Standard
+              </h2>
               {assessmentScheme.length === 0 ? (
                 <div className="border border-gray-200 rounded-lg p-6 bg-white text-center text-xs text-gray-400">
                   No assessment criteria configured yet.
                 </div>
               ) : (
-                <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+                    <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold text-[11px]">
                       <tr>
-                        <th className="text-left px-4 py-3">Assessment Category</th>
-                        <th className="text-left px-4 py-3">Evaluation Method</th>
-                        <th className="text-center px-4 py-3 w-32">Passing Score</th>
+                        <th className="text-left px-4 py-3">Category</th>
+                        <th className="text-center px-4 py-3 w-20">Quantity</th>
                         <th className="text-right px-4 py-3 w-28">Weight</th>
+                        <th className="text-left px-4 py-3">Notes / Passing Standard</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-gray-700">
                       {assessmentScheme.map((item, idx) => (
                         <tr key={idx} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 font-medium">{item.category}</td>
-                          <td className="px-4 py-3 text-gray-500">{item.method}</td>
-                          <td className="px-4 py-3 text-center">{item.passingScore}</td>
-                          <td className="px-4 py-3 text-right font-semibold">{item.weight}</td>
+                          <td className="px-4 py-2.5 font-medium text-gray-800">{item.category}</td>
+                          <td className="px-4 py-2.5 text-center font-mono">{item.count || 1}</td>
+                          <td className="px-4 py-2.5 text-right font-bold text-indigo-600">{item.weight}</td>
+                          <td className="px-4 py-2.5 text-gray-500 text-[11px]">{item.notes || item.method || ">= 6.0 / 10"}</td>
                         </tr>
                       ))}
                       <tr className="bg-purple-50/50 font-bold text-gray-900 border-t border-purple-100">
-                        <td className="px-4 py-3" colSpan={2}>Overall Topic Result</td>
-                        <td className="px-4 py-3 text-center text-[#5b52e0]">&gt;= 6.0 / 10</td>
-                        <td className="px-4 py-3 text-right text-[#5b52e0]">100%</td>
+                        <td className="px-4 py-2.5" colSpan={2}>Overall Topic Minimum GPA</td>
+                        <td className="px-4 py-2.5 text-right text-[#5b52e0]">100%</td>
+                        <td className="px-4 py-2.5 text-[#5b52e0]">&gt;= 6.0 / 10 (Completed 100% Online video, Quiz, Labs, Final Test)</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
               )}
             </div>
+
+            {/* 4. Training Delivery Principles */}
+            <div>
+              <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <ShieldCheck className="size-4 text-indigo-600" />
+                4. Training Delivery Principles
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                {Object.entries(deliveryPrinciples as Record<string, string>).map(([k, v]) => (
+                  <div key={k} className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-lg space-y-1">
+                    <span className="font-semibold text-gray-800 block text-[11px] uppercase tracking-wide">
+                      {k}
+                    </span>
+                    <p className="text-gray-600 leading-relaxed whitespace-pre-line text-[11px]">
+                      {v}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
-        {/* TAB 2: SCHEDULE DETAIL (matching nav_06.jpg) */}
+        {/* TAB 2: SCHEDULE DETAIL (Training Schedule Matrix) */}
         {activeTab === "schedule" && (
           <div className="space-y-4">
             {chapters.length === 0 ? (
-              <div className="text-center py-16 px-6 bg-white border border-dashed border-gray-300 rounded-xl shadow-sm">
-                <div className="size-14 rounded-full bg-purple-50 text-[#5b52e0] flex items-center justify-center mx-auto mb-4">
-                  <BookOpen className="size-7" />
+              <div className="text-center py-16 px-6 bg-white border-2 border-dashed border-gray-300 rounded-xl shadow-sm space-y-4">
+                <div className="size-14 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+                  <FileSpreadsheet className="size-7" />
                 </div>
-                <h3 className="text-base font-bold text-gray-800">No Schedule Outline Defined Yet</h3>
-                <p className="text-xs text-gray-500 max-w-md mx-auto mt-1.5 mb-6">
-                  No chapters or sessions have been created for this topic yet. Click below to start building the lesson schedule and delivery matrix.
-                </p>
-                <div className="flex items-center justify-center gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-gray-800">No Schedule Detail Matrix Configured</h3>
+                  <p className="text-xs text-gray-500 max-w-md mx-auto mt-1">
+                    Upload an official FSOFT Syllabus CSV file or manually create chapters, sessions, and duration minutes.
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-3 pt-2">
                   <Button
+                    onClick={() => setIsSyllabusImportOpen(true)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 text-xs h-9 shadow-sm"
+                  >
+                    <Upload className="size-4" />
+                    Import Syllabus CSV
+                  </Button>
+                  <Button
+                    variant="outline"
                     onClick={() => setIsOutlineEditorOpen(true)}
-                    className="bg-[#5b52e0] hover:bg-[#4a41d0] text-white gap-2 text-xs shadow-sm"
+                    className="gap-2 text-xs h-9"
                   >
                     <Plus className="size-4" />
-                    Create Schedule Outline
+                    Create Manually
                   </Button>
                 </div>
               </div>
             ) : (
               <>
                 {/* Header Action Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-gray-50/70 p-4 rounded-xl border border-gray-200">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-indigo-50/40 p-4 rounded-xl border border-indigo-100">
                   <div>
                     <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                      <Layers className="size-4 text-[#5b52e0]" />
-                      Schedule Breakdown &amp; Delivery Matrix
+                      <Layers className="size-4 text-indigo-600" />
+                      Training Schedule Matrix (scheduleDetail)
                     </h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Structured into {chapters.length} chapters &bull; {totalSessions} sessions &bull; {totalH} hours total
+                      Structured into {chapters.length} Units &bull; {chapters.reduce((acc, c) => acc + c.sessions.length, 0)} Sessions &bull; {totalH} Hours ({totalH * 60} mins)
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => setIsOutlineEditorOpen(true)}
-                    className="bg-[#5b52e0] hover:bg-[#4a41d0] text-white gap-1.5 text-xs shadow-sm"
-                  >
-                    <BookOpen className="size-3.5" />
-                    Edit Schedule Outline
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsSyllabusImportOpen(true)}
+                      className="gap-1.5 text-xs h-8 bg-white"
+                    >
+                      <Upload className="size-3.5 text-indigo-600" />
+                      Re-import CSV
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setIsOutlineEditorOpen(true)}
+                      className="bg-[#5b52e0] hover:bg-[#4a41d0] text-white gap-1.5 text-xs h-8 shadow-sm"
+                    >
+                      <BookOpen className="size-3.5" />
+                      Edit Outline
+                    </Button>
+                  </div>
                 </div>
 
                 {chapters.map((ch, chIdx) => {
                   const isExpanded = isChapterOpen(ch.id, chIdx);
                   return (
-                    <div key={ch.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                    <div key={ch.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
                       {/* Accordion header */}
                       <button
                         onClick={() => toggleChapter(ch.id)}
-                        className="w-full flex items-center justify-between px-5 py-3.5 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                        className="w-full flex items-center justify-between px-5 py-3.5 bg-gray-50/80 hover:bg-gray-100 transition-colors text-left border-b border-gray-200/60"
                       >
-                        <span className="font-semibold text-sm text-gray-800">{ch.title}</span>
+                        <div className="flex items-center gap-2.5">
+                          <span className="size-6 rounded-full bg-indigo-100 text-indigo-700 text-xs flex items-center justify-center font-bold">
+                            {ch.unitNumber || chIdx + 1}
+                          </span>
+                          <span className="font-semibold text-sm text-gray-900">{ch.title}</span>
+                          <span className="text-xs text-gray-500 font-normal">
+                            ({ch.sessions.length} sessions)
+                          </span>
+                        </div>
                         {isExpanded ? (
                           <ChevronUp className="size-4 text-gray-500" />
                         ) : (
@@ -418,28 +600,28 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                       {isExpanded && (
                         <div className="overflow-x-auto">
                           <table className="w-full text-xs">
-                            <thead className="bg-gray-50/50 border-b border-t border-gray-200 text-gray-600 font-semibold">
+                            <thead className="bg-gray-50/50 border-b border-gray-200 text-gray-600 font-semibold text-[11px]">
                               <tr>
-                                <th className="text-center px-3 py-2.5 w-16">Session</th>
-                                <th className="text-left px-3 py-2.5 w-48">Content</th>
-                                <th className="text-left px-3 py-2.5 w-56">Learning Objectives</th>
-                                <th className="text-left px-3 py-2.5 w-32">Delivery Type</th>
-                                <th className="text-center px-3 py-2.5 w-20">Duration</th>
-                                <th className="text-center px-3 py-2.5 w-24">Training Format</th>
-                                <th className="text-left px-3 py-2.5">Training Materials / Logistics &amp; General Notes</th>
+                                <th className="text-center px-3 py-2.5 w-14">Session</th>
+                                <th className="text-left px-3 py-2.5 w-56">Content</th>
+                                <th className="text-left px-3 py-2.5">Learning Objectives</th>
+                                <th className="text-left px-3 py-2.5 w-36">Delivery Type</th>
+                                <th className="text-center px-3 py-2.5 w-24">Duration</th>
+                                <th className="text-center px-3 py-2.5 w-20">Format</th>
+                                <th className="text-left px-3 py-2.5 w-52">Materials / Logistics</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-gray-700">
                               {ch.sessions.map((sess, idx) => (
-                                <tr key={idx} className="hover:bg-gray-50/80">
-                                  <td className="px-3 py-3 text-center font-semibold text-gray-600">
+                                <tr key={idx} className="hover:bg-indigo-50/20">
+                                  <td className="px-3 py-3 text-center font-bold text-gray-800">
                                     {sess.session}
                                   </td>
-                                  <td className="px-3 py-3 font-medium whitespace-pre-line text-gray-800">
+                                  <td className="px-3 py-3 font-medium whitespace-pre-line text-gray-900 leading-relaxed">
                                     {sess.content}
                                   </td>
-                                  <td className="px-3 py-3 text-gray-600">
-                                    {sess.objectives}
+                                  <td className="px-3 py-3 text-gray-600 leading-relaxed">
+                                    {sess.objectives || "—"}
                                   </td>
                                   <td className="px-3 py-3">
                                     <span
@@ -448,41 +630,47 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                                           ? "bg-blue-50 text-blue-700 border border-blue-200"
                                           : sess.deliveryType === "Assignment/Lab"
                                           ? "bg-purple-50 text-purple-700 border border-purple-200"
-                                          : sess.deliveryType === "Exam"
+                                          : sess.deliveryType === "Seminar/Workshop"
+                                          ? "bg-cyan-50 text-cyan-700 border border-cyan-200"
+                                          : sess.deliveryType === "Test/Quiz"
                                           ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                          : "bg-teal-50 text-teal-700 border border-teal-200"
+                                          : sess.deliveryType === "Exam"
+                                          ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                          : "bg-gray-100 text-gray-700 border border-gray-200"
                                       }`}
                                     >
                                       {sess.deliveryType}
                                     </span>
                                   </td>
-                                  <td className="px-3 py-3 text-center font-mono font-medium">
-                                    {sess.duration}
+                                  <td className="px-3 py-3 text-center font-mono text-gray-700">
+                                    {sess.durationMins ? `${sess.durationMins}m (${sess.durationHours}h)` : sess.duration}
                                   </td>
                                   <td className="px-3 py-3 text-center">
                                     <span
                                       className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${
                                         sess.trainingFormat === "Online"
-                                          ? "bg-green-50 text-green-700 border border-green-200"
-                                          : "bg-gray-100 text-gray-700 border border-gray-200"
+                                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                          : "bg-slate-100 text-slate-700 border border-slate-200"
                                       }`}
                                     >
                                       {sess.trainingFormat}
                                     </span>
                                   </td>
-                                  <td className="px-3 py-3 text-gray-600 break-all">
-                                    {sess.materials.startsWith("http") ? (
+                                  <td className="px-3 py-3 text-gray-600 text-[11px]">
+                                    {sess.materials?.startsWith("http") ? (
                                       <a
                                         href={sess.materials}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="text-[#5b52e0] hover:underline inline-flex items-center gap-1 font-medium"
+                                        className="text-[#5b52e0] hover:underline flex items-center gap-1 font-mono break-all"
                                       >
                                         {sess.materials}
-                                        <ExternalLink className="size-3" />
+                                        <ExternalLink className="size-3 shrink-0" />
                                       </a>
                                     ) : (
-                                      <span className="font-mono text-gray-700">{sess.materials}</span>
+                                      <span className="font-mono text-gray-700">
+                                        {sess.materials || "—"}
+                                      </span>
                                     )}
                                   </td>
                                 </tr>
@@ -500,12 +688,20 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
         )}
       </div>
 
-      {/* Interactive Schedule Outline Editor Dialog */}
+      {/* Syllabus Outline Editor Modal */}
       <TopicSyllabusEditorDialog
-        topic={topic}
         open={isOutlineEditorOpen}
         onOpenChange={setIsOutlineEditorOpen}
-        onSaved={(newPkg) => setSyllabusPackage(newPkg)}
+        topic={topic}
+        onSaved={reloadSyllabus}
+      />
+
+      {/* Syllabus & Schedule Detail CSV Import Modal */}
+      <SyllabusImportDialog
+        open={isSyllabusImportOpen}
+        onOpenChange={setIsSyllabusImportOpen}
+        targetTopic={topic}
+        onSuccess={() => reloadSyllabus()}
       />
     </div>
   );
