@@ -22,7 +22,9 @@ export default function ContentPage() {
   const searchParams = new URLSearchParams(location.search);
 
   const defaultView: ContentView =
-    location.pathname.includes("/subjects") || searchParams.get("tab") === "topic"
+    location.pathname.includes("/subjects") ||
+    location.pathname.includes("/content") ||
+    searchParams.get("tab") === "topic"
       ? "topic-list"
       : "program-list";
 
@@ -32,7 +34,7 @@ export default function ContentPage() {
   const [editingProgram, setEditingProgram] = useState<TrainingProgramItem | null>(null);
 
   useEffect(() => {
-    if (location.pathname.includes("/subjects")) {
+    if (location.pathname.includes("/subjects") || location.pathname.includes("/content")) {
       setView("topic-list");
     } else if (location.pathname.includes("/programs")) {
       setView("program-list");

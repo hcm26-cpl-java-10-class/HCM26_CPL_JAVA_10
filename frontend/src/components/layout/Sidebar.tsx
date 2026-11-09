@@ -25,13 +25,13 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
             : []),
         { title: "Training Calendar", url: "/calendar/adjust", icon: iconMap.calendar },
         { title: "Weekly Timetable", url: "/calendar/preview", icon: iconMap.calendar },
+        { title: "Content", url: "/training/content", icon: iconMap["book-open"] },
     ];
 
     const placeholders: NavItem[] = [
         { title: "Audit", url: "/training/audit", icon: iconMap["clipboard-check"], disabled: true },
         { title: "Trainee", url: "/training/trainee", icon: iconMap.users, disabled: true },
         { title: "Log Work", url: "/training/log-work", icon: iconMap.briefcase, disabled: true },
-        { title: "Content", url: "/training/content", icon: iconMap["book-open"], disabled: true },
         { title: "Reports", url: "/training/reports", icon: iconMap["bar-chart"], disabled: true },
     ];
 
