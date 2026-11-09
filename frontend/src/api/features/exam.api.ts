@@ -62,6 +62,14 @@ export const examApi = {
     const response = await axiosInstance.get<CourseExam[]>(`/courses/${courseId}/exams`, { params });
     return response.data;
   },
+  listBySection: async (sectionId: number): Promise<CourseExam[]> => {
+    const response = await axiosInstance.get<CourseExam[]>(`/sections/${sectionId}/exams`);
+    return response.data;
+  },
+  listByLesson: async (lessonId: number): Promise<CourseExam[]> => {
+    const response = await axiosInstance.get<CourseExam[]>(`/lessons/${lessonId}/exams`);
+    return response.data;
+  },
   linkToCurriculum: async (
     courseId: number,
     examId: number,

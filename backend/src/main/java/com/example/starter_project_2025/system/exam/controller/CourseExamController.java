@@ -38,6 +38,26 @@ public class CourseExamController {
         return linkService.listByCourse(courseId, sectionId, lessonId, principal);
     }
 
+    /** Danh sach bai thi thuoc mot section. Giang vien course, admin, hoac sinh vien da ghi danh. */
+    @GetMapping("/sections/{sectionId}/exams")
+    @PreAuthorize("isAuthenticated()")
+    public List<CourseExamDTO> listBySection(
+            @PathVariable Long sectionId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return linkService.listBySection(sectionId, principal);
+    }
+
+    /** Danh sach bai thi thuoc mot lesson. Giang vien course, admin, hoac sinh vien da ghi danh. */
+    @GetMapping("/lessons/{lessonId}/exams")
+    @PreAuthorize("isAuthenticated()")
+    public List<CourseExamDTO> listByLesson(
+            @PathVariable Long lessonId,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return linkService.listByLesson(lessonId, principal);
+    }
+
     /** Gan mot bai thi vao course / section / lesson */
     @PutMapping("/courses/{courseId}/exams/{examId}/link")
     @PreAuthorize("hasAuthority('EXAM_UPDATE')")

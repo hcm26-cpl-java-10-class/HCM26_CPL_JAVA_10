@@ -15,7 +15,11 @@ public interface ExamRepository extends BaseCrudRepository<Exam, Long> {
     boolean existsByQuestions_Id(Long questionId);
 
     /** Bai thi cua mot course (co the loc theo section / lesson); activeOnly=true chi lay bai dang hoat dong. */
-    @Query("select e from Exam e where e.course.id = :courseId "
+    @Query("select distinct e from Exam e "
+            + "left join fetch e.course "
+            + "left join fetch e.section "
+            + "left join fetch e.lesson "
+            + "where e.course.id = :courseId "
             + "and (:sectionId is null or e.section.id = :sectionId) "
             + "and (:lessonId is null or e.lesson.id = :lessonId) "
             + "and (:activeOnly = false or e.isActive = true) order by e.id")
@@ -33,5 +37,4 @@ public interface ExamRepository extends BaseCrudRepository<Exam, Long> {
             "     AND (e.endTime IS NULL OR e.endTime >= CURRENT_TIMESTAMP) THEN 0 ELSE 1 END ASC, " +
             "e.id DESC")
     Page<Exam> findAllExamsSortedByOpenStatus(Pageable pageable);
-
 }
