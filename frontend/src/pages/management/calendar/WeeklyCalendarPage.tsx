@@ -10,7 +10,10 @@ import { isAxiosError } from "axios";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, createContext, useContext } from "react";
+import { externalApi } from "@/api/features/external.api";
+import axiosInstance from "@/api/axios";
+import type { ExternalTrainer } from "@/types";
 import {
   Dialog,
   DialogContent,
@@ -84,6 +87,70 @@ function getCalendarDate(value: string | null) {
   return dayjs.tz(`${value}T00:00:00`, TIME_ZONE);
 }
 
+interface CalendarLookupContextType {
+  getClassName: (classId?: number) => string;
+  getClassCode: (classId?: number) => string;
+  getTrainerName: (trainerId?: number) => string;
+  getTopicName: (topicId?: number, sessionTitle?: string) => string;
+  getTopicCode: (topicId?: number, sessionTitle?: string) => string;
+}
+
+const DEFAULT_TRAINER_NAMES: Record<number, string> = {
+  1: "Nguyễn Ngọc Tân (Trainer)",
+  2: "Nguyễn Mạnh Hoàng (Trainer)",
+  3: "Nguyễn Văn Thắng (Trainer)",
+  4: "Nguyễn Tuấn Danh (Trainer)",
+  5: "Huỳnh Tấn Phát (Trainer)",
+};
+
+const DEFAULT_TOPIC_NAMES: Record<string, string> = {
+  JAVA_CORE: "Lập trình Java căn bản & OOP",
+  SPRING_BOOT: "Lập trình Web Backend với Spring Boot",
+  DATABASE_SQL: "Cơ sở dữ liệu & Thiết kế CSDL SQL",
+  REACT_FRONTEND: "Lập trình Giao diện Web với ReactJS",
+  DEVOPS_BASIC: "DevOps & CI/CD căn bản",
+  TESTING_QA: "Kiểm thử phần mềm & Đảm bảo chất lượng QA",
+};
+
+const DEFAULT_TOPIC_ID_MAP: Record<number, { code: string; name: string }> = {
+  1: { code: "JAVA_CORE", name: "Lập trình Java căn bản & OOP" },
+  2: { code: "SPRING_BOOT", name: "Lập trình Web Backend với Spring Boot" },
+  3: { code: "DATABASE_SQL", name: "Cơ sở dữ liệu & Thiết kế CSDL SQL" },
+  4: { code: "REACT_FRONTEND", name: "Lập trình Giao diện Web với ReactJS" },
+  5: { code: "DEVOPS_BASIC", name: "DevOps & CI/CD căn bản" },
+  6: { code: "TESTING_QA", name: "Kiểm thử phần mềm & Đảm bảo chất lượng QA" },
+};
+
+const CalendarLookupContext = createContext<CalendarLookupContextType>({
+  getClassName: (id) => (id === 1 ? "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)" : id === 2 ? "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)" : id ? `Lớp #${id}` : "—"),
+  getClassCode: (id) => (id === 1 ? "LOCAL_JAVA_01" : id === 2 ? "LOCAL_JAVA_02" : id ? `Lớp #${id}` : "—"),
+  getTrainerName: (id) => (id ? DEFAULT_TRAINER_NAMES[id] || `Trainer #${id}` : "Chưa phân công"),
+  getTopicName: (id, title) => {
+    if (title) {
+      const match = title.match(/^\[(.*?)\]/);
+      if (match && DEFAULT_TOPIC_NAMES[match[1]]) {
+        return `[${match[1]}] ${DEFAULT_TOPIC_NAMES[match[1]]}`;
+      }
+    }
+    if (id && DEFAULT_TOPIC_ID_MAP[id]) {
+      return `[${DEFAULT_TOPIC_ID_MAP[id].code}] ${DEFAULT_TOPIC_ID_MAP[id].name}`;
+    }
+    return id ? `Chủ đề #${id}` : "Chưa có";
+  },
+  getTopicCode: (id, title) => {
+    if (title) {
+      const match = title.match(/^\[(.*?)\]/);
+      if (match) return match[1];
+    }
+    if (id && DEFAULT_TOPIC_ID_MAP[id]) {
+      return DEFAULT_TOPIC_ID_MAP[id].code;
+    }
+    return id ? `Topic #${id}` : "—";
+  },
+});
+
+const useCalendarLookup = () => useContext(CalendarLookupContext);
+
 // Dialog chi tiết buổi học
 function SessionDetailModal({
   session,
@@ -92,6 +159,7 @@ function SessionDetailModal({
   session: CalendarSessionResponse;
   trigger: React.ReactNode;
 }) {
+  const { getClassName, getTrainerName, getTopicName } = useCalendarLookup();
   const statusClass = statusClasses[session.status] || "bg-muted text-muted-foreground";
 
   return (
@@ -152,7 +220,7 @@ function SessionDetailModal({
               <GraduationCap className="h-4 w-4" /> Mã lớp
             </dt>
             <dd className="font-medium text-foreground">
-              CLASS-{session.classId ? String(session.classId).padStart(2, "0") : "—"} (ID: {session.classId})
+              {getClassName(session.classId)}
             </dd>
           </div>
 
@@ -161,14 +229,14 @@ function SessionDetailModal({
               <User className="h-4 w-4" /> Giảng viên
             </dt>
             <dd className="font-medium text-foreground">
-              {session.trainerId ? `Trainer ID #${session.trainerId}` : "Chưa phân công"}
+              {getTrainerName(session.trainerId)}
             </dd>
           </div>
 
           <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2 p-3">
-            <dt className="text-muted-foreground">Chủ đề (Topic ID)</dt>
+            <dt className="text-muted-foreground">Chủ đề (Topic)</dt>
             <dd className="font-medium text-foreground">
-              {session.topicId ? `Topic #${session.topicId}` : "Chưa có"}
+              {getTopicName(session.topicId, session.title)}
             </dd>
           </div>
 
@@ -207,6 +275,7 @@ function SessionCard({
         : `${durationHours.toFixed(1)}h`
       : "";
 
+  const { getClassCode, getTrainerName, getTopicCode } = useCalendarLookup();
   const statusClass = statusClasses[session.status] || "bg-muted text-muted-foreground";
 
   return (
@@ -240,13 +309,13 @@ function SessionCard({
               <div className="flex items-center gap-1.5 truncate">
                 <GraduationCap className="h-3 w-3 shrink-0 text-muted-foreground/70" />
                 <span className="truncate">
-                  Lớp #{session.classId} {session.topicId ? `· Topic #${session.topicId}` : ""}
+                  {getClassCode(session.classId)} · {getTopicCode(session.topicId, session.title)}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 truncate">
                 <User className="h-3 w-3 shrink-0 text-muted-foreground/70" />
                 <span className="truncate font-medium text-foreground/80">
-                  {session.trainerId ? `Trainer #${session.trainerId}` : "Chưa gán Trainer"}
+                  {getTrainerName(session.trainerId)}
                 </span>
               </div>
               <div className="flex items-center gap-1.5 truncate">
@@ -301,13 +370,108 @@ export default function WeeklyCalendarPage() {
     { id: 26, code: "HCM26_FR_FU_KS_JAVA_01", name: "[HCM26_FR_FU_KS_JAVA_01] Lớp Java SE & Spring Boot", status: "active", plannedSize: 30 },
   ]);
 
+  const [trainers, setTrainers] = useState<ExternalTrainer[]>([
+    { id: 1, name: "Nguyễn Ngọc Tân (Trainer)" },
+    { id: 2, name: "Nguyễn Mạnh Hoàng (Trainer)" },
+    { id: 3, name: "Nguyễn Văn Thắng (Trainer)" },
+    { id: 4, name: "Nguyễn Tuấn Danh (Trainer)" },
+    { id: 5, name: "Huỳnh Tấn Phát (Trainer)" },
+  ]);
+
+  const [systemSubjects, setSystemSubjects] = useState<Array<{ id: number; code: string; name: string }>>([
+    { id: 1, code: "JAVA_CORE", name: "Lập trình Java căn bản & OOP" },
+    { id: 2, code: "SPRING_BOOT", name: "Lập trình Web Backend với Spring Boot" },
+    { id: 3, code: "DATABASE_SQL", name: "Cơ sở dữ liệu & Thiết kế CSDL SQL" },
+    { id: 4, code: "REACT_FRONTEND", name: "Lập trình Giao diện Web với ReactJS" },
+    { id: 5, code: "DEVOPS_BASIC", name: "DevOps & CI/CD căn bản" },
+    { id: 6, code: "TESTING_QA", name: "Kiểm thử phần mềm & Đảm bảo chất lượng QA" },
+  ]);
+
   useEffect(() => {
     classSetupApi.getActiveClasses().then((res: any) => {
       if (res && res.length > 0) {
         setSystemClasses(res);
       }
     }).catch(() => {});
+
+    externalApi.getTrainers().then((res: any) => {
+      if (Array.isArray(res) && res.length > 0) {
+        setTrainers(res);
+      }
+    }).catch(() => {});
+
+    axiosInstance.get("/subjects?page=0&size=100").then((res: any) => {
+      const list = res?.data?.content || res?.data || [];
+      if (Array.isArray(list) && list.length > 0) {
+        setSystemSubjects(list.map((s: any) => ({
+          id: s.id,
+          code: s.code,
+          name: s.name,
+        })));
+      }
+    }).catch(() => {});
   }, []);
+
+  const getClassName = (classId?: number): string => {
+    if (!classId) return "—";
+    const found = systemClasses.find((c) => c.id === classId || c.code === "LOCAL_JAVA_" + String(classId).padStart(2, "0"));
+    if (found) {
+      return found.name || "[" + found.code + "]";
+    }
+    if (classId === 1) return "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)";
+    if (classId === 2) return "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)";
+    return "Lớp (ID: " + classId + ")";
+  };
+
+  const getClassCode = (classId?: number): string => {
+    if (!classId) return "—";
+    const found = systemClasses.find((c) => c.id === classId);
+    if (found?.code) return found.code;
+    if (classId === 1) return "LOCAL_JAVA_01";
+    if (classId === 2) return "LOCAL_JAVA_02";
+    return "CLASS-" + String(classId).padStart(2, "0");
+  };
+
+  const getTrainerName = (trainerId?: number): string => {
+    if (!trainerId) return "Chưa phân công";
+    const found = trainers.find((t) => t.id === trainerId);
+    if (found?.name) return found.name;
+    return DEFAULT_TRAINER_NAMES[trainerId] || "Trainer #" + trainerId;
+  };
+
+  const getTopicName = (topicId?: number, sessionTitle?: string): string => {
+    if (sessionTitle) {
+      const match = sessionTitle.match(/^\[(.*?)\]/);
+      if (match) {
+        const code = match[1];
+        const sub = systemSubjects.find((s) => s.code === code);
+        if (sub) return "[" + sub.code + "] " + sub.name;
+        if (DEFAULT_TOPIC_NAMES[code]) return "[" + code + "] " + DEFAULT_TOPIC_NAMES[code];
+        return "[" + code + "]";
+      }
+    }
+    if (topicId) {
+      const sub = systemSubjects.find((s) => s.id === topicId);
+      if (sub) return "[" + sub.code + "] " + sub.name;
+      if (DEFAULT_TOPIC_ID_MAP[topicId]) return "[" + DEFAULT_TOPIC_ID_MAP[topicId].code + "] " + DEFAULT_TOPIC_ID_MAP[topicId].name;
+      return "Chủ đề #" + topicId;
+    }
+    return "Chưa có";
+  };
+
+  const getTopicCode = (topicId?: number, sessionTitle?: string): string => {
+    if (sessionTitle) {
+      const match = sessionTitle.match(/^\[(.*?)\]/);
+      if (match) return match[1];
+    }
+    if (topicId) {
+      const sub = systemSubjects.find((s) => s.id === topicId);
+      if (sub) return sub.code;
+      if (DEFAULT_TOPIC_ID_MAP[topicId]) return DEFAULT_TOPIC_ID_MAP[topicId].code;
+      return "Topic #" + topicId;
+    }
+    return "—";
+  };
 
   const rawPage = searchParams.get("page") ?? "0";
   const parsedPage = Number(rawPage);
@@ -438,9 +602,10 @@ export default function WeeklyCalendarPage() {
         const q = keyword.toLowerCase();
         const matchTitle = (s.title || "").toLowerCase().includes(q);
         const matchLoc = (s.location || "").toLowerCase().includes(q);
-        const matchClass = `class-${s.classId}`.toLowerCase().includes(q) || String(s.classId).includes(q);
-        const matchTrainer = `trainer-${s.trainerId}`.toLowerCase().includes(q) || String(s.trainerId).includes(q);
-        return matchTitle || matchLoc || matchClass || matchTrainer;
+        const matchClass = `class-${s.classId}`.toLowerCase().includes(q) || String(s.classId).includes(q) || getClassCode(s.classId).toLowerCase().includes(q) || getClassName(s.classId).toLowerCase().includes(q);
+        const matchTrainer = `trainer-${s.trainerId}`.toLowerCase().includes(q) || String(s.trainerId).includes(q) || getTrainerName(s.trainerId).toLowerCase().includes(q);
+        const matchTopic = getTopicCode(s.topicId, s.title).toLowerCase().includes(q) || getTopicName(s.topicId, s.title).toLowerCase().includes(q);
+        return matchTitle || matchLoc || matchClass || matchTrainer || matchTopic;
       }
       return true;
     });
@@ -477,9 +642,9 @@ export default function WeeklyCalendarPage() {
     const rows = sessions.map((s) => [
       s.id,
       `"${(s.title || "").replace(/"/g, '""')}"`,
-      `"CLASS-${String(s.classId).padStart(2, "0")}"`,
-      s.topicId ?? "",
-      s.trainerId ?? "",
+      `"${getClassCode(s.classId)}"`,
+      `"${getTopicCode(s.topicId, s.title)}"`,
+      `"${getTrainerName(s.trainerId)}"`,
       `"${(s.location || "Chưa có").replace(/"/g, '""')}"`,
       `"${formatTime(s.startTime)}"`,
       `"${formatTime(s.endTime)}"`,
@@ -572,7 +737,8 @@ export default function WeeklyCalendarPage() {
   }, [viewMode, selectedDate, sessions]);
 
   return (
-    <MainLayout pathName={{ calendar: "Thời khoá biểu" }}>
+    <CalendarLookupContext.Provider value={{ getClassName, getClassCode, getTrainerName, getTopicName, getTopicCode }}>
+      <MainLayout pathName={{ calendar: "Thời khoá biểu" }}>
       <div className="space-y-5 pb-12">
         {/* Header hàng đầu: Tiêu đề & Nút xuất file */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
@@ -785,7 +951,7 @@ export default function WeeklyCalendarPage() {
                 .filter((c) => !systemClasses.some((sc) => sc.id === c))
                 .map((c) => (
                   <option key={c} value={String(c)}>
-                    CLASS-${String(c).padStart(2, "0")}
+                    {getClassName(c)}
                   </option>
                 ))}
             </select>
@@ -1060,14 +1226,14 @@ export default function WeeklyCalendarPage() {
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
                             <Badge variant="outline" className="font-mono text-xs">
-                              CLASS-{String(s.classId).padStart(2, "0")}
+                              {getClassCode(s.classId)}
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-muted-foreground">
-                            Topic #{s.topicId}
+                            {getTopicCode(s.topicId, s.title)}
                           </td>
                           <td className="px-4 py-3 text-muted-foreground">
-                            {s.trainerId ? `Trainer #${s.trainerId}` : "—"}
+                            {getTrainerName(s.trainerId)}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1 text-xs">
@@ -1106,5 +1272,6 @@ export default function WeeklyCalendarPage() {
         )}
       </div>
     </MainLayout>
+    </CalendarLookupContext.Provider>
   );
 }
