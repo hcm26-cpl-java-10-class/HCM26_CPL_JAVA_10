@@ -5,6 +5,7 @@ import { Award, CheckCircle2, Clock, GraduationCap, PlayCircle, BookOpen, Eye } 
 import { Link } from "react-router-dom";
 import { CourseEnrollmentAssignmentDialog } from "./CourseEnrollmentAssignmentDialog";
 import { LEVEL_BADGE_CLASS, LEVEL_LABEL, formatTotalDuration } from "../utils/course.utils.ts";
+import { CourseRating } from "../../course_review/components/CourseRating.tsx";
 
 interface CourseCardProps {
   course: CatalogCourse;
@@ -51,11 +52,11 @@ export function CourseCard({
       onKeyDown={
         disableNavigation
           ? (event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              handleSelect();
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleSelect();
+              }
             }
-          }
           : undefined
       }
     >
@@ -91,11 +92,11 @@ export function CourseCard({
       onKeyDown={
         disableNavigation
           ? (event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              handleSelect();
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleSelect();
+              }
             }
-          }
           : undefined
       }
     >
@@ -122,7 +123,11 @@ export function CourseCard({
               {titleContent}
             </Link>
           )}
-
+          <CourseRating
+            averageRating={course.averageRating}
+            totalReviews={course.totalReviews}
+            className="mt-0.5"
+          />
           <p className="mt-1 text-sm text-muted-foreground">{course.instructor || "Course instructor"}</p>
         </div>
 

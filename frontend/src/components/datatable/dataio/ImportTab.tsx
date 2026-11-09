@@ -140,16 +140,16 @@ export function ImportTab({
 
     try {
       setError(null);
+
       await onImport(file);
 
       clearFile();
 
     } catch (error: unknown) {
-      const failure = error as { response?: { data?: { message?: string } }; message?: string };
       setError(
-          failure.response?.data?.message
-              ?? failure.message
-              ?? "Failed to import data."
+          error instanceof Error
+              ? error.message
+              : "Failed to import data."
       );
     }
   }

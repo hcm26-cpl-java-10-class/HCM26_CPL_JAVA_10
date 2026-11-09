@@ -25,6 +25,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.starter_project_2025.system.exam.dto.ExamAttemptStatisticsDTO;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -43,17 +44,21 @@ public class ExamResultExportService {
     private final ExamAttemptRepository attemptRepository;
     private final ExamResultStatisticsService statisticsService;
     private final ExamResultReadinessService readinessService;
+    private final ExamAttemptStatisticsService attemptStatisticsService;
 
     public ExamResultExportService(
             ExamRepository examRepository,
             ExamAttemptRepository attemptRepository,
             ExamResultStatisticsService statisticsService,
-            ExamResultReadinessService readinessService
+            ExamResultReadinessService readinessService,
+            ExamAttemptStatisticsService attemptStatisticsService
+
     ) {
         this.examRepository = examRepository;
         this.attemptRepository = attemptRepository;
         this.statisticsService = statisticsService;
         this.readinessService = readinessService;
+        this.attemptStatisticsService = attemptStatisticsService;
     }
 
     private static final List<String> HEADERS = List.of(
@@ -67,6 +72,19 @@ public class ExamResultExportService {
             "Submitted at"
     );
 
+    private static final List<String> STUDENT_ATTEMPT_HEADERS = List.of(
+            "No.",
+            "Student",
+            "Attempt",
+            "Flagged",
+            "Email",
+            "Started At",
+            "Submitted At",
+            "1st Score",
+            "2nd Score",
+            "Status"
+    );
+
     private record AttemptRow(
             String studentName,
             String email,
@@ -78,10 +96,24 @@ public class ExamResultExportService {
             String submittedAt
     ) {}
 
+    private record StudentAttemptRow(
+            int no,
+            String student,
+            String attempt,
+            String flagged,
+            String email,
+            String startedAt,
+            String submittedAt,
+            String firstScore,
+            String secondScore,
+            String status
+    ) {}
+
     private record ExportData(
             Exam exam,
             ExamResultStatisticsDTO statistics,
-            List<AttemptRow> rows
+            List<AttemptRow> rows,
+            List<StudentAttemptRow> studentAttemptRows
     ) {}
 
     @Transactional(readOnly = true)
@@ -124,6 +156,14 @@ public class ExamResultExportService {
 
         for (AttemptRow row : data.rows()) {
             appendCsvRow(csv, toValues(row));
+        }
+
+        csv.append("\r\n");
+        appendCsvRow(csv, List.of("Student Attempt Results"));
+        appendCsvRow(csv, STUDENT_ATTEMPT_HEADERS);
+
+        for (StudentAttemptRow row : data.studentAttemptRows()) {
+            appendCsvRow(csv, toStudentAttemptValues(row));
         }
 
         return ("\uFEFF" + csv).getBytes(StandardCharsets.UTF_8);
@@ -194,6 +234,31 @@ public class ExamResultExportService {
 
             for (int i = 0; i < HEADERS.size(); i++) {
                 scores.autoSizeColumn(i);
+            }
+
+            Sheet studentAttempts =
+                    workbook.createSheet("Student Attempt Results");
+
+            Row attemptHeader = studentAttempts.createRow(0);
+
+            for (int i = 0; i < STUDENT_ATTEMPT_HEADERS.size(); i++) {
+                attemptHeader.createCell(i)
+                        .setCellValue(STUDENT_ATTEMPT_HEADERS.get(i));
+            }
+
+            int attemptIndex = 1;
+
+            for (StudentAttemptRow item : data.studentAttemptRows()) {
+                Row row = studentAttempts.createRow(attemptIndex++);
+                List<String> values = toStudentAttemptValues(item);
+
+                for (int i = 0; i < values.size(); i++) {
+                    row.createCell(i).setCellValue(values.get(i));
+                }
+            }
+
+            for (int i = 0; i < STUDENT_ATTEMPT_HEADERS.size(); i++) {
+                studentAttempts.autoSizeColumn(i);
             }
 
             workbook.write(output);
@@ -278,6 +343,41 @@ public class ExamResultExportService {
                 }
 
                 document.add(table);
+
+                document.add(new Paragraph("Student Attempt Results")
+                        .setFontSize(14)
+                        .setBold());
+
+                float[] attemptWidths = {
+                        0.5f, 1.5f, 1.0f, 1.0f, 2.0f,
+                        1.8f, 1.8f, 0.9f, 0.9f, 1.0f
+                };
+
+                Table attemptTable = new Table(
+                        UnitValue.createPercentArray(attemptWidths)
+                ).useAllAvailableWidth();
+
+                for (String heading : STUDENT_ATTEMPT_HEADERS) {
+                    attemptTable.addHeaderCell(
+                            new Cell().add(
+                                    new Paragraph(heading)
+                                            .setBold()
+                                            .setFontSize(8)
+                            )
+                    );
+                }
+
+                for (StudentAttemptRow item : data.studentAttemptRows()) {
+                    for (String value : toStudentAttemptValues(item)) {
+                        attemptTable.addCell(
+                                new Cell().add(
+                                        new Paragraph(value).setFontSize(7)
+                                )
+                        );
+                    }
+                }
+
+                document.add(attemptTable);
             }
 
             return output.toByteArray();
@@ -318,7 +418,35 @@ public class ExamResultExportService {
             ));
         }
 
-        return new ExportData(exam, statistics, rows);
+        List<ExamAttemptStatisticsDTO> studentAttempts =
+                attemptStatisticsService.getAttempts(examId);
+
+        List<StudentAttemptRow> studentAttemptRows = new ArrayList<>();
+
+        int index = 1;
+
+        for (ExamAttemptStatisticsDTO attempt : studentAttempts) {
+            String flagged = attempt.flagged()
+                    ? "Flagged · " + attempt.violationCount()
+                    : "—";
+
+            studentAttemptRows.add(new StudentAttemptRow(
+                    index++,
+                    safe(attempt.studentName()),
+                    "Attempt #" + safe(attempt.attemptNumber()),
+                    flagged,
+                    safe(attempt.studentEmail()),
+                    formatInstant(attempt.startedAt()),
+                    formatInstant(attempt.submittedAt()),
+                    safe(attempt.firstScore()),
+                    safe(attempt.secondScore()),
+                    attempt.status() == null
+                            ? ""
+                            : attempt.status().name()
+            ));
+        }
+
+        return new ExportData(exam, statistics, rows, studentAttemptRows);
     }
 
     private int addSummaryRow(
@@ -343,6 +471,21 @@ public class ExamResultExportService {
                 row.maxScore(),
                 row.status(),
                 row.submittedAt()
+        );
+    }
+
+    private List<String> toStudentAttemptValues(StudentAttemptRow row) {
+        return List.of(
+                String.valueOf(row.no()),
+                row.student(),
+                row.attempt(),
+                row.flagged(),
+                row.email(),
+                row.startedAt(),
+                row.submittedAt(),
+                row.firstScore(),
+                row.secondScore(),
+                row.status()
         );
     }
 

@@ -29,11 +29,14 @@ public class ExamAttemptStatisticsService {
     private final ExamAttemptRepository attemptRepository;
     private final ExamIntegrityEventRepository integrityEventRepository;
     private final ExamScoreAdjustmentRepository adjustmentRepository;
+    private final ExamResultReadinessService readinessService;
 
     public List<ExamAttemptStatisticsDTO> getAttempts(Long examId) {
-        examRepository.findById(examId)
+        Exam exam = examRepository.findById(examId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException("Exam not found"));
+
+        BigDecimal passThreshold = ExamResultStatisticsService.resolvePassThreshold(exam);
 
         Map<Long, Long> violations = new HashMap<>();
         for (ExamIntegrityEvent e : integrityEventRepository.findAllByExamIdOrderByOccurredAtAsc(examId)) {
@@ -48,7 +51,7 @@ public class ExamAttemptStatisticsService {
                                 Comparator.nullsLast(Comparator.naturalOrder())
                         ).reversed()
                 )
-                .map(a -> toDTO(a, violations.getOrDefault(a.getId(), 0L)))
+                .map(a -> toDTO(a, violations.getOrDefault(a.getId(), 0L), passThreshold))
                 .toList();
     }
 
@@ -113,10 +116,12 @@ public class ExamAttemptStatisticsService {
         attempt.setFinalScore(score);
         attemptRepository.save(attempt);
 
-        return toDTO(attempt, count);
+        BigDecimal passThreshold = ExamResultStatisticsService.resolvePassThreshold(attempt.getExam());
+
+        return toDTO(attempt, count, passThreshold);
     }
 
-    private ExamAttemptStatisticsDTO toDTO(ExamAttempt attempt, long violationCount) {
+    private ExamAttemptStatisticsDTO toDTO(ExamAttempt attempt, long violationCount, BigDecimal passThreshold) {
         User student = attempt.getStudent();
 
         String studentName = "";
@@ -136,6 +141,11 @@ public class ExamAttemptStatisticsService {
 
         String locked = lockReason(attempt, violationCount);
 
+        Boolean passed = null;
+        if (readinessService.isFullyGraded(attempt) && attempt.getFinalScore() != null) {
+            passed = attempt.getFinalScore().compareTo(passThreshold) >= 0;
+        }
+
         return new ExamAttemptStatisticsDTO(
                 attempt.getId(),
                 student == null ? null : student.getId(),
@@ -152,7 +162,8 @@ public class ExamAttemptStatisticsService {
                 violationCount > 0,
                 violationCount,
                 locked == null,
-                locked
+                locked,
+                passed
         );
     }
 }

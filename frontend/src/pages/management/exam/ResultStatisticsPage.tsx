@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import axiosInstance from "@/api/axios";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -5,7 +7,19 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, FileSpreadsheet, FileText, Download, Lock, Pencil, Search, X } from "lucide-react";
+import {
+    AlertCircle,
+    CheckCircle2,
+    ChevronLeft,
+    Download,
+    FileSpreadsheet,
+    FileText,
+    Lock,
+    Pencil,
+    Search,
+    X,
+    XCircle,
+} from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { IntegrityReportSection } from "./IntegrityReportSection"; // NEW (anti-cheat)
 import { ItemAnalysisSection } from "./ItemAnalysisSection";
@@ -28,6 +42,11 @@ type ExamStatistics = {
     highestFinalScore: number | null;
     lowestFinalScore: number | null;
     scoreDistribution: ScoreBand[];
+    passedAttempts?: number;
+    passRate?: number | null;
+    failedAttempts?: number;
+    failRate?: number | null;
+    passScore?: number | null;
 };
 
 type ReleasePolicy =
@@ -62,6 +81,7 @@ type ExamAttemptStatistics = {
     secondScore: number | null;
     editable: boolean;
     lockReason: string | null;
+    passed?: boolean | null;
 };
 
 
@@ -85,18 +105,43 @@ function formatScore(value: number | null | undefined): string {
 }
 
 function StatCard({
-                      label,
-                      value,
-                      detail,
-                  }: {
+    label,
+    value,
+    detail,
+    accent,
+    badge,
+}: {
     label: string;
     value: string | number;
     detail?: string;
+    accent?: "default" | "success" | "danger" | "warning";
+    badge?: string;
 }) {
+    const accentClass =
+        accent === "success"
+            ? "border-emerald-200 bg-emerald-50/40 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-100"
+            : accent === "danger"
+            ? "border-rose-200 bg-rose-50/40 text-rose-950 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-100"
+            : "border-border bg-card text-card-foreground";
+
+    const valueColor =
+        accent === "success"
+            ? "text-emerald-600 dark:text-emerald-400"
+            : accent === "danger"
+            ? "text-rose-600 dark:text-rose-400"
+            : "text-foreground";
+
     return (
-        <div className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="mt-2 text-2xl font-bold">{value}</p>
+        <div className={`rounded-xl border p-5 shadow-sm transition-all ${accentClass}`}>
+            <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-muted-foreground">{label}</p>
+                {badge && (
+                    <span className="rounded-full bg-background/80 px-2 py-0.5 text-xs font-semibold shadow-xs">
+                        {badge}
+                    </span>
+                )}
+            </div>
+            <p className={`mt-2 text-2xl font-bold ${valueColor}`}>{value}</p>
             {detail && (
                 <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
             )}
@@ -246,59 +291,41 @@ function AttemptStatusChart({
                                 strokeDasharray={`${completedLength} ${circumference}`}
                                 transform="rotate(-90 80 80)"
                             />
-                            {pending > 0 && (
-                                <circle
-                                    cx="80"
-                                    cy="80"
-                                    r={radius}
-                                    fill="none"
-                                    stroke="#f59e0b"
-                                    strokeWidth="22"
-                                    strokeDasharray={`${pendingLength} ${circumference}`}
-                                    strokeDashoffset={-completedLength}
-                                    transform="rotate(-90 80 80)"
-                                />
-                            )}
+                            <circle
+                                cx="80"
+                                cy="80"
+                                r={radius}
+                                fill="none"
+                                stroke="#eab308"
+                                strokeWidth="22"
+                                strokeDasharray={`${pendingLength} ${circumference}`}
+                                strokeDashoffset={-completedLength}
+                                transform="rotate(-90 80 80)"
+                            />
                         </>
                     )}
-                    <text
-                        x="80"
-                        y="76"
-                        textAnchor="middle"
-                        fontSize="20"
-                        fontWeight="700"
-                        fill="currentColor"
-                        className="text-foreground"
-                    >
-                        {total}
-                    </text>
-
-                    <text
-                        x="80"
-                        y="96"
-                        textAnchor="middle"
-                        fontSize="11"
-                        fill="currentColor"
-                        className="text-muted-foreground"
-                    >
-                        attempts
-                    </text>
                 </svg>
+
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                    <p className="text-3xl font-bold">{total}</p>
+                    <p className="text-xs text-muted-foreground">Total Attempts</p>
+                </div>
             </div>
 
-            <div className="space-y-4 text-sm">
+            <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-3">
-                    <span className="h-3 w-3 rounded-sm bg-green-600" />
+                    <span className="inline-block size-3.5 rounded-full bg-green-600" />
                     <div>
+                        <p className="font-medium">{completed}</p>
                         <p className="text-muted-foreground">Fully Graded</p>
-                        <p className="font-semibold">{completed} attempts</p>
                     </div>
                 </div>
+
                 <div className="flex items-center gap-3">
-                    <span className="h-3 w-3 rounded-sm bg-amber-500" />
+                    <span className="inline-block size-3.5 rounded-full bg-yellow-500" />
                     <div>
+                        <p className="font-medium">{pending}</p>
                         <p className="text-muted-foreground">Pending Grading</p>
-                        <p className="font-semibold">{pending} attempts</p>
                     </div>
                 </div>
             </div>
@@ -310,24 +337,41 @@ function getErrorMessage(error: unknown): string {
     if (
         typeof error === "object" &&
         error !== null &&
-        "response" in error
+        "response" in error &&
+        typeof error.response === "object" &&
+        error.response !== null &&
+        "data" in error.response
     ) {
-        const response = (
-            error as {
-                response?: {
-                    data?: { message?: string; error?: string };
-                };
-            }
-        ).response;
+        const data = error.response.data;
 
-        const message = response?.data?.message ?? response?.data?.error;
-        if (message) return message;
+        if (
+            typeof data === "object" &&
+            data !== null &&
+            "message" in data &&
+            typeof data.message === "string"
+        ) {
+            return data.message;
+        }
+
+        if (
+            typeof data === "object" &&
+            data !== null &&
+            "detail" in data &&
+            typeof data.detail === "string"
+        ) {
+            return data.detail;
+        }
     }
 
-    return "An error occurred while calling the API. Please check the backend and your access permissions.";
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    return "An unknown error occurred.";
 }
 
 export default function ResultStatisticsPage() {
+    const embedded = useContext(EmbeddedLayoutContext);
     const { examId: examIdParam } = useParams();
     const navigate = useNavigate();
     const examId = Number(examIdParam);
@@ -341,6 +385,8 @@ export default function ResultStatisticsPage() {
 
     const [attemptPage, setAttemptPage] = useState(1);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [publishPreviewOpen, setPublishPreviewOpen] = useState(false);
+    const [previewSearch, setPreviewSearch] = useState("");
     const [attemptSearch, setAttemptSearch] = useState("");
     const [selectedAttempt, setSelectedAttempt] =
         useState<ExamAttemptStatistics | null>(null);
@@ -422,6 +468,7 @@ export default function ResultStatisticsPage() {
         },
         onSuccess: async () => {
             toast.success("Result publication settings updated successfully.");
+            setPublishPreviewOpen(false);
             await queryClient.invalidateQueries({
                 queryKey: ["exam-result-publication", examId],
             });
@@ -495,6 +542,41 @@ export default function ResultStatisticsPage() {
     const pageSize = 5;
     const totalPages = Math.max(1, Math.ceil(attempts.length / pageSize));
 
+    // Eligible attempts for grade push preview (fully graded submissions)
+    const eligibleAttempts = useMemo(() => {
+        return attempts.filter(
+            (a) => a.finalScore != null && (a.status === "SUBMITTED" || a.status === "EXPIRED")
+        );
+    }, [attempts]);
+
+    const eligiblePassedAttempts = useMemo(() => {
+        return eligibleAttempts.filter((a) => a.passed === true);
+    }, [eligibleAttempts]);
+
+    const eligibleFailedAttempts = useMemo(() => {
+        return eligibleAttempts.filter((a) => a.passed === false);
+    }, [eligibleAttempts]);
+
+    const eligiblePassRate = useMemo(() => {
+        if (eligibleAttempts.length === 0) return 0;
+        return (eligiblePassedAttempts.length * 100) / eligibleAttempts.length;
+    }, [eligibleAttempts.length, eligiblePassedAttempts.length]);
+
+    const eligibleFailRate = useMemo(() => {
+        if (eligibleAttempts.length === 0) return 0;
+        return (eligibleFailedAttempts.length * 100) / eligibleAttempts.length;
+    }, [eligibleAttempts.length, eligibleFailedAttempts.length]);
+
+    const filteredPreviewAttempts = useMemo(() => {
+        const keyword = previewSearch.trim().toLowerCase();
+        if (!keyword) return eligibleAttempts;
+        return eligibleAttempts.filter(
+            (attempt) =>
+                attempt.studentName.toLowerCase().includes(keyword) ||
+                attempt.studentEmail.toLowerCase().includes(keyword)
+        );
+    }, [eligibleAttempts, previewSearch]);
+
     const filteredAttempts = useMemo(() => {
         const keyword = attemptSearch.trim().toLowerCase();
 
@@ -538,6 +620,7 @@ export default function ResultStatisticsPage() {
     return (
         <MainLayout>
             <div className="space-y-6 p-4 md:p-6">
+                {!embedded && (
                 <div>
                     <Button
                         variant="ghost"
@@ -546,25 +629,26 @@ export default function ResultStatisticsPage() {
                         onClick={() => navigate("/exams")}
                     >
                         <ChevronLeft className="size-4" />
-                        Back to Exam Management
+                        Back to Assessment Management
                     </Button>
 
                     <p className="text-sm text-muted-foreground">
-                        Exam Management / Result Statistics
+                        Assessment Management / Result Statistics
                     </p>
 
                     <h1 className="mt-1 text-2xl font-bold text-foreground">
-                        Exam Result Statistics
+                        Assessment Result Statistics
                     </h1>
 
                     <p className="mt-1 text-sm text-muted-foreground">
                         Exam ID: {validExamId ? examId : "Invalid"}
                     </p>
                 </div>
+                )}
 
                 {!validExamId && (
                     <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-                        Invalid exam ID. Please open this page using the URL
+                        Invalid assessment ID. Please open this page using the URL
                         /exams/ID/result-statistics.
                     </div>
                 )}
@@ -581,8 +665,9 @@ export default function ResultStatisticsPage() {
                         {getErrorMessage(statisticsQuery.error)}
                     </div>
                 )}
+                <div className="flex flex-col gap-6 lg:flex-row">
                 {validExamId && (
-                    <div className="flex flex-wrap gap-1 rounded-lg border bg-muted/40 p-1" role="tablist" aria-label="Statistics sections">
+                    <nav className="flex shrink-0 gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1 lg:w-52 lg:flex-col lg:overflow-visible" role="tablist" aria-orientation="vertical" aria-label="Statistics sections">
                         {([
                             ["overview", "Overview"],
                             ["questions", "Questions"],
@@ -595,15 +680,16 @@ export default function ResultStatisticsPage() {
                                 role="tab"
                                 aria-selected={tab === key}
                                 onClick={() => setTab(key)}
-                                className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
+                                className={`whitespace-nowrap rounded-md px-4 py-2 text-left text-sm font-medium transition ${
                                     tab === key ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
                                 }`}
                             >
                                 {label}
                             </button>
                         ))}
-                    </div>
+                    </nav>
                 )}
+                <div className="min-w-0 flex-1 space-y-6">
 
                 {tab === "overview" && statistics && (
                     <>
@@ -652,23 +738,46 @@ export default function ResultStatisticsPage() {
                                 </DropdownMenu>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                 <StatCard
                                     label="Total Attempts"
                                     value={statistics.totalAttempts}
+                                    detail={`${statistics.uniqueStudents} participating student(s)`}
                                 />
                                 <StatCard
-                                    label="Participating Students"
-                                    value={statistics.uniqueStudents}
+                                    label="Graded Attempts"
+                                    value={statistics.fullyGradedAttempts}
+                                    detail={
+                                        statistics.pendingGradingAttempts > 0
+                                            ? `${statistics.pendingGradingAttempts} pending review`
+                                            : "All attempts graded"
+                                    }
+                                />
+                                <StatCard
+                                    label="Pass Rate"
+                                    value={
+                                        statistics.fullyGradedAttempts > 0 && statistics.passRate != null
+                                            ? `${statistics.passRate.toFixed(1)}%`
+                                            : "—"
+                                    }
+                                    detail={`${statistics.passedAttempts ?? 0} passed attempt(s)${statistics.passScore != null ? ` (≥ ${statistics.passScore})` : ""}`}
+                                    accent="success"
+                                    badge={`${statistics.passedAttempts ?? 0} Đạt`}
+                                />
+                                <StatCard
+                                    label="Fail Rate"
+                                    value={
+                                        statistics.fullyGradedAttempts > 0 && statistics.failRate != null
+                                            ? `${statistics.failRate.toFixed(1)}%`
+                                            : "—"
+                                    }
+                                    detail={`${statistics.failedAttempts ?? 0} failed attempt(s)${statistics.passScore != null ? ` (< ${statistics.passScore})` : ""}`}
+                                    accent="danger"
+                                    badge={`${statistics.failedAttempts ?? 0} Rớt`}
                                 />
                                 <StatCard
                                     label="Average Score"
                                     value={formatScore(statistics.averageFinalScore)}
-                                />
-                                <StatCard
-                                    label="Pending Grading"
-                                    value={statistics.pendingGradingAttempts}
-                                    detail={`${statistics.fullyGradedAttempts} fully graded attempts`}
                                 />
                                 <StatCard
                                     label="Highest Score"
@@ -678,7 +787,44 @@ export default function ResultStatisticsPage() {
                                     label="Lowest Score"
                                     value={formatScore(statistics.lowestFinalScore)}
                                 />
+                                <StatCard
+                                    label="Passing Threshold"
+                                    value={statistics.passScore != null ? formatScore(statistics.passScore) : "5.00"}
+                                    detail={statistics.passScore != null ? "Configured pass score" : "Default 50% max score"}
+                                />
                             </div>
+
+                            {statistics.fullyGradedAttempts > 0 && (
+                                <div className="mt-4 rounded-xl border border-border bg-card p-4 shadow-sm">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                                        <div className="flex items-center gap-4">
+                                            <span className="flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
+                                                <span className="size-2.5 rounded-full bg-emerald-500" />
+                                                Passed: {statistics.passedAttempts ?? 0} ({((statistics.passRate ?? 0)).toFixed(1)}%)
+                                            </span>
+                                            <span className="flex items-center gap-1.5 font-medium text-rose-600 dark:text-rose-400">
+                                                <span className="size-2.5 rounded-full bg-rose-500" />
+                                                Failed: {statistics.failedAttempts ?? 0} ({((statistics.failRate ?? 0)).toFixed(1)}%)
+                                            </span>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground">
+                                            Passing Criterion: Score ≥ {statistics.passScore != null ? statistics.passScore : 5.0}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2.5 flex h-3 w-full overflow-hidden rounded-full bg-muted">
+                                        <div
+                                            className="bg-emerald-500 transition-all duration-300"
+                                            style={{ width: `${Math.max(0, Math.min(100, statistics.passRate ?? 0))}%` }}
+                                            title={`Passed: ${statistics.passedAttempts} (${statistics.passRate?.toFixed(1)}%)`}
+                                        />
+                                        <div
+                                            className="bg-rose-500 transition-all duration-300"
+                                            style={{ width: `${Math.max(0, Math.min(100, statistics.failRate ?? 0))}%` }}
+                                            title={`Failed: ${statistics.failedAttempts} (${statistics.failRate?.toFixed(1)}%)`}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -720,7 +866,7 @@ export default function ResultStatisticsPage() {
                                 Student Attempt Results
                             </h2>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                Each row represents one exam attempt.
+                                Each row represents one assessment attempt with final score and pass/fail result.
                             </p>
                         </div>
 
@@ -765,6 +911,7 @@ export default function ResultStatisticsPage() {
                                         <th className="p-3">Submitted At</th>
                                         <th className="p-3">1st Score</th>
                                         <th className="p-3">2nd Score</th>
+                                        <th className="p-3">Result</th>
                                         <th className="p-3">Status</th>
                                         <th className="p-3">Action</th>
                                     </tr>
@@ -806,6 +953,23 @@ export default function ResultStatisticsPage() {
                                                     ? "--"
                                                     : formatScore(attempt.secondScore)}
                                             </td>
+                                            <td className="p-3 font-semibold">
+                                                {attempt.passed === true ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                                        <CheckCircle2 className="size-3" />
+                                                        Đạt (Passed)
+                                                    </span>
+                                                ) : attempt.passed === false ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                                                        <XCircle className="size-3" />
+                                                        Rớt (Failed)
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                                                        Pending
+                                                    </span>
+                                                )}
+                                            </td>
                                             <td className="p-3">
                                                 {attempt.status}
                                             </td>
@@ -839,7 +1003,7 @@ export default function ResultStatisticsPage() {
                                     {attempts.length === 0 && (
                                         <tr>
                                             <td
-                                                colSpan={9}
+                                                colSpan={10}
                                                 className="p-8 text-center text-muted-foreground"
                                             >
                                                 No student attempts found.
@@ -940,7 +1104,7 @@ export default function ResultStatisticsPage() {
                                 </div>
 
                                 <div className="overflow-x-auto rounded-lg border border-border">
-                                    <table className="w-full min-w-[850px] text-left text-sm">
+                                    <table className="w-full min-w-[950px] text-left text-sm">
                                         <thead className="bg-muted">
                                         <tr>
                                             <th className="p-3">No.</th>
@@ -949,6 +1113,7 @@ export default function ResultStatisticsPage() {
                                             <th className="p-3">Attempt</th>
                                             <th className="p-3">1st Score</th>
                                             <th className="p-3">2nd Score</th>
+                                            <th className="p-3">Result</th>
                                             <th className="p-3">Status</th>
                                             <th className="p-3">Action</th>
                                         </tr>
@@ -979,11 +1144,26 @@ export default function ResultStatisticsPage() {
                                                 <td className="p-3">
                                                     #{attempt.attemptNumber ?? "--"}
                                                 </td>
-                                                <td className="p-3">
+                                                <td className="p-3 font-semibold">
                                                     {formatScore(attempt.firstScore ?? attempt.finalScore)}
                                                 </td>
-                                                <td className="p-3">
+                                                <td className="p-3 font-semibold">
                                                     {formatScore(attempt.secondScore)}
+                                                </td>
+                                                <td className="p-3">
+                                                    {attempt.passed === true ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                                            <CheckCircle2 className="size-3" />
+                                                            Đạt
+                                                        </span>
+                                                    ) : attempt.passed === false ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                                                            <XCircle className="size-3" />
+                                                            Rớt
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">--</span>
+                                                    )}
                                                 </td>
                                                 <td className="p-3">{attempt.status}</td>
                                                 <td className="p-3">
@@ -1012,7 +1192,7 @@ export default function ResultStatisticsPage() {
                                         {filteredAttempts.length === 0 && (
                                             <tr>
                                                 <td
-                                                    colSpan={8}
+                                                    colSpan={9}
                                                     className="p-8 text-center text-muted-foreground"
                                                 >
                                                     No matching students found.
@@ -1127,14 +1307,251 @@ export default function ResultStatisticsPage() {
                     </div>
                 )}
 
+                {/* Grade Push Preview Modal (Bảng xem trước đẩy điểm) */}
+                {publishPreviewOpen && (
+                    <div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-6"
+                        onClick={() => setPublishPreviewOpen(false)}
+                    >
+                        <div
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="push-preview-title"
+                            className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-2xl"
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            {/* Modal Header */}
+                            <div className="flex items-center justify-between border-b border-border p-5">
+                                <div>
+                                    <h2
+                                        id="push-preview-title"
+                                        className="text-xl font-bold text-foreground"
+                                    >
+                                        Grade Push Preview (Bảng xem trước đẩy điểm)
+                                    </h2>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        Review eligible attempts, pass/fail status, and student results before confirming score publication.
+                                    </p>
+                                </div>
+
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setPublishPreviewOpen(false)}
+                                    aria-label="Close preview"
+                                >
+                                    <X className="size-5" />
+                                </Button>
+                            </div>
+
+                            {/* Modal Body */}
+                            <div className="space-y-5 overflow-y-auto p-5">
+                                {/* Top Overview Section (Khu vực tổng quan phía trên bảng) */}
+                                <div>
+                                    <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Summary Overview (Tổng quan điều kiện đẩy điểm)
+                                    </h3>
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                        <div className="rounded-lg border border-border bg-muted/30 p-4">
+                                            <p className="text-xs font-medium text-muted-foreground">
+                                                Eligible Attempts (Đủ điều kiện)
+                                            </p>
+                                            <p className="mt-1 text-2xl font-bold text-foreground">
+                                                {eligibleAttempts.length}
+                                            </p>
+                                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                                of {attempts.length} total attempts
+                                            </p>
+                                        </div>
+
+                                        <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-xs font-medium text-emerald-800 dark:text-emerald-300">
+                                                    Passed (Đạt)
+                                                </p>
+                                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+                                                    {eligiblePassRate.toFixed(1)}%
+                                                </span>
+                                            </div>
+                                            <p className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                                                {eligiblePassedAttempts.length}
+                                            </p>
+                                            <p className="mt-0.5 text-xs text-emerald-700/80 dark:text-emerald-400/80">
+                                                Score ≥ {statistics?.passScore != null ? statistics.passScore : 5.0}
+                                            </p>
+                                        </div>
+
+                                        <div className="rounded-lg border border-rose-200 bg-rose-50/50 p-4 dark:border-rose-900/50 dark:bg-rose-950/20">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-xs font-medium text-rose-800 dark:text-rose-300">
+                                                    Failed (Rớt)
+                                                </p>
+                                                <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-800 dark:bg-rose-900 dark:text-rose-200">
+                                                    {eligibleFailRate.toFixed(1)}%
+                                                </span>
+                                            </div>
+                                            <p className="mt-1 text-2xl font-bold text-rose-600 dark:text-rose-400">
+                                                {eligibleFailedAttempts.length}
+                                            </p>
+                                            <p className="mt-0.5 text-xs text-rose-700/80 dark:text-rose-400/80">
+                                                Score &lt; {statistics?.passScore != null ? statistics.passScore : 5.0}
+                                            </p>
+                                        </div>
+
+                                        <div className="rounded-lg border border-border bg-muted/30 p-4">
+                                            <p className="text-xs font-medium text-muted-foreground">
+                                                Target Release Policy
+                                            </p>
+                                            <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                                                {policies.find((p) => p.value === releasePolicy)?.label ?? releasePolicy}
+                                            </p>
+                                            <p className="mt-0.5 text-xs text-muted-foreground">
+                                                Passing threshold: {statistics?.passScore != null ? statistics.passScore : 5.0}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {(statistics?.pendingGradingAttempts ?? 0) > 0 && (
+                                        <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                                            <AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                                            <div>
+                                                <strong>Notice:</strong> There are {statistics?.pendingGradingAttempts} submission(s) pending grading.
+                                                All submissions must be graded before results can be successfully published.
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Detail Table Filter */}
+                                <div className="space-y-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Detailed Student Results ({filteredPreviewAttempts.length} records)
+                                        </h3>
+
+                                        <div className="relative w-full sm:w-72">
+                                            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                                            <input
+                                                type="text"
+                                                value={previewSearch}
+                                                onChange={(e) => setPreviewSearch(e.target.value)}
+                                                placeholder="Filter student or email..."
+                                                className="w-full rounded-lg border border-border bg-background py-1.5 pl-9 pr-3 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Detailed Preview Table with Result column */}
+                                    <div className="max-h-[380px] overflow-auto rounded-lg border border-border">
+                                        <table className="w-full min-w-[700px] text-left text-sm">
+                                            <thead className="sticky top-0 border-b border-border bg-muted">
+                                                <tr>
+                                                    <th className="p-2.5">No.</th>
+                                                    <th className="p-2.5">Student</th>
+                                                    <th className="p-2.5">Email</th>
+                                                    <th className="p-2.5">Attempt</th>
+                                                    <th className="p-2.5">Score</th>
+                                                    <th className="p-2.5">Result (Kết quả)</th>
+                                                    <th className="p-2.5">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredPreviewAttempts.map((attempt, index) => (
+                                                    <tr
+                                                        key={attempt.attemptId}
+                                                        className="border-b border-border last:border-0 hover:bg-muted/40"
+                                                    >
+                                                        <td className="p-2.5 text-xs text-muted-foreground">
+                                                            {index + 1}
+                                                        </td>
+                                                        <td className="p-2.5 font-medium">
+                                                            {attempt.studentName || "--"}
+                                                        </td>
+                                                        <td className="p-2.5 text-xs text-muted-foreground">
+                                                            {attempt.studentEmail || "--"}
+                                                        </td>
+                                                        <td className="p-2.5 text-xs">
+                                                            #{attempt.attemptNumber ?? "--"}
+                                                        </td>
+                                                        <td className="p-2.5 font-bold">
+                                                            {formatScore(attempt.finalScore)}
+                                                        </td>
+                                                        <td className="p-2.5">
+                                                            {attempt.passed === true ? (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                                                    <CheckCircle2 className="size-3" />
+                                                                    Đạt (Passed)
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+                                                                    <XCircle className="size-3" />
+                                                                    Rớt (Failed)
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="p-2.5 text-xs text-muted-foreground">
+                                                            {attempt.status}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+
+                                                {filteredPreviewAttempts.length === 0 && (
+                                                    <tr>
+                                                        <td
+                                                            colSpan={7}
+                                                            className="p-8 text-center text-muted-foreground"
+                                                        >
+                                                            {eligibleAttempts.length === 0
+                                                                ? "No eligible attempts ready to push."
+                                                                : "No matching students found."}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Modal Footer with Confirmation */}
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-4">
+                                <p className="text-xs text-muted-foreground">
+                                    Students will be notified according to policy:{" "}
+                                    <strong>{policies.find((p) => p.value === releasePolicy)?.label}</strong>
+                                </p>
+
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setPublishPreviewOpen(false)}
+                                    >
+                                        Cancel (Hủy)
+                                    </Button>
+
+                                    <Button
+                                        disabled={
+                                            publishMutation.isPending ||
+                                            eligibleAttempts.length === 0 ||
+                                            (statistics?.pendingGradingAttempts ?? 0) > 0
+                                        }
+                                        onClick={() => publishMutation.mutate(releasePolicy)}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                                    >
+                                        {publishMutation.isPending
+                                            ? "Publishing..."
+                                            : "Confirm & Publish Results (Xác nhận đẩy điểm)"}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {tab === "overview" && (
                 <section className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
                     <h2 className="text-lg font-semibold">
                         Result Publication
                     </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        Only users with the EXAM_UPDATE permission can manage result publication.
-                    </p>
 
                     {publicationQuery.isLoading && (
                         <p className="mt-4 text-sm text-muted-foreground">
@@ -1156,7 +1573,7 @@ export default function ResultStatisticsPage() {
                                 <strong
                                     className={
                                         publication.published
-                                            ? "text-green-700"
+                                            ? "text-green-700 dark:text-green-400"
                                             : "text-foreground"
                                     }
                                 >
@@ -1211,12 +1628,12 @@ export default function ResultStatisticsPage() {
                                     unpublishMutation.isPending ||
                                     !validExamId
                                 }
-                                onClick={() => publishMutation.mutate(releasePolicy)}
+                                onClick={() => setPublishPreviewOpen(true)}
                                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {publishMutation.isPending
                                     ? "Processing..."
-                                    : "Publish Results"}
+                                    : "Preview & Publish Results (Xem trước & Đẩy điểm)"}
                             </button>
 
                             <button
@@ -1243,6 +1660,8 @@ export default function ResultStatisticsPage() {
 
                 {/* NEW (anti-cheat): bao cao vi pham tung luot thi */}
                 {validExamId && tab === "integrity" && <IntegrityReportSection examId={examId} />}
+                </div>
+                </div>
             </div>
         </MainLayout>
     );

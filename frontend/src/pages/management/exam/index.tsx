@@ -1,6 +1,5 @@
-import { examApi, questionApi, examTemplateApi } from "@/api";
+import { examApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -18,2162 +18,449 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { EXAM_CATEGORY_LABEL, EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT, type ExamCategory, type ExamDTO, type ExamType, type LatePolicy, type QuestionDTO, type QuestionDifficulty, type QuestionFilter, type QuestionType, type ResultVisibility } from "@/types";
+import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, ArrowRight, BookOpen, Check, CheckCheck, CheckSquare, ClipboardCheck, Dices, Layers, Mail, MoreVertical, Pencil, Plus, Save, Search, BookmarkPlus, ShieldAlert, Tags, Trash2, X } from "lucide-react";
-import { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { BookmarkPlus, BookOpen, CalendarClock, ClipboardCheck, Clock, Download, ListChecks, Plus, Search, Trophy, Upload, User } from "lucide-react";
+import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { EditExamQuestionDialog, isExamStarted, QuestionAnswers } from "./ExamQuestionParts";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { ExamConfigFields } from "./ExamConfigFields";
+import { ExportExamModal } from "./components/ExportExamModal";
+import { ImportExamModal } from "./components/ImportExamModal";
+import {
+  buildExamRequest,
+  DEFAULT_CONFIG,
+  EXAM_CATEGORY_OPTIONS,
+  EXAM_TYPE_LABEL,
+  getErrorMessage,
+  validateConfig,
+  type ExamConfigForm,
+} from "./examConfig";
 
-const PAGE_SIZE = 10;
+/** 3 cards per row x 3 rows. */
+const PAGE_SIZE = 9;
 
-interface ExamConfigForm {
-  startTime: string;
-  endTime: string;
-  maxAttempts: string;
-  shuffleQuestions: boolean;
-  shuffleOptions: boolean;
-  showAnswersAfterExam: boolean;
-  category: ExamCategory;
-  passScore: string;
-  maxScore: string;
-  latePolicy: LatePolicy;
-  latePenaltyPercent: string;
-  lateGraceMinutes: string;
-  resultVisibility: ResultVisibility;
-  examType: ExamType;
-  accessCode: string;
-  // NEW (anti-cheat)
-  antiCheatEnabled: boolean;
-  detectTabSwitch: boolean;
-  blockCopyPaste: boolean;
-  requireFullscreen: boolean;
-  singleSession: boolean;
+type ExamStatus = "UPCOMING" | "OPEN" | "CLOSED";
+
+/** "Course › Section › Lesson" label of the course an exam belongs to ("—" when it is not linked). */
+const courseLabel = (exam: ExamDTO): string => {
+  if (!exam.courseName) return "—";
+  const parts = [exam.courseName];
+  if (exam.sectionTitle) parts.push(exam.sectionTitle);
+  if (exam.lessonTitle) parts.push(exam.lessonTitle);
+  return parts.join(" › ");
+};
+
+const examStatus = (exam: ExamDTO): ExamStatus => {
+  const now = Date.now();
+  if (exam.endTime && new Date(exam.endTime).getTime() < now) return "CLOSED";
+  if (exam.startTime && new Date(exam.startTime).getTime() > now) return "UPCOMING";
+  return "OPEN";
+};
+
+const STATUS_STYLE: Record<ExamStatus, { label: string; className: string }> = {
+  UPCOMING: { label: "Upcoming", className: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300" },
+  OPEN: { label: "Open", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
+  CLOSED: { label: "Closed", className: "bg-muted text-muted-foreground" },
+};
+
+const SORT_OPTIONS: { value: string; label: string }[] = [
+  { value: "createdAt,desc", label: "Newest first" },
+  { value: "createdAt,asc", label: "Oldest first" },
+  { value: "title,asc", label: "Title A–Z" },
+  { value: "startTime,desc", label: "Exam start time" },
+];
+
+const formatDateTime = (value?: string | null) =>
+  value ? value.replace("T", " ").slice(0, 16) : "—";
+
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+  multiline = false,
+}: {
+  icon: typeof Clock;
+  label: string;
+  value: React.ReactNode;
+  multiline?: boolean;
+}) {
+  return (
+    <div className={`flex gap-2 text-sm min-w-0 ${multiline ? "items-start justify-between" : "items-center justify-between"}`}>
+      <div className="flex shrink-0 items-center gap-2 text-muted-foreground">
+        <Icon className="size-4 shrink-0 text-muted-foreground" />
+        <span>{label}</span>
+      </div>
+      <span
+        className={`min-w-0 max-w-full text-right font-medium break-words [overflow-wrap:anywhere] ${
+          multiline ? "leading-snug" : "truncate"
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
 }
-
-const DEFAULT_CONFIG: ExamConfigForm = {
-  startTime: "",
-  endTime: "",
-  maxAttempts: "1",
-  shuffleQuestions: false,
-  shuffleOptions: false,
-  showAnswersAfterExam: true,
-  category: "ASSESSMENT",
-  passScore: "",
-  maxScore: "",
-  latePolicy: "NOT_ALLOWED",
-  latePenaltyPercent: "",
-  lateGraceMinutes: "0",
-  resultVisibility: "IMMEDIATE",
-  examType: "MIXED",
-  accessCode: "",
-  antiCheatEnabled: false,
-  detectTabSwitch: true,
-  blockCopyPaste: true,
-  requireFullscreen: false,
-  singleSession: true,
-};
-
-const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
-  NOT_ALLOWED: "Late submission not allowed",
-  ALLOWED_WITH_PENALTY: "Allowed with point penalty",
-  ALLOWED: "Allowed with no penalty",
-};
-
-const EXAM_TYPE_LABEL: Record<ExamType, string> = {
-  MULTIPLE_CHOICE: "Multiple Choice Only",
-  ESSAY: "Essay Only",
-  CODING: "Coding Only",
-  MC_CODING: "Multiple Choice & Coding",
-  MIXED: "Mixed (Multiple Choice, Essay & Coding)",
-};
-
-const EXAM_CATEGORY_OPTIONS = Object.keys(EXAM_CATEGORY_LABEL) as ExamCategory[];
-
-const RESULT_VISIBILITY_LABEL: Record<ResultVisibility, string> = {
-  IMMEDIATE: "View immediately after grading",
-  AFTER_EXAM_CLOSED: "View after exam closes",
-  MANUAL_RELEASE: "Manually released by teacher",
-};
-
-const toInputDateTime = (value?: string | null) => (value ? value.slice(0, 16) : "");
-
-const getLocalDatetimeString = (date = new Date()) => {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-};
-
-const getFutureDatetimeString = (minutesAhead: number) =>
-  getLocalDatetimeString(new Date(Date.now() + minutesAhead * 60 * 1000));
-
-const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
-  startTime: toInputDateTime(exam.startTime),
-  endTime: toInputDateTime(exam.endTime),
-  maxAttempts: String(exam.maxAttempts ?? 1),
-  shuffleQuestions: exam.shuffleQuestions ?? false,
-  shuffleOptions: exam.shuffleOptions ?? false,
-  showAnswersAfterExam: exam.showAnswersAfterExam ?? false,
-  category: exam.category ?? "ASSESSMENT",
-  passScore: exam.passScore != null ? String(exam.passScore) : "",
-  maxScore: exam.maxScore != null ? String(exam.maxScore) : "",
-  latePolicy: exam.latePolicy ?? "NOT_ALLOWED",
-  latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
-  lateGraceMinutes: String(exam.lateGraceMinutes ?? 0),
-  resultVisibility: exam.resultVisibility ?? "IMMEDIATE",
-  examType: exam.examType ?? "MIXED",
-  accessCode: exam.accessCode ?? "",
-  antiCheatEnabled: exam.antiCheatEnabled ?? false,
-  detectTabSwitch: exam.detectTabSwitch ?? false,
-  blockCopyPaste: exam.blockCopyPaste ?? false,
-  requireFullscreen: exam.requireFullscreen ?? false,
-  singleSession: exam.singleSession ?? false,
-});
-
-function validateConfig(
-    duration: number,
-    cfg: ExamConfigForm,
-    originalStartTime?: string,
-    originalEndTime?: string,
-): string | null {
-  const now = Date.now() - 60 * 1000; // Allow 1-min grace when saving
-
-  if (cfg.startTime) {
-    const start = new Date(cfg.startTime).getTime();
-    const isStartChanged = !originalStartTime || new Date(originalStartTime).getTime() !== start;
-    if (isStartChanged && start < now) {
-      return "Start time must be at current time or later (recommended: set at least 1 minute ahead so students have time to join).";
-    }
-  }
-
-  if (cfg.endTime) {
-    const end = new Date(cfg.endTime).getTime();
-    const isEndChanged = !originalEndTime || new Date(originalEndTime).getTime() !== end;
-    if (isEndChanged && end < now) {
-      return "End time cannot be in the past.";
-    }
-  }
-
-  if (cfg.startTime && cfg.endTime) {
-    const start = new Date(cfg.startTime).getTime();
-    const end = new Date(cfg.endTime).getTime();
-    if (start >= end) return "End time must be after start time.";
-    const windowMinutes = Math.floor((end - start) / 60000);
-    if (duration > windowMinutes) return `Exam duration (${duration} mins) exceeds the available time window (${windowMinutes} mins).`;
-  }
-  if (!(Number(cfg.maxAttempts) >= 1)) return "Maximum attempts must be at least 1.";
-  if (cfg.maxScore !== "" && !(Number(cfg.maxScore) > 0 && Number(cfg.maxScore) <= 1000)) return "Max score must be greater than 0 and at most 1000.";
-  if (cfg.passScore !== "" && Number(cfg.passScore) < 0) return "Passing score must be >= 0.";
-  if (cfg.passScore !== "" && Number(cfg.passScore) > (cfg.maxScore !== "" ? Number(cfg.maxScore) : 10)) return "Passing score cannot exceed the max score.";
-  if (cfg.latePolicy !== "NOT_ALLOWED" && !cfg.endTime) return "End time is required when setting a late submission policy.";
-  if (cfg.latePolicy === "ALLOWED_WITH_PENALTY") {
-    const pct = Number(cfg.latePenaltyPercent);
-    if (!(pct >= 1 && pct <= 100)) return "Late penalty percentage must be between 1% and 100%.";
-  }
-  if (Number(cfg.lateGraceMinutes) < 0) return "Grace period minutes must be >= 0.";
-  if (cfg.latePolicy === "NOT_ALLOWED" && Number(cfg.lateGraceMinutes) > 0) return "Grace period can only be set when late submissions are allowed.";
-  return null;
-}
-
-const getErrorMessage = (error: unknown, fallback: string): string => {
-  const err = error as { response?: { data?: { errors?: Record<string, string[]>; message?: string } } };
-  const data = err?.response?.data;
-  const fieldError = data?.errors ? (Object.values(data.errors).flat()[0]) : undefined;
-  return fieldError || data?.message || fallback;
-};
 
 export default function ExamManagementPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [_searchParams] = useSearchParams();
   const [examSearch, setExamSearch] = useState("");
   const [examCategoryFilter, setExamCategoryFilter] = useState<ExamCategory | "ALL">("ALL");
+  const [courseFilter, setCourseFilter] = useState<string>("ALL");
   const [examPage, setExamPage] = useState(0);
-  const [activeExam, setActiveExam] = useState<ExamDTO | null>(null);
-  const [editingExam, setEditingExam] = useState<ExamDTO | null>(null);
+  const [statusFilter, setStatusFilter] = useState<ExamStatus | "ALL">("ALL");
+  const [sortKey, setSortKey] = useState("createdAt,desc");
   const [isCreateOpen, setCreateOpen] = useState(false);
-  const [isPickerOpen, setPickerOpen] = useState(false);
+  const [isExportOpen, setExportOpen] = useState(false);
+  const [isImportOpen, setImportOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDuration, setNewDuration] = useState("60");
   const [cfg, setCfg] = useState<ExamConfigForm>(DEFAULT_CONFIG);
-  const [questionSearch, setQuestionSearch] = useState("");
-  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
-  const [questionType, setQuestionType] = useState("ALL");
-  const [difficulty, setDifficulty] = useState("ALL");
-  const [questionPage, setQuestionPage] = useState(0);
-  const [pageInput, setPageInput] = useState<string>("1");
-  const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<number>>(new Set());
-  const [stagedQuestions, setStagedQuestions] = useState<QuestionDTO[]>([]);
-  const [examToDelete, setExamToDelete] = useState<ExamDTO | null>(null);
-  const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
-  const [editingQuestion, setEditingQuestion] = useState<QuestionDTO | null>(null);
-  const [isRandomOpen, setIsRandomOpen] = useState(false);
-  const [randomCount, setRandomCount] = useState(10);
-  const [randomTopic, setRandomTopic] = useState<string>("");
-  const [randomDifficulty, setRandomDifficulty] = useState<string>("ALL");
-  const [randomQuestionType, setRandomQuestionType] = useState<string>("ALL");
-  const [examToSaveAsTemplate, setExamToSaveAsTemplate] =
-      useState<ExamDTO | null>(null);
+  const [showErrors, setShowErrors] = useState(false);
 
-  const [templateName, setTemplateName] = useState("");
-  const [templateDescription, setTemplateDescription] = useState("");
+  const coursesQuery = useQuery({
+    queryKey: ["exam-link-courses"],
+    queryFn: () => examApi.getLinkCourses(),
+    staleTime: 60_000,
+  });
+  const courseOptions = coursesQuery.data ?? [];
 
+  // The status is worked out from the open/close time, so when it is filtered we load all exams
+  // (a teacher has few) and filter / page them here.
+  const clientFiltering = statusFilter !== "ALL";
   const examsQuery = useQuery({
-    queryKey: ["exam-management", examPage, examSearch, examCategoryFilter],
-    queryFn: () => examApi.getPage(
-        { page: examPage, size: PAGE_SIZE, sort: "createdAt,desc" },
+    queryKey: [
+      "exam-management",
+      clientFiltering ? 0 : examPage,
+      examSearch,
+      examCategoryFilter,
+      courseFilter,
+      sortKey,
+      clientFiltering,
+    ],
+    queryFn: () =>
+      examApi.getPage(
+        { page: clientFiltering ? 0 : examPage, size: clientFiltering ? 500 : PAGE_SIZE, sort: sortKey },
         examSearch,
-        examCategoryFilter === "ALL" ? undefined : { category: examCategoryFilter },
-    ),
+        {
+          ...(examCategoryFilter === "ALL" ? {} : { category: examCategoryFilter }),
+          ...(courseFilter === "ALL" ? {} : { courseId: Number(courseFilter) }),
+        },
+      ),
   });
 
-  const lockedQuestionType: QuestionType | null =
-      activeExam?.examType === "MULTIPLE_CHOICE" ? "MULTIPLE_CHOICE"
-          : activeExam?.examType === "ESSAY" ? "ESSAY"
-          : activeExam?.examType === "CODING" ? "CODING"
-              : null;
-  const isPairExam = activeExam?.examType === "MC_CODING";
-  const effectiveQuestionType =
-      lockedQuestionType ??
-      (isPairExam && questionType !== "MULTIPLE_CHOICE" && questionType !== "CODING" ? "MULTIPLE_CHOICE" : questionType);
-
-  const questionFilter: QuestionFilter = {
-    isActive: true,
-    ...(effectiveQuestionType !== "ALL" ? { type: effectiveQuestionType as QuestionType } : {}),
-    ...(difficulty !== "ALL" ? { difficulty: difficulty as QuestionDifficulty } : {}),
-    ...(selectedTopics.length === 1 ? { topic: selectedTopics[0].trim().toLowerCase() } : {}),
-  };
-
-  const questionsQuery = useQuery({
-    queryKey: ["exam-question-picker", questionPage, questionSearch, effectiveQuestionType, difficulty, selectedTopics],
-    enabled: isPickerOpen && Boolean(activeExam?.id),
-    queryFn: () =>
-        questionApi.getPage(
-            { page: questionPage, size: PAGE_SIZE, sort: "id,desc" },
-            questionSearch,
-            questionFilter,
-        ),
-    placeholderData: (previousData) => previousData,
-  });
-
-  const allBankQuestionsQuery = useQuery({
-    queryKey: ["exam-question-all-bank", effectiveQuestionType],
-    enabled: isPickerOpen && Boolean(activeExam?.id),
-    queryFn: () =>
-        questionApi.getPage(
-            { page: 0, size: 2000, sort: "id,desc" },
-            undefined,
-            {
-              isActive: true,
-              ...(effectiveQuestionType !== "ALL" ? { type: effectiveQuestionType as QuestionType } : {}),
-            },
-        ),
-    staleTime: 30_000,
-  });
-
-  const refreshExams = () => queryClient.invalidateQueries({ queryKey: ["exam-management"] });
-
-  const saveExamMutation = useMutation({
-    mutationFn: () => {
-      const request = {
-        title: newTitle.trim(),
-        durationMinutes: Number(newDuration),
-        isActive: editingExam?.isActive ?? true,
-        startTime: cfg.startTime || undefined,
-        endTime: cfg.endTime || undefined,
-        maxAttempts: Number(cfg.maxAttempts),
-        shuffleQuestions: cfg.shuffleQuestions,
-        shuffleOptions: cfg.shuffleOptions,
-        showAnswersAfterExam: cfg.showAnswersAfterExam,
-        category: cfg.category,
-        passScore: cfg.passScore !== "" ? Number(cfg.passScore) : undefined,
-        maxScore: cfg.maxScore !== "" ? Number(cfg.maxScore) : undefined,
-        latePolicy: cfg.latePolicy,
-        latePenaltyPercent:
-            cfg.latePolicy === "ALLOWED_WITH_PENALTY" && cfg.latePenaltyPercent !== ""
-                ? Number(cfg.latePenaltyPercent)
-                : undefined,
-        lateGraceMinutes: Number(cfg.lateGraceMinutes || 0),
-        resultVisibility: cfg.resultVisibility,
-        examType: cfg.examType,
-        accessCode: cfg.accessCode ? cfg.accessCode.trim() : "",
-        // NEW (anti-cheat)
-        antiCheatEnabled: cfg.antiCheatEnabled,
-        detectTabSwitch: cfg.detectTabSwitch,
-        blockCopyPaste: cfg.blockCopyPaste,
-        requireFullscreen: cfg.requireFullscreen,
-        singleSession: cfg.singleSession,
-      };
-      return editingExam?.id
-          ? examApi.update(String(editingExam.id), request)
-          : examApi.create(request);
-    },
-    onSuccess: (exam) => {
-      if (editingExam?.id === activeExam?.id) setActiveExam(exam);
+  const createExamMutation = useMutation({
+    mutationFn: () => examApi.create(buildExamRequest(newTitle, newDuration, cfg, true)),
+    onSuccess: () => {
       setCreateOpen(false);
-      setEditingExam(null);
       setNewTitle("");
       setNewDuration("60");
       setCfg(DEFAULT_CONFIG);
+      setShowErrors(false);
       setExamPage(0);
-      void refreshExams();
-      toast.success(editingExam ? "Exam updated successfully" : "Exam created successfully");
+      void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+      toast.success("Exam created successfully");
     },
     onError: (error) => toast.error(getErrorMessage(error, "Failed to save exam")),
   });
 
-  const deleteExamMutation = useMutation({
-    mutationFn: (examId: number) => examApi.delete(String(examId)),
-    onSuccess: (_, examId) => {
-      if (activeExam?.id === examId) {
-        setActiveExam(null);
-        setPickerOpen(false);
-      }
-      setExamToDelete(null);
-      setDeleteConfirmInput("");
-      void refreshExams();
-      toast.success("Exam deleted successfully");
-    },
-    onError: (error) => toast.error(getErrorMessage(error, "Failed to delete exam")),
-  });
+  const loadedRows = examsQuery.data?.content ?? [];
+  const statusRows = clientFiltering ? loadedRows.filter((exam) => examStatus(exam) === statusFilter) : loadedRows;
+  const examRows = clientFiltering ? statusRows.slice(examPage * PAGE_SIZE, (examPage + 1) * PAGE_SIZE) : statusRows;
+  const examTotalPages = clientFiltering ? Math.ceil(statusRows.length / PAGE_SIZE) : examsQuery.data?.totalPages ?? 0;
+  const examTotal = clientFiltering ? statusRows.length : examsQuery.data?.totalElements ?? 0;
+  const hasFilters =
+    examSearch !== "" ||
+    examCategoryFilter !== "ALL" ||
+    statusFilter !== "ALL" ||
+    courseFilter !== "ALL";
 
-  const saveExamAsTemplateMutation = useMutation({
-    mutationFn: () => {
-      if (!examToSaveAsTemplate?.id) {
-        throw new Error("Select an exam before saving it as a template.");
-      }
-      const name = templateName.trim();
-      if (!name) {
-        throw new Error("Template name is required.");
-      }
-      return examTemplateApi.saveFromExam(examToSaveAsTemplate.id, {
-        name,
-        description: templateDescription.trim() || undefined,
-      });
-    },
-    onSuccess: () => {
-      setExamToSaveAsTemplate(null);
-      setTemplateName("");
-      setTemplateDescription("");
-      toast.success("Exam saved as template successfully");
-    },
-    onError: (error) =>
-        toast.error(getErrorMessage(error, "Failed to save exam as template")),
-  });
-
-  const openSaveAsTemplate = (exam: ExamDTO) => {
-    setExamToSaveAsTemplate(exam);
-    setTemplateName(`${exam.title} - Template`);
-    setTemplateDescription("");
-  };
-
-  const openDeleteConfirm = (exam: ExamDTO) => {
-    setExamToDelete(exam);
-    setDeleteConfirmInput("");
-  };
-
-  const closeDeleteConfirm = () => {
-    if (deleteExamMutation.isPending) return;
-    setExamToDelete(null);
-    setDeleteConfirmInput("");
-  };
-
-  const handleConfirmDelete = () => {
-    if (deleteConfirmInput !== "DELETE" || !examToDelete?.id || deleteExamMutation.isPending) {
-      return;
-    }
-    deleteExamMutation.mutate(examToDelete.id);
-  };
-
-  const addQuestionsMutation = useMutation({
-    mutationFn: (overrideIds?: number[]) =>
-        examApi.addQuestions(activeExam!.id!, overrideIds ?? [...selectedQuestionIds]),
-    onSuccess: (exam) => {
-      setActiveExam(exam);
-      setSelectedQuestionIds(new Set());
-      void refreshExams();
-      queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
-      queryClient.invalidateQueries({ queryKey: ["exam-question-picker"] });
-      toast.success("Questions added to exam");
-    },
-    onError: (error) => toast.error(getErrorMessage(error, "Failed to add questions to exam")),
-  });
-
-  const removeQuestionMutation = useMutation({
-    mutationFn: ({ examId, questionId }: { examId: number; questionId: number }) =>
-        examApi.removeQuestion(examId, questionId),
-    onSuccess: (exam) => {
-      setActiveExam(exam);
-      void refreshExams();
-      queryClient.invalidateQueries({ queryKey: ["exam-question-all-bank"] });
-      queryClient.invalidateQueries({ queryKey: ["exam-question-picker"] });
-      toast.success("Question removed from exam");
-    },
-    onError: (error) => toast.error(getErrorMessage(error, "Failed to remove question from exam")),
-  });
-
-  const openQuestionPicker = (exam: ExamDTO) => {
-    setActiveExam(exam);
-    setQuestionSearch("");
-    setSelectedTopics([]);
-    setQuestionType("ALL");
-    setDifficulty("ALL");
-    setQuestionPage(0);
-    setSelectedQuestionIds(new Set());
-    setStagedQuestions([]);
-    setPickerOpen(true);
-  };
-
-  const openEditExam = (exam: ExamDTO) => {
-    setEditingExam(exam);
-    setNewTitle(exam.title);
-    setNewDuration(String(exam.durationMinutes));
-    setCfg(configFromExam(exam));
+  const openCreateDialog = () => {
+    setNewTitle("");
+    setNewDuration("60");
+    setCfg(DEFAULT_CONFIG);
+    setShowErrors(false);
     setCreateOpen(true);
   };
 
-  const toggleQuestion = (questionId: number, checked: boolean) => {
-    setSelectedQuestionIds((current) => {
-      const next = new Set(current);
-      if (checked) next.add(questionId);
-      else next.delete(questionId);
-      return next;
-    });
-  };
-
-  const allBankQuestions = useMemo(() => allBankQuestionsQuery.data?.content ?? [], [allBankQuestionsQuery.data?.content]);
-
-  const { topicList, topicCounts } = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const q of allBankQuestions) {
-      const t = (q.topic || "").trim();
-      if (t) {
-        counts[t] = (counts[t] || 0) + 1;
-      }
-    }
-    const topics = Object.keys(counts).sort((a, b) => a.localeCompare(b));
-    return { topicList: topics, topicCounts: counts };
-  }, [allBankQuestions]);
-
-  const sourceIdsInExam = useMemo(() => {
-    const set = new Set<number>();
-    (activeExam?.questions ?? []).forEach((q) => {
-      if (q.sourceQuestionId != null) set.add(q.sourceQuestionId);
-      if (q.id != null) set.add(q.id);
-    });
-    return set;
-  }, [activeExam?.questions]);
-
-  const stagedQuestionIds = useMemo(() => {
-    return new Set(stagedQuestions.map((q) => q.id));
-  }, [stagedQuestions]);
-
-  const stagedPoints = useMemo(() => {
-    return stagedQuestions.reduce((sum, q) => sum + (q.points || 0), 0);
-  }, [stagedQuestions]);
-
-  const totalPointsInExam = (activeExam?.totalPoints ?? 0) + stagedPoints;
-  const totalQuestionsInExamCount = (activeExam?.questions?.length ?? 0) + stagedQuestions.length;
-
-  const handleToggleStagedQuestion = (question: QuestionDTO) => {
-    if (activeExamStarted) return;
-    if (sourceIdsInExam.has(question.id)) return;
-
-    setStagedQuestions((prev) => {
-      const exists = prev.some((item) => item.id === question.id);
-      if (exists) {
-        return prev.filter((item) => item.id !== question.id);
-      } else {
-        return [...prev, question];
-      }
-    });
-  };
-
-  const handleRemoveStagedQuestion = (questionId: number) => {
-    if (activeExamStarted) return;
-    setStagedQuestions((prev) => prev.filter((item) => item.id !== questionId));
-  };
-
-  const handleMoveSelectedToRight = () => {
-    if (activeExamStarted || selectedQuestionIds.size === 0) return;
-    const toAdd = allBankQuestions.filter(
-      (q) => selectedQuestionIds.has(q.id) && !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id)
-    );
-    if (toAdd.length > 0) {
-      setStagedQuestions((prev) => {
-        const existing = new Set(prev.map((q) => q.id));
-        const newlyAdded = toAdd.filter((q) => !existing.has(q.id));
-        return [...prev, ...newlyAdded];
-      });
-    }
-    setSelectedQuestionIds(new Set());
-  };
-
-  const handleSaveStagedToExam = () => {
-    if (activeExamStarted) {
-      toast.error("Exam has started, questions cannot be added.");
-      return;
-    }
-    if (!activeExam?.id || stagedQuestions.length === 0) return;
-
-    const idsToAdd = stagedQuestions.map((q) => q.id);
-    addQuestionsMutation.mutate(idsToAdd, {
-      onSuccess: (updatedExam) => {
-        setActiveExam(updatedExam);
-        setStagedQuestions([]);
-        setSelectedQuestionIds(new Set());
-        toast.success(`Saved ${idsToAdd.length} question(s) to exam successfully!`);
-      },
-    });
-  };
-
-  const filterQuestionItem = (q: QuestionDTO) => {
-    if (effectiveQuestionType !== "ALL" && q.type !== effectiveQuestionType) return false;
-    if (difficulty !== "ALL" && q.difficulty !== difficulty) return false;
-    if (selectedTopics.length > 0) {
-      const qTopic = (q.topic || "").trim().toLowerCase();
-      if (!selectedTopics.some((t) => t.toLowerCase() === qTopic)) return false;
-    }
-    if (questionSearch.trim()) {
-      const s = questionSearch.trim().toLowerCase();
-      const matchContent = (q.content || "").toLowerCase().includes(s);
-      const matchTopic = (q.topic || "").toLowerCase().includes(s);
-      if (!matchContent && !matchTopic) return false;
-    }
-    return true;
-  };
-
-  const eligibleFilteredQuestions = useMemo(() => {
-    return allBankQuestions.filter(
-      (q) => !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id) && filterQuestionItem(q)
-    );
-  }, [allBankQuestions, sourceIdsInExam, stagedQuestionIds, effectiveQuestionType, difficulty, selectedTopics, questionSearch]);
-
-  const eligibleTopicQuestions = useMemo(() => {
-    if (selectedTopics.length === 0) return [];
-    return allBankQuestions.filter(
-        (q) => !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id) && selectedTopics.some((t) => (q.topic || "").trim().toLowerCase() === t.toLowerCase())
-    );
-  }, [allBankQuestions, sourceIdsInExam, stagedQuestionIds, selectedTopics]);
-
-  const allAvailableBankQuestions = useMemo(() => {
-    return allBankQuestions.filter((q) => !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id));
-  }, [allBankQuestions, sourceIdsInExam, stagedQuestionIds]);
-
-  const filteredBankQuestions = useMemo(() => {
-    return allBankQuestions.filter(filterQuestionItem);
-  }, [allBankQuestions, effectiveQuestionType, difficulty, selectedTopics, questionSearch]);
-
-  const questionTotalPages = Math.max(1, Math.ceil(filteredBankQuestions.length / PAGE_SIZE));
-
-  useEffect(() => {
-    setPageInput(String(questionPage + 1));
-  }, [questionPage]);
-
-  const handlePageInputSubmit = () => {
-    const parsed = parseInt(pageInput, 10);
-    if (isNaN(parsed) || parsed < 1) {
-      setPageInput(String(questionPage + 1));
-    } else if (parsed > questionTotalPages) {
-      setQuestionPage(Math.max(0, questionTotalPages - 1));
-      setPageInput(String(questionTotalPages));
-    } else {
-      setQuestionPage(parsed - 1);
-    }
-  };
-  const questionRows = useMemo(() => {
-    const start = questionPage * PAGE_SIZE;
-    return filteredBankQuestions.slice(start, start + PAGE_SIZE);
-  }, [filteredBankQuestions, questionPage]);
-
-  const selectablePageQuestions = useMemo(() => {
-    return questionRows.filter((q) => !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id));
-  }, [questionRows, sourceIdsInExam, stagedQuestionIds]);
-
-  const isAllPageSelected =
-      selectablePageQuestions.length > 0 &&
-      selectablePageQuestions.every((q) => selectedQuestionIds.has(q.id));
-
-  const isAllFilteredSelected =
-      eligibleFilteredQuestions.length > 0 &&
-      eligibleFilteredQuestions.every((q) => selectedQuestionIds.has(q.id));
-
-  const isAllTopicSelected =
-      eligibleTopicQuestions.length > 0 &&
-      eligibleTopicQuestions.every((q) => selectedQuestionIds.has(q.id));
-
-  const handleToggleSelectAllPage = () => {
-    setSelectedQuestionIds((prev) => {
-      const next = new Set(prev);
-      if (isAllPageSelected) {
-        selectablePageQuestions.forEach((q) => next.delete(q.id));
-      } else {
-        selectablePageQuestions.forEach((q) => next.add(q.id));
-      }
-      return next;
-    });
-  };
-
-  const handleToggleSelectAllFiltered = () => {
-    if (eligibleFilteredQuestions.length === 0) {
-      toast.info("No unadded questions matching the current filter.");
-      return;
-    }
-    setSelectedQuestionIds((prev) => {
-      const next = new Set(prev);
-      if (isAllFilteredSelected) {
-        eligibleFilteredQuestions.forEach((q) => next.delete(q.id));
-        toast.info(`Deselected ${eligibleFilteredQuestions.length} filtered questions.`);
-      } else {
-        eligibleFilteredQuestions.forEach((q) => next.add(q.id));
-        toast.success(`Selected ${eligibleFilteredQuestions.length} questions matching filter.`);
-      }
-      return next;
-    });
-  };
-
-  const handleToggleSelectAllInTopic = (topics: string[]) => {
-    const list = allBankQuestions.filter(
-        (q) => !sourceIdsInExam.has(q.id) && !stagedQuestionIds.has(q.id) && topics.some((t) => (q.topic || "").trim().toLowerCase() === t.toLowerCase())
-    );
-    if (list.length === 0) {
-      toast.info("All questions in selected topics are already in this exam.");
-      return;
-    }
-    setSelectedQuestionIds((prev) => {
-      const next = new Set(prev);
-      if (isAllTopicSelected) {
-        list.forEach((q) => next.delete(q.id));
-        toast.info("Deselected all questions in selected topics.");
-      } else {
-        list.forEach((q) => next.add(q.id));
-        toast.success(`Selected ${list.length} questions from selected topics.`);
-      }
-      return next;
-    });
-  };
-
-  const handleDeselectAll = () => {
-    setSelectedQuestionIds(new Set());
-    toast.info("Cleared all selected questions.");
-  };
-
-  const openRandomDialog = (preferredTopic?: string) => {
-    setRandomTopic(preferredTopic || (selectedTopics.length === 1 ? selectedTopics[0] : "ALL"));
-    setRandomDifficulty(difficulty !== "ALL" ? difficulty : "ALL");
-    setRandomQuestionType(lockedQuestionType ?? (questionType !== "ALL" ? questionType : "ALL"));
-    setIsRandomOpen(true);
-  };
-
-  const eligibleForRandom = useMemo(() => {
-    return allBankQuestions.filter((q) => {
-      if (sourceIdsInExam.has(q.id)) return false;
-      const typeToFilter = lockedQuestionType ?? (randomQuestionType !== "ALL" ? randomQuestionType : null);
-      if (typeToFilter && q.type !== typeToFilter) return false;
-      if (isPairExam && q.type === "ESSAY") return false;
-      if (randomDifficulty !== "ALL" && q.difficulty !== randomDifficulty) return false;
-      if (randomTopic.trim()) {
-        if ((q.topic || "").trim().toLowerCase() !== randomTopic.trim().toLowerCase()) return false;
-      }
-      return true;
-    });
-  }, [allBankQuestions, sourceIdsInExam, lockedQuestionType, isPairExam, randomQuestionType, randomDifficulty, randomTopic]);
-
-  const handleConfirmRandomAdd = () => {
-    if (eligibleForRandom.length === 0) {
-      toast.warning("No eligible questions available to add!");
-      return;
-    }
-    const count = Math.min(randomCount, eligibleForRandom.length);
-    const shuffled = [...eligibleForRandom];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    const pickedQuestions = shuffled.slice(0, count);
-
-    setStagedQuestions((prev) => {
-      const existing = new Set(prev.map((q) => q.id));
-      const newlyPicked = pickedQuestions.filter((q) => !existing.has(q.id));
-      return [...prev, ...newlyPicked];
-    });
-
-    setIsRandomOpen(false);
-    toast.success(`Added ${pickedQuestions.length} random question(s) to exam list! Click "Save to Exam" to persist.`);
-  };
-
-  const activeExamStarted = isExamStarted(activeExam);
-  const examRows = examsQuery.data?.content ?? [];
-  const examTotalPages = examsQuery.data?.totalPages ?? 0;
-
   return (
-      <MainLayout pathName={{ exams: "Exam Management" }}>
-        <section className="flex flex-col gap-5">
+    <MainLayout pathName={{ exams: "Assessment Management" }}>
+      <section className="flex flex-col gap-5">
 
-          <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Exam Management</p>
-              <h1 className="mt-1 text-2xl font-semibold">Exams List</h1>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                  onClick={() => {
-                    setEditingExam(null);
-                    setNewTitle("");
-                    setNewDuration("60");
-                    setCfg({ ...DEFAULT_CONFIG, startTime: getFutureDatetimeString(2) });
-                    setCreateOpen(true);
-                  }}
-              >
-                <Plus className="mr-2 size-4" />
-                Create Exam
-              </Button>
-
-              <Button
-                  variant="outline"
-                  onClick={() => navigate("/management/exam/templates")}
-              >
-                <BookmarkPlus className="mr-2 size-4" />
-                Use Template
-              </Button>
-            </div>
-          </header>
-
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="relative w-full max-w-md">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                  aria-label="Search exams"
-                  className="pl-9"
-                  placeholder="Search by exam title"
-                  value={examSearch}
-                  onChange={(event) => {
-                    setExamSearch(event.target.value);
-                    setExamPage(0);
-                  }}
-              />
-            </div>
-            <Select value={examCategoryFilter} onValueChange={(value) => {
-              setExamCategoryFilter(value as ExamCategory | "ALL");
-              setExamPage(0);
-            }}>
-              <SelectTrigger aria-label="Filter by exam category" className="w-full max-w-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All categories</SelectItem>
-                {EXAM_CATEGORY_OPTIONS.map((category) => (
-                    <SelectItem key={category} value={category}>{EXAM_CATEGORY_LABEL[category]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span className="text-sm text-muted-foreground">
-            {examsQuery.data?.totalElements ?? 0} exam(s)
-          </span>
+        <header className="flex flex-wrap items-end justify-between gap-4 border-b pb-4">
+          <div>
+            <p className="text-sm text-muted-foreground">Assessment Management</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight">
+              Exams & Assessments
+            </h1>
           </div>
 
-          <div className="overflow-hidden rounded-md border bg-background">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Exam Title</TableHead>
-                  <TableHead className="w-32">Duration</TableHead>
-                  <TableHead className="w-32">Questions</TableHead>
-                  <TableHead className="w-32">Max Score</TableHead>
-                  <TableHead className="w-64 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {examsQuery.isLoading && (
-                    <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Loading exams...</TableCell></TableRow>
-                )}
-                {examsQuery.isError && (
-                    <TableRow><TableCell colSpan={5} className="h-24 text-center text-destructive">Failed to load exams list.</TableCell></TableRow>
-                )}
-                {!examsQuery.isLoading && !examsQuery.isError && examRows.length === 0 && (
-                    <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No matching exams found.</TableCell></TableRow>
-                )}
-                {examRows.map((exam) => (
-                    <TableRow key={exam.id}>
-                      <TableCell className="font-medium">
-                        <button
-                            type="button"
-                            className="text-left font-medium hover:underline"
-                            onClick={() => exam.id && navigate(`/exams/${exam.id}/grading`)}
-                        >
-                          {exam.title}
-                        </button>
-                        <p className="mt-0.5 text-xs font-normal text-muted-foreground">
-                          {exam.startTime || exam.endTime
-                              ? `${exam.startTime ? exam.startTime.replace("T", " ").slice(0, 16) : "…"} → ${exam.endTime ? exam.endTime.replace("T", " ").slice(0, 16) : "…"}`
-                              : "No open/close time limits"}
-                          {" · "}Max {exam.maxAttempts ?? 1} attempt(s)
-                          {" · "}{EXAM_CATEGORY_LABEL[exam.category ?? "ASSESSMENT"]}
-                          {" · Question Format: "}{EXAM_TYPE_LABEL[exam.examType ?? "MIXED"]}
-                        </p>
-                      </TableCell>
-                      <TableCell>{exam.durationMinutes} mins</TableCell>
-                      <TableCell>{exam.questionIds?.length ?? exam.questions?.length ?? 0}</TableCell>
-                      <TableCell>{exam.maxScore ?? 10}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => openQuestionPicker(exam)}>
-                            <BookOpen />
-                            Questions
-                          </Button>
-                          <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => exam.id && navigate(`/exams/${exam.id}/grading`)}
-                              disabled={!exam.id}
-                          >
-                            <ClipboardCheck className="size-4" />
-                            Essay & Coding Grading
-                          </Button>
-                          <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => exam.id && navigate(`/exams/${exam.id}/invitations`)}
-                              disabled={!exam.id}
-                          >
-                            <Mail className="size-4" />
-                            Invitations
-                          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={openCreateDialog}>
+              <Plus className="mr-2 size-4" />
+              Create Exam
+            </Button>
 
-                          <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                  exam.id && navigate(`/exams/${exam.id}/result-statistics`)
-                              }
-                              disabled={!exam.id}
-                          >
-                            <ClipboardCheck className="size-4" />
-                            Statistics
-                          </Button>
-
-                          <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Edit exam"
-                              title="Edit exam"
-                              onClick={() => openEditExam(exam)}
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  aria-label="More options"
-                                  title="More options"
-                              >
-                                <MoreVertical className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                  className="cursor-pointer text-purple-700 dark:text-purple-300 focus:text-purple-800"
-                                  onClick={() => exam.id && navigate(`/exams/${exam.id}/grading/similarity`)}
-                              >
-                                <ShieldAlert className="mr-2 size-4 text-purple-600" />
-                                AI Similarity Check
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                  className="cursor-pointer"
-                                  onClick={() => openSaveAsTemplate(exam)}
-                              >
-                                <BookmarkPlus className="mr-2 size-4" />
-                                Save as Template
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive cursor-pointer"
-                                  onClick={() => openDeleteConfirm(exam)}
-                              >
-                                <Trash2 className="mr-2 size-4" />
-                                Delete Exam
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" size="sm" disabled={examPage === 0} onClick={() => setExamPage((page) => page - 1)}>Previous</Button>
-            <span className="min-w-24 text-center text-sm text-muted-foreground">{examTotalPages === 0 ? 0 : examPage + 1} / {examTotalPages}</span>
-            <Button variant="outline" size="sm" disabled={examPage + 1 >= examTotalPages} onClick={() => setExamPage((page) => page + 1)}>Next</Button>
-          </div>
-        </section>
-
-        <Dialog open={isCreateOpen} onOpenChange={setCreateOpen}>
-          <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-4xl">
-            <form
-                className="flex min-h-0 flex-1 flex-col"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const problem = validateConfig(
-                      Number(newDuration),
-                      cfg,
-                      editingExam?.startTime ? toInputDateTime(editingExam.startTime) : undefined,
-                      editingExam?.endTime ? toInputDateTime(editingExam.endTime) : undefined,
-                  );
-                  if (problem) {
-                    toast.error(problem);
-                    return;
-                  }
-                  saveExamMutation.mutate();
-                }}
+            <Button
+              variant="outline"
+              onClick={() => setImportOpen(true)}
             >
-              <DialogHeader className="shrink-0">
-                <DialogTitle>{editingExam ? "Edit Exam" : "Create Exam"}</DialogTitle>
-                <DialogDescription>Configure exam title, duration, and rules.</DialogDescription>
-              </DialogHeader>
-              <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto py-5 pr-1 sm:grid-cols-2">
-                <label className="grid gap-2 text-sm font-medium sm:col-span-2">
-                  Exam Title
-                  <Input required maxLength={200} value={newTitle} onChange={(event) => setNewTitle(event.target.value)} />
-                </label>
+              <Upload className="mr-2 size-4 text-blue-500" />
+              Import
+            </Button>
 
-                <label className="grid gap-2 text-sm font-medium">
-                  Duration (minutes)
-                  <Input required type="number" min={1} value={newDuration} onChange={(event) => setNewDuration(event.target.value)} />
-                </label>
-
-                <label className="grid gap-2 text-sm font-medium">
-                  Exam Password / Access Code (leave blank if not required)
-                  <Input
-                      type="text"
-                      placeholder="e.g. EXAM2026"
-                      maxLength={100}
-                      value={cfg.accessCode}
-                      onChange={(event) => setCfg((c) => ({ ...c, accessCode: event.target.value }))}
-                  />
-                </label>
-
-                <label className="grid gap-2 text-sm font-medium">
-                  Question Format
-                  <Select value={cfg.examType} onValueChange={(value) => setCfg((c) => ({ ...c, examType: value as ExamType }))}>
-                    <SelectTrigger aria-label="Exam type"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {(Object.keys(EXAM_TYPE_LABEL) as ExamType[]).map((key) => (
-                          <SelectItem key={key} value={key}>{EXAM_TYPE_LABEL[key]}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    Only matching question types can be selected.
-                  </span>
-                </label>
-
-                <label className="grid gap-2 text-sm font-medium">
-                  Exam Category
-                  <Select value={cfg.category} onValueChange={(value) => {
-                    const category = value as ExamCategory;
-                    setCfg((current) => ({
-                      ...current,
-                      category,
-                      showAnswersAfterExam: EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT[category],
-                    }));
-                  }}>
-                    <SelectTrigger aria-label="Exam category"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {EXAM_CATEGORY_OPTIONS.map((category) => (
-                          <SelectItem key={category} value={category}>{EXAM_CATEGORY_LABEL[category]}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    The category sets default for answer review.
-                  </span>
-                </label>
-
-                <div className="grid gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
-                  <div className="grid gap-2 text-sm font-medium">
-                    <div className="flex flex-wrap items-center justify-between gap-1">
-                      <span>Start Time</span>
-                      <div className="flex items-center gap-1 font-normal">
-                        <button
-                          type="button"
-                          className="text-[11px] text-primary hover:underline cursor-pointer"
-                          onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(2) }))}
-                        >
-                          Now +2m
-                        </button>
-                        <span className="text-[10px] text-muted-foreground">·</span>
-                        <button
-                          type="button"
-                          className="text-[11px] text-primary hover:underline cursor-pointer"
-                          onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(15) }))}
-                        >
-                          +15m
-                        </button>
-                        <span className="text-[10px] text-muted-foreground">·</span>
-                        <button
-                          type="button"
-                          className="text-[11px] text-primary hover:underline cursor-pointer"
-                          onClick={() => setCfg((c) => ({ ...c, startTime: getFutureDatetimeString(60) }))}
-                        >
-                          +1h
-                        </button>
-                        {cfg.startTime && (
-                          <>
-                            <span className="text-[10px] text-muted-foreground">·</span>
-                            <button
-                              type="button"
-                              className="text-[11px] text-destructive hover:underline cursor-pointer"
-                              onClick={() => setCfg((c) => ({ ...c, startTime: "" }))}
-                            >
-                              Clear
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <Input
-                        type="datetime-local"
-                        min={editingExam?.startTime && new Date(editingExam.startTime).getTime() < Date.now()
-                          ? undefined
-                          : getLocalDatetimeString()}
-                        value={cfg.startTime}
-                        onChange={(event) => setCfg((c) => ({ ...c, startTime: event.target.value }))}
-                    />
-                    <p className="text-[11px] font-normal text-muted-foreground">
-                      {cfg.startTime
-                        ? "Must be current time or later (rec: at least 1–2 min ahead)."
-                        : "Leave blank = no open limit (students can start anytime)."}
-                    </p>
-                  </div>
-
-                  <div className="grid gap-2 text-sm font-medium">
-                    <div className="flex flex-wrap items-center justify-between gap-1">
-                      <span>End Time</span>
-                      {cfg.endTime && (
-                        <button
-                          type="button"
-                          className="text-[11px] text-destructive hover:underline cursor-pointer font-normal"
-                          onClick={() => setCfg((c) => ({ ...c, endTime: "" }))}
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <Input
-                        type="datetime-local"
-                        min={cfg.startTime || (editingExam?.endTime && new Date(editingExam.endTime).getTime() < Date.now() ? undefined : getLocalDatetimeString())}
-                        value={cfg.endTime}
-                        onChange={(event) => setCfg((c) => ({ ...c, endTime: event.target.value }))}
-                    />
-                    <p className="text-[11px] font-normal text-muted-foreground">
-                      {cfg.endTime
-                        ? "Exam will automatically close at this time."
-                        : "Leave blank = no closing deadline."}
-                    </p>
-                  </div>
-
-                  <label className="grid gap-2 text-sm font-medium">
-                    Maximum Attempts
-                    <Input type="number" min={1} value={cfg.maxAttempts} onChange={(event) => setCfg((c) => ({ ...c, maxAttempts: event.target.value }))} />
-                    <span className="text-xs font-normal text-muted-foreground">
-                      Number of times a student can take this exam.
-                    </span>
-                  </label>
-
-                  <label className="grid gap-2 text-sm font-medium">
-                    Max Score (leave blank = 10)
-                    <Input type="number" min={0.01} step="0.01" placeholder="10" value={cfg.maxScore} onChange={(event) => setCfg((c) => ({ ...c, maxScore: event.target.value }))} />
-                    <span className="text-xs font-normal text-muted-foreground">
-                      Question score = max score × question weight ÷ total weight.
-                    </span>
-                  </label>
-
-                  <label className="grid gap-2 text-sm font-medium">
-                    Passing Score (leave blank = no requirement)
-                    <Input type="number" min={0} step="0.01" value={cfg.passScore} onChange={(event) => setCfg((c) => ({ ...c, passScore: event.target.value }))} />
-                    <span className="text-xs font-normal text-muted-foreground">
-                      Minimum score required to pass (e.g. 5.0).
-                    </span>
-                  </label>
-
-                  <div className="grid gap-2 text-sm font-medium">
-                    Late Submission Policy
-                    <Select value={cfg.latePolicy} onValueChange={(value) => setCfg((c) => ({
-                      ...c,
-                      latePolicy: value as LatePolicy,
-                      lateGraceMinutes: value === "NOT_ALLOWED" ? "0" : c.lateGraceMinutes,
-                    }))}>
-                      <SelectTrigger aria-label="Late submission policy"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {(Object.keys(LATE_POLICY_LABEL) as LatePolicy[]).map((key) => (
-                            <SelectItem key={key} value={key}>{LATE_POLICY_LABEL[key]}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <span className="text-xs font-normal text-muted-foreground">
-                      Rules for submissions turned in after end time.
-                    </span>
-                  </div>
-
-                  {cfg.latePolicy === "ALLOWED_WITH_PENALTY" && (
-                    <>
-                      <label className="grid gap-2 text-sm font-medium">
-                        Late Penalty Percentage (1–100%)
-                        <Input type="number" min={1} max={100} value={cfg.latePenaltyPercent} onChange={(event) => setCfg((c) => ({ ...c, latePenaltyPercent: event.target.value }))} />
-                      </label>
-                      <label className="grid gap-2 text-sm font-medium">
-                        Grace Period (minutes)
-                        <Input type="number" min={0} value={cfg.lateGraceMinutes} onChange={(event) => setCfg((c) => ({ ...c, lateGraceMinutes: event.target.value }))} />
-                      </label>
-                    </>
-                  )}
-                  {cfg.latePolicy === "ALLOWED" && (
-                    <label className="grid gap-2 text-sm font-medium sm:col-span-2">
-                      Grace Period (minutes)
-                      <Input type="number" min={0} value={cfg.lateGraceMinutes} onChange={(event) => setCfg((c) => ({ ...c, lateGraceMinutes: event.target.value }))} />
-                    </label>
-                  )}
-
-                  <div className="grid gap-2 text-sm font-medium">
-                    Result Visibility
-                    <Select value={cfg.resultVisibility} onValueChange={(value) => setCfg((c) => ({ ...c, resultVisibility: value as ResultVisibility }))}>
-                      <SelectTrigger aria-label="Result visibility"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {(Object.keys(RESULT_VISIBILITY_LABEL) as ResultVisibility[]).map((key) => (
-                            <SelectItem key={key} value={key}>{RESULT_VISIBILITY_LABEL[key]}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <span className="text-xs font-normal text-muted-foreground">
-                      Choose when students can review their scores.
-                    </span>
-                  </div>
-
-                  <div className="grid gap-2 text-sm font-medium">
-                    Show Answers After Exam
-                    <label className="flex h-9 items-center gap-2 rounded-md border border-input bg-background/50 px-3 py-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="size-4 accent-primary cursor-pointer"
-                        checked={cfg.showAnswersAfterExam}
-                        onChange={(event) => setCfg((c) => ({ ...c, showAnswersAfterExam: event.target.checked }))}
-                      />
-                      <span className="text-xs font-normal text-muted-foreground select-none">
-                        Allow students to see answer keys
-                      </span>
-                    </label>
-                    <span className="text-xs font-normal text-muted-foreground">
-                      Only visible after score is published and no attempts left.
-                    </span>
-                  </div>
-                </div>
-
-                {/* NEW (anti-cheat): cau hinh chong gian lan theo tung de */}
-                <div className="grid gap-3 border-t pt-4 sm:col-span-2">
-                  <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
-                    <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.antiCheatEnabled} onChange={(event) => setCfg((c) => ({ ...c, antiCheatEnabled: event.target.checked }))} />
-                    Anti-cheating monitoring (chống gian lận)
-                  </label>
-                  <p className="text-xs text-muted-foreground">
-                    Violations are only logged (the exam is never auto-submitted). View them in Result Statistics → Integrity Report.
-                  </p>
-                  {cfg.antiCheatEnabled && (
-                      <div className="grid gap-3 pl-6 sm:grid-cols-2">
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.detectTabSwitch} onChange={(event) => setCfg((c) => ({ ...c, detectTabSwitch: event.target.checked }))} />
-                          Count tab / window switches
-                        </label>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.blockCopyPaste} onChange={(event) => setCfg((c) => ({ ...c, blockCopyPaste: event.target.checked }))} />
-                          Block copy / paste / right-click / dev shortcuts
-                        </label>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.requireFullscreen} onChange={(event) => setCfg((c) => ({ ...c, requireFullscreen: event.target.checked }))} />
-                          Require fullscreen
-                        </label>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.singleSession} onChange={(event) => setCfg((c) => ({ ...c, singleSession: event.target.checked }))} />
-                          Detect multiple tabs / devices
-                        </label>
-                      </div>
-                  )}
-                </div>
-              </div>
-              <DialogFooter className="shrink-0 border-t pt-4">
-                <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={saveExamMutation.isPending || !newTitle.trim()}>
-                  {saveExamMutation.isPending ? "Saving..." : editingExam ? "Save Changes" : "Create Exam"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={isPickerOpen} onOpenChange={setPickerOpen}>
-          <DialogContent className="flex h-[90vh] max-h-[90vh] flex-col gap-4 overflow-hidden p-5 sm:max-w-6xl">
-            <DialogHeader className="shrink-0">
-              <DialogTitle>{activeExam?.title ?? "Select Questions"}</DialogTitle>
-              <DialogDescription>
-                Search questions by content/topic, filter by type and difficulty, then add them to the exam.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="grid min-h-0 flex-1 gap-5 overflow-hidden lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.85fr)] h-full">
-              <section className="flex min-h-0 flex-1 flex-col gap-3 rounded-md border bg-muted/20 p-4 h-full">
-                {activeExamStarted && (
-                    <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-                      <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <span>Exam has started. Adding, editing, and removing questions are disabled to protect student results.</span>
-                    </div>
-                )}
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <div className="relative sm:col-span-3">
-                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                        aria-label="Search questions"
-                        className="pl-9"
-                        placeholder="Search content or topic..."
-                        value={questionSearch}
-                        onChange={(event) => {
-                          setQuestionSearch(event.target.value);
-                          setQuestionPage(0);
-                        }}
-                    />
-                  </div>
-                  <Select value={effectiveQuestionType} disabled={lockedQuestionType !== null} onValueChange={(value) => { setQuestionType(value); setQuestionPage(0); }}>
-                    <SelectTrigger aria-label="Filter question type"><SelectValue placeholder="Question type" /></SelectTrigger>
-                    <SelectContent>
-                      {!isPairExam && <SelectItem value="ALL">All Types</SelectItem>}
-                      <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
-                      {!isPairExam && <SelectItem value="ESSAY">Essay</SelectItem>}
-                      <SelectItem value="CODING">Coding</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={difficulty} onValueChange={(value) => { setDifficulty(value); setQuestionPage(0); }}>
-                    <SelectTrigger aria-label="Filter difficulty"><SelectValue placeholder="Difficulty" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All Difficulties</SelectItem>
-                      <SelectItem value="EASY">Easy</SelectItem>
-                      <SelectItem value="MEDIUM">Medium</SelectItem>
-                      <SelectItem value="HARD">Hard</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select
-                      value={selectedTopics.length === 1 ? selectedTopics[0] : selectedTopics.length > 1 ? "MULTIPLE" : "ALL"}
-                      onValueChange={(value) => {
-                        setQuestionPage(0);
-                        if (value === "ALL") {
-                          setSelectedTopics([]);
-                        } else if (value !== "MULTIPLE") {
-                          setSelectedTopics([value]);
-                        }
-                      }}
-                  >
-                    <SelectTrigger aria-label="Filter topic">
-                      <SelectValue>
-                        {selectedTopics.length === 0
-                          ? `All Topics (${allBankQuestions.length})`
-                          : selectedTopics.length === 1
-                            ? `Topic: ${selectedTopics[0]}`
-                            : `Topics (${selectedTopics.length} selected)`}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All Topics ({allBankQuestions.length})</SelectItem>
-                      {selectedTopics.length > 1 && (
-                        <SelectItem value="MULTIPLE" disabled>
-                          {selectedTopics.join(", ")} ({selectedTopics.length} selected)
-                        </SelectItem>
-                      )}
-                      {topicList.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {t} ({topicCounts[t] ?? 0})
-                          </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {topicList.length > 0 && (
-                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                    <span className="shrink-0 text-muted-foreground font-medium flex items-center gap-1">
-                      <Tags className="size-3 text-indigo-500" /> Topics:
-                    </span>
-                      <Badge
-                          variant={selectedTopics.length === 0 ? "default" : "outline"}
-                          className="cursor-pointer hover:opacity-80 transition-opacity"
-                          onClick={() => { setSelectedTopics([]); setQuestionPage(0); }}
-                      >
-                        All ({allBankQuestions.length})
-                      </Badge>
-                      {topicList.map((t) => {
-                        const isSelected = selectedTopics.some((st) => st.toLowerCase() === t.toLowerCase());
-                        const count = topicCounts[t] ?? 0;
-                        return (
-                            <Badge
-                                key={t}
-                                variant={isSelected ? "default" : "secondary"}
-                                className={`cursor-pointer whitespace-nowrap transition-all ${
-                                  isSelected
-                                    ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs"
-                                    : "hover:bg-muted/80"
-                                }`}
-                                onClick={() => {
-                                  setQuestionPage(0);
-                                  setSelectedTopics((prev) => {
-                                    const norm = t.toLowerCase();
-                                    if (prev.some((item) => item.toLowerCase() === norm)) {
-                                      return prev.filter((item) => item.toLowerCase() !== norm);
-                                    } else {
-                                      return [...prev, t];
-                                    }
-                                  });
-                                }}
-                            >
-                              {isSelected && <Check className="size-3 mr-1" />}
-                              {t} ({count})
-                            </Badge>
-                        );
-                      })}
-                    </div>
-                )}
-
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 p-2 text-xs">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium text-muted-foreground text-[11px]">Select:</span>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs px-2"
-                        onClick={handleToggleSelectAllPage}
-                        disabled={activeExamStarted || selectablePageQuestions.length === 0}
-                    >
-                      <CheckSquare className="mr-1 size-3.5" />
-                      {isAllPageSelected ? "Deselect Page" : `Page (${selectablePageQuestions.length})`}
-                    </Button>
-
-                    {selectedTopics.length > 0 ? (
-                        <>
-                          <Button
-                              type="button"
-                              variant={isAllTopicSelected ? "secondary" : "outline"}
-                              size="sm"
-                              className="h-7 text-xs px-2"
-                              onClick={() => handleToggleSelectAllInTopic(selectedTopics)}
-                              disabled={activeExamStarted || eligibleTopicQuestions.length === 0}
-                              title="Toggle select all questions in selected topics"
-                          >
-                            <Layers className="mr-1 size-3.5" />
-                            {isAllTopicSelected
-                                ? `Deselect Topics (${selectedTopics.length})`
-                                : `All in Topics (${eligibleTopicQuestions.length})`}
-                          </Button>
-
-                          {eligibleFilteredQuestions.length !== eligibleTopicQuestions.length && (
-                              <Button
-                                  type="button"
-                                  variant={isAllFilteredSelected ? "secondary" : "outline"}
-                                  size="sm"
-                                  className="h-7 text-xs px-2"
-                                  onClick={handleToggleSelectAllFiltered}
-                                  disabled={activeExamStarted || eligibleFilteredQuestions.length === 0}
-                                  title="Select questions matching search/difficulty inside selected topics"
-                              >
-                                <CheckCheck className="mr-1 size-3.5" />
-                                {isAllFilteredSelected
-                                    ? `Deselect Filtered (${eligibleFilteredQuestions.length})`
-                                    : `Filtered (${eligibleFilteredQuestions.length})`}
-                              </Button>
-                          )}
-                        </>
-                    ) : (
-                        <Button
-                            type="button"
-                            variant={isAllFilteredSelected ? "secondary" : "outline"}
-                            size="sm"
-                            className="h-7 text-xs px-2"
-                            onClick={handleToggleSelectAllFiltered}
-                            disabled={activeExamStarted || eligibleFilteredQuestions.length === 0}
-                            title="Select all unadded questions matching the current filter"
-                        >
-                          <CheckCheck className="mr-1 size-3.5" />
-                          {isAllFilteredSelected
-                              ? `Deselect All (${eligibleFilteredQuestions.length})`
-                              : `Select All (${eligibleFilteredQuestions.length})`}
-                        </Button>
-                    )}
-
-                    {selectedQuestionIds.size > 0 && (
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            onClick={handleDeselectAll}
-                            title="Clear all selections across all pages"
-                        >
-                          <X className="mr-1 size-3.5" />
-                          Deselect All ({selectedQuestionIds.size})
-                        </Button>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                        type="button"
-                        variant="default"
-                        size="sm"
-                        className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm"
-                        onClick={() => openRandomDialog(selectedTopics.length === 1 ? selectedTopics[0] : undefined)}
-                        disabled={activeExamStarted || allAvailableBankQuestions.length === 0}
-                    >
-                      <Dices className="mr-1 size-3.5" />
-                      {selectedTopics.length === 1 ? `Random from "${selectedTopics[0]}"...` : selectedTopics.length > 1 ? `Random (${selectedTopics.length} topics)...` : "Random Questions..."}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden rounded-md border bg-card/40">
-                  <Table className="w-full table-fixed">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-9 text-center p-0">
-                          <input
-                              type="checkbox"
-                              className="size-4 accent-primary"
-                              aria-label="Select all on this page"
-                              checked={isAllPageSelected}
-                              disabled={activeExamStarted || selectablePageQuestions.length === 0}
-                              onChange={handleToggleSelectAllPage}
-                          />
-                        </TableHead>
-                        <TableHead className="w-auto">Content</TableHead>
-                        <TableHead className="w-24 text-center shrink-0">Type</TableHead>
-                        <TableHead className="w-20 text-center shrink-0">Difficulty</TableHead>
-                        <TableHead className="w-14 text-center shrink-0">Weight</TableHead>
-                        <TableHead className="w-20 text-center shrink-0">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {questionsQuery.isLoading && (
-                          <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Loading questions...</TableCell></TableRow>
-                      )}
-                      {questionsQuery.isError && (
-                          <TableRow><TableCell colSpan={6} className="h-24 text-center text-destructive">Failed to load questions list.</TableCell></TableRow>
-                      )}
-                      {!questionsQuery.isLoading && !questionsQuery.isError && questionRows.length === 0 && (
-                          <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">No matching questions found.</TableCell></TableRow>
-                      )}
-                      {questionRows.map((q) => {
-                        const added = sourceIdsInExam.has(q.id);
-                        const isStaged = stagedQuestionIds.has(q.id);
-                        const selected = selectedQuestionIds.has(q.id);
-                        return (
-                            <TableRow
-                                key={q.id}
-                                className={`group transition-all select-none ${
-                                    added
-                                        ? "bg-muted/20 opacity-60 cursor-not-allowed"
-                                        : isStaged
-                                            ? "bg-emerald-500/10 dark:bg-emerald-950/20 border-l-2 border-l-emerald-500 cursor-pointer"
-                                            : "cursor-pointer hover:bg-primary/5 hover:border-l-2 hover:border-l-primary"
-                                }`}
-                                onClick={() => {
-                                  if (!added && !activeExamStarted) {
-                                    handleToggleStagedQuestion(q);
-                                  }
-                                }}
-                            >
-                              <TableCell className="w-9 text-center p-0" onClick={(e) => e.stopPropagation()}>
-                                <input
-                                    type="checkbox"
-                                    className="size-4 accent-primary cursor-pointer"
-                                    disabled={added || activeExamStarted}
-                                    checked={added || isStaged || selected}
-                                    onChange={(e) => toggleQuestion(q.id, e.target.checked)}
-                                />
-                              </TableCell>
-                              <TableCell className="min-w-0 pr-2">
-                                <HoverCard openDelay={150} closeDelay={100}>
-                                  <HoverCardTrigger asChild>
-                                    <div className="cursor-pointer group/title">
-                                      <p className="line-clamp-2 text-xs font-medium leading-snug group-hover:text-primary transition-colors">
-                                        {q.content}
-                                      </p>
-                                      {q.topic && (
-                                          <p className="mt-0.5 text-[11px] text-muted-foreground truncate">
-                                            Topic: <span className="font-medium text-foreground/80">{q.topic}</span>
-                                          </p>
-                                      )}
-                                    </div>
-                                  </HoverCardTrigger>
-                                  <HoverCardContent
-                                    side="right"
-                                    align="start"
-                                    sideOffset={14}
-                                    className="w-[420px] max-w-[90vw] p-4 shadow-2xl border bg-popover/98 backdrop-blur-md z-50 text-left"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <div className="space-y-3">
-                                      <div className="flex items-center justify-between gap-2 border-b pb-2">
-                                        <div className="flex items-center gap-1.5 flex-wrap">
-                                          <Badge variant="outline" className="text-[11px] font-semibold">
-                                            {q.type === "ESSAY" ? "Essay" : q.type === "CODING" ? "Coding" : "Multiple Choice"}
-                                          </Badge>
-                                          <Badge variant="secondary" className="text-[11px]">
-                                            {q.difficulty === "EASY" ? "Easy" : q.difficulty === "MEDIUM" ? "Medium" : "Hard"}
-                                          </Badge>
-                                          {q.topic && (
-                                            <Badge variant="outline" className="text-[10px] bg-muted/50">
-                                              {q.topic}
-                                            </Badge>
-                                          )}
-                                        </div>
-                                        <span className="text-xs font-medium text-muted-foreground shrink-0">
-                                          Weight: <strong className="text-foreground">{q.points ?? 1}</strong>
-                                        </span>
-                                      </div>
-
-                                      <div>
-                                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                                          Question Content:
-                                        </p>
-                                        <p className="text-xs font-medium leading-relaxed whitespace-pre-wrap break-words text-foreground">
-                                          {q.content}
-                                        </p>
-                                      </div>
-
-                                      <div className="border-t pt-2.5">
-                                        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                                          <span>Answers & Options:</span>
-                                          {q.type === "MULTIPLE_CHOICE" && (
-                                            <span className="text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
-                                              (Highlighted = Correct)
-                                            </span>
-                                          )}
-                                        </p>
-                                        <QuestionAnswers question={q} />
-                                      </div>
-                                    </div>
-                                  </HoverCardContent>
-                                </HoverCard>
-                              </TableCell>
-                              <TableCell className="w-24 text-center shrink-0 p-1">
-                                <Badge variant="outline" className="text-[11px] px-1.5 py-0 whitespace-nowrap">
-                                  {q.type === "ESSAY" ? "Essay" : q.type === "CODING" ? "Coding" : "Multiple"}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="w-20 text-center shrink-0 p-1">
-                                <Badge variant="secondary" className="text-[11px] px-1.5 py-0 whitespace-nowrap">
-                                  {q.difficulty === "EASY" ? "Easy" : q.difficulty === "MEDIUM" ? "Medium" : "Hard"}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="w-14 text-center shrink-0 font-medium text-xs p-1">{q.points}</TableCell>
-                              <TableCell className="w-20 text-center shrink-0 p-1" onClick={(e) => e.stopPropagation()}>
-                                {added ? (
-                                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
-                                      <Check className="size-3.5 text-emerald-500" />
-                                      Saved
-                                    </span>
-                                ) : isStaged ? (
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        className="h-7 px-2 text-xs text-emerald-600 hover:text-destructive hover:bg-destructive/10"
-                                        title="Click to remove from staged list"
-                                        onClick={() => handleToggleStagedQuestion(q)}
-                                    >
-                                      <Check className="size-3.5 mr-1" />
-                                      Added
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        disabled={activeExamStarted}
-                                        className="h-7 px-2 text-xs text-primary font-medium opacity-0 group-hover:opacity-100 transition-all bg-primary/10 hover:bg-primary/20 shadow-xs"
-                                        title="Move question to exam list"
-                                        onClick={() => handleToggleStagedQuestion(q)}
-                                    >
-                                      <span>Add</span>
-                                      <ArrowRight className="size-3.5 ml-1 transition-transform group-hover:translate-x-0.5" />
-                                    </Button>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                        );
-                      })}
-                      {questionRows.length > 0 && questionRows.length < PAGE_SIZE && (
-                        Array.from({ length: PAGE_SIZE - questionRows.length }).map((_, i) => (
-                          <TableRow key={`filler-${i}`} className="border-b border-border/40 hover:bg-transparent pointer-events-none select-none">
-                            <TableCell colSpan={6} className="h-12 py-2 text-transparent">
-                              &nbsp;
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    {selectedQuestionIds.size > 0 && (
-                        <>
-                          <Button
-                              size="sm"
-                              variant="default"
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                              onClick={handleMoveSelectedToRight}
-                              disabled={activeExamStarted}
-                          >
-                            <ArrowRight className="mr-1 size-4" />
-                            Move {selectedQuestionIds.size} Selected to Right
-                          </Button>
-                          <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="text-xs text-muted-foreground hover:text-destructive"
-                              onClick={handleDeselectAll}
-                          >
-                            <X className="mr-1 size-3.5" />
-                            Clear selection
-                          </Button>
-                        </>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-2.5 text-xs"
-                        disabled={questionPage === 0}
-                        onClick={() => setQuestionPage((p) => p - 1)}
-                    >
-                      Previous
-                    </Button>
-
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium px-1">
-                      <span>Page</span>
-                      <Input
-                          type="number"
-                          min={1}
-                          max={questionTotalPages}
-                          className="h-8 w-13 px-1 text-center text-xs font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          value={pageInput}
-                          onChange={(e) => setPageInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.currentTarget.blur();
-                            }
-                          }}
-                          onBlur={handlePageInputSubmit}
-                          aria-label="Go to page"
-                          title="Type page number and press Enter"
-                      />
-                      <span>/ {questionTotalPages}</span>
-                    </div>
-
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-2.5 text-xs"
-                        disabled={questionPage + 1 >= questionTotalPages}
-                        onClick={() => setQuestionPage((p) => p + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </section>
-
-              <section className="flex min-h-0 flex-col gap-3 rounded-md border bg-muted/20 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-sm">
-                      Questions in Exam ({totalQuestionsInExamCount})
-                      {stagedQuestions.length > 0 && (
-                          <Badge className="ml-2 bg-emerald-600 text-white text-[10px] px-1.5 py-0 font-normal">
-                            +{stagedQuestions.length} new
-                          </Badge>
-                      )}
-                    </h3>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Total weight: {totalPointsInExam} · Max score: {activeExam?.maxScore ?? 10}
-                    </span>
-                  </div>
-                </div>
-
-                {activeExamStarted && (
-                    <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-                      Exam has started. Adding, editing, and removing questions are disabled to protect student results.
-                    </p>
-                )}
-
-                <div className="min-h-0 flex-1 overflow-y-auto space-y-3 pr-1">
-                  {totalQuestionsInExamCount === 0 && (
-                      <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
-                        <ArrowRight className="size-8 opacity-40 mb-2 rotate-180" />
-                        <p className="text-sm font-medium">No questions added yet</p>
-                        <p className="text-xs mt-1">Click any question or arrow on the left to move it here.</p>
-                      </div>
-                  )}
-
-                  {/* Saved Questions */}
-                  {(activeExam?.questions ?? []).map((q, idx) => (
-                      <div
-                          key={q.id}
-                          className={`group relative rounded-md border bg-card p-3 shadow-xs transition-all select-none ${
-                              activeExamStarted
-                                  ? "cursor-default opacity-80"
-                                  : "cursor-pointer hover:border-destructive/70 hover:bg-destructive/10"
-                          } ${removeQuestionMutation.isPending ? "pointer-events-none opacity-60" : ""}`}
-                          onClick={() => {
-                            if (!activeExamStarted && activeExam?.id && !removeQuestionMutation.isPending) {
-                              removeQuestionMutation.mutate({ examId: activeExam.id, questionId: q.id });
-                            }
-                          }}
-                          title={activeExamStarted ? "Exam has started, questions cannot be removed" : "Click to remove from exam"}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-semibold text-primary group-hover:text-destructive transition-colors">
-                              Question {idx + 1} (weight {q.points})
-                            </span>
-                            <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground group-hover:hidden">
-                              Saved
-                            </Badge>
-                            {!activeExamStarted && (
-                              <Badge variant="destructive" className="hidden group-hover:inline-flex text-[10px] px-1.5 py-0 font-normal">
-                                Click to remove
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {!activeExamStarted && (
-                              <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="sm"
-                                  className="h-6 px-2 text-[11px] gap-1 opacity-0 group-hover:opacity-100 transition-opacity font-medium shadow-xs"
-                                  title="Remove question from exam"
-                                  disabled={removeQuestionMutation.isPending}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    activeExam?.id && removeQuestionMutation.mutate({ examId: activeExam.id, questionId: q.id });
-                                  }}
-                              >
-                                <ArrowLeft className="size-3" />
-                                <span>Remove</span>
-                              </Button>
-                            )}
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label="Edit question points/content"
-                                title={activeExamStarted ? "Exam has started, questions cannot be edited" : "Edit question points/content"}
-                                disabled={activeExamStarted}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditingQuestion(q);
-                                }}
-                            >
-                              <Pencil className="size-3.5" />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                className="text-muted-foreground group-hover:text-destructive group-hover:bg-destructive/20"
-                                disabled={activeExamStarted || removeQuestionMutation.isPending}
-                                aria-label="Remove question from exam"
-                                title={activeExamStarted ? "Exam has started, questions cannot be removed" : "Remove question from exam"}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  activeExam?.id && removeQuestionMutation.mutate({ examId: activeExam.id, questionId: q.id });
-                                }}
-                            >
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                        <p className="mt-1 line-clamp-2 text-xs group-hover:text-foreground">{q.content}</p>
-                        <QuestionAnswers question={q} />
-                      </div>
-                  ))}
-
-                  {/* Staged Questions (Pending Save) */}
-                  {stagedQuestions.map((q, idx) => {
-                    const qNum = (activeExam?.questions?.length ?? 0) + idx + 1;
-                    return (
-                        <div
-                            key={q.id}
-                            className="group relative rounded-md border-2 border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20 p-3 shadow-xs transition-all animate-in fade-in-50 duration-200 cursor-pointer hover:border-destructive/70 hover:bg-destructive/10 select-none"
-                            onClick={() => handleRemoveStagedQuestion(q.id)}
-                            title="Click to remove from exam list"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 group-hover:text-destructive transition-colors">
-                                Question {qNum} (weight {q.points})
-                              </span>
-                              <Badge className="bg-emerald-600 text-white text-[10px] px-1.5 py-0 font-normal group-hover:hidden">
-                                New
-                              </Badge>
-                              <Badge variant="destructive" className="hidden group-hover:inline-flex text-[10px] px-1.5 py-0 font-normal">
-                                Click to remove
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="sm"
-                                  className="h-6 px-2 text-[11px] gap-1 opacity-0 group-hover:opacity-100 transition-opacity font-medium shadow-xs"
-                                  title="Remove from staged questions"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveStagedQuestion(q.id);
-                                  }}
-                              >
-                                <ArrowLeft className="size-3" />
-                                <span>Remove</span>
-                              </Button>
-                              <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  className="h-6 w-6 text-muted-foreground group-hover:text-destructive group-hover:bg-destructive/20"
-                                  title="Remove from staged questions"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveStagedQuestion(q.id);
-                                  }}
-                              >
-                                <X className="size-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                          <p className="mt-1 line-clamp-2 text-xs group-hover:text-foreground">{q.content}</p>
-                          <QuestionAnswers question={q} />
-                        </div>
-                    );
-                  })}
-                </div>
-
-                <div className="pt-2 border-t mt-auto space-y-1.5">
-                  <Button
-                      type="button"
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm h-9"
-                      disabled={activeExamStarted || stagedQuestions.length === 0 || addQuestionsMutation.isPending}
-                      onClick={handleSaveStagedToExam}
-                  >
-                    <Save className="mr-1.5 size-4" />
-                    {addQuestionsMutation.isPending
-                        ? "Saving to exam..."
-                        : stagedQuestions.length > 0
-                            ? `Save ${stagedQuestions.length} Question(s) to Exam`
-                            : "Save to Exam"}
-                  </Button>
-                  {stagedQuestions.length > 0 ? (
-                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400 text-center font-medium">
-                        {stagedQuestions.length} question(s) moved to the right. Click "Save to Exam" to save into exam.
-                      </p>
-                  ) : (
-                      <p className="text-[11px] text-muted-foreground text-center">
-                        All questions on the right are saved.
-                      </p>
-                  )}
-                </div>
-              </section>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={isRandomOpen} onOpenChange={setIsRandomOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Dices className="size-5 text-indigo-600" />
-                Add Random Questions
-              </DialogTitle>
-              <DialogDescription>
-                Select quantity and scope to randomly select and add questions into this exam.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-2">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Quick Select Quantity</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[10, 20, 30, 50].map((num) => (
-                      <Button
-                          key={num}
-                          type="button"
-                          variant={randomCount === num ? "default" : "outline"}
-                          size="sm"
-                          className="text-xs h-8 font-medium"
-                          onClick={() => setRandomCount(num)}
-                      >
-                        {num} Questions
-                      </Button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Or Enter Custom Number</label>
-                <Input
-                    type="number"
-                    min={1}
-                    max={eligibleForRandom.length || 100}
-                    value={randomCount}
-                    onChange={(e) => setRandomCount(Math.max(1, parseInt(e.target.value) || 1))}
-                    placeholder="e.g. 15, 25, 50"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Topic</label>
-                <Select value={randomTopic || "ALL"} onValueChange={(val) => setRandomTopic(val === "ALL" ? "" : val)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All Topics" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">
-                      All Topics ({allAvailableBankQuestions.length} available)
-                    </SelectItem>
-                    {topicList.map((t) => {
-                      const count = allBankQuestions.filter(
-                          (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === t.toLowerCase()
-                      ).length;
-                      return (
-                          <SelectItem key={t} value={t} disabled={count === 0}>
-                            {t} ({count} available)
-                          </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground">Question Type</label>
-                  <Select
-                      value={lockedQuestionType ?? randomQuestionType}
-                      disabled={lockedQuestionType !== null}
-                      onValueChange={setRandomQuestionType}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Types" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All Types</SelectItem>
-                      <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
-                      {!isPairExam && <SelectItem value="ESSAY">Essay</SelectItem>}
-                      <SelectItem value="CODING">Coding</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {lockedQuestionType && (
-                      <p className="text-[10px] text-muted-foreground">Locked by exam type</p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground">Difficulty</label>
-                  <Select value={randomDifficulty} onValueChange={setRandomDifficulty}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All Difficulties</SelectItem>
-                      <SelectItem value="EASY">Easy</SelectItem>
-                      <SelectItem value="MEDIUM">Medium</SelectItem>
-                      <SelectItem value="HARD">Hard</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="rounded-md bg-muted p-3 text-xs space-y-1">
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Available in {randomTopic ? `topic "${randomTopic}"` : "all topics"}:</span>
-                  <span className="font-semibold text-foreground">{eligibleForRandom.length} questions</span>
-                </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Will add to exam:</span>
-                  <span className="font-semibold text-indigo-600">
-                    {Math.min(randomCount, eligibleForRandom.length)} question(s)
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" type="button" onClick={() => setIsRandomOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                  type="button"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                  disabled={eligibleForRandom.length === 0 || addQuestionsMutation.isPending}
-                  onClick={handleConfirmRandomAdd}
-              >
-                {addQuestionsMutation.isPending
-                    ? "Adding..."
-                    : `Add ${Math.min(randomCount, eligibleForRandom.length)} Random Question(s)`}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog
-            open={Boolean(examToSaveAsTemplate)}
-            onOpenChange={(open) => {
-              if (!open && !saveExamAsTemplateMutation.isPending) {
-                setExamToSaveAsTemplate(null);
-                setTemplateName("");
-                setTemplateDescription("");
-              }
-            }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (!templateName.trim()) {
-                    toast.error("Template name is required.");
-                    return;
-                  }
-                  saveExamAsTemplateMutation.mutate();
-                }}
+            <Button
+              variant="outline"
+              onClick={() => setExportOpen(true)}
             >
-              <DialogHeader>
-                <DialogTitle>Save Exam as Template</DialogTitle>
-                <DialogDescription>
-                  Save the configuration, questions, and answer options from
-                  <strong className="text-foreground"> {examToSaveAsTemplate?.title}</strong>
-                  {" "}as a reusable template. The original exam will not be changed.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-5">
-                <label className="grid gap-2 text-sm font-medium">
-                  Template Name
-                  <Input
-                      required
-                      maxLength={200}
-                      value={templateName}
-                      onChange={(event) => setTemplateName(event.target.value)}
-                      placeholder="Enter template name"
-                  />
-                </label>
-                <label className="grid gap-2 text-sm font-medium">
-                  Description (optional)
-                  <textarea
-                      className="min-h-24 rounded-md border border-input bg-background px-3 py-2 text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      maxLength={1000}
-                      value={templateDescription}
-                      onChange={(event) => setTemplateDescription(event.target.value)}
-                      placeholder="Describe when this template should be reused"
-                  />
-                </label>
-              </div>
-              <DialogFooter>
-                <Button
-                    type="button"
-                    variant="outline"
-                    disabled={saveExamAsTemplateMutation.isPending}
-                    onClick={() => {
-                      setExamToSaveAsTemplate(null);
-                      setTemplateName("");
-                      setTemplateDescription("");
-                    }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                    type="submit"
-                    disabled={saveExamAsTemplateMutation.isPending || !templateName.trim()}
-                >
-                  {saveExamAsTemplateMutation.isPending ? "Saving..." : "Save Template"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+              <Download className="mr-2 size-4 text-emerald-500" />
+              Export
+            </Button>
 
-        <Dialog open={Boolean(examToDelete)} onOpenChange={(open: boolean) => { if (!open) closeDeleteConfirm(); }}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-destructive">Confirm Exam Deletion</DialogTitle>
-              <DialogDescription>
-                This action cannot be undone. All attempts and data related to exam <strong className="text-foreground">{examToDelete?.title}</strong> will be permanently deleted.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-3 py-3">
-              <p className="text-xs text-muted-foreground">
-                Type <strong className="text-foreground">DELETE</strong> below to confirm:
-              </p>
-              <Input
-                  autoFocus
-                  placeholder="Type DELETE"
-                  value={deleteConfirmInput}
-                  onChange={(e) => setDeleteConfirmInput(e.target.value)}
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={closeDeleteConfirm} disabled={deleteExamMutation.isPending}>
-                Cancel
-              </Button>
-              <Button
-                  variant="destructive"
-                  disabled={deleteConfirmInput !== "DELETE" || deleteExamMutation.isPending}
-                  onClick={handleConfirmDelete}
-              >
-                {deleteExamMutation.isPending ? "Deleting..." : "Delete Exam"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            <Button
+              variant="outline"
+              onClick={() => navigate("/management/exam/templates")}
+            >
+              <BookmarkPlus className="mr-2 size-4" />
+              Use Template
+            </Button>
+          </div>
+        </header>
 
-        {editingQuestion && activeExam && (
-            <EditExamQuestionDialog
-                exam={activeExam}
-                question={editingQuestion}
-                onClose={() => setEditingQuestion(null)}
-                onSaved={(updatedExam: ExamDTO) => {
-                  setActiveExam(updatedExam);
-                  setEditingQuestion(null);
-                  void refreshExams();
-                }}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Search exams"
+              className="pl-9"
+              placeholder="Search by exam title"
+              value={examSearch}
+              onChange={(event) => {
+                setExamSearch(event.target.value);
+                setExamPage(0);
+              }}
             />
+          </div>
+
+          <Select
+            value={courseFilter}
+            onValueChange={(value) => {
+              setCourseFilter(value);
+              setExamPage(0);
+            }}
+          >
+            <SelectTrigger aria-label="Filter by course" className="w-full max-w-[13rem]">
+              <SelectValue placeholder="All courses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All courses</SelectItem>
+              {courseOptions.map((course) => (
+                <SelectItem key={course.id} value={String(course.id)}>
+                  {course.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={examCategoryFilter} onValueChange={(value) => {
+            setExamCategoryFilter(value as ExamCategory | "ALL");
+            setExamPage(0);
+          }}>
+            <SelectTrigger aria-label="Filter by exam category" className="w-full max-w-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All categories</SelectItem>
+              {EXAM_CATEGORY_OPTIONS.map((category) => (
+                <SelectItem key={category} value={category}>{EXAM_CATEGORY_LABEL[category]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={(value) => {
+            setStatusFilter(value as ExamStatus | "ALL");
+            setExamPage(0);
+          }}>
+            <SelectTrigger aria-label="Filter by status" className="w-full max-w-[11rem]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All statuses</SelectItem>
+              <SelectItem value="UPCOMING">Upcoming</SelectItem>
+              <SelectItem value="OPEN">Open</SelectItem>
+              <SelectItem value="CLOSED">Closed</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={sortKey} onValueChange={(value) => {
+            setSortKey(value);
+            setExamPage(0);
+          }}>
+            <SelectTrigger aria-label="Sort exams" className="w-full max-w-[11rem]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-sm text-muted-foreground">
+            {examTotal} exam(s)
+          </span>
+        </div>
+
+        {examsQuery.isLoading ? (
+          <div className="grid min-w-0 max-w-full gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Loading exams">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="flex min-w-0 max-w-full flex-col gap-3 rounded-lg border p-4">
+                <Skeleton className="h-5 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+                <div className="grid gap-2 border-t pt-3">
+                  {Array.from({ length: 5 }, (_, k) => <Skeleton key={k} className="h-4 w-full" />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : examsQuery.isError ? (
+          <p className="py-16 text-center text-sm text-destructive">Failed to load exams list.</p>
+        ) : examRows.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <p className="text-sm text-muted-foreground">
+              {hasFilters ? "No exams match your filters." : "You have no exams yet."}
+            </p>
+            {hasFilters ? (
+              <Button variant="outline" size="sm" onClick={() => {
+                setExamSearch("");
+                setExamCategoryFilter("ALL");
+                setStatusFilter("ALL");
+                setCourseFilter("ALL");
+                setExamPage(0);
+              }}>
+                Clear filters
+              </Button>
+            ) : (
+              <Button size="sm" onClick={openCreateDialog}>
+                <Plus className="mr-2 size-4" />
+                Create your first exam
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="grid min-w-0 max-w-full gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {examRows.map((exam) => {
+              const status = STATUS_STYLE[examStatus(exam)];
+              return (
+                // A real link that opens the exam in a new browser tab (middle click and Ctrl+click also work).
+                <a
+                  key={exam.id}
+                  href={`/exams/${exam.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Open exam ${exam.title} in a new tab`}
+                  className="flex min-w-0 max-w-full cursor-pointer flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm transition hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <div className="flex items-start justify-between gap-3 min-w-0">
+                    <h2 className="line-clamp-2 min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-base font-semibold leading-snug">{exam.title}</h2>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${status.className}`}>
+                        {status.label}
+                      </span>
+                      {(exam.pendingGradingCount ?? 0) > 0 && (
+                        <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                          <ClipboardCheck className="size-3" />
+                          {exam.pendingGradingCount} to grade
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {EXAM_CATEGORY_LABEL[exam.category ?? "ASSIGNMENT"]}
+                    {" · "}
+                    {EXAM_TYPE_LABEL[exam.examType ?? "MIXED"]}
+                  </p>
+
+                  <div className="grid min-w-0 max-w-full gap-2 border-t pt-3">
+                    <InfoRow icon={CalendarClock} label="Created" value={formatDateTime(exam.createdAt)} />
+                    <InfoRow icon={User} label="Created by" value={exam.createdByName || "—"} multiline />
+                    <InfoRow icon={BookOpen} label="Course" value={courseLabel(exam)} multiline />
+                    <InfoRow icon={Clock} label="Duration" value={`${exam.durationMinutes} mins`} />
+                    <InfoRow icon={ListChecks} label="Questions" value={exam.questionIds?.length ?? exam.questions?.length ?? 0} />
+                    <InfoRow icon={Trophy} label="Max score" value={exam.maxScore ?? 10} />
+                  </div>
+                </a>
+              );
+            })}
+          </div>
         )}
-      </MainLayout>
+
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="outline" size="sm" disabled={examPage === 0} onClick={() => setExamPage((page) => page - 1)}>Previous</Button>
+          <span className="min-w-24 text-center text-sm text-muted-foreground">{examTotalPages === 0 ? 0 : examPage + 1} / {examTotalPages}</span>
+          <Button variant="outline" size="sm" disabled={examPage + 1 >= examTotalPages} onClick={() => setExamPage((page) => page + 1)}>Next</Button>
+        </div>
+      </section>
+
+      <Dialog open={isCreateOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-4xl">
+          <form
+            className="flex min-h-0 flex-1 flex-col"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const problem = validateConfig(Number(newDuration), cfg);
+              if (problem) {
+                setShowErrors(true);
+                toast.error(problem);
+                return;
+              }
+              createExamMutation.mutate();
+            }}
+          >
+            <DialogHeader className="shrink-0">
+              <DialogTitle>Create Exam</DialogTitle>
+              <DialogDescription>Configure exam title, duration, and rules.</DialogDescription>
+            </DialogHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto py-5 pr-1">
+              <ExamConfigFields
+                title={newTitle}
+                setTitle={setNewTitle}
+                duration={newDuration}
+                setDuration={setNewDuration}
+                cfg={cfg}
+                setCfg={setCfg}
+                showErrors={showErrors}
+              />
+            </div>
+            <DialogFooter className="shrink-0 border-t pt-4">
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={createExamMutation.isPending || !newTitle.trim()}>
+                {createExamMutation.isPending ? "Saving..." : "Create Exam"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <ExportExamModal
+        open={isExportOpen}
+        onOpenChange={setExportOpen}
+        totalCount={examTotal}
+        filters={{
+          search: examSearch || undefined,
+          category: examCategoryFilter === "ALL" ? undefined : examCategoryFilter,
+          courseId: courseFilter === "ALL" ? undefined : Number(courseFilter),
+        }}
+      />
+
+      <ImportExamModal
+        open={isImportOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={() => {
+          void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+        }}
+      />
+    </MainLayout>
   );
 }
-

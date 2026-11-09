@@ -37,6 +37,8 @@ public class RoleDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        ensurePermission("COURSE_REPORT", "READ");
+        ensurePermission("STUDENT_ANALYTICS", "READ");
         ensurePermission("PEO", "TEAM_ALLOCATE");
         ensurePermission("EXAM", "TAKE");
         ensurePermission("ARTIFACT", "DRAFT_WRITE");
@@ -119,6 +121,7 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "LESSON_DELETE",
                         "CATEGORY_CREATE", "CATEGORY_READ", "CATEGORY_UPDATE", "CATEGORY_DELETE",
                         "COURSE_REPORT_READ",
+                        "STUDENT_ANALYTICS_READ",
                         "SECTION_CREATE", "SECTION_READ", "SECTION_UPDATE", "SECTION_DELETE",
                         "SYLLABUS_CREATE", "SYLLABUS_READ", "SYLLABUS_UPDATE", "SYLLABUS_DELETE",
                         "LESSON_QUESTION_READ", "LESSON_QUESTION_DELETE",
