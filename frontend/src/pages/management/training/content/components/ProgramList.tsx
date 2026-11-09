@@ -170,10 +170,15 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
 
   return (
     <div className="space-y-4">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-800">Training Program</h1>
+      {/* Action Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-gray-700">Program List</span>
+          <Badge variant="secondary" className="text-xs px-2 py-0.5 font-mono">
+            {totalElements} {totalElements === 1 ? "entry" : "entries"}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
