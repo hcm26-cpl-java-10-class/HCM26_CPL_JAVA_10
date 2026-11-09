@@ -56,3 +56,6 @@ frontend-dev.err
 
 # === Runtime uploaded files (khong commit) ===
 uploads/
+
+# Local H2 database
+/data/

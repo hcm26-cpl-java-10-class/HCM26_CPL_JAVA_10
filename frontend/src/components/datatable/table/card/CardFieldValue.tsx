@@ -113,13 +113,20 @@ export function CardFieldValue({
 
   if (field.type === "date" && value) {
     try {
-      const formatted = new Date(value).toLocaleDateString("vi-VN", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      const date = new Date(value);
+      const formatted = field.name === "dateOfBirth"
+        ? date.toLocaleDateString("vi-VN", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          })
+        : date.toLocaleDateString("vi-VN", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
       return (
         <TruncatedText
           content={formatted}

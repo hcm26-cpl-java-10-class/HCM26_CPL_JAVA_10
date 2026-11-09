@@ -1,3 +1,9 @@
+import { useMemo } from "react";
+import { useDispatch } from "react-redux";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { setLogout } from "@/store/slices/auth/authSlice";
+import { authApi } from "@/api/features/auth.api";
 import HeaderRight from "@/components/layout/HeaderRight";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
@@ -13,16 +19,10 @@ import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { usePendingInvitations } from "@/hooks/usePendingInvitations";
 import { InvitationBell } from "@/components/features/invitation/InvitationBell";
 import { cn } from "@/lib/utils";
-import { authApi } from "@/api/features/auth.api";
 import { iconMap } from "@/components/datatable/iconMap";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { usePermissions } from "@/hooks/usePermissions";
 import { ChevronDown, LogOutIcon, Menu } from "lucide-react";
-import { useMemo } from "react";
-import { useDispatch } from "react-redux";
-import { useLocation, useNavigate } from "react-router-dom";
-import { setLogout } from "@/store/slices/auth/authSlice";
-import { useQueryClient } from "@tanstack/react-query";
 
 const normalizePath = (path?: string) => {
   const trimmed = (path || "/").replace(/\/+$/, "");
@@ -54,17 +54,16 @@ const activeNavClass =
     "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100";
 
 export function StudentNavbar() {
-  const location = useLocation();
-  const navigate = useNavigate();
   const dispatch = useDispatch();
   const queryClient = useQueryClient();
-  const { activeRole, effectivePermissions, hasPermission } = usePermissions();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { activeRole, user, effectivePermissions, hasPermission } = usePermissions();
   const { data: moduleGroups = [] } = useActiveModuleGroups();
   const { count: pendingInvitationCount } = usePendingInvitations();
   const pathname = normalizePath(location.pathname);
 
-  const canBrowseSyllabuses =
-      hasPermission("COURSE_READ");
+  const canBrowseSyllabuses = hasPermission("COURSE_READ");
 
   const isSyllabusesActive =
       pathname === SYLLABUS_PATH ||
@@ -143,7 +142,7 @@ export function StudentNavbar() {
       group.items.some((item) => item.url === MY_SUBMISSIONS_URL),
     );
     if (!hasMySubmissions) {
-      const projectGroup = groups.find((group) => /project|dự án/i.test(group.name));
+      const projectGroup = groups.find((group) => /project|dß╗▒ ├ín/i.test(group.name));
       const item = {
         id: "student-my-submissions",
         title: "My Submissions",
@@ -152,7 +151,7 @@ export function StudentNavbar() {
         isActive: pathname === MY_SUBMISSIONS_URL || pathname.startsWith(`${MY_SUBMISSIONS_URL}/`),
       };
       if (projectGroup) projectGroup.items.push(item);
-      else groups.push({ id: "student-project", name: "Dự án", hiddenInMenu: false, items: [item] });
+      else groups.push({ id: "student-project", name: "Dß╗▒ ├ín", hiddenInMenu: false, items: [item] });
     }
 
     return groups.filter((group) => !group.hiddenInMenu && group.items.length > 0);
@@ -182,7 +181,6 @@ export function StudentNavbar() {
     | {
         type: "syllabuses";
       };
-
 
   const navigation: NavigationEntry[] = [];
 
@@ -225,210 +223,188 @@ export function StudentNavbar() {
   };
 
   return (
-      <header className="border-b border-sidebar-border bg-sidebar text-sidebar-foreground">
-        <div className="flex h-16 items-center gap-3 px-4">
-
-          {/* BRAND */}
-          <Button
-              type="button"
-              variant="ghost"
-              onClick={() =>
-                  navigate(getHomePathByRole(activeRole, effectivePermissions))
-              }
-              className="flex h-auto min-w-0 items-center justify-start gap-3 px-0 hover:bg-transparent"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-blue-800 text-sm font-semibold text-white">
-              RB
-            </div>
-
-            <span className="truncate text-lg font-bold text-blue-800">
+    <header className="border-b border-sidebar-border bg-sidebar text-sidebar-foreground">
+      <div className="flex h-16 items-center gap-3 px-4">
+        {/* BRAND */}
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() =>
+            navigate(getHomePathByRole(activeRole, effectivePermissions ?? user?.permissions))
+          }
+          className="flex h-auto min-w-0 items-center justify-start gap-3 px-0 hover:bg-transparent"
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-blue-800 text-sm font-semibold text-white">
+            RB
+          </div>
+          <span className="hidden truncate text-lg font-bold text-blue-800 dark:text-blue-400 sm:block">
             RBAC System
           </span>
-          </Button>
+        </Button>
 
-          {/* DESKTOP NAVIGATION */}
-          <nav
-              aria-label="Student navigation"
-              className="hidden min-w-0 flex-1 items-center gap-2 lg:flex"
-          >
-            {navigation.map((entry) => {
-              if (entry.type === "syllabuses") {
-                return (
-                    <Button
-                        key="student-syllabuses"
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                            navigate(SYLLABUS_PATH)
-                        }
-                        aria-current={
-                          isSyllabusesActive
-                              ? "page"
-                              : undefined
-                        }
-                        className={cn(
-                            navButtonClass,
-                            isSyllabusesActive && activeNavClass
-                        )}
-                    >
+        {/* DESKTOP NAVIGATION */}
+        <nav
+          aria-label="Student navigation"
+          className="hidden min-w-0 flex-1 items-center gap-2 lg:flex"
+        >
+          {navigation.map((entry) => {
+            if (entry.type === "syllabuses") {
+              return (
+                <Button
+                  key="student-syllabuses"
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate(SYLLABUS_PATH)}
+                  aria-current={isSyllabusesActive ? "page" : undefined}
+                  className={cn(
+                    navButtonClass,
+                    isSyllabusesActive && activeNavClass
+                  )}
+                >
                   <span className="max-w-[180px] truncate">
                     Syllabuses
                   </span>
-                    </Button>
-                );
-              }
+                </Button>
+              );
+            }
 
-              const group = entry.group;
+            const group = entry.group;
+            const groupHasActive = group.items.some((item) => item.isActive);
 
-              const groupHasActive =
-                  group.items.some(
-                      (item) => item.isActive
-                  );
-
-              return (
-                  <DropdownMenu key={group.id}>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className={cn(
-                              navButtonClass,
-                              groupHasActive && activeNavClass
-                          )}
-                      >
+            return (
+              <DropdownMenu key={group.id}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      navButtonClass,
+                      groupHasActive && activeNavClass
+                    )}
+                  >
                     <span className="max-w-[180px] truncate">
                       {group.name}
                     </span>
+                    <ChevronDown className="h-4 w-4 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
 
-                        <ChevronDown className="h-4 w-4 opacity-70" />
-                      </Button>
-                    </DropdownMenuTrigger>
-
-                    <DropdownMenuContent
-                        align="start"
-                        className="min-w-64"
-                    >
-                      <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                        {group.name}
-                      </DropdownMenuLabel>
-
-                      <DropdownMenuSeparator />
-
-                      {group.items.map((item) => (
-                          <DropdownMenuItem
-                              key={`${group.id}-${item.id}-${item.url}`}
-                              onClick={() =>
-                                  navigate(item.url)
-                              }
-                              className={cn(
-                                  "gap-2",
-                                  item.isActive &&
-                                  "bg-blue-50 text-blue-800 focus:bg-blue-100 focus:text-blue-800"
-                              )}
-                          >
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.title}</span>
-                            {renderPendingBadge(item.url)}
-                          </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-              );
-            })}
-          </nav>
-
-          {/* MOBILE NAVIGATION */}
-          <div className="ml-auto flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="lg:hidden"
-                    aria-label="Open navigation menu"
+                <DropdownMenuContent
+                  align="start"
+                  className="min-w-64"
                 >
-                  <Menu className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    {group.name}
+                  </DropdownMenuLabel>
 
-              <DropdownMenuContent
-                  align="end"
-                  className="w-72"
-              >
-                {navigation.map((entry, index) => {
-                  if (entry.type === "syllabuses") {
-                    return (
-                        <DropdownMenuItem
-                            key="mobile-syllabuses"
-                            onClick={() =>
-                                navigate(SYLLABUS_PATH)
-                            }
-                            className={cn(
-                                isSyllabusesActive &&
-                                "bg-blue-50 text-blue-800"
-                            )}
-                        >
-                          Syllabuses
-                        </DropdownMenuItem>
-                    );
-                  }
+                  <DropdownMenuSeparator />
 
-                  const group = entry.group;
+                  {group.items.map((item) => (
+                    <DropdownMenuItem
+                      key={`${group.id}-${item.id}-${item.url}`}
+                      onClick={() => navigate(item.url)}
+                      className={cn(
+                        "gap-2",
+                        item.isActive &&
+                        "bg-blue-50 text-blue-800 focus:bg-blue-100 focus:text-blue-800"
+                      )}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                      {renderPendingBadge(item.url)}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          })}
+        </nav>
 
-                  return (
-                      <div key={`mobile-${group.id}`}>
-                        {index > 0 && (
-                            <DropdownMenuSeparator />
-                        )}
-                        <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          {group.name}
-                        </DropdownMenuLabel>
-
-                        {group.items.map((item) => (
-                            <DropdownMenuItem
-                                key={`mobile-${group.id}-${item.id}-${item.url}`}
-                                onClick={() =>
-                                    navigate(item.url)
-                                }
-                                className={cn(
-                                    "gap-2",
-                                    item.isActive &&
-                                    "bg-blue-50 text-blue-800"
-                                )}
-                            >
-                              <item.icon className="h-4 w-4" />
-                              <span>{item.title}</span>
-                              {renderPendingBadge(item.url)}
-                            </DropdownMenuItem>
-                        ))}
-                      </div>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* INVITATION BELL */}
-            <InvitationBell />
-
-            {/* EXISTING ROLE SWITCHER */}
-            <HeaderRight />
-
-            {/* LOGOUT */}
-            <TooltipWrapper content="Logout">
+        {/* MOBILE NAVIGATION */}
+        <div className="ml-auto flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  onClick={handleLogout}
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="lg:hidden"
+                aria-label="Open navigation menu"
               >
-                <LogOutIcon className="size-4" />
+                <Menu className="size-4" />
               </Button>
-            </TooltipWrapper>
-          </div>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent
+              align="end"
+              className="w-72"
+            >
+              {navigation.map((entry, index) => {
+                if (entry.type === "syllabuses") {
+                  return (
+                    <DropdownMenuItem
+                      key="mobile-syllabuses"
+                      onClick={() => navigate(SYLLABUS_PATH)}
+                      className={cn(
+                        isSyllabusesActive &&
+                        "bg-blue-50 text-blue-800"
+                      )}
+                    >
+                      Syllabuses
+                    </DropdownMenuItem>
+                  );
+                }
+
+                const group = entry.group;
+
+                return (
+                  <div key={`mobile-${group.id}`}>
+                    {index > 0 && <DropdownMenuSeparator />}
+                    <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {group.name}
+                    </DropdownMenuLabel>
+
+                    {group.items.map((item) => (
+                      <DropdownMenuItem
+                        key={`mobile-${group.id}-${item.id}-${item.url}`}
+                        onClick={() => navigate(item.url)}
+                        className={cn(
+                          "gap-2",
+                          item.isActive && "bg-blue-50 text-blue-800"
+                        )}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                        {renderPendingBadge(item.url)}
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* INVITATION BELL */}
+          <InvitationBell />
+
+          {/* EXISTING ROLE SWITCHER */}
+          <HeaderRight />
+
+          {/* LOGOUT */}
+          <TooltipWrapper content="Logout">
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="hidden text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground sm:inline-flex"
+              onClick={handleLogout}
+            >
+              <LogOutIcon className="size-4" />
+            </Button>
+          </TooltipWrapper>
         </div>
-      </header>
+      </div>
+    </header>
   );
 }

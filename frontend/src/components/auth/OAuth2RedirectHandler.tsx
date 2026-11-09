@@ -4,7 +4,7 @@ import { useDispatch } from "react-redux";
 import { jwtDecode } from "jwt-decode";
 import { setLogin } from "@/store/slices/auth/authSlice";
 import type { LoginResponse } from "@/types";
-import { getHomePathByRole, normalizeAuthRolePayload, resolveEffectivePermissions } from "@/utils/rbac.utils";
+import { availableAccountViews, getHomePathByRole, normalizeAuthRolePayload, resolveEffectivePermissions } from "@/utils/rbac.utils";
 import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 
 export const OAuth2RedirectHandler = () => {
@@ -15,7 +15,11 @@ export const OAuth2RedirectHandler = () => {
 
     useEffect(() => {
         const error = searchParams.get("error");
-        const token = searchParams.get("token");
+        let token = searchParams.get("token");
+        if (!token && window.location.hash.includes("token=")) {
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            token = hashParams.get("token");
+        }
 
         if (error) {
             navigate("/login?error=google_auth_failed", { replace: true });
@@ -56,7 +60,9 @@ export const OAuth2RedirectHandler = () => {
 
             setViewRole(null);
             dispatch(setLogin(userData));
-            navigate(getHomePathByRole(userData.role, resolveEffectivePermissions(userData.role, userData.rolePermissions, userData.permissions)), { replace: true });
+            const homeRole = availableAccountViews(userData.permissions ?? [])[0] ?? userData.role;
+            const effectivePerms = resolveEffectivePermissions(homeRole, userData.rolePermissions, userData.permissions);
+            navigate(getHomePathByRole(homeRole, effectivePerms), { replace: true });
         } catch {
             navigate("/login?error=google_token_invalid", { replace: true });
         }

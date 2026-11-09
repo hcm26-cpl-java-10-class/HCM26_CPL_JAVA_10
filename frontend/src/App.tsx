@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
 import { RoleSwitchProvider } from "./contexts/RoleSwitchContext";
+import { CourseProvider } from "./contexts/CourseContext";
 import { usePermissions } from "./hooks/usePermissions";
 import { useActiveModuleGroups } from "./hooks/useSidebarMenus";
 import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
@@ -12,15 +13,32 @@ import type { RootState } from "./store/store";
 import { getHomePathByRole } from "./utils/rbac.utils";
 
 function AppRoutes() {
-    const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+    const { isAuthenticated, permissions } = useSelector((state: RootState) => state.auth);
     const { activeRole, effectivePermissions } = usePermissions();
     const { data: moduleGroups = [] } = useActiveModuleGroups(isAuthenticated);
 
-    const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions) : "/login";
+    const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions ?? permissions) : "/login";
 
-    const componentRegistry = Object.fromEntries(
-        routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
-    );
+    // Create component lookup map from module-driven routes
+    const explicitOverrides: Record<string, any> = {
+        "/courses": routes.find((r) => r.path === "/courses")?.component,
+        "/enrollments": routes.find((r) => r.path === "/enrollments")?.component,
+        "/course-enrollments": routes.find((r) => r.path === "/course-enrollments")?.component,
+        "/my-learning": routes.find((r) => r.path === "/my-learning")?.component,
+        "/fams/my-learning": routes.find((r) => r.path === "/fams/my-learning")?.component,
+        "/learning": routes.find((r) => r.path === "/learning")?.component,
+        "/profile": routes.find((r) => r.path === "/profile")?.component,
+        "/fams/profile": routes.find((r) => r.path === "/fams/profile")?.component,
+        "/fams/ho-so-ca-nhan-oi-mat-khau": routes.find((r) => r.path === "/fams/ho-so-ca-nhan-oi-mat-khau")?.component,
+        "/fams/ho-so-ca-nhan-doi-mat-khau": routes.find((r) => r.path === "/fams/ho-so-ca-nhan-doi-mat-khau")?.component,
+    };
+
+    const componentRegistry = {
+        ...Object.fromEntries(
+            routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
+        ),
+        ...explicitOverrides,
+    };
 
     const staticRoutes = routes.filter((r) => !r.isModuleDriven);
     const staticRoutePaths = new Set(staticRoutes.map((r) => r.path));
@@ -101,7 +119,9 @@ function App() {
             />
             <AuthProvider>
                 <RoleSwitchProvider>
-                    <AppRoutes />
+                    <CourseProvider>
+                        <AppRoutes />
+                    </CourseProvider>
                 </RoleSwitchProvider>
             </AuthProvider>
         </BrowserRouter>

@@ -35,7 +35,7 @@ public class CourseEnrollmentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('ENROLLMENT_CREATE')")
+    @PreAuthorize("hasAuthority('LEARNER_ACCESS') and hasAuthority('ENROLLMENT_CREATE')")
     @ResponseStatus(HttpStatus.CREATED)
     public CourseEnrollmentDTO enroll(
             @AuthenticationPrincipal UserPrincipal principal,
@@ -50,7 +50,7 @@ public class CourseEnrollmentController {
     }
 
     @GetMapping("/my-courses")
-    @PreAuthorize("hasAuthority('ENROLLMENT_READ')")
+    @PreAuthorize("hasAuthority('LEARNER_ACCESS') and hasAuthority('LEARNING_SELF_READ')")
     public List<CourseEnrollmentDTO> getMyCourses(
             @AuthenticationPrincipal UserPrincipal principal) {
 
@@ -63,7 +63,7 @@ public class CourseEnrollmentController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('ENROLLMENT_DELETE')")
+    @PreAuthorize("hasAuthority('LEARNER_ACCESS') and hasAuthority('ENROLLMENT_DELETE')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void cancelEnrollment(
             @AuthenticationPrincipal UserPrincipal principal,
@@ -167,6 +167,7 @@ public class CourseEnrollmentController {
                 .id(enrollment.getId())
                 .courseId(enrollment.getCourse().getId())
                 .courseName(enrollment.getCourse().getName())
+                .courseDescription(enrollment.getCourse().getDescription())
                 .thumbnailUrl(enrollment.getCourse().getThumbnailUrl())
                 .instructor(enrollment.getCourse().getInstructor())
                 .enrolledAt(enrollment.getCreatedAt())

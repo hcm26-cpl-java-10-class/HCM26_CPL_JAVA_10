@@ -56,6 +56,7 @@ public class UserDataInitializer implements CommandLineRunner {
         .orElseThrow(() -> new IllegalStateException("Role TEACHER not found. Ensure role seed runs first."));
 
       ensureUserWithRole(adminEmail, adminPassword, adminFirstName, adminLastName, adminRole, false);
+      ensureUserWithRole(adminEmail, adminPassword, adminFirstName, adminLastName, studentRole, false);
       ensureUserWithRole(STUDENT_EMAIL, DEFAULT_PASSWORD, "John", "Doe", studentRole, true);
       ensureUserWithRole(TEACHER_EMAIL, DEFAULT_PASSWORD, "Teacher", "User", teacherRole, true);
       deactivateLegacyJaneAccount();
@@ -89,6 +90,26 @@ public class UserDataInitializer implements CommandLineRunner {
 
       if (user.getLastName() == null || user.getLastName().isBlank()) {
         user.setLastName(lastName);
+      }
+    }
+
+    if (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()) {
+      user.setPhoneNumber("0903 221 879");
+    }
+
+    if (user.getDepartment() == null || user.getDepartment().isBlank()) {
+      user.setDepartment("FHN.G2");
+    }
+
+    if (user.getEmployeeCode() == null || user.getEmployeeCode().isBlank()) {
+      if (email.equalsIgnoreCase(adminEmail)) {
+        user.setEmployeeCode("EMP10014");
+      } else if (email.equalsIgnoreCase(STUDENT_EMAIL)) {
+        user.setEmployeeCode("STU10001");
+      } else if (email.equalsIgnoreCase(TEACHER_EMAIL)) {
+        user.setEmployeeCode("TEA10001");
+      } else {
+        user.setEmployeeCode("EMP10099");
       }
     }
 

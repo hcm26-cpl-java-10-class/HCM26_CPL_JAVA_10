@@ -125,8 +125,12 @@ export function validateForm(
         if (rule.email && !EMAIL_REGEX.test(trimmed)) {
           messages.push("Invalid email address");
         }
-        if (rule.pattern && !rule.pattern.regex.test(trimmed)) {
-          messages.push(rule.pattern.message);
+        if (rule.pattern) {
+          const regex = rule.pattern instanceof RegExp ? rule.pattern : (rule.pattern as any).regex;
+          const msg = (rule.pattern instanceof RegExp ? rule.patternMessage : (rule.pattern as any).message) || `${field.label} format is invalid`;
+          if (regex && !regex.test(trimmed)) {
+            messages.push(msg);
+          }
         }
       }
     }

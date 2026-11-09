@@ -15,6 +15,7 @@ import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenSe
 import com.example.starter_project_2025.system.auth.verify.VerificationService;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
+import com.example.starter_project_2025.system.auth.util.PasswordPolicy;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import jakarta.transaction.Transactional;
@@ -28,13 +29,20 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import java.time.Instant;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.example.starter_project_2025.system.audit.AuditAction;
+import com.example.starter_project_2025.system.audit.AuditLogService;
+import com.example.starter_project_2025.system.audit.AuditSupport;
+import org.springframework.security.core.AuthenticationException;
+
 
 @Service
 @RequiredArgsConstructor
@@ -50,43 +58,134 @@ public class AuthServiceImpl implements AuthService {
     UserRepository userRepository;
     RoleRepository roleRepository;
     PasswordEncoder passwordEncoder;
+    SsoAccessPolicy ssoAccessPolicy;
+    AuditLogService auditLogService;
+
+
 
     @Override
+    @Transactional
     public AuthenticationResponse login(LoginRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.email(),
-                        request.password()
-                )
-        );
+
+return login(request, request != null ? request.device() : null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse login(LoginRequest request, String device) {
+        String email = request.email();
+
+        Authentication authentication;
+
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            email,
+                            request.password()
+                    )
+            );
+        } catch (AuthenticationException ex) {
+            auditLogService.logLoginFailure(
+                    email,
+                    UUID.randomUUID().toString()
+            );
+
+            throw ex;
+        }
 
         UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
+        User user = principal.getUser();
+        user.setLastLoginAt(Instant.now());
+        if (StringUtils.hasText(device)) {
+            user.setLastLoginDevice(device.trim());
+        }
+        user = userRepository.save(user);
+
+        // Temporary password (for example from an Excel import): the password was right, but the account
+        // can only be used after its owner chooses their own. No access or refresh token is issued, so the
+        // temporary password cannot be used to call the API; the user only gets a short-lived token to set
+        // the new password on the existing reset-password page.
+        if (Boolean.TRUE.equals(principal.getUser().getMustChangePassword())) {
+            String setupToken = oneTimeTokenService.createOneTimeToken(
+                    principal.getUser(), OneTimeToken.TokenType.RESET_PASSWORD, Duration.ofMinutes(30));
+
+            return AuthenticationResponse.builder()
+                    .email(principal.getUser().getEmail())
+                    .passwordChangeRequired(true)
+                    .setupToken(setupToken)
+                    .build();
+        }
 
         refreshTokenService.revokeAllRefreshTokens(principal.getUser().getId());
 
         String accessToken = refreshTokenService.generateAccessToken(authentication);
         String refreshToken = refreshTokenService.createRefreshToken(principal.getUser());
 
-        return buildAuthResponse(principal, accessToken, refreshToken);
+        AuthenticationResponse response = buildAuthResponse(
+                principal,
+                accessToken,
+                refreshToken
+        );
+
+        auditLogService.log(
+                "LOGIN",
+                "AUTH",
+                String.valueOf(principal.getUser().getId()),
+                null,
+                null,
+                UUID.randomUUID().toString(),
+                "SUCCESS"
+        );
+
+        return response;
     }
 
     @Override
     @Transactional
     public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName) {
+        return loginWithGoogle(email, true, firstName, lastName, null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse loginWithGoogle(String email, String firstName, String lastName, String device) {
+        return loginWithGoogle(email, true, firstName, lastName, device);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName) {
+        return loginWithGoogle(email, emailVerified, firstName, lastName, null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse loginWithGoogle(String email, boolean emailVerified, String firstName, String lastName, String device) {
         if (!StringUtils.hasText(email)) {
-            throw new BadRequestException("Google account email is required");
+            throw new SsoLoginException(SsoLoginException.AUTH_FAILED, "Google account email is required");
         }
 
-        User user = userRepository.findByEmail(email)
-                .orElseGet(() -> createGoogleUser(email, firstName, lastName));
+        ssoAccessPolicy.checkEmail(email, emailVerified);
 
-        if (Boolean.TRUE.equals(user.getLocked())) {
-            throw new org.springframework.security.authentication.LockedException(
-                    "Account is locked"
-            );
+        // Only accounts that already exist may sign in (imported or created by an administrator),
+        // unless app.sso.auto-create-users=true.
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+        if (user == null) {
+            if (!ssoAccessPolicy.autoCreateUsers()) {
+                throw ssoAccessPolicy.notRegistered(email);
+            }
+            user = createGoogleUser(email, firstName, lastName);
         }
+
+        ssoAccessPolicy.checkAccount(user);
 
         user = updateUserFromGoogleProfile(user, firstName, lastName);
+
+        user.setLastLoginAt(Instant.now());
+        if (StringUtils.hasText(device)) {
+            user.setLastLoginDevice(device.trim());
+        }
+        user = userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(user.getId());
 
@@ -119,7 +218,17 @@ public class AuthServiceImpl implements AuthService {
 
         user.getRoles().add(getDefaultStudentRole());
 
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+
+        auditLogService.logEventAs(
+                savedUser.getId(),
+                savedUser.getEmail(),
+                AuditAction.REGISTER,
+                "USER",
+                String.valueOf(savedUser.getId()),
+                null,
+                AuditSupport.json("email", savedUser.getEmail())
+        );
 
         verificationService.sendEmailVerification(user.getEmail());
     }
@@ -173,7 +282,33 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void logout(TokenRequest request) {
-        refreshTokenService.revokeRefreshToken(request.token());
+        String correlationId = UUID.randomUUID().toString();
+
+        RefreshToken refreshToken;
+
+        try {
+            refreshToken =
+                    refreshTokenService.verifyRefreshToken(request.token());
+
+            refreshTokenService.revokeRefreshToken(request.token());
+        } catch (RuntimeException ex) {
+            auditLogService.logLogout(
+                    null,
+                    null,
+                    correlationId,
+                    "FAILURE"
+            );
+            throw ex;
+        }
+
+        User user = refreshToken.getUser();
+
+        auditLogService.logLogout(
+                user.getId(),
+                user.getEmail(),
+                correlationId,
+                "SUCCESS"
+        );
     }
 
     @Override
@@ -185,12 +320,33 @@ public class AuthServiceImpl implements AuthService {
 
         User user = resetToken.getUser();
 
+        String passwordProblem = PasswordPolicy.validate(request.newPassword());
+        if (passwordProblem != null) {
+            throw new BadRequestException(passwordProblem);
+        }
+
+        // The new password must really be new (for example not the temporary one it replaces).
+        if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+            throw new BadRequestException("The new password must be different from the current password.");
+        }
+
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.setMustChangePassword(false);
         userRepository.save(user);
 
         refreshTokenService.revokeAllRefreshTokens(user.getId());
 
         oneTimeTokenService.markUsed(resetToken);
+
+        auditLogService.logEventAs(
+                user.getId(),
+                user.getEmail(),
+                AuditAction.RESET_PASSWORD,
+                "USER",
+                String.valueOf(user.getId()),
+                null,
+                null
+        );
     }
 
     private User createGoogleUser(String email, String firstName, String lastName) {
@@ -291,6 +447,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return user.getRoles().stream()
+                .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .map(Role::getName)
                 .filter(StringUtils::hasText)
                 .map(this::normalizeRoleName)
@@ -304,6 +461,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return user.getRoles().stream()
+                .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                 .filter(role -> role.getPermissions() != null)
                 .flatMap(role -> role.getPermissions().stream())
                 .map(permission -> permission.getName())
@@ -318,6 +476,7 @@ public class AuthServiceImpl implements AuthService {
 
         if (user.getRoles() != null) {
             Map<String, Role> rolesByName = user.getRoles().stream()
+                    .filter(role -> Boolean.TRUE.equals(role.getIsActive()))
                     .filter(role -> StringUtils.hasText(role.getName()))
                     .collect(Collectors.toMap(
                             role -> normalizeRoleName(role.getName()),
@@ -334,21 +493,7 @@ public class AuthServiceImpl implements AuthService {
             }
         }
 
-        if (sortedRoles.contains("ADMIN")) {
-            includePreviewRolePermissions(rolePermissions, "STUDENT");
-            includePreviewRolePermissions(rolePermissions, "TEACHER");
-        }
-
         return rolePermissions;
-    }
-
-    private void includePreviewRolePermissions(Map<String, Set<String>> rolePermissions, String roleName) {
-        if (rolePermissions.containsKey(roleName)) {
-            return;
-        }
-
-        roleRepository.findByName(roleName)
-                .ifPresent(role -> rolePermissions.put(roleName, mapRolePermissions(role)));
     }
 
     private Set<String> mapRolePermissions(Role role) {

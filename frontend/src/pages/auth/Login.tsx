@@ -10,7 +10,7 @@ import { setLogin } from "@/store/slices/auth/authSlice";
 import { authApi } from "@/api/features/auth.api";
 import axios from "axios";
 import { Eye, EyeOff } from "lucide-react";
-import { getHomePathByRole, resolveEffectivePermissions } from "@/utils/rbac.utils";
+import { availableAccountViews, getHomePathByRole, resolveEffectivePermissions } from "@/utils/rbac.utils";
 import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 
 const URL_LOGIN_WITH_GOOGLE =
@@ -60,7 +60,13 @@ export const Login: React.FC = () => {
             const res = await authApi.login({ email: cleanEmail, password: cleanPassword, isRememberedMe });
             setViewRole(null);
             dispatch(setLogin(res));
-            navigate(getHomePathByRole(res.role, resolveEffectivePermissions(res.role, res.rolePermissions, res.permissions)), { replace: true });
+            const primaryRole = res.role ?? availableAccountViews(res.permissions ?? [])[0];
+            const effectivePermissions = resolveEffectivePermissions(
+                primaryRole,
+                res.rolePermissions,
+                res.permissions ?? []
+            );
+            navigate(getHomePathByRole(primaryRole, effectivePermissions), { replace: true });
         } catch (err) {
             if (axios.isAxiosError(err)) {
                 const backendMsg = err.response?.data?.message;
@@ -136,7 +142,7 @@ export const Login: React.FC = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
-                                placeholder="••••••••"
+                                placeholder="ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó"
                                 className="bg-background "
                             />
                             <Button

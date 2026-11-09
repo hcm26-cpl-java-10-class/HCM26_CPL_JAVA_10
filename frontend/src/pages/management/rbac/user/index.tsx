@@ -1,56 +1,111 @@
 import { userApi } from "@/api";
 import { departmentApi } from "@/api/features/rbac/department.api";
 import { roleApi } from "@/api/features/rbac/role.api";
-import { UserCreatePage } from "./pages/UserCreatePage";
-import { UserDetailPage } from "./pages/UserDetailPage";
-import { UserEditPage } from "./pages/UserEditPage";
 import {
   auditableFieldsSchema,
+  GENDER_OPTIONS,
   type EntityConfig,
   type EntitySchema,
   type FieldSchema,
 } from "@/types";
+import { validatePasswordStrength } from "@/utils/password.utils";
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const NAME_PATTERN = /^[\p{L}][\p{L}\s.'-]*$/u;
+const PHONE_PATTERN = /^\+?\d{8,15}$/;
+
+const USER_SAMPLE_ID_MAP: Record<string, string> = {
+  "admin@example.com": "USR001",
+  "student@example.com": "USR012",
+  "teacher@example.com": "USR026",
+};
+
+const formatUserId = (row: any, index: number) => {
+  if (row?.email && USER_SAMPLE_ID_MAP[row.email]) {
+    return USER_SAMPLE_ID_MAP[row.email];
+  }
+  if (row?.id === 1 || row?.id === "1") return "USR001";
+  if (row?.id === 2 || row?.id === "2") return "USR012";
+  if (row?.id === 3 || row?.id === "3") return "USR026";
+  if (row?.id && !isNaN(Number(row.id))) {
+    return `USR${String(row.id).padStart(3, "0")}`;
+  }
+  if (index === 0) return "USR001";
+  if (index === 1) return "USR012";
+  if (index === 2) return "USR026";
+  return `USR${String(index + 1).padStart(3, "0")}`;
+};
 
 const userSchema: EntitySchema = {
   entityName: "user",
   idField: "id",
+  indexColumnTitle: "ID",
+  indexColumnWidth: 85,
+  renderIndex: formatUserId,
   fields: [
-    {
-      name: "username",
-      label: "Username",
-      type: "text",
-      sortable: true,
-    },
-    {
-      name: "employeeCode",
-      label: "Mã nhân viên",
-      type: "text",
-      sortable: true,
-    },
-    {
-      name: "userCode",
-      label: "Mã sinh viên",
-      type: "text",
-      sortable: true,
-    },
     {
       name: "email",
       label: "Email",
       type: "text",
       sortable: true,
       bold: true,
+      validation: {
+        required: true,
+        maxLength: 100,
+        pattern: EMAIL_PATTERN,
+        patternMessage: "Enter a valid email address, e.g. name@company.com.",
+        inputFilter: (v: string) => v.replace(/\s/g, ""),
+        placeholder: "name@company.com",
+      },
+    },
+    {
+      name: "fullName",
+      label: "Full Name",
+      type: "text",
+      sortable: true,
+      editable: false,
     },
     {
       name: "firstName",
       label: "First Name",
       type: "text",
+      visible: false,
+      hideable: false,
       sortable: true,
+      validation: {
+        required: true,
+        maxLength: 100,
+        pattern: NAME_PATTERN,
+        patternMessage: "Use letters, spaces, dots, apostrophes or hyphens only.",
+        inputFilter: (v: string) => v.replace(/[^\p{L}\s.'-]/gu, ""),
+      },
     },
     {
       name: "lastName",
       label: "Last Name",
       type: "text",
+      visible: false,
+      hideable: false,
       sortable: true,
+      validation: {
+        maxLength: 100,
+        pattern: NAME_PATTERN,
+        patternMessage: "Use letters, spaces, dots, apostrophes or hyphens only.",
+        inputFilter: (v: string) => v.replace(/[^\p{L}\s.'-]/gu, ""),
+      },
+    },
+    {
+      name: "phone",
+      label: "Phone",
+      type: "text",
+      visible: false,
+      validation: {
+        maxLength: 16,
+        pattern: PHONE_PATTERN,
+        patternMessage: "Enter 8-15 digits, optionally starting with +.",
+        inputFilter: (v: string) => v.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, ""),
+        placeholder: "0901234567",
+      },
     },
     {
       name: "password",
@@ -58,6 +113,34 @@ const userSchema: EntitySchema = {
       type: "password",
       visible: false,
       hideable: false,
+      validation: {
+        requiredOnCreate: true,
+        maxLength: 64,
+        passwordRules: true,
+        hint: "No email is sent: give this initial password to the user. When editing, leave blank to keep the current password.",
+        validate: (value: any) =>
+          value ? validatePasswordStrength(String(value)) : undefined,
+      },
+    },
+    {
+      name: "confirmPassword",
+      label: "Confirm Password",
+      type: "password",
+      visible: false,
+      hideable: false,
+      transient: true,
+      validation: {
+        requiredOnCreate: true,
+        maxLength: 64,
+        placeholder: "Re-enter the password",
+        validate: (value: any, form: any) => {
+          const password = String(form.password ?? "");
+          const confirm = String(value ?? "");
+          if (password && !confirm) return "Please re-enter the password to confirm it.";
+          if (confirm && confirm !== password) return "Passwords do not match.";
+          return undefined;
+        },
+      },
     },
     {
       name: "roleIds",
@@ -71,10 +154,11 @@ const userSchema: EntitySchema = {
       },
       filterable: true,
       filterType: "select",
+      validation: { required: true },
     },
     {
       name: "departmentIds",
-      label: "Phòng ban",
+      label: "Department",
       type: "relation",
       relation: {
         api: departmentApi,
@@ -85,6 +169,44 @@ const userSchema: EntitySchema = {
       filterable: true,
       filterType: "select",
     },
+    {
+      name: "dateOfBirth",
+      label: "Date of Birth",
+      type: "text",
+      visible: false,
+      validation: {
+        requiredOnCreate: true,
+        pattern: /^\d{4}-\d{1,2}-\d{1,2}$/,
+        patternMessage: "Use the format yyyy-MM-dd, for example 2000-01-31.",
+        placeholder: "2000-01-31",
+        validate: (value: any) => {
+          const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(value ?? "").trim());
+          if (!m) return undefined; // an empty value or a wrong format is reported by the rules above
+          const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+          const date = new Date(Date.UTC(y, mo - 1, d));
+          if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d)
+            return "This date does not exist.";
+          const iso = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+          if (iso > new Date().toISOString().slice(0, 10)) return "Date of birth cannot be in the future.";
+          return undefined;
+        },
+      },
+    },
+    {
+      name: "gender",
+      label: "Gender",
+      type: "select",
+      options: GENDER_OPTIONS,
+      visible: false,
+      validation: { requiredOnCreate: true },
+    },
+    {
+      name: "description",
+      label: "Description",
+      type: "textarea",
+      visible: false,
+      validation: { maxLength: 500 },
+    },
     ...(auditableFieldsSchema as FieldSchema[]),
   ],
 };
@@ -94,9 +216,4 @@ export const entityConfig: EntityConfig = {
   path: "/users",
   api: userApi,
   schema: userSchema,
-  actionPages: {
-    create: { path: "/users/create", component: UserCreatePage },
-    edit: { path: "/users/:id/edit", component: UserEditPage },
-    detail: { path: "/users/:id/detail", component: UserDetailPage },
-  },
 };

@@ -19,6 +19,18 @@ public class RelationLookupEngine {
 
     ApplicationContext ctx;
 
+    /** Roles, departments... already looked up during the running import (one query per distinct value). */
+    private static final ThreadLocal<Map<List<Object>, Object>> CACHE = new ThreadLocal<>();
+
+    /** Start remembering lookups on this thread. Call {@link #endCache()} when the import is over. */
+    public void startCache() {
+        CACHE.set(new HashMap<>());
+    }
+
+    public void endCache() {
+        CACHE.remove();
+    }
+
     public Object resolveSingle(String value, Class<?> entity, String field) {
 
         JpaRepository<?, ?> repo = getRepository(entity);
@@ -51,24 +63,55 @@ public class RelationLookupEngine {
 
     private Object findEntity(JpaRepository<?, ?> repo, String field, String value) {
 
+        Map<List<Object>, Object> cache = CACHE.get();
+        if (cache == null) {
+            return findEntityUncached(repo, field, value);
+        }
+
+        List<Object> key = List.of(System.identityHashCode(repo), field, value);
+        Object known = cache.get(key);
+        if (known != null) {
+            return known;
+        }
+
+        Object found = findEntityUncached(repo, field, value);
+        cache.put(key, found);
+        return found;
+    }
+
+    private Object findEntityUncached(JpaRepository<?, ?> repo, String field, String value) {
+
+        String methodName = "findBy" + capitalize(field);
+        Object result;
+
         try {
-            String method = "findBy" + capitalize(field);
-
-            Method m = repo.getClass().getMethod(method, String.class);
-
-            Object result = m.invoke(repo, value);
-
-            if (result instanceof Optional<?> opt)
-                return opt.orElseThrow(() -> new RuntimeException("Not found: " + value));
-
-            if (result == null)
-                throw new RuntimeException("Not found: " + value);
-
-            return result;
-
+            // Upper and lower case do not matter ("it" finds the department IT) when the repository
+            // offers findBy<Field>IgnoreCase; otherwise the exact match is used.
+            Method m;
+            try {
+                m = repo.getClass().getMethod(methodName + "IgnoreCase", String.class);
+            } catch (NoSuchMethodException noIgnoreCase) {
+                m = repo.getClass().getMethod(methodName, String.class);
+            }
+            result = m.invoke(repo, value);
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(
+                    "Repository is missing method " + methodName + "(String)", e);
         } catch (Exception e) {
             throw new RuntimeException("Lookup failed: " + value, e);
         }
+
+        if (result instanceof Optional<?> opt) {
+            return opt.orElseThrow(() -> new RuntimeException(
+                    "Not found: " + field + " = '" + value + "'"));
+        }
+
+        if (result == null) {
+            throw new RuntimeException(
+                    "Not found: " + field + " = '" + value + "'");
+        }
+
+        return result;
     }
 
     private JpaRepository<?, ?> getRepository(Class<?> entity) {

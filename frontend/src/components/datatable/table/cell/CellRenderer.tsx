@@ -67,13 +67,13 @@ export function CellRenderer({
     return (
       <TableCell>
         {Icon ? (
-          <TooltipWrapper content={iconKey || "—"}>
+          <TooltipWrapper content={iconKey || "ΓÇö"}>
             <span className="inline-flex items-center">
               <Icon className="h-4 w-4 text-muted-foreground" />
             </span>
           </TooltipWrapper>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-muted-foreground">ΓÇö</span>
         )}
       </TableCell>
     );
@@ -84,7 +84,7 @@ export function CellRenderer({
     const matchedUser = users.find(
       (u) => u?.id?.toString() === value?.toString()
     );
-    const displayText = matchedUser?.email ?? String(value ?? "—");
+    const displayText = matchedUser?.email ?? String(value ?? "ΓÇö");
 
     return (
       <TableCell>
@@ -112,7 +112,7 @@ export function CellRenderer({
               valueField={valueField}
             />
           ) : (
-            <span className="text-muted-foreground">—</span>
+            <span className="text-muted-foreground">ΓÇö</span>
           )}
         </TableCell>
       );
@@ -121,7 +121,7 @@ export function CellRenderer({
     const matched = options.find(
       (opt) => opt[valueField]?.toString() === value?.toString()
     );
-    const displayText = matched ? matched[labelField] : (value ?? "—");
+    const displayText = matched ? matched[labelField] : (value ?? "ΓÇö");
     return (
       <TableCell>
         <TruncatedText content={String(displayText)} bold={field.bold} />
@@ -133,7 +133,7 @@ export function CellRenderer({
     if (value.length === 0) {
       return (
         <TableCell>
-          <span className="text-muted-foreground">—</span>
+          <span className="text-muted-foreground">ΓÇö</span>
         </TableCell>
       );
     }
@@ -143,7 +143,7 @@ export function CellRenderer({
       if ("content" in firstItem) {
         const optionsText = value
           .map((opt: any, idx: number) =>
-            `${String.fromCharCode(65 + idx)}. ${opt.content}${opt.correct ? " ✓" : ""}`
+            `${String.fromCharCode(65 + idx)}. ${opt.content}${opt.correct ? " Γ£ô" : ""}`
           )
           .join("\n");
 
@@ -170,10 +170,10 @@ export function CellRenderer({
     field.type === "select"
       ? field.options?.find((option) => option.value?.toString() === value?.toString())?.label
       : undefined;
-  const displayValue = optionLabel ?? value ?? "—";
+  const displayValue = optionLabel ?? value ?? "ΓÇö";
   const displayStr =
     (field.type === "date" || field.type === "datetime") && value
-      ? formatDateValue(value, dateFormat)
+      ? formatDateValue(value, dateFormat ?? "date")
       : String(displayValue);
 
   return (

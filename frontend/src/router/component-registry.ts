@@ -1,4 +1,3 @@
-
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -33,6 +32,10 @@ import StudentProjectDetailPage from "@/pages/student/projects/detail";
 import StudentDraftTeamPage from "@/pages/student/draft-team";
 import ProjectTemplateVersionPage from "@/pages/management/project-template-version";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
+import { ModuleGroupsPage } from "@/pages/management/fams/ModuleGroupsPage";
+import { ModulesPage } from "@/pages/management/fams/ModulesPage";
+import { PersonalProfilePage } from "@/pages/management/profile";
+import { MyLearningPage } from "@/pages/management/learning";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
 import { MilestoneDetailPage } from "@/pages/management/project/milestone/pages/MilestoneDetailPage";
 import { MilestoneListPage } from "@/pages/management/project/milestone/pages/MilestoneListPage";
@@ -50,7 +53,7 @@ import { StudentSubmissionPage } from "@/pages/student/milestone-submission/Stud
 import { StudentSubmissionListPage } from "@/pages/student/milestone-submission/StudentSubmissionListPage";
 import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
 import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
-import { createElement} from "react";
+import { createElement, type ComponentType } from "react";
 import { Navigate } from "react-router-dom";
 import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
@@ -65,8 +68,9 @@ import ExamReviewPage from "@/pages/student/ExamReviewPage";
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
 import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
-import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+import { LocationPage } from "@/pages/management/rbac/location";
+import AuditLogPage from "@/pages/management/audit-log";
 
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
@@ -82,7 +86,7 @@ import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-question
 import LessonReportsPage from "@/pages/management/demo/lesson-reports";
 import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
 import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
-import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage.tsx";
+import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage";
 import DepartmentManagementPage from "@/pages/management/demo/department";
 
 export interface RouteConfig {
@@ -101,10 +105,34 @@ export const ROLE_HOME_PATHS = [
 ] as const;
 
 export const routes: RouteConfig[] = [
-  // Dashboard is the default landing page for administrators. Keep this route
-  // available while the backend-driven sidebar is still loading; otherwise a
-  // successful login can temporarily fall through to the blank 404 redirect.
-  { path: "/dashboard", component: Dashboard, requiredPermission: "USER_READ" },
+  // User Profile
+  { path: "/fams/ho-so-ca-nhan-oi-mat-khau", component: PersonalProfilePage },
+  { path: "/fams/ho-so-ca-nhan-doi-mat-khau", component: PersonalProfilePage },
+  { path: "/fams/profile", component: PersonalProfilePage },
+  { path: "/profile", component: PersonalProfilePage },
+
+  // My Learning
+  { path: "/my-learning", component: MyLearningPage },
+  { path: "/fams/my-learning", component: MyLearningPage },
+  { path: "/learning", component: MyLearningPage },
+
+  // FAMS Module Group & Module
+  { path: "/menu-groups", component: ModuleGroupsPage, requiredPermission: "MENU_READ" },
+  { path: "/menus", component: ModulesPage, requiredPermission: "MENU_READ" },
+  { path: "/fams/module-group-module", component: ModuleGroupModulePage, requiredPermission: "MENU_READ" },
+  { path: "/module-group-module", component: ModuleGroupModulePage, requiredPermission: "MENU_READ" },
+  { path: "/module-groups", component: ModuleGroupsPage, requiredPermission: "MENU_READ" },
+  { path: "/modules", component: ModulesPage, requiredPermission: "MENU_READ" },
+
+  // Location
+  { path: "/locations", component: LocationPage, isPublic: true },
+  { path: "/management/rbac/locations", component: LocationPage, isPublic: true },
+
+  // Audit Log
+  { path: "/admin/audit-log", component: AuditLogPage, isModuleDriven: true },
+
+  // Dashboard
+  { path: "/dashboard", component: Dashboard, requiredPermission: "USER_READ", isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
@@ -117,51 +145,11 @@ export const routes: RouteConfig[] = [
   { path: "/project-templates/:id/edit", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_UPDATE" },
   { path: "/project-templates/:id/detail", component: ProjectTemplateDetailPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
 
-  // FAMS MODULE GROUP MODULE
-  {
-    path: "/fams/module-group-module",
-    component: ModuleGroupModulePage,
-    isPublic: true,
-  },
-  {
-    path: "/module-group-module",
-    component: ModuleGroupModulePage,
-    isPublic: true,
-  },
-
-  // ROLE HOME
-  {
-    path: "/dashboard",
-    component: Dashboard,
-  },
-  {
-    path: "/student",
-    component: StudentLandingPage,
-  },
-  {
-    path: "/teacher",
-    component: TeacherLandingPage,
-  },
-
-  // DASHBOARD
-  {
-    path: "/dashboard",
-    component: Dashboard,
-    isModuleDriven: true,
-  },
-
   // RBAC
   {
     path: "/role-permissions",
     component: RolePermissionMatrixPage,
     requiredPermission: "ROLE_UPDATE",
-  },
-
-  // EXAMS
-  {
-    path: "/exams",
-    component: ExamManagementPage,
-    isModuleDriven: true,
   },
 
   {
@@ -176,7 +164,6 @@ export const routes: RouteConfig[] = [
     component: UnifiedInvitationsPage,
     requiredPermission: "INVITATION_READ",
   },
-
   {
     path: "/exams/:examId/invitations",
     component: InvitationsPage,
@@ -189,25 +176,21 @@ export const routes: RouteConfig[] = [
     component: EssayAttemptListPage,
     requiredPermission: "EXAM_UPDATE",
   },
-
   {
     path: "/exams/:examId/grading/similarity",
     component: ExamSimilarityPage,
     requiredPermission: "EXAM_UPDATE",
   },
-
   {
     path: "/exams/:examId/similarity",
     component: ExamSimilarityPage,
     requiredPermission: "EXAM_UPDATE",
   },
-
   {
     path: "/exams/:examId/grading/:attemptId",
     component: EssayAttemptDetailPage,
     requiredPermission: "EXAM_UPDATE",
   },
-
   {
     path: "/exams/:examId/result-statistics",
     component: ResultStatisticsPage,
@@ -240,9 +223,8 @@ export const routes: RouteConfig[] = [
     requiredPermission: "INVITATION_READ",
   },
 
-  // TOPIC MARKS
+  // TOPIC MARKS / BACKLOGS
   {
-    // Student backlog view (also served at /sprints for non-admin roles).
     path: "/backlogs",
     component: BacklogPage,
     requiredPermission: "SPRINT_READ",
@@ -254,6 +236,8 @@ export const routes: RouteConfig[] = [
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
   },
+
+  // TEAM ALLOCATION
   {
     path: "/team-allocation",
     component: TeamAllocationClassListPage,
@@ -265,36 +249,39 @@ export const routes: RouteConfig[] = [
     component: TeamAllocationPage,
     requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
   },
+
+  // STUDENT
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
-  { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
+  { path: "/student/exams", component: StudentExamList, requiredPermission: "EXAM_READ", isModuleDriven: true },
   {
-    // US-09: mock Project Template catalogue (Project Management tab).
-    // Module-driven: `useSidebarMenus` injects the matching student module
-    // entry, and `App` resolves it through the module-driven component map.
-    // Without `isModuleDriven`, the injected module route would shadow this
-    // route with a "missing component" redirect (page not found).
-    // No permission string because the Project Template module is not seeded
-    // yet; access is limited to authenticated users, and the data scope is
-    // mocked in `mocks/project-templates.mock.ts`.
+    path: "/student/exams/:examId/take",
+    component: StudentExamTakingPage,
+    requiredPermission: "EXAM_TAKE",
+  },
+  {
+    path: "/student/exams/attempts/:attemptId/review",
+    component: ExamReviewPage,
+    requiredPermission: "EXAM_TAKE",
+  },
+  {
     path: "/student/projects/explore",
     component: ExploreProjectsPage,
     isModuleDriven: true,
   },
   {
-    // US-09 / AC02: full project brief on its own page (no modal).
-    // Reached from a catalogue card on `/student/projects/explore`.
     path: "/student/projects/detail/:projectId",
     component: StudentProjectDetailPage,
   },
   {
-    // US-10: the student (team leader) screen that assigns a project template
-    // to the DRAFT teams they lead. Authenticated users only; the backend
-    // enforces ownership (team role PM) and the capacity window.
     path: "/student/draft-team",
     component: StudentDraftTeamPage,
     isModuleDriven: true,
   },
+
+  // TEACHER
   { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
+
+  // WORKSPACE & PROJECT
   { path: "/project-board", component: ProjectBoardPage },
   { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
@@ -310,20 +297,10 @@ export const routes: RouteConfig[] = [
   { path: "/teams/:teamId/milestones/:milestoneId/submit", component: TeamArtifactSubmissionPage, requiredPermission: "ARTIFACT_READ" },
   { path: "/teams/:teamId/milestones/:milestoneId/submissions", component: TeamMilestoneSubmissionsPage },
   { path: "/student/teams/:teamId/milestones/:milestoneId/submissions", component: StudentTeamMilestoneSubmissionsPage, requiredPermission: "ARTIFACT_READ" },
-  {
-    path: "/projects/:projectId/milestones/new",
-    component: MilestoneCreatePage,
-  },
+  { path: "/projects/:projectId/milestones/new", component: MilestoneCreatePage },
   { path: "/projects/:projectId/milestones/:milestoneId/edit", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
-  {
-    path: "/projects/:projectId/milestones/:milestoneId",
-    component: MilestoneDetailPage,
-  },
-  {
-    path: "/projects/:projectId/milestones/:milestoneId/submit",
-    component: ArtifactDraftPage,
-    requiredPermission: "ARTIFACT_READ",
-  },
+  { path: "/projects/:projectId/milestones/:milestoneId", component: MilestoneDetailPage },
+  { path: "/projects/:projectId/milestones/:milestoneId/submit", component: ArtifactDraftPage, requiredPermission: "ARTIFACT_READ" },
   { path: "/rubrics", component: RubricListPage },
   { path: "/rubrics/new", component: RubricCreatePage },
   { path: "/rubrics/:rubricId", component: RubricDetailPage },
@@ -334,17 +311,21 @@ export const routes: RouteConfig[] = [
   { path: "/student/milestone-submissions", component: StudentSubmissionListPage },
   { path: "/student/milestone-submissions/:submissionId", component: StudentSubmissionPage },
   { path: "/student/milestone-submissions/:submissionId/edit", component: StudentSubmissionPage },
-  ...buildEntityRoutes(),
 
-  { path: "/not-found-page", component: NotFoundPage, isPublic: true },
-  { path: "/login", component: Login, isPublic: true },
-  { path: "/logout", component: Logout, isPublic: true },
-  { path: "/register", component: RegisterPage, isPublic: true },
-  { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
-  { path: "/unauthorized", component: Unauthorized, isPublic: true },
+  // MY SCORES / MY APPEALS
+  {
+    path: "/my-scores",
+    component: MyScoresPage,
+    requiredPermission: "STUDENT_SCORE_VIEW_OWN",
+    isModuleDriven: true,
+  },
+  {
+    path: "/my-appeals",
+    component: MyAppealsPage,
+    requiredPermission: "SCORE_APPEAL_VIEW_OWN",
+  },
 
-  // M3 ADMIN / TEACHER
+  // M3 SYLLABUS
   {
     path: "/syllabuses",
     component: SyllabusesPage,
@@ -369,8 +350,6 @@ export const routes: RouteConfig[] = [
     requiredPermission: "SYLLABUS_READ",
     isModuleDriven: false,
   },
-
-  // M3 STUDENT VIEW
   {
     path: "/student/syllabuses",
     component: StudentSyllabusListPage,
@@ -395,92 +374,6 @@ export const routes: RouteConfig[] = [
     component: VerifyCertificatePage,
     isPublic: true,
     isModuleDriven: false,
-  },
-
-  // STUDENT
-  {
-    path: "/student",
-    component: StudentLandingPage,
-    requiredPermission: "BOOK_READ",
-  },
-  {
-    path: "/student/exams",
-    component: StudentExamList,
-    requiredPermission: "EXAM_READ",
-    isModuleDriven: true,
-  },
-
-  {
-    path: "/student/exams/:examId/take",
-    component: StudentExamTakingPage,
-    requiredPermission: "EXAM_TAKE",
-  },
-
-  {
-    path: "/student/exams/attempts/:attemptId/review",
-    component: ExamReviewPage,
-    requiredPermission: "EXAM_TAKE",
-  },
-
-  // MY SCORES / MY APPEALS
-  {
-    path: "/my-scores",
-    component: MyScoresPage,
-    requiredPermission: "STUDENT_SCORE_VIEW_OWN",
-    isModuleDriven: true,
-  },
-
-  {
-    path: "/my-appeals",
-    component: MyAppealsPage,
-    requiredPermission: "SCORE_APPEAL_VIEW_OWN",
-  },
-
-  // TEACHER
-  {
-    path: "/teacher",
-    component: TeacherLandingPage,
-    requiredPermission: "BOOK_UPDATE",
-  },
-
-  // DYNAMIC ENTITY ROUTES
-  ...buildEntityRoutes(),
-
-  // AUTHENTICATION
-  {
-    path: "/not-found-page",
-    component: NotFoundPage,
-    isPublic: true,
-  },
-  {
-    path: "/login",
-    component: Login,
-    isPublic: true,
-  },
-  {
-    path: "/logout",
-    component: Logout,
-    isPublic: true,
-  },
-  {
-    path: "/register",
-    component: RegisterPage,
-    isPublic: true,
-  },
-  {
-    path: "/forgot-password",
-    component: ForgotPasswordPage,
-    isPublic: true,
-  },
-  {
-    path: "/oauth2/redirect",
-    component: OAuth2RedirectHandler,
-    isPublic: true,
-  },
-  {
-    path: "/unauthorized",
-    component: Unauthorized,
-    isPublic: true,
   },
 
   // CURRICULUM
@@ -535,4 +428,16 @@ export const routes: RouteConfig[] = [
     requiredPermission: "DEPARTMENT_READ",
     isModuleDriven: true,
   },
+
+  // DYNAMIC ENTITY ROUTES (Course, Book, User, Role, Department, etc.)
+  ...buildEntityRoutes(),
+
+  // AUTHENTICATION & ERROR PAGES
+  { path: "/not-found-page", component: NotFoundPage, isPublic: true },
+  { path: "/login", component: Login, isPublic: true },
+  { path: "/logout", component: Logout, isPublic: true },
+  { path: "/register", component: RegisterPage, isPublic: true },
+  { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
+  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
+  { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];

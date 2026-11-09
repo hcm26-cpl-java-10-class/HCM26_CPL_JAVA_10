@@ -89,6 +89,9 @@ public class SecurityConfig {
                     auth.requestMatchers(PUBLIC_ENDPOINTS).permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/api/lesson-audio/**").permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/api/lesson-documents/**").permitAll();
+                    auth.requestMatchers("/api/users/**", "/api/roles/**", "/api/permissions/**",
+                            "/api/departments/**", "/api/dashboard/**")
+                            .hasAuthority("ADMIN_ACCESS");
                     auth.anyRequest().authenticated();
                 })
                 .exceptionHandling(ex -> ex

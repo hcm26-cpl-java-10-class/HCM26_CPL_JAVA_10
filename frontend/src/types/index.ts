@@ -33,6 +33,7 @@ export * from "./features/backlog-item";
 export * from "./features/rbac/permission";
 export * from "./features/rbac/role";
 export * from "./features/rbac/user";
+export * from "./features/rbac/location";
 export * from "./features/score-appeal";
 export * from "./features/demo/session";
 export * from "./features/workspace";

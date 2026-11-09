@@ -3,6 +3,7 @@ import {
   ADMIN_ROLE,
   STUDENT_ROLE,
   TEACHER_ROLE,
+  availableAccountViews,
   normalizeRole,
   uniqueRoles,
 } from "@/utils/rbac.utils";
@@ -26,7 +27,7 @@ const RoleSwitchContext = createContext<RoleSwitchContextType | undefined>(
 export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { isAuthenticated, role, roles, rolePermissions } = useSelector(
+  const { isAuthenticated, role, roles, rolePermissions, permissions } = useSelector(
     (state: RootState) => state.auth,
   );
 
@@ -39,11 +40,13 @@ export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
   const primaryRole = normalizeRole(role);
 
   const availableRoles = useMemo(() => {
+    const fallbackViews = availableAccountViews(permissions ?? []);
     const roleCandidates = uniqueRoles(
       [
         ...Object.keys(rolePermissions ?? {}),
         ...(roles ?? []),
         primaryRole,
+        ...fallbackViews,
       ],
       primaryRole,
     );
@@ -58,8 +61,8 @@ export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     }
 
-    return roleCandidates;
-  }, [primaryRole, rolePermissions, roles]);
+    return roleCandidates.length > 0 ? roleCandidates : fallbackViews;
+  }, [primaryRole, rolePermissions, roles, permissions]);
 
   useEffect(() => {
     if (!isAuthenticated) {

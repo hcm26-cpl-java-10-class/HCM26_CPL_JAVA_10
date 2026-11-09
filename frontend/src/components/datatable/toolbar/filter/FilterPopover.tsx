@@ -81,7 +81,8 @@ export function FilterPopover({
               </div>
             </div>
 
-            <div className="p-3">
+            {/* Filter fields with scrollbar */}
+            <div className="p-3 max-h-[75vh] overflow-y-auto pr-1">
               <Filters table={table} />
             </div>
           </>

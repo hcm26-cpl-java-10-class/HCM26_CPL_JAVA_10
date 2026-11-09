@@ -18,6 +18,7 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
     List<User> lockForContribution(@Param("ids") java.util.Collection<Long> ids);
 
     Optional<User> findByEmail(String email);
+    Optional<User> findByEmailIgnoreCase(String email);
 
     List<User> findByEmailEndingWithIgnoreCase(String emailSuffix);
 
@@ -29,11 +30,22 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
 
     boolean existsByUserCode(String userCode);
 
+    /** Profile affiliations are scalar values; accept a department code or display name. */
+    @Query("""
+            select (count(u) > 0) from User u
+            where lower(trim(u.department)) = lower(trim(:code))
+               or lower(trim(u.department)) = lower(trim(:name))
+            """)
+    boolean existsByDepartmentCodeOrName(@Param("code") String code, @Param("name") String name);
+
     Optional<User> findByUsernameIgnoreCase(String username);
 
     Optional<User> findByEmployeeCodeIgnoreCase(String employeeCode);
 
     Long countByIsActive(Boolean isActive);
+
+    /** Number of ACTIVE accounts: active and not locked. */
+    Long countByIsActiveAndLocked(Boolean isActive, Boolean locked);
 
     List<User> findAllByDepartments_Id(Long departmentId);
 
@@ -148,6 +160,19 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
     List<Object[]> countActiveStudentsPerDepartment();
 
     long countByRolesId(Long roleId);
+
+    @Query("""
+    SELECT u.id
+    FROM User u
+    WHERE LOWER(CONCAT(
+        COALESCE(u.firstName, ''), ' ',
+        COALESCE(u.lastName, '')
+    )) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+    """)
+    List<Long> findIdsByActorName(@Param("keyword") String keyword);
 
     @Query("""
             select distinct u from User u

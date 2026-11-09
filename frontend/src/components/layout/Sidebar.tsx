@@ -1,21 +1,21 @@
+import { useMemo } from "react";
+import { useDispatch } from "react-redux";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { setLogout } from "@/store/slices/auth/authSlice";
+import { authApi } from "@/api/features/auth.api";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
 import { NavMain } from "@/components/layout/NavMain";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, LoaderCircle, LogOutIcon, RefreshCw } from "lucide-react";
-import { useMemo } from "react";
-import { useDispatch } from "react-redux";
-import { useLocation, useNavigate } from "react-router-dom";
-import { authApi } from "@/api/features/auth.api";
 import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
-import { setLogout } from "@/store/slices/auth/authSlice";
-import { useQueryClient } from "@tanstack/react-query";
 
 export function SidebarMenu() {
+    const dispatch = useDispatch();
     const location = useLocation();
     const navigate = useNavigate();
-    const dispatch = useDispatch();
     const queryClient = useQueryClient();
     const { toggleSidebar, state } = useSidebar();
     const {
@@ -58,14 +58,28 @@ export function SidebarMenu() {
                             url !== "/enrollments"
                         );
                     })
-                    .map((module) => ({
-                        title: module.title ?? "Untitled",
-                        url: module.url ?? "#",
-                        icon: resolveIcon(module.icon),
-                        isActive:
+                    .map((module) => {
+                        let normalizedUrl = module.url ?? "#";
+                        if (normalizedUrl === "/menu-groups") {
+                            normalizedUrl = "/module-groups";
+                        } else if (normalizedUrl === "/menus") {
+                            normalizedUrl = "/modules";
+                        }
+
+                        const isCurrentActive =
                             !!module.url &&
-                            (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
-                    })),
+                            (location.pathname === normalizedUrl ||
+                                location.pathname === module.url ||
+                                (normalizedUrl !== "/" && location.pathname.startsWith(`${normalizedUrl}/`)) ||
+                                (module.url !== "/" && location.pathname.startsWith(`${module.url}/`)));
+
+                        return {
+                            title: module.title ?? "Untitled",
+                            url: normalizedUrl,
+                            icon: resolveIcon(module.icon),
+                            isActive: isCurrentActive,
+                        };
+                    }),
             }))
             .filter((group) => !group.hiddenInMenu && group.items.length > 0);
     }, [location.pathname, moduleGroups]);
@@ -88,7 +102,7 @@ export function SidebarMenu() {
                     </div>
 
                     {state === "expanded" && (
-                        <span className="text-lg font-bold text-blue-800 truncate">RBAC System</span>
+                        <span className="text-lg font-bold text-blue-800 dark:text-blue-400 truncate">RBAC System</span>
                     )}
                 </Button>
             </SidebarHeader>
