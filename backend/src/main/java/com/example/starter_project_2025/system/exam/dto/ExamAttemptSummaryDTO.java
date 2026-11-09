@@ -19,6 +19,9 @@ public class ExamAttemptSummaryDTO {
     private int totalPoints;
     private BigDecimal maxScore;
     private BigDecimal bestScore;
+    private BigDecimal passScore;
+    /** Dat/Truot theo diem dat da dong bang; chi co khi ket qua da cong bo va da co diem cuoi. */
+    private Boolean passed;
 
     /** Ket qua da duoc giao vien cong bo (Publish Results) hay chua. */
     private boolean resultPublished;

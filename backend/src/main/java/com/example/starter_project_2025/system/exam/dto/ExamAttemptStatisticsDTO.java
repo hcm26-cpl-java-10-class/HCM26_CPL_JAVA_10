@@ -20,6 +20,8 @@ public record ExamAttemptStatisticsDTO(
         boolean flagged,
         long violationCount,
         boolean editable,
-        String lockReason
+        String lockReason,
+        /** Dat/Truot theo diem dat da dong bang; null khi chua co diem cuoi hoac de khong dat diem dat. */
+        Boolean passed
 ) {
 }

@@ -109,8 +109,6 @@ export interface ExamDTO {
   hasAttempts?: boolean;
   title: string;
   durationMinutes: number;
-  startTime?: string | null;
-  endTime?: string | null;
   maxAttempts?: number;
   shuffleQuestions?: boolean;
   shuffleOptions?: boolean;

@@ -45,6 +45,16 @@ public class ExamResultStatisticsService {
                 .filter(Objects::nonNull)
                 .toList();
 
+        long passableAttempts = completedAttempts.stream()
+                .filter(attempt -> ExamScoring.passed(attempt) != null)
+                .count();
+        long passedAttempts = completedAttempts.stream()
+                .filter(attempt -> Boolean.TRUE.equals(ExamScoring.passed(attempt)))
+                .count();
+        Double passRate = passableAttempts == 0
+                ? null
+                : passedAttempts * 100.0 / passableAttempts;
+
         Set<Long> studentIds = attempts.stream()
                 .map(attempt -> attempt.getStudent() == null
                         ? null
@@ -127,7 +137,10 @@ public class ExamResultStatisticsService {
                 averageScore,
                 highestScore,
                 lowestScore,
-                scoreDistribution
+                scoreDistribution,
+                exam.getPassScore(),
+                passedAttempts,
+                passRate
         );
     }
 }

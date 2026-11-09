@@ -72,7 +72,6 @@ public class ExamAttemptService {
         Exam exam = examRepository.lockForAttemptStart(examId)
                 .filter(candidate -> Boolean.TRUE.equals(candidate.getIsActive()))
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
-        LocalDateTime nowLocal = LocalDateTime.now();
 
         List<ExamAttempt> attempts = attemptRepository
                 .findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(examId, studentId);
@@ -85,7 +84,6 @@ public class ExamAttemptService {
             return toResponse(attempt);
         }
 
-        ensureExamWindowOpen(exam, nowLocal);
         if (!anonymousGuest) {
             progressLockService.assertUnlocked(exam, studentId);
         }
@@ -119,19 +117,12 @@ public class ExamAttemptService {
         attempt.setPassScore(exam.getPassScore());
         attempt.setStartedAt(startedAt);
         Instant durationDeadline = startedAt.plus(Duration.ofMinutes(exam.getDurationMinutes()));
-        Instant examDeadline = exam.getEndTime() == null
-                ? null
-                : exam.getEndTime().atZone(ZoneId.systemDefault()).toInstant();
-        boolean lateGraceEligible = examDeadline != null && !durationDeadline.isBefore(examDeadline);
-        Instant officialDeadline = lateGraceEligible ? examDeadline : durationDeadline;
-        int graceMinutes = exam.getLatePolicy() == LatePolicy.NOT_ALLOWED || exam.getLateGraceMinutes() == null
-                ? 0
-                : exam.getLateGraceMinutes();
-        attempt.setLateGraceEligible(lateGraceEligible && graceMinutes > 0);
+        // Khong con lich thi (gio dong de) nen han nop chi tinh theo thoi luong va khong co thoi gian gia han.
+        attempt.setLateGraceEligible(false);
         attempt.setLatePolicy(exam.getLatePolicy());
         attempt.setLatePenaltyPercent(exam.getLatePenaltyPercent());
-        attempt.setOfficialDeadlineAt(officialDeadline);
-        attempt.setDeadlineAt(officialDeadline.plus(Duration.ofMinutes(attempt.isLateGraceEligible() ? graceMinutes : 0)));
+        attempt.setOfficialDeadlineAt(durationDeadline);
+        attempt.setDeadlineAt(durationDeadline);
         attempt.setStatus(ExamAttemptStatus.IN_PROGRESS);
         snapshotQuestions(attempt, exam, questions);
         return toResponse(attemptRepository.save(attempt));
@@ -178,15 +169,6 @@ public class ExamAttemptService {
                 snap.getOptions().add(snapOption);
             }
             attempt.getQuestions().add(snap);
-        }
-    }
-
-    private void ensureExamWindowOpen(Exam exam, LocalDateTime now) {
-        if (exam.getStartTime() != null && now.isBefore(exam.getStartTime())) {
-            throw new BadRequestException("Kỳ thi chưa đến giờ mở");
-        }
-        if (exam.getEndTime() != null && !now.isBefore(exam.getEndTime())) {
-            throw new BadRequestException("Kỳ thi đã đóng");
         }
     }
 
@@ -276,6 +258,8 @@ public class ExamAttemptService {
         // Chua cong bo ket qua: an diem va dap an dung/sai, chi con cau da lam.
         response.setObjectiveScore(revealAnswers ? attempt.getObjectiveScore() : null);
         response.setFinalScore(revealAnswers ? attempt.getFinalScore() : null);
+        response.setPassScore(ExamScoring.effectivePassScore(attempt));
+        response.setPassed(revealAnswers ? ExamScoring.passed(attempt) : null);
         response.setSubmittedAt(attempt.getSubmittedAt());
         response.setRevealAnswers(revealAnswers);
         response.setQuestions(attempt.getQuestions().stream()
@@ -634,6 +618,7 @@ public class ExamAttemptService {
         if (resultPublished) {
             response.setObjectiveScore(attempt.getObjectiveScore());
             response.setFinalScore(attempt.getFinalScore());
+            response.setPassed(ExamScoring.passed(attempt));
             if (attempt.getStatus() != ExamAttemptStatus.IN_PROGRESS
                     && attempt.getStatus() != ExamAttemptStatus.NOT_STARTED) {
                 response.setProvisionalScore(attempt.getFinalScore() != null
@@ -702,6 +687,7 @@ public class ExamAttemptService {
         response.setStatus(attempt.getStatus());
         response.setTotalPoints(attempt.getTotalPoints());
         response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
+        response.setPassScore(ExamScoring.effectivePassScore(attempt));
 
         // Diem chi duoc hien thi khi giao vien da cong bo ket qua.
         boolean resultPublished = resultAccessService.isResultPublished(attempt.getExam());
@@ -709,6 +695,7 @@ public class ExamAttemptService {
         if (resultPublished) {
             response.setObjectiveScore(attempt.getObjectiveScore());
             response.setFinalScore(attempt.getFinalScore());
+            response.setPassed(ExamScoring.passed(attempt));
         }
 
         response.setStartedAt(attempt.getStartedAt());

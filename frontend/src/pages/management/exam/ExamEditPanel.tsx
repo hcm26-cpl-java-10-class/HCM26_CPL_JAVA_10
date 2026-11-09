@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ExamConfigFields } from "./ExamConfigFields";
-import { buildExamRequest, configFromExam, DEFAULT_CONFIG, getErrorMessage, toInputDateTime, validateConfig, type ExamConfigForm } from "./examConfig";
+import { buildExamRequest, configFromExam, DEFAULT_CONFIG, getErrorMessage, validateConfig, type ExamConfigForm } from "./examConfig";
 
 export function ExamEditPanel({ examId }: { examId: number }) {
   const queryClient = useQueryClient();
@@ -141,12 +141,7 @@ export function ExamEditPanel({ examId }: { examId: number }) {
         className="flex min-w-0 max-w-full flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          const problem = validateConfig(
-            Number(newDuration),
-            cfg,
-            exam.startTime ? toInputDateTime(exam.startTime) : undefined,
-            exam.endTime ? toInputDateTime(exam.endTime) : undefined,
-          );
+          const problem = validateConfig(Number(newDuration), cfg);
           if (problem) {
             setShowErrors(true);
             toast.error(problem);

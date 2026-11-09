@@ -119,16 +119,6 @@ class ExamAttemptServiceTest {
     }
 
     @Test
-    void startOrResumeRejectsBeforeExamOpens() {
-        Exam exam = attempt.getExam();
-        exam.setStartTime(LocalDateTime.now().plusMinutes(5));
-        attempt.setStatus(ExamAttemptStatus.SUBMITTED);
-        when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
-
-        assertThrows(BadRequestException.class, () -> service.startOrResume(20L, 40L));
-    }
-
-    @Test
     void startOrResumeRejectsWhenAllAttemptsAreUsed() {
         Exam exam = attempt.getExam();
         exam.setMaxAttempts(1);

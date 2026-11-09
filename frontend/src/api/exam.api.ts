@@ -10,8 +10,6 @@ export interface Exam {
     totalPoints?: number;
     maxScore?: number;
     isActive?: boolean;
-    startTime?: string | null;
-    endTime?: string | null;
     maxAttempts?: number | null;
     latePolicy?: 'NOT_ALLOWED' | 'ALLOWED' | 'ALLOWED_WITH_PENALTY';
     hasPassword?: boolean;
@@ -114,6 +112,10 @@ export interface ExamAttemptSummary {
     finalScore: number | null;
     totalPoints: number;
     maxScore?: number;
+    /** Pass score frozen when the attempt started (null when the exam has none). */
+    passScore?: number | null;
+    /** Passed / not passed; null until the result is published and graded. */
+    passed?: boolean | null;
     /** Teacher has published the results (Publish Results). */
     resultPublished?: boolean;
     startedAt: string;
@@ -154,6 +156,8 @@ export interface ExamAttemptReview {
     maxScore?: number;
     objectiveScore: number | null;
     finalScore: number | null;
+    passScore?: number | null;
+    passed?: boolean | null;
     submittedAt: string | null;
     /** Results and correct/wrong answers are released (scores published). */
     revealAnswers: boolean;

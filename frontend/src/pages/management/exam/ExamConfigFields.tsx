@@ -167,7 +167,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
           <Select value={cfg.resultVisibility} onValueChange={(value) => setCfg((c) => ({ ...c, resultVisibility: value as ResultVisibility }))}>
             <SelectTrigger aria-label="Result visibility" className="w-full min-w-0 max-w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {(Object.keys(RESULT_VISIBILITY_LABEL) as ResultVisibility[]).map((key) => (
+              {(Object.keys(RESULT_VISIBILITY_LABEL) as ResultVisibility[]).filter((key) => key !== "AFTER_EXAM_CLOSED").map((key) => (
                 <SelectItem key={key} value={key}>{RESULT_VISIBILITY_LABEL[key]}</SelectItem>
               ))}
             </SelectContent>

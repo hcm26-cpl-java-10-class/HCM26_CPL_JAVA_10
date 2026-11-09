@@ -40,16 +40,8 @@ type ButtonGate = {
 };
 
 function computeExamWindow(invitation: InvitationDTO, now: number): ButtonGate {
-    const start = invitation.availableFrom
-        ? new Date(invitation.availableFrom).getTime()
-        : invitation.examStartTime
-        ? new Date(invitation.examStartTime).getTime()
-        : null;
-    const end = invitation.expiresAt
-        ? new Date(invitation.expiresAt).getTime()
-        : invitation.examEndTime
-        ? new Date(invitation.examEndTime).getTime()
-        : null;
+    const start = invitation.availableFrom ? new Date(invitation.availableFrom).getTime() : null;
+    const end = invitation.expiresAt ? new Date(invitation.expiresAt).getTime() : null;
 
     if (start != null && now < start) {
         return {
@@ -118,7 +110,7 @@ export default function StudentInvitationList() {
                 toast.success(
                     gate.closed
                         ? "Đã chấp nhận lời mời, nhưng kỳ thi đã đóng."
-                        : `Đã chấp nhận lời mời. Đề thi mở lúc ${formatDate(updated.examStartTime ?? null)}.`,
+                        : `Đã chấp nhận lời mời. Đề thi mở lúc ${formatDate(updated.availableFrom ?? null)}.`,
                 );
                 return;
             }
@@ -268,10 +260,10 @@ export default function StudentInvitationList() {
                                         </dd>
 
                                         <dt>Mở lúc</dt>
-                                        <dd>{formatDate(invitation.availableFrom ?? invitation.examStartTime ?? null)}</dd>
+                                        <dd>{formatDate(invitation.availableFrom ?? null)}</dd>
 
                                         <dt>Đóng lúc</dt>
-                                        <dd>{formatDate(invitation.expiresAt ?? invitation.examEndTime ?? null)}</dd>
+                                        <dd>{formatDate(invitation.expiresAt ?? null)}</dd>
 
                                         <dt>Số lượt tối đa</dt>
                                         <dd>{invitation.examMaxAttempts ?? "—"}</dd>

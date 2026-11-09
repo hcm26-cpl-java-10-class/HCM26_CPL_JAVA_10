@@ -1,3 +1,4 @@
+import { PassBadge } from "@/components/exam/PassBadge";
 import { useContext } from "react";
 import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import axiosInstance from "@/api/axios";
@@ -30,6 +31,9 @@ type ExamStatistics = {
     highestFinalScore: number | null;
     lowestFinalScore: number | null;
     scoreDistribution: ScoreBand[];
+    passScore?: number | null;
+    passedAttempts?: number;
+    passRate?: number | null;
 };
 
 type ReleasePolicy =
@@ -64,6 +68,7 @@ type ExamAttemptStatistics = {
     secondScore: number | null;
     editable: boolean;
     lockReason: string | null;
+    passed?: boolean | null;
 };
 
 
@@ -685,6 +690,13 @@ export default function ResultStatisticsPage() {
                                     label="Lowest Score"
                                     value={formatScore(statistics.lowestFinalScore)}
                                 />
+                                {statistics.passRate != null && (
+                                    <StatCard
+                                        label="Pass Rate"
+                                        value={`${statistics.passRate.toFixed(0)}%`}
+                                        detail={`${statistics.passedAttempts ?? 0} passed · pass score ${formatScore(statistics.passScore ?? null)}`}
+                                    />
+                                )}
                             </div>
                         </div>
 
@@ -807,6 +819,7 @@ export default function ResultStatisticsPage() {
                                             </td>
                                             <td className="p-3 font-semibold">
                                                 {formatScore(attempt.firstScore ?? attempt.finalScore)}
+                                                {attempt.passed != null && <PassBadge passed={attempt.passed} className="ml-2" />}
                                             </td>
                                             <td className="p-3 font-semibold">
                                                 {attempt.secondScore == null
@@ -988,6 +1001,7 @@ export default function ResultStatisticsPage() {
                                                 </td>
                                                 <td className="p-3">
                                                     {formatScore(attempt.firstScore ?? attempt.finalScore)}
+                                                    {attempt.passed != null && <PassBadge passed={attempt.passed} className="ml-2" />}
                                                 </td>
                                                 <td className="p-3">
                                                     {formatScore(attempt.secondScore)}

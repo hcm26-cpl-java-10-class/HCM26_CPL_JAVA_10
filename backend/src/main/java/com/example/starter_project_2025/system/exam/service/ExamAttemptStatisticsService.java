@@ -152,7 +152,8 @@ public class ExamAttemptStatisticsService {
                 violationCount > 0,
                 violationCount,
                 locked == null,
-                locked
+                locked,
+                ExamScoring.passed(attempt)
         );
     }
 }
