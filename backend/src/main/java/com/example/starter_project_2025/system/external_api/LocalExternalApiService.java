@@ -25,23 +25,23 @@ public class LocalExternalApiService implements ExternalApiService {
     private final AtomicLong classIds = new AtomicLong(3);
 
     public LocalExternalApiService() {
-        classes.put(1L, ExternalClassDTO.builder().id(1L).code("LOCAL_JAVA_01").name("Lớp Java mẫu 01")
+        classes.put(1L, ExternalClassDTO.builder().id(1L).code("LOCAL_JAVA_01").name("Lớp Chuyên sâu Java Backend (K26)")
                 .startDate("2026-10-01").endDate("2027-01-31").status("active")
                 .plannedSize(25).enrolledCount(18)
                 .deliveryType("Class").traineeType("Fresher").formatType("Offline").skills("Java, Spring Boot")
-                .site("TP. Hồ Chí Minh").location("F-Town 3, Phòng A101").subjectType("IT Technical")
+                .site("TP. Hồ Chí Minh").location("F-Town 3, Phòng Lab 201").subjectType("IT Technical")
                 .scope("Unit").supplierPartner("SCM").jobRecommendation(false).build());
-        classes.put(2L, ExternalClassDTO.builder().id(2L).code("LOCAL_JAVA_02").name("Lớp Java mẫu 02")
+        classes.put(2L, ExternalClassDTO.builder().id(2L).code("LOCAL_JAVA_02").name("Lớp Lập trình Fullstack Java Web (K26)")
                 .startDate("2026-11-15").endDate("2027-03-15").status("active")
                 .plannedSize(30).enrolledCount(0)
                 .deliveryType("Class").traineeType("Fresher").formatType("Hybrid").skills("Java, React")
-                .site("TP. Hồ Chí Minh").location("QTSC 9, Phòng A102").subjectType("IT Technical")
+                .site("TP. Hồ Chí Minh").location("QTSC 9, Phòng 304").subjectType("IT Technical")
                 .scope("Unit").supplierPartner("SCM").jobRecommendation(false).build());
-        classes.put(3L, ExternalClassDTO.builder().id(3L).code("LOCAL_JAVA_OLD").name("Lớp Java mẫu đã kết thúc")
+        classes.put(3L, ExternalClassDTO.builder().id(3L).code("LOCAL_JAVA_OLD").name("Lớp Kỹ thuật phần mềm Java (Đã hoàn thành)")
                 .startDate("2026-03-01").endDate("2026-07-31").status("inactive")
                 .plannedSize(25).enrolledCount(24)
                 .deliveryType("Class").traineeType("Fresher").formatType("Offline").skills("Java")
-                .site("Hà Nội").location("F-Ville 2, Hòa Lạc").subjectType("IT Technical")
+                .site("Hà Nội").location("F-Ville 2, Phòng Lab 405").subjectType("IT Technical")
                 .scope("Unit").supplierPartner("SCM").jobRecommendation(false).build());
     }
 
@@ -90,16 +90,24 @@ public class LocalExternalApiService implements ExternalApiService {
     @Override
     public List<ExternalTrainerDTO> fetchTrainers(String status) {
         return List.of(
-                new ExternalTrainerDTO(1L, "Giảng viên mẫu An", "trainer.an@example.com", "active"),
-                new ExternalTrainerDTO(2L, "Giảng viên mẫu Bình", "trainer.binh@example.com", "active"),
-                new ExternalTrainerDTO(3L, "Giảng viên mẫu đã nghỉ", "trainer.old@example.com", "inactive")
+                new ExternalTrainerDTO(1L, "Nguyễn Ngọc Tân (Trainer)", "trainer.tan@example.com", "active"),
+                new ExternalTrainerDTO(2L, "Nguyễn Mạnh Hoàng (Trainer)", "trainer.hoang@example.com", "active"),
+                new ExternalTrainerDTO(3L, "Nguyễn Văn Thắng (Trainer)", "trainer.thang@example.com", "active"),
+                new ExternalTrainerDTO(4L, "Nguyễn Tuấn Danh (Trainer)", "trainer.danh@example.com", "active"),
+                new ExternalTrainerDTO(5L, "Huỳnh Tấn Phát (Trainer)", "trainer.phat@example.com", "active")
         ).stream().filter(item -> matchesStatus(status, item.getStatus())).toList();
     }
 
     @Override
     public List<ExternalRoomDTO> fetchRooms() {
-        return List.of(new ExternalRoomDTO(1L, "Phòng mẫu A101", 30),
-                new ExternalRoomDTO(2L, "Phòng mẫu A102", 25));
+        return List.of(
+                new ExternalRoomDTO(1L, "Phòng Lab 201 (F-Town 2)", 30),
+                new ExternalRoomDTO(2L, "Phòng 304 (Innovation Hall)", 25),
+                new ExternalRoomDTO(3L, "Phòng Lab 405 (F-Town 1)", 30),
+                new ExternalRoomDTO(4L, "Phòng Online Zoom A", 100),
+                new ExternalRoomDTO(5L, "Online MS Teams", 100),
+                new ExternalRoomDTO(6L, "Room A101", 30)
+        );
     }
 
     private ExternalClassDTO toClass(Long id, ExternalClassRequest request, Long programId, Integer enrolledCount) {

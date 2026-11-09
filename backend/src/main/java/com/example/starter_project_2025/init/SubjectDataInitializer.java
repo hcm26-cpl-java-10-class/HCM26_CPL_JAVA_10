@@ -36,7 +36,23 @@ public class SubjectDataInitializer implements CommandLineRunner {
                 "ERD design, database normalization, indexing, ACID transactions, stored procedures, and query tuning.",
                 "Database", 32, true);
 
-        log.info("Ensured clean sample subject data (3 topics).");
+        upsertSubject("REACT_FRONTEND", "SPA Development with React & TypeScript", "1.0",
+                "React hooks, TypeScript component lifecycle, state management, routing, and REST API integration.",
+                "Frontend", 40, true);
+
+        upsertSubject("DEVOPS_BASIC", "Docker & CI/CD Pipelines for Developers", "1.0",
+                "Containerization with Docker, Docker Compose, microservice deployment, and CI/CD basics.",
+                "DevOps", 24, true);
+
+        upsertSubject("TESTING_QA", "Software Testing & Unit Test Automation", "1.0",
+                "Unit testing with JUnit 5, Mockito, Testcontainers, and automated API testing.",
+                "Testing", 20, true);
+
+        upsertSubject("LEGACY_JSP", "Legacy Java Web Architecture (JSP & Servlet)", "0.9",
+                "Legacy architecture module preserved for historical reference across previous training batches.",
+                "Backend", 30, false);
+
+        log.info("Ensured clean sample subject data (6 active topics + 1 legacy).");
     }
 
     private void upsertSubject(String code, String name, String version,

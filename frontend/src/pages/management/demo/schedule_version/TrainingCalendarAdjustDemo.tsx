@@ -225,7 +225,7 @@ export function generateDaysFromDuration({
   sessionHours = 2,
   startDateStr,
   startTime = "08:00",
-  trainer = "NgaTTT45",
+  trainer = "Nguyễn Ngọc Tân (Trainer)",
   format = "Self Learning",
   skipWeekends = true,
 }: {
@@ -270,7 +270,7 @@ export function generateDaysFromDuration({
     dayActivities.push({
       id: uid(),
       name: `${topicName}`,
-      pic: trainer || "NgaTTT45",
+      pic: trainer || "Nguyễn Ngọc Tân (Trainer)",
       contribution: "Lecture",
       format: format || "Self Learning",
       duration: durLabel,
@@ -377,7 +377,7 @@ export function formatFamsDateRange(days: TrainingDay[]): string {
 function newActivity(
   start = "08:00",
   end = "12:00",
-  pic = "NgaTTT45",
+  pic = "Nguyễn Ngọc Tân (Trainer)",
   name = "New training activity",
   contribution = "Lecture",
   format = "Self Learning",
@@ -483,7 +483,7 @@ export default function TrainingCalendarAdjustDemo({
   version: initialVersion,
   onBack,
   onSave,
-  defaultClassId = "HCM26_FR_FU_KS_JAVA_01",
+  defaultClassId = "LOCAL_JAVA_01",
 }: Props) {
   const [selectedClassId, setSelectedClassId] = useState<string>(
     initialVersion?.classId ? String(initialVersion.classId) : defaultClassId
@@ -896,8 +896,9 @@ export default function TrainingCalendarAdjustDemo({
               topic = {
                 id: `topic-${code.toLowerCase()}`,
                 code: code,
-                name: code,
-                trainer: "Trainer",
+                name: systemSubjects.find((sub) => sub.code.toUpperCase() === code.toUpperCase())?.name || code,
+                trainer: "Nguyễn Ngọc Tân (Trainer)",
+                location: s.location || "Phòng Lab 201 (F-Town 2)",
                 mentor: "",
                 prerequisite: "",
                 slot: "1",
@@ -920,7 +921,7 @@ export default function TrainingCalendarAdjustDemo({
             day.activities.push({
               id: String(s.id || uid()),
               name: activityName,
-              pic: "Trainer",
+              pic: "Nguyễn Ngọc Tân (Trainer)",
               contribution: "Lecture",
               format: s.location?.toLowerCase().includes("online") ? "Online" : "Offline",
               start: timeStart,
