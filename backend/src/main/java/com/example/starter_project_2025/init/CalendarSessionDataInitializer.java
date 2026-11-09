@@ -47,29 +47,35 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
         LocalDate monday = now.minusDays(now.getDayOfWeek().getValue() - 1);
 
         createSession(1L, javaCoreId, 1L, "Java Core - OOP & Inheritance",
-                monday.atTime(8, 30), monday.atTime(11, 30), "Phòng Lab 201", Session.SessionStatus.COMPLETED);
+                monday.atTime(8, 30), monday.atTime(11, 30), "Phòng Lab 201", "COMPLETED");
         createSession(1L, javaCoreId, 1L, "Java Core - Collections & Generics",
-                monday.plusDays(1).atTime(8, 30), monday.plusDays(1).atTime(11, 30), "Phòng Lab 201", Session.SessionStatus.SCHEDULED);
+                monday.plusDays(1).atTime(8, 30), monday.plusDays(1).atTime(11, 30), "Phòng Lab 201", "SCHEDULED");
         createSession(1L, javaCoreId, 1L, "Java Core - Stream API & Concurrency",
-                monday.plusDays(2).atTime(8, 30), monday.plusDays(2).atTime(11, 30), "Phòng Lab 201", Session.SessionStatus.SCHEDULED);
+                monday.plusDays(2).atTime(8, 30), monday.plusDays(2).atTime(11, 30), "Phòng Lab 201", "SCHEDULED");
         createSession(1L, sqlId, 1L, "SQL Database - Schema Design & Indexes",
-                monday.plusDays(3).atTime(8, 30), monday.plusDays(3).atTime(11, 30), "Phòng Lab 201", Session.SessionStatus.SCHEDULED);
+                monday.plusDays(3).atTime(8, 30), monday.plusDays(3).atTime(11, 30), "Phòng Lab 201", "SCHEDULED");
         createSession(1L, springBootId, 1L, "Spring Boot - REST API & JPA Entities",
-                monday.plusDays(4).atTime(8, 30), monday.plusDays(4).atTime(11, 30), "Phòng Lab 201", Session.SessionStatus.SCHEDULED);
+                monday.plusDays(4).atTime(8, 30), monday.plusDays(4).atTime(11, 30), "Phòng Lab 201", "SCHEDULED");
 
         // Afternoon sessions for class 2
         createSession(2L, reactId, 1L, "React TS - Component Lifecycle & Hooks",
-                monday.atTime(13, 30), monday.atTime(16, 30), "Phòng Lab 202", Session.SessionStatus.SCHEDULED);
+                monday.atTime(13, 30), monday.atTime(16, 30), "Phòng Lab 202", "SCHEDULED");
         createSession(2L, reactId, 1L, "React TS - State Management with Redux",
-                monday.plusDays(2).atTime(13, 30), monday.plusDays(2).atTime(16, 30), "Phòng Lab 202", Session.SessionStatus.SCHEDULED);
+                monday.plusDays(2).atTime(13, 30), monday.plusDays(2).atTime(16, 30), "Phòng Lab 202", "SCHEDULED");
         createSession(2L, springBootId, 1L, "Spring Security - JWT & Role RBAC",
-                monday.plusDays(4).atTime(13, 30), monday.plusDays(4).atTime(16, 30), "Phòng Lab 202", Session.SessionStatus.SCHEDULED);
+                monday.plusDays(4).atTime(13, 30), monday.plusDays(4).atTime(16, 30), "Phòng Lab 202", "SCHEDULED");
 
         log.info("Initialized sample Training Calendar Sessions for class 1 and class 2.");
     }
 
     private void createSession(Long classId, Long topicId, Long trainerId, String title,
-                               LocalDateTime start, LocalDateTime end, String room, Session.SessionStatus status) {
+                               LocalDateTime start, LocalDateTime end, String room, String status) {
+        Session.SessionStatus sessionStatus = Session.SessionStatus.SCHEDULED;
+        try {
+            sessionStatus = Session.SessionStatus.valueOf(status);
+        } catch (Exception ignored) {
+        }
+
         sessionRepository.save(Session.builder()
                 .classId(classId)
                 .topicId(topicId)
@@ -78,7 +84,7 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
                 .startTime(start)
                 .endTime(end)
                 .location(room)
-                .status(status)
+                .status(sessionStatus)
                 .isActive(true)
                 .build());
     }

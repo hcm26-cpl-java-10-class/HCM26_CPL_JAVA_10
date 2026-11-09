@@ -75,7 +75,7 @@ public class CalendarController {
             LocalDateTime to,
 
             @RequestParam(value = "status", required = false)
-            Session.SessionStatus status,
+            String status,
 
             @RequestParam(value = "classId", required = false)
             Long classId,
@@ -100,8 +100,11 @@ public class CalendarController {
         SessionFilter filter = new SessionFilter();
         filter.setFromDate(from);
         filter.setToDate(to);
-        if (status != null) {
-            filter.setStatus(List.of(status));
+        if (status != null && !status.isBlank()) {
+            try {
+                filter.setStatus(List.of(Session.SessionStatus.valueOf(status.trim().toUpperCase())));
+            } catch (IllegalArgumentException ignored) {
+            }
         }
         if (classId != null) {
             filter.setClassId(List.of(classId));
@@ -135,7 +138,7 @@ public class CalendarController {
             LocalDateTime to,
 
             @RequestParam(value = "status", required = false)
-            Session.SessionStatus status,
+            String status,
 
             @RequestParam(value = "classId", required = false)
             Long classId,
@@ -159,8 +162,11 @@ public class CalendarController {
         SessionFilter filter = new SessionFilter();
         filter.setFromDate(from);
         filter.setToDate(to);
-        if (status != null) {
-            filter.setStatus(List.of(status));
+        if (status != null && !status.isBlank()) {
+            try {
+                filter.setStatus(List.of(Session.SessionStatus.valueOf(status.trim().toUpperCase())));
+            } catch (IllegalArgumentException ignored) {
+            }
         }
         if (classId != null) {
             filter.setClassId(List.of(classId));
