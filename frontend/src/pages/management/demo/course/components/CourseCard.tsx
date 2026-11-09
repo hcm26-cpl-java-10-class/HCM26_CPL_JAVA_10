@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { CatalogCourse } from "@/types";
-import { CheckCircle2, Clock, GraduationCap, PlayCircle, BookOpen, Eye } from "lucide-react";
+import { Award, CheckCircle2, Clock, GraduationCap, PlayCircle, BookOpen, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CourseEnrollmentAssignmentDialog } from "./CourseEnrollmentAssignmentDialog";
 import { LEVEL_BADGE_CLASS, LEVEL_LABEL, formatTotalDuration } from "../utils/course.utils.ts";
@@ -11,6 +11,7 @@ interface CourseCardProps {
   course: CatalogCourse;
   /** id enrollment của user cho khóa này (nếu đã ghi danh) — dùng cho nút Continue learning. */
   enrollmentId?: number;
+  certificateToken?: string;
   canEnroll: boolean;
   isEnrolling: boolean;
   canAssign: boolean;
@@ -24,6 +25,7 @@ interface CourseCardProps {
 export function CourseCard({
   course,
   enrollmentId,
+  certificateToken,
   canEnroll,
   isEnrolling,
   canAssign,
@@ -75,7 +77,7 @@ export function CourseCard({
       </Badge>
       {course.enrolled && (
         <Badge className="absolute right-3 top-3 bg-emerald-600 text-white hover:bg-emerald-600">
-          <CheckCircle2 className="size-3" /> Enrolled
+          <CheckCircle2 className="size-3" /> {certificateToken ? "Completed" : "Enrolled"}
         </Badge>
       )}
     </div>
@@ -154,11 +156,19 @@ export function CourseCard({
             </Button>
           )}
           {showEnrollmentAction && (course.enrolled && enrollmentId !== undefined ? (
-            <Button asChild className="flex-1 bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700">
-              <Link to={`/enrollments/${enrollmentId}/learn`}>
-                <PlayCircle className="size-4" /> Continue learning
-              </Link>
-            </Button>
+            certificateToken ? (
+              <Button asChild className="flex-1">
+                <Link to={`/my-certificates/${encodeURIComponent(certificateToken)}`}>
+                  <Award className="size-4" /> View certificate
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild className="flex-1 bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700">
+                <Link to={`/enrollments/${enrollmentId}/learn`}>
+                  <PlayCircle className="size-4" /> Continue learning
+                </Link>
+              </Button>
+            )
           ) : (
             <>
               {!course.enrolled && canEnroll && (

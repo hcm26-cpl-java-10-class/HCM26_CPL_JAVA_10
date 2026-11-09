@@ -1,4 +1,4 @@
-import { courseApi } from "@/api";
+import { certificateApi, courseApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -146,6 +146,20 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
   });
 
   const { canEnroll, enrollmentsQuery, enrollmentByCourseId, enrollMutation } = useCourseEnrollment();
+
+  const certificatesQuery = useQuery({
+    queryKey: ["my-certificates"],
+    queryFn: certificateApi.getMyCertificates,
+    enabled: !embedded && enrollmentsQuery.isSuccess,
+  });
+  const certificateByCourseId = useMemo(
+    () => new Map(
+      (certificatesQuery.data ?? [])
+        .filter((certificate) => certificate.courseId != null && certificate.verificationToken)
+        .map((certificate) => [certificate.courseId as number, certificate.verificationToken as string]),
+    ),
+    [certificatesQuery.data],
+  );
 
   const courses = coursesQuery.data?.content ?? [];
   const totalElements = coursesQuery.data?.totalElements ?? 0;
@@ -327,6 +341,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
                 key={course.id}
                 course={course}
                 enrollmentId={enrollmentByCourseId.get(course.id)?.id}
+                certificateToken={certificateByCourseId.get(course.id)}
                 canEnroll={canEnroll}
                 isEnrolling={enrollingCourseId === course.id}
                 canAssign={embedded}

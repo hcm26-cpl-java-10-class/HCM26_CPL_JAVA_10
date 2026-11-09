@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 import type { CourseReportItem } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Award, BarChart3, BookOpen, CheckCircle2, Download, Users } from "lucide-react";
+import { Activity, Award, BarChart3, BookOpen, CheckCircle2, Clock3, Download, Users } from "lucide-react";
 import { useMemo } from "react";
 import { Navigate } from "react-router-dom";
 import { CourseCatalogPage } from "@/pages/management/demo/course/components/CourseCatalogPage";
@@ -72,6 +72,34 @@ export default function CourseReportPage() {
         <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-4">
           {cards.map(([label, value, Icon]) => <div key={label} className="rounded-xl border bg-card px-4 py-2 shadow-sm"><div className="flex items-center justify-between text-sm text-muted-foreground"><span>{label}</span><Icon className="size-4" /></div><div className="mt-1 text-3xl font-semibold">{value}</div></div>)}
         </div>
+
+        <section className="rounded-xl border border-dashed bg-card px-4 py-3" aria-labelledby="learning-hours-heading">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Clock3 className="size-5 text-blue-600" />
+                <h2 id="learning-hours-heading" className="text-lg font-semibold">Learning hours analytics</h2>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Planned reporting for enrollment dates and learning hours by student and department.
+              </p>
+            </div>
+            <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">Coming soon</span>
+          </div>
+          <div className="mt-3 overflow-x-auto rounded-lg border">
+            <div className="grid min-w-[820px] grid-cols-[1.2fr_1.2fr_1.2fr_1fr_1fr_1fr] gap-3 bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
+              <span>Department</span>
+              <span>Student</span>
+              <span>Course</span>
+              <span>Enrolled at</span>
+              <span>Student hours</span>
+              <span>Department hours</span>
+            </div>
+            <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+              Learning-time data collection will be added in a future update.
+            </p>
+          </div>
+        </section>
 
         <div className="rounded-xl border bg-card px-4 py-2">
           <div className="mb-2 flex items-center justify-between gap-3">
