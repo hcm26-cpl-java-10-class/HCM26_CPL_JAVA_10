@@ -9,6 +9,8 @@ import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.notification.NotificationService;
+import com.example.starter_project_2025.system.analytics.student.StudentLearningActivity;
+import com.example.starter_project_2025.system.analytics.student.StudentLearningActivityRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +38,8 @@ class LessonProgressServiceTest {
     NotificationService notificationService;
     @Mock
     CertificateService certificateService;
+    @Mock
+    StudentLearningActivityRepository activityRepository;
 
     @InjectMocks
     LessonProgressService service;
@@ -102,6 +106,7 @@ class LessonProgressServiceTest {
         assertTrue(progress.isCompleted());
         assertNotNull(progress.getCompletedAt());
         assertNotNull(progress.getLastAccessedAt());
+        verify(activityRepository).save(any(StudentLearningActivity.class));
         assertEquals(100, result.progressPercentage());
         verify(progressRepository).save(progress);
     }
@@ -149,6 +154,7 @@ class LessonProgressServiceTest {
         verify(enrollmentRepository).save(enrollment);
         verify(enrollmentRepository).findOwnedByIdForUpdate(40L, 7L);
         verify(progressRepository).save(any(LessonProgress.class));
+        verify(activityRepository).save(any(StudentLearningActivity.class));
     }
 
     @Test
@@ -169,5 +175,6 @@ class LessonProgressServiceTest {
         assertEquals("My answer", progress.getStudentAnswer());
         assertEquals("My answer", result.lessons().getFirst().studentAnswer());
         verify(progressRepository).save(progress);
+        verify(activityRepository).save(any(StudentLearningActivity.class));
     }
 }

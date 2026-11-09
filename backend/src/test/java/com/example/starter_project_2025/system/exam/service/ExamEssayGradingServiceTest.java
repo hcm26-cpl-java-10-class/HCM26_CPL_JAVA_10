@@ -118,6 +118,83 @@ class ExamEssayGradingServiceTest {
         verify(attemptRepository).save(attempt);
     }
 
+    private ExamQuestionGradingConfig liveGuideline(String reference, String rubric) {
+        ExamQuestionGradingConfig live = ExamQuestionGradingConfig.builder()
+                .examId(10L)
+                .questionId(101L)
+                .referenceAnswer(reference)
+                .rubric(rubric)
+                .build();
+        when(gradingConfigRepository.findByExamIdAndQuestionId(10L, 101L)).thenReturn(Optional.of(live));
+        return live;
+    }
+
+    @Test
+    void submitOfficialGradeFreezesGuidelinesSoLaterRubricEditsDoNotChangeGradedAttempt() {
+        ExamQuestionGradingConfig live = liveGuideline("Old reference", "Old rubric");
+        when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
+        when(attemptRepository.findById(100L)).thenReturn(Optional.of(attempt));
+        when(attemptRepository.save(any(ExamAttempt.class))).thenReturn(attempt);
+
+        EssayGradingDTO.QuestionGrade grade = new EssayGradingDTO.QuestionGrade();
+        grade.setQuestionId(101L);
+        grade.setScore(new BigDecimal(8));
+        EssayGradingDTO.GradeSubmissionRequest request = new EssayGradingDTO.GradeSubmissionRequest();
+        request.setGrades(List.of(grade));
+
+        gradingService.submitOfficialGrade(10L, 100L, request);
+
+        assertNotNull(essayQuestion.getGuidelineSnapshotAt());
+        assertEquals("Old reference", essayQuestion.getGuidelineReference());
+        assertEquals("Old rubric", essayQuestion.getGuidelineRubric());
+
+        // Giao vien sua rubric sau khi bai da cham.
+        live.setRubric("New rubric");
+        live.setReferenceAnswer("New reference");
+
+        EssayGradingDTO.EssayItem item = gradingService.getDetail(10L, 100L).getEssays().get(0);
+        assertTrue(item.isGuidelineFrozen());
+        assertEquals("Old rubric", item.getRubric());
+        assertEquals("Old reference", item.getReferenceAnswer());
+    }
+
+    @Test
+    void regradingKeepsTheFirstFrozenGuidelines() {
+        ExamQuestionGradingConfig live = liveGuideline("Old reference", "Old rubric");
+        when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
+        when(attemptRepository.findById(100L)).thenReturn(Optional.of(attempt));
+        when(attemptRepository.save(any(ExamAttempt.class))).thenReturn(attempt);
+
+        EssayGradingDTO.QuestionGrade grade = new EssayGradingDTO.QuestionGrade();
+        grade.setQuestionId(101L);
+        grade.setScore(new BigDecimal(8));
+        EssayGradingDTO.GradeSubmissionRequest request = new EssayGradingDTO.GradeSubmissionRequest();
+        request.setGrades(List.of(grade));
+        gradingService.submitOfficialGrade(10L, 100L, request);
+        Instant firstSnapshot = essayQuestion.getGuidelineSnapshotAt();
+
+        live.setRubric("New rubric");
+        request.setConfirmOverwrite(true);
+        gradingService.submitOfficialGrade(10L, 100L, request);
+
+        assertEquals(firstSnapshot, essayQuestion.getGuidelineSnapshotAt());
+        assertEquals("Old rubric", essayQuestion.getGuidelineRubric());
+    }
+
+    @Test
+    void ungradedAttemptStillSeesLiveGuidelines() {
+        liveGuideline("Live reference", "Live rubric");
+        when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
+        when(attemptRepository.findById(100L)).thenReturn(Optional.of(attempt));
+
+        EssayGradingDTO.EssayItem item = gradingService.getDetail(10L, 100L).getEssays().get(0);
+
+        assertFalse(item.isGuidelineFrozen());
+        assertNull(essayQuestion.getGuidelineSnapshotAt());
+        assertEquals("Live rubric", item.getRubric());
+        assertEquals("Live reference", item.getReferenceAnswer());
+    }
+
     @Test
     void submitOfficialGradeRejectsScoreExceedingMaxPoints() {
         when(examRepository.findById(10L)).thenReturn(Optional.of(exam));

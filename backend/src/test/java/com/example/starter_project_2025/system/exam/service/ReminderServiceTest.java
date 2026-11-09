@@ -140,7 +140,8 @@ class ReminderServiceTest {
     void duplicateReminderRejected() {
         Exam exam = exam();
         Invitation target = invitation(100L, InvitationStatus.SENT);
-        LocalDateTime scheduledAt = exam.getStartTime().minusHours(1);
+        // Exam khong con gio bat dau, moc nhac nhay theo han cua loi moi.
+        LocalDateTime scheduledAt = target.getExpiresAt().minusHours(1);
 
         ExamReminder existing = ExamReminder.builder()
                 .id(1L)

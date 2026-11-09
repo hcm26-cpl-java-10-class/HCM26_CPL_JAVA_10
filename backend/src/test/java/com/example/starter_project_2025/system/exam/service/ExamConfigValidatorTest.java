@@ -39,14 +39,15 @@ class ExamConfigValidatorTest {
     }
 
     @Test
-    void rejectsStartTimeInThePast() {
+    void ignoresStartTimeBecauseSchedulingWasRemoved() {
+        // Tinh nang dat lich (start/end) da bi go bo (commit "remove set time"): validator khong con kiem tra gio mo/dong.
         ExamDTO request = new ExamDTO();
         request.setStartTime(java.time.LocalDateTime.now().minusHours(2));
         ValidationContext context = new ValidationContext();
 
         validator.validate(null, request, 10, context);
 
-        assertThrows(BusinessValidationException.class, context::throwIfErrors);
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(context::throwIfErrors);
     }
 
     @Test

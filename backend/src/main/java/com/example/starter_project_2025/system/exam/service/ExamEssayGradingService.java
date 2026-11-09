@@ -317,6 +317,7 @@ public class ExamEssayGradingService {
         if (request.getGrades() == null || request.getGrades().isEmpty()) {
             throw new BadRequestException("Grades list cannot be empty");
         }
+        freezeGuidelines(examId, attempt);
 
         Map<Long, EssayGradingDTO.QuestionGrade> gradeMap = new HashMap<>();
         for (EssayGradingDTO.QuestionGrade grade : request.getGrades()) {
@@ -401,9 +402,7 @@ public class ExamEssayGradingService {
                 .sorted(Comparator.comparingInt(ExamAttemptQuestion::getDisplayOrder))
                 .map(q -> {
                     // Ưu tiên nạp phiên bản Reference & Rubric đã submit vào database theo cặp (examId, questionId)
-                    ExamQuestionGradingConfig config = gradingConfigRepository
-                            .findByExamIdAndQuestionId(examId, q.getSourceQuestionId())
-                            .orElse(null);
+                    ExamQuestionGradingConfig config = effectiveGuideline(examId, q);
 
                     String refAnswer = (config != null && config.getReferenceAnswer() != null && !config.getReferenceAnswer().isBlank())
                             ? config.getReferenceAnswer().trim() : null;
@@ -512,6 +511,46 @@ public class ExamEssayGradingService {
         return item;
     }
 
+    /**
+     * Chup Reference / Rubric hien hanh vao tung cau tu luan cua luot lam, chi lan cham dau tien.
+     * Sau do sua rubric chi anh huong cac bai chua cham; bai da cham giu nguyen ban da chup.
+     */
+    private void freezeGuidelines(Long examId, ExamAttempt attempt) {
+        Instant now = Instant.now();
+        for (ExamAttemptQuestion q : attempt.getQuestions()) {
+            if (q.getType() != QuestionType.ESSAY || q.getGuidelineSnapshotAt() != null) {
+                continue;
+            }
+            ExamQuestionGradingConfig live = gradingConfigRepository
+                    .findByExamIdAndQuestionId(examId, q.getSourceQuestionId())
+                    .orElse(null);
+            if (live != null) {
+                q.setGuidelineReference(live.getReferenceAnswer());
+                q.setGuidelineReferenceAt(live.getReferenceSubmittedAt());
+                q.setGuidelineRubric(live.getRubric());
+                q.setGuidelineRubricAt(live.getRubricSubmittedAt());
+            }
+            q.setGuidelineSnapshotAt(now);
+        }
+    }
+
+    /** Reference / Rubric dung de cham cau nay: ban da chup neu co, nguoc lai ban dang luu (chua cham). */
+    private ExamQuestionGradingConfig effectiveGuideline(Long examId, ExamAttemptQuestion q) {
+        if (q.getGuidelineSnapshotAt() != null) {
+            return ExamQuestionGradingConfig.builder()
+                    .examId(examId)
+                    .questionId(q.getSourceQuestionId())
+                    .referenceAnswer(q.getGuidelineReference())
+                    .referenceSubmittedAt(q.getGuidelineReferenceAt())
+                    .rubric(q.getGuidelineRubric())
+                    .rubricSubmittedAt(q.getGuidelineRubricAt())
+                    .build();
+        }
+        return gradingConfigRepository
+                .findByExamIdAndQuestionId(examId, q.getSourceQuestionId())
+                .orElse(null);
+    }
+
     private EssayGradingDTO.EssayItem toEssayItem(ExamAttempt attempt, ExamAttemptQuestion question) {
         EssayGradingDTO.EssayItem item = new EssayGradingDTO.EssayItem();
         item.setQuestionId(question.getSourceQuestionId());
@@ -528,9 +567,9 @@ public class ExamEssayGradingService {
             return dto;
         }).toList());
 
-        ExamQuestionGradingConfig config = gradingConfigRepository
-                .findByExamIdAndQuestionId(attempt.getExam().getId(), question.getSourceQuestionId())
-                .orElse(null);
+        ExamQuestionGradingConfig config = effectiveGuideline(attempt.getExam().getId(), question);
+        item.setGuidelineFrozen(question.getGuidelineSnapshotAt() != null);
+        item.setGuidelineSnapshotAt(question.getGuidelineSnapshotAt());
         if (config != null) {
             item.setReferenceAnswer(config.getReferenceAnswer());
             item.setReferenceSubmittedAt(config.getReferenceSubmittedAt());

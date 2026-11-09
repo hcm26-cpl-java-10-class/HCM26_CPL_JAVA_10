@@ -16,7 +16,9 @@ import type {
   QuestionDTO,
   QuestionFilter,
   QuestionGuidelineDTO,
-  SimilarityReport
+  SimilarityReport,
+  FileFormat,
+  ImportResult
 } from "@/types";
 
 const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
@@ -40,6 +42,31 @@ export interface PublishedExamScore {
 
 export const examApi = {
   ...examBase,
+  exportExams: async (format: FileFormat, filters?: { search?: string; category?: string; courseId?: number }): Promise<Blob> => {
+    const ext = format === "EXCEL" ? "xlsx" : format.toLowerCase();
+    const response = await axiosInstance.get(`/exams/export/${ext}`, {
+      params: filters,
+      responseType: "blob",
+    });
+    return response.data;
+  },
+  downloadExamTemplate: async (format: "xlsx" | "csv" = "xlsx"): Promise<Blob> => {
+    const response = await axiosInstance.get("/exams/export/template", {
+      params: { format },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+  importExams: async (file: File): Promise<ImportResult> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await axiosInstance.post<ImportResult>("/exams/import", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  },
   listInvitationOverviews: async (): Promise<ExamInvitationOverview[]> => {
     const response = await axiosInstance.get<ExamInvitationOverview[]>("/exams/invitations/overview");
     return response.data;

@@ -181,14 +181,16 @@ class InvitationServiceTest {
     }
 
     @Test
-    @DisplayName("Đề thi đã kết thúc thì không tạo được lời mời")
-    void invitationBlockedForFinishedExam() {
+    @DisplayName("Lịch thi đã bị gỡ: giờ kết thúc cũ trong DB không còn chặn việc tạo lời mời")
+    void legacyPastEndTimeDoesNotBlockInvitation() {
         exam.setEndTime(LocalDateTime.now().minusDays(1));
         when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+        when(userRepository.findById(100L)).thenReturn(Optional.of(student));
+        when(invitationRepository.existsByExamIdAndUserId(1L, 100L)).thenReturn(false);
 
-        BadRequestException ex = assertThrows(BadRequestException.class,
-                () -> service.createInvitation(1L, createRequest(100L), teacherPrincipal()));
-        assertEquals("Kỳ thi đã kết thúc, không thể mời tham dự", ex.getMessage());
+        InvitationDTO dto = service.createInvitation(1L, createRequest(100L), teacherPrincipal());
+
+        assertEquals(InvitationStatus.SENT, dto.getStatus());
     }
 
     @Test
@@ -207,8 +209,8 @@ class InvitationServiceTest {
     }
 
     @Test
-    @DisplayName("expiresAt vượt quá thời gian kết thúc đề thì bị chặn")
-    void expiresAtAfterExamEndRejected() {
+    @DisplayName("Đề không còn giờ kết thúc nên expiresAt ở tương lai xa vẫn được chấp nhận")
+    void expiresAtInFarFutureAcceptedWithoutExamEndTime() {
         when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
         when(userRepository.findById(100L)).thenReturn(Optional.of(student));
         when(invitationRepository.existsByExamIdAndUserId(1L, 100L)).thenReturn(false);
@@ -216,9 +218,9 @@ class InvitationServiceTest {
         InvitationCreateRequest request = createRequest(100L);
         request.setExpiresAt(LocalDateTime.now().plusDays(10).toString());
 
-        BadRequestException ex = assertThrows(BadRequestException.class,
-                () -> service.createInvitation(1L, request, teacherPrincipal()));
-        assertTrue(ex.getMessage().contains("vượt quá"));
+        InvitationDTO dto = service.createInvitation(1L, request, teacherPrincipal());
+
+        assertEquals(InvitationStatus.SENT, dto.getStatus());
     }
 
     @Test

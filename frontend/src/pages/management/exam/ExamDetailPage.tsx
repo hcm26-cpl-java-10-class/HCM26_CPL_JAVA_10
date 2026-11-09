@@ -75,6 +75,23 @@ export default function ExamDetailPage() {
           </Button>
           <span className="text-muted-foreground">/</span>
           <h1 className="truncate text-base font-semibold">{title ?? "Loading..."}</h1>
+          {examQuery.data && (examQuery.data.courseName ? (
+            <span
+              className="hidden max-w-[40ch] truncate rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground md:inline"
+              title={[examQuery.data.courseName, examQuery.data.sectionTitle, examQuery.data.lessonTitle].filter(Boolean).join(" › ")}
+            >
+              {[examQuery.data.courseName, examQuery.data.sectionTitle, examQuery.data.lessonTitle].filter(Boolean).join(" › ")}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate(`/exams/${examId}/edit`)}
+              className="hidden shrink-0 rounded-md bg-amber-50 px-2 py-0.5 text-xs text-amber-700 hover:bg-amber-100 md:inline dark:bg-amber-950/50 dark:text-amber-300"
+              title="This exam is not linked to any course. Open the Edit tab to link it."
+            >
+              Not linked to a course
+            </button>
+          ))}
         </div>
         <HeaderRight />
       </header>
