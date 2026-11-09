@@ -139,14 +139,13 @@ class ExamAttemptServiceTest {
     }
 
     @Test
-    void startOrResumeSnapshotsGraceWhenDurationRunsPastExamClose() {
+    void startOrResumeHasNoGraceBecauseExamHasNoCloseTime() {
         Exam exam = attempt.getExam();
         exam.setDurationMinutes(60);
         exam.setMaxAttempts(2);
         exam.setLatePolicy(LatePolicy.ALLOWED_WITH_PENALTY);
         exam.setLatePenaltyPercent(20);
         exam.setLateGraceMinutes(15);
-        exam.setEndTime(LocalDateTime.now().plusMinutes(10));
         exam.setQuestions(Set.of(question(1L, QuestionType.MULTIPLE_CHOICE, 5)));
         when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
         when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L, 40L))
@@ -155,10 +154,30 @@ class ExamAttemptServiceTest {
 
         var result = service.startOrResume(20L, 40L);
 
-        Instant officialDeadline = exam.getEndTime().atZone(ZoneId.systemDefault()).toInstant();
-        assertEquals(officialDeadline, result.getOfficialDeadlineAt());
-        assertEquals(officialDeadline.plusSeconds(15 * 60L), result.getDeadlineAt());
+        // Lich thi da bi go bo: han nop chi tinh theo thoi luong, khong co gia han vi khong co gio dong de.
+        assertEquals(result.getStartedAt().plusSeconds(60 * 60L), result.getOfficialDeadlineAt());
+        assertEquals(result.getOfficialDeadlineAt(), result.getDeadlineAt());
         assertEquals(1, result.getAttemptsRemaining());
+    }
+
+    @Test
+    void startOrResumeSnapshotsPassScoreAtStart() {
+        Exam exam = attempt.getExam();
+        exam.setPassScore(new java.math.BigDecimal("5.00"));
+        exam.setQuestions(Set.of(question(1L, QuestionType.MULTIPLE_CHOICE, 5)));
+        when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
+        when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L, 40L))
+                .thenReturn(List.of());
+        when(userRepository.findById(40L)).thenReturn(Optional.of(attempt.getStudent()));
+
+        var result = service.startOrResume(20L, 40L);
+
+        // Giao vien doi diem dat sau khi sinh vien da bat dau: luot da bat dau khong doi.
+        exam.setPassScore(new java.math.BigDecimal("9.00"));
+        ArgumentCaptor<ExamAttempt> captor = ArgumentCaptor.forClass(ExamAttempt.class);
+        verify(attemptRepository).save(captor.capture());
+        assertEquals(0, new java.math.BigDecimal("5.00").compareTo(captor.getValue().getPassScore()));
+        assertEquals(0, new java.math.BigDecimal("5.00").compareTo(result.getPassScore()));
     }
 
     @Test

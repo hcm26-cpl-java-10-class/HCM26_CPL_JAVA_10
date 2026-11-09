@@ -15,6 +15,13 @@ export interface Exam {
     maxAttempts?: number | null;
     latePolicy?: 'NOT_ALLOWED' | 'ALLOWED' | 'ALLOWED_WITH_PENALTY';
     hasPassword?: boolean;
+    /** Course link (optional): set when the exam belongs to a course / section / lesson. */
+    courseId?: number | null;
+    courseName?: string | null;
+    sectionId?: number | null;
+    sectionTitle?: string | null;
+    lessonId?: number | null;
+    lessonTitle?: string | null;
     showAnswersAfterExam?: boolean;
     /** When students can review their scores. */
     resultVisibility?: ResultVisibility;

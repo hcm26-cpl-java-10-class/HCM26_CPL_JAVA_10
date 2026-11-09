@@ -12,6 +12,16 @@ import type { ExamConfigForm } from "./examConfig";
 
 const NONE = "none";
 
+type LinkLevel = "none" | "course" | "section" | "lesson";
+
+/** Where each exam category usually belongs in a course (a hint only, never enforced). */
+const RECOMMENDED: Record<string, { level: LinkLevel; text: string }> = {
+  QUIZ: { level: "lesson", text: "Quizzes usually attach to a lesson and open after the student completes it." },
+  ASSIGNMENT: { level: "section", text: "Assignments usually attach to a section and open after all its lessons are completed." },
+  MIDTERM: { level: "section", text: "Midterms usually attach to a section and open after all its lessons are completed." },
+  FINAL_TEST: { level: "course", text: "Final tests usually attach to the whole course (leave Section and Lesson empty)." },
+};
+
 interface Props {
   cfg: ExamConfigForm;
   setCfg: Dispatch<SetStateAction<ExamConfigForm>>;
@@ -44,6 +54,10 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
     staleTime: 60_000,
   });
 
+  const level: LinkLevel = cfg.lessonId ? "lesson" : cfg.sectionId ? "section" : cfg.courseId ? "course" : "none";
+  const recommended = cfg.category ? RECOMMENDED[cfg.category] : undefined;
+  const levelMismatch = recommended != null && level !== "none" && level !== recommended.level;
+
   const courseOptions = courses.data ?? [];
   const sectionOptions = courseId != null ? sections.data ?? [] : [];
   const lessonOptions = sectionId != null ? lessons.data ?? [] : [];
@@ -71,6 +85,12 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:col-span-3">
         Course (optional)
       </h3>
+      {recommended && (
+        <p className={`text-xs sm:col-span-3 ${levelMismatch ? "text-amber-600" : "text-muted-foreground"}`}>
+          {recommended.text}
+          {levelMismatch ? ` Currently linked at ${level} level.` : ""}
+        </p>
+      )}
 
       <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
         <span className="truncate">Course</span>

@@ -116,6 +116,7 @@ public class ExamAttemptService {
         attempt.setDurationMinutes(exam.getDurationMinutes());
         attempt.setTotalPoints(questions.stream().mapToInt(Question::getPoints).sum());
         attempt.setMaxScore(ExamScoring.effectiveMax(exam.getMaxScore()));
+        attempt.setPassScore(exam.getPassScore());
         attempt.setStartedAt(startedAt);
         Instant durationDeadline = startedAt.plus(Duration.ofMinutes(exam.getDurationMinutes()));
         Instant examDeadline = exam.getEndTime() == null
@@ -624,6 +625,7 @@ public class ExamAttemptService {
         response.setDurationMinutes(attempt.getDurationMinutes());
         response.setTotalPoints(attempt.getTotalPoints());
         response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
+        response.setPassScore(attempt.getPassScore());
 
         // Diem chi duoc cong bo khi giao vien bam "Publish Results".
         boolean resultPublished = resultAccessService.isResultPublished(attempt.getExam());

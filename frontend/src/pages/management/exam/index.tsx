@@ -20,11 +20,13 @@ import {
 } from "@/components/ui/select";
 import { EXAM_CATEGORY_LABEL, type ExamCategory, type ExamDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookmarkPlus, BookOpen, CalendarClock, ClipboardCheck, Clock, ListChecks, Plus, Search, Trophy, User } from "lucide-react";
+import { BookmarkPlus, BookOpen, CalendarClock, ClipboardCheck, Clock, Download, ListChecks, Plus, Search, Trophy, Upload, User } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ExamConfigFields } from "./ExamConfigFields";
+import { ExportExamModal } from "./components/ExportExamModal";
+import { ImportExamModal } from "./components/ImportExamModal";
 import {
   buildExamRequest,
   DEFAULT_CONFIG,
@@ -111,6 +113,8 @@ export default function ExamManagementPage() {
   const [statusFilter, setStatusFilter] = useState<ExamStatus | "ALL">("ALL");
   const [sortKey, setSortKey] = useState("createdAt,desc");
   const [isCreateOpen, setCreateOpen] = useState(false);
+  const [isExportOpen, setExportOpen] = useState(false);
+  const [isImportOpen, setImportOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDuration, setNewDuration] = useState("60");
   const [cfg, setCfg] = useState<ExamConfigForm>(DEFAULT_CONFIG);
@@ -201,10 +205,18 @@ export default function ExamManagementPage() {
 
             <Button
               variant="outline"
-              onClick={() => navigate("/exams/curriculum")}
+              onClick={() => setImportOpen(true)}
             >
-              <BookOpen className="mr-2 size-4 text-indigo-500" />
-              Curriculum Mapping
+              <Upload className="mr-2 size-4 text-blue-500" />
+              Import
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => setExportOpen(true)}
+            >
+              <Download className="mr-2 size-4 text-emerald-500" />
+              Export
             </Button>
 
             <Button
@@ -430,6 +442,25 @@ export default function ExamManagementPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ExportExamModal
+        open={isExportOpen}
+        onOpenChange={setExportOpen}
+        totalCount={examTotal}
+        filters={{
+          search: examSearch || undefined,
+          category: examCategoryFilter === "ALL" ? undefined : examCategoryFilter,
+          courseId: courseFilter === "ALL" ? undefined : Number(courseFilter),
+        }}
+      />
+
+      <ImportExamModal
+        open={isImportOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={() => {
+          void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
+        }}
+      />
     </MainLayout>
   );
 }
