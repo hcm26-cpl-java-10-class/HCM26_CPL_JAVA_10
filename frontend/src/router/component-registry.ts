@@ -25,7 +25,6 @@ import ClassListPage from "@/pages/management/training/class/ClassListPage";
 import ClassDetailPage from "@/pages/management/training/class/ClassDetailPage";
 import SessionDetailPage from "@/pages/management/demo/session/SessionDetailPage";
 
-
 export interface RouteConfig {
   path: string;
   component: ComponentType<any>;
@@ -35,22 +34,23 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
-  { path: "/training/audit", component: AuditPage },
-  { path: "/training/trainee", component: TraineePage },
-  { path: "/training/log-work", component: LogWorkPage },
-  { path: "/training/content", component: ContentPage },
-  { path: "/subjects", component: ContentPage, requiredPermission: "SUBJECT_READ" },
-  { path: "/programs", component: ContentPage, requiredPermission: "PROGRAM_READ" },
-  { path: "/training/reports", component: ReportsPage },
+  { path: "/training/audit", component: AuditPage, isModuleDriven: true },
+  { path: "/training/trainee", component: TraineePage, isModuleDriven: true },
+  { path: "/training/log-work", component: LogWorkPage, isModuleDriven: true },
+  { path: "/training/content", component: ContentPage, isModuleDriven: true },
+  { path: "/subjects", component: ContentPage, requiredPermission: "SUBJECT_READ", isModuleDriven: true },
+  { path: "/programs", component: ContentPage, requiredPermission: "PROGRAM_READ", isModuleDriven: true },
+  { path: "/class-setup", component: ContentPage, requiredPermission: "CLASS_READ", isModuleDriven: true },
+  { path: "/training/reports", component: ReportsPage, isModuleDriven: true },
   // Class List is a sidebar module (registered by the backend as /classes); the detail pages are reached from it
   { path: "/classes", component: ClassListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/classes/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/training-operations/class-details/:classCode", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/class-details/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/sessions/:sessionId", component: SessionDetailPage, requiredPermission: "SESSION_READ" },
-    { path: "/calendar/preview", component: WeeklyCalendarPage, requiredPermission: "SESSION_READ" },
+  { path: "/calendar/preview", component: WeeklyCalendarPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/schedule-versions", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
-  { path: "/calendar/adjust", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ" },
+  { path: "/calendar/adjust", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   {
@@ -65,10 +65,10 @@ export const routes: RouteConfig[] = [
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
   },
-  { path: "/topic-marks", component: TopicMarkGradebookDemoPage, requiredPermission: "STUDENT_SCORE_READ" },
-  { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
-  { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
-  { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
+  { path: "/topic-marks", component: TopicMarkGradebookDemoPage, requiredPermission: "STUDENT_SCORE_READ", isModuleDriven: true },
+  { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ", isModuleDriven: true },
+  { path: "/student/exams", component: StudentExamList, requiredPermission: "EXAM_READ", isModuleDriven: true },
+  { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE", isModuleDriven: true },
   ...buildEntityRoutes(),
 
   { path: "/not-found-page", component: NotFoundPage, isPublic: true },
@@ -77,6 +77,5 @@ export const routes: RouteConfig[] = [
   { path: "/register", component: RegisterPage, isPublic: true },
   { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
   { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true,},
   { path: "/unauthorized", component: Unauthorized, isPublic: true },
 ];

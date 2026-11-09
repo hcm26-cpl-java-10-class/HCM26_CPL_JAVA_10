@@ -1,7 +1,5 @@
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } from "@/components/ui/sidebar";
-
 import { NavMain, type NavItem } from "@/components/layout/NavMain";
-
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
 import { LogOutIcon } from "lucide-react";
@@ -20,18 +18,33 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
     );
     const classItems = CLASS_SECTION_URLS.flatMap((url) => withoutSessions.filter((item) => item.url === url));
     const remaining = withoutSessions.filter((item) => !CLASS_SECTION_URLS.includes(item.url));
-    const sections = [
-        { title: "Class", url: "", icon: iconMap["graduation-cap"], children: classItems },
-        { title: "Audit", url: "/training/audit", icon: iconMap["clipboard-check"] },
-        { title: "Trainee", url: "/training/trainee", icon: iconMap.users },
-        { title: "Log Work", url: "/training/log-work", icon: iconMap.briefcase },
-        { title: "Content", url: "/training/content", icon: iconMap["book-open"] },
-        { title: "Reports", url: "/training/reports", icon: iconMap["bar-chart"] },
+
+    const activeSections: NavItem[] = [
+        ...(classItems.length > 0
+            ? [{ title: "Class", url: "", icon: iconMap["graduation-cap"], children: classItems }]
+            : []),
+        { title: "Training Calendar", url: "/calendar/adjust", icon: iconMap.calendar },
+        { title: "Weekly Timetable", url: "/calendar/preview", icon: iconMap.calendar },
     ];
 
-    const navigation = sections.map((section): NavItem => {
-        const existing = remaining.find((item) => item.title.toLowerCase() === section.title.toLowerCase());
-        if (existing) return existing;
+    const placeholders: NavItem[] = [
+        { title: "Audit", url: "/training/audit", icon: iconMap["clipboard-check"], disabled: true },
+        { title: "Trainee", url: "/training/trainee", icon: iconMap.users, disabled: true },
+        { title: "Log Work", url: "/training/log-work", icon: iconMap.briefcase, disabled: true },
+        { title: "Content", url: "/training/content", icon: iconMap["book-open"], disabled: true },
+        { title: "Reports", url: "/training/reports", icon: iconMap["bar-chart"], disabled: true },
+    ];
+
+    const mappedActive = activeSections.map((section): NavItem => {
+        const existing = remaining.find(
+            (item) => item.title.toLowerCase() === section.title.toLowerCase() || (item.url && item.url === section.url),
+        );
+        if (existing) {
+            return {
+                ...existing,
+                isActive: pathname === existing.url || pathname.startsWith(`${existing.url}/`),
+            };
+        }
         return {
             ...section,
             disabled: !section.url && !section.children?.length,
@@ -40,12 +53,24 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
         };
     });
 
-    return [...navigation, ...remaining.filter((item) =>
-        !sections.some((section) => section.title.toLowerCase() === item.title.toLowerCase()),
-    )];
+    // Teammate actual modules (Subject, Training Program, Topic Mark, etc.)
+    const otherRealModules = remaining.filter((item) =>
+        !activeSections.some(
+            (sec) => sec.title.toLowerCase() === item.title.toLowerCase() || (sec.url && sec.url === item.url),
+        ) &&
+        !placeholders.some(
+            (pl) => pl.title.toLowerCase() === item.title.toLowerCase() || (pl.url && pl.url === item.url),
+        ),
+    );
+
+    return [...mappedActive, ...otherRealModules, ...placeholders];
 }
 
-export function SidebarMenu() {
+export function SidebarMenu({
+    collapsible = "icon",
+}: {
+    collapsible?: "icon" | "offcanvas";
+} = {}) {
     const location = useLocation();
     const navigate = useNavigate();
     const { toggleSidebar, state } = useSidebar();
@@ -54,7 +79,9 @@ export function SidebarMenu() {
     const navGroups = useMemo(() => {
         const resolveIcon = (iconName?: string) => {
             const key: keyof typeof iconMap =
-                iconName && iconName in iconMap ? (iconName as keyof typeof iconMap) : "menu";
+                iconName && iconName in iconMap
+                    ? (iconName as keyof typeof iconMap)
+                    : "menu";
 
             return iconMap[key];
         };
@@ -65,6 +92,19 @@ export function SidebarMenu() {
                 name: group.name ?? "Menu",
                 items: group.modules
                     .filter((module) => !!module.url)
+                    .filter((module) => {
+                        const isUnderSystemManagement = (group.name || "")
+                            .toLowerCase()
+                            .includes("system");
+                        const isModulesMenu =
+                            module.url === "/menus" ||
+                            (module.title || "").toLowerCase() === "modules";
+
+                        if (isUnderSystemManagement && isModulesMenu) {
+                            return false;
+                        }
+                        return true;
+                    })
                     .map((module) => ({
                         title: module.title ?? "Untitled",
                         url: module.url ?? "#",
@@ -79,13 +119,17 @@ export function SidebarMenu() {
                     })),
             }))
             .filter((group) => group.items.length > 0)
-            .map((group) => group.name.trim().toLowerCase() === "training operations"
-                ? { ...group, items: organizeTrainingItems(group.items, location.pathname) }
-                : group);
+            .map((group) => {
+                const groupName = (group.name || "").trim().toLowerCase();
+                const isTraining = groupName === "training operations" || groupName === "training management";
+                return isTraining
+                    ? { ...group, items: organizeTrainingItems(group.items, location.pathname) }
+                    : group;
+            });
     }, [location.pathname, moduleGroups]);
 
     return (
-        <Sidebar variant="inset" collapsible="icon">
+        <Sidebar variant="inset" collapsible={collapsible}>
             {/* Header */}
             <SidebarHeader className="py-3 px-0">
                 <Button
@@ -103,7 +147,9 @@ export function SidebarMenu() {
                     </div>
 
                     {state === "expanded" && (
-                        <span className="text-lg font-bold text-blue-800 truncate">RBAC System</span>
+                        <span className="text-lg font-bold text-blue-800 truncate">
+                            RBAC System
+                        </span>
                     )}
                 </Button>
             </SidebarHeader>
@@ -112,14 +158,21 @@ export function SidebarMenu() {
             <SidebarContent>
                 {navGroups.map((group) =>
                     group ? (
-                        <NavMain key={group.id} title={group.name} items={group.items} sidebarState={state} />
+                        <NavMain
+                            key={group.id}
+                            title={group.name}
+                            items={group.items}
+                            sidebarState={state}
+                        />
                     ) : null,
                 )}
             </SidebarContent>
 
             {/* Footer */}
             <SidebarFooter className="p-4 text-xs flex flex-row items-center gap-2 text-muted-foreground group-data-[collapsible=icon]:justify-center">
-                {state === "expanded" && <span className="flex-1 truncate">RBAC System v1.0</span>}
+                {state === "expanded" && (
+                    <span className="flex-1 truncate">RBAC System v1.0</span>
+                )}
 
                 <TooltipWrapper content="Logout">
                     <Button
