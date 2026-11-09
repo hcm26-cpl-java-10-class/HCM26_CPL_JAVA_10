@@ -198,10 +198,16 @@ public class Milestone {
     }
 
     public void startAutomatically(Instant now) {
+        startIfDue(SCHEDULER_ACTOR_ID, now);
+    }
+
+    /** Starts a planned milestone whose scheduled start has been reached; returns whether it started. */
+    public boolean startIfDue(UUID actorId, Instant now) {
         if (!active || !autoStartEnabled || lifecycleStatus() != MilestoneLifecycleStatus.PLANNED
-                || scheduledStartAt == null || now.isBefore(scheduledStartAt)) return;
-        if (status == MilestoneStatus.PLANNED) openForWork(SCHEDULER_ACTOR_ID, now);
-        start(SCHEDULER_ACTOR_ID, now);
+                || scheduledStartAt == null || now.isBefore(scheduledStartAt)) return false;
+        if (status == MilestoneStatus.PLANNED) openForWork(actorId, now);
+        start(actorId, now);
+        return true;
     }
 
     public void addChecklistItem(String content, boolean mandatory, int orderIndex) {
