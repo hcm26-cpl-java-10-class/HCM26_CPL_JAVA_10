@@ -37,6 +37,8 @@ export function MilestoneDetailPage() {
   const { hasPermission } = usePermissions();
   const teamIdParam = searchParams.get("teamId");
   const teamId = teamIdParam ? Number(teamIdParam) : undefined;
+  const workspaceIdParam = Number(searchParams.get("workspaceId"));
+  const workspaceId = Number.isSafeInteger(workspaceIdParam) && workspaceIdParam > 0 ? workspaceIdParam : undefined;
   const routeState = location.state as MilestoneDetailRouteState | null;
   const defaultListUrl = projectId ? `/projects/${projectId}/milestones` : "/teacher";
   const returnUrl = routeState?.returnTo?.startsWith(`/projects/${projectId}/milestones`)
@@ -79,19 +81,19 @@ export function MilestoneDetailPage() {
 
   return (
     <MainLayout pathName={breadcrumbs}>
-      <div className="mx-auto grid w-full max-w-6xl gap-6">
+      <div className="mx-auto grid w-full min-w-0 max-w-6xl gap-6">
         <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
           <CardHeader>
             <div className="flex flex-wrap items-center gap-2">
               <MilestoneStatusBadge status={milestone.lifecycleStatus} />
               {milestone.mandatory ? <Badge variant="secondary">Mandatory</Badge> : null}
             </div>
-            <CardTitle className="mt-2 text-2xl">{milestone.title}</CardTitle>
-            {milestone.description ? <CardDescription className="max-w-3xl whitespace-pre-wrap text-sm">{milestone.description}</CardDescription> : null}
+            <CardTitle className="mt-2 text-2xl [overflow-wrap:anywhere]">{milestone.title}</CardTitle>
+            {milestone.description ? <CardDescription className="max-w-3xl whitespace-pre-wrap text-sm [overflow-wrap:anywhere]">{milestone.description}</CardDescription> : null}
           </CardHeader>
         </Card>
 
-        {milestone.teamId && hasPermission("ARTIFACT_READ") ? <WorkspaceArtifactsPanel teamId={milestone.teamId} milestone={milestone}
+        {milestone.teamId && hasPermission("ARTIFACT_READ") ? <WorkspaceArtifactsPanel teamId={milestone.teamId} milestone={milestone} workspaceId={workspaceId}
           onRefreshMilestone={() => { void detailQuery.refetch(); }} /> : null}
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">

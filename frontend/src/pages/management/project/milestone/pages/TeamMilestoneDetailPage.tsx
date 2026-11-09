@@ -39,11 +39,11 @@ export function TeamMilestoneDetailPage() {
   const milestone = query.data;
   const checklist = [...milestone.checklist].sort((a, b) => a.orderIndex - b.orderIndex);
   return <MainLayout pathName={{ milestones: "Milestones", [milestone.id]: milestone.title }}>
-    <main className="mx-auto grid w-full max-w-6xl gap-6">
+    <main className="mx-auto grid w-full min-w-0 max-w-6xl gap-6">
       <Card className="overflow-hidden border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
         <CardHeader className="gap-4 p-6 md:p-8">
           <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Team milestone</Badge><MilestoneStatusBadge status={milestone.lifecycleStatus} />{milestone.mandatory && <Badge variant="secondary">Mandatory</Badge>}</div>
-          <div className="grid gap-2"><CardTitle className="text-2xl md:text-3xl">{milestone.title}</CardTitle><CardDescription className="max-w-3xl whitespace-pre-wrap text-sm leading-6">{milestone.description || "No description provided."}</CardDescription></div>
+          <div className="min-w-0 grid gap-2"><CardTitle className="text-2xl [overflow-wrap:anywhere] md:text-3xl">{milestone.title}</CardTitle><CardDescription className="max-w-3xl whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]">{milestone.description || "No description provided."}</CardDescription></div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground"><span className="inline-flex items-center gap-2"><CalendarClock className="size-4" />Due {formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone)}</span><span className="inline-flex items-center gap-2"><Globe2 className="size-4" />{milestone.tenantTimeZone}</span></div>
           {milestone.startDate && <p className="text-sm text-muted-foreground">Start date: {milestone.startDate}</p>}
           {milestone.scheduledStartAt && <p className="text-sm text-muted-foreground">Starts automatically {formatTenantDateTime(milestone.scheduledStartAt, milestone.tenantTimeZone)}</p>}

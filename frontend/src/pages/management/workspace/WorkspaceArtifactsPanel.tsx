@@ -186,9 +186,14 @@ export function WorkspaceArtifactsPanel({
             <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Track deliverables, submitted versions, and review outcomes for your team's milestones.</p>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        {isStudent && <Button type="button" variant="outline" size="sm" className="h-8 text-xs" title="View your submissions across all projects" onClick={() => navigate("/student/milestone-submissions")}>
+          <FileCheck2 className="size-3.5" />My Submissions
+        </Button>}
         <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={refreshing} onClick={() => { refreshMilestones(); void submissionsQuery.refetch(); }}>
           <RotateCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />Refresh
         </Button>
+        </div>
       </section>
 
       {submissionsQuery.isError && !milestoneError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-xs">

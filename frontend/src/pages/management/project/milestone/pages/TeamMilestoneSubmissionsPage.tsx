@@ -322,7 +322,7 @@ export default function TeamMilestoneSubmissionsPage() {
                   <TableHead className="w-36">
                     <span
                       className="inline-flex cursor-help items-center gap-1 border-b border-dotted border-muted-foreground"
-                      title="Thời gian nộp bài so với hạn chót (Deadline) của Milestone. Bài nộp sau deadline sẽ bị đánh dấu Late và áp dụng trừ điểm phạt theo Late Policy."
+                      title="Timing is determined from the recorded submission time and the milestone's deadline policy. Late submissions may receive a penalty."
                     >
                       Timing
                     </span>
@@ -393,7 +393,7 @@ export default function TeamMilestoneSubmissionsPage() {
                           <Badge
                             variant="destructive"
                             className="cursor-help text-xs font-normal"
-                            title={`Nộp sau deadline (${milestone ? formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone) : "hạn chót"}). Điểm phạt trừ: ${submission.latePenaltyPercent ?? 0}%.`}
+                            title={`Submitted after the deadline (${milestone ? formatTenantDateTime(milestone.deadline, milestone.tenantTimeZone) : "deadline not available"}). Penalty: ${submission.latePenaltyPercent ?? 0}%.`}
                           >
                             Late
                             {submission.latePenaltyPercent != null
@@ -404,7 +404,7 @@ export default function TeamMilestoneSubmissionsPage() {
                           <Badge
                             variant="outline"
                             className="cursor-help border-emerald-300 bg-emerald-50 text-xs font-normal text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300"
-                            title="Nộp đúng hạn trước hoặc đúng thời điểm deadline của Milestone. Không bị trừ điểm phạt."
+                            title="Recorded as submitted on or before the milestone deadline. No late penalty applies."
                           >
                             On time
                           </Badge>
