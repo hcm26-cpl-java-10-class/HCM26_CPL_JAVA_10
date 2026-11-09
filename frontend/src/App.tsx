@@ -7,7 +7,7 @@ import { RoleSwitchProvider } from "./contexts/RoleSwitchContext";
 import { usePermissions } from "./hooks/usePermissions";
 import { useActiveModuleGroups } from "./hooks/useSidebarMenus";
 import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
-import { routes } from "./router/component-registry";
+import { routes, type RouteConfig } from "./router/component-registry";
 import type { RootState } from "./store/store";
 import { getHomePathByRole } from "./utils/rbac.utils";
 
@@ -18,13 +18,13 @@ function AppRoutes() {
 
     const homePath = isAuthenticated ? getHomePathByRole(activeRole) : "/login";
 
-    // Create component lookup map from module-driven routes
-    const componentRegistry = Object.fromEntries(
-        routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
-    );
+    // Lookup map from ALL known routes
+    const componentLookup = new Map<string, RouteConfig>();
+    for (const r of routes) {
+        componentLookup.set(r.path, r);
+    }
 
-    // Get non-module routes (frontend-controlled)
-    const staticRoutes = routes.filter((r) => !r.isModuleDriven);
+    const dynamicPaths = new Set<string>();
 
     return (
         <Routes>
@@ -35,18 +35,22 @@ function AppRoutes() {
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
                     if (!m.url) return null;
-                    const Component = componentRegistry[m.url];
+                    const routeConfig = componentLookup.get(m.url);
 
-                    if (!Component) {
-                        return <Route key={`missing-${m.id ?? m.url}`} path={m.url} element={<Navigate to="/not-found-page" replace />} />;
+                    if (!routeConfig) {
+                        return null;
                     }
+
+                    dynamicPaths.add(m.url);
+                    const Component = routeConfig.component;
+                    const requiredPermission = m.requiredPermission || routeConfig.requiredPermission;
 
                     return (
                         <Route
-                            key={m.id}
+                            key={`mod-${m.id ?? m.url}`}
                             path={m.url}
                             element={
-                                <ProtectedRoute requiredPermission={m.requiredPermission}>
+                                <ProtectedRoute requiredPermission={requiredPermission}>
                                     <Component />
                                 </ProtectedRoute>
                             }
@@ -55,26 +59,28 @@ function AppRoutes() {
                 }),
             )}
 
-            {/* Static routes from componentRegistry */}
-            {staticRoutes.map((route, index) => {
-                const Component = route.component;
+            {/* Static routes for public pages and any route not provided by backend Module table */}
+            {routes
+                .filter((route) => !dynamicPaths.has(route.path))
+                .map((route, index) => {
+                    const Component = route.component;
 
-                if (route.isPublic) {
-                    return <Route key={index} path={route.path} element={<Component />} />;
-                }
+                    if (route.isPublic) {
+                        return <Route key={`pub-${route.path}-${index}`} path={route.path} element={<Component />} />;
+                    }
 
-                return (
-                    <Route
-                        key={index}
-                        path={route.path}
-                        element={
-                            <ProtectedRoute requiredPermission={route.requiredPermission}>
-                                <Component />
-                            </ProtectedRoute>
-                        }
-                    />
-                );
-            })}
+                    return (
+                        <Route
+                            key={`stat-${route.path}-${index}`}
+                            path={route.path}
+                            element={
+                                <ProtectedRoute requiredPermission={route.requiredPermission}>
+                                    <Component />
+                                </ProtectedRoute>
+                            }
+                        />
+                    );
+                })}
 
             {/* Catch all */}
             <Route path="*" element={<NotFoundRedirect />} />
