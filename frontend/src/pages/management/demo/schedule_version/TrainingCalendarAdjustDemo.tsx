@@ -101,7 +101,7 @@ export const PIC_OPTIONS = [
   "Huỳnh Tấn Phát (Trainer)",
 ];
 
-export const CONTRIBUTION_OPTIONS = [
+const CONTRIBUTION_OPTIONS = [
   "Lecture",
   "Assignment",
   "Practice",
