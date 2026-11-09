@@ -93,7 +93,7 @@ public class SubjectController
 
     @PostMapping(value = "/import/preview", consumes = "multipart/form-data")
     @PreAuthorize("hasAuthority('SUBJECT_READ')")
-    @Operation(summary = "Xem trước file import môn học")
+    @Operation(summary = "Preview topic import file")
     public TopicImportPreviewResponse previewImport(@RequestParam("file") MultipartFile file) {
         return subjectImportService.preview(file);
     }
@@ -107,14 +107,14 @@ public class SubjectController
 
     @PostMapping("/import/commit")
     @PreAuthorize("hasAuthority('SUBJECT_CREATE')")
-    @Operation(summary = "Import dữ liệu môn học đã qua preview và chỉnh sửa")
+    @Operation(summary = "Import validated topic rows with strict rollback")
     public ImportResult commitImport(@RequestBody List<SubjectDTO> items) {
         return subjectImportService.commitRows(items);
     }
 
     @GetMapping("/import/template")
     @PreAuthorize("hasAuthority('SUBJECT_READ')")
-    @Operation(summary = "Tải file mẫu import môn học (Excel)")
+    @Operation(summary = "Download topic import Excel template")
     public ResponseEntity<byte[]> importTemplate() throws java.io.IOException {
         try (
                 org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
@@ -195,14 +195,14 @@ public class SubjectController
 
     @GetMapping("/active")
     @PreAuthorize("hasAuthority('SUBJECT_READ')")
-    @Operation(summary = "Lấy danh sách môn học đang hoạt động", description = "Lấy danh mục môn học đang hoạt động")
+    @Operation(summary = "Get active topics", description = "Get list of active topics")
     public ResponseEntity<List<SubjectDTO>> getActiveSubjects() {
         return ResponseEntity.ok(subjectService.getActiveSubjects());
     }
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAuthority('SUBJECT_UPDATE')")
-    @Operation(summary = "Đổi trạng thái môn học (kích hoạt / ngừng sử dụng)")
+    @Operation(summary = "Change topic status (Active / Inactive)")
     public ResponseEntity<SubjectDTO> changeStatus(
             @PathVariable Long id,
             @RequestParam Boolean active
@@ -212,7 +212,7 @@ public class SubjectController
 
     @GetMapping("/{id}/is-referenced")
     @PreAuthorize("hasAuthority('SUBJECT_READ')")
-    @Operation(summary = "Kiểm tra môn học đã được tham chiếu hay chưa", description = "Kiểm tra xem môn học đã được sử dụng trong lịch học hoặc chương trình đào tạo hay chưa")
+    @Operation(summary = "Check if topic is referenced", description = "Check if topic is used in training programs or schedules")
     public ResponseEntity<Boolean> isSubjectReferenced(@PathVariable Long id) {
         return ResponseEntity.ok(subjectService.isSubjectReferenced(id));
     }

@@ -131,8 +131,8 @@ public class SubjectServiceImpl
     protected void beforeDelete(Subject subject) {
         if (isSubjectReferenced(subject.getId())) {
             throw new BadRequestException(String.format(
-                    "Không thể xóa môn học [%s - v%s] vì đã được tham chiếu trong hệ thống. " +
-                    "Vui lòng chuyển trạng thái sang 'Ngừng hoạt động' (Inactive) để bảo toàn lịch sử đào tạo.",
+                    "Cannot delete topic [%s - v%s] because it is referenced in the system. " +
+                    "Please set status to Inactive instead to preserve historical training records.",
                     subject.getCode(), subject.getVersion()
             ));
         }
@@ -145,22 +145,22 @@ public class SubjectServiceImpl
             return false;
         }
 
-        // 1. Kiểm tra trong bảng sessions (Topic ID)
+        // 1. Check in sessions table (Topic ID)
         if (sessionRepository != null && sessionRepository.existsByTopicId(id)) {
             return true;
         }
 
-        // 2. Kiểm tra trong chương trình đào tạo (program_subjects)
+        // 2. Check in training programs (program_subjects)
         if (programSubjectRepository != null && programSubjectRepository.existsBySubject_Id(id)) {
             return true;
         }
 
-        // 3. Kiểm tra phân công giảng dạy (teaching_assignments)
+        // 3. Check teaching assignments (teaching_assignments)
         if (teachingAssignmentRepository != null && teachingAssignmentRepository.existsByProgramSubject_Subject_Id(id)) {
             return true;
         }
 
-        // 4. Kiểm tra các module khác như study_sessions nếu bảng có tồn tại
+        // 4. Check other modules such as study_sessions if table exists
         if (jdbcTemplate != null) {
             try {
                 Integer count = jdbcTemplate.queryForObject(
@@ -170,7 +170,7 @@ public class SubjectServiceImpl
                     return true;
                 }
             } catch (BadSqlGrammarException ignored) {
-                // Bảng study_sessions chưa được tạo ở giai đoạn này
+                // Table study_sessions not created in this phase
             }
         }
 

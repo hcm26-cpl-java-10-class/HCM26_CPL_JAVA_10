@@ -288,7 +288,7 @@ public class SubjectImportService {
         try (InputStream input = file.getInputStream()) {
             return parserFactory.getParser(file.getOriginalFilename()).parse(input);
         } catch (Exception error) {
-            throw new BadRequestException("Không thể đọc file import. Vui lòng sử dụng file CSV hoặc Excel hợp lệ.");
+            throw new BadRequestException("Cannot read import file. Please use a valid CSV or Excel file.");
         }
     }
 
@@ -358,7 +358,7 @@ public class SubjectImportService {
         }
         String msg = cause.getMessage();
         if (msg != null && msg.contains("No enum constant")) {
-            return "Trạng thái không hợp lệ. Vui lòng nhập ACTIVE hoặc INACTIVE.";
+            return "Invalid status. Please enter ACTIVE or INACTIVE.";
         }
         if (error instanceof BusinessValidationException validation) {
             return validation.getErrors().values().stream().flatMap(List::stream)
@@ -371,6 +371,6 @@ public class SubjectImportService {
         if (error instanceof DataIntegrityViolationException integrity) {
             return SubjectExceptionHandler.persistenceMessage(integrity);
         }
-        return msg != null ? msg : "Dữ liệu môn học không hợp lệ";
+        return msg != null ? msg : "Invalid topic data";
     }
 }

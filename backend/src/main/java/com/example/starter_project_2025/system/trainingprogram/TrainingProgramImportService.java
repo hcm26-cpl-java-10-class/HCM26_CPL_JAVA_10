@@ -141,27 +141,28 @@ public class TrainingProgramImportService {
                                 )
                                 .orElseThrow(() ->
                                         new IllegalArgumentException(
-                                                "Không tìm thấy môn "
+                                                "Topic not found: "
                                                         + row.subjectCode()
-                                                        + " phiên bản "
+                                                        + " (version "
                                                         + row.subjectVersion()
+                                                        + ")"
                                         )
                                 );
 
                         if (!Boolean.TRUE.equals(subject.getIsActive())) {
                             throw new IllegalArgumentException(
-                                    "Môn học "
+                                    "Topic "
                                             + row.subjectCode()
-                                            + " đang INACTIVE."
+                                            + " is INACTIVE."
                             );
                         }
 
                         if (subject.getDurationHours() == null
                                 || subject.getDurationHours() <= 0) {
                             throw new IllegalArgumentException(
-                                    "Thời lượng môn "
+                                    "Duration for topic "
                                             + row.subjectCode()
-                                            + " phải lớn hơn 0."
+                                            + " must be greater than 0."
                             );
                         }
 
@@ -230,27 +231,28 @@ public class TrainingProgramImportService {
                                 )
                                 .orElseThrow(() ->
                                         new IllegalArgumentException(
-                                                "Không tìm thấy môn "
+                                                "Topic not found: "
                                                         + row.subjectCode()
-                                                        + " phiên bản "
+                                                        + " (version "
                                                         + row.subjectVersion()
+                                                        + ")"
                                         )
                                 );
 
                         if (!Boolean.TRUE.equals(subject.getIsActive())) {
                             throw new IllegalArgumentException(
-                                    "Môn học "
+                                    "Topic "
                                             + row.subjectCode()
-                                            + " đang INACTIVE."
+                                            + " is INACTIVE."
                             );
                         }
 
                         if (subject.getDurationHours() == null
                                 || subject.getDurationHours() <= 0) {
                             throw new IllegalArgumentException(
-                                    "Thời lượng môn "
+                                    "Duration for topic "
                                             + row.subjectCode()
-                                            + " phải lớn hơn 0."
+                                            + " must be greater than 0."
                             );
                         }
 
@@ -452,14 +454,14 @@ public class TrainingProgramImportService {
     private List<Row> read(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException(
-                    "Vui lòng chọn file để import."
+                    "Please select a file to import."
             );
         }
 
         String filename = file.getOriginalFilename();
 
         if (filename == null) {
-            throw new IllegalArgumentException("Tên file không hợp lệ.");
+            throw new IllegalArgumentException("Invalid file name.");
         }
 
         filename = filename.toLowerCase(Locale.ROOT);
@@ -478,13 +480,12 @@ public class TrainingProgramImportService {
             }
 
             throw new IllegalArgumentException(
-                    "Định dạng không được hỗ trợ. "
-                            + "Chỉ chấp nhận XLSX, XLS, CSV hoặc TXT."
+                    "Unsupported format. Only XLSX, XLS, CSV or TXT are allowed."
             );
 
         } catch (IOException e) {
             throw new IllegalArgumentException(
-                    "Không thể đọc file Import.",
+                    "Cannot read import file.",
                     e
             );
         }
@@ -498,7 +499,7 @@ public class TrainingProgramImportService {
 
             if (workbook.getNumberOfSheets() == 0) {
                 throw new IllegalArgumentException(
-                        "File không có sheet dữ liệu."
+                        "File does not contain any data sheets."
                 );
             }
 
@@ -506,7 +507,7 @@ public class TrainingProgramImportService {
 
             if (sheet.getLastRowNum() < 1) {
                 throw new IllegalArgumentException(
-                        "File không có dòng dữ liệu."
+                        "File does not contain data rows."
                 );
             }
 
@@ -516,7 +517,7 @@ public class TrainingProgramImportService {
 
             if (header == null) {
                 throw new IllegalArgumentException(
-                        "Thiếu dòng tiêu đề."
+                        "Missing header row."
                 );
             }
 
@@ -605,7 +606,7 @@ public class TrainingProgramImportService {
 
             List<String[]> allRows = reader.readAll();
             if (allRows == null || allRows.isEmpty()) {
-                throw new IllegalArgumentException("File không có dữ liệu.");
+                throw new IllegalArgumentException("File contains no data.");
             }
 
             String[] headerRow = allRows.get(0);
@@ -651,7 +652,7 @@ public class TrainingProgramImportService {
                 ));
             }
         } catch (com.opencsv.exceptions.CsvException e) {
-            throw new IllegalArgumentException("Lỗi định dạng CSV/TXT: " + e.getMessage(), e);
+            throw new IllegalArgumentException("CSV/TXT format error: " + e.getMessage(), e);
         }
 
         return ensureRows(rows);
@@ -660,7 +661,7 @@ public class TrainingProgramImportService {
     private List<Row> ensureRows(List<Row> rows) {
         if (rows.isEmpty()) {
             throw new IllegalArgumentException(
-                    "Không tìm thấy dòng dữ liệu trong file."
+                    "No data rows found in file."
             );
         }
 
@@ -682,7 +683,7 @@ public class TrainingProgramImportService {
                 || subjectVersionCol < 0
                 || orderCol < 0) {
             throw new IllegalArgumentException(
-                    "Thiếu cột bắt buộc: "
+                    "Missing required column: "
                             + "programCode, programName, programVersion, "
                             + "subjectCode, subjectVersion, orderIndex."
             );

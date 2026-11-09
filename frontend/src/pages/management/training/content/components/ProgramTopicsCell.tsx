@@ -50,7 +50,7 @@ export function ProgramTopicsCell({
     );
   }, [sortedSubjects, searchTerm]);
 
-  // Hover handlers for smooth preview on hover ("khi tra vào")
+  // Hover handlers for smooth preview on hover
   const handleMouseEnter = () => {
     if (closeTimeoutRef.current) {
       clearTimeout(closeTimeoutRef.current);

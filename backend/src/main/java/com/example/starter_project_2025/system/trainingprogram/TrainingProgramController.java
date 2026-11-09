@@ -196,7 +196,7 @@ public class TrainingProgramController {
         return ResponseEntity.ok(
                 Map.of(
                         "importedPrograms", imported,
-                        "message", "Import thành công."
+                        "message", "Import completed successfully."
                 )
         );
     }
@@ -211,7 +211,7 @@ public class TrainingProgramController {
         return ResponseEntity.ok(
                 Map.of(
                         "importedPrograms", imported,
-                        "message", "Import thành công " + imported + " chương trình."
+                        "message", "Successfully imported " + imported + " program(s)."
                 )
         );
     }
@@ -316,18 +316,18 @@ public class TrainingProgramController {
 
         if (!List.of("all", "filtered").contains(normalizedScope)) {
             throw new IllegalArgumentException(
-                    "Scope phải là all hoặc filtered."
+                    "Scope must be either 'all' or 'filtered'."
             );
         }
 
         if (!List.of("xlsx", "xls", "csv", "txt")
                 .contains(normalizedFormat)) {
             throw new IllegalArgumentException(
-                    "Định dạng Export không được hỗ trợ."
+                    "Export format is not supported."
             );
         }
 
-        // Nếu chọn all thì bỏ qua các bộ lọc.
+        // If 'all' is chosen, ignore filters.
         if ("all".equals(normalizedScope)) {
             search = null;
             status = null;
@@ -387,7 +387,7 @@ public class TrainingProgramController {
             }
 
             default -> throw new IllegalArgumentException(
-                    "Định dạng Export không hợp lệ."
+                    "Invalid export format."
             );
         }
 
