@@ -39,8 +39,10 @@ import {
     ChevronLeft,
     Clock3,
     Copy,
+    GraduationCap,
     Mail,
     MoreHorizontal,
+    Pencil,
     QrCode,
     RefreshCw,
     Send,
@@ -48,7 +50,7 @@ import {
     Users,
     XCircle,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -88,6 +90,7 @@ export default function InvitationsPage() {
 
     const [statusFilter, setStatusFilter] = useState<InvitationStatus | "ALL">("ALL");
     const [typeFilter, setTypeFilter] = useState<"ALL" | "authenticated" | "anonymous">("ALL");
+    const [sourceFilter, setSourceFilter] = useState<"ALL" | "MANUAL" | "COURSE">("ALL");
     const [isCreateOpen, setCreateOpen] = useState(false);
     const [revokeTarget, setRevokeTarget] = useState<InvitationDTO | null>(null);
     const [revokeReason, setRevokeReason] = useState("");
@@ -123,7 +126,14 @@ export default function InvitationsPage() {
         void loadExamTitle();
     }, [numericExamId, isValidExamId]);
 
-    const rows = invitationsQuery.data ?? [];
+    const allRows = invitationsQuery.data ?? [];
+    const rows = useMemo(
+        () =>
+            sourceFilter === "ALL"
+                ? allRows
+                : allRows.filter((inv) => (inv.sourceType ?? "MANUAL") === sourceFilter),
+        [allRows, sourceFilter],
+    );
     const total = rows.length;
 
     const resendMutation = useMutation({
@@ -232,6 +242,20 @@ export default function InvitationsPage() {
                                 </SelectContent>
                             </Select>
 
+                            <Select
+                                value={sourceFilter}
+                                onValueChange={(v) => { setSourceFilter(v as typeof sourceFilter); }}
+                            >
+                                <SelectTrigger className="w-44">
+                                    <SelectValue placeholder="Source" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL">All Sources</SelectItem>
+                                    <SelectItem value="MANUAL">Manual</SelectItem>
+                                    <SelectItem value="COURSE">By Class</SelectItem>
+                                </SelectContent>
+                            </Select>
+
                             {invitationsQuery.isFetching && (
                                 <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                                     <RefreshCw className="size-3.5 animate-spin" />
@@ -246,6 +270,7 @@ export default function InvitationsPage() {
                             <TableRow>
                                 <TableHead>Recipient</TableHead>
                                 <TableHead className="w-32">Type</TableHead>
+                                <TableHead className="w-28">Source</TableHead>
                                 <TableHead className="w-32">Status</TableHead>
                                 <TableHead className="w-44">Access Code</TableHead>
                                 <TableHead className="w-40">Sent Date</TableHead>
@@ -255,21 +280,21 @@ export default function InvitationsPage() {
                         <TableBody>
                             {invitationsQuery.isLoading && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                                         Loading invitations...
                                     </TableCell>
                                 </TableRow>
                             )}
                             {invitationsQuery.isError && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-24 text-center text-destructive">
+                                    <TableCell colSpan={7} className="h-24 text-center text-destructive">
                                         Failed to load invitations list.
                                     </TableCell>
                                 </TableRow>
                             )}
                             {!invitationsQuery.isLoading && !invitationsQuery.isError && rows.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                                         No invitations created yet.
                                     </TableCell>
                                 </TableRow>
@@ -300,6 +325,17 @@ export default function InvitationsPage() {
                                                 </>
                                             )}
                                         </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        {inv.sourceType === "COURSE" ? (
+                                            <Badge variant="outline" className="gap-1">
+                                                <GraduationCap className="size-3" /> By Class
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="secondary" className="gap-1">
+                                                <Pencil className="size-3" /> Manual
+                                            </Badge>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         {inv.status && (
@@ -412,7 +448,7 @@ export default function InvitationsPage() {
                     </TabsContent>
 
                     <TabsContent value="reminders" className="pt-4">
-                        <ReminderManagement examId={numericExamId} invitations={rows} />
+                        <ReminderManagement examId={numericExamId} invitations={allRows} />
                     </TabsContent>
                 </Tabs>
             </section>

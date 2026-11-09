@@ -46,6 +46,9 @@ public class Invitation extends BaseEntity {
 
     private LocalDateTime sentAt;
 
+    @Column(name = "available_from")
+    private LocalDateTime availableFrom;
+
     private LocalDateTime expiresAt;
 
     private LocalDateTime acceptedAt;
@@ -89,4 +92,13 @@ public class Invitation extends BaseEntity {
     @Builder.Default
     @Column(nullable = false)
     private Integer accessAttemptCount = 0;
+
+    /** Nguồn tạo lời mời: MANUAL (tạo lẻ) hoặc COURSE (bulk theo lớp). */
+    @Builder.Default
+    @Column(name = "source_type", nullable = false, length = 20)
+    private String sourceType = "MANUAL";
+
+    /** Lớp (course) dùng làm nguồn khi tạo lời mời hàng loạt. */
+    @Column(name = "source_course_id")
+    private Long sourceCourseId;
 }

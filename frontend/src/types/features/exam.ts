@@ -136,12 +136,49 @@ export interface ExamDTO {
   singleSession?: boolean;
   cameraProctoring?: boolean;
   notifyOnViolation?: boolean;
+  // Optional link to a course / section / lesson (null = not linked)
+  courseId?: number | null;
+  sectionId?: number | null;
+  lessonId?: number | null;
+  courseName?: string | null;
+  sectionTitle?: string | null;
+  lessonTitle?: string | null;
 }
 
 export interface ExamFilter {
   title?: string;
   isActive?: boolean;
   category?: ExamCategory;
+  courseId?: number;
+  sectionId?: number;
+  lessonId?: number;
+}
+
+/** One option of the course / section / lesson pickers in the exam form. */
+export interface ExamLinkOption {
+  id: number;
+  title: string;
+}
+
+/** Compact exam info returned by GET /courses/{id}/exams (no questions or answers). */
+export interface CourseExam {
+  id: number;
+  title: string;
+  category: ExamCategory;
+  examType: ExamType;
+  durationMinutes: number;
+  maxAttempts: number | null;
+  maxScore: number | null;
+  passScore: number | null;
+  isActive: boolean;
+  courseId: number | null;
+  sectionId: number | null;
+  sectionTitle: string | null;
+  lessonId: number | null;
+  lessonTitle: string | null;
+  /** Only returned to the course teacher and admin. */
+  questionCount: number | null;
+  createdByName: string | null;
 }
 
 export type EssayAttemptStatus = "IN_PROGRESS" | "SUBMITTED" | "PENDING_REVIEW" | "EXPIRED";

@@ -15,7 +15,7 @@ import type { FieldSchema } from "@/types";
 
 interface SelectFilterProps {
   field: FieldSchema;
-
+  /** Selected value or values, depending on the field schema. */
   value: any;
   onChange: (value: any) => void;
 }
@@ -26,6 +26,7 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
   const [search, setSearch] = useState("");
   const options = field.filterOptions || field.options || [];
   const isIconField = field.type === "icon" || field.name === "icon";
+  const isMultiple = field.filterMultiple !== false;
 
   const selectedValues: string[] = useMemo(() => {
     if (value === undefined || value === null || value === "") return [];
@@ -51,11 +52,19 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
 
   const toggleValue = (optValue: any) => {
     const strVal = optValue?.toString();
+    if (field.filterMultiple === false) {
+      onChange(selectedValues.includes(strVal) ? undefined : strVal);
+      return;
+    }
     if (selectedValues.includes(strVal)) {
+      if (!isMultiple) {
+        onChange(undefined);
+        return;
+      }
       const next = selectedValues.filter((v) => v !== strVal);
       onChange(next.length > 0 ? next : undefined);
     } else {
-      onChange([...selectedValues, strVal]);
+      onChange(isMultiple ? [...selectedValues, strVal] : strVal);
     }
   };
 
@@ -69,6 +78,10 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
   };
 
   const clearAll = () => {
+    if (!isMultiple) {
+      onChange(undefined);
+      return;
+    }
     if (search.trim()) {
       const filteredIds = new Set(
         filteredOptions.map((o) => o.value?.toString())
@@ -135,7 +148,7 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
               {selectedValues.length}/{options.length}
             </span>
             <div className="flex gap-0.5">
-              {!allFilteredSelected && (
+              {isMultiple && !allFilteredSelected && (
                 <Button
                   variant="ghost"
                   size="sm"

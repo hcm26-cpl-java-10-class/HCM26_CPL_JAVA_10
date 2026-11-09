@@ -1218,22 +1218,16 @@ AnonymousSessionCleanupJob
 | 1 | POST | `/api/exams/{examId}/invitations` | JWT | `INVITATION_CREATE` | CreateInvitationModal |
 | 2 | POST | `/api/exams/{examId}/invitations/batch` | JWT | `INVITATION_CREATE` | — (chưa dùng UI) |
 | 3 | GET | `/api/exams/{examId}/invitations` | JWT | `INVITATION_READ` | InvitationsPage |
-| 4 | GET | `/api/exams/{examId}/invitations/audit` | JWT | `INVITATION_READ` | Nhật ký lời mời |
-| 5 | GET | `/api/exams/invitations/overview` | JWT | `INVITATION_READ` | Trang `/invitations` của giáo viên |
-| 6 | GET | `/api/invitations/{id}` | JWT | `INVITATION_READ` | — (chưa dùng UI) |
-| 7 | PATCH | `/api/invitations/{id}/revoke` | JWT | `INVITATION_DELETE` | Dialog revoke |
-| 8 | POST | `/api/invitations/{id}/resend` | JWT | `INVITATION_UPDATE` | Menu "Gửi lại email" |
-| 9 | DELETE | `/api/invitations/{id}` | JWT | `INVITATION_DELETE` | Dialog xoá lời mời |
-| 10 | GET | `/api/invitations/{id}/qr` | JWT | `INVITATION_READ` | Dialog QR + getQrDataUrl |
-| 11 | GET | `/api/invitations/my` | JWT | `INVITATION_READ`/`EXAM_TAKE` | StudentInvitationsPage |
-| 12 | PATCH | `/api/invitations/{id}/accept` | JWT | `isAuthenticated()` | StudentInvitationsPage |
-| 13 | PATCH | `/api/invitations/{id}/reject` | JWT | `isAuthenticated()` | — (chưa dùng UI) |
-| 14 | POST | `/api/exams/{examId}/invitations/anonymous` | JWT | `INVITATION_CREATE` | CreateInvitationModal tab 2 |
-| 15 | GET | `/api/exams/verify-access/{code}` | **PUBLIC** (rate limit 10 lần/phút/IP) | — | AnonymousAccessPage |
-| 16 | POST | `/api/exams/anonymous-session` | **PUBLIC** | — | AnonymousAccessPage |
-| 17 | GET | `/api/exams/{examId}/reminders` | JWT | `INVITATION_READ` | Tab Reminders |
-| 18 | POST | `/api/exams/{examId}/reminders` | JWT | `INVITATION_CREATE` | Tab Reminders + CreateInvitationModal |
-| 19 | DELETE | `/api/reminders/{id}` | JWT | `INVITATION_DELETE` | Nút huỷ trong tab Reminders |
+| 4 | GET | `/api/invitations/{id}` | JWT | `INVITATION_READ` | — (chưa dùng UI) |
+| 5 | PATCH | `/api/invitations/{id}/revoke` | JWT | `INVITATION_DELETE` | Dialog revoke |
+| 6 | POST | `/api/invitations/{id}/resend` | JWT | `INVITATION_UPDATE` | Menu "Gửi lại email" |
+| 7 | GET | `/api/invitations/{id}/qr` | JWT | `INVITATION_READ` | Dialog QR + getQrDataUrl |
+| 8 | GET | `/api/invitations/my` | JWT | `INVITATION_READ`/`EXAM_TAKE` | StudentInvitationsPage |
+| 9 | PATCH | `/api/invitations/{id}/accept` | JWT | `isAuthenticated()` | StudentInvitationsPage |
+| 10 | PATCH | `/api/invitations/{id}/reject` | JWT | `isAuthenticated()` | — (chưa dùng UI) |
+| 11 | POST | `/api/exams/{examId}/invitations/anonymous` | JWT | `INVITATION_CREATE` | CreateInvitationModal tab 2 |
+| 12 | GET | `/api/exams/verify-access/{code}` | **PUBLIC** | — | AnonymousAccessPage |
+| 13 | POST | `/api/exams/anonymous-session` | **PUBLIC** | — | AnonymousAccessPage |
 
 ---
 

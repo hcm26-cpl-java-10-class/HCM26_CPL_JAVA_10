@@ -8,9 +8,14 @@ import java.util.Set;
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
+import com.example.starter_project_2025.system.demo.course.Course;
+import com.example.starter_project_2025.system.demo.lesson.Lesson;
+import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.question.domain.Question;
 import jakarta.persistence.*;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -120,6 +125,22 @@ public class Exam extends BaseEntity {
     @Column(nullable = false)
     @ColumnDefault("false")
     private Boolean notifyOnViolation = false;
+
+    /** Course / section / lesson ma bai thi thuoc ve (co the de trong). Xoa course/section/lesson thi chi go lien ket. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_id")
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private Course course;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "section_id")
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private Section section;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lesson_id")
+    @OnDelete(action = OnDeleteAction.SET_NULL)
+    private Lesson lesson;
 
     @ManyToMany
     @JoinTable(name = "exam_question",

@@ -11,6 +11,7 @@ export const USER_STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
 export interface UserDTO extends BaseDTO {
   username?: string;
   email?: string;
+  userCode?: string | null;
   password?: string;
   firstName?: string;
   lastName?: string;
@@ -23,11 +24,16 @@ export interface UserDTO extends BaseDTO {
 
   departmentIds?: Array<string | number>;
   lastLoginAt?: string;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  departmentNames?: string[];
+  clearDepartment?: boolean;
 }
 
 export interface UserFilter extends BaseFilter {
-  roleIds?: string[];
-  departmentIds?: string[];
+  departmentId?: number;
+  roleIds?: Array<string | number>;
+  departmentIds?: Array<string | number>;
   status?: UserStatus;
 }
 

@@ -67,6 +67,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 	private final QuestionMapper questionMapper;
 	private final QuestionValidator questionValidator;
 	private final ExamAccessGuard examAccessGuard;
+	private final ExamCourseLinkService courseLinkService;
 
 	@Override
 	protected BaseCrudRepository<Exam, Long> getRepository() {
@@ -180,6 +181,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 			ExamType examType = request.getExamType() != null ? request.getExamType() : exam.getExamType();
 			exam.setQuestions(resolveQuestions(exam, request.getQuestionIds(), context, examType));
 		}
+		courseLinkService.apply(exam, request, context);
 		configValidator.validate(null, request, totalPoints(exam.getQuestions()), context);
 	}
 
@@ -197,6 +199,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 				deleteExamCopies(before, after);
 			}
 		}
+		courseLinkService.apply(exam, request, context);
 		configValidator.validate(exam, request, totalPoints(exam.getQuestions()), context);
 	}
 

@@ -2,6 +2,20 @@ package com.example.starter_project_2025.exception;
 
 import com.example.starter_project_2025.exception.error.ErrorResponse;
 import com.example.starter_project_2025.exception.error.ValidationErrorResponse;
+import com.example.starter_project_2025.system.project.StudentAlreadyAssignedException;
+import com.example.starter_project_2025.system.project.AllocationSessionConflictException;
+import com.example.starter_project_2025.system.project.IdempotencyKeyConflictException;
+import com.example.starter_project_2025.system.project.IdempotencyRequestInProgressException;
+import com.example.starter_project_2025.system.project.TeamCapacityExceededException;
+import com.example.starter_project_2025.system.project.TeamErrorResponse;
+import com.example.starter_project_2025.system.project.TeamNotDraftException;
+import com.example.starter_project_2025.system.project.TeamTemplateCapacityExceededException;
+import com.example.starter_project_2025.system.project.TeamTemplateErrorResponse;
+import com.example.starter_project_2025.system.project.TeamRoleAssignmentErrorResponse;
+import com.example.starter_project_2025.system.project.TeamRoleAssignmentException;
+import com.example.starter_project_2025.system.project.TeamRolePolicyException;
+import com.example.starter_project_2025.system.project.TeamVersionConflictException;
+import com.example.starter_project_2025.system.project.InvalidMentorForClassException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -10,7 +24,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.security.authentication.LockedException;
@@ -24,6 +40,181 @@ import java.util.Map;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(TeamRoleAssignmentException.class)
+    public ResponseEntity<TeamRoleAssignmentErrorResponse> handleTeamRoleAssignment(
+            TeamRoleAssignmentException ex
+    ) {
+        TeamRoleAssignmentErrorResponse response = new TeamRoleAssignmentErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                "ERR_INVALID_TEAM_MEMBER_ROLES",
+                ex.getMessage(),
+                ex.getInvalidMemberIds(),
+                List.of(),
+                List.of(),
+                LocalDateTime.now());
+        return ResponseEntity.unprocessableEntity().body(response);
+    }
+
+    /**
+     * US-11: template policy violations (multi-role disabled, role quota not
+     * met, team leader must keep PM).
+     */
+    @ExceptionHandler(TeamRolePolicyException.class)
+    public ResponseEntity<TeamRoleAssignmentErrorResponse> handleTeamRolePolicy(
+            TeamRolePolicyException ex
+    ) {
+        TeamRoleAssignmentErrorResponse response = new TeamRoleAssignmentErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                ex.getErrorCode(),
+                ex.getMessage(),
+                ex.getInvalidMemberIds(),
+                ex.getViolations(),
+                ex.getMultiRoleMemberIds(),
+                LocalDateTime.now());
+        return ResponseEntity.unprocessableEntity().body(response);
+    }
+
+    @ExceptionHandler(TeamVersionConflictException.class)
+    public ResponseEntity<TeamErrorResponse> handleTeamVersionConflict(
+            TeamVersionConflictException ex
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new TeamErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "ERR_TEAM_VERSION_CONFLICT",
+                ex.getMessage(),
+                null,
+                null,
+                LocalDateTime.now()));
+    }
+
+    @ExceptionHandler(AllocationSessionConflictException.class)
+    public ResponseEntity<TeamErrorResponse> handleAllocationSessionConflict(
+            AllocationSessionConflictException ex
+    ) {
+        TeamErrorResponse response = new TeamErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "ERR_ALLOCATION_SESSION_CONFLICT",
+                ex.getMessage(),
+                null,
+                null,
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    public ResponseEntity<TeamErrorResponse> handleIdempotencyKeyConflict(
+            IdempotencyKeyConflictException ex
+    ) {
+        TeamErrorResponse response = new TeamErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "ERR_IDEMPOTENCY_KEY_REUSED",
+                ex.getMessage(),
+                null,
+                null,
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(IdempotencyRequestInProgressException.class)
+    public ResponseEntity<TeamErrorResponse> handleIdempotencyRequestInProgress(
+            IdempotencyRequestInProgressException ex
+    ) {
+        TeamErrorResponse response = new TeamErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "ERR_REQUEST_IN_PROGRESS",
+                ex.getMessage(),
+                null,
+                null,
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    @ExceptionHandler(TeamCapacityExceededException.class)
+    public ResponseEntity<TeamErrorResponse> handleTeamCapacityExceeded(
+            TeamCapacityExceededException ex
+    ) {
+        TeamErrorResponse response = new TeamErrorResponse(
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                "ERR_TEAM_CAPACITY_EXCEEDED",
+                ex.getMessage(),
+                null,
+                null,
+                LocalDateTime.now()
+        );
+        return ResponseEntity.unprocessableEntity().body(response);
+    }
+
+    @ExceptionHandler(StudentAlreadyAssignedException.class)
+    public ResponseEntity<TeamErrorResponse> handleStudentAlreadyAssigned(
+            StudentAlreadyAssignedException ex
+    ) {
+        TeamErrorResponse response = new TeamErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                "ERR_STUDENT_ALREADY_ASSIGNED",
+                ex.getMessage(),
+                ex.getMemberId(),
+                ex.getConflictingTeamId(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    /**
+     * US-10 / AC02 + AC03: the DRAFT team size is outside the capacity window of
+     * the selected project template. The contract requires HTTP 400 with the
+     * {@code ERR_TEAM_CAPACITY_EXCEEDED} code for both directions.
+     */
+    @ExceptionHandler(TeamTemplateCapacityExceededException.class)
+    public ResponseEntity<TeamTemplateErrorResponse> handleTeamTemplateCapacityExceeded(
+            TeamTemplateCapacityExceededException ex
+    ) {
+        TeamTemplateErrorResponse response = new TeamTemplateErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "ERR_TEAM_CAPACITY_EXCEEDED",
+                ex.getReason().name(),
+                ex.getMessage(),
+                null,
+                ex.getProjectTemplateId(),
+                ex.getProjectTemplateName(),
+                ex.getMemberCount(),
+                ex.getMinMembers(),
+                ex.getMaxMembers(),
+                LocalDateTime.now()
+        );
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    /** US-10: a project template can only be assigned to a DRAFT team. */
+    @ExceptionHandler(TeamNotDraftException.class)
+    public ResponseEntity<TeamTemplateErrorResponse> handleTeamNotDraft(
+            TeamNotDraftException ex
+    ) {
+        TeamTemplateErrorResponse response = new TeamTemplateErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "ERR_TEAM_NOT_DRAFT",
+                ex.getTeamStatus() == null ? null : ex.getTeamStatus().name(),
+                ex.getMessage(),
+                ex.getTeamId(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                LocalDateTime.now()
+        );
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFound(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+                new ErrorResponse(HttpStatus.NOT_FOUND.value(), "Resource was not found", LocalDateTime.now()));
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFoundException(ResourceNotFoundException ex) {
@@ -44,6 +235,31 @@ public class GlobalExceptionHandler {
                 LocalDateTime.now());
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
+
+    @ExceptionHandler(InvalidMentorForClassException.class)
+    public ResponseEntity<TeamErrorResponse> handleInvalidMentorForClass(
+            InvalidMentorForClassException ex
+    ) {
+        return ResponseEntity.badRequest().body(new TeamErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "ERR_INVALID_MENTOR_FOR_CLASS",
+                InvalidMentorForClassException.MESSAGE,
+                null,
+                null,
+                LocalDateTime.now()));
+        }
+
+    /** Giữ đúng status (401/404/...) thay vì bị handler RuntimeException đổi hết thành 400. */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatusException(ResponseStatusException ex) {
+        String message = ex.getReason() != null ? ex.getReason() : ex.getStatusCode().toString();
+        ErrorResponse error = new ErrorResponse(
+                ex.getStatusCode().value(),
+                message,
+                LocalDateTime.now());
+        return new ResponseEntity<>(error, ex.getStatusCode());
+    }
+
 
     @ExceptionHandler(LockedException.class)
     public ResponseEntity<ErrorResponse> handleLockedException(
@@ -134,6 +350,12 @@ public class GlobalExceptionHandler {
                 "An unexpected error occurred: " + message,
                 LocalDateTime.now());
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(new ErrorResponse(
+                HttpStatus.METHOD_NOT_ALLOWED.value(), ex.getMessage(), LocalDateTime.now()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

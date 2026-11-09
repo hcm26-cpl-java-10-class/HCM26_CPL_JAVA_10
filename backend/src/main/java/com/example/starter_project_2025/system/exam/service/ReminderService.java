@@ -42,12 +42,6 @@ public class ReminderService {
 
         examAccessGuard.checkCanManage(exam, principal);
 
-        LocalDateTime scheduledAt = resolveScheduledAt(exam, request);
-
-        if (scheduledAt.isBefore(LocalDateTime.now())) {
-            throw new BadRequestException("Thời gian nhắc nhở phải nằm trong tương lai");
-        }
-
         List<Invitation> targets;
 
         if (request.getInvitationId() != null) {
@@ -70,6 +64,13 @@ public class ReminderService {
             if (targets.isEmpty()) {
                 throw new BadRequestException("Không tìm thấy lời mời nào có thể nhắc nhở cho đề thi này");
             }
+        }
+
+        Invitation primaryInvitation = targets.get(0);
+        LocalDateTime scheduledAt = resolveScheduledAt(exam, primaryInvitation, request);
+
+        if (scheduledAt.isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("Thời điểm nhắc nhở (" + scheduledAt + ") đã qua hoặc nằm trong quá khứ. Vui lòng chọn thời gian khác.");
         }
 
         List<ReminderDTO> created = new ArrayList<>();
@@ -204,7 +205,7 @@ public class ReminderService {
         return sent;
     }
 
-    private LocalDateTime resolveScheduledAt(Exam exam, ReminderRequest request) {
+    private LocalDateTime resolveScheduledAt(Exam exam, Invitation invitation, ReminderRequest request) {
         if (request.getReminderType() == ReminderType.CUSTOM) {
             if (request.getScheduledAt() == null) {
                 throw new BadRequestException("Cần có scheduledAt cho nhắc nhở tùy chỉnh");
@@ -212,13 +213,25 @@ public class ReminderService {
             return request.getScheduledAt();
         }
 
-        if (exam.getStartTime() == null) {
-                throw new BadRequestException("Đề thi chưa có thời gian bắt đầu, không thể tự động đặt nhắc nhở");
+        LocalDateTime anchor = null;
+        if (invitation != null) {
+            if (invitation.getAvailableFrom() != null) {
+                anchor = invitation.getAvailableFrom();
+            } else if (invitation.getExpiresAt() != null) {
+                anchor = invitation.getExpiresAt();
+            }
+        }
+        if (anchor == null) {
+            anchor = exam.getStartTime() != null ? exam.getStartTime() : exam.getEndTime();
+        }
+
+        if (anchor == null) {
+            throw new BadRequestException("Đề thi và lời mời chưa có mốc thời gian bắt đầu hoặc kết thúc, vui lòng chọn Nhắc nhở Tùy chỉnh (Custom)");
         }
 
         return switch (request.getReminderType()) {
-            case ONE_HOUR -> exam.getStartTime().minusHours(1);
-            case ONE_DAY -> exam.getStartTime().minusDays(1);
+            case ONE_HOUR -> anchor.minusHours(1);
+            case ONE_DAY -> anchor.minusDays(1);
             case CUSTOM -> request.getScheduledAt();
         };
     }

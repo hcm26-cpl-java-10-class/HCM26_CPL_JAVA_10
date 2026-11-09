@@ -64,6 +64,18 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setResultVisibility(e.getResultVisibility());
         d.setExamType(ExamTypePolicy.effective(e.getExamType()));
         d.setCategory(e.getCategory() == null ? ExamCategory.ASSIGNMENT : e.getCategory());
+        if (e.getCourse() != null) {
+            d.setCourseId(e.getCourse().getId());
+            d.setCourseName(e.getCourse().getName());
+        }
+        if (e.getSection() != null) {
+            d.setSectionId(e.getSection().getId());
+            d.setSectionTitle(e.getSection().getTitle());
+        }
+        if (e.getLesson() != null) {
+            d.setLessonId(e.getLesson().getId());
+            d.setLessonTitle(e.getLesson().getTitle());
+        }
 
         List<Question> sorted = e.getQuestions().stream()
                 .sorted(Comparator.comparing(Question::getId)).toList();

@@ -7,57 +7,41 @@ import { RoleSwitchProvider } from "./contexts/RoleSwitchContext";
 import { usePermissions } from "./hooks/usePermissions";
 import { useActiveModuleGroups } from "./hooks/useSidebarMenus";
 import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
-import { routes } from "./router/component-registry";
+import { ROLE_HOME_PATHS, routes } from "./router/component-registry";
 import type { RootState } from "./store/store";
 import { getHomePathByRole } from "./utils/rbac.utils";
 
 function AppRoutes() {
     const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-    const { activeRole } = usePermissions();
+    const { activeRole, effectivePermissions } = usePermissions();
     const { data: moduleGroups = [] } = useActiveModuleGroups(isAuthenticated);
 
-    const homePath = isAuthenticated ? getHomePathByRole(activeRole) : "/login";
+    const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions) : "/login";
 
     const componentRegistry = Object.fromEntries(
         routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
     );
 
     const staticRoutes = routes.filter((r) => !r.isModuleDriven);
-
     const staticRoutePaths = new Set(staticRoutes.map((r) => r.path));
 
     return (
         <Routes>
             <Route path="/" element={<Navigate to={homePath} replace />} />
 
-            {staticRoutes.map((route, index) => {
-                const Component = route.component;
-
-                if (route.isPublic) {
-                    return <Route key={index} path={route.path} element={<Component />} />;
-                }
-
-                return (
-                    <Route
-                        key={index}
-                        path={route.path}
-                        element={
-                            <ProtectedRoute requiredPermission={route.requiredPermission}>
-                                <Component />
-                            </ProtectedRoute>
-                        }
-                    />
-                );
-            })}
-
+            {/* Dynamic routes from backend Module table */}
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
-                    if (!m.url) return null;
-                    if (staticRoutePaths.has(m.url)) return null;
+                    // Frontend-controlled routes already include their permission checks.
+                    if (!m.url || staticRoutePaths.has(m.url)) return null;
+                    if ((ROLE_HOME_PATHS as readonly string[]).includes(m.url)) {
+                        return null;
+                    }
                     const Component = componentRegistry[m.url];
 
                     if (!Component) {
-                        return <Route key={`missing-${m.id ?? m.url}`} path={m.url} element={<Navigate to="/not-found-page" replace />} />;
+                        // Frontend-controlled pages can still be exposed in the sidebar.
+                        // Their static route below is responsible for rendering them.
                         return null;
                     }
 
@@ -75,6 +59,7 @@ function AppRoutes() {
                 }),
             )}
 
+            {/* Static routes from componentRegistry */}
             {staticRoutes.map((route, index) => {
                 const Component = route.component;
 
@@ -87,7 +72,10 @@ function AppRoutes() {
                         key={index}
                         path={route.path}
                         element={
-                            <ProtectedRoute requiredPermission={route.requiredPermission}>
+                            <ProtectedRoute
+                                requiredPermission={route.requiredPermission}
+                                requiredPermissions={route.requiredPermissions}
+                            >
                                 <Component />
                             </ProtectedRoute>
                         }

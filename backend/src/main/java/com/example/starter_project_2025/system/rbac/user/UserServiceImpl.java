@@ -4,8 +4,11 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
+import com.example.starter_project_2025.system.demo.department.Department;
+import com.example.starter_project_2025.system.demo.department.DepartmentRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -29,6 +32,8 @@ public class UserServiceImpl
     UserMapper userMapper;
     UserRepository userRepository;
     RoleRepository roleRepository;
+    TenantRepository tenantRepository;
+    DepartmentRepository departmentRepository;
     PasswordEncoder passwordEncoder;
 
     @Override
@@ -56,6 +61,7 @@ public class UserServiceImpl
         validateEmployeeCodeUnique(request.getEmployeeCode(), null, ctx);
         validatePhone(request.getPhone(), ctx);
         validateRoles(request.getRoleIds(), ctx);
+        validateTenant(request.getTenantId(), ctx);
 
         user.setUsername(request.getUsername());
         user.setEmployeeCode(request.getEmployeeCode());
@@ -63,7 +69,11 @@ public class UserServiceImpl
         user.setDescription(request.getDescription());
 
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        user.setTenantId(request.getTenantId());
 
+        Set<Role> roles = getRoles(request.getRoleIds());
+        user.setRoles(roles);
+        assignDepartment(user, request, ctx);
         user.setRoles(getRoles(request.getRoleIds()));
     }
 
@@ -90,8 +100,16 @@ public class UserServiceImpl
             validateRoles(request.getRoleIds(), ctx);
         }
 
+        if (request.getTenantId() != null) {
+            validateTenant(request.getTenantId(), ctx);
+        }
+
         if (ctx.hasErrors()) {
             return;
+        }
+
+        if (request.getTenantId() != null) {
+            user.setTenantId(request.getTenantId());
         }
 
         if (request.getPassword() != null) {
@@ -103,6 +121,7 @@ public class UserServiceImpl
             user.getRoles().addAll(getRoles(request.getRoleIds()));
         }
 
+        assignDepartment(user, request, ctx);
     }
 
     private void normalize(UserDTO request) {
@@ -132,6 +151,37 @@ public class UserServiceImpl
         if (phone != null && !phone.isEmpty() && !PHONE_PATTERN.matcher(phone).matches()) {
             ctx.add("phone", "Phone number is invalid");
         }
+    }
+
+    private void assignDepartment(User user, UserDTO request, ValidationContext ctx) {
+        if (request.isClearDepartment()) {
+            user.getDepartments().clear();
+            return;
+        }
+
+        if (request.getDepartmentIds() != null) {
+            Set<Department> departments = new HashSet<>(
+                    departmentRepository.findAllById(request.getDepartmentIds()));
+            if (departments.size() != request.getDepartmentIds().size()) {
+                ctx.add("departmentIds", "One or more departments do not exist");
+                return;
+            }
+            user.setDepartments(departments);
+            return;
+        }
+
+        if (request.getDepartmentId() == null) {
+            return;
+        }
+
+        Department department = departmentRepository.findById(request.getDepartmentId())
+                .orElse(null);
+        if (department == null) {
+            ctx.add("departmentId", "Department does not exist");
+            return;
+        }
+
+        user.setDepartments(new HashSet<>(Set.of(department)));
     }
 
     private void validateEmailUnique(String email, Long currentUserId, ValidationContext ctx) {
@@ -186,6 +236,12 @@ public class UserServiceImpl
 
         if (found != roleIds.size()) {
             ctx.add("roleIds", "One or more roles are invalid");
+        }
+    }
+
+    private void validateTenant(Long tenantId, ValidationContext ctx) {
+        if (tenantId != null && !tenantRepository.existsByIdAndIsActiveTrue(tenantId)) {
+            ctx.add("tenantId", "Tenant does not exist or is inactive");
         }
     }
 

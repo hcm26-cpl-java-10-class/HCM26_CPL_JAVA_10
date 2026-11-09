@@ -109,7 +109,8 @@ export function DetailModal({
         return matched ? matched[rel.labelField] : String(value);
       }
 
-      case "date": {
+      case "date":
+      case "datetime": {
         try {
           const date = new Date(value);
           return date.toLocaleDateString("vi-VN", {

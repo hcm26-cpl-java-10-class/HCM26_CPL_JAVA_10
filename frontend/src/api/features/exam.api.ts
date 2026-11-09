@@ -8,7 +8,10 @@ import type {
   EssayGradingSummary,
   ExamDTO,
   ExamFilter,
+  ExamCategory,
   ExamInvitationOverview,
+  ExamLinkOption,
+  CourseExam,
   GradeSubmissionRequest,
   QuestionDTO,
   QuestionFilter,
@@ -21,6 +24,7 @@ const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 export interface PublishedExamScore {
   examId: number;
   examTitle: string;
+  category: ExamCategory;
   attemptNumber: number;
   objectiveScore: number | null;
   finalScore: number | null;
@@ -38,6 +42,39 @@ export const examApi = {
   ...examBase,
   listInvitationOverviews: async (): Promise<ExamInvitationOverview[]> => {
     const response = await axiosInstance.get<ExamInvitationOverview[]>("/exams/invitations/overview");
+    return response.data;
+  },
+  /** Courses the current user may attach an exam to (a teacher: only the courses they teach). */
+  getLinkCourses: async (): Promise<ExamLinkOption[]> => {
+    const response = await axiosInstance.get<ExamLinkOption[]>("/exams/link-options/courses");
+    return response.data;
+  },
+  getLinkSections: async (courseId: number): Promise<ExamLinkOption[]> => {
+    const response = await axiosInstance.get<ExamLinkOption[]>(`/exams/link-options/courses/${courseId}/sections`);
+    return response.data;
+  },
+  getLinkLessons: async (sectionId: number): Promise<ExamLinkOption[]> => {
+    const response = await axiosInstance.get<ExamLinkOption[]>(`/exams/link-options/sections/${sectionId}/lessons`);
+    return response.data;
+  },
+  /** Exams attached to a course (optionally narrowed to a section or lesson). */
+  listByCourse: async (courseId: number, params?: { sectionId?: number; lessonId?: number }): Promise<CourseExam[]> => {
+    const response = await axiosInstance.get<CourseExam[]>(`/courses/${courseId}/exams`, { params });
+    return response.data;
+  },
+  linkToCurriculum: async (
+    courseId: number,
+    examId: number,
+    params: { sectionId?: number; lessonId?: number }
+  ): Promise<CourseExam> => {
+    const response = await axiosInstance.put<CourseExam>(`/courses/${courseId}/exams/${examId}/link`, null, { params });
+    return response.data;
+  },
+  unlinkFromCurriculum: async (courseId: number, examId: number, unlinkFromCourse = false): Promise<void> => {
+    await axiosInstance.delete(`/courses/${courseId}/exams/${examId}/link`, { params: { unlinkFromCourse } });
+  },
+  getAvailableExamsForCourse: async (courseId: number): Promise<CourseExam[]> => {
+    const response = await axiosInstance.get<CourseExam[]>(`/courses/${courseId}/exams/available`);
     return response.data;
   },
   getMyPublishedExamScores: async (): Promise<PublishedExamScore[]> => {

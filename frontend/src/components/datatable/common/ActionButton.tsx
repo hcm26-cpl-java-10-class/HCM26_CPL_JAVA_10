@@ -28,6 +28,7 @@ const ActionButton = ({
         size={title ? "default" : "icon"}
         onClick={onClick}
         disabled={disabled}
+        aria-label={title ?? tooltip}
         className={className}
       >
         {icon}

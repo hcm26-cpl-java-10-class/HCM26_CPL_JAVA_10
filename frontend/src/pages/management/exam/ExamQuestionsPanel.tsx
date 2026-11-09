@@ -6,13 +6,29 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ExamDTO, QuestionDTO, QuestionDifficulty, QuestionType } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, ChevronDown, ChevronUp, Dices, Eye, Pencil, Plus, Save, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronUp, Dices, Eye, EyeOff, Pencil, Plus, Save, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { QuestionAnswersPreview } from "./question/components/QuestionAnswersPreview";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getErrorMessage } from "./examConfig";
-import { EditExamQuestionDialog, isExamStarted, QuestionAnswers } from "./ExamQuestionParts";
+import { EditExamQuestionDialog, isExamStarted } from "./ExamQuestionParts";
 
 const PAGE_SIZE = 8;
+
+const TYPE_CONFIG: Record<QuestionType, { label: string; badge: string }> = {
+  MULTIPLE_CHOICE: {
+    label: "Multiple Choice",
+    badge: "bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/25",
+  },
+  ESSAY: {
+    label: "Essay",
+    badge: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/25",
+  },
+  CODING: {
+    label: "Coding",
+    badge: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/25",
+  },
+};
 
 const TYPE_LABEL: Record<QuestionType, string> = {
   MULTIPLE_CHOICE: "Multiple Choice",
@@ -20,19 +36,20 @@ const TYPE_LABEL: Record<QuestionType, string> = {
   CODING: "Coding",
 };
 
-const DIFFICULTY_LABEL: Record<QuestionDifficulty, string> = { EASY: "Easy", MEDIUM: "Medium", HARD: "Hard" };
-
-const DIFFICULTY_STYLE: Record<QuestionDifficulty, string> = {
-  EASY: "text-emerald-600 dark:text-emerald-400",
-  MEDIUM: "text-amber-600 dark:text-amber-400",
-  HARD: "text-red-600 dark:text-red-400",
+const DIFFICULTY_CONFIG: Record<QuestionDifficulty, { label: string; badge: string }> = {
+  EASY: {
+    label: "Easy",
+    badge: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
+  },
+  MEDIUM: {
+    label: "Medium",
+    badge: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25",
+  },
+  HARD: {
+    label: "Hard",
+    badge: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/25",
+  },
 };
-
-function formatDateTime(value?: string | null): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-}
 
 const normalizeTopic = (topic?: string | null) => (topic ?? "").trim().toLowerCase();
 
@@ -44,71 +61,241 @@ function toggleIn<T>(set: Set<T>, value: T): Set<T> {
 }
 
 function QuestionMeta({ q }: { q: QuestionDTO }) {
+  const typeCfg = TYPE_CONFIG[q.type] ?? { label: q.type, badge: "bg-muted text-foreground border-border" };
+  const diffCfg = DIFFICULTY_CONFIG[q.difficulty] ?? { label: q.difficulty, badge: "bg-muted text-foreground border-border" };
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-      <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{TYPE_LABEL[q.type]}</span>
-      <span className={`font-semibold ${DIFFICULTY_STYLE[q.difficulty]}`}>{DIFFICULTY_LABEL[q.difficulty]}</span>
-      <span className="text-muted-foreground">Weight: {q.points}</span>
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className={`rounded-md border px-2 py-0.5 font-medium ${typeCfg.badge}`}>{typeCfg.label}</span>
+      <span className={`rounded-md border px-2 py-0.5 font-semibold ${diffCfg.badge}`}>{diffCfg.label}</span>
+      <span className="rounded-md border border-border/60 bg-muted/40 px-2 py-0.5 text-muted-foreground font-medium">
+        Weight: {q.points}
+      </span>
     </div>
   );
 }
 
-/** One question of the library. The text is cut short; More / Less shows all of it. */
+/** One question of the library with inline preview expansion */
 function LibraryCard({
   q,
   state,
   locked,
+  isExpanded,
+  onToggleExpand,
   onAdd,
   onUndo,
-  onPreview,
 }: {
   q: QuestionDTO;
   state: "available" | "staged" | "inExam";
   locked: boolean;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
   onAdd: () => void;
   onUndo: () => void;
-  onPreview: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const longText = q.content.length > 140 || q.content.includes("\n") || q.type === "MULTIPLE_CHOICE" || q.type === "CODING";
   return (
-    <div className={`rounded-lg border bg-card p-4 shadow-xs ${state === "inExam" ? "opacity-70" : ""}`}>
+    <div className={`rounded-xl border bg-card p-4 shadow-xs transition-all hover:border-primary/40 ${state === "inExam" ? "opacity-75" : ""}`}>
       <div className="flex items-start justify-between gap-3">
         <QuestionMeta q={q} />
         <div className="flex shrink-0 items-center gap-1">
-          <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs text-primary" onClick={onPreview}>
-            <Eye className="size-3.5" />
-            Preview
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2.5 text-xs text-primary hover:bg-primary/10"
+            onClick={onToggleExpand}
+          >
+            {isExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+            {isExpanded ? "Hide preview" : "Preview"}
           </Button>
           {state === "available" && (
-            <Button type="button" size="icon-sm" aria-label="Add to selected questions" title="Add to selected questions" disabled={locked} onClick={onAdd}>
+            <Button
+              type="button"
+              size="icon-sm"
+              aria-label="Add to selected questions"
+              title="Add to selected questions"
+              disabled={locked}
+              onClick={onAdd}
+            >
               <Plus className="size-4" />
             </Button>
           )}
           {state === "staged" && (
-            <Button type="button" size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs text-emerald-600" title="Click to remove from the selection" onClick={onUndo}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1 px-2 text-xs text-emerald-600 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20"
+              title="Click to remove from the selection"
+              onClick={onUndo}
+            >
               <Check className="size-3.5" />
               Added
             </Button>
           )}
-          {state === "inExam" && <Badge variant="outline" className="text-[10px]">In assessment</Badge>}
+          {state === "inExam" && (
+            <Badge variant="outline" className="text-[10px] bg-muted/40">
+              In assessment
+            </Badge>
+          )}
         </div>
       </div>
 
-      <p className={`mt-3 whitespace-pre-wrap break-words text-sm ${expanded ? "" : "line-clamp-2"}`}>{q.content}</p>
-      {expanded && <QuestionAnswers question={q} />}
+      <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">{q.content}</p>
 
-      <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2">
-        <div className="flex flex-wrap gap-1.5">
-          {q.topic?.trim() && <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{q.topic.trim()}</span>}
+      {q.imageUrl && (
+        <div className="mt-2.5 overflow-hidden rounded-md border bg-muted/10 p-2">
+          <img src={q.imageUrl} alt="" className="max-h-48 w-auto rounded object-contain" />
         </div>
-        {longText && (
-          <button type="button" className="flex items-center gap-0.5 text-xs font-medium text-primary hover:underline" onClick={() => setExpanded((v) => !v)}>
-            {expanded ? "Less" : "More"}
-            {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-          </button>
-        )}
+      )}
+
+      {q.topic?.trim() && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground font-mono">
+            #{q.topic.trim()}
+          </span>
+        </div>
+      )}
+
+      {isExpanded && (
+        <div className="mt-3 pt-3 border-t space-y-2">
+          <QuestionAnswersPreview question={q} />
+          <div className="flex justify-center pt-2 border-t border-border/40">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={onToggleExpand}
+            >
+              <ChevronUp className="size-3.5" />
+              <span>Collapse preview</span>
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Selected question card (saved or staged) matching the library card style */
+function SelectedQuestionCard({
+  q,
+  orderNumber,
+  isStaged,
+  isExpanded,
+  locked,
+  onToggleExpand,
+  onEdit,
+  onRemove,
+}: {
+  q: QuestionDTO;
+  orderNumber: number;
+  isStaged?: boolean;
+  isExpanded: boolean;
+  locked: boolean;
+  onToggleExpand: () => void;
+  onEdit?: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      className={`rounded-xl border p-4 shadow-xs transition-all ${
+        isStaged
+          ? "border-emerald-500/40 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.06]"
+          : "border-border bg-card hover:border-primary/40"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {isStaged ? (
+            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 text-xs font-semibold px-2 py-0.5">
+              Question {orderNumber} · Not saved yet
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="font-semibold text-xs px-2 py-0.5 bg-muted/60 border-border/80">
+              Question {orderNumber}
+            </Badge>
+          )}
+          <QuestionMeta q={q} />
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2.5 text-xs text-primary hover:bg-primary/10"
+            onClick={onToggleExpand}
+          >
+            {isExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+            {isExpanded ? "Hide preview" : "Preview"}
+          </Button>
+
+          {onEdit && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+              title={locked ? "Assessment has started" : "Edit question points or content"}
+              disabled={locked}
+              onClick={onEdit}
+            >
+              <Pencil className="size-3.5" />
+              <span>Edit</span>
+            </Button>
+          )}
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs text-rose-500/80 hover:text-rose-400 hover:bg-rose-500/10"
+            title={locked ? "Assessment has started" : "Remove question from selection"}
+            disabled={locked}
+            onClick={onRemove}
+          >
+            <Trash2 className="size-3.5" />
+            <span>Remove</span>
+          </Button>
+        </div>
       </div>
+
+      <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+        {q.content}
+      </p>
+
+      {q.imageUrl && (
+        <div className="mt-2.5 overflow-hidden rounded-md border bg-muted/10 p-2">
+          <img src={q.imageUrl} alt="" className="max-h-48 w-auto rounded object-contain" />
+        </div>
+      )}
+
+      {q.topic?.trim() && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <span className="rounded bg-muted px-2 py-0.5 text-[11px] text-muted-foreground font-mono">
+            #{q.topic.trim()}
+          </span>
+        </div>
+      )}
+
+      {isExpanded && (
+        <div className="mt-3 pt-3 border-t space-y-2">
+          <QuestionAnswersPreview question={q} />
+          <div className="flex justify-center pt-2 border-t border-border/40">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 px-3 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={onToggleExpand}
+            >
+              <ChevronUp className="size-3.5" />
+              <span>Collapse preview</span>
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -135,8 +322,9 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
 
   // Selection / dialogs
   const [stagedQuestions, setStagedQuestions] = useState<QuestionDTO[]>([]);
-  const [previewQuestion, setPreviewQuestion] = useState<QuestionDTO | null>(null);
   const [editingQuestion, setEditingQuestion] = useState<QuestionDTO | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number | string>>(new Set());
+  const [expandedSelectedIds, setExpandedSelectedIds] = useState<Set<number | string>>(new Set());
   const [isRandomOpen, setIsRandomOpen] = useState(false);
   const [randomCount, setRandomCount] = useState(10);
   const [randomTopic, setRandomTopic] = useState<string>("");
@@ -238,6 +426,45 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   useEffect(() => setPage(0), [search, typeFilter, difficultyFilter, topicFilter, hideAdded]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageRows = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+
+  const isAllExpanded = pageRows.length > 0 && pageRows.every((q) => expandedIds.has(q.id));
+  const togglePreviewAll = () => {
+    if (isAllExpanded) {
+      setExpandedIds(new Set());
+    } else {
+      const next = new Set(expandedIds);
+      pageRows.forEach((q) => next.add(q.id));
+      setExpandedIds(next);
+    }
+  };
+  const togglePreview = (id: number | string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectedPreview = (id: number | string) => {
+    setExpandedSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const isAllSelectedExpanded =
+    selectedAll.length > 0 && selectedAll.every((q) => expandedSelectedIds.has(q.id));
+  const toggleSelectedPreviewAll = () => {
+    if (isAllSelectedExpanded) {
+      setExpandedSelectedIds(new Set());
+    } else {
+      const next = new Set(expandedSelectedIds);
+      selectedAll.forEach((q) => next.add(q.id));
+      setExpandedSelectedIds(next);
+    }
+  };
   const addable = filtered.filter((q) => !sourceIdsInExam.has(q.id) && !stagedIds.has(q.id));
   const hasFilters = search !== "" || typeFilter.size > 0 || difficultyFilter.size > 0 || topicFilter.size > 0;
 
@@ -413,6 +640,16 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
               <p className="text-xs text-muted-foreground">{filtered.length} question(s)</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={togglePreviewAll}
+                className="gap-1.5 text-xs"
+              >
+                {isAllExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                <span>{isAllExpanded ? "Collapse all" : "Preview all"}</span>
+              </Button>
               <Button type="button" variant="outline" size="sm" aria-pressed={filtersOpen} onClick={() => setFiltersOpen((v) => !v)}>
                 <SlidersHorizontal className="mr-1 size-4" />
                 {filtersOpen ? "Hide filters" : "Show filters"}
@@ -440,9 +677,10 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                 q={q}
                 state={sourceIdsInExam.has(q.id) ? "inExam" : stagedIds.has(q.id) ? "staged" : "available"}
                 locked={activeExamStarted}
+                isExpanded={expandedIds.has(q.id)}
+                onToggleExpand={() => togglePreview(q.id)}
                 onAdd={() => stageQuestion(q)}
                 onUndo={() => unstageQuestion(q.id)}
-                onPreview={() => setPreviewQuestion(q)}
               />
             ))}
           </div>
@@ -455,84 +693,80 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
         </section>
 
         {/* ---------------- Selected questions ---------------- */}
-        <section className="flex min-h-0 flex-col rounded-md border">
-          <div className="border-b p-3">
-            <h3 className="text-sm font-semibold">
-              Selected questions ({totalQuestionsInExamCount})
-              {stagedQuestions.length > 0 && (
-                <Badge className="ml-2 bg-emerald-600 px-1.5 py-0 text-[10px] font-normal text-white">+{stagedQuestions.length} new</Badge>
-              )}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Total weight: {totalPointsInExam} · Max score: {activeExam.maxScore ?? 10}
-            </p>
-            {typeSummary.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {typeSummary.map((row) => (
-                  <span key={row.type} className="rounded-full bg-muted px-2 py-0.5 text-[11px]">
-                    {TYPE_LABEL[row.type]}: {row.count} · weight {row.points}
-                  </span>
-                ))}
-              </div>
+        <section className="flex min-h-0 flex-col rounded-xl border bg-card/40">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3.5 bg-card/60">
+            <div>
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <span>Selected questions ({totalQuestionsInExamCount})</span>
+                {stagedQuestions.length > 0 && (
+                  <Badge className="bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    +{stagedQuestions.length} new
+                  </Badge>
+                )}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Total weight: <span className="font-semibold text-foreground">{totalPointsInExam}</span> · Max score: <span className="font-semibold text-foreground">{activeExam.maxScore ?? 10}</span>
+              </p>
+            </div>
+            {totalQuestionsInExamCount > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={toggleSelectedPreviewAll}
+                className="gap-1.5 text-xs h-8"
+              >
+                {isAllSelectedExpanded ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                <span>{isAllSelectedExpanded ? "Collapse all" : "Preview all"}</span>
+              </Button>
             )}
           </div>
 
-          <div className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto p-3">
+          {typeSummary.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 border-b bg-muted/20 px-3.5 py-2">
+              {typeSummary.map((row) => (
+                <span
+                  key={row.type}
+                  className="rounded-md border border-border/60 bg-background/80 px-2 py-0.5 text-[11px] font-medium text-foreground"
+                >
+                  {TYPE_LABEL[row.type]}: <span className="text-primary font-semibold">{row.count}</span> · weight <span className="text-primary font-semibold">{row.points}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-3.5">
             {totalQuestionsInExamCount === 0 && (
-              <div className="p-6 text-center text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border/70 p-8 text-center text-muted-foreground">
                 <p className="text-sm font-medium">No questions added yet</p>
                 <p className="mt-1 text-xs">Click + on a question in the library to add it here.</p>
               </div>
             )}
 
             {savedQuestions.map((q, idx) => (
-              <div key={q.id} className="rounded-md border bg-card p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-xs font-semibold text-primary">Question {idx + 1}</span>
-                  <div className="flex items-center gap-0.5">
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Preview question" title="Preview" onClick={() => setPreviewQuestion(q)}>
-                      <Eye className="size-3.5" />
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Edit question" title={activeExamStarted ? "Students have already started this assessment" : "Edit question points/content"} disabled={activeExamStarted} onClick={() => setEditingQuestion(q)}>
-                      <Pencil className="size-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-destructive"
-                      aria-label="Remove question from assessment"
-                      title={activeExamStarted ? "Students have already started this assessment" : "Remove question from assessment"}
-                      disabled={activeExamStarted || removeQuestionMutation.isPending}
-                      onClick={() => removeQuestionMutation.mutate({ examId: activeExam.id!, questionId: q.id })}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="mt-1"><QuestionMeta q={q} /></div>
-                <p className="mt-2 line-clamp-2 text-xs">{q.content}</p>
-              </div>
+              <SelectedQuestionCard
+                key={q.id}
+                q={q}
+                orderNumber={idx + 1}
+                isExpanded={expandedSelectedIds.has(q.id)}
+                locked={activeExamStarted}
+                onToggleExpand={() => toggleSelectedPreview(q.id)}
+                onEdit={() => setEditingQuestion(q)}
+                onRemove={() => removeQuestionMutation.mutate({ examId: activeExam.id!, questionId: q.id })}
+              />
             ))}
 
             {stagedQuestions.map((q, idx) => (
-              <div key={q.id} className="rounded-md border-2 border-emerald-500/40 bg-emerald-500/5 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                    Question {savedQuestions.length + idx + 1} · not saved yet
-                  </span>
-                  <div className="flex items-center gap-0.5">
-                    <Button type="button" variant="ghost" size="icon-sm" aria-label="Preview question" title="Preview" onClick={() => setPreviewQuestion(q)}>
-                      <Eye className="size-3.5" />
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" aria-label="Remove from the selection" title="Remove from the selection" disabled={activeExamStarted} onClick={() => unstageQuestion(q.id)}>
-                      <X className="size-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="mt-1"><QuestionMeta q={q} /></div>
-                <p className="mt-2 line-clamp-2 text-xs">{q.content}</p>
-              </div>
+              <SelectedQuestionCard
+                key={q.id}
+                q={q}
+                orderNumber={savedQuestions.length + idx + 1}
+                isStaged
+                isExpanded={expandedSelectedIds.has(q.id)}
+                locked={activeExamStarted}
+                onToggleExpand={() => toggleSelectedPreview(q.id)}
+                onRemove={() => unstageQuestion(q.id)}
+              />
             ))}
           </div>
 
@@ -558,78 +792,6 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
           </div>
         </section>
       </div>
-
-      {/* Preview: full screen, shows everything we have about the question */}
-      <Dialog open={previewQuestion !== null} onOpenChange={(open) => { if (!open) setPreviewQuestion(null); }}>
-        <DialogContent className="h-screen max-h-screen w-screen max-w-none overflow-y-auto rounded-none p-6 sm:max-w-none">
-          <DialogHeader>
-            <DialogTitle>Question preview{previewQuestion ? ` #${previewQuestion.id}` : ""}</DialogTitle>
-            <DialogDescription>{previewQuestion && <QuestionMeta q={previewQuestion} />}</DialogDescription>
-          </DialogHeader>
-          {previewQuestion && (
-            <div className="mx-auto grid w-full max-w-5xl content-start gap-5">
-              <section className="grid gap-2 rounded-md border p-4">
-                <h3 className="text-xs font-semibold uppercase text-muted-foreground">Information</h3>
-                <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
-                  {[
-                    ["ID", `#${previewQuestion.id}`],
-                    ["Type", TYPE_LABEL[previewQuestion.type]],
-                    ["Difficulty", DIFFICULTY_LABEL[previewQuestion.difficulty]],
-                    ["Topic", previewQuestion.topic?.trim() || "-"],
-                    ["Weight", String(previewQuestion.points)],
-                    ["Status", previewQuestion.isActive ? "Active" : "Inactive"],
-                    ["Created at", formatDateTime(previewQuestion.createdAt)],
-                    ...(previewQuestion.createdBy != null ? [["Created by", `User #${previewQuestion.createdBy}`]] : []),
-                    ["Last updated", formatDateTime(previewQuestion.updatedAt)],
-                    ...(previewQuestion.updatedBy != null ? [["Updated by", `User #${previewQuestion.updatedBy}`]] : []),
-                    ...(previewQuestion.sourceQuestionId != null ? [["Copied from question", `#${previewQuestion.sourceQuestionId}`]] : []),
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex gap-2">
-                      <dt className="w-32 shrink-0 text-muted-foreground">{label}</dt>
-                      <dd className="min-w-0 break-words font-medium">{value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
-
-              <section className="grid gap-2">
-                <h3 className="text-xs font-semibold uppercase text-muted-foreground">Content</h3>
-                <p className="whitespace-pre-wrap break-words text-sm">{previewQuestion.content}</p>
-                {previewQuestion.imageUrl && <img src={previewQuestion.imageUrl} alt="" className="max-h-96 rounded-md border object-contain" />}
-              </section>
-
-              <section className="grid gap-2">
-                <h3 className="text-xs font-semibold uppercase text-muted-foreground">
-                  {previewQuestion.type === "CODING" ? "Coding details" : previewQuestion.type === "ESSAY" ? "Essay" : "Answers"}
-                </h3>
-                <QuestionAnswers question={previewQuestion} />
-                {previewQuestion.type === "ESSAY" && (previewQuestion.gradingCriteria ?? []).length > 0 && (
-                  <div className="overflow-x-auto rounded-md border">
-                    <table className="w-full text-left text-sm">
-                      <thead className="border-b bg-muted/50 text-xs text-muted-foreground">
-                        <tr>
-                          <th className="px-3 py-2">Grading criterion</th>
-                          <th className="px-3 py-2">Description</th>
-                          <th className="w-24 px-3 py-2">Weight</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(previewQuestion.gradingCriteria ?? []).map((c, i) => (
-                          <tr key={i} className="border-b last:border-b-0">
-                            <td className="px-3 py-2 font-medium">{c.name}</td>
-                            <td className="px-3 py-2 text-muted-foreground">{c.description || "-"}</td>
-                            <td className="px-3 py-2">{c.weightPercentage}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={isRandomOpen} onOpenChange={setIsRandomOpen}>
         <DialogContent className="sm:max-w-md">

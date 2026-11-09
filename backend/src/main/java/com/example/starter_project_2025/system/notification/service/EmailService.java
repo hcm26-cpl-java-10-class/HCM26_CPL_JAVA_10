@@ -59,6 +59,19 @@ public class EmailService {
         send("[Lời mời] " + examTitle, recipient.getEmail(), EXAM_INVITATION_EMAIL, vars);
     }
 
+    public void sendBatchExamInvitations(List<Invitation> invitations) {
+        for (Invitation invitation : invitations) {
+            if (invitation.getUser() != null) {
+                try {
+                    sendExamInvitation(invitation, invitation.getUser());
+                } catch (Exception e) {
+                    log.error("Failed to send batch invitation email to userId={}: {}",
+                            invitation.getUser().getId(), e.getMessage());
+                }
+            }
+        }
+    }
+
     public void sendExamAcceptance(Invitation invitation) {
         if (invitation.getUser() == null) {
             return;
@@ -79,15 +92,16 @@ public class EmailService {
         }
 
         String examTitle = invitation.getExam().getTitle();
-        LocalDateTime startTime = invitation.getExam().getStartTime();
-        String countdown = buildCountdown(startTime, now);
+        LocalDateTime startTime = invitation.getAvailableFrom() != null ? invitation.getAvailableFrom() : invitation.getExam().getStartTime();
+        LocalDateTime endTime = invitation.getExpiresAt() != null ? invitation.getExpiresAt() : invitation.getExam().getEndTime();
+        String countdown = buildCountdown(startTime != null ? startTime : endTime, now);
         String examLink = String.format("%s/student/exams/%d", frontendUrl, invitation.getExam().getId());
 
         List<Map.Entry<String, Object>> vars = new ArrayList<>();
         vars.add(Map.entry("username", invitation.getUser().getFullName()));
         vars.add(Map.entry("examTitle", examTitle));
         vars.add(Map.entry("startTime", formatDateTime(startTime)));
-        vars.add(Map.entry("endTime", formatDateTime(invitation.getExam().getEndTime())));
+        vars.add(Map.entry("endTime", formatDateTime(endTime)));
         vars.add(Map.entry("durationMinutes", invitation.getExam().getDurationMinutes()));
         vars.add(Map.entry("countdown", countdown));
         vars.add(Map.entry("examLink", examLink));

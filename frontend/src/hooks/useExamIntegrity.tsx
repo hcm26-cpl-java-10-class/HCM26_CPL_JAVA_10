@@ -41,6 +41,7 @@ const LABELS: Partial<Record<IntegrityEventType, string>> = {
     CAMERA_COVERED: 'Camera is covered',
     FACE_MISSING: 'You left the camera view',
     MULTIPLE_FACES: 'Another person is in the camera view',
+    HEAD_TURNED: 'Head turned away from the screen',
 };
 
 const newClientId = () =>
@@ -118,8 +119,8 @@ export function useExamIntegrity({ attemptId, config, active, send, sendEntryPho
         enabled: cameraEnabled,
         monitoring: cameraEnabled && entryDone,
         // the examinee was notified when the violation started -> the report at its end is silent
-        report: (type: CameraViolationType, secs, snapshot) =>
-            record(type, secs, undefined, snapshot ?? undefined, true),
+        report: (type: CameraViolationType, secs, snapshot, detail) =>
+            record(type, secs, detail, snapshot ?? undefined, true),
         announce: (type: CameraViolationType) => announce(type),
     });
 

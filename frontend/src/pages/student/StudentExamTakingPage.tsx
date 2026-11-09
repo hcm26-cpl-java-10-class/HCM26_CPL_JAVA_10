@@ -21,6 +21,7 @@ import { CodingWorkspace } from './components/CodingWorkspace';
 import { EssayPopup } from './components/EssayPopup';
 import { ExamIntegrityNotice, useExamIntegrity } from '@/hooks/useExamIntegrity'; // NEW (anti-cheat)
 import { FontSizeControl, useQuestionFontSize } from '@/hooks/useQuestionFontSize';
+import { SubmitConfirmOverlay } from '@/components/exam/SubmitConfirmOverlay';
 
 const attemptQueryKey = (examId: number) => ['student-exam-attempt', examId] as const;
 
@@ -167,6 +168,8 @@ export default function StudentExamTakingPage() {
     });
 
     const questionFont = useQuestionFontSize();
+    const [confirmText, setConfirmText] = useState<string | null>(null);
+    const skipConfirmRef = useRef(false);
     const [flagged, setFlagged] = useState<Set<number>>(new Set());
     const [activeQuestionId, setActiveQuestionId] = useState<number | null>(null);
     const flagKey = attempt ? `exam-flagged-${attempt.id}` : null;
@@ -359,18 +362,16 @@ export default function StudentExamTakingPage() {
             return;
         }
 
-        if (
-            requireConfirmation &&
-            !window.confirm(
+        if (requireConfirmation && !skipConfirmRef.current) {
+            // In-page dialog: a native confirm() would take the browser out of fullscreen.
+            const unsaved = attempt.questions.filter((q) => q.type === 'ESSAY' && !answersRef.current[q.id]?.saved).length;
+            setConfirmText(
                 'Are you sure you want to submit your exam? Please double-check your answers before proceeding.' +
-                (() => {
-                    const unsaved = attempt.questions.filter((q) => q.type === 'ESSAY' && !answersRef.current[q.id]?.saved).length;
-                    return unsaved > 0 ? `\n\nThere are ${unsaved} essay question(s) that have not been saved (unsaved content will still be submitted).` : '';
-                })()
-            )
-        ) {
+                (unsaved > 0 ? `\n\nThere are ${unsaved} essay question(s) that have not been saved (unsaved content will still be submitted).` : ''),
+            );
             return;
         }
+        skipConfirmRef.current = false;
 
         submitStartedRef.current = true;
 
@@ -583,6 +584,18 @@ export default function StudentExamTakingPage() {
         </div>
     );
 
+    const confirmOverlay = confirmText ? (
+        <SubmitConfirmOverlay
+            message={confirmText}
+            onCancel={() => setConfirmText(null)}
+            onConfirm={() => {
+                setConfirmText(null);
+                skipConfirmRef.current = true;
+                void submitCurrentAnswers(true);
+            }}
+        />
+    ) : null;
+
     const timeUpOverlay = isTimeUp ? (
         <div
             role="alertdialog"
@@ -673,6 +686,7 @@ export default function StudentExamTakingPage() {
         return (
             <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }} focusMode>
                 {timeUpOverlay}
+{confirmOverlay}
                 <CodingWorkspace
                     key={currentCode.id}
                     question={currentCode}
@@ -696,6 +710,7 @@ export default function StudentExamTakingPage() {
     return (
         <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }} focusMode={!isFinished}>
             {timeUpOverlay}
+{confirmOverlay}
             <main className="flex w-full flex-col gap-5">
                 {!isFinished && pinnedBar}
                 {!isFinished && <ExamIntegrityNotice config={attempt.integrity} state={integrity} />}

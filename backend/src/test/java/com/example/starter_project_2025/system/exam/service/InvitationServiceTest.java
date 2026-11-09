@@ -8,6 +8,9 @@ import com.example.starter_project_2025.system.exam.domain.AnonymousSessionRepos
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamReminder;
 import com.example.starter_project_2025.system.exam.domain.ExamReminderRepository;
+import com.example.starter_project_2025.system.demo.course.Course;
+import com.example.starter_project_2025.system.demo.course.CourseRepository;
+import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentService;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
 import com.example.starter_project_2025.system.exam.domain.Invitation;
 import com.example.starter_project_2025.system.exam.domain.InvitationRepository;
@@ -15,6 +18,8 @@ import com.example.starter_project_2025.system.exam.domain.InvitationStatus;
 import com.example.starter_project_2025.system.exam.dto.BatchInvitationRequest;
 import com.example.starter_project_2025.system.exam.dto.BatchInvitationResponse;
 import com.example.starter_project_2025.system.exam.dto.InvitationCreateRequest;
+import com.example.starter_project_2025.system.exam.dto.InvitationBulkItemResult;
+import com.example.starter_project_2025.system.exam.dto.GroupInvitationRequest;
 import com.example.starter_project_2025.system.exam.dto.InvitationDTO;
 import com.example.starter_project_2025.system.notification.service.EmailService;
 import com.example.starter_project_2025.system.rbac.role.Role;
@@ -81,6 +86,12 @@ class InvitationServiceTest {
     @Mock
     private ExamReminderRepository examReminderRepository;
 
+    @Mock
+    private CourseRepository courseRepository;
+
+    @Mock
+    private CourseEnrollmentService courseEnrollmentService;
+
     private InvitationService service;
 
     private Exam exam;
@@ -97,7 +108,9 @@ class InvitationServiceTest {
                 guestUserService,
                 examAccessGuard,
                 invitationAuditService,
-                examReminderRepository);
+                examReminderRepository,
+                courseRepository,
+                courseEnrollmentService);
 
         exam = new Exam();
         exam.setId(1L);
@@ -404,5 +417,114 @@ class InvitationServiceTest {
 
         // Vòng lặp phải hỏi lại DB ít nhất 2 lần: lần đầu trùng, lần sau mới dùng.
         verify(invitationRepository, org.mockito.Mockito.atLeast(2)).existsByAccessCode(anyString());
+    }
+
+    // ===== Bulk invite theo lớp (Course) =====
+
+    private User classStudent(Long id, String email) {
+        User u = User.builder()
+                .id(id)
+                .email(email)
+                .firstName("SV")
+                .lastName(String.valueOf(id))
+                .isActive(true)
+                .build();
+        Set<Role> roles = new HashSet<>();
+        roles.add(Role.builder().name("STUDENT").build());
+        u.setRoles(roles);
+        return u;
+    }
+
+    private GroupInvitationRequest groupRequest(Long courseId, List<Long> userIds) {
+        GroupInvitationRequest request = new GroupInvitationRequest();
+        request.setCourseId(courseId);
+        request.setUserIds(userIds);
+        request.setSendEmail(false);
+        return request;
+    }
+
+    @Test
+    @DisplayName("Mời theo lớp: học viên hợp lệ đều thành công")
+    void bulkInviteByCourseCreatesInvitationsForAllClassStudents() {
+        User s1 = classStudent(201L, "s1@example.com");
+        User s2 = classStudent(202L, "s2@example.com");
+
+        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+        when(courseRepository.findById(9L)).thenReturn(Optional.of(Course.builder().id(9L).name("Java 101").build()));
+        when(courseEnrollmentService.getActiveStudentsByCourse(9L)).thenReturn(List.of(s1, s2));
+        when(invitationRepository.existsByExamIdAndUserId(org.mockito.ArgumentMatchers.eq(1L), any()))
+                .thenReturn(false);
+
+        BatchInvitationResponse response = service.createInvitationsByCourse(
+                1L, groupRequest(9L, List.of()), teacherPrincipal());
+
+        assertEquals(2, response.getTotalRequested());
+        assertEquals(2, response.getSuccessCount());
+        assertEquals(0, response.getSkippedCount());
+        assertEquals(0, response.getFailureCount());
+        assertNotNull(response.getItems());
+        assertTrue(response.getItems().stream()
+                .allMatch(i -> i.getStatus() == InvitationBulkItemResult.Status.SUCCESS));
+    }
+
+    @Test
+    @DisplayName("Mời theo lớp: học viên đã có lời mời bị bỏ qua (idempotent) chứ không làm hỏng cả lô")
+    void bulkInviteByCourseSkipsStudentsAlreadyInvited() {
+        User s1 = classStudent(201L, "s1@example.com");
+        User s2 = classStudent(202L, "s2@example.com");
+
+        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+        when(courseRepository.findById(9L)).thenReturn(Optional.of(Course.builder().id(9L).name("Java 101").build()));
+        when(courseEnrollmentService.getActiveStudentsByCourse(9L)).thenReturn(List.of(s1, s2));
+        when(invitationRepository.existsByExamIdAndUserId(1L, 201L)).thenReturn(true);
+        when(invitationRepository.existsByExamIdAndUserId(1L, 202L)).thenReturn(false);
+
+        BatchInvitationResponse response = service.createInvitationsByCourse(
+                1L, groupRequest(9L, List.of()), teacherPrincipal());
+
+        assertEquals(2, response.getTotalRequested());
+        assertEquals(1, response.getSuccessCount());
+        assertEquals(1, response.getSkippedCount());
+        assertEquals(0, response.getFailureCount());
+        assertTrue(response.getItems().stream()
+                .anyMatch(i -> i.getStatus() == InvitationBulkItemResult.Status.SKIPPED));
+    }
+
+    @Test
+    @DisplayName("Mời theo lớp: học viên không thuộc lớp được báo lỗi, người khác vẫn được mời")
+    void bulkInviteByCourseFailsForUserNotInClass() {
+        User s1 = classStudent(201L, "s1@example.com");
+
+        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+        when(courseRepository.findById(9L)).thenReturn(Optional.of(Course.builder().id(9L).name("Java 101").build()));
+        when(courseEnrollmentService.getActiveStudentsByCourse(9L)).thenReturn(List.of(s1));
+        when(invitationRepository.existsByExamIdAndUserId(1L, 201L)).thenReturn(false);
+
+        BatchInvitationResponse response = service.createInvitationsByCourse(
+                1L, groupRequest(9L, List.of(201L, 999L)), teacherPrincipal());
+
+        assertEquals(1, response.getSuccessCount());
+        assertEquals(1, response.getFailureCount());
+        assertTrue(response.getItems().stream()
+                .anyMatch(i -> i.getStatus() == InvitationBulkItemResult.Status.FAILED
+                        && i.getUserId().equals(999L)));
+    }
+
+    @Test
+    @DisplayName("Mời theo lớp: lời mời được ghi nhận nguồn COURSE và courseId")
+    void bulkInviteByCourseRecordsSourceCourse() {
+        User s1 = classStudent(201L, "s1@example.com");
+
+        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+        when(courseRepository.findById(9L)).thenReturn(Optional.of(Course.builder().id(9L).name("Java 101").build()));
+        when(courseEnrollmentService.getActiveStudentsByCourse(9L)).thenReturn(List.of(s1));
+        when(invitationRepository.existsByExamIdAndUserId(1L, 201L)).thenReturn(false);
+
+        BatchInvitationResponse response = service.createInvitationsByCourse(
+                1L, groupRequest(9L, List.of()), teacherPrincipal());
+
+        InvitationDTO dto = response.getSuccessfulInvitations().get(0);
+        assertEquals("COURSE", dto.getSourceType());
+        assertEquals(9L, dto.getSourceCourseId());
     }
 }

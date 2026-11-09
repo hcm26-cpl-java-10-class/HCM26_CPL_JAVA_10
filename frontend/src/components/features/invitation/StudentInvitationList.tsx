@@ -40,12 +40,20 @@ type ButtonGate = {
 };
 
 function computeExamWindow(invitation: InvitationDTO, now: number): ButtonGate {
-    const start = invitation.examStartTime ? new Date(invitation.examStartTime).getTime() : null;
-    const end = invitation.examEndTime ? new Date(invitation.examEndTime).getTime() : null;
+    const start = invitation.availableFrom
+        ? new Date(invitation.availableFrom).getTime()
+        : invitation.examStartTime
+        ? new Date(invitation.examStartTime).getTime()
+        : null;
+    const end = invitation.expiresAt
+        ? new Date(invitation.expiresAt).getTime()
+        : invitation.examEndTime
+        ? new Date(invitation.examEndTime).getTime()
+        : null;
 
     if (start != null && now < start) {
         return {
-            label: "Vào thi",
+            label: "Chưa mở ca thi",
             disabled: true,
             waiting: true,
             closed: false,
@@ -54,7 +62,7 @@ function computeExamWindow(invitation: InvitationDTO, now: number): ButtonGate {
     }
     if (end != null && now >= end) {
         return {
-            label: "Kỳ thi đã đóng",
+            label: "Đã đóng ca thi",
             disabled: true,
             waiting: false,
             closed: true,
@@ -238,11 +246,15 @@ export default function StudentInvitationList() {
                                                 </Badge>
                                             )}
                                         </div>
-                                        {invitation.expiresAt && (
-                                            <p className="text-xs text-muted-foreground">
-                                                Hạn phản hồi lời mời: {formatDate(invitation.expiresAt)}
+                                        {invitation.availableFrom ? (
+                                            <p className="text-xs text-blue-700 font-medium">
+                                                🎯 Ca thi: {formatDate(invitation.availableFrom)} – {formatDate(invitation.expiresAt)}
                                             </p>
-                                        )}
+                                        ) : invitation.expiresAt ? (
+                                            <p className="text-xs text-muted-foreground">
+                                                ⏱ Hạn chót làm bài: {formatDate(invitation.expiresAt)}
+                                            </p>
+                                        ) : null}
                                     </header>
 
                                     <dl className="grid grid-cols-2 gap-y-2 text-xs text-slate-600">
@@ -256,10 +268,10 @@ export default function StudentInvitationList() {
                                         </dd>
 
                                         <dt>Mở lúc</dt>
-                                        <dd>{formatDate(invitation.examStartTime ?? null)}</dd>
+                                        <dd>{formatDate(invitation.availableFrom ?? invitation.examStartTime ?? null)}</dd>
 
                                         <dt>Đóng lúc</dt>
-                                        <dd>{formatDate(invitation.examEndTime ?? null)}</dd>
+                                        <dd>{formatDate(invitation.expiresAt ?? invitation.examEndTime ?? null)}</dd>
 
                                         <dt>Số lượt tối đa</dt>
                                         <dd>{invitation.examMaxAttempts ?? "—"}</dd>
