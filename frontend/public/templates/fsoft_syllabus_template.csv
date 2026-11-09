@@ -1,0 +1,76 @@
+,,,,,,,,
+,,,,,,,,
+,Fresher,,,,,,,
+,JAVA SE ADVANCED PROGRAMMING SYLLABUS,,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,26e-BM/HR/HDCV/FSOFT
+,,,,,Version,,,2.0
+,,,,,Effective Date,,,24/04/2020
+Java SE Advanced Programming Syllabus,,,,,
+1,Technical Group,Java,,,
+2,Topic Name,Java SE Advanced Programming,,,
+3,Topic Code,Java-201,,,
+4,Version,2,,,
+5,Training Audience,Trainees who are software developers (SD) with basic background and skills on programming language,,,
+6,Course Objectives,"This topic is to introduce about Java programming language knowledge; adapt trainees with skills, lessons and practices which is specifically used in the Fsoft projects.
+
+The topic cover following output standards",,,
+,,Name,Code,Description,
+,,Java Advanced Concepts,,,
+7,Topic Outline,"- Java Advanced Concepts
+- Theory Evaluation
+- Capstone Project Evaluation
+- Audit",,,
+8,Time Allocation,Concept/Lecture,0.23076923076923078,"Concepts, theory","9 Sessions"
+,,Assignment/Lab,0,"Assignment, Lab",
+,,Guides/Review,0,"Quiz, assignment review",
+,,Seminar/Workshop,0.15384615384615385,"Seminar, Workshop",
+,,Class Meeting,0,Daily class meeting,
+,,Test/Quiz,0.15384615384615385,Daily quiz,
+,,Exam,0.46153846153846156,"Pre-Test, Final Topic Test",
+9,Training Materials & Environments,Text book,N/A,,
+,,References,N/A,,
+,,Technical requirements,N/A,,
+10,Assessment Scheme,Quiz,2,20,"(2 quizzes, to do in 15-30 minutes for each)"
+,,Final Theory Test,1,30,
+,,Final Practice Test,1,50,
+,,Pass Criteria,6,"Total topic GPA >= 6/10; Completed 100% Online video, Quiz, Assignments, Labs, Final Test",
+11,Training Delivery Principles,Trainees,"Qualified entry test and passed interview of Fresher program; Less than or equals 20 students in the class",,
+,,Trainer,"- Trainer and mentor has a good knowledge of the Java programming language that has been evaluated by FA",,
+,,Training,"- Trainee actively self-learn at day 1 of each topic
+- Trainer/Mentor conducts the workshop at day 2 of each topic
+- Trainees have 1 final test at the end of the course",,
+,,Re-Test,2,"Only allow each student to retake the test up to 2 times; Re-exam the same structure as the Final Test",
+,,Marking,"- Trainer marks students on Assignments, Final Exam Theory, Final Exam Practice",,
+,,Waiver Criteria,"Students pass the quick test; Trainer Audit: rank B or up",,
+,,Others,N/A,,
+,,,,,,,,
+Java SE Advanced Programming - Training Schedule,,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,"Training Materials / Logistics & General Notes"
+1,Java Advanced Concepts,1,"Functional Programming
+Stream API
+Optional API
+Time API",Understand functional theory and Stream pipelines,Concept/Lecture,180,Offline,https://docs.oracle.com/
+,,2,"Functional Programming
+Stream API
+Optional API
+Time API",Hands-on functional streams,Seminar/Workshop,120,Offline,Lab-Functional.pdf
+,,,Quiz 01,Quick check on stream fundamentals,Test/Quiz,30,Offline,Quiz-01.pdf
+,,3,"Java I/O, NIO API
+Concurrency API
+JUnit & Mockito",Master asynchronous and I/O streams,Concept/Lecture,180,Offline,https://docs.oracle.com/
+,,4,"Java I/O, NIO API
+Concurrency API
+JUnit & Mockito",Implement multithreaded I/O services,Seminar/Workshop,120,Offline,Lab-IO-Concurrency.pdf
+,,,Quiz 02,Check on concurrency and mock testing,Test/Quiz,30,Offline,Quiz-02.pdf
+2,Theory Evaluation,5,Interviewing-based Quiz (Open-end questions),Comprehensive theoretical interview,Test/Quiz,180,Offline,Theory-Quiz-Rubric.pdf
+3,Capstone Project Evaluation,6,Capstone Project Evaluation,Evaluate practical architecture and business solutions,Exam,180,Offline,Capstone-Project-Guidelines.pdf
+,,7,Capstone Project Evaluation,Complete practical defense and code review,Exam,180,Offline,Capstone-Project-Rubric.pdf
+4,Audit,8,Audit,Technical quality audit and compliance check,Exam,180,Offline,Audit-Checklist.pdf
+,,9,Audit,Final score compilation and grade submission,Exam,180,Offline,Final-Grade-Report.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,
+,Role,Name,Account,Unit,Notes
+,Creator,Bùi Việt Phương,PhuongBV3,FSA.NLS,
+,Reviewer,Lê Thu Trang,TrangLT44,FSA.NLS,
+

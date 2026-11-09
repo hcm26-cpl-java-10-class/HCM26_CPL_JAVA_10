@@ -14,72 +14,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-const DEFAULT_ACTIVITIES: ClassActivity[] = [
-    {
-        id: 1,
-        classId: 1,
-        author: "UyenHTM",
-        initials: "UH",
-        content: "has updated trainee allocation info.",
-        timestamp: "06-Aug-2026 09:41:25",
-        type: "history",
-    },
-    {
-        id: 2,
-        classId: 1,
-        author: "UyenHTM",
-        initials: "UH",
-        content: "has updated trainee status.",
-        timestamp: "06-Aug-2026 09:34:35",
-        type: "history",
-    },
-    {
-        id: 3,
-        classId: 1,
-        author: "UyenHTM",
-        initials: "UH",
-        content: "has reverted to in progress the class with following reason:\nUPDATE MILESTONE.",
-        timestamp: "28-Jul-2026 15:19:32",
-        type: "history",
-    },
-    {
-        id: 4,
-        classId: 1,
-        author: "UyenHTM",
-        initials: "UH",
-        content: "has edited trainee mark.",
-        timestamp: "27-Jul-2026 17:02:19",
-        type: "history",
-    },
-    {
-        id: 5,
-        classId: 1,
-        author: "UyenHTM",
-        initials: "UH",
-        content: "has updated class milestone.",
-        timestamp: "27-Jul-2026 16:26:47",
-        type: "history",
-    },
-    {
-        id: 6,
-        classId: 1,
-        author: "NgaTTT45",
-        initials: "NT",
-        content: "All trainees completed Final Practice Exam for Milestone Jun - 2026. Ready for graduation review.",
-        timestamp: "26-Jul-2026 14:10:05",
-        type: "comment",
-    },
-    {
-        id: 7,
-        classId: 1,
-        author: "NhiNLY4",
-        initials: "NN",
-        content: "has updated trainee reward and penalty.",
-        timestamp: "25-Jul-2026 10:22:14",
-        type: "history",
-    },
-];
-
 export function ClassActivitiesTab({ classItem }: { classItem: ExternalClass }) {
     const classId = String(classItem.id);
     const { data: serverActivities, isLoading, refetch } = useClassActivities(classId);
@@ -92,11 +26,9 @@ export function ClassActivitiesTab({ classItem }: { classItem: ExternalClass }) 
     // New comment input state
     const [newComment, setNewComment] = useState("");
 
-    // Fallback combined list
+    // Filtered list directly from H2 database
     const activities = useMemo(() => {
-        let baseList = serverActivities && Array.isArray(serverActivities) && serverActivities.length > 0
-            ? serverActivities
-            : DEFAULT_ACTIVITIES;
+        const baseList: ClassActivity[] = Array.isArray(serverActivities) ? serverActivities : [];
 
         return baseList.filter((item) => {
             if (item.type === "comment" && !showComments) return false;
@@ -110,20 +42,17 @@ export function ClassActivitiesTab({ classItem }: { classItem: ExternalClass }) 
 
         addActivityMutation.mutate(
             {
-                author: "UyenHTM",
                 content: newComment.trim(),
                 type: "comment",
             },
             {
                 onSuccess: () => {
                     setNewComment("");
-                    toast.success("Đã gửi bình luận thành công!");
+                    toast.success("Đã gửi bình luận vào H2 thành công!");
                     refetch();
                 },
                 onError: () => {
-                    // Fallback local update
-                    setNewComment("");
-                    toast.success("Đã ghi nhận bình luận (lưu cục bộ)!");
+                    toast.error("Không thể lưu bình luận vào H2!");
                 },
             }
         );

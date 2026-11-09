@@ -41,7 +41,6 @@ public class CsvExporter implements Exporter {
         }
         writer.newLine();
 
-        // Data
         for (T item : data) {
             for (int i = 0; i < config.columns().size(); i++) {
                 if (i > 0) {
@@ -70,6 +69,4 @@ public class CsvExporter implements Exporter {
         return "\"" + value.replace("\"", "\"\"") + "\"";
     }
 }
-
-
 

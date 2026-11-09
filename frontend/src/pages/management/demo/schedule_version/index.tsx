@@ -8,5 +8,5 @@ import TrainingCalendarAdjustDemo from "./TrainingCalendarAdjustDemo";
  * Topic -> Day -> Activity theo đúng đặc tả FAMS SRS.
  */
 export default function ScheduleVersionManagementPage() {
-  return <TrainingCalendarAdjustDemo defaultClassId="HCM26_FR_FU_KS_JAVA_01" />;
+  return <TrainingCalendarAdjustDemo defaultClassId="LOCAL_JAVA_01" />;
 }

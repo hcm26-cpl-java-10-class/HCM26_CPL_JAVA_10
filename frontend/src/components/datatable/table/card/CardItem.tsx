@@ -49,7 +49,6 @@ export function CardItem({
   const isClickable = typeof onRowClick === "function";
   const hasHeader = selectable || showIndex || showActions;
 
-  // Default row actions
   const defaultActions = (
     <>
       <ActionButton
@@ -109,7 +108,7 @@ export function CardItem({
         </CardHeader>
       )}
 
-      <CardContent className={cn("space-y-2 overflow-hidden", hasHeader ? "pt-0" : "pt-4")}> 
+      <CardContent className={cn("space-y-2 overflow-hidden", hasHeader ? "pt-0" : "pt-4")}>
         {visibleFields
           .filter((f) => f.type !== "password")
           .map((f) => (

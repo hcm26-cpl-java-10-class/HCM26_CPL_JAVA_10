@@ -14,7 +14,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
-public class Location extends BaseEntity { // <--- Thêm extends ở đây
+public class Location extends BaseEntity {
 
     @Column(nullable = false, unique = true)
     private String code;

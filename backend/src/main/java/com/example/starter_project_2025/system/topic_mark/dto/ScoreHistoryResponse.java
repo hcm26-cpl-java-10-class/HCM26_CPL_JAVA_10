@@ -10,9 +10,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Response wrapper for the paginated score-change history endpoint.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -37,8 +34,6 @@ public class ScoreHistoryResponse {
 
     @Schema(description = "Sort parameter used", example = "updatedAt,desc")
     private String sort;
-
-    // ── Inner types ────────────────────────────────────────────────────────
 
     @Data
     @Builder

@@ -14,26 +14,83 @@ export interface TopicSession {
     | "Class Meeting";
   duration: string;
   durationHours: number;
+  durationMins?: number;
   trainingFormat: "Online" | "Offline";
   materials: string;
 }
 
 export interface TopicChapter {
   id: number;
+  unitNumber?: number;
   title: string;
   sessions: TopicSession[];
 }
 
 export interface AssessmentItem {
+  id?: string;
   category: string;
+  count?: number;
   method: string;
   passingScore: string;
   weight: string;
+  weightedNumber?: number;
+  notes?: string;
+}
+
+export const DEFAULT_FSOFT_ASSESSMENT_SCHEME: AssessmentItem[] = [
+  {
+    category: "Class Participation & Attendance",
+    count: 1,
+    method: "Daily attendance roll-call, seminar discussion & active engagement",
+    passingScore: ">= 80%",
+    weight: "10%",
+    weightedNumber: 10,
+    notes: "Daily attendance roll-call",
+  },
+  {
+    category: "Hands-on Assignments & Lab Exercises",
+    count: 2,
+    method: "Evaluation of practical lab problems, code cleanlines & Git commit history",
+    passingScore: ">= 6.0 / 10",
+    weight: "40%",
+    weightedNumber: 40,
+    notes: "Practical assignments",
+  },
+  {
+    category: "Final Practical Examination",
+    count: 1,
+    method: "Comprehensive capstone coding exam covering core competencies",
+    passingScore: ">= 6.0 / 10",
+    weight: "35%",
+    weightedNumber: 35,
+    notes: "Final practice test",
+  },
+  {
+    category: "Final Knowledge Quiz",
+    count: 1,
+    method: "Multiple-choice online assessment on key concepts & best practices",
+    passingScore: ">= 6.0 / 10",
+    weight: "15%",
+    weightedNumber: 15,
+    notes: "Final theory test",
+  },
+];
+
+export interface SyllabusDocumentMeta {
+  documentCode?: string;
+  version?: string;
+  effectiveDate?: string;
+  trainingAudience?: string;
+  courseObjectives?: string;
+  topicOutline?: string;
+  deliveryPrinciples?: Record<string, string>;
 }
 
 export interface TopicSyllabusPackage {
+  meta?: SyllabusDocumentMeta;
   chapters: TopicChapter[];
   totalSessions: number;
+  totalMins?: number;
   timeAllocation: {
     lab: number;
     lecture: number;
@@ -43,629 +100,10 @@ export interface TopicSyllabusPackage {
   assessmentScheme: AssessmentItem[];
 }
 
-// 1. Curated real syllabi matching video (nav_01.jpg, nav_06.jpg, frame_006.jpg)
-const CURATED_SYLLABI: Record<string, TopicChapter[]> = {
-  // Hibernate (Exact match to nav_01.jpg & nav_06.jpg)
-  L2_JA_ORM: [
-    {
-      id: 1,
-      title: "1. Hibernate Mapping and Relationship",
-      sessions: [
-        {
-          session: 1,
-          content: "Hibernate Introduction\nHibernate Mapping\nHibernate relationship",
-          objectives: "Understand ORM architecture, entity mapping, and table associations (@OneToMany, @ManyToOne)",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://www.linkedin.com/learning/java-persistence-with-jpa-and-hibernate/mapping-entity-fields-to-table-columns",
-        },
-        {
-          session: 2,
-          content: "Long Assignment - problem 1",
-          objectives: "Hands-on entity mapping and CRUD operations with Hibernate SessionFactory",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Hibernate-Assignment-1.pdf",
-        },
-      ],
-    },
-    {
-      id: 2,
-      title: "2. Queries and Criteria",
-      sessions: [
-        {
-          session: 3,
-          content: "Hibernate Queries and Criteria API",
-          objectives: "Master JPQL queries, CriteriaBuilder, root queries, and type-safe query formulation",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://www.linkedin.com/learning/java-persistence-with-jpa-and-hibernate/jpql-queries",
-        },
-        {
-          session: 4,
-          content: "Long Assignment - problem 2",
-          objectives: "Implement dynamic search filters and pagination using JPA Criteria API",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Criteria-Assignment-2.pdf",
-        },
-      ],
-    },
-    {
-      id: 3,
-      title: "3. Hibernate Caching and Validator",
-      sessions: [
-        {
-          session: 5,
-          content: "Hibernate Caching\nHibernate Validator",
-          objectives: "Understand L1/L2 cache providers, entity lifecycle listeners, and validation constraints",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "Jakarta-Bean-Validation-using-Hibernate-Validator.pdf",
-        },
-        {
-          session: 6,
-          content: "Long Assignment - problem 3",
-          objectives: "Optimize query caching, avoid N+1 queries, and author custom bean validators",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Caching-Validation-3.pdf",
-        },
-      ],
-    },
-    {
-      id: 4,
-      title: "4. Final Test",
-      sessions: [
-        {
-          session: 7,
-          content: "Theory Final Test (60m)\nPractice Final Test (180m)",
-          objectives: "Comprehensive evaluation of Hibernate mapping, criteria query performance, and caching",
-          deliveryType: "Exam",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Exam-Rubric-Hibernate-v2.pdf",
-        },
-      ],
-    },
-  ],
-
-  // Java Core & OOP
-  JAVA_CORE: [
-    {
-      id: 1,
-      title: "1. Core Syntax, Memory & Object-Oriented Fundamentals",
-      sessions: [
-        {
-          session: 1,
-          content: "Java Virtual Machine (JVM) Architecture, Stack & Heap\nPrimitive Types & Control Structures",
-          objectives: "Master memory allocation model, bytecode compilation, and foundational syntax rules",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://docs.oracle.com/javase/tutorial/java/nutsandbolts/",
-        },
-        {
-          session: 2,
-          content: "Encapsulation, Inheritance, Polymorphism & Abstraction",
-          objectives: "Apply SOLID object-oriented principles to construct scalable class hierarchies",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Java-OOP-BankingSystem.pdf",
-        },
-      ],
-    },
-    {
-      id: 2,
-      title: "2. Collections Framework, Generics & Exception Handling",
-      sessions: [
-        {
-          session: 3,
-          content: "List, Set, Map Internals & Complexity Analysis\nCustom Generic Classes & Bounded Wildcards",
-          objectives: "Evaluate internal hashing in HashMap, collision resolution, and author type-safe collections",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://www.baeldung.com/java-collections",
-        },
-        {
-          session: 4,
-          content: "Exception Hierarchy, Custom Checked/Unchecked Exceptions & Java I/O",
-          objectives: "Construct resilient error-handling strategies and read/write structured file streams",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Collections-FileIO.pdf",
-        },
-      ],
-    },
-    {
-      id: 3,
-      title: "3. Modern Java Features & Functional Programming",
-      sessions: [
-        {
-          session: 5,
-          content: "Lambda Expressions, Functional Interfaces & Java Stream API Pipelines",
-          objectives: "Write declarative parallel and sequential stream processing with map, filter, reduce",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://dev.java/learn/api/streams/",
-        },
-        {
-          session: 6,
-          content: "Advanced Stream Operations, Collectors & Optional Class Best Practices",
-          objectives: "Refactor legacy loops into clean stream collectors and eliminate NullPointerExceptions",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Streams-Refactoring.pdf",
-        },
-      ],
-    },
-    {
-      id: 4,
-      title: "4. Final Assessment",
-      sessions: [
-        {
-          session: 7,
-          content: "Java Core Theory Test (60m) & OOP Console Application Defense (180m)",
-          objectives: "Demonstrate complete mastery of Java fundamentals, clean code, and algorithmic problem solving",
-          deliveryType: "Exam",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Exam-Java-Core-Assessment.pdf",
-        },
-      ],
-    },
-  ],
-
-  // Spring Boot Enterprise
-  SPRING_BOOT: [
-    {
-      id: 1,
-      title: "1. Spring Core & Architecture",
-      sessions: [
-        {
-          session: 1,
-          content: "Inversion of Control (IoC), Dependency Injection & Bean Lifecycle\nSpring Boot Autoconfiguration",
-          objectives: "Understand Spring container mechanics, component scans, and profile-based configuration",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://spring.io/guides/gs/rest-service/",
-        },
-        {
-          session: 2,
-          content: "Spring Boot Multi-tier RESTful API Project Setup",
-          objectives: "Bootstrap enterprise layered architecture (Controller, Service, Repository, DTO)",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-SpringBoot-Architecture.pdf",
-        },
-      ],
-    },
-    {
-      id: 2,
-      title: "2. RESTful Endpoints & Data Persistence",
-      sessions: [
-        {
-          session: 3,
-          content: "RESTful Standards, DTO Validation & @RestControllerAdvice Error Handling",
-          objectives: "Author standard API responses, request validation, and uniform exception handlers",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://www.baeldung.com/spring-boot-bean-validation",
-        },
-        {
-          session: 4,
-          content: "Spring Data JPA, Custom JPQL Repositories & Specifications",
-          objectives: "Implement dynamic filtering, pagination, sorting, and optimistic locking mechanisms",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-SpringDataJPA-Repositories.pdf",
-        },
-      ],
-    },
-    {
-      id: 3,
-      title: "3. Spring Security & Integration Testing",
-      sessions: [
-        {
-          session: 5,
-          content: "Spring Security 6, JWT Stateless Authentication & Role-Based Access Control",
-          objectives: "Configure SecurityFilterChain, token issuance, filter validation, and @PreAuthorize checks",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html",
-        },
-        {
-          session: 6,
-          content: "Automated Integration Testing with MockMvc & Testcontainers",
-          objectives: "Author comprehensive end-to-end tests validating secured API endpoints against isolated DB",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Security-Testcontainers.pdf",
-        },
-      ],
-    },
-    {
-      id: 4,
-      title: "4. Capstone Defense",
-      sessions: [
-        {
-          session: 7,
-          content: "Enterprise REST API Defense & Code Review Audit",
-          objectives: "Deliver production-grade secured REST backend with OpenAPI/Swagger documentation",
-          deliveryType: "Exam",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Exam-SpringBoot-Enterprise-Rubric.pdf",
-        },
-      ],
-    },
-  ],
-
-  // Relational Database Design
-  DATABASE_SQL: [
-    {
-      id: 1,
-      title: "1. Relational Modeling & Schema Normalization",
-      sessions: [
-        {
-          session: 1,
-          content: "Entity-Relationship Modeling (ERD) & 1NF/2NF/3NF Normalization Principles",
-          objectives: "Design clean relational schemas eliminating update/delete anomalies and data redundancy",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://www.postgresql.org/docs/current/tutorial.html",
-        },
-        {
-          session: 2,
-          content: "DDL Scripts, Constraints, Foreign Keys & Cascading Rules",
-          objectives: "Author strict schema definitions enforcing referential integrity and composite keys",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-ERD-Schema-Design.pdf",
-        },
-      ],
-    },
-    {
-      id: 2,
-      title: "2. Complex Query Formulation & Window Functions",
-      sessions: [
-        {
-          session: 3,
-          content: "Multi-table JOINs, Common Table Expressions (CTEs) & Window Analytical Functions",
-          objectives: "Write high-performance reporting queries using PARTITION BY, RANK, and LEAD/LAG",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://mode.com/sql-tutorial/sql-window-functions/",
-        },
-        {
-          session: 4,
-          content: "Complex SQL Analytical Query Problem Solving",
-          objectives: "Solve business analytics challenges requiring nested aggregations and recursive CTEs",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Complex-SQL-Queries.pdf",
-        },
-      ],
-    },
-    {
-      id: 3,
-      title: "3. Indexing Strategies & Performance Tuning",
-      sessions: [
-        {
-          session: 5,
-          content: "B-Tree Indexes, Composite Index Ordering & EXPLAIN ANALYZE Execution Plans",
-          objectives: "Diagnose sequential scans, author covering indexes, and tune query execution cost",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://use-the-index-luke.com/",
-        },
-        {
-          session: 6,
-          content: "ACID Transactions, Isolation Levels & Stored Procedures",
-          objectives: "Prevent dirty reads/phantom reads and author high-throughput stored procedures",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Indexing-Query-Optimization.pdf",
-        },
-      ],
-    },
-    {
-      id: 4,
-      title: "4. Database Final Evaluation",
-      sessions: [
-        {
-          session: 7,
-          content: "Theory Test (60m) & Live SQL Performance Optimization Exam (180m)",
-          objectives: "Evaluate schema design, query tuning, and index optimization under high concurrency",
-          deliveryType: "Exam",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Exam-SQL-Optimization.pdf",
-        },
-      ],
-    },
-  ],
-
-  // React & TypeScript
-  REACT_FRONTEND: [
-    {
-      id: 1,
-      title: "1. Component Lifecycle, Hooks & Design Systems",
-      sessions: [
-        {
-          session: 1,
-          content: "React 18 Architecture, Virtual DOM & Core Hooks (useState, useEffect, useMemo)",
-          objectives: "Construct responsive components adhering to clean functional programming paradigms",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://react.dev/learn",
-        },
-        {
-          session: 2,
-          content: "Custom Hooks & Tailwind CSS Responsive Component Library",
-          objectives: "Extract reusable logic into custom hooks and style responsive UI components",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-React-Component-Library.pdf",
-        },
-      ],
-    },
-    {
-      id: 2,
-      title: "2. State Management & REST API Integration",
-      sessions: [
-        {
-          session: 3,
-          content: "Data Fetching with Axios & TanStack Query (React Query)",
-          objectives: "Manage server-side caching, background refetching, pagination, and optimistic updates",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://tanstack.com/query/latest",
-        },
-        {
-          session: 4,
-          content: "Global State Management with Context API & Zustand",
-          objectives: "Maintain clean global auth state, user permissions, and persistent app configuration",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-React-State-API.pdf",
-        },
-      ],
-    },
-    {
-      id: 3,
-      title: "3. Routing, Charts & Data Visualization",
-      sessions: [
-        {
-          session: 5,
-          content: "React Router DOM, Protected Routes & Role-Based Navigation Guards",
-          objectives: "Enforce route authorization guards and configure dynamic breadcrumbs and sub-navigation",
-          deliveryType: "Concept/Lecture",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Online",
-          materials: "https://reactrouter.com/",
-        },
-        {
-          session: 6,
-          content: "Interactive Dashboards & Recharts Data Visualization",
-          objectives: "Render responsive pie charts, time allocation charts, and exportable data tables",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Dashboard-Charts.pdf",
-        },
-      ],
-    },
-    {
-      id: 4,
-      title: "4. Frontend Capstone Exam",
-      sessions: [
-        {
-          session: 7,
-          content: "Single Page Application Capstone Defense & Code Quality Review",
-          objectives: "Deliver fully responsive enterprise data dashboard with 0 TypeScript/ESLint warnings",
-          deliveryType: "Exam",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Exam-React-Frontend-Rubric.pdf",
-        },
-      ],
-    },
-  ],
-
-  // Mock Project for Fresher (L4_MOCK_PROJECT)
-  L4_MOCK_PROJECT: [
-    {
-      id: 1,
-      title: "1. Project Inception, Architecture & Backlog Refinement",
-      sessions: [
-        {
-          session: 1,
-          content: "Business Requirement Specification (BRS) & Technical Architecture Design",
-          objectives: "Deconstruct business requirements into domain models and system architecture diagrams",
-          deliveryType: "Seminar/Workshop",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "BRS-Fresher-Mock-Project.pdf",
-        },
-        {
-          session: 2,
-          content: "Database Schema Design, API Contracts & Gitflow Branching Conventions",
-          objectives: "Establish team coding standards, OpenAPI documentation, and CI pipeline checks",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Architecture-API-Specs.pdf",
-        },
-      ],
-    },
-    {
-      id: 2,
-      title: "2. Sprint Execution & Enterprise Feature Development",
-      sessions: [
-        {
-          session: 3,
-          content: "Sprint 1 - Core Authentication, User Management & RBAC Permissions",
-          objectives: "Implement JWT login, refresh tokens, role authorizations, and audit tracking",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Sprint-1-Backlog.pdf",
-        },
-        {
-          session: 4,
-          content: "Sprint 2 - Primary Business Workflow & Transactional Services",
-          objectives: "Implement core business entities, optimistic locking, and complex database transactions",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Sprint-2-Backlog.pdf",
-        },
-        {
-          session: 5,
-          content: "Sprint 3 - Analytical Dashboards, Chart Visualizations & Batch Import/Export",
-          objectives: "Build asynchronous Excel/CSV data ingestion pipelines and interactive Recharts views",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Sprint-3-Backlog.pdf",
-        },
-      ],
-    },
-    {
-      id: 3,
-      title: "3. Quality Assurance & Container Deployment",
-      sessions: [
-        {
-          session: 6,
-          content: "Automated Integration Testing & Static Code Analysis with SonarQube",
-          objectives: "Ensure 80%+ test coverage with Mockito, MockMvc, and resolve critical security hotspots",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-QA-Testing-SonarQube.pdf",
-        },
-        {
-          session: 7,
-          content: "Docker Containerization, Docker Compose & Staging Deployment",
-          objectives: "Containerize frontend, backend, and PostgreSQL database for one-click deployment",
-          deliveryType: "Assignment/Lab",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Lab-Docker-Staging-Deploy.pdf",
-        },
-      ],
-    },
-    {
-      id: 4,
-      title: "4. Final Defense & Assessment",
-      sessions: [
-        {
-          session: 8,
-          content: "Final Project Committee Defense & Customer Acceptance Demonstration",
-          objectives: "Present working enterprise system to audit panel, defend architectural trade-offs, and pass review",
-          deliveryType: "Exam",
-          duration: "4h",
-          durationHours: 4,
-          trainingFormat: "Offline",
-          materials: "Rubric-Mock-Project-Defense.pdf",
-        },
-      ],
-    },
-  ],
-
-  // Softskills: Culture & Global Mindset
-  L1_AL_CCGM: [
-    {
-      id: 1,
-      title: "1. Corporate Culture & Global Professional Mindset",
-      sessions: [
-        {
-          session: 1,
-          content: "Corporate Culture, Values & Professional Ethics in Global Tech Environment",
-          objectives: "Align with professional workplace norms, corporate compliance, and team value systems",
-          deliveryType: "Concept/Lecture",
-          duration: "2h",
-          durationHours: 2,
-          trainingFormat: "Offline",
-          materials: "Global-Mindset-Handbook.pdf",
-        },
-      ],
-    },
-  ],
-};
-
 // Storage key prefix for custom saved syllabi per topic
 const STORAGE_PREFIX = "fams_custom_syllabus_";
+const STORAGE_ASSESSMENT_PREFIX = "fams_custom_assessment_";
+const STORAGE_PASS_SCORE_PREFIX = "fams_custom_pass_score_";
 
 export function getCustomTopicSyllabus(topicId: number | string): TopicChapter[] | null {
   try {
@@ -684,6 +122,66 @@ export function getCustomTopicSyllabus(topicId: number | string): TopicChapter[]
 
 export function hasCustomTopicSyllabus(topicId: number | string): boolean {
   return getCustomTopicSyllabus(topicId) !== null;
+}
+
+export function getCustomAssessmentScheme(topicId: number | string): AssessmentItem[] | null {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_ASSESSMENT_PREFIX}${topicId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to read custom assessment scheme from storage", e);
+  }
+  return null;
+}
+
+export function saveCustomAssessmentScheme(
+  topicId: number | string,
+  items: AssessmentItem[],
+  passScore?: string,
+  topicCode?: string
+): void {
+  try {
+    localStorage.setItem(`${STORAGE_ASSESSMENT_PREFIX}${topicId}`, JSON.stringify(items));
+    if (topicCode) {
+      localStorage.setItem(`${STORAGE_ASSESSMENT_PREFIX}${topicCode}`, JSON.stringify(items));
+    }
+    if (passScore) {
+      localStorage.setItem(`${STORAGE_PASS_SCORE_PREFIX}${topicId}`, passScore);
+      if (topicCode) {
+        localStorage.setItem(`${STORAGE_PASS_SCORE_PREFIX}${topicCode}`, passScore);
+      }
+    }
+  } catch (e) {
+    console.error("Failed to save custom assessment scheme to storage", e);
+  }
+}
+
+export function getCustomPassScore(topicId: number | string): string {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_PASS_SCORE_PREFIX}${topicId}`);
+    if (raw) return raw;
+  } catch (e) {
+    console.error("Failed to read custom pass score from storage", e);
+  }
+  return ">= 6.0 / 10";
+}
+
+export function resetCustomAssessmentScheme(topicId: number | string, topicCode?: string): void {
+  try {
+    localStorage.removeItem(`${STORAGE_ASSESSMENT_PREFIX}${topicId}`);
+    localStorage.removeItem(`${STORAGE_PASS_SCORE_PREFIX}${topicId}`);
+    if (topicCode) {
+      localStorage.removeItem(`${STORAGE_ASSESSMENT_PREFIX}${topicCode}`);
+      localStorage.removeItem(`${STORAGE_PASS_SCORE_PREFIX}${topicCode}`);
+    }
+  } catch (e) {
+    console.error("Failed to reset custom assessment scheme from storage", e);
+  }
 }
 
 export function saveTopicSyllabusPackage(
@@ -716,8 +214,14 @@ export function resetTopicSyllabusPackage(topicId: number | string, topicCode?: 
 // Helper to compute metrics, time allocations and assessment scheme for any chapters list
 export function calculateSyllabusPackage(
   chapters: TopicChapter[],
-  topic: TopicItem
+  topic: TopicItem,
+  overrideScheme?: AssessmentItem[]
 ): TopicSyllabusPackage {
+  // Check if custom assessment scheme exists in storage
+  const savedScheme = overrideScheme ||
+    (topic.id ? getCustomAssessmentScheme(topic.id) : null) ||
+    (topic.code ? getCustomAssessmentScheme(topic.code) : null);
+
   if (!chapters || chapters.length === 0) {
     return {
       chapters: [],
@@ -728,79 +232,114 @@ export function calculateSyllabusPackage(
         exam: 0,
         total: 0,
       },
-      assessmentScheme: [],
+      assessmentScheme: savedScheme && savedScheme.length > 0 ? savedScheme : DEFAULT_FSOFT_ASSESSMENT_SCHEME,
     };
   }
 
-  const code = (topic.code || "").toUpperCase();
   let totalSessions = 0;
   let labHours = 0;
   let lectureHours = 0;
   let examHours = 0;
 
-  chapters.forEach((ch) => {
-    ch.sessions.forEach((sess) => {
-      totalSessions++;
-      const hrs = Number(sess.durationHours) || 0;
+  for (const ch of chapters) {
+    for (const sess of ch.sessions || []) {
+      totalSessions += 1;
+      const h = sess.durationHours || 0;
       if (sess.deliveryType === "Assignment/Lab" || sess.deliveryType === "Seminar/Workshop") {
-        labHours += hrs;
+        labHours += h;
       } else if (sess.deliveryType === "Exam" || sess.deliveryType === "Test/Quiz") {
-        examHours += hrs;
+        examHours += h;
       } else {
-        lectureHours += hrs;
+        lectureHours += h;
       }
-    });
-  });
+    }
+  }
 
-  const totalCalculatedHours = labHours + lectureHours + examHours;
-  const totalH = totalCalculatedHours > 0 ? totalCalculatedHours : (topic.durationHours || 0);
-
-  // Tailor assessment scheme to topic type
-  const isSoftSkill = topic.technicalGroup?.toLowerCase().includes("soft") || code.startsWith("L1_AL");
-  const isProject = code.includes("PROJECT") || code.includes("MOCK");
+  const totalCalculated = labHours + lectureHours + examHours;
+  const targetDuration = topic.durationHours || totalCalculated;
 
   let assessmentScheme: AssessmentItem[];
-  if (isProject) {
-    assessmentScheme = [
-      { category: "Sprint Progress & Tasks", method: "Agile sprint backlog deliverables & git commits", passingScore: ">= 6.0 / 10", weight: "30%" },
-      { category: "Code Quality & Automated Tests", method: "SonarQube code smell audit & JUnit 5 test suite", passingScore: ">= 6.0 / 10", weight: "30%" },
-      { category: "Final Committee Defense", method: "Live system demo, architecture defense & Q&A review", passingScore: ">= 6.0 / 10", weight: "40%" },
-    ];
-  } else if (isSoftSkill) {
-    assessmentScheme = [
-      { category: "Class Attendance & Engagement", method: "Active participation in team exercises & discussions", passingScore: ">= 80%", weight: "20%" },
-      { category: "Practical Group Workshop", method: "Team simulation, role-play presentation & peer review", passingScore: ">= 6.0 / 10", weight: "40%" },
-      { category: "Final Reflective Assessment", method: "Written scenario evaluation & personal action plan", passingScore: ">= 6.0 / 10", weight: "40%" },
-    ];
+  if (savedScheme && savedScheme.length > 0) {
+    assessmentScheme = savedScheme;
   } else {
+    // Derive realistic assessment items from chapters
+    const hasExam = examHours > 0;
     assessmentScheme = [
-      { category: "Quiz", method: "Online multiple-choice quizzes via LMS portal", passingScore: ">= 6.0 / 10", weight: "20%" },
-      { category: "Assignment / Lab", method: "Hands-on coding problems & pull request review", passingScore: ">= 6.0 / 10", weight: "30%" },
-      { category: "Final Test", method: "Theory examination (60m) + Practice examination (180m)", passingScore: ">= 6.0 / 10", weight: "50%" },
+      {
+        category: "Class Participation & Attendance",
+        count: 1,
+        method: "Daily attendance roll-call, seminar discussion & active engagement",
+        passingScore: ">= 80%",
+        weight: "10%",
+        weightedNumber: 10,
+        notes: "Daily attendance roll-call",
+      },
+      {
+        category: "Hands-on Assignments & Lab Exercises",
+        count: 2,
+        method: "Evaluation of practical lab problems, code cleanlines & Git commit history",
+        passingScore: ">= 6.0 / 10",
+        weight: hasExam ? "40%" : "50%",
+        weightedNumber: hasExam ? 40 : 50,
+        notes: "Practical assignments",
+      },
     ];
+
+    if (hasExam) {
+      assessmentScheme.push(
+        {
+          category: "Final Practical Examination",
+          count: 1,
+          method: "Comprehensive capstone coding exam covering core competencies",
+          passingScore: ">= 6.0 / 10",
+          weight: "35%",
+          weightedNumber: 35,
+          notes: "Final practice test",
+        },
+        {
+          category: "Final Knowledge Quiz",
+          count: 1,
+          method: "Multiple-choice online assessment on key concepts & best practices",
+          passingScore: ">= 6.0 / 10",
+          weight: "15%",
+          weightedNumber: 15,
+          notes: "Final theory test",
+        }
+      );
+    } else {
+      assessmentScheme.push({
+        category: "Capstone Mini-Project",
+        count: 1,
+        method: "End-of-module functional prototype review & presentation",
+        passingScore: ">= 6.0 / 10",
+        weight: "40%",
+        weightedNumber: 40,
+        notes: "Final capstone project",
+      });
+    }
   }
 
   return {
     chapters,
     totalSessions,
+    totalMins: Math.round(totalCalculated * 60),
     timeAllocation: {
       lab: labHours,
       lecture: lectureHours,
       exam: examHours,
-      total: totalH,
+      total: totalCalculated > 0 ? totalCalculated : targetDuration,
     },
     assessmentScheme,
   };
 }
 
-// Generate template chapters matching exact target hours
+// 2. Blueprint generator used ONLY when user clicks "Auto-generate Template" in outline editor
 export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
-  const targetH = Math.max(topic.durationHours || 40, 4);
-  const name = topic.name || "Topic Modules";
+  const targetH = topic.durationHours && topic.durationHours > 0 ? topic.durationHours : 32;
+  const name = topic.name || "Topic";
   const code = topic.code || "TOPIC";
   const group = topic.technicalGroup || "Engineering";
 
-  // Divide into 3 to 4 chapters
   const numChapters = targetH >= 30 ? 4 : targetH >= 16 ? 3 : 2;
   const sessionsPerChapter = 2;
   const totalSessions = numChapters * sessionsPerChapter;
@@ -827,7 +366,6 @@ export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
     const isLastChapter = chIdx === numChapters - 1;
     const chSessions: TopicSession[] = [];
 
-    // Session 1 of chapter
     let sess1Hours = baseSessionH;
     if (remainingHoursToAdd > 0) {
       sess1Hours += 1;
@@ -845,13 +383,13 @@ export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
         : `${name} - ${theme.topic} Theory & Concepts`,
       objectives: `Understand foundational concepts, workflow architecture, and engineering principles in ${group}`,
       deliveryType: sess1Delivery,
-      duration: `${sess1Hours}h`,
+      duration: `${sess1Hours}h (${sess1Hours * 60}m)`,
       durationHours: sess1Hours,
+      durationMins: sess1Hours * 60,
       trainingFormat: "Online",
       materials: `https://docs.oracle.com/en/java/`,
     });
 
-    // Session 2 of chapter
     let sess2Hours = baseSessionH;
     if (remainingHoursToAdd > 0) {
       sess2Hours += 1;
@@ -871,8 +409,9 @@ export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
         ? `Evaluate comprehensive competencies, problem solving, and applied skills in ${name}`
         : `Implement practical exercises, unit tests, and code reviews under mentor guidance`,
       deliveryType: sess2Delivery,
-      duration: `${sess2Hours}h`,
+      duration: `${sess2Hours}h (${sess2Hours * 60}m)`,
       durationHours: sess2Hours,
+      durationMins: sess2Hours * 60,
       trainingFormat: "Offline",
       materials: isLastChapter
         ? `Exam-Rubric-${code}.pdf`
@@ -881,6 +420,7 @@ export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
 
     chapters.push({
       id: chIdx + 1,
+      unitNumber: chIdx + 1,
       title: theme.title,
       sessions: chSessions,
     });
@@ -889,21 +429,18 @@ export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
   return chapters;
 }
 
-// 3. Main Resolver: returns chapters, accurate time allocations, and tailored assessment scheme
+// 3. Main Resolver: returns custom syllabus if configured by user; otherwise returns completely empty state.
 export function getTopicSyllabusPackage(topic: TopicItem): TopicSyllabusPackage {
   // Check custom saved syllabus first (by id or code)
   const custom = (topic.id ? getCustomTopicSyllabus(topic.id) : null) || getCustomTopicSyllabus(topic.code);
+  const customAssessment = (topic.id ? getCustomAssessmentScheme(topic.id) : null) ||
+    (topic.code ? getCustomAssessmentScheme(topic.code) : null);
+
   if (custom && custom.length > 0) {
     return calculateSyllabusPackage(custom, topic);
   }
 
-  // Exact match only for specific predefined seed syllabus (e.g. L2_JA_ORM demo from FAMS video)
-  const code = (topic.code || "").toUpperCase().trim();
-  if (code && CURATED_SYLLABI[code]) {
-    return calculateSyllabusPackage(CURATED_SYLLABI[code], topic);
-  }
-
-  // If user hasn't added any chapters, keep it completely empty. Do NOT generate fake data!
+  // If user has not added any chapters yet, return empty chapters but allow assessment scheme to be configured!
   return {
     chapters: [],
     totalSessions: 0,
@@ -913,7 +450,8 @@ export function getTopicSyllabusPackage(topic: TopicItem): TopicSyllabusPackage 
       exam: 0,
       total: 0,
     },
-    assessmentScheme: [],
+    assessmentScheme: customAssessment && customAssessment.length > 0
+      ? customAssessment
+      : DEFAULT_FSOFT_ASSESSMENT_SCHEME,
   };
 }
-

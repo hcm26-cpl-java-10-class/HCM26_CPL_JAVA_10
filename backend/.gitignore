@@ -1,5 +1,6 @@
 HELP.md
 target/
+data/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -31,3 +32,11 @@ build/
 
 ### VS Code ###
 .vscode/
+
+uploads/
+
+# === Environment Variables / Secrets ===
+.env
+.env.local
+.env.*.local
+!.env.example

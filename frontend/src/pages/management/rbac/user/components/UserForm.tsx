@@ -92,7 +92,6 @@ export function UserForm({ mode, values, errors, submitting, onChange, onSubmit,
     />
   );
 
-  // Tab nào có lỗi thì đánh dấu để người dùng biết quay lại sửa.
   const generalHasError = (
     ["firstName", "lastName", "username", "email", "employeeCode", "phone", "password", "confirmPassword", "departmentIds", "status", "description"] as const
   ).some((k) => errors[k]?.length);

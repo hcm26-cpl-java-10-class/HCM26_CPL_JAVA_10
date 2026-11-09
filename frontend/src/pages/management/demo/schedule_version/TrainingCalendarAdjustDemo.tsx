@@ -77,7 +77,6 @@ export type TrainingTopic = {
 export const PRESET_CLASSES = [
   { id: "LOCAL_JAVA_01", name: "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)", startDate: "2026-10-01" },
   { id: "LOCAL_JAVA_02", name: "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)", startDate: "2026-11-15" },
-  { id: "HCM26_FR_FU_KS_JAVA_01", name: "[HCM26_FR_FU_KS_JAVA_01] Lớp Java SE & Spring Boot", startDate: "2026-05-14" },
 ];
 
 export const LOCATION_OPTIONS = [
@@ -102,7 +101,7 @@ export const PIC_OPTIONS = [
   "Huỳnh Tấn Phát (Trainer)",
 ];
 
-export const CONTRIBUTION_OPTIONS = [
+const CONTRIBUTION_OPTIONS = [
   "Lecture",
   "Assignment",
   "Practice",
@@ -248,7 +247,7 @@ export function generateDaysFromDuration({
   const days: TrainingDay[] = [];
   let currentDate = new Date(startDateStr);
   if (Number.isNaN(currentDate.getTime())) {
-    currentDate = new Date("2026-05-14");
+    currentDate = new Date("2026-10-01");
   }
 
   let sessionCount = 0;

@@ -8,7 +8,7 @@ import {
     Trash2,
     X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
@@ -58,149 +58,6 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/utils/session.utils";
 
-// Default fallback data matching FAMS reference images
-function createDefaultOperationData(classItem: ExternalClass): ClassOperationData {
-    return {
-        classId: classItem.id,
-        operatingInfo: {
-            actualStartDate: classItem.startDate || "2026-01-23",
-            earlyGraduatedDate: classItem.id === 1 ? "2026-07-22" : (classItem.endDate || "2026-07-22"),
-            actualEndDate: "",
-            gpaCalculation: {
-                topicMark: 70,
-                disciplinePoint: 30,
-                bonusPoint: 10,
-                penaltyPoint: 20,
-            },
-            hasNoAllocationNeeds: false,
-        },
-        milestones: [
-            {
-                id: 1,
-                name: "Feb - 2026",
-                status: "Baselined",
-                checkpointType: "STANDARD",
-                salaryPaid: "Yes",
-                startDate: "2026-02-01",
-                endDate: "2026-02-28",
-                topics: [
-                    { id: 101, topic: "[L1_AL_DF] [NFP] Database Fundamentals For All by FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 868 },
-                    { id: 102, topic: "[L1_AL_ECWL] [NFP] Effective Communication with LEAP Technique (Instructor Led) (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 360 },
-                    { id: 103, topic: "[L1_AL_DSAA] [NFP] Data Structures and Algorithms for ALL by FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 810 },
-                    { id: 104, topic: "[L1_AL_APWS] [NFP] Agile Practitioner with Scrum For All By FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 210 },
-                ],
-            },
-            {
-                id: 2,
-                name: "Mar - 2026",
-                status: "Baselined",
-                checkpointType: "STANDARD",
-                salaryPaid: "Yes",
-                startDate: "2026-03-01",
-                endDate: "2026-03-31",
-                topics: [
-                    { id: 201, topic: "[L1_AL_VCG] [NFP] Version Control - Git for ALL by FSA (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 264 },
-                    { id: 202, topic: "[L4_MOCK_PROJECT] [NFP] Mock Project for Fresher (1.0) - Phase 1", maxScore: 10, passingScore: 6, weightedNumber: 5520 },
-                ],
-            },
-            {
-                id: 3,
-                name: "Apr - 2026",
-                status: "Baselined",
-                checkpointType: "STANDARD",
-                salaryPaid: "Yes",
-                startDate: "2026-04-01",
-                endDate: "2026-04-30",
-                topics: [
-                    { id: 301, topic: "[L4_MOCK_PROJECT] [NFP] Mock Project for Fresher (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 9840 },
-                    { id: 302, topic: "[FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - April", maxScore: 10, passingScore: 6, weightedNumber: 3060 },
-                ],
-            },
-            {
-                id: 4,
-                name: "May - 2026",
-                status: "Baselined",
-                checkpointType: "STANDARD",
-                salaryPaid: "Yes",
-                startDate: "2026-05-01",
-                endDate: "2026-05-31",
-                topics: [
-                    { id: 401, topic: "[L2_JA_JS] [NFP] Java SE/Java Language Programing (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 2880 },
-                    { id: 402, topic: "[FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - May", maxScore: 10, passingScore: 6, weightedNumber: 1260 },
-                ],
-            },
-            {
-                id: 5,
-                name: "Jun - 2026",
-                status: "Baselined",
-                checkpointType: "STANDARD",
-                salaryPaid: "Yes",
-                startDate: "2026-06-01",
-                endDate: "2026-06-30",
-                topics: [
-                    { id: 501, topic: "[L2_JA_ORM] [NFP] ORM Framework - Hibernate (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 2400 },
-                    { id: 502, topic: "[L2_JA_FEF(JS.KS)] [NFP] Front-end Fundamentals (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 4230 },
-                    { id: 503, topic: "[L3_JSFW] [NFP] JavaScript Framework - React (1.0)", maxScore: 10, passingScore: 6, weightedNumber: 4000 },
-                ],
-            },
-        ],
-    };
-}
-
-function createDefaultTopicAssessments(): TopicAssessment[] {
-    const titles = [
-        "1. L1_AL_CCGM - [NFP] Company Culture & Global Mindset (Instructor Led)",
-        "2. [FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - Jan&Feb",
-        "3. L1_AL_GC - [NFP] Global Collaboration",
-        "4. L1_AL_PSE - [NFP] Problem Solving",
-        "5. L1_AL_TME - [NFP] Time Management (E-learning)",
-        "6. L1_AL_DF - [NFP] Database Fundamentals For All by FSA",
-        "7. L1_AL_APWS - [NFP] Agile Practitioner with Scrum For All By FSA",
-        "8. L1_AL_ECWL - [NFP] Effective Communication with LEAP Technique (Instructor Led)",
-        "9. L1_AL_DSAA - [NFP] Data Structures and Algorithms for ALL by FSA",
-        "10. L1_AL_VCG - [NFP] Version Control - Git for ALL by FSA",
-        "11. FR_FU_KOR_IM - FR_FU_KOR_IM",
-        "12. [L4_MOCK_PROJECT] [NFP] Mock Project for Fresher (1.0) - Phase 1",
-        "13. [FR_FU_KOR_IM] FR_FU_KOR_IM (1.0) - April",
-        "14. L4_MOCK_PROJECT - [NFP] Mock Project for Fresher",
-    ];
-
-    return titles.map((title, idx) => {
-        const id = idx + 1;
-        if (id === 6) {
-            return {
-                id,
-                title,
-                assessments: [
-                    { id: 601, name: "Assignments", weightedNumber: 30, quantity: 2, note: "(2 assignments)", action: "Keep", changeStatus: "none" },
-                    { id: 602, name: "Final Theory Test", weightedNumber: 28, quantity: 1, note: "", action: "Keep", changeStatus: "confirmed" },
-                    { id: 603, name: "Final Final Test", weightedNumber: 42, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
-                ],
-            };
-        }
-        if (id === 9) {
-            return {
-                id,
-                title,
-                assessments: [
-                    { id: 901, name: "Assignments", weightedNumber: 30, quantity: 3, note: "", action: "Keep", changeStatus: "waiting" },
-                    { id: 902, name: "Final Theory Test", weightedNumber: 30, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
-                    { id: 903, name: "Final Practice Test", weightedNumber: 40, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
-                ],
-            };
-        }
-        return {
-            id,
-            title,
-            assessments: [
-                { id: id * 100 + 1, name: "Assignments", weightedNumber: 30, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
-                { id: id * 100 + 2, name: "Final Theory Test", weightedNumber: 30, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
-                { id: id * 100 + 3, name: "Final Practice Test", weightedNumber: 40, quantity: 1, note: "", action: "Keep", changeStatus: "none" },
-            ],
-        };
-    });
-}
-
 function calculateTopicTotal(topic: TopicAssessment): number {
     return (topic.assessments || []).reduce((sum, a) => sum + (Number(a.weightedNumber) || 0), 0);
 }
@@ -217,18 +74,17 @@ function TopicAssessmentModal({ open, onClose, classId, onActivityLog }: TopicAs
     const { data: serverTopics, refetch } = useTopicAssessments(classId);
     const saveMutation = useSaveTopicAssessments(classId);
 
-    const [topics, setTopics] = useState<TopicAssessment[]>(createDefaultTopicAssessments());
-    const [initialTopics, setInitialTopics] = useState<TopicAssessment[]>(createDefaultTopicAssessments());
-    const [openTopicId, setOpenTopicId] = useState<number | null>(6); // Default expand topic 6 like reference image
+    const [topics, setTopics] = useState<TopicAssessment[]>([]);
+    const [initialTopics, setInitialTopics] = useState<TopicAssessment[]>([]);
+    const [openTopicId, setOpenTopicId] = useState<number | null>(1);
 
     useEffect(() => {
-        if (serverTopics && Array.isArray(serverTopics) && serverTopics.length > 0) {
+        if (serverTopics && Array.isArray(serverTopics)) {
             setTopics(JSON.parse(JSON.stringify(serverTopics)));
             setInitialTopics(JSON.parse(JSON.stringify(serverTopics)));
-        } else {
-            const defaults = createDefaultTopicAssessments();
-            setTopics(defaults);
-            setInitialTopics(defaults);
+            if (serverTopics.length > 0 && !serverTopics.some((t) => t.id === openTopicId)) {
+                setOpenTopicId(serverTopics[0].id);
+            }
         }
     }, [serverTopics, open]);
 
@@ -300,7 +156,7 @@ function TopicAssessmentModal({ open, onClose, classId, onActivityLog }: TopicAs
         toast.info("Đã hoàn tác các thay đổi cấu hình đánh giá chuyên đề.");
     };
 
-    // 2.4: Reject Assessments
+    // 2.4: Reject Assessments (persisted to H2, keeps modal open)
     const handleReject = () => {
         const rejected = topics.map((t) => ({
             ...t,
@@ -313,21 +169,23 @@ function TopicAssessmentModal({ open, onClose, classId, onActivityLog }: TopicAs
         saveMutation.mutate(
             { topics: rejected, action: "reject" },
             {
-                onSuccess: () => {
+                onSuccess: (updatedTopics) => {
+                    if (updatedTopics && Array.isArray(updatedTopics)) {
+                        setTopics(JSON.parse(JSON.stringify(updatedTopics)));
+                        setInitialTopics(JSON.parse(JSON.stringify(updatedTopics)));
+                    }
                     toast.warn("Đã từ chối các thay đổi cấu hình đánh giá.");
                     onActivityLog("has rejected topic assessments changes.");
-                    onClose();
+                    refetch();
                 },
                 onError: () => {
-                    toast.warn("Đã từ chối các thay đổi (lưu cục bộ).");
-                    onActivityLog("has rejected topic assessments changes.");
-                    onClose();
+                    toast.error("Không thể cập nhật trạng thái từ chối vào cơ sở dữ liệu H2!");
                 },
             }
         );
     };
 
-    // 2.4: Confirm Assessments with validation (Max 100%)
+    // 2.4: Confirm Assessments with validation (Max 100%, persisted to H2, does NOT auto-close modal)
     const handleConfirm = () => {
         // Validate: no topic can have total weighted number > 100
         const exceedingTopic = topics.find((t) => calculateTopicTotal(t) > 100);
@@ -351,16 +209,19 @@ function TopicAssessmentModal({ open, onClose, classId, onActivityLog }: TopicAs
         saveMutation.mutate(
             { topics: confirmed, action: "confirm" },
             {
-                onSuccess: () => {
+                onSuccess: (updatedTopics) => {
+                    if (updatedTopics && Array.isArray(updatedTopics)) {
+                        setTopics(JSON.parse(JSON.stringify(updatedTopics)));
+                        setInitialTopics(JSON.parse(JSON.stringify(updatedTopics)));
+                    } else {
+                        setInitialTopics(JSON.parse(JSON.stringify(confirmed)));
+                    }
                     toast.success("Xác nhận thay đổi cấu hình đánh giá thành công!");
                     onActivityLog("has confirmed topic assessment configuration.");
                     refetch();
-                    onClose();
                 },
                 onError: () => {
-                    toast.success("Xác nhận cấu hình đánh giá thành công (lưu cục bộ)!");
-                    onActivityLog("has confirmed topic assessment configuration.");
-                    onClose();
+                    toast.error("Không thể lưu cấu hình đánh giá vào cơ sở dữ liệu H2!");
                 },
             }
         );
@@ -641,11 +502,6 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
             setActualEndDate(serverOpData.operatingInfo?.actualEndDate || "");
             setHasNoAllocationNeeds(Boolean(serverOpData.operatingInfo?.hasNoAllocationNeeds));
             setMilestones(serverOpData.milestones || []);
-        } else {
-            const defaults = createDefaultOperationData(classItem);
-            setActualEndDate(defaults.operatingInfo.actualEndDate || "");
-            setHasNoAllocationNeeds(defaults.operatingInfo.hasNoAllocationNeeds);
-            setMilestones(defaults.milestones);
         }
     }, [serverOpData, classItem]);
 
@@ -656,13 +512,17 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
         }, 0);
     }, [milestones]);
 
-    // 2.6: Save changes
+    const totalMilestoneTopics = useMemo(() => {
+        return milestones.reduce((sum, m) => sum + (m.topics?.length || 0), 0);
+    }, [milestones]);
+
+    // 2.6: Save changes (persisted directly to H2 database)
     const handleSaveChanges = () => {
         const payload: ClassOperationData = {
             classId: classItem.id,
             operatingInfo: {
-                actualStartDate: serverOpData?.operatingInfo?.actualStartDate || classItem.startDate || "2026-01-23",
-                earlyGraduatedDate: serverOpData?.operatingInfo?.earlyGraduatedDate || classItem.endDate || "2026-07-22",
+                actualStartDate: serverOpData?.operatingInfo?.actualStartDate || classItem.startDate || "",
+                earlyGraduatedDate: serverOpData?.operatingInfo?.earlyGraduatedDate || classItem.endDate || "",
                 actualEndDate,
                 gpaCalculation: serverOpData?.operatingInfo?.gpaCalculation || {
                     topicMark: 70,
@@ -678,18 +538,14 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
 
         saveOpMutation.mutate(payload, {
             onSuccess: () => {
-                toast.success("Lưu thông tin vận hành và milestone thành công!");
+                toast.success("Lưu thông tin vận hành và milestone vào H2 thành công!");
                 addActivityMutation.mutate({
                     content: "has updated class operating info and milestone configuration.",
                     type: "history",
                 });
             },
             onError: () => {
-                toast.success("Đã cập nhật thông tin vận hành (lưu phiên làm việc)!");
-                addActivityMutation.mutate({
-                    content: "has updated class operating info and milestone configuration.",
-                    type: "history",
-                });
+                toast.error("Không thể lưu thông tin vận hành vào cơ sở dữ liệu H2!");
             },
         });
     };
@@ -838,7 +694,10 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                                     Total Weighted Number: <span className="text-blue-700 dark:text-blue-400 font-mono text-sm">{totalWeightedNumber}</span>
                                 </p>
                                 <span className="text-xs text-muted-foreground">
-                                    5 Milestones (Feb - 2026 đến Jun - 2026) • 14 Chuyên đề
+                                    {milestones.length} Milestones
+                                    {milestones.length > 0 && ` (${milestones[0].name} đến ${milestones[milestones.length - 1].name})`}
+                                    {" • "}
+                                    {totalMilestoneTopics} Chuyên đề
                                 </span>
                             </div>
 
@@ -857,7 +716,7 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                                     </TableHeader>
                                     <TableBody>
                                         {milestones.map((m, mIdx) => (
-                                            <tbody key={`milestone-block-${m.id}`} className="border-b last:border-b-0">
+                                            <Fragment key={`milestone-block-${m.id}`}>
                                                 {/* Parent Milestone Row */}
                                                 <TableRow className="bg-slate-50/80 dark:bg-slate-900/60 font-semibold border-t">
                                                     <TableCell className="font-bold">{mIdx + 1}</TableCell>
@@ -898,7 +757,7 @@ export function ClassBudgetTab({ classItem }: { classItem: ExternalClass }) {
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
-                                            </tbody>
+                                            </Fragment>
                                         ))}
                                     </TableBody>
                                 </Table>
