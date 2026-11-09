@@ -91,17 +91,12 @@ export function CourseDetailPage({ forceEnrollmentManagement = false }: { forceE
   return (
     <MainLayout dense pathName={breadcrumbTitles}>
       <div className="mx-auto w-full max-w-6xl space-y-1.5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Button asChild variant="ghost" className="-ml-3">
+        <div className="sticky top-2 z-20 -ml-1 w-fit">
+          <Button asChild variant="outline" className="bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80">
             <Link to={listPath}>
               <ArrowLeft className="size-4" /> {listLabel}
             </Link>
           </Button>
-          {enrollmentManagement && course && (
-            <PermissionGate permissions={["DEPARTMENT_READ", "DEPARTMENT_UPDATE"]} requireAll>
-              <CourseEnrollmentAssignmentDialog course={course} prominent />
-            </PermissionGate>
-          )}
         </div>
 
         {!validId || (detailQuery.isError && getErrorStatus(detailQuery.error) === 404) ? (
@@ -217,7 +212,7 @@ export function CourseDetailContent({
       <div className="space-y-1.5">
         {hero}
         <CourseInformationPanel>{information}</CourseInformationPanel>
-        <CourseLearnersPanel courseId={course.id} />
+        <CourseLearnersPanel course={course} />
       </div>
     );
   }
@@ -255,13 +250,13 @@ function CourseInformationPanel({ children }: { children: ReactNode }) {
 
 const LEARNERS_PER_PAGE = 6;
 
-function CourseLearnersPanel({ courseId }: { courseId: number }) {
+function CourseLearnersPanel({ course }: { course: CourseDetail }) {
   const [open, setOpen] = useState(true);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
   const [page, setPage] = useState(0);
   const reportQuery = useQuery({ queryKey: ["course-report"], queryFn: courseReportApi.getCourseEnrollmentReport });
-  const courseReport = reportQuery.data?.find((item) => item.courseId === courseId);
+  const courseReport = reportQuery.data?.find((item) => item.courseId === course.id);
   const learners = useMemo(() => courseReport?.learners ?? [], [courseReport]);
   const filteredLearners = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -278,12 +273,17 @@ function CourseLearnersPanel({ courseId }: { courseId: number }) {
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <section className="rounded-xl border bg-card px-4 py-2">
-        <CollapsibleTrigger asChild>
-          <button type="button" className="flex w-full items-center justify-between gap-4 text-left">
-            <div className="flex items-start gap-3"><Users className="mt-0.5 size-5 text-muted-foreground" /><div><h2 className="text-lg font-semibold">Assigned & enrolled students</h2><p className="mt-0 text-sm text-muted-foreground">{learners.length} {learners.length === 1 ? "student" : "students"} in this course</p></div></div>
-            <ChevronDown className={`size-5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
-          </button>
-        </CollapsibleTrigger>
+        <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-start gap-3"><Users className="mt-0.5 size-5 shrink-0 text-muted-foreground" /><div className="min-w-0"><h2 className="text-lg font-semibold">Assigned & enrolled students</h2><p className="mt-0 text-sm text-muted-foreground">{learners.length} {learners.length === 1 ? "student" : "students"} in this course</p></div></div>
+          <PermissionGate permissions={["DEPARTMENT_READ", "DEPARTMENT_UPDATE"]} requireAll>
+            <CourseEnrollmentAssignmentDialog course={course} prominent />
+          </PermissionGate>
+          <CollapsibleTrigger asChild>
+            <button type="button" className="shrink-0 rounded-md p-2 hover:bg-muted" aria-label={open ? "Collapse assigned students" : "Expand assigned students"}>
+              <ChevronDown className={`size-5 transition-transform ${open ? "rotate-180" : ""}`} />
+            </button>
+          </CollapsibleTrigger>
+        </div>
         <CollapsibleContent className="pt-1.5">
           <div className="grid gap-1.5 border-y py-1.5 md:grid-cols-[minmax(0,1fr)_220px]">
             <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Search students by name or email..." className="pl-9" /></div>

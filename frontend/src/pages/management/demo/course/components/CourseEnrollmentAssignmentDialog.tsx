@@ -235,11 +235,11 @@ export function CourseEnrollmentAssignmentDialog({
     >
       <DialogTrigger asChild>
         {prominent ? (
-          <Button type="button" variant="default">
+          <Button type="button" variant="default" className="bg-green-600 text-white hover:bg-green-700 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700">
             Enroll
           </Button>
         ) : (
-          <Button type="button" variant="outline" className="flex-1">
+          <Button type="button" variant="outline" className="flex-1 border-green-600 bg-green-600 text-white hover:bg-green-700 hover:text-white dark:border-blue-600 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700 dark:hover:text-white">
             Enroll
           </Button>
         )}
