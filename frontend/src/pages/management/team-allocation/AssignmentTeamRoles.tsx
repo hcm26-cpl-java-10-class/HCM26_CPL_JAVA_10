@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { AssignmentMember, AssignmentRole, AssignmentRolePolicy, AssignmentTeam } from "@/types/features/project-assignment";
@@ -30,27 +31,35 @@ export function assignmentRoleErrors(team: AssignmentTeam, policy: AssignmentRol
   return errors;
 }
 
-export function TeamMemberRoleInput({ label, selected, multiple, disabled, placeholder = "Select a role", onChange }: {
+export function TeamMemberRoleInput({ label, selected, multiple, disabled, onChange }: {
   label: string; selected: TeamMemberRole[]; multiple: boolean; disabled?: boolean;
-  placeholder?: string; onChange: (roles: TeamMemberRole[]) => void;
+  onChange: (roles: TeamMemberRole[]) => void;
 }) {
-  if (multiple) {
-    return <fieldset className="flex flex-wrap gap-3" disabled={disabled}>
-      <legend className="sr-only">{label}</legend>
-      {roles.map(role => <label key={role} className="flex items-center gap-2 text-sm">
-        <Checkbox checked={selected.includes(role)} disabled={disabled}
+  const radioGroupId = useId();
+  return <fieldset className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-4" disabled={disabled}
+    aria-label={label} aria-invalid={multiple ? undefined : selected.length !== 1}>
+    <legend className="sr-only">{label}</legend>
+    {roles.map(role => {
+      const checked = selected.includes(role);
+      return <label key={role}
+        className={"flex min-h-9 min-w-0 cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors "
+          + (checked
+            ? "border-primary/50 bg-primary/10 text-primary"
+            : "bg-background text-muted-foreground hover:border-primary/30 hover:bg-muted/50")
+          + (disabled ? " cursor-not-allowed opacity-60" : "")}>
+        {multiple ? <Checkbox checked={checked} disabled={disabled}
           aria-label={`${role} · ${label}`}
-          onCheckedChange={checked => onChange(checked === true ? [...selected, role] : selected.filter(value => value !== role))} />
-        {role}
-      </label>)}
-    </fieldset>;
-  }
-  return <select className="h-9 rounded-md border bg-background px-2 text-sm" aria-label={label}
-    aria-invalid={selected.length !== 1} disabled={disabled} value={selected.length === 1 ? selected[0] : ""}
-    onChange={event => onChange(event.target.value ? [event.target.value as TeamMemberRole] : [])}>
-    <option value="">{placeholder}</option>
-    {roles.map(role => <option key={role} value={role}>{role}</option>)}
-  </select>;
+          onCheckedChange={value => onChange(value === true
+            ? [...selected, role]
+            : selected.filter(value => value !== role))} />
+          : <input type="radio" name={radioGroupId} value={role} checked={checked} disabled={disabled}
+            className="size-3.5 shrink-0 accent-primary"
+            aria-label={`${role} · ${label}`}
+            onChange={() => onChange([role])} />}
+        <span className="truncate">{role}</span>
+      </label>;
+    })}
+  </fieldset>;
 }
 
 export function AssignmentTeamRoles({ team, projectName, policy, choices, leaderId, errors, readOnly, onLeaderChange, onChange }: {
@@ -107,7 +116,7 @@ export function AssignmentTeamRoles({ team, projectName, policy, choices, leader
           </div>
           {readOnly ? <p className="text-sm">{selected.join(", ") || "Chưa chọn vai trò"}</p>
             : <TeamMemberRoleInput label={`Vai trò của ${member.name}`} selected={selected} multiple={policy.allowMultiRole}
-                placeholder="Chọn vai trò" onChange={next => onChange(member.memberId, next)} />}
+                onChange={next => onChange(member.memberId, next)} />}
         </li>;
       })}
     </ul>

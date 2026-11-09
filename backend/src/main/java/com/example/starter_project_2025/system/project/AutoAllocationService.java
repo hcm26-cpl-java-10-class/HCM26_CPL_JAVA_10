@@ -154,7 +154,7 @@ public class AutoAllocationService {
             }).toList();
             responseTeams.add(new BatchSaveDraftResponse.TeamResponse(team.getId(), team.getTeamName(),
                     team.getStatus(), null, null, team.getVersion(), ids, members,
-                    null, null, null, null, ids.size(), false, List.of(), null));
+                    null, null, null, null, ids.size(), false, List.of(), null, team.getProjectId()));
         }
         return new BatchSaveDraftResponse("SUCCESS", sessionId, responseTeams, List.of());
     }
