@@ -10,4 +10,3 @@ public record ExportColumn<T>(
         Function<T, Object> valueExtractor
 ) {
 }
-

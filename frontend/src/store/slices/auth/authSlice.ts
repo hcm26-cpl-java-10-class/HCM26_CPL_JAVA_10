@@ -11,6 +11,7 @@ const AUTH_STORAGE_KEYS = [
     "roles",
     "permissions",
     "rolePermissions",
+    "viewRole",
 ];
 
 const parseStringArrayFromStorage = (key: string): string[] => {

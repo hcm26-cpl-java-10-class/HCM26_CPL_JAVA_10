@@ -1,0 +1,147 @@
+[
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/service/WorkspaceContextService.java",
+    "beforeSha256": null,
+    "afterSha256": "48f68b99847cf539fe1c456866015a44b52772cbe0b4b4289a4adc3a8f9fd5ee"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/service/WorkspaceAccessService.java",
+    "beforeSha256": "60cc4952a0f83385011c39e9edc74f25d84b2eb7fd954296227e6b31172f2582",
+    "afterSha256": "d7db8ecfb53e1c21586f5293a45550442dd839f8c94dc5f3943f521d8d786f29"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/dto/WorkspaceSectionDtos.java",
+    "beforeSha256": null,
+    "afterSha256": "ce77515ac41155e68964c46c81654c254f9ee58a860173f5530520afcecbef1c"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/service/WorkspaceSectionPolicy.java",
+    "beforeSha256": null,
+    "afterSha256": "414262fd30737592d1784d2680c1b26f4005b2269108dbc55295ee96dcfebfa9"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/service/WorkspaceSectionDataSource.java",
+    "beforeSha256": null,
+    "afterSha256": "3cf8e5aedc6da168c031b90a177a4345e63bf61de5883beb42b815b9a32b4f5c"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/service/MockWorkspaceSectionDataSource.java",
+    "beforeSha256": null,
+    "afterSha256": "9bf06df4a485d6e882eb201c31adf68927c0caae480dd4d481fa1bbec3c8217c"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/service/WorkspaceSectionService.java",
+    "beforeSha256": null,
+    "afterSha256": "bcaaa00692f003b9dbaeff8d697187b27bb18c78489c0b56bcaf49ba7622bbcb"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/controller/WorkspaceSectionsController.java",
+    "beforeSha256": null,
+    "afterSha256": "d8757a0d69d3fa457f63d5f222fa9094f01d03290ef7d2e54fcbeeb0983a23c6"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/controller/WorkspaceSectionErrors.java",
+    "beforeSha256": null,
+    "afterSha256": "33f5d6ce8cabaa991fb4dc57e370709ebe15abd5adef8e8b69ac67837451cd9d"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/controller/WorkspaceMockSectionsController.java",
+    "beforeSha256": null,
+    "afterSha256": "ee734abd033c3bc7233cb61a431e7563d65f959a5aa365ac1567a534bae01969"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/demo/WorkspaceSectionMockInitializer.java",
+    "beforeSha256": null,
+    "afterSha256": "bd0204eb9c0ba76ba512b7456b8b2daa532f018ee9755e240434c92497b06aee"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/service/WorkspacePermissionInitializer.java",
+    "beforeSha256": "6ecbf5b44ff35e43c46669dd0ca09f4b2c551cce900fcc80de6b905f997496ca",
+    "afterSha256": "ffe162f1f889d5a91bd70750c1cfec3e0a81c449f391255e01a400b97cff1c11"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/init/RoleDataInitializer.java",
+    "beforeSha256": "f2ed9ebea6d64963c5d3aa045e2c1ce981276a3a2478e07730fc9f9727740600",
+    "afterSha256": "81b17d58dfd434694158959aad0c1a07bbc60dcc6013e8966bad1a6c6832be0b"
+  },
+  {
+    "path": "backend/src/main/java/com/example/starter_project_2025/system/project/workspace/service/WorkspaceReadService.java",
+    "beforeSha256": "2a5bf2e071d9187928ac00d4c4f530fadec55e91778d68fdb70ecd9fc2a404bb",
+    "afterSha256": "bf97f3cec35ac9882ff134b2dd4eeddc370f88883225772c772da10cf575d1ab"
+  },
+  {
+    "path": "frontend/src/types/features/workspace.ts",
+    "beforeSha256": "695c4d813f8b743bb819071ee24d69c3e364f282bb7088d09de712b3baccecd4",
+    "afterSha256": "f08aff186493e114014251255bc2e373007fa9edc5df8e847b592ecdf6f929a7"
+  },
+  {
+    "path": "frontend/src/api/features/workspace.api.ts",
+    "beforeSha256": "61acc06f3556ecd3dfce47ddfac2f7562d9401e00d6f73d3570a19f205811182",
+    "afterSha256": "bc7c5ea22cd11c7fb4a9a8d443291affaf00d59969993829cfac989e86ef35a9"
+  },
+  {
+    "path": "frontend/src/pages/management/workspace/workspace.section-access.ts",
+    "beforeSha256": null,
+    "afterSha256": "facf9a8e19ee234dd2cfacb29f531ae15a77d4acd3ce7fdf2503bcceb1b97f9f"
+  },
+  {
+    "path": "frontend/src/pages/management/workspace/WorkspaceSectionState.tsx",
+    "beforeSha256": null,
+    "afterSha256": "10ec202ddbf1849e877be0dec1f623b2a33545304cf496058d9da6439a280283"
+  },
+  {
+    "path": "frontend/src/pages/management/workspace/WorkspaceSectionActionDialog.tsx",
+    "beforeSha256": null,
+    "afterSha256": "15944d84dbd7bd848ea2d10b82ed7139697e458dff6fcf902fa2424f48db3540"
+  },
+  {
+    "path": "frontend/src/pages/management/workspace/WorkspaceBusinessSectionPanel.tsx",
+    "beforeSha256": null,
+    "afterSha256": "76904465d50c51a097495d5c470f2774491b88d044558575939cfd66880cbe26"
+  },
+  {
+    "path": "frontend/src/pages/management/workspace/WorkspaceOverviewSection.tsx",
+    "beforeSha256": null,
+    "afterSha256": "3d95eca9e503d6651a371d9a5b3988a58abbdf565f068f6e7e82d8de0f128b8d"
+  },
+  {
+    "path": "frontend/src/pages/management/workspace/WorkspaceMembersPanel.tsx",
+    "beforeSha256": "88b98764333dbe058798705b9805978465710d07f8e45ddc8ced74878012ab77",
+    "afterSha256": "f2063b4de1ee5976a7defb6a8636ab4de51a96d0d432b57cc8698fd6164ae423"
+  },
+  {
+    "path": "frontend/src/pages/management/workspace/TeamCharterForm.tsx",
+    "beforeSha256": "2fc3044fc2f062834fb1a599c3160e3d78a8f7ba6ef9fd7889776c1d63431524",
+    "afterSha256": "561b785b6125376a9bccf4728df198552dab830cc4bad6820e93961c76e99e7e"
+  },
+  {
+    "path": "frontend/src/pages/management/workspace/WorkspaceMemberManagementDialog.tsx",
+    "beforeSha256": "11c436fc5b444033a436b5ece323dd70507a0985f124a9cec694677e8da11a33",
+    "afterSha256": "221c3f5320181886fa74b1369232b256d0169e191f515fb5f091f2db540a2ae9"
+  },
+  {
+    "path": "frontend/src/pages/management/workspace/WorkspaceDetailPage.tsx",
+    "beforeSha256": "0558f72c6fbeae62de5f988b7fb079ae72545057458d84d8f39948d4b08d11bf",
+    "afterSha256": "c8c038902d7729b37b11b7c605abdd1073a4364b6bb78036aa53513a4b6c0375"
+  },
+  {
+    "path": "backend/src/test/java/com/example/starter_project_2025/system/project/WorkspaceOverviewIntegrationTest.java",
+    "beforeSha256": "dd38de760df681023f6fba0333123e9b62e8320fa9a9596342c66bd869f276f3",
+    "afterSha256": "63ba9b36815e3f5754b9f1dab68977b419892e4d24a6003c89c08c178db4807a"
+  },
+  {
+    "path": "backend/src/test/java/com/example/starter_project_2025/system/project/WorkspaceAcceptanceIntegrationTest.java",
+    "beforeSha256": "d8c26c90eac56d11d86c590304d533e147457df022536edb4a1c4c2193505338",
+    "afterSha256": "b6a7e93a4a0618d5dd170ac82a61d30b93139646e573e38cc30bbc4053b41aee"
+  },
+  {
+    "path": "backend/src/test/java/com/example/starter_project_2025/system/project/WorkspaceSectionsIntegrationTest.java",
+    "beforeSha256": null,
+    "afterSha256": "8f786a2247089f03e0bea35f7c8be8867fd06f9141bed2d1daa442886edbdb85"
+  },
+  {
+    "path": "backend/src/test/java/com/example/starter_project_2025/system/project/WorkspacePersistenceIntegrationTest.java",
+    "beforeSha256": "308b94dd92df2fe1e8148a9c8277568ea08fee40a4b9a8a0b7f666c5393cac3a",
+    "afterSha256": "db2ce7267fe7d17bef457ae351d75bdd60adee52f947621ef1fb1d41cee16ea5"
+  }
+]

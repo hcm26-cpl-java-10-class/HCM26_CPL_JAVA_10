@@ -111,12 +111,4 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-//    @PreAuthorize("isAuthenticated()")
-//    @PostMapping("/switch-role")
-//    public ResponseEntity<LoginResponse> getPermissions(HttpServletRequest request, HttpServletResponse response, @RequestBody GetPermissonReqDTO data)
-//    {
-//        var email = request.getUserPrincipal().getName();
-//        var res = authService.switchRole(data, email, response);
-//        return ResponseEntity.ok(res);
-//    }
 }

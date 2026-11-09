@@ -1,31 +1,56 @@
-import {SidebarInset, SidebarProvider} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import HeaderRight from "@/components/layout/HeaderRight";
-import {SidebarMenu} from "@/components/layout/Sidebar.tsx";
+import { SidebarMenu } from "@/components/layout/Sidebar.tsx";
 import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
 import { StudentNavbar } from "@/components/layout/StudentNavbar";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
+import { useContext, type ReactNode } from "react";
+import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 
 export function MainLayout({
                                children,
                                pathName,
+                               pathLinks,
+                               dense = false,
+                               focusMode = false,
                            }: {
-    children: React.ReactNode;
+    children: ReactNode;
     pathName?: Record<string, string>;
+    pathLinks?: Record<string, string>;
+    /** Tighter header / content padding (Course Online pages). */
+    dense?: boolean;
+    /** Hide the navbar / breadcrumbs / sidebar (e.g. while taking an exam). */
+    focusMode?: boolean;
 }) {
+    const isEmbedded = useContext(EmbeddedLayoutContext);
+    if (isEmbedded) {
+        return <>{children}</>;
+    }
+
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
 
-    if (isStudentView) {
+    if (focusMode) {
         return (
             <div className="flex h-screen max-h-[calc(100vh-18px)] flex-col overflow-hidden">
+                <main className="flex flex-1 min-h-0 flex-col overflow-y-auto px-6 pb-6 pt-4">
+                    {children}
+                </main>
+            </div>
+        );
+    }
+
+    if (isStudentView) {
+        return (
+            <div className="flex min-h-screen flex-col">
                 <StudentNavbar />
 
-                <header className="flex h-14 shrink-0 items-center border-b px-6">
-                    <DynamicBreadcrumbs pathTitles={pathName} variant="student" />
+                <header className="flex min-h-14 shrink-0 items-center border-b px-6 py-2">
+                    <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} variant="student" />
                 </header>
 
-                <main className="flex flex-1 min-h-0 flex-col overflow-y-auto px-6 pb-6 pt-4">
+                <main className="flex-1 px-6 pb-6 pt-4">
                     {children}
                 </main>
             </div>
@@ -35,17 +60,18 @@ export function MainLayout({
     return (
         <SidebarProvider>
             <SidebarMenu />
-            <SidebarInset  className="h-screen flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
-                <header className="flex h-16 shrink-0 items-center gap-2">
+            <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
+                <header className={`flex shrink-0 items-center gap-2 ${dense ? "min-h-11 py-0.5" : "min-h-16 py-3"}`}>
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
-                        <div className="flex items-center gap-2">
-                            <DynamicBreadcrumbs pathTitles={pathName} />
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <SidebarTrigger aria-label="Toggle navigation sidebar" />
+                            <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} />
                         </div>
-                        <HeaderRight />
+                        <div className="shrink-0"><HeaderRight /></div>
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto min-h-0 flex flex-col px-6 pb-6 pt-6">
+                <main className={`min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto ${dense ? "px-4 pb-3 pt-1" : "px-6 pb-6 pt-6"}`}>
                     {children}
                 </main>
             </SidebarInset>

@@ -15,6 +15,7 @@ import { iconMap } from "@/components/datatable/iconMap";
 
 type Props = {
     pathTitles?: Record<string, string>;
+    pathLinks?: Record<string, string>;
     hasPage?: boolean;
     ignorePaths?: string[];
     variant?: "default" | "student";
@@ -46,7 +47,7 @@ function isLikelyIdentifier(segment: string) {
     const numericPattern = /^\d+$/;
     const uuidPattern =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    const tokenLikePattern = /^[A-Za-z0-9_-]{16,}$/;
+    const tokenLikePattern = /^(?=.*\d)[A-Za-z0-9_-]{16,}$/;
 
     return numericPattern.test(segment) || uuidPattern.test(segment) || tokenLikePattern.test(segment);
 }
@@ -69,6 +70,7 @@ function resolveTitle(
 
 export default function DynamicBreadcrumbs({
     pathTitles,
+    pathLinks,
     hasPage = true,
     ignorePaths = [],
     variant = "default",
@@ -112,9 +114,10 @@ export default function DynamicBreadcrumbs({
             : pathnameSegments;
 
     const crumbs: BreadcrumbNode[] = rawSegments.flatMap((segment, index) => {
-        const href = `/${rawSegments.slice(0, index + 1).join("/")}`;
-        const title = resolveTitle(segment, href, pathTitles, moduleTitleByPath);
-        const hasCustomTitle = Boolean(pathTitles?.[segment] || pathTitles?.[href]);
+        const routeHref = `/${rawSegments.slice(0, index + 1).join("/")}`;
+        const href = pathLinks?.[segment] || pathLinks?.[routeHref] || routeHref;
+        const title = resolveTitle(segment, routeHref, pathTitles, moduleTitleByPath);
+        const hasCustomTitle = Boolean(pathTitles?.[segment] || pathTitles?.[routeHref]);
 
         if (!hasCustomTitle && isLikelyIdentifier(segment)) {
             return [];

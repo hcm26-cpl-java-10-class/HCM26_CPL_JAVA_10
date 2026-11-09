@@ -28,7 +28,7 @@ export interface SessionDTO extends BaseDTO {
     roomId?: number;
     meetingUrl?: string;
     title?: string;
-    startTime?: string; // LocalDateTime tá»« Spring Boot serialize vá» dáº¡ng ISO-8601 string
+    startTime?: string;
     endTime?: string;
     location?: string;
     status?: SessionStatus;

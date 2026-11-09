@@ -1,15 +1,39 @@
 import { moduleApi, moduleGroupApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
-import { canAccessByPermission } from "@/utils/rbac.utils";
+import {
+    canAccessByPermission,
+    getMovedMenuGroupName,
+    isMenuGroupHiddenInMenu,
+    isModuleHiddenInMenu,
+    normalizeMenuGroupName,
+    normalizeModulePath,
+    normalizeRole,
+    ADMIN_ROLE,
+    STUDENT_ROLE,
+} from "@/utils/rbac.utils";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 export type SidebarModule = ModuleDTO & {
     name?: string;
+
+    hiddenInMenu?: boolean;
+
+    menuGroupOverride?: string;
 };
 
 export type SidebarModuleGroup = ModuleGroupDTO & {
     modules: SidebarModule[];
+
+    hiddenInMenu?: boolean;
+};
+
+// Display-only renames for menu group names (DB data is untouched).
+const GROUP_NAME_OVERRIDES: Record<string, string> = {
+    "Course Management": "Course Online",
+    "COURSE_ONLINE": "Course Online",
+    "Course Online": "Course Online",
 };
 
 const menuPagination: Pagination = {
@@ -25,76 +49,43 @@ const modulePagination: Pagination = {
 };
 
 export function useActiveModuleGroups(enabled = true) {
-    const { activeRole, hasPermission } = usePermissions();
+    const { activeRole, effectivePermissions, hasPermission } = usePermissions();
+    const permissionCacheKey = useMemo(
+        () => [...effectivePermissions].sort().join("|"),
+        [effectivePermissions],
+    );
 
     return useQuery<SidebarModuleGroup[]>({
-        queryKey: ["sidebar-menu", "active-module-groups", activeRole],
-        enabled,
+        queryKey: ["sidebar-menu", "active-module-groups", activeRole, permissionCacheKey],
+        enabled: enabled && !!activeRole,
+        /**
+         * Keep the previous role's menu while the new role's menu is loading.
+         * The App builds the module driven routes from this data: dropping it
+         * for a frame sends the current URL to the catch-all 404 route right
+         * after a role switch.
+         */
+        placeholderData: (previousData) => previousData,
         queryFn: async () => {
-            let groups: ModuleGroupDTO[] = [];
-            let modules: ModuleDTO[] = [];
+            const [groupPage, modulePage] = await Promise.all([
+                moduleGroupApi.getPage(menuPagination, undefined, { ids: [], isActive: true }),
+                moduleApi.getPage(modulePagination, undefined, { ids: [], isActive: true }),
+            ]);
 
-            try {
-                const [groupPage, modulePage] = await Promise.all([
-                    moduleGroupApi.getPage(menuPagination, undefined, { ids: [], isActive: true }),
-                    moduleApi.getPage(modulePagination, undefined, { ids: [], isActive: true }),
-                ]);
+            const groups = groupPage.content ?? groupPage.items ?? [];
+            const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) => {
+                const url = module.url ?? "";
+                const isExcludedPath = [
+                    "/management/project-templates",
+                    "/management/project-teams",
+                ].some((path) => url.startsWith(path));
 
-                const isAdmin = activeRole === "ADMIN";
-                groups = groupPage.content ?? groupPage.items ?? [];
-                modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
-                    isAdmin || canAccessByPermission(module.requiredPermission, hasPermission),
+                return (
+                    !isExcludedPath &&
+                    url !== "/tasks" && url !== "/management/tasks" &&
+                    url !== "/team-allocation" &&
+                    canAccessByPermission(module.requiredPermission, hasPermission)
                 );
-            } catch (err) {
-                console.warn("Failed to load sidebar modules from backend, loading fallback navigation:", err);
-                groups = [
-                    {
-                        id: 1,
-                        name: "Training Operations",
-                        description: "Academic & Training Operations",
-                        displayOrder: -1,
-                        isActive: true,
-                    },
-                    {
-                        id: 2,
-                        name: "Subjects & Scheduling",
-                        description: "Curriculum and Sessions",
-                        displayOrder: 2,
-                        isActive: true,
-                    },
-                ];
-                modules = [
-                    {
-                        id: 101,
-                        moduleGroupId: "1",
-                        title: "Training Calendar",
-                        url: "/calendar/adjust",
-                        icon: "calendar",
-                        displayOrder: 1,
-                        requiredPermission: "SESSION_READ",
-                        isActive: true,
-                    },
-                    {
-                        id: 102,
-                        moduleGroupId: "1",
-                        title: "Weekly Timetable",
-                        url: "/calendar/preview",
-                        icon: "calendar",
-                        displayOrder: 2,
-                        requiredPermission: "SESSION_READ",
-                        isActive: true,
-                    },
-                    {
-                        id: 103,
-                        moduleGroupId: "1",
-                        title: "Class List",
-                        url: "/classes",
-                        icon: "graduation-cap",
-                        displayOrder: 3,
-                        isActive: true,
-                    },
-                ].filter((m) => activeRole === "ADMIN" || canAccessByPermission(m.requiredPermission, hasPermission));
-            }
+            });
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {
                 if (!module.moduleGroupId) return acc;
@@ -103,14 +94,21 @@ export function useActiveModuleGroups(enabled = true) {
                     acc[module.moduleGroupId] = [];
                 }
 
+                const menuTitle = module.url === "/tasks"
+                    ? "Tasks"
+                    : ["/management/workspaces/candidates", "/workspaces/candidates"].includes(module.url ?? "")
+                        ? "Workspace"
+                        : module.title;
+
                 acc[module.moduleGroupId].push({
                     ...module,
-                    name: module.title,
+                    url: /^\/projects\/[^/]+\/milestones$/.test(module.url??"") ? "/milestones" : module.url,
+                    title: menuTitle,
+                    name: menuTitle,
                 });
                 return acc;
             }, {});
 
-            // Ensure Invitation menu under Exam Management if permitted and not already in DB
             const hasInvitationInDb = modules.some((m) => m.url === "/invitations");
             if (!hasInvitationInDb && canAccessByPermission("INVITATION_READ", hasPermission)) {
                 let examGroup = groups.find(
@@ -147,103 +145,336 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
-            // Unify "Training Management" and "Training Operations" into a single group if both exist
-            const trainingGroupNames = ["training operations", "training management"];
-            const trainingGroups = groups.filter((g) =>
-                trainingGroupNames.includes((g.name || "").trim().toLowerCase()),
-            );
-            if (trainingGroups.length > 1) {
-                const primary = trainingGroups[0];
-                const primaryId = String(primary.id ?? 9998);
-                for (let i = 1; i < trainingGroups.length; i++) {
-                    const otherId = String(trainingGroups[i].id ?? "");
-                    if (groupedModules[otherId]) {
-                        if (!groupedModules[primaryId]) groupedModules[primaryId] = [];
-                        groupedModules[primaryId].push(...groupedModules[otherId]);
-                        delete groupedModules[otherId];
-                    }
-                }
-                groups = groups.filter(
-                    (g) => g === primary || !trainingGroupNames.includes((g.name || "").trim().toLowerCase()),
+            if (
+                canAccessByPermission("PEO_TEAM_ALLOCATE", hasPermission) ||
+                canAccessByPermission("PRJ_WORKSPACE_MANAGE", hasPermission)
+            ) {
+                const moduleGroup = groups.find(
+                    (group) => (group.name ?? "").toLowerCase() === "project management",
                 );
-            }
-
-            // Ensure Training Management / Operations group exists and contains critical menus
-            let trainingGroup = groups.find((g) =>
-                trainingGroupNames.includes((g.name || "").trim().toLowerCase()),
-            );
-
-            if (!trainingGroup) {
-                const fallbackGroup: ModuleGroupDTO = {
-                    id: 9998,
-                    name: "Training Operations",
-                    description: "Academic & Training Operations",
-                    displayOrder: -1,
+                const allocationModule: SidebarModule = {
+                    id: 100001,
+                    moduleGroupId: String(moduleGroup?.id ?? 100000),
+                    title: "Project Team Allocation",
+                    name: "Project Team Allocation",
+                    url: "/team-allocation",
+                    icon: "users",
+                    displayOrder: 1,
+                    requiredPermission: canAccessByPermission(
+                        "PEO_TEAM_ALLOCATE",
+                        hasPermission,
+                    )
+                        ? "PEO_TEAM_ALLOCATE"
+                        : "PRJ_WORKSPACE_MANAGE",
                     isActive: true,
                 };
-                groups.push(fallbackGroup);
-                trainingGroup = fallbackGroup;
+                if (moduleGroup) {
+                    const groupId = String(moduleGroup.id ?? "");
+                    if (!groupedModules[groupId]) groupedModules[groupId] = [];
+                    groupedModules[groupId].push(allocationModule);
+                } else {
+                    const fallbackGroup: ModuleGroupDTO = {
+                        id: 100000,
+                        name: "Project Management",
+                        description: "Project and team allocation",
+                        displayOrder: 1,
+                        isActive: true,
+                    };
+                    groups.push(fallbackGroup);
+                    groupedModules[String(fallbackGroup.id)] = [allocationModule];
+                }
             }
 
-            trainingGroup.name = "Training Operations";
-            trainingGroup.displayOrder = -1;
+            // US-09: the Project Template module is not seeded in the backend
+            // yet, so expose the mock Explore Projects catalogue under the
+            // "Project Management" tab for students.
+            if (normalizeRole(activeRole) === STUDENT_ROLE) {
+                const exploreUrl = "/student/projects/explore";
+                const alreadyRegistered = modules.some((module) => module.url === exploreUrl);
 
-            const trainingGroupId = String(trainingGroup.id ?? 9998);
-            if (!groupedModules[trainingGroupId]) {
-                groupedModules[trainingGroupId] = [];
+                if (!alreadyRegistered) {
+                    const exploreGroup = groups.find(
+                        (group) => (group.name ?? "").toLowerCase() === "project management",
+                    );
+                    const exploreModule: SidebarModule = {
+                        id: 100005,
+                        moduleGroupId: String(exploreGroup?.id ?? 100000),
+                        title: "Explore Projects",
+                        name: "Explore Projects",
+                        url: exploreUrl,
+                        icon: "folder",
+                        description: "Browse active project templates for your class",
+                        displayOrder: 2,
+                        isActive: true,
+                    };
+
+                    if (exploreGroup) {
+                        const groupId = String(exploreGroup.id ?? "");
+                        if (!groupedModules[groupId]) groupedModules[groupId] = [];
+                        groupedModules[groupId].push(exploreModule);
+                    } else {
+                        const fallbackGroup: ModuleGroupDTO = {
+                            id: 100000,
+                            name: "Project Management",
+                            description: "Project and team allocation",
+                            displayOrder: 1,
+                            isActive: true,
+                        };
+                        groups.push(fallbackGroup);
+                        groupedModules[String(fallbackGroup.id)] = [exploreModule];
+                    }
+                }
+
+                // US-10: team leaders assign the official project template to
+                // their own DRAFT teams.
+                const draftTeamUrl = "/student/draft-team";
+                const draftTeamRegistered = modules.some(
+                    (module) => module.url === draftTeamUrl,
+                );
+
+                if (!draftTeamRegistered) {
+                    const draftTeamGroup = groups.find(
+                        (group) => (group.name ?? "").toLowerCase() === "project management",
+                    );
+                    const draftTeamModule: SidebarModule = {
+                        id: 100007,
+                        moduleGroupId: String(draftTeamGroup?.id ?? 100000),
+                        title: "Nhóm nháp của tôi",
+                        name: "Nhóm nháp của tôi",
+                        url: draftTeamUrl,
+                        icon: "users",
+                        description: "Assign the official project template to your draft team",
+                        displayOrder: 3,
+                        isActive: true,
+                    };
+
+                    if (draftTeamGroup) {
+                        const groupId = String(draftTeamGroup.id ?? "");
+                        if (!groupedModules[groupId]) groupedModules[groupId] = [];
+                        groupedModules[groupId].push(draftTeamModule);
+                    } else {
+                        const fallbackGroup: ModuleGroupDTO = {
+                            id: 100000,
+                            name: "Project Management",
+                            description: "Project and team allocation",
+                            displayOrder: 1,
+                            isActive: true,
+                        };
+                        groups.push(fallbackGroup);
+                        groupedModules[String(fallbackGroup.id)] = [draftTeamModule];
+                    }
+                }
             }
 
-            const currentTrainingMods = groupedModules[trainingGroupId];
-
-            const hasAdjust = currentTrainingMods.some(
-                (m) => m.url === "/calendar/adjust" || m.url === "/schedule-versions",
+            let projectGroup = groups.find(
+                (group) => (group.name ?? "").toLowerCase() === "project management",
             );
-            if (!hasAdjust) {
-                currentTrainingMods.unshift({
-                    id: 99998,
-                    moduleGroupId: trainingGroupId,
-                    title: "Training Calendar",
-                    name: "Training Calendar",
-                    url: "/calendar/adjust",
-                    icon: "calendar",
+
+            if (!projectGroup) {
+                projectGroup = {
+                    id: 100000,
+                    name: "Project Management",
+                    description: "Project management workspace",
                     displayOrder: 1,
-                    requiredPermission: "SESSION_READ",
+                    isActive: true,
+                };
+                groups.push(projectGroup);
+            }
+
+            const projectGroupId = String(projectGroup.id ?? 100000);
+            if (!groupedModules[projectGroupId]) {
+                groupedModules[projectGroupId] = [];
+            }
+
+            if (!modules.some((module) => module.url === "/management/alerts") && hasPermission("PROJECT_ALERT_READ")) {
+                groupedModules[projectGroupId].push({
+                    id: 100005, moduleGroupId: projectGroupId, title: "Alerts", name: "Alerts",
+                    url: "/management/alerts", icon: "bell", displayOrder: 6,
+                    requiredPermission: "PROJECT_ALERT_READ", isActive: true,
+                });
+            }
+
+            if (!modules.some((module) => module.url === "/project-board")) {
+                groupedModules[projectGroupId].push({
+                    id: 100004,
+                    moduleGroupId: projectGroupId,
+                    title: "Kanban Board",
+                    name: "Kanban Board",
+                    url: "/project-board",
+                    icon: "layers",
+                    displayOrder: 2.5,
                     isActive: true,
                 });
             }
 
-            const hasTimetable = currentTrainingMods.some(
-                (m) => m.url === "/calendar/preview" || m.url === "/calendar/timetable",
-            );
-            if (!hasTimetable) {
-                currentTrainingMods.splice(1, 0, {
-                    id: 99997,
-                    moduleGroupId: trainingGroupId,
-                    title: "Weekly Timetable",
-                    name: "Weekly Timetable",
-                    url: "/calendar/preview",
-                    icon: "calendar",
-                    displayOrder: 2,
-                    requiredPermission: "SESSION_READ",
+            const projectWorkspaceModules: SidebarModule[] = [
+                {
+                    id: 100002,
+                    moduleGroupId: projectGroupId,
+                    title: "Milestones",
+                    name: "Milestones",
+                    url: "/milestones",
+                    requiredPermission: "MILESTONE_READ",
+                    icon: "bookmark",
+                    displayOrder: 3,
+                    isActive: true,
+                },
+                {
+                    id: 100003,
+                    moduleGroupId: projectGroupId,
+                    title: "Rubrics",
+                    name: "Rubrics",
+                    url: "/rubrics",
+                    icon: "file-text",
+                    displayOrder: 4,
+                    isActive: true,
+                },
+            ];
+
+            for (const projectModule of projectWorkspaceModules) {
+                if (!canAccessByPermission(projectModule.requiredPermission,hasPermission)) continue;
+                const alreadyExists = modules.some((module) => module.url === projectModule.url)
+                    || groupedModules[projectGroupId].some((module) => module.url === projectModule.url);
+
+                if (!alreadyExists) {
+                    groupedModules[projectGroupId].push(projectModule);
+                }
+            }
+
+            // US-07 / US-08: `/project-template-versions` is rendered as an entity
+            // route, which is module driven - the menu row is what makes the path
+            // reachable at all. The backend `@ResourceMenu` on the snapshot entity
+            // seeds that row, but databases created before the annotation existed
+            // never receive it, so the button is injected here to keep it visible
+            // for ADMIN and STUDENT.
+            const templateVersionUrl = "/project-template-versions";
+            const canBrowseTemplateVersions =
+                normalizeRole(activeRole) === ADMIN_ROLE ||
+                normalizeRole(activeRole) === STUDENT_ROLE ||
+                canAccessByPermission("PROJECT_TEMPLATE_VERSION_READ", hasPermission);
+            const hasTemplateVersionMenu =
+                modules.some((module) => module.url === templateVersionUrl) ||
+                groupedModules[projectGroupId].some((module) => module.url === templateVersionUrl);
+
+            if (canBrowseTemplateVersions && !hasTemplateVersionMenu) {
+                groupedModules[projectGroupId].push({
+                    id: 100006,
+                    moduleGroupId: projectGroupId,
+                    title: "Project Template Versions",
+                    name: "Project Template Versions",
+                    url: templateVersionUrl,
+                    icon: "layers",
+                    description: "Create, version and publish project templates",
+                    displayOrder: 4.5,
                     isActive: true,
                 });
+            }
+
+            // Ensure Workspace Candidate menu is available for testing even when backend menu table is not yet updated
+            const hasWorkspaceMenu = modules.some(
+                (m) => m.url === "/management/workspaces/candidates" || m.url === "/workspaces/candidates",
+            );
+            if (!hasWorkspaceMenu && canAccessByPermission("WORKSPACE_READ", hasPermission)) {
+                groupedModules[projectGroupId].push({
+                    id: 99998,
+                    moduleGroupId: projectGroupId,
+                    title: "Workspace",
+                    name: "Workspace",
+                    url: "/management/workspaces/candidates",
+                    icon: "folder",
+                    displayOrder: 999,
+                    requiredPermission: "WORKSPACE_READ",
+                    isActive: true,
+                });
+            }
+
+            const movedModules: SidebarModule[] = [];
+            const movedUrls = new Set<string>();
+
+            for (const group of groups) {
+                const groupId = String(group.id ?? "");
+                const groupMods = groupedModules[groupId] ?? [];
+
+                for (const module of groupMods) {
+                    const targetGroupName = getMovedMenuGroupName(module.url, activeRole);
+
+                    if (!targetGroupName) continue;
+
+                    const targetGroup = groups.find(
+                        (g) => normalizeMenuGroupName(g.name) === normalizeMenuGroupName(targetGroupName),
+                    );
+
+                    if (!targetGroup) continue;
+
+                    movedUrls.add(normalizeModulePath(module.url));
+                    movedModules.push({
+                        ...module,
+                        moduleGroupId: String(targetGroup.id ?? ""),
+                        menuGroupOverride: targetGroup.name,
+                    });
+                }
+            }
+
+            if (movedUrls.size > 0) {
+                for (const group of groups) {
+                    const groupId = String(group.id ?? "");
+                    const groupMods = groupedModules[groupId] ?? [];
+
+                    groupedModules[groupId] = groupMods.filter(
+                        (m) => !movedUrls.has(normalizeModulePath(m.url)),
+                    );
+                }
+
+                for (const moved of movedModules) {
+                    const targetGroupId = String(moved.moduleGroupId ?? "");
+                    if (!targetGroupId) continue;
+
+                    if (!groupedModules[targetGroupId]) {
+                        groupedModules[targetGroupId] = [];
+                    }
+
+                    if (groupedModules[targetGroupId].some((m) => m.url === moved.url)) {
+                        continue;
+                    }
+
+                    groupedModules[targetGroupId].push(moved);
+                }
             }
 
             return groups
+                .map((group) => ({
+                    ...group,
+                    name: (group.name && GROUP_NAME_OVERRIDES[group.name]) || group.name,
+                    modules: groupedModules[group.id ?? ""] ?? [],
+                }))
                 .map((group) => {
                     const groupId = String(group.id ?? "");
-                    const isTraining = trainingGroupNames.includes((group.name || "").trim().toLowerCase());
-                    const groupMods = (groupedModules[groupId] ?? []).sort(
-                        (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
-                    );
+                    const groupMods = (groupedModules[groupId] ?? [])
+                        .map((module) => ({
+                            ...module,
+                            hiddenInMenu:
+                                module.hiddenInMenu ||
+                                isModuleHiddenInMenu(module.url, activeRole) ||
+                                isMenuGroupHiddenInMenu(group.name, activeRole),
+                        }))
+                        .sort(
+                            (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
+                        );
+                    if ((group.name ?? "").toLowerCase() === "project management") {
+                        const boardIndex = groupMods.findIndex((module) => module.url === "/project-board");
+                        const backlogIndex = groupMods.findIndex((module) => module.url === "/sprint-backlogs");
+                        if (boardIndex >= 0 && backlogIndex >= 0 && boardIndex !== backlogIndex + 1) {
+                            const [boardModule] = groupMods.splice(boardIndex, 1);
+                            groupMods.splice(backlogIndex + (boardIndex < backlogIndex ? 0 : 1), 0, boardModule);
+                        }
+                    }
                     return {
                         ...group,
-                        displayOrder: isTraining ? -1 : (group.displayOrder ?? 0),
                         modules: groupMods,
+                        hiddenInMenu: isMenuGroupHiddenInMenu(group.name, activeRole),
                     };
                 })
-                .filter((group) => group.modules.length > 0)
-                .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+                .filter((group) => group.modules.length > 0);
         },
         staleTime: 5 * 60 * 1000,
     });

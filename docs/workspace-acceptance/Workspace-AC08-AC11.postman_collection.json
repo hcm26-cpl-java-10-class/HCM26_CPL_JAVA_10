@@ -1,0 +1,1075 @@
+{
+  "info": {
+    "name": "Workspace AC08-AC11 evidence",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Run individual folders on separate fresh QA fixtures, not the entire collection blindly. See docs/workspace-acceptance/README.md. AC12 uses integration fault injection; AC13 uses the UI. Tokens are saved only in local collection variables."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "email",
+      "value": "workspace.mentor.demo@example.com"
+    },
+    {
+      "key": "password",
+      "value": "password123"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "viewerToken",
+      "value": ""
+    },
+    {
+      "key": "fixturePrefix",
+      "value": ""
+    },
+    {
+      "key": "missingTeamId",
+      "value": "2147483000"
+    },
+    {
+      "key": "ac08_projectId",
+      "value": ""
+    },
+    {
+      "key": "ac08_teamId",
+      "value": ""
+    },
+    {
+      "key": "ac08_run",
+      "value": ""
+    },
+    {
+      "key": "ac08_workspaceId",
+      "value": ""
+    },
+    {
+      "key": "ac09_projectId",
+      "value": ""
+    },
+    {
+      "key": "ac09_teamId",
+      "value": ""
+    },
+    {
+      "key": "ac09_run",
+      "value": ""
+    },
+    {
+      "key": "ac09_workspaceId",
+      "value": ""
+    },
+    {
+      "key": "ac10_projectId",
+      "value": ""
+    },
+    {
+      "key": "ac10_teamId",
+      "value": ""
+    },
+    {
+      "key": "ac10_run",
+      "value": ""
+    },
+    {
+      "key": "ac10_workspaceId",
+      "value": ""
+    },
+    {
+      "key": "ac11_projectId",
+      "value": ""
+    },
+    {
+      "key": "ac11_teamId",
+      "value": ""
+    },
+    {
+      "key": "ac11_run",
+      "value": ""
+    },
+    {
+      "key": "ac11_workspaceId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Setup",
+      "item": [
+        {
+          "name": "01 - Login creator",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "01 - Login creator",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Login succeeded\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"token\", pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 - Inspect candidates and capture QA IDs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspaces/candidates",
+            "description": "02 - Inspect candidates and capture QA IDs"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  " const rows = pm.response.json();",
+                  " console.table(rows.map(r => ({ teamId: r.teamId, teamCode: r.teamCode, projectId: r.projectId, workspaceId: r.workspaceId, status: r.projectStatus })));",
+                  " const prefix = pm.collectionVariables.get(\"fixturePrefix\");",
+                  " if (prefix) {",
+                  "   for (const ac of [\"ac08\", \"ac09\", \"ac10\", \"ac11\"]) {",
+                  "     const row = rows.find(r => r.teamCode === prefix + \"-\" + ac.toUpperCase());",
+                  "     pm.test(ac + \" fixture exists\", () => pm.expect(row, \"Check fixturePrefix and SQL connection\").to.be.an(\"object\"));",
+                  "     if (row) {",
+                  "       pm.collectionVariables.set(ac + \"_teamId\", String(row.teamId));",
+                  "       pm.collectionVariables.set(ac + \"_projectId\", String(row.projectId));",
+                  "       pm.collectionVariables.unset(ac + \"_run\");",
+                  "       pm.collectionVariables.unset(ac + \"_workspaceId\");",
+                  "       pm.collectionVariables.unset(ac + \"_firstResponse\");",
+                  "     }",
+                  "   }",
+                  " }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 - Login read-only viewer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "03 - Login read-only viewer",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"workspace.viewer.demo@example.com\",\n  \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Viewer login succeeded\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) pm.collectionVariables.set(\"viewerToken\", pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AC08 - Duplicate workspace",
+      "item": [
+        {
+          "name": "A - First creation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{ac08_run}}-first"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{ac08_run}}-first"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces",
+            "description": "A - First creation",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac08_projectId}},\n  \"teamId\": {{ac08_teamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac08_projectId\", \"ac08_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac08_run\")) {",
+                  "  pm.collectionVariables.set(\"ac08_run\", \"ac08-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "  const data = pm.response.json();",
+                  "  pm.test(\"Correct project and team\", () => {",
+                  "    pm.expect(data.projectId).to.equal(Number(pm.collectionVariables.get(\"ac08_projectId\")));",
+                  "    pm.expect(data.teamId).to.equal(Number(pm.collectionVariables.get(\"ac08_teamId\")));",
+                  "  });",
+                  "  pm.collectionVariables.set(\"ac08_workspaceId\", String(data.id));",
+                  "  pm.collectionVariables.set(\"ac08_firstResponse\", JSON.stringify(data));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B - Same pair, different key: 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{ac08_run}}-duplicate"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{ac08_run}}-duplicate"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces",
+            "description": "B - Same pair, different key: 409",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac08_projectId}},\n  \"teamId\": {{ac08_teamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac08_projectId\", \"ac08_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac08_run\")) {",
+                  "  pm.collectionVariables.set(\"ac08_run\", \"ac08-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac08_workspaceId\")) throw new Error(\"Run AC08 A first.\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"Existing workspace ID returned\", () => pm.expect(pm.response.json().workspaceId).to.equal(Number(pm.collectionVariables.get(\"ac08_workspaceId\"))));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AC09 - Durable replay",
+      "item": [
+        {
+          "name": "A - First creation, fixed key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{ac09_run}}-fixed"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{ac09_run}}-first"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces",
+            "description": "A - First creation, fixed key",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac09_projectId}},\n  \"teamId\": {{ac09_teamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac09_projectId\", \"ac09_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac09_run\")) {",
+                  "  pm.collectionVariables.set(\"ac09_run\", \"ac09-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "  const data = pm.response.json();",
+                  "  pm.test(\"Correct project and team\", () => {",
+                  "    pm.expect(data.projectId).to.equal(Number(pm.collectionVariables.get(\"ac09_projectId\")));",
+                  "    pm.expect(data.teamId).to.equal(Number(pm.collectionVariables.get(\"ac09_teamId\")));",
+                  "  });",
+                  "  pm.collectionVariables.set(\"ac09_workspaceId\", String(data.id));",
+                  "  pm.collectionVariables.set(\"ac09_firstResponse\", JSON.stringify(data));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B - Same key and body: identical 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{ac09_run}}-fixed"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{ac09_run}}-replay"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces",
+            "description": "B - Same key and body: identical 201",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac09_projectId}},\n  \"teamId\": {{ac09_teamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac09_projectId\", \"ac09_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac09_run\")) {",
+                  "  pm.collectionVariables.set(\"ac09_run\", \"ac09-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac09_firstResponse\")) throw new Error(\"Run AC09 A first.\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Replay HTTP 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Entire saved response is identical\", () => pm.expect(pm.response.json()).to.deep.equal(JSON.parse(pm.collectionVariables.get(\"ac09_firstResponse\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "C - Same key, different body: 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{ac09_run}}-fixed"
+              },
+              {
+                "key": "X-Correlation-ID",
+                "value": "{{ac09_run}}-changed"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces",
+            "description": "C - Same key, different body: 409",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac09_projectId}},\n  \"teamId\": {{ac11_teamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac09_projectId\", \"ac09_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac09_run\")) {",
+                  "  pm.collectionVariables.set(\"ac09_run\", \"ac09-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}",
+                  "for (const field of [\"ac11_projectId\", \"ac11_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac11_run\")) {",
+                  "  pm.collectionVariables.set(\"ac11_run\", \"ac11-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac09_firstResponse\")) throw new Error(\"Run AC09 A first.\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Changed payload HTTP 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AC10 - Two concurrent POST requests",
+      "item": [
+        {
+          "name": "Run concurrent creation on a clean pair",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspaces/candidates",
+            "description": "The GET is only the driver/precondition check. Post-response sends TWO POSTs concurrently with Promise.all. Inspect Test Results, Postman Console and ac10_evidence. Then query verify.sql: exactly 1 workspace, 1 audit/event/activity/request and 8 sections."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Driver GET succeeded\", () => pm.response.to.have.status(200));",
+                  "if (pm.response.code !== 200) throw new Error(\"Cannot inspect clean state.\");",
+                  "const projectId = Number(pm.collectionVariables.get(\"ac10_projectId\"));",
+                  "const teamId = Number(pm.collectionVariables.get(\"ac10_teamId\"));",
+                  "if (!Number.isSafeInteger(projectId) || !Number.isSafeInteger(teamId) || projectId <= 0 || teamId <= 0) {",
+                  "  throw new Error(\"Set ac10_projectId and ac10_teamId first.\");",
+                  "}",
+                  "const target = pm.response.json().find(row => row.teamId === teamId && row.projectId === projectId);",
+                  "const clean = !!target && !target.workspaceId && target.eligibleForWorkspace === true;",
+                  "pm.test(\"Precondition: eligible pair has no workspace\", () => pm.expect(clean).to.equal(true));",
+                  "if (!clean) throw new Error(\"AC10 needs a fresh pair. Run the fixture setup again, then update fixturePrefix and inspect candidates.\");",
+                  "const run = \"ac10-\" + pm.variables.replaceIn(\"{{$guid}}\");",
+                  "pm.collectionVariables.set(\"ac10_run\", run);",
+                  "const payload = JSON.stringify({ projectId, teamId });",
+                  "function dispatch(label) {",
+                  "  return new Promise((resolve, reject) => {",
+                  "    const sentAt = new Date().toISOString();",
+                  "    pm.sendRequest({",
+                  "      url: pm.collectionVariables.get(\"baseUrl\") + \"/api/workspaces\",",
+                  "      method: \"POST\",",
+                  "      header: {",
+                  "        Authorization: \"Bearer \" + pm.collectionVariables.get(\"token\"),",
+                  "        \"Content-Type\": \"application/json\",",
+                  "        \"X-Idempotency-Key\": run + \"-\" + label,",
+                  "        \"X-Correlation-ID\": run + \"-\" + label",
+                  "      },",
+                  "      body: { mode: \"raw\", raw: payload }",
+                  "    }, (error, response) => {",
+                  "      if (error) return reject(error);",
+                  "      let responseBody;",
+                  "      try { responseBody = response.json(); } catch (_) { responseBody = response.text(); }",
+                  "      resolve({ label, key: run + \"-\" + label, sentAt, receivedAt: new Date().toISOString(),",
+                  "        status: response.code, body: responseBody });",
+                  "    });",
+                  "  });",
+                  "}",
+                  "// Both sends start before Promise.all waits for either result.",
+                  "const responses = await Promise.all([dispatch(\"A\"), dispatch(\"B\")]);",
+                  "const codes = responses.map(r => r.status).sort((a, b) => a - b);",
+                  "const evidence = { run, projectId, teamId, payload: JSON.parse(payload), responses };",
+                  "pm.collectionVariables.set(\"ac10_evidence\", JSON.stringify(evidence, null, 2));",
+                  "console.log(\"AC10 concurrent evidence\", JSON.stringify(evidence, null, 2));",
+                  "pm.test(\"Two different idempotency keys\", () => pm.expect(responses[0].key).not.to.equal(responses[1].key));",
+                  "pm.test(\"Exactly HTTP 201 + HTTP 409\", () => pm.expect(codes).to.deep.equal([201, 409]));",
+                  "const winner = responses.find(r => r.status === 201);",
+                  "if (winner) {",
+                  "  pm.collectionVariables.set(\"ac10_workspaceId\", String(winner.body.id));",
+                  "  pm.test(\"Winner belongs to the selected pair\", () => {",
+                  "    pm.expect(winner.body.projectId).to.equal(projectId);",
+                  "    pm.expect(winner.body.teamId).to.equal(teamId);",
+                  "  });",
+                  "}",
+                  "console.log(\"Save this console evidence AND run verify.sql. HTTP results alone do not establish database uniqueness.\");"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AC11 - Backend revalidation",
+      "item": [
+        {
+          "name": "A - Confirm valid pair without writes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces/confirm",
+            "description": "A - Confirm valid pair without writes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac11_projectId}},\n  \"teamId\": {{ac11_teamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac11_projectId\", \"ac11_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac11_run\")) {",
+                  "  pm.collectionVariables.set(\"ac11_run\", \"ac11-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Confirmation HTTP 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B - Missing authentication: 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{ac11_run}}-unauthenticated"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces",
+            "description": "Quick authentication check only. A missing token is not proof of a formerly valid token expiring; use the signed-expired-token integration test for that scenario.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac11_projectId}},\n  \"teamId\": {{ac11_teamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac11_projectId\", \"ac11_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac11_run\")) {",
+                  "  pm.collectionVariables.set(\"ac11_run\", \"ac11-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "C - Read-only user: 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{ac11_run}}-readonly"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces",
+            "description": "Basic lack-of-create-permission check; runtime revocation of the same user after confirmation is separately tested by JUnit.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{viewerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac11_projectId}},\n  \"teamId\": {{ac11_teamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac11_projectId\", \"ac11_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac11_run\")) {",
+                  "  pm.collectionVariables.set(\"ac11_run\", \"ac11-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"viewerToken\")) throw new Error(\"Login read-only viewer in Setup first.\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "D - Missing team: 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{ac11_run}}-missing"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces",
+            "description": "D - Missing team: 404",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac11_projectId}},\n  \"teamId\": {{missingTeamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac11_projectId\", \"ac11_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac11_run\")) {",
+                  "  pm.collectionVariables.set(\"ac11_run\", \"ac11-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "E - Project assigned to another team: 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{ac11_run}}-relationship"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces",
+            "description": "E - Project assigned to another team: 422",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac09_projectId}},\n  \"teamId\": {{ac11_teamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac11_projectId\", \"ac11_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac11_run\")) {",
+                  "  pm.collectionVariables.set(\"ac11_run\", \"ac11-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}",
+                  "for (const field of [\"ac09_projectId\", \"ac09_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac09_run\")) {",
+                  "  pm.collectionVariables.set(\"ac09_run\", \"ac09-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Invalid relationship HTTP 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "F - Status changed after confirmation: 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{ac11_run}}-terminal"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces",
+            "description": "Run A first, change only the AC11 QA project to COMPLETED (then repeat with CANCELLED), run F, verify zero records, restore PLANNING. Guard skips the create request if the project is not terminal.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac11_projectId}},\n  \"teamId\": {{ac11_teamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac11_projectId\", \"ac11_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac11_run\")) {",
+                  "  pm.collectionVariables.set(\"ac11_run\", \"ac11-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}",
+                  "const response = await pm.sendRequest({",
+                  "  url: pm.collectionVariables.get(\"baseUrl\") + \"/api/workspaces/candidates\",",
+                  "  method: \"GET\",",
+                  "  header: { Authorization: \"Bearer \" + pm.collectionVariables.get(\"token\") }",
+                  "});",
+                  "const row = response.code === 200 ? response.json().find(item => item.teamId === Number(pm.collectionVariables.get(\"ac11_teamId\"))) : null;",
+                  "if (!row || ![\"COMPLETED\", \"CANCELLED\"].includes(row.projectStatus) || row.workspaceId) {",
+                  "  pm.execution.skipRequest();",
+                  "  throw new Error(\"First confirm the AC11 pair, then change ONLY that QA project to COMPLETED/CANCELLED using the SQL in README. This request was skipped.\");",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Terminal project HTTP 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "G - Scope revoked on the same account: 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "{{ac11_run}}-revoked"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspaces",
+            "description": "MANUAL ONLY. First confirm successfully. In SQL, remove mentor assignment and deactivate this QA team's membership for the creator. Keep the SAME token. Then send. Restore both changes afterward.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": {{ac11_projectId}},\n  \"teamId\": {{ac11_teamId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "for (const field of [\"ac11_projectId\", \"ac11_teamId\"]) {",
+                  "  const value = Number(pm.collectionVariables.get(field));",
+                  "  if (!Number.isSafeInteger(value) || value <= 0) {",
+                  "    throw new Error(\"Set \" + field + \" from the fixture SQL / candidate response first.\");",
+                  "  }",
+                  "}",
+                  "if (!pm.collectionVariables.get(\"ac11_run\")) {",
+                  "  pm.collectionVariables.set(\"ac11_run\", \"ac11-\" + pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "}",
+                  "const response = await pm.sendRequest({",
+                  "  url: pm.collectionVariables.get(\"baseUrl\") + \"/api/workspaces/candidates\",",
+                  "  method: \"GET\",",
+                  "  header: { Authorization: \"Bearer \" + pm.collectionVariables.get(\"token\") }",
+                  "});",
+                  "if (response.code !== 200 || response.json().some(row => row.teamId === Number(pm.collectionVariables.get(\"ac11_teamId\")))) {",
+                  "  pm.execution.skipRequest();",
+                  "  throw new Error(\"First confirm successfully, then revoke mentor AND membership scope on the QA team. Request skipped because the team is still visible or the candidate check failed.\");",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Live scope revocation HTTP 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

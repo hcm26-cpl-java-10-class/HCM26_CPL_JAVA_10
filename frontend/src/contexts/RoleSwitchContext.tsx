@@ -6,7 +6,7 @@ import {
   normalizeRole,
   uniqueRoles,
 } from "@/utils/rbac.utils";
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 
 interface RoleSwitchContextType {
@@ -78,7 +78,7 @@ export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   }, [availableRoles, isAuthenticated]);
 
-  const setViewRole = (nextRole: string | null) => {
+  const setViewRole = useCallback((nextRole: string | null) => {
     const normalizedRole = normalizeRole(nextRole);
 
     if (!normalizedRole) {
@@ -93,7 +93,7 @@ export const RoleSwitchProvider: React.FC<{ children: React.ReactNode }> = ({
 
     setViewRoleState(normalizedRole);
     localStorage.setItem(VIEW_ROLE_STORAGE_KEY, normalizedRole);
-  };
+  }, [availableRoles]);
 
   const activeRole = viewRole || primaryRole || availableRoles[0] || null;
   const isPreviewMode = !!viewRole && normalizeRole(viewRole) !== primaryRole;

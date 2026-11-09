@@ -2,9 +2,11 @@ package com.example.starter_project_2025.system.question.mapper;
 
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.system.question.domain.Question;
+import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
 import com.example.starter_project_2025.system.question.domain.QuestionOption;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
+import com.example.starter_project_2025.system.question.service.CodeSpecSupport;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -33,15 +35,27 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
         d.setCreatedBy(q.getCreatedBy());
         d.setUpdatedBy(q.getUpdatedBy());
         d.setContent(q.getContent());
+        d.setImageUrl(q.getImageUrl());
         d.setType(q.getType());
         d.setDifficulty(q.getDifficulty());
         d.setTopic(q.getTopic());
         d.setPoints(q.getPoints());
+        d.setSourceQuestionId(q.getSourceQuestionId());
+        d.setCode(q.getType() == QuestionType.CODING ? CodeSpecSupport.forTeacher(q.getCodeSpec()) : null);
+        d.setGradingCriteria(q.getGradingCriteria().stream().map(criterion -> {
+            QuestionDTO.EssayCriterionDTO dto = new QuestionDTO.EssayCriterionDTO();
+            dto.setName(criterion.getName());
+            dto.setDescription(criterion.getDescription());
+            dto.setWeightPercentage(criterion.getWeightPercentage());
+            return dto;
+        }).toList());
         d.setOptions(q.getOptions().stream().map(o -> {
             QuestionDTO.OptionDTO od = new QuestionDTO.OptionDTO();
             od.setId(o.getId());
             od.setContent(o.getContent());
             od.setCorrect(o.isCorrect());
+            od.setImageUrl(o.getImageUrl());
+            od.setImageUrl(o.getImageUrl());
             return od;
         }).toList());
         return d;
@@ -55,6 +69,7 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
 
     private void apply(Question q, QuestionDTO d) {
         if (d.getContent() != null) q.setContent(d.getContent().trim());
+        if (d.getImageUrl() != null) q.setImageUrl(d.getImageUrl().isBlank() ? null : d.getImageUrl().trim());
         if (d.getType() != null) q.setType(d.getType());
         if (d.getDifficulty() != null) q.setDifficulty(d.getDifficulty());
         if (d.getTopic() != null) {
@@ -62,7 +77,30 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
         }
         if (d.getPoints() != null) q.setPoints(d.getPoints());
 
-        if (q.getType() == QuestionType.ESSAY) {
+        if (d.getGradingCriteria() != null) {
+            q.getGradingCriteria().clear();
+            if (q.getType() == QuestionType.ESSAY) {
+                d.getGradingCriteria().forEach(dto -> {
+                    if (dto == null) return;
+                    EssayGradingCriterion criterion = new EssayGradingCriterion();
+                    criterion.setName(dto.getName() == null ? "" : dto.getName().trim());
+                    criterion.setDescription(dto.getDescription() == null || dto.getDescription().isBlank()
+                            ? null : dto.getDescription().trim());
+                    criterion.setWeightPercentage(dto.getWeightPercentage() == null ? 0 : dto.getWeightPercentage());
+                    q.getGradingCriteria().add(criterion);
+                });
+            }
+        } else if (q.getType() != QuestionType.ESSAY) {
+            q.getGradingCriteria().clear();
+        }
+
+        if (q.getType() == QuestionType.CODING) {
+            if (d.getCode() != null) q.setCodeSpec(CodeSpecSupport.toJson(d.getCode()));
+        } else {
+            q.setCodeSpec(null);
+        }
+
+        if (q.getType() == QuestionType.ESSAY || q.getType() == QuestionType.CODING) {
             q.getOptions().clear();
         } else if (d.getOptions() != null) {
             Map<Long, QuestionOption> existing = new HashMap<>();
@@ -78,9 +116,11 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
                 }
                 o.setContent(od.getContent().trim());
                 o.setCorrect(od.isCorrect());
+                o.setImageUrl(od.getImageUrl() == null || od.getImageUrl().isBlank() ? null : od.getImageUrl().trim());
+                o.setImageUrl(od.getImageUrl() == null || od.getImageUrl().isBlank() ? null : od.getImageUrl().trim());
                 kept.add(o);
             }
-            q.getOptions().removeIf(o -> kept.stream().noneMatch(k -> k == o)); // orphanRemoval xóa đáp án không còn
+            q.getOptions().removeIf(o -> kept.stream().noneMatch(k -> k == o));
         }
     }
 }
