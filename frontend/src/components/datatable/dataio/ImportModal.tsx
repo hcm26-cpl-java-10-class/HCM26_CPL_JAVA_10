@@ -11,6 +11,7 @@ import { Tabs } from "@/components/ui/tabs";
 import type { ImportResult } from "@/types";
 import { useState } from "react";
 import { toast } from "sonner";
+import { apiErrorMessage } from "@/utils/api-error.utils";
 import { ImportTab } from "./ImportTab";
 
 interface ImportModalProps {
@@ -19,7 +20,7 @@ interface ImportModalProps {
   table: any;
   title?: string;
   description?: string;
-  onImportSuccess?: (result: ImportResult) => void;
+  onImportSuccess?: (result: ImportResult, file: File) => void;
   canImport?: boolean;
 }
 
@@ -51,15 +52,15 @@ export function ImportModal({
     try {
       setImportLoading(true);
       const result = await table.importFile(file);
-      onImportSuccess?.(result);
+      onImportSuccess?.(result, file);
       onOpenChange(false);
       toast.success("Import successful!");
     } catch (err: any) {
       if (err?.response?.data) {
-        onImportSuccess?.(err.response.data);
+        onImportSuccess?.(err.response.data, file);
         onOpenChange(false);
       }
-      toast.error(err?.response?.data?.message ?? "Failed to import data");
+      toast.error(apiErrorMessage(err, "Failed to import data"));
     } finally {
       setImportLoading(false);
     }

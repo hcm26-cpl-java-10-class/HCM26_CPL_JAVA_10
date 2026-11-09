@@ -3,13 +3,12 @@ package com.example.starter_project_2025.system.rbac.user;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
 import com.example.starter_project_2025.base.dataio.importer.hook.ImportHandler;
 import com.example.starter_project_2025.base.dataio.importer.parser.FileParser;
-import com.example.starter_project_2025.base.dataio.importer.result.GeneratedCredential;
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
 import com.example.starter_project_2025.base.dataio.importer.resolver.RelationLookupEngine;
 import com.example.starter_project_2025.base.dataio.importer.result.RowError;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.auth.util.PasswordPolicy;
-import com.example.starter_project_2025.system.auth.util.TemporaryPassword;
+import com.example.starter_project_2025.system.auth.util.InitialPassword;
 import com.example.starter_project_2025.system.rbac.department.Department;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import lombok.RequiredArgsConstructor;
@@ -17,19 +16,24 @@ import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.lang.reflect.Field;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -37,6 +41,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 
 /**
  * Rules for importing users from Excel/CSV. The email identifies the account. Creating accounts sends
@@ -45,9 +50,8 @@ import java.util.regex.Pattern;
  * <table>
  *   <tr><th>Account</th><th>Password column</th><th>Result</th></tr>
  *   <tr><td>new</td><td>filled</td><td>password checked, hashed and saved; the account is ready to use</td></tr>
- *   <tr><td>new</td><td>empty</td><td>the system generates a random temporary password for that person and the account
- *       must choose its own password at the first sign-in. The temporary passwords are returned once to
- *       the person who ran the import</td></tr>
+ *   <tr><td>new</td><td>empty</td><td>the initial password is built from the email and the date of birth (see
+ *       {@link InitialPassword}) and the account must choose its own password at the first sign-in</td></tr>
  *   <tr><td>existing</td><td>filled</td><td>caller needs USER_UPDATE; password checked, hashed and updated, sessions
  *       revoked; "password changed" notice to the owner (can be switched off, no password in it). Roles,
  *       Departments, names, phone and description in the file are applied too when they differ</td></tr>
@@ -56,7 +60,8 @@ import java.util.regex.Pattern;
  *       value), counted as updated, no email. Nothing differs: skipped (unchanged)</td></tr>
  * </table>
  *
- * Also rejected, per Excel row: invalid data, an email that appears twice in the same file.
+ * The import is all or nothing: when any row is rejected (invalid data, an email that appears twice in the
+ * same file, ...) nothing is saved and every rejected row is reported.
  * Passwords are never put in an email. At most {@code app.import.max-emails} notices are sent per import.
  */
 @Slf4j
@@ -71,6 +76,14 @@ public class UserImportHandler implements ImportHandler<User> {
     private static final Pattern DATE_SHAPE = Pattern.compile("\\d{4}-\\d{1,2}-\\d{1,2}");
     private static final DateTimeFormatter DATE_FORMAT =
             DateTimeFormatter.ofPattern("uuuu-M-d").withResolverStyle(ResolverStyle.STRICT);
+
+    /**
+     * Initial passwords follow a known pattern (email + date of birth) and are replaced at the first sign-in,
+     * so a slow hash protects nothing there: they get the cheapest bcrypt cost (about 1 ms instead of
+     * about 100 ms). A hash carries its own cost, so signing in works as usual, and the password the person
+     * chooses afterwards is hashed with the normal cost. Passwords typed in the file keep the normal cost.
+     */
+    private static final PasswordEncoder INITIAL_PASSWORD_ENCODER = new BCryptPasswordEncoder(4);
 
     private static final String PERMISSION_CREATE = "USER_CREATE";
     private static final String PERMISSION_UPDATE = "USER_UPDATE";
@@ -99,8 +112,11 @@ public class UserImportHandler implements ImportHandler<User> {
         final Set<User> existing = Collections.newSetFromMap(new IdentityHashMap<>());
         /** Existing entities whose password the import changed (only these get sessions revoked and a notice). */
         final Set<User> passwordChanged = Collections.newSetFromMap(new IdentityHashMap<>());
-        /** Temporary passwords generated in this run, by entity. */
-        final Map<User, String> temporaryPasswords = new IdentityHashMap<>();
+        /** The accounts that already exist for the emails of the file (lower-case email), loaded in one go. */
+        final Map<String, User> existingByEmail = new HashMap<>();
+        boolean existingLoaded;
+        /** Password hashes computed in parallel before the rows are processed, by row. */
+        final Map<Map<String, String>, String> passwordHashes = new IdentityHashMap<>();
         /** Emails sent or attempted so far in this run. */
         int emailsAttempted;
     }
@@ -125,7 +141,100 @@ public class UserImportHandler implements ImportHandler<User> {
             }
             fallback = rowNumber + 1;
         }
+
+        loadExistingAccounts(state, rows);
+        precomputePasswordHashes(state, rows);
+
         run.set(state);
+    }
+
+    /** One query per 500 emails instead of one query per row. */
+    private void loadExistingAccounts(Run state, List<Map<String, String>> rows) {
+        Set<String> emails = new LinkedHashSet<>();
+        for (Map<String, String> row : rows) {
+            String email = value(row, "Email");
+            if (email != null) {
+                emails.add(email.toLowerCase(Locale.ROOT));
+            }
+        }
+
+        List<String> all = new ArrayList<>(emails);
+        for (int from = 0; from < all.size(); from += 500) {
+            List<String> chunk = new ArrayList<>(all.subList(from, Math.min(from + 500, all.size())));
+            for (User user : userRepository.findAllByEmailLowerIn(chunk)) {
+                state.existingByEmail.put(user.getEmail().toLowerCase(Locale.ROOT), user);
+            }
+        }
+        state.existingLoaded = true;
+    }
+
+    /**
+     * Hashing a password is deliberately slow and was done row by row. Here every password that will be
+     * needed (given in the file, or built from the email and date of birth for a new account) is hashed
+     * at once on all processors. A row with invalid data is simply not hashed: it is reported later.
+     */
+    private void precomputePasswordHashes(Run state, List<Map<String, String>> rows) {
+        List<Map<String, String>> targets = new ArrayList<>();
+        List<String> secrets = new ArrayList<>();
+        List<Boolean> initial = new ArrayList<>();
+
+        for (Map<String, String> row : rows) {
+            String email = value(row, "Email");
+            if (email == null) {
+                continue;
+            }
+            try {
+                String password = value(row, "Password");
+                if (password != null) {
+                    if (PasswordPolicy.validate(password) == null) {
+                        targets.add(row);
+                        secrets.add(password);
+                        initial.add(false);
+                    }
+                } else if (!state.existingByEmail.containsKey(email.toLowerCase(Locale.ROOT))
+                        && EMAIL_PATTERN.matcher(email).matches()) {
+                    LocalDate dateOfBirth = parseDateOfBirth(value(row, "Date of Birth"));
+                    if (dateOfBirth != null) {
+                        targets.add(row);
+                        secrets.add(InitialPassword.from(email, dateOfBirth));
+                        initial.add(true);
+                    }
+                }
+            } catch (RuntimeException e) {
+                // The row has invalid data; it is reported when it is processed.
+            }
+        }
+
+        if (targets.isEmpty()) {
+            return;
+        }
+
+        List<String> hashes = IntStream.range(0, targets.size())
+                .parallel()
+                .mapToObj(i -> (initial.get(i) ? INITIAL_PASSWORD_ENCODER : passwordEncoder).encode(secrets.get(i)))
+                .toList();
+
+        for (int i = 0; i < targets.size(); i++) {
+            state.passwordHashes.put(targets.get(i), hashes.get(i));
+        }
+    }
+
+    /** The hash computed in advance for this row, or a fresh one when there is none. */
+    private String hashFor(Map<String, String> row, String rawPassword, boolean initialPassword) {
+        Run state = run.get();
+        String ready = state == null ? null : state.passwordHashes.get(row);
+        if (ready != null) {
+            return ready;
+        }
+        return (initialPassword ? INITIAL_PASSWORD_ENCODER : passwordEncoder).encode(rawPassword);
+    }
+
+    private Optional<User> findExisting(String email) {
+        Run state = run.get();
+        if (state != null && state.existingLoaded) {
+            return Optional.ofNullable(state.existingByEmail.get(email.toLowerCase(Locale.ROOT)));
+        }
+        return userRepository.findByEmailIgnoreCase(email);
     }
 
     @Override
@@ -145,7 +254,7 @@ public class UserImportHandler implements ImportHandler<User> {
         // Reject a bad Date of Birth / Gender with a clear message, and hand the mapper the canonical form.
         normalizeProfileColumns(row);
 
-        Optional<User> existing = userRepository.findByEmailIgnoreCase(email);
+        Optional<User> existing = findExisting(email);
         if (existing.isEmpty()) {
             // A new account needs both. An existing account keeps its stored value when the cell is blank.
             requireColumn(row, "Date of Birth");
@@ -168,7 +277,7 @@ public class UserImportHandler implements ImportHandler<User> {
             return Optional.empty();
         }
 
-        Optional<User> existing = userRepository.findByEmailIgnoreCase(email);
+        Optional<User> existing = findExisting(email);
         existing.ifPresent(user -> {
             Run state = run.get();
             if (state != null) {
@@ -198,7 +307,7 @@ public class UserImportHandler implements ImportHandler<User> {
             requirePermission(PERMISSION_UPDATE, "update an existing account");
 
             if (rawPassword != null) {
-                updateExistingPassword(user, rawPassword);
+                updateExistingPassword(user, row, rawPassword);
                 Run state = run.get();
                 if (state != null) {
                     state.passwordChanged.add(user);
@@ -233,21 +342,15 @@ public class UserImportHandler implements ImportHandler<User> {
 
         if (rawPassword != null) {
             requireStrongPassword(rawPassword);
-            user.setPasswordHash(passwordEncoder.encode(rawPassword));
+            user.setPasswordHash(hashFor(row, rawPassword, false));
             user.setIsActive(true);
             user.setMustChangePassword(false);
         } else {
-            // No password in the file: generate a random temporary one for this person. The account is
-            // active, but its owner has to choose their own password at the first sign-in.
-            String temporary = TemporaryPassword.generate();
-            user.setPasswordHash(passwordEncoder.encode(temporary));
+            // No password in the file: the initial password is built from the email and the date of birth.
+            // The account is active, but its owner has to choose their own password at the first sign-in.
+            user.setPasswordHash(hashFor(row, InitialPassword.from(email, user.getDateOfBirth()), true));
             user.setIsActive(true);
             user.setMustChangePassword(true);
-
-            Run state = run.get();
-            if (state != null) {
-                state.temporaryPasswords.put(user, temporary);
-            }
         }
     }
 
@@ -273,13 +376,6 @@ public class UserImportHandler implements ImportHandler<User> {
             log.warn("Could not revoke sessions of {}: {}", user.getEmail(), e.getMessage());
         }
 
-        // A temporary password was generated: hand it to the person who ran the import, send no email.
-        String temporary = state == null ? null : state.temporaryPasswords.remove(user);
-        if (temporary != null) {
-            result.getCredentials().add(new GeneratedCredential(rowNumber, user.getEmail(), temporary));
-            return;
-        }
-
         // Creating an account sends no email. Only an existing owner whose password was changed is told.
         if (!passwordChanged || !notifyPasswordChange) {
             return;
@@ -293,6 +389,11 @@ public class UserImportHandler implements ImportHandler<User> {
             state.emailsAttempted++;
         }
 
+        // The import is all or nothing: the notice goes out only after the whole import was saved.
+        afterCommit(() -> sendPasswordChangedNotice(user, rowNumber, result));
+    }
+
+    private void sendPasswordChangedNotice(User user, int rowNumber, ImportResult result) {
         try {
             accountMailService.sendPasswordChangedNotification(user);
             result.setEmailsSent(result.getEmailsSent() + 1);
@@ -306,17 +407,31 @@ public class UserImportHandler implements ImportHandler<User> {
         }
     }
 
+    /** Runs the action once the surrounding transaction has been committed (at once when there is none). */
+    private void afterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** Existing account + a password in the file: check the caller's right, then change the password. */
-    private void updateExistingPassword(User user, String rawPassword) {
+    private void updateExistingPassword(User user, Map<String, String> row, String rawPassword) {
         if (rawPassword == null) {
             // shouldSkip() normally filters this case out; never change anything without a password.
             throw new IllegalArgumentException("Password is empty, nothing to update");
         }
 
         requireStrongPassword(rawPassword);
-        user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        user.setPasswordHash(hashFor(row, rawPassword, false));
         user.setMustChangePassword(false);
     }
 

@@ -5,6 +5,7 @@ import { TabsContent } from "@/components/ui/tabs";
 import { Download, FileSpreadsheet, Loader2, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { apiErrorMessage } from "@/utils/api-error.utils";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -55,7 +56,7 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
       await onImport(file);
       clearFile();
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Failed to import data");
+      setError(apiErrorMessage(err, "Failed to import data"));
     }
   };
 
@@ -137,10 +138,10 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
             account is created.
           </p>
           <p>
-            <strong>New account, Password empty:</strong> the system generates a random temporary
-            password for each person (no email is sent, so large files are fine). You download the
-            list once after the import; at the first sign-in each person must create their own
-            password.
+            <strong>New account, Password empty:</strong> the first password is the letters of the
+            email before the @ (first letter in capital) followed by the date of birth as ddMMyyyy,
+            for example Annguyen31012000. At the first sign-in each person must choose their own
+            password. No email is sent.
           </p>
           <p>
             <strong>Existing account, Password filled:</strong> the password is changed and the user is
@@ -151,7 +152,9 @@ export function ImportTab({ loading, onImport, entityName }: ImportTabProps) {
             <strong>Existing account, Password empty:</strong> nothing changes and no email is sent.
           </p>
           <p>
-            Each email can appear only once in the file; errors are listed by Excel row.
+            Each email can appear only once in the file. If any row has an error, nothing is imported
+            and every row to fix is listed by Excel row; fix them and import the file again. If a
+            department in the file does not exist yet, you can add it from the result window.
           </p>
         </div>
       )}

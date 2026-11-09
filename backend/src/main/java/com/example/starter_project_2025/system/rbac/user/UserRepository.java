@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +16,10 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
     Optional<User> findByEmail(String email);
 
     Optional<User> findByEmailIgnoreCase(String email);
+
+    /** Used by the import: the accounts of many emails (given in lower case) in one query. */
+    @Query("select u from User u where lower(u.email) in :emails")
+    List<User> findAllByEmailLowerIn(@Param("emails") Collection<String> emails);
 
     boolean existsByEmail(String email);
 

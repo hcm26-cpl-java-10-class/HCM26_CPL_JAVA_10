@@ -35,5 +35,14 @@ export interface ImportResult {
   /** Temporary passwords generated for rows without a password. Shown once; hand them out securely. */
   credentials?: GeneratedCredential[];
 
+  /** True when the import had errors and saved nothing. */
+  rolledBack?: boolean;
+
+  /** Codes the file refers to that do not exist yet (for users: departments). */
+  missingCodes?: string[];
+
+  /** Explanation shown to the person who ran the import when nothing was saved. */
+  message?: string;
+
   errors: ImportError[];
 }
