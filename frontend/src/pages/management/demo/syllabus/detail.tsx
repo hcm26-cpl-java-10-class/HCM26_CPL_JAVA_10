@@ -530,6 +530,23 @@ export default function SyllabusDetailPage() {
                             </p>
                         </section>
 
+                        {["SYLLABUS_READ", "COURSE_CREATE", "SECTION_CREATE", "LESSON_CREATE"].every(hasPermission) && (
+                            <div className="flex flex-wrap items-center gap-3">
+                                {published && syllabus.isActive ? (
+                                    <Button asChild>
+                                        <Link to={`/courses?fromSyllabus=${syllabusId}`}>
+                                            <Plus className="size-4" />
+                                            Create Course from Syllabus
+                                        </Link>
+                                    </Button>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                        Publish and activate this Syllabus to create a Course.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
                         {/* General Information */}
                         <GeneralInformationPanel syllabusId={syllabusId} readOnly={published} />
 

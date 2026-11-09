@@ -19,6 +19,11 @@ const base = createBaseApiService<CourseDTO, CourseFilter>({
 });
 
 export const courseApi = Object.assign({}, base, {
+  createFromSyllabus: async (data: CourseDTO): Promise<CourseDTO> => {
+    const response = await axiosInstance.post<CourseDTO>(`${path}/from-syllabus`, data);
+    return response.data;
+  },
+
   /** Catalog cho người học: chỉ khóa PUBLISHED, hỗ trợ search / category / level / phân trang. */
   searchCatalog: async (params: CatalogSearchParams = {}): Promise<CatalogPage<CatalogCourse>> => {
     const { search, categoryId, level, page = 0, size = 12, sort } = params;
