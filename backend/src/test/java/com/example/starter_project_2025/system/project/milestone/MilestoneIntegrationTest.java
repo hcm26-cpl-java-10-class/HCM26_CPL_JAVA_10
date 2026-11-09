@@ -89,6 +89,31 @@ class MilestoneIntegrationTest {
     }
 
     @Test
+    void createWithTodayStartDateStartsImmediately() throws Exception {
+        Map<String, Object> request = new LinkedHashMap<>(validRequest());
+        String startDate = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).toString();
+        request.put("startDate", startDate);
+        request.put("deadline", Instant.now().plus(2, ChronoUnit.DAYS).toString());
+        String result = mockMvc.perform(post(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .header("Idempotency-Key", "start-today-immediate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.lifecycleStatus").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.startDate").value(startDate))
+                .andReturn().getResponse().getContentAsString();
+        var id = java.util.UUID.fromString(objectMapper.readTree(result).get("id").asText());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.IN_PROGRESS,
+                milestoneRepository.findById(id).orElseThrow().lifecycleStatus());
+        org.junit.jupiter.api.Assertions.assertTrue(auditRepository.findAll().stream()
+                .anyMatch(log -> "MILESTONE_AUTO_STARTED".equals(log.getAction())));
+        org.junit.jupiter.api.Assertions.assertTrue(outboxRepository.findAll().stream()
+                .anyMatch(event -> "MILESTONE_STARTED".equals(event.getEventType())));
+    }
+
+    @Test
     void rejectsPastStartDateAndRemovedManualRoutes() throws Exception {
         Map<String, Object> request = new LinkedHashMap<>(validRequest());
         request.put("startDate", LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(1).toString());
