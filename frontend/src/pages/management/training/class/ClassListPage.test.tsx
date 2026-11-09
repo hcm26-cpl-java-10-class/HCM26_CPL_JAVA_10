@@ -43,6 +43,8 @@ const rowCodes = async () => (await rowsOf()).map((row) => within(row).getByRole
 beforeEach(() => {
     fakeHttp.reset();
     fakeHttp.on("get", "/classes", classes);
+    fakeHttp.on("get", "/classes/stats", { totalClasses: 23, inProgress: 5, upcomingClasses: 0, completedClasses: 5,
+        asOf: "2026-11-07", upcomingThrough: "2026-12-07", timezone: "Asia/Ho_Chi_Minh" });
 });
 
 describe("Class List: loading data", () => {

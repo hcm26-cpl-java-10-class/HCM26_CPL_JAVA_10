@@ -85,7 +85,7 @@ export function filterClasses(classes: ExternalClass[], filters: ClassFilters): 
         const statusLabel = getClassStatusMeta(item.status).label;
 
         if (filters.status && statusLabel !== filters.status) return false;
-        if (filters.programId && String(item.programId ?? "") !== filters.programId) return false;
+        if (filters.programId && String(item.programId ?? item.program ?? "") !== filters.programId) return false;
 
         if (filters.startFrom || filters.startTo) {
             const day = isoDay(item.startDate);
@@ -96,7 +96,7 @@ export function filterClasses(classes: ExternalClass[], filters: ClassFilters): 
 
         if (!keyword) return true;
 
-        return [item.code, item.name, item.id, item.programId, programLabel(item.programId), item.status, statusLabel].some((value) =>
+        return [item.code, item.name, item.id, item.programId, item.program, programLabel(item.programId), item.status, statusLabel].some((value) =>
             String(value ?? "")
                 .toLowerCase()
                 .includes(keyword),
@@ -112,7 +112,7 @@ const sortValue = (item: ExternalClass, key: ClassSortKey): string | number | nu
         case "code":
             return classTitle(item);
         case "program":
-            return item.programId ?? null;
+            return item.programId ?? item.program ?? null;
         case "trainees":
             return item.plannedSize ?? null;
         case "startDate":

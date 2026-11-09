@@ -6,6 +6,7 @@ import {
     type ClassSortKey,
     type SortDirection,
 } from "@/utils/class.utils";
+import type { ClassKpi } from "@/hooks/useClassInsights";
 
 export const PAGE_SIZES = [10, 20, 50] as const;
 export const DEFAULT_PAGE_SIZE = PAGE_SIZES[0];
@@ -14,6 +15,7 @@ const SORT_KEYS: readonly ClassSortKey[] = ["code", "program", "trainees", "star
 const DEFAULT_SORT_KEY: ClassSortKey = "code";
 
 export interface ClassListState {
+    kpi: ClassKpi;
     filters: ClassFilters;
     sortKey: ClassSortKey;
     sortDirection: SortDirection;
@@ -42,6 +44,7 @@ export function useClassListState() {
         const size = positiveInt(params.get("size"));
 
         return {
+            kpi: (["inProgress", "upcoming", "completed"].includes(params.get("kpi") ?? "") ? params.get("kpi") : "all") as ClassKpi,
             filters: {
                 search: params.get("q") ?? "",
                 status: params.get("status") ?? "",
@@ -88,7 +91,7 @@ export function useClassListState() {
     );
 
     const clearFilters = useCallback(
-        () => update({ q: undefined, status: undefined, program: undefined, from: undefined, to: undefined, page: undefined }),
+        () => update({ q: undefined, status: undefined, program: undefined, from: undefined, to: undefined, kpi: undefined, page: undefined }),
         [update],
     );
 
@@ -111,6 +114,7 @@ export function useClassListState() {
     );
 
     return {
+        setKpi: (kpi: ClassKpi) => update({ kpi: kpi === "all" ? undefined : kpi, page: undefined }),
         state,
         /** The raw query string, handed to the detail page so its "Back" link can restore this exact view. */
         queryString: params.toString(),

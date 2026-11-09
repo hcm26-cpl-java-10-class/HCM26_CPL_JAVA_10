@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { ExternalClass } from "@/types";
 import { programLabel } from "@/utils/class.utils";
 import { formatDate } from "@/utils/session.utils";
+import { ClassReadinessPanel } from "./ClassReadinessPanel";
 
 interface InfoField {
     label: string;
@@ -17,7 +18,7 @@ function displayValue(value?: ReactNode): ReactNode {
     return value;
 }
 
-export function ClassInfoTab({ classItem }: { classItem: ExternalClass }) {
+export function ClassInfoTab({ classItem, onNavigate = () => {} }: { classItem: ExternalClass; onNavigate?: (tab: string) => void }) {
     const [open, setOpen] = useState(true);
 
     const trainingProgram =
@@ -57,6 +58,7 @@ export function ClassInfoTab({ classItem }: { classItem: ExternalClass }) {
 
     return (
         <div className="space-y-4">
+            <ClassReadinessPanel classItem={classItem} onNavigate={onNavigate} />
             <Collapsible open={open} onOpenChange={setOpen} className="overflow-hidden rounded-lg border bg-card">
                 <CollapsibleTrigger className="flex w-full items-center justify-between bg-muted/30 px-4 py-3 text-left text-sm font-semibold hover:bg-muted/50">
                     <span>General</span>

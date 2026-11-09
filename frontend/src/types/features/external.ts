@@ -164,6 +164,7 @@ export interface StatusLogEntry {
 // ===================== CLASS =====================
 
 export interface ExternalClass {
+    traineeSource?: "internal";
     id: number;
     code?: string;
     name?: string;

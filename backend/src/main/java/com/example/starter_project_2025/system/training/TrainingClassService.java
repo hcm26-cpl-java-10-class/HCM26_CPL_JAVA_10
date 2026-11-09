@@ -21,6 +21,7 @@ public class TrainingClassService {
     private final TrainingClassRepository repository;
     private final SessionRepository sessions;
     private final Validator validator;
+    private final ClassEnrollmentRepository enrollments;
     private static final Map<String, List<String>> TRANSITIONS = Map.of(
         "planning", List.of("assigned", "cancelled"),
         "assigned", List.of("active", "cancelled", "planning"),
@@ -119,6 +120,8 @@ public class TrainingClassService {
     @Transactional
     public TrainingClassDTO update(Long id, TrainingClassDTO input) {
         TrainingClass entity = repository.findForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Class not found"));
+        if (input.getPlannedSize() < enrollments.occupiedSeats(id))
+            throw new ConflictException("Planned capacity cannot be lower than the current enrollment.");
         validate(input, id);
         if (!Objects.equals(entity.getStatus(), input.getStatus()) &&
                 !TRANSITIONS.get(entity.getStatus()).contains(input.getStatus()))
@@ -137,6 +140,8 @@ public class TrainingClassService {
     @Transactional
     public void deactivate(Long id) {
         TrainingClass entity = repository.findForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Class not found"));
+        if (!enrollments.findByTrainingClass_IdAndIsActiveTrueOrderByIdAsc(id).isEmpty())
+            throw new ConflictException("Cannot deactivate a class with trainee enrollments");
         if (Set.of("active", "completed", "closed").contains(entity.getStatus()))
             throw new ConflictException("Cannot deactivate a class that has started");
         if (!sessions.findByClassId(id).stream().filter(s -> Boolean.TRUE.equals(s.getIsActive())).toList().isEmpty())
@@ -158,6 +163,8 @@ public class TrainingClassService {
     private TrainingClassDTO dto(TrainingClass entity) {
         TrainingClassDTO dto = new TrainingClassDTO();
         BeanUtils.copyProperties(entity, dto);
+        dto.setEnrolledTrainees(enrollments.occupiedSeats(entity.getId()));
+        dto.setTraineeSource("internal");
         return dto;
     }
 }

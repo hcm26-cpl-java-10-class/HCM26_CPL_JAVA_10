@@ -74,11 +74,11 @@ export function useTransitionClassStatus(classId: string | undefined) {
 
 // ===================== TRAINEES =====================
 
-export function useClassTrainees(classId: string | undefined) {
+export function useClassTrainees(classId: string | undefined, enabled = true) {
     return useQuery({
         queryKey: externalKeys.classTrainees(classId ?? ""),
         queryFn: () => externalApi.getClassTrainees(classId as string),
-        enabled: !!classId,
+        enabled: enabled && !!classId,
         staleTime: STALE_TIME_MS,
         retry: retryUnlessClientError,
     });

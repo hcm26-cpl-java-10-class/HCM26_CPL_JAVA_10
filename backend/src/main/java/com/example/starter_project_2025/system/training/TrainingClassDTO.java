@@ -7,6 +7,10 @@ import java.time.LocalDate;
 @Data
 public class TrainingClassDTO {
     private Long id;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private Long enrolledTrainees;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    private String traineeSource;
     @NotBlank @Pattern(regexp = "[A-Z0-9_-]{4,30}")
     private String code;
     @NotBlank @Size(max = 150)

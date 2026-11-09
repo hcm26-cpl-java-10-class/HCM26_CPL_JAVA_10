@@ -49,6 +49,7 @@ export function CalendarAdjustView({ calendar, classItem, onBack }: {
         }),
         onSuccess: async () => {
             await client.invalidateQueries({ queryKey: ["class-calendars", classItem.id] });
+            await client.invalidateQueries({ queryKey: ["classes", "readiness", String(classItem.id)] });
             toast.success("A new draft calendar version was created.");
             onBack();
         },

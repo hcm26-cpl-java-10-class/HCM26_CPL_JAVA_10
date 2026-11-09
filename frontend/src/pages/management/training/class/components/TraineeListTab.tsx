@@ -1,6 +1,10 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { classEnrollmentApi, classEnrollmentKey } from "@/api/features/class-enrollment.api";
+import { usePermissions } from "@/hooks/usePermissions";
+import { paginate } from "@/utils/class.utils";
+import { TraineeImportModal } from "./TraineeImportModal";
 import { Download, Eye, MoreVertical, Pencil, RotateCcw, Save, Search, Trash2, Users } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { utils, writeFile } from "xlsx";
@@ -37,7 +41,7 @@ import { cn } from "@/lib/utils";
 import type { ExternalClass, Trainee } from "@/types";
 import { formatDate, splitLocalDateTime } from "@/utils/session.utils";
 import {
-    formatFptStudentIdForSite,
+    formatFptStudentIdForSite as legacyStudentId,
     normalizeTraineeGender,
     normalizeTraineeStatus,
     resolveTraineeStatusBadge,
@@ -55,12 +59,12 @@ function isSameTrainee(baseline: Trainee | undefined, candidate: Trainee, site?:
 
     const baseDob = baseline.dob ? splitLocalDateTime(baseline.dob).date : "";
     const candDob = candidate.dob ? splitLocalDateTime(candidate.dob).date : "";
-    const baseStudentId = formatFptStudentIdForSite(
+    const baseStudentId = legacyStudentId(
         baseline.fptAccount ?? baseline.code,
         site,
         baseline.id,
     );
-    const candStudentId = formatFptStudentIdForSite(
+    const candStudentId = legacyStudentId(
         candidate.fptAccount ?? candidate.code,
         site,
         candidate.id,
@@ -80,10 +84,10 @@ function isSameTrainee(baseline: Trainee | undefined, candidate: Trainee, site?:
     );
 }
 
-function toFormInput(trainee: Trainee, site?: string): TraineeFormInput {
+function toFormInput(trainee: Trainee, site?: string, canonical = false): TraineeFormInput {
     return {
         fullName: (trainee.fullName ?? "").trim(),
-        fptAccount: formatFptStudentIdForSite(trainee.fptAccount ?? trainee.code, site, trainee.id),
+        fptAccount: canonical ? (trainee.fptAccount ?? trainee.code ?? "").trim().toUpperCase() : legacyStudentId(trainee.fptAccount ?? trainee.code, site, trainee.id),
         personalEmail: (trainee.personalEmail ?? trainee.email ?? "").trim(),
         nationalId: (trainee.nationalId ?? "").trim(),
         employeeId: (trainee.employeeId ?? "").trim(),
@@ -104,7 +108,20 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
     const queryClient = useQueryClient();
     const classId = String(classItem.id);
     const classSite = classItem.site;
-    const { data: serverTrainees = [], isPending, isError, error, refetch } = useClassTrainees(classId);
+    const internal = classItem.traineeSource === "internal";
+    const { hasPermission } = usePermissions();
+    const canRead = !internal || hasPermission("ENROLLMENT_READ");
+    const canUpdate = !internal || hasPermission("ENROLLMENT_UPDATE");
+    const canCreate = !internal || hasPermission("ENROLLMENT_CREATE");
+    const canDelete = !internal || hasPermission("ENROLLMENT_DELETE");
+    const externalQuery = useClassTrainees(classId, !internal);
+    const internalQuery = useQuery({ queryKey: classEnrollmentKey(classId), queryFn: () => classEnrollmentApi.list(classId), enabled: internal && canRead });
+    const { data: serverTrainees = [], isPending, isError, error, refetch } = internal ? internalQuery : externalQuery;
+    // Canonical directory identities must never be rewritten or invented for a site.
+    const formatFptStudentIdForSite = useCallback((raw?: string, site?: string, id?: number) => internal
+        ? (raw ?? "").trim().toUpperCase() : legacyStudentId(raw, site, id), [internal]);
+    const [importOpen, setImportOpen] = useState(false);
+    const [page, setPage] = useState(0);
 
     // Local staging state: null means synchronized with serverTrainees
     const [draftTrainees, setDraftTrainees] = useState<Trainee[] | null>(null);
@@ -148,7 +165,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         const baselineById = new Map(serverTrainees.map((item) => [item.id, item]));
         const draftIdSet = new Set(draftTrainees.map((item) => item.id));
 
-        const created = draftTrainees.filter((item) => item.id < 0).map((item) => toFormInput(item, classSite));
+        const created = draftTrainees.filter((item) => item.id < 0).map((item) => toFormInput(item, classSite, internal));
         const updated = draftTrainees
             .filter((item) => item.id > 0 && !isSameTrainee(baselineById.get(item.id), item, classSite))
             .map((item) => {
@@ -170,7 +187,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
             updatedIdSet: new Set(updated.map((item) => item.id)),
             total: created.length + updated.length + deletedIds.length,
         };
-    }, [classSite, draftTrainees, serverTrainees]);
+    }, [classSite, draftTrainees, serverTrainees, internal, formatFptStudentIdForSite]);
 
     const hasUnsavedChanges = pendingChanges.total > 0;
 
@@ -195,8 +212,13 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
     }, [hasUnsavedChanges]);
 
     const saveMutation = useMutation({
-        mutationFn: (payload: TraineeBatchPayload) => traineeService.batchUpdate(classId, payload),
+        mutationFn: (payload: TraineeBatchPayload) => internal ? classEnrollmentApi.batch(classId, payload) : traineeService.batchUpdate(classId, payload),
         onSuccess: (response) => {
+            if (internal) {
+                queryClient.setQueryData(classEnrollmentKey(classId), response.trainees);
+                void queryClient.invalidateQueries({ queryKey: classEnrollmentKey(classId) });
+                void queryClient.invalidateQueries({ queryKey: ["classes"] });
+            }
             queryClient.setQueryData(externalKeys.classTrainees(classId), response.trainees);
             void queryClient.invalidateQueries({ queryKey: externalKeys.classTrainees(classId) });
             void queryClient.invalidateQueries({ queryKey: externalKeys.class(classId) });
@@ -234,15 +256,18 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                 trainee.status,
             ].some((field) => String(field ?? "").toLowerCase().includes(keyword));
         });
-    }, [activeTrainees, classSite, search]);
+    }, [activeTrainees, classSite, search, formatFptStudentIdForSite]);
+
+    const traineePage = paginate(filteredTrainees, page, 10);
+    const visibleTrainees = traineePage.items;
 
     const selectedVisibleCount = useMemo(
-        () => filteredTrainees.filter((trainee) => selectedIds.has(trainee.id)).length,
-        [filteredTrainees, selectedIds],
+        () => visibleTrainees.filter((trainee) => selectedIds.has(trainee.id)).length,
+        [visibleTrainees, selectedIds],
     );
 
     const selectAllState: boolean | "indeterminate" =
-        filteredTrainees.length > 0 && selectedVisibleCount === filteredTrainees.length
+        visibleTrainees.length > 0 && selectedVisibleCount === visibleTrainees.length
             ? true
             : selectedVisibleCount > 0
               ? "indeterminate"
@@ -251,7 +276,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
     const handleToggleAll = (checked: boolean) => {
         setSelectedIds((prev) => {
             const next = new Set(prev);
-            for (const trainee of filteredTrainees) {
+            for (const trainee of visibleTrainees) {
                 if (checked) next.add(trainee.id);
                 else next.delete(trainee.id);
             }
@@ -300,7 +325,8 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                 gender: values.gender,
                 status: values.status,
             };
-            setDraftTrainees([...currentList, stagedTrainee]);
+            setDraftTrainees([stagedTrainee, ...currentList]);
+            setPage(0);
         } else if (modalState.mode === "edit" && modalState.trainee) {
             const targetId = modalState.trainee.id;
             setDraftTrainees(
@@ -366,7 +392,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                 trainee.id,
             ),
             "Personal Email": trainee.personalEmail || trainee.email || "",
-            "National ID": trainee.nationalId ?? "",
+            ...(!internal ? { "National ID": trainee.nationalId ?? "" } : {}),
             DOB: formatDob(trainee.dob),
             Gender: trainee.gender ?? "",
             Status: resolveTraineeStatusBadge(trainee.status).label,
@@ -394,7 +420,8 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
     };
 
     const handleSaveChanges = () => {
-        if (!hasUnsavedChanges || saveMutation.isPending) return;
+        if (!hasUnsavedChanges || saveMutation.isPending || !canUpdate
+            || (pendingChanges.created.length > 0 && !canCreate) || (pendingChanges.deletedIds.length > 0 && !canDelete)) return;
         saveMutation.mutate({
             created: pendingChanges.created,
             updated: pendingChanges.updated,
@@ -416,6 +443,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         );
     };
 
+    if (!canRead) return <p role="alert">You do not have permission to view trainee profiles.</p>;
     if (isError) {
         return <ApiErrorState error={error} resource="trainee list" onRetry={() => void refetch()} />;
     }
@@ -434,7 +462,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                             aria-label="Search trainees"
                             placeholder="Search trainees"
                             value={search}
-                            onChange={(event) => setSearch(event.target.value)}
+                            onChange={(event) => { setSearch(event.target.value); setPage(0); }}
                             className="pl-9"
                         />
                     </div>
@@ -453,11 +481,13 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                     <Button
                         type="button"
                         onClick={handleOpenCreate}
-                        disabled={isPending || saveMutation.isPending}
+                        disabled={isPending || saveMutation.isPending || !canCreate || !canUpdate}
                         className="bg-[#283593] text-white hover:bg-[#1a237e] dark:bg-blue-600 dark:hover:bg-blue-500"
                     >
                         + Add Trainee
                     </Button>
+                    {internal && <Button type="button" variant="outline" disabled={isPending || saveMutation.isPending || hasUnsavedChanges || !canCreate}
+                        title={hasUnsavedChanges ? "Save or discard staged changes before importing." : undefined} onClick={() => setImportOpen(true)}>Import Excel</Button>}
 
                     <Button
                         type="button"
@@ -481,7 +511,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                     <Button
                         type="button"
                         variant={selectedCount > 0 ? "destructive" : "outline"}
-                        disabled={selectedCount === 0 || isPending || saveMutation.isPending}
+                        disabled={selectedCount === 0 || isPending || saveMutation.isPending || !canDelete || !canUpdate}
                         onClick={() => setBulkDeleteOpen(true)}
                     >
                         <Trash2 className="size-4" aria-hidden />
@@ -555,7 +585,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredTrainees.map((trainee, index) => {
+                            visibleTrainees.map((trainee, index) => {
                                 const isSelected = selectedIds.has(trainee.id);
                                 const isNewRow = trainee.id < 0;
                                 const isEditedRow = pendingChanges.updatedIdSet.has(trainee.id);
@@ -586,7 +616,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                                                 }
                                             />
                                         </TableCell>
-                                        <TableCell className="px-3 py-3 text-sm text-foreground">{index + 1}</TableCell>
+                                        <TableCell className="px-3 py-3 text-sm text-foreground">{traineePage.from + index}</TableCell>
                                         <TableCell className="px-3 py-3 text-sm font-medium text-[#3b4cb8] dark:text-blue-300">
                                             <div className="flex items-center gap-2">
                                                 <TooltipWrapper content="View Profile">
@@ -651,12 +681,13 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                                                     <DropdownMenuItem onClick={() => handleOpenView(trainee)}>
                                                         <Eye className="size-4" /> View Profile
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => handleOpenEdit(trainee)}>
+                                                    <DropdownMenuItem disabled={!canUpdate} onClick={() => handleOpenEdit(trainee)}>
                                                         <Pencil className="size-4" /> Edit
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem
                                                         variant="destructive"
+                                                        disabled={!canDelete || !canUpdate}
                                                         onClick={() => setDeleteTarget(trainee)}
                                                     >
                                                         <Trash2 className="size-4" /> Delete
@@ -673,6 +704,11 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
             </div>
 
             {/* Bottom Actions Bar */}
+            <nav aria-label="Trainee pagination" className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                <span>Showing {traineePage.from}–{traineePage.to} of {filteredTrainees.length} trainees</span>
+                <div className="flex gap-2"><Button variant="outline" size="sm" aria-label="Previous trainees" disabled={traineePage.page === 0} onClick={() => setPage(traineePage.page - 1)}>Previous</Button>
+                    <Button variant="outline" size="sm" aria-label="Next trainees" disabled={traineePage.page >= traineePage.totalPages - 1} onClick={() => setPage(traineePage.page + 1)}>Next</Button></div>
+            </nav>
             <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
                 {hasUnsavedChanges ? (
                     <Button
@@ -687,7 +723,8 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
 
                 <Button
                     type="button"
-                    disabled={!hasUnsavedChanges || saveMutation.isPending}
+                    disabled={!hasUnsavedChanges || saveMutation.isPending || !canUpdate
+                        || (pendingChanges.created.length > 0 && !canCreate) || (pendingChanges.deletedIds.length > 0 && !canDelete)}
                     onClick={handleSaveChanges}
                     className={cn(
                         hasUnsavedChanges
@@ -707,6 +744,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
 
             {/* Add / Edit / View Profile Modal */}
             <TraineeModal
+                membershipOnly={internal}
                 open={modalState.open}
                 mode={modalState.mode}
                 site={classSite}
@@ -715,12 +753,13 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                 onOpenChange={(open) => setModalState((prev) => ({ ...prev, open }))}
                 onSubmit={handleModalSubmit}
                 onSwitchToEdit={
-                    modalState.trainee
+                    modalState.trainee && canUpdate
                         ? () => setModalState((prev) => ({ ...prev, mode: "edit" }))
                         : undefined
                 }
             />
 
+            {importOpen && <TraineeImportModal open classId={classItem.id} onOpenChange={setImportOpen} />}
             {/* Single Row Delete Confirmation Modal */}
             <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
                 <DialogContent className="sm:max-w-md">

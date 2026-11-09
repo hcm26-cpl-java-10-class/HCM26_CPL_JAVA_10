@@ -20,6 +20,9 @@ import {
     AlertTriangle,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { ClassKpiCards } from "./components/ClassKpiCards";
+import { matchesClassKpi, useClassStatistics } from "@/hooks/useClassInsights";
 import { Link } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
@@ -196,6 +199,8 @@ function EmptyState({ filtered, onClear, onCreate }: { filtered: boolean; onClea
 export default function ClassListPage() {
     const list = useClassListState();
     const classes = useClasses();
+    const statistics = useClassStatistics();
+    const queryClient = useQueryClient();
     const { state } = list;
     const { filters, sortKey, sortDirection, page, pageSize } = state;
     const data = classes.data;
@@ -220,20 +225,20 @@ export default function ClassListPage() {
         [data],
     );
     const programChoices = useMemo(
-        () =>
-            [...new Set((data ?? []).map((item) => item.programId).filter((value): value is number => value != null))].sort(
-                (a, b) => a - b,
-            ),
+        () => [...new Map((data ?? []).flatMap(item => {
+            const value = item.programId != null ? String(item.programId) : item.program;
+            return value ? [[value, { value, label: item.programId != null ? programLabel(item.programId) : value }] as const] : [];
+        })).values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })),
         [data],
     );
     const visible = useMemo(
-        () => sortClasses(filterClasses(data ?? [], filters), sortKey, sortDirection),
-        [data, filters, sortKey, sortDirection],
+        () => sortClasses(filterClasses(data ?? [], filters).filter(item => matchesClassKpi(item, state.kpi, statistics.data)), sortKey, sortDirection),
+        [data, filters, sortKey, sortDirection, state.kpi, statistics.data],
     );
 
     const slice = paginate(visible, page, pageSize);
     const activeFilterCount = countActiveFilters(filters);
-    const hasCriteria = activeFilterCount > 0 || filters.search.trim() !== "";
+    const hasCriteria = activeFilterCount > 0 || filters.search.trim() !== "" || state.kpi !== "all";
 
     const countText = classes.isPending
         ? "Loading…"
@@ -296,8 +301,8 @@ export default function ClassListPage() {
         setIsDeleting(true);
         try {
             await clsApi.deleteClass(deletingClass.id);
+            await queryClient.invalidateQueries({ queryKey: ["classes"] });
             setDeleteModalOpen(false);
-            classes.refetch();
         } catch (err: any) {
             setDeleteError(err.response?.data?.message || err.message || "Lỗi khi xóa lớp học.");
         } finally {
@@ -328,6 +333,7 @@ export default function ClassListPage() {
     return (
         <MainLayout pathName={{ classes: "Class List" }}>
             <section className="w-full min-w-0 overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
+                <ClassKpiCards active={state.kpi} onSelect={list.setKpi} query={statistics} />
                 <header className="flex flex-col gap-4 border-b p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
                     <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -396,9 +402,9 @@ export default function ClassListPage() {
                                         onChange={(event) => list.setFilters({ programId: event.target.value })}
                                     >
                                         <option value="">All programs</option>
-                                        {programChoices.map((id) => (
-                                            <option key={id} value={String(id)}>
-                                                {programLabel(id)}
+                                        {programChoices.map(({ value, label }) => (
+                                            <option key={value} value={value}>
+                                                {label}
                                             </option>
                                         ))}
                                     </NativeSelect>
@@ -475,6 +481,9 @@ export default function ClassListPage() {
                     <ApiErrorState error={classes.error} resource="class list" onRetry={() => void classes.refetch()} />
                 ) : classes.isPending ? (
                     <ClassTableSkeleton />
+                ) : state.kpi === "upcoming" && !statistics.data ? (
+                    <div role="status" className="p-6 text-sm text-muted-foreground">Upcoming classes cannot be evaluated until class statistics are available.
+                        <Button variant="link" onClick={() => list.setKpi("all")}>Clear KPI filter</Button></div>
                 ) : !data || data.length === 0 ? (
                     <EmptyState filtered={false} onClear={list.clearFilters} onCreate={() => setCreateModalOpen(true)} />
                 ) : visible.length === 0 ? (
@@ -620,7 +629,6 @@ export default function ClassListPage() {
                 onOpenChange={setCreateModalOpen}
                 classItem={null}
                 existingClasses={data ?? []}
-                onSuccess={() => classes.refetch()}
             />
 
             {/* Edit Class Modal */}
@@ -629,14 +637,12 @@ export default function ClassListPage() {
                 onOpenChange={setEditModalOpen}
                 classItem={editingClass}
                 existingClasses={data ?? []}
-                onSuccess={() => classes.refetch()}
             />
 
             {/* Import Classes Modal */}
             <ClassImportModal
                 open={importModalOpen}
                 onOpenChange={setImportModalOpen}
-                onSuccess={() => classes.refetch()}
             />
 
             {/* Delete Confirmation Dialog */}

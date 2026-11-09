@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { clsApi, type CreateTrainingClassInput } from "@/api/features/cls.api";
@@ -10,10 +11,11 @@ import { parseClassWorkbook, classImportServerIssues, type ClassImportIssue } fr
 interface ClassImportModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSuccess: () => void;
+    onSuccess?: () => void;
 }
 
 export function ClassImportModal({ open, onOpenChange, onSuccess }: ClassImportModalProps) {
+    const queryClient = useQueryClient();
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [fileName, setFileName] = useState("");
     const [parsedData, setParsedData] = useState<CreateTrainingClassInput[]>([]);
@@ -68,7 +70,8 @@ export function ClassImportModal({ open, onOpenChange, onSuccess }: ClassImportM
         setErrorMsg("");
         try {
             await clsApi.importClasses(parsedData);
-            onSuccess();
+            await queryClient.invalidateQueries({ queryKey: ["classes"] });
+            onSuccess?.();
             close();
         } catch (err: unknown) {
             const error = describeApiError(err, "Lỗi khi import lớp học.");

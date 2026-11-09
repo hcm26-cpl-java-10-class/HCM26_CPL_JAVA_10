@@ -21,6 +21,7 @@ import { formatDate, splitLocalDateTime } from "@/utils/session.utils";
 export type TraineeModalMode = "create" | "edit" | "view";
 
 export interface TraineeModalProps {
+    membershipOnly?: boolean;
     open: boolean;
     mode: TraineeModalMode;
     site?: string;
@@ -328,14 +329,16 @@ function TraineeProfileBody({
     site,
     onClose,
     onSwitchToEdit,
+    membershipOnly,
 }: {
     trainee: Trainee;
     site?: string;
     onClose: () => void;
     onSwitchToEdit?: () => void;
+    membershipOnly?: boolean;
 }) {
     const badge = resolveTraineeStatusBadge(trainee.status);
-    const studentId = formatFptStudentIdForSite(trainee.fptAccount || trainee.code, site, trainee.id);
+    const studentId = membershipOnly ? trainee.fptAccount || trainee.code || "" : formatFptStudentIdForSite(trainee.fptAccount || trainee.code, site, trainee.id);
     const fields: Array<{ label: string; value: string }> = [
         { label: "Full Name", value: trainee.fullName || "—" },
         { label: "FPT Student ID", value: studentId || "—" },
@@ -584,7 +587,44 @@ function TraineeFormBody({
     );
 }
 
+function MembershipFormBody({ trainee, existingTrainees, onSubmit, onClose }: {
+    trainee?: Trainee | null; existingTrainees: Trainee[]; onSubmit: (input: TraineeFormInput) => void; onClose: () => void;
+}) {
+    const [studentId, setStudentId] = useState(trainee?.fptAccount ?? trainee?.code ?? "");
+    const [fullName, setFullName] = useState(trainee?.fullName ?? "");
+    const [status, setStatus] = useState<TraineeStatus>(normalizeTraineeStatus(trainee?.status));
+    const [error, setError] = useState("");
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+        const code = studentId.trim().toUpperCase();
+        if (!trainee && (!/^[A-Z0-9_-]{2,64}$/.test(code) || !fullName.trim() || fullName.trim().length > 100)) {
+            setError("Provide the existing Student ID and Full Name (maximum 100 characters)."); return;
+        }
+        if (!trainee && existingTrainees.some(row => (row.fptAccount ?? row.code ?? "").toUpperCase() === code)) {
+            setError("Student is already enrolled in this class."); return;
+        }
+        onSubmit({ fptAccount: code, fullName: fullName.trim(), personalEmail: trainee?.personalEmail ?? trainee?.email ?? "",
+            nationalId: trainee?.nationalId ?? "", dob: trainee?.dob ?? "", gender: normalizeTraineeGender(trainee?.gender),
+            status: trainee ? status : "Active" });
+    };
+    return <form onSubmit={submit} className="space-y-4">
+        <p className="text-sm text-muted-foreground">Only an existing active master student can be enrolled. Personal profiles are read-only; Save Changes verifies the identity with the backend.</p>
+        <div className="space-y-2"><Label htmlFor="enrollment-student-id">FPT Student ID *</Label>
+            <Input id="enrollment-student-id" value={studentId} readOnly={!!trainee} maxLength={64} onChange={event => setStudentId(event.target.value)} /></div>
+        <div className="space-y-2"><Label htmlFor="enrollment-full-name">Full Name *</Label>
+            <Input id="enrollment-full-name" value={fullName} readOnly={!!trainee} maxLength={100} onChange={event => setFullName(event.target.value)} /></div>
+        {trainee && <div className="space-y-2"><Label htmlFor="enrollment-status">Enrollment Status</Label>
+            <NativeSelect id="enrollment-status" value={status} onChange={event => setStatus(event.target.value as TraineeStatus)}>
+                {STATUS_OPTIONS.map(value => <option key={value}>{value}</option>)}
+            </NativeSelect></div>}
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit">{trainee ? "Update Trainee" : "Add Trainee"}</Button></DialogFooter>
+    </form>;
+}
+
 export function TraineeModal({
+    membershipOnly = false,
     open,
     mode,
     site,
@@ -595,9 +635,11 @@ export function TraineeModal({
     onSwitchToEdit,
 }: TraineeModalProps) {
     const title =
-        mode === "create" ? "Add New Trainee" : mode === "edit" ? "Edit Trainee" : "Trainee Profile";
+        mode === "create" ? (membershipOnly ? "Enroll Existing Trainee" : "Add New Trainee")
+            : mode === "edit" ? (membershipOnly ? "Edit Enrollment" : "Edit Trainee") : "Trainee Profile";
     const description =
-        mode === "create"
+        membershipOnly ? "Enroll an existing student or update their enrollment status. Personal profile information is managed in the master directory."
+            : mode === "create"
             ? "Fill in trainee details to add them to the class list. Click Save Changes to persist."
             : mode === "edit"
               ? "Modify trainee information. Changes are staged locally until you click Save Changes."
@@ -613,11 +655,15 @@ export function TraineeModal({
 
                 {mode === "view" && trainee ? (
                     <TraineeProfileBody
+                        membershipOnly={membershipOnly}
                         trainee={trainee}
                         site={site}
                         onClose={() => onOpenChange(false)}
                         onSwitchToEdit={onSwitchToEdit}
                     />
+                ) : membershipOnly ? (
+                    <MembershipFormBody key={`${mode}-${trainee?.id ?? "new"}-${open}`} trainee={trainee}
+                        existingTrainees={existingTrainees} onSubmit={onSubmit} onClose={() => onOpenChange(false)} />
                 ) : (
                     <TraineeFormBody
                         key={`${mode}-${trainee?.id ?? "new"}-${site ?? ""}-${open ? "open" : "closed"}`}

@@ -13,6 +13,7 @@ export type ClassStatus =
     | string;
 
 export interface TrainingClass {
+    traineeSource?: "internal";
     id: number;
     code: string;
     name: string;
@@ -51,6 +52,27 @@ export interface ClassPage {
     number: number;
     size: number;
     programs: string[];
+}
+
+export interface ClassStatistics {
+    totalClasses: number;
+    inProgress: number;
+    upcomingClasses: number;
+    completedClasses: number;
+    asOf: string;
+    upcomingThrough: string;
+    timezone: string;
+}
+
+export interface ClassReadiness {
+    classId: number;
+    checks: Array<{ key: string; label: string; status: "READY" | "NOT_READY" | "UNKNOWN"; reason: string; target: string }>;
+    ready: number;
+    notReady: number;
+    unknown: number;
+    verified: number;
+    enrolledTrainees: number;
+    evaluatedAt: string;
 }
 
 export interface ClassFilterParams {
@@ -99,6 +121,8 @@ export type UpdateTrainingClassInput = Partial<CreateTrainingClassInput>;
  * Note: axiosInstance baseURL already includes '/api', so paths do not repeat '/api'.
  */
 export const clsApi = {
+    getReadiness: async (id: number): Promise<ClassReadiness> => (await axiosInstance.get<ClassReadiness>(`/classes/${id}/readiness`)).data,
+    getStatistics: async (): Promise<ClassStatistics> => (await axiosInstance.get<ClassStatistics>("/classes/stats")).data,
     /**
      * GET /classes
      * Fetch paginated and filtered classes.

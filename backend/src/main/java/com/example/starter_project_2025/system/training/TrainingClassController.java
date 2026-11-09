@@ -18,6 +18,16 @@ import java.util.List;
 @Validated
 public class TrainingClassController {
     private final TrainingClassService service;
+    private final ClassStatisticsService statistics;
+    private final ClassReadinessService readiness;
+
+    @GetMapping("/{id}/readiness")
+    @PreAuthorize("hasAuthority('CLASS_READ')")
+    public ClassReadinessService.Readiness readiness(@PathVariable @Positive Long id) { return readiness.get(id); }
+
+    @GetMapping("/stats")
+    @PreAuthorize("hasAuthority('CLASS_READ')")
+    public ClassStatisticsService.Statistics statistics() { return statistics.get(); }
 
     @GetMapping
     @PreAuthorize("hasAuthority('CLASS_READ')")

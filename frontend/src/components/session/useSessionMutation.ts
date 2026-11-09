@@ -21,6 +21,7 @@ export function useSessionMutation<TVariables>({ mutationFn, successMessage, onS
         mutationFn,
         onSuccess: async (session) => {
             await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+            await queryClient.invalidateQueries({ queryKey: ["classes", "readiness", String(session.classId)] });
             toast.success(typeof successMessage === "function" ? successMessage(session) : successMessage);
             onSuccess?.(session);
         },

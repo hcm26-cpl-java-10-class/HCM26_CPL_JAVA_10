@@ -68,7 +68,7 @@ export function ClassDetailView() {
 
     const navigate = useNavigate();
     const location = useLocation();
-    const [searchParams, setSearchParams] = useSearchParams();
+    const [searchParams] = useSearchParams();
     const requestedTab = searchParams.get("tab");
     const activeTab: ClassDetailTabValue = isValidTab(requestedTab) ? requestedTab : DEFAULT_TAB;
 
@@ -84,6 +84,13 @@ export function ClassDetailView() {
 
     const resolvedName = classItem ? classTitle(classItem) : rawIdentifier;
 
+    const navigateToTab = (tab: ClassDetailTabValue) => {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.set("tab", tab);
+        navigate({ pathname: location.pathname, search: `?${nextParams}`, hash: location.hash },
+            { replace: true, state: location.state });
+    };
+
     const handleTabChange = (nextValue: string) => {
         if (!isValidTab(nextValue) || nextValue === activeTab) return;
 
@@ -92,7 +99,7 @@ export function ClassDetailView() {
             return;
         }
 
-        setSearchParams({ tab: nextValue }, { replace: true, state: location.state });
+        navigateToTab(nextValue);
     };
 
     const handleBackLinkClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -110,7 +117,7 @@ export function ClassDetailView() {
         setCalendarDirty(false);
 
         if (target.type === "tab") {
-            setSearchParams({ tab: target.tab }, { replace: true, state: location.state });
+            navigateToTab(target.tab);
         } else {
             navigate(target.to);
         }
@@ -192,7 +199,7 @@ export function ClassDetailView() {
 
                             <div className="flex-1 min-h-0 overflow-y-auto p-5 fams-scrollbar">
                                 <TabsContent value="info">
-                                    <ClassInfoTab classItem={classItem} />
+                                    <ClassInfoTab classItem={classItem} onNavigate={handleTabChange} />
                                 </TabsContent>
 
                                 <TabsContent value="trainees">

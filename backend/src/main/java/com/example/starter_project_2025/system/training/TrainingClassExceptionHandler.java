@@ -17,7 +17,7 @@ import java.util.Map;
 
 /** Class-specific error formatting; other modules retain their existing handlers. */
 @Order(-1)
-@RestControllerAdvice(assignableTypes = TrainingClassController.class)
+@RestControllerAdvice(assignableTypes = { TrainingClassController.class, ClassEnrollmentController.class })
 public class TrainingClassExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ValidationErrorResponse> validation(ConstraintViolationException ex) {

@@ -55,6 +55,8 @@ describe("Class import modal request and error display", () => {
 
     it("refetches Class List and displays the six imported classes", async () => {
         let saved: unknown[] = [];
+        fakeHttp.on("get", "/classes/stats", () => ({ totalClasses: saved.length, inProgress: 0, upcomingClasses: 0, completedClasses: 0,
+            asOf: "2026-11-07", upcomingThrough: "2026-12-07", timezone: "Asia/Ho_Chi_Minh" }));
         fakeHttp.on("get", "/classes", () => ({ content: saved, totalElements: saved.length }));
         fakeHttp.on("post", "/classes/import", (call: RecordedCall) => {
             saved = (call.data as Record<string, unknown>[]).map((item, i) => ({ ...item, id: i + 1 }));
@@ -68,6 +70,7 @@ describe("Class import modal request and error display", () => {
         const table = await screen.findByRole("table", { name: "Classes" });
         expect(within(table).getAllByRole("row")).toHaveLength(7);
         expect(screen.getByRole("link", { name: "HCM26_IMPORT_6" })).toBeInTheDocument();
+        expect(await within(screen.getByRole("button", { name: "Total Classes" })).findByText("6")).toBeInTheDocument();
         expect(fakeHttp.callsTo("get", "/classes")).toHaveLength(2);
     });
 

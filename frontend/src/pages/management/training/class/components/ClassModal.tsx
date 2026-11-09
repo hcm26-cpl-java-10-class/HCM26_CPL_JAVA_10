@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,11 +13,12 @@ interface ClassModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     classItem?: ExternalClass | null; // null for Create, object for Edit
-    onSuccess: () => void;
+    onSuccess?: () => void;
     existingClasses?: ExternalClass[];
 }
 
 export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingClasses = [] }: ClassModalProps) {
+    const queryClient = useQueryClient();
     const isEdit = Boolean(classItem);
 
     const [code, setCode] = useState("");
@@ -166,7 +168,8 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                 await clsApi.createClass(payload as any);
             }
 
-            onSuccess();
+            await queryClient.invalidateQueries({ queryKey: ["classes"] });
+            onSuccess?.();
             onOpenChange(false);
         } catch (err: any) {
             const serverMsg = err.response?.data?.message || err.message || "Đã xảy ra lỗi khi lưu lớp học.";

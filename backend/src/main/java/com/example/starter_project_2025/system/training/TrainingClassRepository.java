@@ -15,4 +15,22 @@ public interface TrainingClassRepository extends JpaRepository<TrainingClass, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from TrainingClass c where c.id = :id and c.isActive = true")
     Optional<TrainingClass> findForUpdate(@Param("id") Long id);
+
+    interface Statistics {
+        long getTotalClasses();
+        long getInProgress();
+        long getUpcomingClasses();
+        long getCompletedClasses();
+    }
+
+    @Query("""
+        select count(c) as totalClasses,
+          coalesce(sum(case when c.status = 'active' then 1 else 0 end), 0) as inProgress,
+          coalesce(sum(case when c.status in ('planning', 'assigned')
+            and c.startDate between :today and :through then 1 else 0 end), 0) as upcomingClasses,
+          coalesce(sum(case when c.status in ('completed', 'closed') then 1 else 0 end), 0) as completedClasses
+        from TrainingClass c where c.isActive = true
+        """)
+    Statistics statistics(@Param("today") java.time.LocalDate today,
+                          @Param("through") java.time.LocalDate through);
 }

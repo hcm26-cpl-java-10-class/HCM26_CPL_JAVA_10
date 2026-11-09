@@ -84,6 +84,7 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
         mutationFn: (updates: Array<{ id: number; name: string; historyChange: string }>) => externalApi.saveClassCalendars(classItem.id, updates),
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ["class-calendars", classItem.id] });
+            await queryClient.invalidateQueries({ queryKey: ["classes", "readiness", String(classItem.id)] });
             setPending({});
             setEditingIds([]);
             toast.success("Calendar changes saved.");
