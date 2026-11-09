@@ -10,7 +10,7 @@ import {
 } from "@/types";
 import { CourseCatalogPage } from "./components/CourseCatalogPage";
 import { CourseDetailPage } from "./pages/CourseDetailPage";
-import { AiCourseBuilderButton } from "./components/AiCourseBuilder";
+import { CourseHeaderActions } from "./components/AiCourseBuilder";
 
 const courseStatusOptions: { label: string; value: CourseStatus }[] = [
   { label: "Draft (hidden from students)", value: "DRAFT" },
@@ -121,7 +121,7 @@ export const entityConfig: EntityConfig = {
   path: "/courses",
   api: courseApi,
   schema: courseSchema,
-  headerActions: () => <AiCourseBuilderButton />,
+  headerActions: ({ table }) => <CourseHeaderActions table={table} />,
   actionPages: {
     // /courses/:id — chi tiết khóa học (giáo trình, nút Ghi danh / Tiếp tục học)
     detail: {
