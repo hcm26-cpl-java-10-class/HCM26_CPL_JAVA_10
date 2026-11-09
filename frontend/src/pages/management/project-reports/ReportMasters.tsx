@@ -54,20 +54,20 @@ function treeOrder(projects: ReportProject[]) {
   return result;
 }
 export function ReportMasters({ masters, timeZone }: { masters: ReportMaster[]; timeZone: string }) {
-  return <div className="space-y-4">{masters.map(master => <details key={master.key} className="group/master overflow-hidden rounded-xl border bg-card">
-    <summary className="flex cursor-pointer list-none flex-wrap items-center gap-4 p-5 transition-colors hover:bg-muted/25 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
-      <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300"><FolderKanban className="size-5" /></div>
-      <div className="min-w-0 flex-1 basis-52"><p className="text-[11px] font-mono text-muted-foreground">{master.code} · Master Project</p><h3 className="text-sm font-semibold leading-6">{master.name}</h3>
-        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><GraduationCap className="size-3.5" />{master.className}<span className="mx-1 text-border">|</span><Users className="size-3.5" />{master.scopedTeams} team · {master.matchingSubProjects}/{master.subProjects} Sub-project khớp bộ lọc</p></div>
-      <StatusBadge status={master.status} /><div className="text-right"><strong className="text-lg tabular-nums">{master.backlog.total}</strong><p className="text-[11px] text-muted-foreground">backlog toàn Master</p></div>
-      <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><span className="group-open/master:hidden">Xem chi tiết</span><span className="hidden group-open/master:inline">Thu gọn</span><ChevronDown className="size-4 transition-transform group-open/master:rotate-180" /></span>
+  return <div className="space-y-3">{masters.map(master => <details key={master.key} className="group/master overflow-hidden rounded-xl border border-slate-200/80 bg-card shadow-xs dark:border-border">
+    <summary className="flex cursor-pointer list-none flex-wrap items-center gap-3 p-4 transition-colors hover:bg-muted/25 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+      <div aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300"><FolderKanban className="size-[18px]" /></div>
+      <div className="min-w-0 flex-1 basis-52"><p className="text-[10px] font-mono text-muted-foreground">{master.code} · Master Project</p><h3 className="mt-0.5 text-sm font-semibold leading-5 text-foreground">{master.name}</h3>
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground"><GraduationCap className="size-3" />{master.className}<span className="mx-1 text-border">|</span><Users className="size-3" />{master.scopedTeams} team · {master.matchingSubProjects}/{master.subProjects} Sub-project khớp bộ lọc</p></div>
+      <StatusBadge status={master.status} /><div className="text-right"><strong className="text-base tabular-nums text-foreground">{master.backlog.total}</strong><p className="text-[10px] text-muted-foreground">backlog toàn Master</p></div>
+      <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"><span className="group-open/master:hidden">Xem chi tiết</span><span className="hidden group-open/master:inline">Thu gọn</span><ChevronDown className="size-3.5 transition-transform group-open/master:rotate-180" /></span>
     </summary>
     <div className="space-y-4 border-t">
       <div className="space-y-3 bg-muted/25 px-5 py-4"><p className="text-xs text-muted-foreground">Đề bài Master: {master.templateName} · {master.sourceVersion}</p>
         <p className="text-[11px] leading-5 text-muted-foreground">Tổng backlog gồm Master và tất cả Project con bạn được phép xem, kể cả module bị ẩn bởi bộ lọc chi tiết.</p>
         <BacklogSummary counts={master.backlog} />
       </div>
-      <div className="mx-5 space-y-3 rounded-lg border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="text-xs font-semibold">Phần việc trực tiếp của Master</h4>
+      <div className="mx-5 space-y-3 rounded-lg border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="text-xs font-semibold text-foreground">Phần việc trực tiếp của Master</h4>
         <p className="mt-1 text-xs text-muted-foreground">{master.project.teamName ?? "Dùng chung"} · Mentor: {master.project.mentorName ?? "Chưa gán"}</p></div>
         {master.project.workspaceId && <Link className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline" to={"/management/workspaces/" + master.project.workspaceId}>Mở Workspace<ArrowUpRight className="size-3" /></Link>}
         {!master.project.workspaceId && !master.project.contextOnly && master.project.status === "PLANNING" && <span className="text-xs text-muted-foreground">Chờ publish nhóm để mở Workspace</span>}

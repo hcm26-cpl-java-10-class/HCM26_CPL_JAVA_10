@@ -383,6 +383,97 @@ class ProjectReportIntegrationTest {
             work(root,SprintBacklogStatus.REVIEW);work(b,SprintBacklogStatus.IN_PROGRESS);return root.getId();
         });
     }
+    Long unpublishedSplitHierarchy() {
+        Long rootId=splitHierarchy();
+        tx.executeWithoutResult(status->{
+            var root=em.find(Project.class,rootId);
+            var school=em.find(TrainingClass.class,classId);
+            var session=em.find(ProjectTeam.class,teamA).getAllocationSession();
+            session.setStatus(TeamAllocationSessionStatus.OPEN);
+            List<ProjectTeam> pending=new ArrayList<>(List.of(em.find(ProjectTeam.class,teamA),em.find(ProjectTeam.class,teamB)));
+            for(int index=0;index<5;index++) pending.add(team(school,otherMentorId,ProjectStatus.PLANNING,sourceId));
+            for(var team:pending) {
+                team.setAllocationSession(session);team.setStatus(ProjectTeamStatus.DRAFT);
+                team.getProject().setParentProject(root);team.getProject().setAssignmentId(9001L);
+                team.getProject().setStatus(ProjectStatus.PLANNING);
+            }
+        });
+        return rootId;
+    }
+    @Test void unpublishedSplitMasterIsPlanningAcrossDashboardFiltersAndExcelWithoutChangingBusinessData() throws Exception {
+        Long root=unpublishedSplitHierarchy();
+        var data=body(report(admin).andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.masters").value(1)).andExpect(jsonPath("$.summary.runningMasters").value(0))
+                .andExpect(jsonPath("$.summary.teams").value(7)).andExpect(jsonPath("$.summary.subProjects").value(7))
+                .andExpect(jsonPath("$.statuses.PLANNING").value(1)).andExpect(jsonPath("$.statuses.ACTIVE").value(0))
+                .andExpect(jsonPath("$.content[0].status").value("PLANNING"))
+                .andExpect(jsonPath("$.content[0].project.status").value("PLANNING")));
+        for(var project:data.path("content").get(0).path("projects")) {
+            assertThat(project.path("status").asText()).isEqualTo("PLANNING");
+            assertThat(project.path("masterStatus").asText()).isEqualTo("PLANNING");
+            assertThat(project.path("workspaceId").isNull()).isTrue();
+        }
+        report(admin).andExpect(jsonPath("$.content[0].projects.length()").value(7));
+        for(String filter:List.of("masterStatus","status")) {
+            mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin)
+                    .param("classId",classId.toString()).param(filter,"PLANNING"))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1))
+                    .andExpect(jsonPath("$.statuses.PLANNING").value(1));
+        }
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin)
+                .param("classId",classId.toString()).param("masterStatus","ACTIVE"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));
+        var file=export("EXCEL",UUID.randomUUID());exports.process(file);
+        byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",file).header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            var sheet=workbook.getSheetAt(0);
+            assertThat(sheet.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(8);
+            for(int index=ProjectReportExcelWriter.HEADER_ROW+1;index<=sheet.getLastRowNum();index++)
+                assertThat(sheet.getRow(index).getCell(4).getStringCellValue()).isEqualTo("Lên kế hoạch");
+        }
+        tx.executeWithoutResult(status->{
+            assertThat(em.find(Project.class,root).getStatus()).isEqualTo(ProjectStatus.ACTIVE);
+            assertThat(em.find(Project.class,projectA).getStatus()).isEqualTo(ProjectStatus.PLANNING);
+            assertThat(em.find(ProjectTeam.class,teamA).getStatus()).isEqualTo(ProjectTeamStatus.DRAFT);
+        });
+    }
+    @Test void publishedSplitTeamActivatesMasterReportEvenWhenFilteredOrHiddenFromAnotherMentor() throws Exception {
+        unpublishedSplitHierarchy();
+        tx.executeWithoutResult(status->{
+            em.find(ProjectTeam.class,teamB).setStatus(ProjectTeamStatus.ACTIVE);
+            em.find(Project.class,projectB).setStatus(ProjectStatus.ACTIVE);
+        });
+        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.statuses.ACTIVE").value(1))
+                .andExpect(jsonPath("$.summary.runningMasters").value(1));
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.content[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.content[0].projects.length()").value(1))
+                .andExpect(jsonPath("$.content[0].projects[0].id").value(projectA))
+                .andExpect(jsonPath("$.content[0].projects[0].status").value("PLANNING"));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("teamId",teamA.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$.content[0].projects.length()").value(1));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+mentor).param("projectId",projectB.toString()))
+                .andExpect(status().isForbidden());
+        tx.executeWithoutResult(status->{
+            for(var team:em.createQuery("select t from ProjectTeam t where t.trainingClass.id=:school",ProjectTeam.class)
+                    .setParameter("school",classId).getResultList()) {
+                team.setStatus(ProjectTeamStatus.ACTIVE);team.getProject().setStatus(ProjectStatus.ACTIVE);
+            }
+        });
+        var published=body(report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.statuses.ACTIVE").value(1))
+                .andExpect(jsonPath("$.summary.subProjects").value(7)));
+        for(var project:published.path("content").get(0).path("projects"))
+            assertThat(project.path("status").asText()).isEqualTo("ACTIVE");
+    }
+    @Test void unpublishedTeamsNeverOverrideExplicitCompletedOrCancelledMasterStates() throws Exception {
+        Long root=unpublishedSplitHierarchy();
+        for(var state:List.of(ProjectStatus.COMPLETED,ProjectStatus.CANCELLED)) {
+            tx.executeWithoutResult(status->em.find(Project.class,root).setStatus(state));
+            report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.content[0].status").value(state.name()))
+                    .andExpect(jsonPath("$.statuses."+state.name()).value(1)).andExpect(jsonPath("$.statuses.PLANNING").value(0));
+        }
+    }
     @Test void wholeAssignmentHasOneMasterThreeModulesAndOneTeamWithDirectAndChildBacklog() throws Exception {
         tx.executeWithoutResult(status->{
             var team=em.find(ProjectTeam.class,teamA);var root=team.getProject();root.setName("Whole commerce");root.setAssignmentId(9001L);

@@ -1,6 +1,8 @@
 package com.example.starter_project_2025.system.project.report;
 
 import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
+import com.example.starter_project_2025.system.project.TeamAllocationSessionStatus;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
@@ -26,14 +28,14 @@ public class ProjectReportQueryRepository {
     public record Source(List<ProjectTeam> teams, Map<Long,Entry> entries,
                          Map<Long,List<SprintBacklog>> backlogs, Map<Long,List<Milestone>> milestones,
                          Map<UUID,Submitted> submissions, Map<Long,ProjectTemplateSnapshot> snapshots,
-                         Map<Long,String> mentors) { }
+                         Map<Long,String> mentors, Set<Long> unpublishedMasters) { }
     private final EntityManager em;
     private final ProjectReportScopeService scope;
     private final ObjectMapper json;
 
     public Source load(ProjectReportScopeService.Actor actor) {
         List<ProjectTeam> teams = scope.teams(actor);
-        if (teams.isEmpty()) return new Source(teams,Map.of(),Map.of(),Map.of(),Map.of(),Map.of(),Map.of());
+        if (teams.isEmpty()) return new Source(teams,Map.of(),Map.of(),Map.of(),Map.of(),Map.of(),Map.of(),Set.of());
         Map<Long,ProjectTeam> byTeam = new HashMap<>();
         Map<Long,ProjectTeam> primary = new HashMap<>();
         teams.forEach(team -> { byTeam.put(team.getId(),team); if(team.getProjectId()!=null) primary.put(team.getProjectId(),team); });
@@ -81,7 +83,7 @@ public class ProjectReportQueryRepository {
         }
         Set<Long> readable = new HashSet<>();
         entries.values().stream().filter(entry -> !entry.contextOnly()).forEach(entry -> readable.add(entry.project().getId()));
-        if (readable.isEmpty()) return new Source(teams,entries,Map.of(),Map.of(),Map.of(),Map.of(),Map.of());
+        if (readable.isEmpty()) return new Source(teams,entries,Map.of(),Map.of(),Map.of(),Map.of(),Map.of(),Set.of());
         Map<Long,List<Milestone>> milestones = new HashMap<>();
         em.createQuery("select m from Milestone m where m.tenantId=:tenant and m.active=true and m.projectId in :projects",Milestone.class)
                 .setParameter("tenant",actor.tenantId()).setParameter("projects",readable).getResultList().stream()
@@ -133,7 +135,32 @@ public class ProjectReportQueryRepository {
                 + "where u.tenantId=:tenant and u.id in :ids",Object[].class)
                 .setParameter("tenant",actor.tenantId()).setParameter("ids",mentorIds).getResultList())
             mentors.put((Long)row[0],(row[1]+" "+Objects.toString(row[2],"")).strip());
-        return new Source(teams,entries,backlogs,milestones,submissions,snapshots,mentors);
+        return new Source(teams,entries,backlogs,milestones,submissions,snapshots,mentors,unpublishedMasters(entries));
+    }
+
+    private Set<Long> unpublishedMasters(Map<Long,Entry> entries) {
+        Set<Long> shared = new HashSet<>();
+        entries.values().stream().filter(entry -> entry.project().getId().equals(entry.root().getId())
+                && entry.owner()==null && entry.project().getTeamId()==null && entry.project().getAssignmentId()!=null)
+                .forEach(entry -> shared.add(entry.project().getId()));
+        if (shared.isEmpty()) return Set.of();
+        // Check publication across the whole authorized Master, before report filters or Mentor scope
+        // narrow its detail rows. Only aggregate publication flags; do not load sibling project data.
+        Set<Long> pending = new HashSet<>();
+        for (Object[] row : em.createQuery("select master.id,"
+                + "sum(case when t.status=:draft then 1 else 0 end),"
+                + "sum(case when t.status=:published then 1 else 0 end) "
+                + "from ProjectTeam t join t.project p join p.parentProject master join t.trainingClass c "
+                + "where master.id in :masters and t.isActive=true and c.isActive=true and p.isActive=true "
+                + "and c.tenantId=master.tenantId and p.tenantId=master.tenantId "
+                + "and c.id=master.classId and p.classId=master.classId and p.assignmentId=master.assignmentId "
+                + "and t.allocationSession.status<>:cancelled group by master.id",Object[].class)
+                .setParameter("masters",shared).setParameter("draft",ProjectTeamStatus.DRAFT)
+                .setParameter("published",ProjectTeamStatus.ACTIVE)
+                .setParameter("cancelled",TeamAllocationSessionStatus.CANCELLED).getResultList()) {
+            if (number(row[1])>0 && number(row[2])==0) pending.add((Long)row[0]);
+        }
+        return Set.copyOf(pending);
     }
 
     private List<Project> ancestors(Project project,Long tenantId,Long classId) {

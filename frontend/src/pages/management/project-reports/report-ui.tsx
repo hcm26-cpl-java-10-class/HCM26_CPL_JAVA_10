@@ -14,15 +14,27 @@ export function StatusBadge({ status }: { status: ReportStatus }) {
 }
 export function BacklogSummary({ counts, expanded = false }: { counts: BacklogCounts; expanded?: boolean }) {
   const entries = [
-    { label: "Todo", value: counts.todo, color: "bg-slate-400" },
-    { label: "In progress", value: counts.inProgress, color: "bg-blue-500" },
-    { label: "Review", value: counts.review, color: "bg-violet-500" },
-    { label: "Done", value: counts.done, color: "bg-emerald-500" },
-    ...(counts.other ? [{ label: "Khác", value: counts.other, color: "bg-amber-500" }] : []),
+    { label: "Todo", value: counts.todo, color: "bg-slate-400", note: "Chờ thực hiện", style: "border-slate-200 bg-slate-50 text-slate-700 dark:border-border dark:bg-muted/30 dark:text-slate-300" },
+    { label: "In progress", value: counts.inProgress, color: "bg-blue-500", note: "Đang tiến hành", style: "border-blue-100 bg-blue-50 text-blue-700 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-300" },
+    { label: "Review", value: counts.review, color: "bg-amber-500", note: "Chờ review", style: "border-amber-100 bg-amber-50/60 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300" },
+    { label: "Done", value: counts.done, color: "bg-emerald-500", note: "Đã hoàn thành", style: "border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300" },
+    ...(counts.other ? [{ label: "Khác", value: counts.other, color: "bg-violet-500", note: "Trạng thái khác", style: "border-violet-100 bg-violet-50 text-violet-700 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-300" }] : []),
   ];
-  return <dl className={expanded ? "grid grid-cols-2 gap-3" : "flex min-w-48 flex-wrap gap-x-3 gap-y-1.5"}>
-    {entries.map(entry => <div key={entry.label} className={expanded ? "flex items-center gap-2 rounded-lg bg-muted/40 p-3" : "flex items-center gap-1.5 text-[11px]"}>
-      <span className={"size-1.5 shrink-0 rounded-full " + entry.color} /><dt className="text-muted-foreground">{entry.label}</dt><dd className={(expanded ? "ml-auto text-lg " : "") + "font-semibold tabular-nums"}>{entry.value.toLocaleString("vi-VN")}</dd>
+  if (expanded) return <div className="space-y-4">
+    <div role="img" aria-label={"Phân bố backlog: " + entries.map(entry => `${entry.label}: ${entry.value}`).join(". ")}
+      className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-slate-100 p-0.5 dark:bg-muted">
+      {counts.total > 0 && entries.filter(entry => entry.value > 0).map(entry => <span aria-hidden="true" key={entry.label} title={`${entry.label}: ${entry.value}`} className={"min-w-[3px] rounded-full " + entry.color} style={{ flexGrow: entry.value, flexBasis: 0 }} />)}
+    </div>
+    <dl className={"grid grid-cols-2 gap-2.5 " + (counts.other ? "@[640px]/reports:grid-cols-3" : "@[640px]/reports:grid-cols-4")}>
+      {entries.map(entry => <div key={entry.label} className={"min-w-0 rounded-lg border p-3 " + entry.style}>
+        <dt className="flex items-center justify-between gap-1.5 text-[11px] font-medium"><span>{entry.label}</span><span aria-hidden="true" className={"size-2 shrink-0 rounded-full " + entry.color} /></dt>
+        <dd className="mt-2.5 text-[26px] font-semibold leading-none tracking-tight tabular-nums">{entry.value.toLocaleString("vi-VN")}</dd><dd className="mt-1.5 text-[10px] leading-4 opacity-75">{entry.note}</dd>
+      </div>)}
+    </dl>
+  </div>;
+  return <dl className="flex min-w-48 flex-wrap gap-x-3 gap-y-1.5">
+    {entries.map(entry => <div key={entry.label} className="flex items-center gap-1.5 text-[11px]">
+      <span aria-hidden="true" className={"size-1.5 shrink-0 rounded-full " + entry.color} /><dt className="text-muted-foreground">{entry.label}</dt><dd className="font-semibold tabular-nums">{entry.value.toLocaleString("vi-VN")}</dd>
     </div>)}
   </dl>;
 }

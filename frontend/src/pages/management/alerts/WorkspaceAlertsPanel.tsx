@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { AlertCircle, ArrowUpRight, Bell, BellOff, Check, ChevronLeft, ChevronRight, ClipboardList, RefreshCw, Search, Settings2, TriangleAlert, X } from "lucide-react";
+import { ArrowUpRight, Bell, BellOff, CheckCircle2, ChevronLeft, ChevronRight, RefreshCw, Search, Settings2, TriangleAlert, X } from "lucide-react";
 import { projectAlertApi } from "@/api/features/project-alert.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
@@ -79,73 +79,66 @@ function AlertSnapshot({ item, alert, workspaceId, teamId }: {
     : item.id ? `/teams/${teamId}/milestones/${encodeURIComponent(item.id)}?workspaceId=${workspaceId}`
       : `/management/workspaces/${workspaceId}?tab=milestones`;
   return <section aria-label={item.title ?? (task ? "Công việc được cảnh báo" : "Milestone được cảnh báo")}
-    className="min-w-0 rounded-xl border border-slate-200/80 bg-slate-50/80 p-3.5 dark:border-border dark:bg-muted/25">
-    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-      <div className="flex min-w-0 items-start gap-3">
-        <span aria-hidden="true" className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold",
-          task ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300" : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300")}>
-          {task ? "TASK" : <ClipboardList className="size-4" />}
+    className="flex min-w-0 flex-col gap-3 rounded-lg border border-slate-200/80 bg-slate-50/70 px-3 py-2.5 dark:border-border dark:bg-muted/25 @[880px]:flex-row @[880px]:items-center @[880px]:gap-4">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-2 @[880px]:max-w-[48%] @[880px]:flex-nowrap">
+      <div className="flex min-w-0 max-w-full items-center gap-2.5">
+        <span aria-hidden="true" className={cn("shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium tracking-wide",
+          task ? "border-rose-200 bg-rose-100/80 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/15 dark:text-rose-300"
+            : "border-amber-200 bg-amber-100/80 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300")}>
+          {task ? "TASK" : "MILESTONE"}
         </span>
-        <div className="min-w-0 space-y-1.5">
-          <h4 className="break-words text-xs font-semibold leading-5 text-foreground">{item.title ?? (task ? "Công việc" : "Milestone")}</h4>
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[11px] leading-5 text-muted-foreground">{task ? "Công việc được nhắc trong cảnh báo" : "Cột mốc được nhắc trong cảnh báo"}</p>
-            {overdue && <Badge className="max-w-full whitespace-normal rounded bg-rose-100 px-1.5 text-[10px] text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">{overdue}</Badge>}
-          </div>
-        </div>
+        <h4 title={item.title ?? undefined} className="min-w-0 truncate text-xs font-medium leading-5 text-foreground">{item.title ?? (task ? "Công việc" : "Milestone")}</h4>
       </div>
-      <Button variant="outline" size="sm" asChild className={cn("h-8 self-start rounded-lg text-xs shadow-none",
-        task ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300"
-          : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300")}>
-        <Link to={destination}>{task ? "Mở backlog" : "Mở milestone"}<ArrowUpRight className="size-3.5" /></Link>
-      </Button>
+      {overdue && <Badge variant="outline" className="max-w-full whitespace-normal rounded border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">{overdue}</Badge>}
     </div>
-    <dl className="mt-3.5 grid min-w-0 gap-3 border-t border-slate-200/70 pt-3.5 text-xs dark:border-border sm:grid-cols-2 xl:grid-cols-3">
-      <div className="min-w-0 space-y-1.5"><dt className="text-[11px] text-muted-foreground">Trạng thái lúc gửi</dt>
-        <dd><Badge className={cn("max-w-full whitespace-normal rounded px-2 text-[11px]",
-          task ? "bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300" : "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300")}>{statusLabel(item.status)}</Badge></dd>
+    <dl className="flex min-w-0 flex-[1.2] flex-wrap items-center gap-x-4 gap-y-2 text-[11px] leading-5">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5"><dt className="text-muted-foreground">Trạng thái lúc gửi:</dt>
+        <dd className={cn("min-w-0 break-words rounded px-1.5 font-medium",
+          task ? "bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300" : "bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300")}>{statusLabel(item.status)}</dd>
       </div>
-      <div className="min-w-0 space-y-1.5"><dt className="text-[11px] text-muted-foreground">Hạn chót lúc gửi</dt>
-        <dd className={cn("break-words font-medium leading-5", overdue && "text-rose-700 dark:text-rose-400")}>{date(item.deadline)}</dd>
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5"><dt className="text-muted-foreground">Hạn chót:</dt>
+        <dd className={cn("break-words font-mono text-[10px] font-medium tabular-nums", overdue && "text-rose-600 dark:text-rose-400")}>{date(item.deadline)}</dd>
       </div>
-      {(task || item.assigneeName) && <div className="min-w-0 space-y-1.5"><dt className="text-[11px] text-muted-foreground">Người phụ trách</dt>
-        <dd className="flex items-start gap-1.5 leading-5">{initials && <span aria-hidden="true" className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[8px] font-bold text-white">{initials}</span>}<span className="min-w-0 break-words font-medium">{item.assigneeName || "Chưa được phân công"}</span></dd>
+      {(task || item.assigneeName) && <div className="flex min-w-0 max-w-full items-center gap-1.5"><dt className="shrink-0 text-muted-foreground">Phụ trách:</dt>
+        <dd className="flex min-w-0 items-center gap-1.5">{initials && <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[8px] font-bold text-white">{initials}</span>}<span className="min-w-0 break-words font-medium">{item.assigneeName || "Chưa được phân công"}</span></dd>
       </div>}
-      {progress !== null && <div className="min-w-0 space-y-1.5"><dt className="text-[11px] text-muted-foreground">Tiến độ lúc gửi</dt>
+      {progress !== null && <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-1"><dt className="text-muted-foreground">Tiến độ lúc gửi:</dt>
         <dd className="flex flex-wrap items-center gap-2">
           <div role="progressbar" aria-label="Tiến độ lúc gửi" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}
-            className="h-2 min-w-16 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-muted">
+            className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-200 dark:bg-muted">
             <div className="h-full rounded-full bg-amber-500" style={{ width: `${progress}%` }} />
           </div>
-          <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">{progress}%{item.done != null && item.total != null ? ` (${item.done}/${item.total} đã xong)` : ""}</span>
+          <span className="font-medium text-amber-800 dark:text-amber-300">{progress}%{item.done != null && item.total != null ? ` (${item.done}/${item.total} đã xong)` : ""}</span>
         </dd>
       </div>}
+      <div className="flex items-center"><dt className="sr-only">Chi tiết</dt><dd><Link to={destination} className={cn("inline-flex items-center gap-1 rounded text-xs font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring",
+        task ? "text-rose-600 dark:text-rose-400" : "text-blue-600 dark:text-blue-400")}>
+        {task ? "Mở backlog" : "Mở milestone"}<ArrowUpRight aria-hidden="true" className="size-3.5" />
+      </Link></dd></div>
     </dl>
   </section>;
 }
 
 function SentAlertCard({ alert, workspaceId, teamId }: { alert: WorkspaceSentAlert; workspaceId: number; teamId: number }) {
   const task = alert.kind === "BACKLOG";
-  const Icon = task ? AlertCircle : TriangleAlert;
   return <article aria-label={`${task ? "Công việc quá hạn" : "Rủi ro milestone"} · ${alert.senderName}`}
-    className={cn("flex min-w-0 flex-col gap-4 rounded-xl border border-l-4 bg-card p-4 transition-shadow hover:shadow-sm sm:flex-row sm:p-5",
-      task ? "border-rose-200 border-l-rose-600 dark:border-rose-500/30 dark:border-l-rose-500" : "border-amber-200 border-l-amber-500 dark:border-amber-500/30 dark:border-l-amber-500")}>
-    <span aria-hidden="true" className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl",
-      task ? "bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400" : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400")}><Icon className="size-5" /></span>
-    <div className="min-w-0 flex-1 space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-2.5">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 text-xs">
-          <Badge className={cn("gap-1.5 border-0 px-2.5 font-semibold", task ? "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300" : "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300")}>
+    className={cn("relative min-w-0 overflow-hidden rounded-xl border border-slate-200/80 bg-card p-3.5 pl-5 shadow-xs before:absolute before:inset-y-0 before:left-0 before:w-[3px] dark:border-border sm:p-4 sm:pl-5",
+      task ? "before:bg-rose-500" : "before:bg-amber-500")}>
+    <div className="min-w-0 space-y-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs">
+          <Badge variant="outline" className={cn("gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium", task ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300" : "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300")}>
             <span className={cn("size-1.5 rounded-full", task ? "bg-rose-500" : "bg-amber-500")} />{task ? "Công việc quá hạn" : "Rủi ro milestone"}
           </Badge>
-          <span className="min-w-0 break-words leading-5 text-muted-foreground">Người gửi: <strong className="font-semibold text-foreground">{alert.senderName}</strong></span>
-          <span className="hidden size-1 rounded-full bg-slate-300 sm:block" aria-hidden="true" />
-          <time dateTime={alert.sentAt} className="text-[11px] leading-5 text-muted-foreground">{date(alert.sentAt)}</time>
+          <span className="hidden size-1 rounded-full bg-slate-300 sm:block dark:bg-slate-600" aria-hidden="true" />
+          <span className="min-w-0 break-words leading-5 text-muted-foreground">Người gửi: <strong className="font-medium text-foreground">{alert.senderName}</strong></span>
+          <span className="hidden size-1 rounded-full bg-slate-300 sm:block dark:bg-slate-600" aria-hidden="true" />
+          <time dateTime={alert.sentAt} className="font-mono text-[10px] leading-5 tabular-nums text-muted-foreground">{date(alert.sentAt)}</time>
         </div>
-        <Badge variant="outline" className="gap-1 border-slate-200 bg-slate-50 text-[10px] font-medium text-slate-600 dark:border-border dark:bg-muted/40 dark:text-muted-foreground"><Check className="size-3 text-emerald-600" />Đã gửi</Badge>
+        <Badge variant="outline" className="gap-1 rounded-md border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"><CheckCircle2 aria-hidden="true" className="size-3" />Đã gửi</Badge>
       </div>
-      <p className="whitespace-pre-wrap break-words text-sm leading-6">{alert.warningNote}</p>
-      {!!alert.items.length && <div className="space-y-3">{alert.items.map((item, index) =>
+      <p className="flex min-w-0 items-baseline gap-2 text-xs leading-5"><span className="shrink-0 text-muted-foreground">Ghi chú:</span><span className="min-w-0 whitespace-pre-wrap break-words">{alert.warningNote || "Không có ghi chú."}</span></p>
+      {!!alert.items.length && <div className="space-y-2">{alert.items.map((item, index) =>
         <AlertSnapshot key={item.id ?? index} item={item} alert={alert} workspaceId={workspaceId} teamId={teamId} />)}</div>}
     </div>
   </article>;
@@ -185,59 +178,59 @@ export function WorkspaceAlertsPanel({ workspaceId, teamId }: { workspaceId: num
   function changeKind(value: string) { setKind(value as KindFilter); setPage(0); }
   function reset() { setKind("ALL"); setSearch(""); setTime("ALL"); setPage(0); }
 
-  return <section aria-label="Cảnh báo của nhóm" className="min-w-0 rounded-xl border border-slate-200/80 bg-card p-4 font-sans shadow-sm dark:border-border sm:p-6">
-    <header className="space-y-5 border-b border-slate-100 pb-5 dark:border-border">
-      <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+  return <section aria-label="Cảnh báo của nhóm" className="@container min-w-0 rounded-xl border border-slate-200/80 bg-card p-4 font-sans dark:border-border sm:p-5">
+    <header className="space-y-4">
+      <div className="flex flex-col justify-between gap-3 border-b border-slate-100 pb-3 dark:border-border @[1000px]:flex-row @[1000px]:items-center">
         <div className="flex min-w-0 items-start gap-3">
-          <span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-md shadow-blue-500/15"><Bell className="size-6" /></span>
-          <div className="min-w-0 space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold tracking-tight">Cảnh báo của nhóm</h2><Badge variant="outline" className="border-slate-200 bg-slate-100 text-[10px] font-medium text-slate-600 dark:border-border dark:bg-muted dark:text-muted-foreground">Lịch sử đã gửi</Badge></div>
-            <p className="max-w-2xl text-xs leading-5 text-muted-foreground">Lịch sử cảnh báo công việc và milestone đã gửi cho nhóm. Số liệu phản ánh tình trạng tại thời điểm gửi cảnh báo.</p>
+          <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-600 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-400"><Bell className="size-[18px]" /></span>
+          <div className="min-w-0 space-y-0.5">
+            <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-semibold tracking-tight">Cảnh báo của nhóm</h2><Badge variant="outline" className="rounded border-slate-200 bg-slate-100 px-1.5 py-0 text-[10px] font-medium text-slate-500 dark:border-border dark:bg-muted dark:text-muted-foreground">Lịch sử đã gửi</Badge></div>
+            <p className="text-xs leading-5 text-muted-foreground">Lịch sử cảnh báo công việc và milestone đã gửi cho nhóm. Số liệu phản ánh tình trạng tại thời điểm gửi cảnh báo.</p>
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" className="h-9 rounded-lg text-xs shadow-none" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={cn("size-3.5", query.isFetching && "animate-spin")} />Làm mới</Button>
-          {hasPermission("PROJECT_ALERT_READ") && <Button variant="secondary" size="sm" className="h-9 rounded-lg text-xs" asChild><Link to={`/management/alerts?teamId=${teamId}${kind === "ALL" ? "" : `&view=${kind}`}`}><Settings2 className="size-3.5" />Quản lý cảnh báo</Link></Button>}
+          <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs shadow-none" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={cn("size-3.5", query.isFetching && "animate-spin")} />Làm mới</Button>
+          {hasPermission("PROJECT_ALERT_READ") && <Button variant="outline" size="sm" className="h-8 rounded-lg text-xs shadow-none" asChild><Link to={`/management/alerts?teamId=${teamId}${kind === "ALL" ? "" : `&view=${kind}`}`}><Settings2 className="size-3.5" />Quản lý cảnh báo</Link></Button>}
         </div>
       </div>
       <div role="group" aria-label="Lọc nhanh loại cảnh báo" className="flex flex-wrap items-center gap-2">
         {kinds.map(option => <button key={option.value} type="button" aria-pressed={kind === option.value} onClick={() => changeKind(option.value)}
-          className={cn("inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-background",
+          className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-background",
             option.value === "ALL" && (kind === "ALL" ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900" : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-border dark:bg-muted/30 dark:text-muted-foreground"),
             option.value === "BACKLOG" && "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300",
             option.value === "MILESTONE" && "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300",
             kind === option.value && option.value !== "ALL" && "ring-2 ring-current/15")}>
           {option.value !== "ALL" && <span aria-hidden="true" className={cn("size-1.5 rounded-full", option.value === "BACKLOG" ? "bg-rose-500" : "bg-amber-500")} />}
-          {option.label}<span className={cn("flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums", option.value === "ALL" && kind === "ALL" ? "bg-white/20 dark:bg-slate-900/10" : "bg-current/10")}>{data ? counts[option.value] : "—"}</span>
+          {option.label}<span className={cn("flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums", option.value === "ALL" && kind === "ALL" ? "bg-white/20 dark:bg-slate-900/10" : option.value === "BACKLOG" ? "bg-rose-100 dark:bg-rose-500/20" : option.value === "MILESTONE" ? "bg-amber-100 dark:bg-amber-500/20" : "bg-slate-200 dark:bg-muted")}>{data ? counts[option.value] : "—"}</span>
         </button>)}
       </div>
     </header>
 
-    <div role="search" aria-label="Tìm kiếm và lọc cảnh báo" className="my-5 grid min-w-0 gap-4 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-border dark:bg-muted/20 lg:grid-cols-3">
+    <div role="search" aria-label="Tìm kiếm và lọc cảnh báo" className="mb-5 mt-4 grid min-w-0 gap-3 @[640px]:grid-cols-2 @[880px]:grid-cols-4">
       <div className="min-w-0 space-y-2"><Label htmlFor="workspace-alert-kind" className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Loại cảnh báo (Alert type)</Label>
-        <Select value={kind} onValueChange={changeKind}><SelectTrigger id="workspace-alert-kind" className="h-9 w-full min-w-0 bg-background text-xs shadow-xs"><SelectValue /></SelectTrigger>
+        <Select value={kind} onValueChange={changeKind}><SelectTrigger id="workspace-alert-kind" size="sm" className="w-full min-w-0 bg-background text-xs shadow-none"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="ALL">Tất cả loại cảnh báo</SelectItem><SelectItem value="BACKLOG">Công việc quá hạn</SelectItem><SelectItem value="MILESTONE">Rủi ro milestone</SelectItem></SelectContent>
         </Select>
       </div>
-      <div className="min-w-0 space-y-2"><Label htmlFor="workspace-alert-search" className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tìm kiếm nội dung</Label>
-        <div className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-2.5 size-4 text-slate-400" />
-          <Input id="workspace-alert-search" type="search" value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} placeholder="Tên task, milestone, người gửi…" className="h-9 bg-background pl-9 pr-9 text-xs md:text-xs" />
-          {!!search && <Button type="button" variant="ghost" size="icon-xs" aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1.5 text-muted-foreground" onClick={() => { setSearch(""); setPage(0); }}><X className="size-3.5" /></Button>}
+      <div className="min-w-0 space-y-2 @[880px]:col-span-2"><Label htmlFor="workspace-alert-search" className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tìm kiếm nội dung</Label>
+        <div className="relative"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-2 size-4 text-slate-400" />
+          <Input id="workspace-alert-search" type="search" value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} placeholder="Tên task, milestone, người gửi…" className="h-8 bg-background pl-9 pr-9 text-xs shadow-none md:text-xs" />
+          {!!search && <Button type="button" variant="ghost" size="icon-xs" aria-label="Xóa tìm kiếm" className="absolute right-1.5 top-1 text-muted-foreground" onClick={() => { setSearch(""); setPage(0); }}><X className="size-3.5" /></Button>}
         </div>
       </div>
       <div className="min-w-0 space-y-2"><Label htmlFor="workspace-alert-time" className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Thời gian gửi</Label>
-        <Select value={time} onValueChange={value => { setTime(value as TimeFilter); setPage(0); }}><SelectTrigger id="workspace-alert-time" className="h-9 w-full min-w-0 bg-background text-xs shadow-xs"><SelectValue /></SelectTrigger>
+        <Select value={time} onValueChange={value => { setTime(value as TimeFilter); setPage(0); }}><SelectTrigger id="workspace-alert-time" size="sm" className="w-full min-w-0 bg-background text-xs shadow-none"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="ALL">Toàn bộ thời gian (All time)</SelectItem><SelectItem value="TODAY">Hôm nay</SelectItem><SelectItem value="7">7 ngày gần đây</SelectItem><SelectItem value="30">30 ngày gần đây</SelectItem></SelectContent>
         </Select>
       </div>
     </div>
 
-    {query.isPending ? <div role="status" aria-label="Đang tải lịch sử cảnh báo" className="space-y-4">{[0, 1].map(value => <div key={value} className="space-y-4 rounded-xl border p-5"><Skeleton className="h-5 w-44" /><Skeleton className="h-4 w-full" /><Skeleton className="h-28 w-full" /></div>)}</div>
+    {query.isPending ? <div role="status" aria-label="Đang tải lịch sử cảnh báo" className="space-y-3">{[0, 1].map(value => <div key={value} className="space-y-3 rounded-xl border p-4"><Skeleton className="h-4 w-44" /><Skeleton className="h-3 w-full" /><Skeleton className="h-16 w-full" /></div>)}</div>
       : failure || !data ? <div role="alert" className="flex flex-col items-center gap-3 rounded-xl border border-dashed py-10 text-center"><TriangleAlert className="size-8 text-destructive" /><h3 className="text-sm font-semibold">Không thể tải cảnh báo</h3><p className="max-w-lg px-4 text-xs leading-5 text-muted-foreground">{failure?.message ?? "Không thể tải cảnh báo cho workspace này."}</p><Button variant="outline" size="sm" onClick={() => void query.refetch()}>Thử lại</Button></div>
-        : visible.length ? <div aria-label="Danh sách cảnh báo đã gửi" className="space-y-4">{visible.map(alert => <SentAlertCard key={alert.id} alert={alert} workspaceId={workspaceId} teamId={teamId} />)}</div>
+        : visible.length ? <div aria-label="Danh sách cảnh báo đã gửi" className="space-y-3">{visible.map(alert => <SentAlertCard key={alert.id} alert={alert} workspaceId={workspaceId} teamId={teamId} />)}</div>
           : <div role="status" className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-4 py-12 text-center"><span className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-muted">{hasFilters ? <Search className="size-6" /> : <BellOff className="size-6" />}</span><h3 className="text-sm font-semibold">{hasFilters ? "Không tìm thấy cảnh báo phù hợp" : "Chưa có cảnh báo nào được gửi"}</h3><p className="max-w-md text-xs leading-5 text-muted-foreground">{hasFilters ? "Thử thay đổi loại cảnh báo, từ khóa hoặc khoảng thời gian gửi." : "Các cảnh báo sẽ xuất hiện tại đây sau khi người quản lý gửi cho nhóm."}</p>{hasFilters && <Button variant="outline" size="sm" className="mt-2 text-xs" onClick={reset}>Xóa bộ lọc</Button>}</div>}
 
-    {data && <footer className="mt-6 flex flex-col justify-between gap-3 border-t border-slate-100 pt-4 text-xs text-muted-foreground dark:border-border sm:flex-row sm:items-center">
+    {data && <footer className="mt-4 flex flex-col justify-between gap-3 border-t border-slate-100 pt-3 text-xs text-muted-foreground dark:border-border sm:flex-row sm:items-center">
       <p role="status">Hiển thị <strong className="font-semibold text-foreground">{filtered.length ? start + 1 : 0} – {Math.min(start + PAGE_SIZE, filtered.length)}</strong> trên tổng số <strong className="font-semibold text-foreground">{filtered.length}</strong> cảnh báo{hasFilters ? " phù hợp" : " đã gửi"}</p>
       <nav aria-label="Phân trang cảnh báo" className="flex flex-wrap items-center gap-1">
         <Button variant="outline" size="sm" className="h-8 text-xs shadow-none" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}><ChevronLeft className="size-3.5" />Trước</Button>

@@ -14,6 +14,13 @@ class ProjectReportPolicyTest {
         var policy=new ProjectReportStatusPolicy();
         for(var state:ProjectStatus.values()) assertThat(policy.evaluate(state).name()).isEqualTo(state.name());
     }
+    @Test void publicationGateOnlyChangesAnActiveSharedMasterWhilePreservingExplicitLifecycleStates() {
+        var policy=new ProjectReportStatusPolicy();
+        assertThat(policy.evaluate(ProjectStatus.ACTIVE,true)).isEqualTo(Status.PLANNING);
+        assertThat(policy.evaluate(ProjectStatus.ACTIVE,false)).isEqualTo(Status.ACTIVE);
+        for(var state:List.of(ProjectStatus.DRAFT,ProjectStatus.PLANNING,ProjectStatus.COMPLETED,ProjectStatus.CANCELLED))
+            assertThat(policy.evaluate(state,true).name()).isEqualTo(state.name());
+    }
     @Test void backlogShowsCountsIncludingUnlinkedWorkAndEmptyBacklogIsZeroItems() {
         var rows=java.util.Arrays.stream(SprintBacklogStatus.values()).map(state->{
             var item=new SprintBacklog();item.setStatus(state);return item;

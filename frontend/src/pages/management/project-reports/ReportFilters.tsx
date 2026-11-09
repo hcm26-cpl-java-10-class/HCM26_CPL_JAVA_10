@@ -55,11 +55,11 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
     applied.createdFrom ? `Từ ${applied.createdFrom}` : "", applied.createdTo ? `Đến ${applied.createdTo}` : "",
     applied.q ? `Tìm: ${applied.q}` : ""].filter(Boolean);
 
-  return <div className="space-y-3 rounded-xl border bg-card p-4" aria-label="Bộ lọc báo cáo"><div className="flex flex-wrap items-center gap-2">
+  return <div className="space-y-2.5 rounded-xl border border-slate-200/80 bg-card p-2.5 shadow-xs dark:border-border" aria-label="Bộ lọc báo cáo"><div className="flex flex-wrap items-center gap-2.5">
     <Popover open={open} onOpenChange={setOpen}>
       <TooltipWrapper content="Filter data">
         <PopoverTrigger asChild>
-          <Button variant="outline" className="h-9 gap-1.5">
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs shadow-none">
             <Filter size={14} />Filters
             {activeCount > 0 && <Badge className="ml-0.5 h-5 min-w-5 rounded-full px-1.5 text-xs">{activeCount}</Badge>}
           </Button>
@@ -112,9 +112,9 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
         </form>
       </PopoverContent>
     </Popover>
-    <SearchInput compact search={value.q ?? ""} onSearchChange={q => update({ q: q.slice(0, 120) })} />
+    <div className="contents [&_input]:h-8 [&_input]:bg-slate-50/60 [&_input]:text-xs [&_input]:shadow-none dark:[&_input]:bg-muted/20"><SearchInput compact search={value.q ?? ""} onSearchChange={q => update({ q: q.slice(0, 120) })} /></div>
     {(activeCount > 0 || !!applied.q) && <Button type="button" variant="ghost" size="sm" onClick={onReset}>Đặt lại</Button>}
-    <span className="ml-auto hidden text-xs text-muted-foreground md:inline">{activeCount ? `${activeCount} điều kiện đã áp dụng` : "Tất cả dữ liệu trong phạm vi của bạn"}</span>
+    <span className="ml-auto hidden pr-1 text-[11px] text-muted-foreground md:inline">{activeCount ? `${activeCount} điều kiện đã áp dụng` : "Tất cả dữ liệu trong phạm vi của bạn"}</span>
     </div>
     {appliedLabels.length > 0 && <div className="flex flex-wrap gap-1.5 border-t pt-3" aria-label="Điều kiện đã áp dụng">{appliedLabels.map(label => <Badge key={label} variant="secondary" className="max-w-full rounded-md px-2 py-1 text-[11px] font-normal whitespace-normal">{label}</Badge>)}</div>}
   </div>;
