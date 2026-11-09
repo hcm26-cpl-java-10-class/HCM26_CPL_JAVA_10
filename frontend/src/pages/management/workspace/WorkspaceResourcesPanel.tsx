@@ -107,8 +107,9 @@ export function WorkspaceResourcesPanel({
   }
 
   const data = query.data;
+  const expectedProjectId = selectedProjectId ?? projectId ?? null;
   if (!data || data.workspaceId !== workspaceId || data.teamId !== teamId
-    || (data.projectId ?? null) !== (projectId ?? null)) {
+    || (data.projectId ?? null) !== expectedProjectId) {
     return (
       <WorkspaceSectionState
         error={new Error("Resources context does not match this workspace.")}

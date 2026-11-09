@@ -147,12 +147,22 @@ public class TemplateResourceFileStorage {
         }
 
         if (template) {
-            try {
-                scanner.requireClean(bytes);
-            } catch (ArtifactUploadRejectedException exception) {
-                throw rejected("The file was rejected by the malware scanner");
-            } catch (ArtifactUploadUnavailableException exception) {
-                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Resource scanning is unavailable");
+            // ClamAV is an optional integration (like Redis/SMTP in the local demo).
+            // When it is not configured, keep template-resource uploads usable
+            // instead of rejecting every file. A configured-but-unreachable
+            // scanner still fails closed so files are never stored unscanned
+            // after scanning has been explicitly enabled.
+            if (scanner.isConfigured()) {
+                try {
+                    scanner.requireClean(bytes);
+                } catch (ArtifactUploadRejectedException exception) {
+                    throw rejected("The file was rejected by the malware scanner");
+                } catch (ArtifactUploadUnavailableException exception) {
+                    throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Resource scanning is unavailable");
+                }
+            } else {
+                log.warn("Storing template resource file '{}' without malware scanning: ClamAV is not configured",
+                        originalName);
             }
         }
         return write(bytes, originalName, extension);
