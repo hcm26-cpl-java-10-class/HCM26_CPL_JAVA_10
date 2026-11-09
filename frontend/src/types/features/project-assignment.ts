@@ -42,11 +42,6 @@ export interface WorkspaceAssignmentContext {
   assignedAt: string | null; readOnly: boolean; projects: WorkspaceProjectNode[];
   history: Array<{ workspaceId: number; name: string; status: string; createdAt: string; current: boolean }>;
 }
-export interface ProjectCompletionSummary {
-  projectId: number; teamId: number | null; completed: boolean; gradeLocked: boolean; finalScore: number | null;
-  canManage: boolean; childrenCompleted: boolean;
-  milestones: Array<{ id: string; title: string; mandatory: boolean; accepted: boolean; waived: boolean }>;
-}
 export interface MasterMilestoneContext {
   projectId: number; projectName: string; mode: ProjectAssignmentMode; teamId: number | null;
   status: string; canManage: boolean; readOnly: boolean;
