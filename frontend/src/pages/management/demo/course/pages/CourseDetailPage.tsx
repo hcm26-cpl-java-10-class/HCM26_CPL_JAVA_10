@@ -56,6 +56,7 @@ import {
   formatTotalDuration,
   getErrorStatus,
 } from "../utils/course.utils.ts";
+import { CourseReviewsSection } from "../../course_review/components/CourseReviewsSection.tsx";
 
 const CONTENT_ICON: Record<LessonContentType, LucideIcon> = {
   VIDEO: Video,
@@ -227,6 +228,7 @@ export function CourseDetailContent({
       <aside className="lg:sticky lg:top-4 lg:self-start">
         <CourseActionCard course={course} />
       </aside>
+      <CourseReviewsSection courseId={course.id} />
     </div>
   );
 }

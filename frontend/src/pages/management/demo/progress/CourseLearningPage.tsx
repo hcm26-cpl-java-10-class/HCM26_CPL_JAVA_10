@@ -26,6 +26,7 @@ import { LessonReportDialog } from "../lesson/components/LessonReportDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { LessonProgressSidebar } from "./LessonProgressSidebar";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
+import { CourseReviewPrompt } from "../course_review/components/CourseReviewPrompt";
 
 export function CourseLearningPage() {
   const { id } = useParams();
@@ -285,6 +286,12 @@ export function CourseLearningPage() {
                             </Button>
                           </div>
                       )}
+                      
+                  {progressQuery.data.progressPercentage === 100 &&
+                      <CourseReviewPrompt
+                        courseId={progressQuery.data.courseId}
+                      />
+                  }
 
                   {currentLesson && (
                       <div className="mt-3">
