@@ -32,6 +32,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class ClassReadinessIntegrationTest {
     @Autowired ClassReadinessService service;
+    @Autowired TrainingClassService profiles;
+    @Autowired com.fasterxml.jackson.databind.ObjectMapper mapper;
     @Autowired TrainingClassRepository classes;
     @Autowired ClassEnrollmentRepository enrollments;
     @Autowired SessionRepository sessions;
@@ -87,12 +89,108 @@ class ClassReadinessIntegrationTest {
         assertEquals(5, result.ready()); assertEquals(5, result.verified()); assertEquals(0, result.unknown());
         assertEquals(1, result.enrolledTrainees());
     }
-    @Test void unavailableOrSampleDirectoryIsUnknownRatherThanNotReady() {
+    @Test void unavailableOrSampleDirectoryIsBlockedRatherThanReady() {
         linkProgramAndTrainer();
         when(directory.fetchTrainers("active")).thenThrow(new ExternalApiException("Unavailable", 503, null));
-        assertEquals(ClassReadinessService.State.UNKNOWN, check("trainer").status());
+        assertEquals(ClassReadinessService.State.BLOCKED, check("trainer").status());
         when(directory.isSampleData()).thenReturn(true);
+        assertEquals(ClassReadinessService.State.BLOCKED, check("trainer").status());
+    }
+    @Test void roomFailuresAreBlockedAndExcludedFromVerifiedTotals() {
+        when(directory.fetchRooms()).thenThrow(new ExternalApiException("Contains upstream details", 503, "secret"));
+        var result = service.get(item.getId());
+        assertEquals(ClassReadinessService.State.BLOCKED, check("operations").status());
+        assertTrue(check("operations").reason().contains("HTTP 503"));
+        assertFalse(check("operations").reason().contains("secret"));
+        assertEquals(1, result.blocked()); assertEquals(2, result.verified());
+        assertEquals(5, result.ready() + result.notReady() + result.unknown() + result.blocked());
+    }
+    @Test void connectionFailureDoesNotBecomeAnEmptyRoomDirectory() {
+        when(directory.fetchRooms()).thenThrow(new ExternalApiException("connection refused"));
+        assertEquals(ClassReadinessService.State.BLOCKED, check("operations").status());
+        assertTrue(check("operations").reason().contains("connection or response failure"));
+    }
+    @Test void sampleMetadataDiscoveredWhileFetchingRoomsStillBlocksVerification() {
+        when(directory.isSampleData()).thenReturn(false, true);
+        assertEquals(ClassReadinessService.State.BLOCKED, check("operations").status());
+        assertTrue(check("operations").reason().contains("sample"));
+    }
+    @Test void sampleTrainerResponseCannotMakeAssignmentsReady() {
+        linkProgramAndTrainer();
+        when(directory.isSampleData()).thenReturn(false, true);
+        assertEquals(ClassReadinessService.State.BLOCKED, check("trainer").status());
+    }
+    @Test void blendedAndHybridUseTheSameRealRoomAndCapacityRulesAsOffline() {
+        for (String format : List.of("Blended", "Hybrid", "Offline")) {
+            item.setFormatType(format); classes.saveAndFlush(item);
+            when(directory.fetchRooms()).thenReturn(List.of(new ExternalRoomDTO(1L, "Room A", 2)));
+            assertEquals(ClassReadinessService.State.READY, check("operations").status());
+            when(directory.fetchRooms()).thenReturn(List.of(new ExternalRoomDTO(1L, "Room A", 1)));
+            assertEquals(ClassReadinessService.State.NOT_READY, check("operations").status());
+            assertTrue(check("operations").reason().contains("capacity 1"));
+        }
+    }
+    @Test void roomMismatchAndAmbiguityExplainTheActualLocationAndMatchCount() {
+        item.setLocation("Building A"); classes.saveAndFlush(item);
+        assertTrue(check("operations").reason().contains("'Building A' matches 0 rooms out of 1"));
+        item.setLocation("Room A"); classes.saveAndFlush(item);
+        when(directory.fetchRooms()).thenReturn(List.of(new ExternalRoomDTO(1L, "Room A", 20), new ExternalRoomDTO(2L, "Room A", 30)));
+        assertEquals(ClassReadinessService.State.UNKNOWN, check("operations").status());
+        assertTrue(check("operations").reason().contains("matches 2 rooms"));
+    }
+    @Test void roomIdentityAndCapacityMustBothExist() {
+        when(directory.fetchRooms()).thenReturn(List.of(new ExternalRoomDTO(null, "Room A", 20)));
+        assertEquals(ClassReadinessService.State.UNKNOWN, check("operations").status());
+        for (Integer capacity : java.util.Arrays.asList(null, 0, -1)) {
+            when(directory.fetchRooms()).thenReturn(List.of(new ExternalRoomDTO(1L, "Room A", capacity)));
+            assertEquals(ClassReadinessService.State.UNKNOWN, check("operations").status());
+        }
+    }
+    @Test void aDifferentActiveTrainerCannotVerifyTheSavedMasterTrainer() {
+        linkProgramAndTrainer();
+        item.setMasterTrainer("Someone else"); classes.saveAndFlush(item);
+        assertEquals(ClassReadinessService.State.NOT_READY, check("trainer").status());
+    }
+    @Test void linksAssignmentsAndSessionsForAnotherClassCannotVerifyThisClass() {
+        linkProgramAndTrainer(); session();
+        var link = links.findByClassId(item.getId()).orElseThrow(); link.setClassId(item.getId() + 1000); links.saveAndFlush(link);
+        var assignment = assignments.findByClassIdOrderByEffectiveFromAscIdAsc(item.getId()).getFirst();
+        assignment.setClassId(item.getId() + 1000); assignments.saveAndFlush(assignment);
+        var session = sessions.findByClassId(item.getId()).getFirst(); session.setClassId(item.getId() + 1000); sessions.saveAndFlush(session);
+        assertEquals(ClassReadinessService.State.UNKNOWN, check("basic").status());
         assertEquals(ClassReadinessService.State.UNKNOWN, check("trainer").status());
+        assertEquals(ClassReadinessService.State.NOT_READY, check("calendar").status());
+        assertTrue(check("basic").reason().contains("Internal class " + item.getId()));
+    }
+    @Test void mainAssignmentMustCoverTheWholeClassDateRange() {
+        linkProgramAndTrainer();
+        var assignment = assignments.findByClassIdOrderByEffectiveFromAscIdAsc(item.getId()).getFirst();
+        assignment.setEffectiveFrom(item.getStartDate().plusDays(1)); assignments.saveAndFlush(assignment);
+        assertEquals(ClassReadinessService.State.UNKNOWN, check("trainer").status());
+        assignment.setEffectiveFrom(item.getStartDate()); assignment.setEffectiveTo(item.getEndDate().minusDays(1)); assignments.saveAndFlush(assignment);
+        assertEquals(ClassReadinessService.State.UNKNOWN, check("trainer").status());
+    }
+    @Test void everyUnreadyCheckIncludesSpecificNextSteps() {
+        assertTrue(check("basic").action().contains("internal class ID"));
+        assertTrue(check("trainer").action().contains("MAIN"));
+        assertTrue(check("calendar").action().contains("draft calendar alone is not a session"));
+    }
+    @Test void savingClassInfoPersistsOperationalFieldsButDoesNotInventSetupEvidence() throws Exception {
+        var admin = users.loadUserByUsername("admin@example.com");
+        var token = tokens.generateAccessToken(new UsernamePasswordAuthenticationToken(admin, null, admin.getAuthorities()));
+        var input = profiles.get(item.getId());
+        input.setClassAdmin("Admin"); input.setDeliveryType("Instructor led"); input.setFormatType("Blended"); input.setLocation("Room A");
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/classes/" + item.getId())
+            .header("Authorization", "Bearer " + token).contentType("application/json").content(mapper.writeValueAsString(input)))
+            .andExpect(status().isOk());
+        em.clear();
+        var saved = classes.findById(item.getId()).orElseThrow();
+        assertEquals("Instructor led", saved.getDeliveryType()); assertEquals("Blended", saved.getFormatType()); assertEquals("Room A", saved.getLocation());
+        assertEquals(ClassReadinessService.State.READY, check("operations").status());
+        assertEquals(ClassReadinessService.State.UNKNOWN, check("basic").status());
+        assertEquals(ClassReadinessService.State.UNKNOWN, check("trainer").status());
+        assertTrue(links.findByClassId(item.getId()).isEmpty());
+        assertTrue(assignments.findByClassIdOrderByEffectiveFromAscIdAsc(item.getId()).isEmpty());
     }
     @Test void enrollmentAndCalendarReflectNewRecordsWithoutChangingCapacity() {
         assertEquals(ClassReadinessService.State.NOT_READY, check("enrollment").status());
@@ -115,6 +213,14 @@ class ClassReadinessIntegrationTest {
         assertEquals(ClassReadinessService.State.READY, check("operations").status());
         item.setFormatType("Custom"); classes.saveAndFlush(item);
         assertEquals(ClassReadinessService.State.UNKNOWN, check("operations").status());
+    }
+    @Test void relativeAndNonHttpMeetingLocationsAreNotReadyRatherThanServerErrors() {
+        item.setFormatType("Online");
+        for (String location : List.of("/meeting", "meeting", "ftp://meet.example.test/class", "https:///meeting")) {
+            item.setLocation(location); classes.saveAndFlush(item);
+            assertEquals(ClassReadinessService.State.NOT_READY, check("operations").status());
+        }
+        verify(directory, never()).fetchRooms();
     }
     @Test void unverifiedLocationIsUnknownAndUndersizedRoomIsNotReady() {
         when(directory.fetchRooms()).thenReturn(List.of());

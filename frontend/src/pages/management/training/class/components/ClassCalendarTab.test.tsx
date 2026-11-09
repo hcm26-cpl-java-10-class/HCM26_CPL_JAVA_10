@@ -25,6 +25,15 @@ beforeEach(() => {
     fakeHttp.on("get", "/classes/1/calendars", records);
 });
 
+it("opens session management with the internal class ID rather than the shared directory", async () => {
+    renderAt(<ClassCalendarTab classItem={{ id: 1, code: "INTERNAL_CLASS" }} />, { route: "/classes/1?tab=calendar" });
+    expect(await screen.findByRole("link", { name: "Manage Sessions" })).toHaveAttribute("href", "/sessions?classId=1");
+    expect(screen.getByText(/draft versions do not create teaching sessions/)).toBeInTheDocument();
+    await screen.findByRole("table", { name: "Calendar version history" });
+    expect(fakeHttp.callsTo("get", "/classes/1/calendars")).toHaveLength(1);
+    expect(fakeHttp.calls.some(call => call.url.includes("/external/classes"))).toBe(false);
+});
+
 it("shows the calendar supplied from Class Info without requiring calendar creation", async () => {
     grant("SESSION_READ", "SESSION_UPDATE");
     fakeHttp.on("get", "/classes/2/calendars", [{ id: 0, classId: 2, name: "HCM02666_Calendar",

@@ -25,13 +25,13 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
     const [name, setName] = useState("");
     const [site, setSite] = useState("HCM");
     const [traineeType, setTraineeType] = useState("Fresher");
-    const [program, setProgram] = useState("FR_NFP_JAVA");
+    const [program, setProgram] = useState("");
     const [deliveryType, setDeliveryType] = useState("Class");
     const [formatType, setFormatType] = useState("Offline");
     const [skills, setSkills] = useState("Java");
     const [classAdmin, setClassAdmin] = useState("AnhVNP2, BinhHBB");
     const [masterTrainer, setMasterTrainer] = useState("NgaTTT45");
-    const [location, setLocation] = useState("Center Building, HCM");
+    const [location, setLocation] = useState("");
     const [plannedSize, setPlannedSize] = useState<number>(20);
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
@@ -51,13 +51,13 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                 setName(classItem.name || "");
                 setSite(classItem.site || "HCM");
                 setTraineeType(classItem.traineeType || "Fresher");
-                setProgram(classItem.program || classItem.trainingProgram || "FR_NFP_JAVA");
+                setProgram(classItem.program || classItem.trainingProgram || "");
                 setDeliveryType(classItem.deliveryType || "Class");
                 setFormatType(classItem.formatType || "Offline");
                 setSkills(classItem.skills || "Java");
                 setClassAdmin(classItem.classAdmin || "");
                 setMasterTrainer(classItem.masterTrainer || "");
-                setLocation(classItem.location || "Center Building, HCM");
+                setLocation(classItem.location || "");
                 setPlannedSize(classItem.plannedSize || 20);
                 setStartDate(classItem.startDate || "");
                 setEndDate(classItem.endDate || "");
@@ -68,13 +68,13 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                 setName("");
                 setSite("HCM");
                 setTraineeType("Fresher");
-                setProgram("FR_NFP_JAVA");
+                setProgram("");
                 setDeliveryType("Class");
                 setFormatType("Offline");
                 setSkills("Java");
                 setClassAdmin("AnhVNP2, BinhHBB");
                 setMasterTrainer("NgaTTT45");
-                setLocation("Center Building, HCM");
+                setLocation("");
                 setPlannedSize(20);
                 const today = new Date().toISOString().split("T")[0];
                 const threeMonthsLater = new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0];
@@ -235,18 +235,13 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                             <Label htmlFor="class-program" className="font-semibold text-xs">
                                 Chương trình đào tạo (Program) <span className="text-red-500">*</span>
                             </Label>
-                            <NativeSelect
+                            <Input
                                 id="class-program"
                                 value={program}
                                 onChange={(e) => setProgram(e.target.value)}
-                            >
-                                <option value="[FSA.HCM] FR_NFP_JAVA_KS">[FSA.HCM] FR_NFP_JAVA_KS</option>
-                                <option value="FR_NFP_JAVA_2">FR_NFP_JAVA_2</option>
-                                <option value="FR_NFP_JAVA">FR_NFP_JAVA</option>
-                                <option value="[NFP] Fresher Full-stack Java Developer">[NFP] Fresher Full-stack Java Developer</option>
-                                <option value="FR_NFP_REACT">FR_NFP_REACT</option>
-                                <option value="FR_NFP_DOTNET">FR_NFP_DOTNET</option>
-                            </NativeSelect>
+                                required
+                            />
+                            <p className="text-xs text-muted-foreground">Enter the exact code or name of an active Training Program. Saving this field does not create the program link.</p>
                         </div>
 
                         {/* Site */}
@@ -284,6 +279,10 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
 
                         {/* Format Type */}
                         <div className="space-y-1.5">
+                            <Label htmlFor="class-delivery-type" className="font-semibold text-xs">Delivery Type</Label>
+                            <Input id="class-delivery-type" value={deliveryType} onChange={e => setDeliveryType(e.target.value)} required />
+                        </div>
+                        <div className="space-y-1.5">
                             <Label htmlFor="class-format-type" className="font-semibold text-xs">
                                 Hình thức đào tạo
                             </Label>
@@ -294,6 +293,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                             >
                                 <option value="Offline">Offline</option>
                                 <option value="Online">Online</option>
+                                <option value="Hybrid">Hybrid</option>
                                 <option value="Blended">Blended (Kết hợp)</option>
                             </NativeSelect>
                         </div>
@@ -392,8 +392,9 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                 id="class-location"
                                 value={location}
                                 onChange={(e) => setLocation(e.target.value)}
-                                placeholder="VD: Center Building, HCM - Room 101"
+                                placeholder={formatType === "Online" ? "HTTP(S) meeting URL" : "Exact room name from the real room directory"}
                             />
+                            <p className="text-xs text-muted-foreground">A building name is not a room. Offline/Hybrid/Blended needs a unique room with capacity at least Planned Size; Online needs an HTTP(S) meeting URL.</p>
                         </div>
                     </div>
 

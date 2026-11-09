@@ -12,6 +12,10 @@ public interface TrainingProgramRepository
         extends JpaRepository<TrainingProgram, Long>,
                 JpaSpecificationExecutor<TrainingProgram> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_READ)
+    @Query("select p from TrainingProgram p where p.id = :id")
+    Optional<TrainingProgram> findForClassSetup(@Param("id") Long id);
+
     @Query("""
         select distinct p.region
         from TrainingProgram p

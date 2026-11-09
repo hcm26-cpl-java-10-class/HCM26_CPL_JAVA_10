@@ -15,7 +15,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useAssignableTrainers, useExternalClass, useExternalClasses, useExternalRooms } from "@/hooks/useExternalLookups";
+import { useAssignableTrainers, useExternalRooms } from "@/hooks/useExternalLookups";
+import { useClasses } from "@/hooks/useClasses";
 import type { SessionCancelDTO, SessionDTO, SessionDuplicateDTO, SessionRescheduleDTO } from "@/types";
 import { describeApiError } from "@/utils/api-error.utils";
 import { classTitle } from "@/utils/class.utils";
@@ -261,8 +262,8 @@ function SessionFormDialog({ action, onClose }: { action: FormAction; onClose: (
     const [formError, setFormError] = useState<string | null>(null);
 
     const trainers = useAssignableTrainers();
-    const classes = useExternalClasses(classIsPickable);
-    const currentClass = useExternalClass(values.classId || undefined);
+    const classes = useClasses({ enabled: classIsPickable });
+    const currentClass = useClasses({ classId: values.classId, enabled: !!values.classId });
 
     const mutation = useSessionMutation<SessionDTO>({
         mutationFn: (payload) => (session ? sessionApi.update(String(idOf(session)), payload) : sessionApi.create(payload)),

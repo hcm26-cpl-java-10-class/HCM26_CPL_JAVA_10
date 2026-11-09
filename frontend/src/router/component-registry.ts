@@ -22,6 +22,8 @@ import ReportsPage from "@/pages/management/training/reports";
 import ClassListPage from "@/pages/management/training/class/ClassListPage";
 import ClassDetailPage from "@/pages/management/training/class/ClassDetailPage";
 import SessionDetailPage from "@/pages/management/demo/session/SessionDetailPage";
+import SessionManagementPage from "@/pages/management/demo/session/SessionManagementPage";
+import ClassSetupPage from "@/pages/management/training/class/ClassSetupPage";
 
 
 export interface RouteConfig {
@@ -33,6 +35,7 @@ export interface RouteConfig {
 }
 
 export const routes: RouteConfig[] = [
+  { path: "/class-setup", component: ClassSetupPage, requiredPermission: "CLASS_READ" },
   { path: "/training/audit", component: AuditPage },
   { path: "/training/trainee", component: TraineePage },
   { path: "/training/log-work", component: LogWorkPage },
@@ -46,6 +49,7 @@ export const routes: RouteConfig[] = [
   { path: "/training-operations/class-details/:classCode", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/class-details/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/sessions/:sessionId", component: SessionDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/sessions", component: SessionManagementPage, requiredPermission: "SESSION_READ" },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   {

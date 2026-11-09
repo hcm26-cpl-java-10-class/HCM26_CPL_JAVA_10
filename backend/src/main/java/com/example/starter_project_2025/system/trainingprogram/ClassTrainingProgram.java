@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
-/** Stores only the program link for a class owned by the shared system. */
+/** Program link for an internal TrainingClass; shared class IDs are not interchangeable. */
 @Entity
 @Table(name = "class_training_programs", indexes = {
         @Index(name = "uk_class_training_program_class_id", columnList = "class_id", unique = true)

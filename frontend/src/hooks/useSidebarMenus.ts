@@ -2,6 +2,7 @@ import { moduleApi, moduleGroupApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
 import { canAccessByPermission } from "@/utils/rbac.utils";
+import { resolveMenuPermission } from "@/router/menu-permission.utils";
 import { useQuery } from "@tanstack/react-query";
 
 export type SidebarModule = ModuleDTO & {
@@ -37,7 +38,9 @@ export function useActiveModuleGroups(enabled = true) {
             ]);
 
             const groups = groupPage.content ?? groupPage.items ?? [];
-            const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =>
+            const modules = (modulePage.content ?? modulePage.items ?? []).map(module => ({ ...module,
+                requiredPermission: resolveMenuPermission(module.url, module.requiredPermission),
+            })).filter((module) =>
                 canAccessByPermission(module.requiredPermission, hasPermission),
             );
 

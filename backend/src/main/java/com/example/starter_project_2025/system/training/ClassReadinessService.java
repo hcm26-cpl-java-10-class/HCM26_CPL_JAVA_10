@@ -25,10 +25,21 @@ public class ClassReadinessService {
     private final EntityManager entityManager;
     private final Clock trainingClassClock;
 
-    public enum State { READY, NOT_READY, UNKNOWN }
-    public record Check(String key, String label, State status, String reason, String target) {}
+    public enum State { READY, NOT_READY, UNKNOWN, BLOCKED }
+    public record Check(String key, String label, State status, String reason, String target, String action) {
+        public Check(String key, String label, State status, String reason, String target) {
+            this(key, label, status, reason, target, switch (key) {
+                case "basic" -> "Open Class Setup and link an ACTIVE training program to this internal class ID. Class Info Program must match its code or name; saving text does not create the link.";
+                case "trainer" -> "Open Class Setup and create an active MAIN teaching assignment for this internal class ID and an eligible subject of its linked program. Cover the entire class date range and select an active real directory trainer matching Master Trainer.";
+                case "enrollment" -> "Open Trainee List and save at least one ACTIVE enrollment for this internal class. Active and reserved seats must not exceed Planned Size.";
+                case "calendar" -> "Open Calendar > Manage Sessions for this internal class ID. Save at least one non-cancelled session within the class dates with end time after start time. A class-date overview or draft calendar alone is not a session.";
+                case "operations" -> "In Class Info, supply Delivery Type and Format Type. Offline/Hybrid/Blended needs an exact, unique real room name with capacity >= Planned Size; Online needs an HTTP(S) meeting URL. Restore the real Room API if verification is blocked.";
+                default -> "";
+            });
+        }
+    }
     public record Readiness(Long classId, List<Check> checks, int ready, int notReady, int unknown,
-                            int verified, long enrolledTrainees, Instant evaluatedAt) {}
+                            int blocked, int verified, long enrolledTrainees, Instant evaluatedAt) {}
 
     public Readiness get(Long classId) {
         var item = classes.findByIdAndIsActiveTrue(classId)
@@ -63,8 +74,9 @@ public class ClassReadinessService {
         checks.add(operations(item));
         int ready = (int) checks.stream().filter(c -> c.status() == State.READY).count();
         int unknown = (int) checks.stream().filter(c -> c.status() == State.UNKNOWN).count();
-        return new Readiness(classId, checks, ready, checks.size() - ready - unknown, unknown,
-            checks.size() - unknown, occupied, trainingClassClock.instant());
+        int blocked = (int) checks.stream().filter(c -> c.status() == State.BLOCKED).count();
+        return new Readiness(classId, checks, ready, checks.size() - ready - unknown - blocked, unknown,
+            blocked, checks.size() - unknown - blocked, occupied, trainingClassClock.instant());
     }
 
     private Check basic(TrainingClass item, Optional<ClassTrainingProgram> link) {
@@ -72,10 +84,11 @@ public class ClassReadinessService {
                 || item.getStartDate() == null || item.getEndDate() == null || !item.getEndDate().isAfter(item.getStartDate()))
             return new Check("basic", "Basic Information", State.NOT_READY, "Complete code, name, site, program and valid dates.", "edit");
         if (link.isEmpty()) return new Check("basic", "Basic Information", State.UNKNOWN,
-            "A program name is recorded, but no program link has been verified.", "setup");
+            "Internal class " + item.getId() + " has Program '" + item.getProgram()
+                + "', but no active ClassTrainingProgram link for this class ID.", "setup");
         var program = link.get().getProgram();
         boolean valid = Boolean.TRUE.equals(program.getIsActive()) && program.getStatus() == ProgramStatus.ACTIVE
-            && (item.getProgram().equalsIgnoreCase(program.getCode()) || item.getProgram().equalsIgnoreCase(program.getName()));
+            && (item.getProgram().trim().equalsIgnoreCase(program.getCode().trim()) || item.getProgram().trim().equalsIgnoreCase(program.getName().trim()));
         return new Check("basic", "Basic Information", valid ? State.READY : State.NOT_READY,
             valid ? "Required information and the linked active program are verified."
                 : "The linked program is inactive or does not match the class program.", "setup");
@@ -84,25 +97,40 @@ public class ClassReadinessService {
     private Check trainer(TrainingClass item, Optional<ClassTrainingProgram> link) {
         if (blank(item.getMasterTrainer())) return new Check("trainer", "Trainer Assignment", State.NOT_READY,
             "No master trainer is recorded.", "edit");
-        var main = assignments.findByClassIdOrderByEffectiveFromAscIdAsc(item.getId()).stream()
+        var all = assignments.findByClassIdOrderByEffectiveFromAscIdAsc(item.getId());
+        if (link.isEmpty()) return new Check("trainer", "Trainer Assignment", State.UNKNOWN,
+            "Internal class " + item.getId() + " has no active program link; Master Trainer '"
+                + item.getMasterTrainer() + "' is text only. Found " + all.size() + " assignment records for this class ID.", "setup");
+        if (!Boolean.TRUE.equals(link.get().getProgram().getIsActive()) || link.get().getProgram().getStatus() != ProgramStatus.ACTIVE)
+            return new Check("trainer", "Trainer Assignment", State.NOT_READY, "The assignment's linked training program is inactive.", "setup");
+        var main = all.stream()
             .filter(a -> Boolean.TRUE.equals(a.getIsActive()) && a.getRole() == AssignmentRole.MAIN)
             .filter(a -> !a.getEffectiveFrom().isAfter(item.getStartDate())
                 && (a.getEffectiveTo() == null || !a.getEffectiveTo().isBefore(item.getEndDate())))
             .filter(a -> link.isPresent() && Objects.equals(a.getProgramSubject().getProgram().getId(), link.get().getProgram().getId()))
+            .filter(a -> Boolean.TRUE.equals(a.getProgramSubject().getSubject().getIsActive())
+                && a.getProgramSubject().getSubject().getStatus() == com.example.starter_project_2025.system.subject.SubjectStatus.ACTIVE)
             .toList();
         if (main.isEmpty()) return new Check("trainer", "Trainer Assignment", State.UNKNOWN,
-            "Trainer text alone cannot verify a main assignment covering the class dates.", "setup");
-        if (directory.isSampleData()) return new Check("trainer", "Trainer Assignment", State.UNKNOWN,
+            "No active MAIN assignment for internal class " + item.getId() + " and linked program "
+                + link.get().getProgram().getCode() + " covers " + item.getStartDate() + " through " + item.getEndDate() + ".", "setup");
+        if (directory.isSampleData()) return new Check("trainer", "Trainer Assignment", State.BLOCKED,
             "The local sample directory cannot verify real trainer eligibility.", "setup");
         try {
-            var activeIds = directory.fetchTrainers("active").stream()
-                .filter(t -> "active".equalsIgnoreCase(t.getStatus())).map(t -> t.getId()).collect(java.util.stream.Collectors.toSet());
+            var trainers = directory.fetchTrainers("active");
+            if (directory.isSampleData()) return new Check("trainer", "Trainer Assignment", State.BLOCKED,
+                "Trainer API returned sample data; real trainer eligibility is not verified.", "setup");
+            var activeTrainers = trainers.stream().filter(t -> t.getId() != null && "active".equalsIgnoreCase(t.getStatus())).toList();
+            var activeIds = activeTrainers.stream().map(t -> t.getId()).collect(java.util.stream.Collectors.toSet());
             boolean valid = main.stream().allMatch(a -> activeIds.contains(a.getTrainerId()));
-            return new Check("trainer", "Trainer Assignment", valid ? State.READY : State.NOT_READY,
-                valid ? "Main assignments and active trainer identities are verified."
-                    : "An assigned main trainer is not active in the master directory.", "setup");
+            boolean matchesName = activeTrainers.stream().anyMatch(t -> main.stream().anyMatch(a -> Objects.equals(a.getTrainerId(), t.getId()))
+                && (item.getMasterTrainer().trim().equalsIgnoreCase(t.getName()) || item.getMasterTrainer().trim().equalsIgnoreCase(t.getEmail())));
+            return new Check("trainer", "Trainer Assignment", valid && matchesName ? State.READY : State.NOT_READY,
+                valid && matchesName ? "Main assignments and active trainer identities are verified."
+                    : "An assigned main trainer is inactive, missing, or does not match Master Trainer.", "setup");
         } catch (ExternalApiException ex) {
-            return new Check("trainer", "Trainer Assignment", State.UNKNOWN, "Trainer directory is unavailable; eligibility could not be verified.", "setup");
+            return new Check("trainer", "Trainer Assignment", State.BLOCKED,
+                "Trainer directory is unavailable" + failure(ex) + "; eligibility could not be verified.", "setup");
         }
     }
 
@@ -112,31 +140,42 @@ public class ClassReadinessService {
                 "Provide delivery type, format and a location or meeting URL.", "edit");
         String format = item.getFormatType().trim().toLowerCase(Locale.ROOT);
         boolean online = format.equals("online");
-        if (!Set.of("online", "offline", "hybrid").contains(format)) return new Check("operations", "Operational Information",
-            State.UNKNOWN, "No operational validation rule is defined for this format.", "edit");
+        if (!Set.of("online", "offline", "hybrid", "blended").contains(format)) return new Check("operations", "Operational Information",
+            State.UNKNOWN, "Unsupported saved Format Type '" + item.getFormatType() + "'. Use Online, Offline, Hybrid or Blended.", "edit");
         if (online) {
             try {
                 var uri = java.net.URI.create(item.getLocation());
-                if (!Set.of("http", "https").contains(uri.getScheme()) || uri.getHost() == null) throw new IllegalArgumentException();
+                if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
+                        || uri.getHost() == null) throw new IllegalArgumentException();
             } catch (IllegalArgumentException ex) {
                 return new Check("operations", "Operational Information", State.NOT_READY, "Online classes require a valid HTTP(S) meeting URL.", "edit");
             }
         } else {
-            if (directory.isSampleData()) return new Check("operations", "Operational Information", State.UNKNOWN,
+            if (directory.isSampleData()) return new Check("operations", "Operational Information", State.BLOCKED,
                 "The local sample room directory cannot verify a real training location.", "edit");
             try {
-                var matches = directory.fetchRooms().stream()
+                var rooms = directory.fetchRooms();
+                if (directory.isSampleData()) return new Check("operations", "Operational Information", State.BLOCKED,
+                    "Room API returned sample data; real room identity and capacity cannot be verified.", "edit");
+                var matches = rooms.stream()
                     .filter(room -> room.getName() != null && room.getName().equalsIgnoreCase(item.getLocation().trim())).toList();
                 if (matches.size() != 1) return new Check("operations", "Operational Information", State.UNKNOWN,
-                    "The location text cannot be uniquely verified in the room directory.", "edit");
+                    "Saved Location '" + item.getLocation() + "' matches " + matches.size() + " rooms out of " + rooms.size()
+                        + ". An exact, unique room name is required; a building or site name alone is insufficient.", "edit");
+                if (matches.getFirst().getId() == null) return new Check("operations", "Operational Information", State.UNKNOWN,
+                    "The matched room has no directory ID; its identity cannot be verified.", "edit");
                 var capacity = matches.getFirst().getCapacity();
-                if (capacity == null) return new Check("operations", "Operational Information", State.UNKNOWN,
-                    "The room exists, but its capacity is not available for verification.", "edit");
+                if (capacity == null || capacity <= 0) return new Check("operations", "Operational Information", State.UNKNOWN,
+                    "Room '" + matches.getFirst().getName() + "' has no valid capacity; Planned Size is " + item.getPlannedSize() + ".", "edit");
                 if (capacity < item.getPlannedSize()) return new Check("operations", "Operational Information", State.NOT_READY,
-                    "The verified room capacity is below the planned class size.", "edit");
+                    "Room '" + matches.getFirst().getName() + "' capacity " + capacity + " is below Planned Size " + item.getPlannedSize() + ".", "edit");
+                return new Check("operations", "Operational Information", State.READY,
+                    "Room " + matches.getFirst().getId() + " ('" + matches.getFirst().getName() + "') is uniquely verified; capacity "
+                        + capacity + " >= Planned Size " + item.getPlannedSize() + "; Format Type '" + item.getFormatType()
+                        + "', Delivery Type '" + item.getDeliveryType() + "'.", "edit");
             } catch (ExternalApiException ex) {
-                return new Check("operations", "Operational Information", State.UNKNOWN,
-                    "The room directory is unavailable; the venue could not be verified.", "edit");
+                return new Check("operations", "Operational Information", State.BLOCKED,
+                    "Room API is unavailable" + failure(ex) + "; real room identity and capacity cannot be verified. No sample room was substituted.", "edit");
             }
         }
         return new Check("operations", "Operational Information", State.READY,
@@ -144,4 +183,9 @@ public class ClassReadinessService {
     }
 
     private boolean blank(String value) { return value == null || value.isBlank(); }
+
+    private String failure(ExternalApiException ex) {
+        // Do not expose upstream bodies, credentials or internal connection strings.
+        return ex.getStatusCode() > 0 ? " (HTTP " + ex.getStatusCode() + ")" : " (connection or response failure)";
+    }
 }
