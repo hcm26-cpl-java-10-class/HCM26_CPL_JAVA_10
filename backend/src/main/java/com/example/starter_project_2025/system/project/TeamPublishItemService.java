@@ -5,6 +5,8 @@ import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.template.assignment.TemplateAssignmentProvisioningService;
+import com.example.starter_project_2025.system.project.template.assignment.hierarchy.ProjectAssignmentService;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
@@ -38,6 +40,8 @@ public class TeamPublishItemService {
     private final ObjectMapper objectMapper;
     private final ProjectTeamMentorService teamMentorService;
     private final ProjectTeamMemberHistoryService historyService;
+    private final TemplateAssignmentProvisioningService provisioning;
+    private final ProjectAssignmentService projectAssignments;
 
     @Transactional(noRollbackFor = {
             StudentAlreadyAssignedException.class,
@@ -67,6 +71,8 @@ public class TeamPublishItemService {
             throw new TeamPublishValidationException("Only DRAFT teams can be published");
         }
 
+        projectAssignments.validateDirectAssignmentPublication(team);
+        Long assignedMentorId = teamMentorService.resolveMentorForPublish(team);
         List<ProjectMember> assignments = memberRepository.findAllByTeam_IdOrderByIdAsc(teamId);
         if (assignments.isEmpty()) {
             throw new TeamPublishValidationException(
@@ -121,11 +127,13 @@ public class TeamPublishItemService {
                     conflictNames);
         }
 
-        Long assignedMentorId = teamMentorService.resolveMentorForPublish(team);
         String beforeState = serialize(snapshot(team, assignments, ProjectTeamStatus.DRAFT));
         team.setAssignedMentorId(assignedMentorId);
         team.setStatus(ProjectTeamStatus.ACTIVE);
         teamRepository.saveAndFlush(team);
+        if (team.getProjectTemplate() != null) {
+            provisioning.provision(team, team.getProjectTemplate(), actorId, CorrelationIdFilter.currentId());
+        }
         activateProjectAndWorkspace(team);
         for (ProjectMember assignment : assignments) {
             historyService.record(

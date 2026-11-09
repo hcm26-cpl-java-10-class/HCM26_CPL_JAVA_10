@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -22,6 +23,13 @@ public class AssignmentTemplateReader {
     public record Node(Long templateId, Long sourceVersionId, String version, ObjectNode content, List<Node> modules) {
         public String name() { return content.path("name").asText(); }
         public String code() { return content.path("code").asText(); }
+
+        public Set<Long> templateIds() {
+            Set<Long> ids = new LinkedHashSet<>();
+            ids.add(templateId);
+            modules.forEach(module -> ids.addAll(module.templateIds()));
+            return ids;
+        }
     }
 
     private final ProjectTemplateRepository templates;
@@ -75,6 +83,19 @@ public class AssignmentTemplateReader {
 
     public ProjectTemplateConstraints.Capacity capacity(Node node) {
         return ProjectTemplateConstraints.parse(json, constraintsTemplate(node), null);
+    }
+
+    public Node loadAssigned(Long templateId, Long versionId, Long tenantId) {
+        var version = versions.findById(versionId).filter(value -> templateId.equals(value.getTemplateId())
+                && value.getProjectId() == null && value.getStatus() != ProjectTemplateVersionStatus.DRAFT)
+                .orElseThrow(() -> AssignmentException.invalid("The assigned template version is unavailable"));
+        try {
+            ObjectNode content = (ObjectNode) json.readTree(version.getContentJson());
+            content.put("templateId", templateId);
+            return node(content, version.getId(), version.getVersion(), tenantId, new HashSet<>());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException | ClassCastException exception) {
+            throw AssignmentException.invalid("The assigned template configuration is invalid");
+        }
     }
 
     public ProjectTemplateConstraints.RolePolicy roles(Node node) {

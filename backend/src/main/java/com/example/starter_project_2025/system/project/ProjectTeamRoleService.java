@@ -160,9 +160,7 @@ public class ProjectTeamRoleService {
 
         List<ProjectMember> assignments =
                 memberRepository.findAllByTeam_IdOrderByIdAsc(team.getId());
-        if (assignmentPolicy != null) assignments = assignments.stream().filter(member -> Boolean.TRUE.equals(member.getIsActive())
-                && Boolean.TRUE.equals(member.getClassMember().getIsActive())
-                && member.getClassMember().getStatus() == com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus.ACTIVE
+        if (assignmentPolicy != null) assignments = assignments.stream().filter(member -> ProjectTeamLeaderService.eligible(member)
                 && team.getTrainingClass().getId().equals(member.getClassMember().getTrainingClass().getId())).toList();
         Map<Long, ProjectMember> assignmentsByMemberId = new HashMap<>();
         assignments.forEach(assignment ->
@@ -208,15 +206,14 @@ public class ProjectTeamRoleService {
         Long leaderToAssign = null;
         if (assignmentPolicy != null) {
             Long currentLeader = ProjectTeamLeaderService.activeLeaderId(team, assignments);
-            if (currentLeader == null) {
-                ProjectMember selected = assignmentsByMemberId.get(requestedLeaderId);
+            Long chosenLeader = requestedLeaderId == null ? currentLeader : requestedLeaderId;
+            if (chosenLeader == null || !chosenLeader.equals(currentLeader)) {
+                ProjectMember selected = assignmentsByMemberId.get(chosenLeader);
                 if (team.getStatus() != ProjectTeamStatus.DRAFT || session.getStatus() != TeamAllocationSessionStatus.OPEN
                         || selected == null || !ProjectTeamLeaderService.eligible(selected)) {
                     throw new BadRequestException("Chọn một thành viên ACTIVE làm Leader trước khi gán dự án");
                 }
-                leaderToAssign = requestedLeaderId;
-            } else if (requestedLeaderId != null && !currentLeader.equals(requestedLeaderId)) {
-                throw new BadRequestException("Đổi Leader bằng thao tác Chỉ định Leader");
+                leaderToAssign = chosenLeader;
             }
         }
 

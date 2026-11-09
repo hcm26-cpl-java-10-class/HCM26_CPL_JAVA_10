@@ -76,7 +76,7 @@ export function AssignmentTeamRoles({ team, projectName, policy, choices, leader
       </div> : <div className="grid min-w-0 gap-1 text-sm">
         <label htmlFor={leaderFieldId} className="font-medium">Leader</label>
         <select id={leaderFieldId} className="h-9 w-full min-w-0 rounded-md border bg-background px-2" value={leaderId ?? ""}
-          aria-invalid={!leader} disabled={team.leaderMemberId != null || team.status !== "DRAFT"}
+          aria-invalid={!leader} disabled={team.status !== "DRAFT"}
           onChange={event => onLeaderChange(event.target.value ? Number(event.target.value) : null)}>
           <option value="">Chọn Leader</option>
           {team.members.map(member => <option key={member.memberId} value={member.memberId}>{member.name}</option>)}

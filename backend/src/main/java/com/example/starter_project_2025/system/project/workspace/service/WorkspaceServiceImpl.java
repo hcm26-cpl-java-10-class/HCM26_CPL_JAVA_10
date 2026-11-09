@@ -116,6 +116,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 .classId(trainingClass.getId())
                 .classCode(trainingClass.getCode())
                 .className(trainingClass.getName())
+                .allocationSessionId(team.getAllocationSession().getId())
                 .workspaceId(existing != null ? existing.getId() : null)
                 .workspaceStatus(existing != null ? existing.getStatus() : null)
                 .eligibleForWorkspace(eligible)

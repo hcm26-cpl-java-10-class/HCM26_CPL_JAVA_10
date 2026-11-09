@@ -146,7 +146,7 @@ public class MasterMilestoneService {
 
     private Project master(Workspace workspace) {
         Project primary = workspace.getProject();
-        if (primary == null || primary.getAssignmentId() == null) return null;
+        if (primary == null || primary.getParentProject() != null || primary.getAssignmentId() == null) return null;
         var assignment = assignments.findById(primary.getAssignmentId())
                 .filter(value -> Objects.equals(value.getTenantId(), workspace.getTenant().getId())
                         && Objects.equals(value.getClassId(), workspace.getTeam().getTrainingClass().getId()))

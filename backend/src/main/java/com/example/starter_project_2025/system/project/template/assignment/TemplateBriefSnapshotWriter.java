@@ -18,9 +18,11 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * US-13 step 1 — "chụp snapshot đề bài".
@@ -57,9 +59,13 @@ public class TemplateBriefSnapshotWriter {
      * no version exists yet) into a fresh, immutable assignment snapshot.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public ProjectTemplateSnapshot snapshotForAssignment(ProjectTemplate template, Long teamId) {
+    public ProjectTemplateSnapshot snapshotForAssignment(ProjectTemplate template, Long teamId, Long versionId) {
 
         ProjectTemplateSnapshot source = resolveActiveVersion(template.getId());
+        if (versionId != null && (source == null || !versionId.equals(source.getId()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Đề bài đã có phiên bản khác. Lưu lại phân công trước khi công bố.");
+        }
 
         ProjectTemplateSnapshot snapshot = ProjectTemplateSnapshot.builder()
                 .templateId(template.getId())

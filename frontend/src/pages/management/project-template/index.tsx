@@ -14,6 +14,7 @@ import { Eye, Files, FolderTree, Pen, Plus, RefreshCw, Rocket, Trash2 } from "lu
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ProjectTemplateCard } from "./components/ProjectTemplateCard";
+import { ProjectTemplateHeader } from "./components/ProjectTemplateHeader";
 import { ProjectTemplateError, ProjectTemplateLoading } from "./components/ProjectTemplateState";
 import { ProjectTemplateStatusBadge } from "./components/ProjectTemplateStatusBadge";
 import { useProjectTemplateOptions } from "./hooks/useProjectTemplateOptions";
@@ -69,13 +70,9 @@ export default function ProjectTemplateListPage() {
   return (
     <MainLayout pathName={{ "project-templates": "Project Templates" }}>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-5">
-        <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Project Templates</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Manage project template versions. Each new version starts as an editable draft.</p>
-          </div>
+        <ProjectTemplateHeader title="Project Templates" description="Build reusable briefs and manage master templates, modules and versions.">
           {options.data && <Badge variant="outline">{options.data.tenantName}</Badge>}
-        </header>
+        </ProjectTemplateHeader>
         {!options.canRead ? <ProjectTemplateError denied />
           : options.isLoading ? <ProjectTemplateLoading />
           : options.isError ? <ProjectTemplateError error={options.error} onRetry={() => void options.refetch()} />
@@ -106,7 +103,7 @@ export default function ProjectTemplateListPage() {
                 );
                 if (field.name === "name") return (
                   <div className={`flex min-w-0 items-center gap-2 ${template.parentTemplateId != null ? "border-l-2 pl-3" : ""}`}>
-                    {template.parentTemplateId != null && <Badge variant="secondary" className="shrink-0">Module</Badge>}
+                    {template.parentTemplateId != null && <Badge variant="outline" className="shrink-0 border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">Module</Badge>}
                     <button className="min-w-0 truncate text-left font-medium hover:text-primary hover:underline" onClick={() => view(template)}>
                       {template.name}
                     </button>
@@ -116,7 +113,8 @@ export default function ProjectTemplateListPage() {
               }}
               headerActions={(
                 <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" aria-pressed={showModules} onClick={() => {
+                  <Button type="button" variant="outline" size="sm" aria-pressed={showModules}
+                    className="aria-pressed:border-indigo-200 aria-pressed:bg-indigo-50 aria-pressed:text-indigo-700 dark:aria-pressed:border-indigo-800 dark:aria-pressed:bg-indigo-950 dark:aria-pressed:text-indigo-300" onClick={() => {
                     table.setPage(0); setShowModules(value => !value);
                   }}><FolderTree className="size-4" />{showModules ? "Hide modules" : "Show modules"}</Button>
                   <ActionButton tooltip="Refresh templates" disabled={table.isFetching} onClick={() => void table.refetch()}
