@@ -129,7 +129,7 @@ public class CourseReviewServiceImpl implements CourseReviewService {
 
         return new CourseReviewSummaryResponse(
                 courseId,
-                average == null ? 0.0 : Math.round(average * 10.0) / 10,
+                average == null ? 0.0 : Math.round(average * 10.0) / 10.0,
                 totalReviews,
                 distribution
         );
