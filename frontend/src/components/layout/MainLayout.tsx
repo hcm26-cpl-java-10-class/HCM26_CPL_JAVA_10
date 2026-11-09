@@ -9,19 +9,15 @@ import { useContext, type ReactNode } from "react";
 import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 
 export function MainLayout({
-                               children,
-                               pathName,
-                               pathLinks,
-                               dense = false,
-                               focusMode = false,
-                           }: {
-    children: ReactNode;
+    children,
+    pathName,
+    plainBreadcrumb = false,
+    headerContent,
+}: {
+    children: React.ReactNode;
     pathName?: Record<string, string>;
-    pathLinks?: Record<string, string>;
-    /** Tighter header / content padding (Course Online pages). */
-    dense?: boolean;
-    /** Hide the navbar / breadcrumbs / sidebar (e.g. while taking an exam). */
-    focusMode?: boolean;
+    plainBreadcrumb?: boolean;
+    headerContent?: React.ReactNode;
 }) {
     const isEmbedded = useContext(EmbeddedLayoutContext);
     if (isEmbedded) {
@@ -63,11 +59,14 @@ export function MainLayout({
             <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
                 <header className={`flex shrink-0 items-center gap-2 ${dense ? "min-h-11 py-0.5" : "min-h-16 py-3"}`}>
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
-                            <SidebarTrigger aria-label="Toggle navigation sidebar" />
-                            <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} />
-                        </div>
-                        <div className="shrink-0"><HeaderRight /></div>
+                        {headerContent ?? (
+                            <>
+                                <div className="flex items-center gap-2">
+                                    <DynamicBreadcrumbs pathTitles={pathName} plain={plainBreadcrumb} />
+                                </div>
+                                <HeaderRight />
+                            </>
+                        )}
                     </div>
                 </header>
 

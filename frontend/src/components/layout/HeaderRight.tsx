@@ -5,6 +5,7 @@ import type { RootState } from "@/store/store";
 import { useSelector } from "react-redux";
 import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 import { ChevronDown, ShieldCheck, GraduationCap } from "lucide-react";
+import { HeaderUserControls } from "@/components/layout/HeaderUserControls";
 import {
   formatRoleLabel,
   getHomePathByRole,
@@ -22,12 +23,11 @@ export default function HeaderRight() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const primaryRole = normalizeRole(role);
+  const primaryRole = normalizeRole(role || roles[0]);
   const assignedRoles = uniqueRoles(roles, primaryRole);
   const canSwitchRole = availableRoles.length > 1;
   const currentRole = activeRole ?? primaryRole;
   const isStudentRole = currentRole === "STUDENT";
-
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -41,26 +41,21 @@ export default function HeaderRight() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  if (!role) {
-    return (
-      <div className="flex items-center gap-3">
-        <ToggleTheme />
-      </div>
-    );
-  }
-
   if (!canSwitchRole) {
     return (
       <div className="flex items-center gap-3">
-        <Badge
-          variant="secondary"
-          className="text-sm text-blue-500 bg-blue-100"
-        >
-          {formatRoleLabel(currentRole)}
-        </Badge>
+        {primaryRole && (
+          <Badge
+            variant="secondary"
+            className="text-sm text-blue-500 bg-blue-100"
+          >
+            {formatRoleLabel(primaryRole)}
+          </Badge>
+        )}
 
         <NotificationBell />
         <ToggleTheme />
+        <HeaderUserControls />
       </div>
     );
   }
@@ -164,6 +159,7 @@ export default function HeaderRight() {
 
       <NotificationBell />
       <ToggleTheme />
+      <HeaderUserControls />
     </div >
   );
 }

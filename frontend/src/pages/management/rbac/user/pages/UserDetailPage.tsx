@@ -4,11 +4,31 @@ import { PermissionGate } from "@/components/PermissionGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { USER_STATUS_OPTIONS, type UserStatus } from "@/types";
+import { cn } from "@/lib/utils";
+import {
+  GENDER_OPTIONS,
+  USER_STATUS_HEADER_CLASS,
+  type DepartmentDTO,
+  type RoleDTO,
+  type UserAccountStatus,
+} from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, PenSquare } from "lucide-react";
-import type { ReactNode } from "react";
+import {
+  ArrowLeft,
+  AtSign,
+  Building2,
+  Cake,
+  CalendarDays,
+  Clock,
+  FileText,
+  Hash,
+  Mail,
+  PenSquare,
+  Phone,
+  UserRound,
+  ShieldCheck,
+} from "lucide-react";
+import type { ComponentType, ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { extractServerErrors } from "../user-form.utils";
 
@@ -66,14 +86,15 @@ export function UserDetailPage() {
   });
 
   const user = userQuery.data;
-  const nameOf = (list: any[] | undefined, ids?: Array<string | number>) =>
+  const nameOf = (list: Array<Pick<RoleDTO | DepartmentDTO, "id" | "name">> | undefined, ids?: Array<string | number>) =>
     (ids ?? []).map((i) => list?.find((x) => String(x.id) === String(i))?.name ?? `#${i}`);
 
   const roleNames = nameOf(roleQuery.data?.content ?? roleQuery.data?.items, user?.roleIds);
   const deptNames = nameOf(deptQuery.data?.content ?? deptQuery.data?.items, user?.departmentIds);
   const fullName = [user?.lastName, user?.firstName].filter(Boolean).join(" ");
-  const status: UserStatus = user?.status ?? (user?.isActive === false ? "INACTIVE" : "ACTIVE");
-  const statusLabel = USER_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status;
+  const displayName = fullName || user?.email || "";
+  const status: UserAccountStatus = user?.status ?? (user?.isActive === false ? "INACTIVE" : "ACTIVE");
+  const initial = (user?.firstName?.[0] ?? user?.email?.[0] ?? "?").toUpperCase();
 
   return (
     <MainLayout pathName={pathName}>
@@ -103,26 +124,42 @@ export function UserDetailPage() {
                 <TabsTrigger value="authorization">Phân quyền</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="general" className="grid gap-4 text-sm md:grid-cols-2">
-                <Item label="Họ tên">
-                  <span className="text-base font-semibold">{fullName}</span>
-                </Item>
-                <Item label="Username">{user?.username}</Item>
-                <Item label="Email">{user?.email}</Item>
-                <Item label="Mã nhân viên">{user?.employeeCode}</Item>
-                <Item label="Mã sinh viên">{user?.userCode || "Chưa được gán"}</Item>
-                <Item label="Số điện thoại">{user?.phone}</Item>
-                <Item label="Trạng thái">
-                  <Badge variant={STATUS_VARIANT[status]}>{statusLabel}</Badge>
-                </Item>
-                <Item label="Phòng ban">
-                  <BadgeGroup names={deptNames} />
-                </Item>
-                <Item label="Đăng nhập gần nhất">{formatDate(user?.lastLoginAt)}</Item>
-                <div className="md:col-span-2">
-                  <Item label="Mô tả">
-                    <p className="leading-6">{user?.description}</p>
-                  </Item>
+                <Section title="Thông tin tài khoản">
+                  <InfoRow icon={AtSign} label="Username">
+                    {user?.username}
+                  </InfoRow>
+                  <InfoRow icon={Hash} label="Mã nhân viên">
+                    {user?.employeeCode}
+                  </InfoRow>
+                  <InfoRow icon={Mail} label="Email">
+                    {user?.email}
+                  </InfoRow>
+                  <InfoRow icon={Phone} label="Số điện thoại">
+                    {user?.phone}
+                  </InfoRow>
+                  <InfoRow icon={Cake} label="Ngày sinh">
+                    {user?.dateOfBirth}
+                  </InfoRow>
+                  <InfoRow icon={UserRound} label="Giới tính">
+                    {GENDER_OPTIONS.find((o) => o.value === user?.gender)?.label}
+                  </InfoRow>
+                  <InfoRow icon={Building2} label="Phòng ban" className="sm:col-span-2">
+                    {deptNames.length > 0 ? <BadgeGroup names={deptNames} /> : null}
+                  </InfoRow>
+                  <InfoRow icon={ShieldCheck} label="Role" className="sm:col-span-2">
+                    {roleNames.length > 0 ? <BadgeGroup names={roleNames} /> : null}
+                  </InfoRow>
+                  <InfoRow icon={FileText} label="Mô tả" className="sm:col-span-2">
+                    {user?.description ? <p className="whitespace-pre-line font-normal leading-6">{user.description}</p> : null}
+                  </InfoRow>
+                </Section>
+
+                <div className="flex flex-wrap gap-x-6 gap-y-2 px-1 text-xs text-muted-foreground">
+                  <MetaItem icon={CalendarDays} label="Ngày tạo" value={formatDate(user?.createdAt) || "—"} />
+                  <MetaItem icon={Clock} label="Cập nhật lần cuối" value={formatDate(user?.updatedAt) || "—"} />
+                  {user?.lastLoginAt && (
+                    <MetaItem icon={Clock} label="Đăng nhập gần nhất" value={formatDate(user.lastLoginAt)} />
+                  )}
                 </div>
                 <Item label="Ngày tạo">{formatDate(user?.createdAt)}</Item>
                 <Item label="Cập nhật lần cuối">{formatDate(user?.updatedAt)}</Item>

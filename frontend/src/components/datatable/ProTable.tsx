@@ -24,6 +24,11 @@ interface ProTableProps<TData = any> {
     table: any;
 
     headerActions?: React.ReactNode;
+    toolbarActionLabels?: {
+        import?: string;
+        export?: string;
+    };
+    actionColumnLabel?: string;
 
     /** Optional: extra buttons rendered next to the header actions / Create button */
     extraHeaderActions?: React.ReactNode;
@@ -35,7 +40,10 @@ interface ProTableProps<TData = any> {
     browseActions?: React.ReactNode;
 
     /** Optional: Complete override of row actions. If provided, you have full control */
-    renderRowActions?: (row: TData) => React.ReactNode;
+    renderRowActions?: (
+        row: TData,
+        actions: { onView: (row: TData) => void; onEdit: (row: TData) => void; onDelete: (row: TData) => void },
+    ) => React.ReactNode;
 
     actionsColumnWidth?: number;
 
@@ -126,8 +134,8 @@ interface ProTableProps<TData = any> {
 export function ProTable<TData = any>({
     table,
     headerActions,
-    extraHeaderActions,
-    browseActions,
+    toolbarActionLabels,
+    actionColumnLabel = "Actions",
     renderRowActions,
     actionsColumnWidth,
     renderExtraRowActions,
@@ -293,7 +301,16 @@ export function ProTable<TData = any>({
         />
     );
 
-    const finalRenderRowActions = renderRowActions || defaultRenderRowActions;
+    // Use provided renderer or default (with individual overrides support)
+    const rowActionHandlers = {
+        onView: onView || setDetailRow,
+        onEdit: onEdit || table.openEdit,
+        onDelete: onDelete || setDeleteItem,
+    };
+    const finalRenderRowActions = (row: TData) =>
+        renderRowActions
+            ? renderRowActions(row, rowActionHandlers)
+            : defaultRenderRowActions(row);
     const effectiveViewMode: ViewMode = isBrowseMode ? "card" : viewMode;
     const cardRowClickHandler =
         onRowClick || (isBrowseMode ? ((onView || setDetailRow) as (row: TData) => void) : undefined);
@@ -304,26 +321,17 @@ export function ProTable<TData = any>({
           : (renderEmpty ?? <NoResult />);
 
     return (
-        <div
-            className={`grid gap-4 h-full font-inter ${
-                hideToolbar ? "grid-rows-[1fr_auto]" : "grid-rows-[auto_1fr_auto]"
-            }`}
-        >
-            {!hideToolbar && (
-                <Toolbar
-                    table={table}
-                    headerActions={headerActions}
-                    extraHeaderActions={extraHeaderActions}
-                    browseActions={browseActions}
-                    viewMode={effectiveViewMode}
-                    onViewModeChange={setViewMode}
-                    showViewModeToggle={!isBrowseMode}
-                    showActions={!isBrowseMode}
-                    showCardColumnToggle={!isBrowseMode}
-                    compact={compactToolbar}
-                    hideCreate={hideCreate}
-                />
-            )}
+        <div className="grid h-full w-full min-w-0 max-w-full grid-rows-[auto_1fr_auto] gap-4 overflow-x-hidden font-inter">
+            <Toolbar
+                table={table}
+                headerActions={headerActions}
+                actionLabels={toolbarActionLabels}
+                viewMode={effectiveViewMode}
+                onViewModeChange={setViewMode}
+                showViewModeToggle={!isBrowseMode}
+                showActions={!isBrowseMode}
+                showCardColumnToggle={!isBrowseMode}
+            />
 
             <div
                 ref={containerRef}
@@ -374,7 +382,7 @@ export function ProTable<TData = any>({
                                             className="sticky right-0 z-50 bg-background border-l border-border/70 shadow-[-8px_0_10px_-10px_rgba(0,0,0,0.45)]"
                                         >
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="whitespace-nowrap">Actions</span>
+                                                <span className="whitespace-nowrap">{actionColumnLabel}</span>
                                                 <ColumnToggle
                                                     schema={schema}
                                                     columnVisibility={table.columnVisibility}
@@ -457,30 +465,24 @@ export function ProTable<TData = any>({
                                                         </TableCell>
                                                     )}
 
-                                                    {table.visibleFields.map((f: any) => {
-                                                        const content = renderCell?.(row, f);
-                                                        return content !== undefined ? (
-                                                            <TableCell key={f.name}>{content}</TableCell>
-                                                        ) : (
-                                                            <CellRenderer
-                                                                key={f.name}
-                                                                field={f}
-                                                                value={row[f.name]}
-                                                                row={row}
-                                                                relationOptions={table.relationOptions}
-                                                                disableBooleanToggle={!(table.permission?.canUpdate ?? true)}
-                                                                onBooleanToggle={(fieldName, newValue) => {
-                                                                    if (!(table.permission?.canUpdate ?? true)) return;
-                                                                    table.patchField(id, fieldName, newValue);
-                                                                }}
-                                                                dateFormat={
-                                                                    f.type === "date"
-                                                                        ? (dateFormats[f.name] ?? "datetime")
-                                                                        : undefined
-                                                                }
-                                                            />
-                                                        );
-                                                    })}
+                                                    {table.visibleFields.map((f: any) => (
+                                                        <CellRenderer
+                                                            key={f.name}
+                                                            field={f}
+                                                            value={row[f.name]}
+                                                            relationOptions={table.relationOptions}
+                                                            disableBooleanToggle={!(table.permission?.canUpdate ?? true)}
+                                                            onBooleanToggle={(fieldName, newValue) => {
+                                                                if (!(table.permission?.canUpdate ?? true)) return;
+                                                                table.patchField(id, fieldName, newValue);
+                                                            }}
+                                                            dateFormat={
+                                                                f.type === "date"
+                                                                    ? (dateFormats[f.name] ?? "date")
+                                                                    : undefined
+                                                            }
+                                                        />
+                                                    ))}
 
                                                     {showActionsColumn && (
                                                         <TableCell

@@ -2,7 +2,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, useSidebar } fro
 import { NavMain } from "@/components/layout/NavMain";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, LoaderCircle, LogOutIcon, RefreshCw } from "lucide-react";
+import { LogOutIcon, MapPin } from "lucide-react";
 import { useMemo } from "react";
 import { useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -45,91 +45,90 @@ export function SidebarMenu() {
 
         return moduleGroups
             .map((group) => {
-                const groupNameLower = (group.name ?? "").toLowerCase();
-                const isAssessmentGroup =
-                    groupNameLower.includes("assessment") ||
-                    group.modules.some((m) => m.url === "/exams");
+                const groupNameLower = (group.name || "").toLowerCase();
+                const isRbacGroup = groupNameLower.includes("rbac");
 
-                const baseItems = group.modules
+                const items = group.modules
+                    .filter((module) => !!module.url)
                     .filter((module) => {
-                        const url = module.url?.replace(/\/+$/, "") ?? "";
-                        return (
-                            !!module.url &&
-                            !module.hiddenInMenu &&
-                            url !== "/project-template-versions" &&
-                            url !== "/enrollments"
-                        );
+                        const isUnderSystemManagement =
+                            (group.name || "").toLowerCase().includes("system");
+                        const isModulesMenu =
+                            module.url === "/menus" || (module.title || "").toLowerCase() === "modules";
+
+                        if (isUnderSystemManagement && isModulesMenu) {
+                            return false;
+                        }
+                        return true;
                     })
                     .map((module) => {
-                        const isExamsRoot = module.url === "/exams";
-                        const isMatch =
-                            !!module.url &&
-                            (location.pathname === module.url ||
-                                (location.pathname.startsWith(`${module.url}/`) &&
-                                    (!isExamsRoot || !location.pathname.startsWith("/exams/curriculum"))));
+                        const moduleUrl = module.url?.replace(/\/+$/, "");
+                        const normalizedTitle = (module.title ?? "").trim().toLocaleLowerCase();
+                        const isRoleManagement =
+                            moduleUrl === "/roles" ||
+                            moduleUrl === "/role" ||
+                            normalizedTitle === "roles" ||
+                            normalizedTitle === "quản lý vai trò" ||
+                            normalizedTitle === "role management";
+                        const url = isRoleManagement
+                            ? "/fams/role-permission-matrix"
+                            : module.url ?? "#";
 
                         return {
                             title: module.title ?? "Untitled",
-                            url: module.url ?? "#",
+                            url,
                             icon: resolveIcon(module.icon),
-                            isActive: isMatch,
+                            isActive:
+                                location.pathname === url ||
+                                location.pathname.startsWith(`${url}/`),
                         };
                     });
 
-                let items = baseItems;
-                if (isAssessmentGroup) {
-                    const alreadyHas = items.some((i) => i.url === "/exams/curriculum");
-                    if (!alreadyHas) {
-                        const curriculumItem = {
-                            title: "Curriculum Mapping",
-                            url: "/exams/curriculum",
-                            icon: resolveIcon("book-open"),
+                if (isRbacGroup) {
+                    const hasLocation = items.some(
+                        (item) => item.url.includes("location")
+                    );
+                    if (!hasLocation) {
+                        items.push({
+                            title: "Locations",
+                            url: "/locations",
+                            icon: MapPin,
                             isActive:
-                                location.pathname === "/exams/curriculum" ||
-                                location.pathname.startsWith("/exams/curriculum"),
-                        };
-                        const examsIndex = items.findIndex((i) => i.url === "/exams");
-                        if (examsIndex >= 0) {
-                            items = [
-                                ...items.slice(0, examsIndex + 1),
-                                curriculumItem,
-                                ...items.slice(examsIndex + 1),
-                            ];
-                        } else {
-                            items = [curriculumItem, ...items];
-                        }
+                                location.pathname === "/locations" ||
+                                location.pathname.startsWith("/locations/"),
+                        });
                     }
                 }
 
                 return {
                     id: group.id ?? group.name ?? "group",
                     name: group.name ?? "Menu",
-                    hiddenInMenu: group.hiddenInMenu,
                     items,
                 };
             })
-            .filter((group) => !group.hiddenInMenu && group.items.length > 0);
+            .filter((group) => group.items.length > 0);
     }, [location.pathname, moduleGroups]);
 
     return (
-        <Sidebar variant="inset" collapsible="icon">
+        <Sidebar
+            variant="inset"
+            collapsible="icon"
+            className="[--sidebar:#0F172A] [--sidebar-foreground:#F8FAFC] [--sidebar-accent:#1E293B] [--sidebar-accent-foreground:#F8FAFC] [--sidebar-border:#334155] [--sidebar-ring:#EA580C] [&_[data-slot=sidebar-inner]]:!bg-slate-900"
+        >
+            {/* Header */}
             <SidebarHeader className="py-3 px-0">
                 <Button
                     type="button"
                     variant="ghost"
                     onClick={toggleSidebar}
-                    className="
-            flex h-auto w-full min-w-0 items-center justify-start gap-3
-            group-data-[collapsible=icon]:justify-center
-            group-data-[collapsible=icon]:px-0
-          "
+                    className="flex h-auto w-full min-w-0 items-center justify-start gap-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                 >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-blue-800 text-sm font-semibold text-white">
-                        RB
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-600 text-sm font-semibold text-white">
+                        F
                     </div>
 
                     {state === "expanded" && (
-                        <span className="text-lg font-bold text-blue-800 truncate">RBAC System</span>
+                        <span className="truncate text-lg font-bold text-white">FAMS</span>
                     )}
                 </Button>
             </SidebarHeader>
@@ -168,8 +167,13 @@ export function SidebarMenu() {
                 )}
             </SidebarContent>
 
-            <SidebarFooter className="p-4 text-xs flex flex-row items-center gap-2 text-muted-foreground group-data-[collapsible=icon]:justify-center">
-                {state === "expanded" && <span className="flex-1 truncate">RBAC System v1.0</span>}
+            {/* Footer */}
+            <SidebarFooter className="flex flex-col items-start gap-1 p-4 text-xs text-slate-400 group-data-[collapsible=icon]:items-center">
+                {state === "expanded" && (
+                    <span className="flex-1 truncate">
+                        FAMS v2.4.0 / Training Operations
+                    </span>
+                )}
 
                 <TooltipWrapper content="Logout">
                     <Button

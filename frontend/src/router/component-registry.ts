@@ -62,27 +62,10 @@ import ExamReviewPage from "@/pages/student/ExamReviewPage";
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
 import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
+import RolePermissionMatrixPage from "@/pages/management/fams/RolePermissionMatrixPage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
-import { Navigate } from "react-router-dom";
-
-import SyllabusesPage from "@/pages/management/demo/syllabus";
-import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
-import CourseUsagePage from "@/pages/management/demo/syllabus/CourseUsagePage";
-import SyllabusTemplatesPage from "@/pages/management/demo/syllabus/SyllabusTemplatesPage";
-
-import StudentSyllabusListPage from "@/pages/student/StudentSyllabusListPage";
-import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
-
-import CourseReportPage from "@/pages/management/demo/report";
-import { CourseEnrollmentDetailPage } from "@/pages/management/demo/course/pages/CourseEnrollmentDetailPage";
-import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-questions";
-import LessonReportsPage from "@/pages/management/demo/lesson-reports";
-import CertificateDetailPage from "@/pages/management/demo/certificate/pages/CertificateDetailPage";
-import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
-import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage.tsx";
-import DepartmentManagementPage from "@/pages/management/demo/department";
-import CourseGradeDetailPage from "@/pages/student/CourseGradeDetailPage";
+import { LocationPage } from "@/pages/management/rbac/location";
 
 export interface RouteConfig {
   path: string;
@@ -100,76 +83,25 @@ export const ROLE_HOME_PATHS = [
 ] as const;
 
 export const routes: RouteConfig[] = [
-  { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
-  { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
-  { path: "/tasks/create", component: TaskManagementPage, requiredPermission: "TASK_CREATE" },
-  { path: "/tasks/:id/edit", component: TaskManagementPage, requiredPermission: "TASK_UPDATE" },
-  { path: "/tasks/:id/detail", component: TaskManagementPage, requiredPermission: "TASK_READ" },
-  { path: "/project-templates", component: ProjectTemplateListPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
-  { path: "/project-template-versions", component: ProjectTemplateVersionPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
-  { path: "/project-templates/create", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
-  { path: "/project-templates/:id/edit", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_UPDATE" },
-  { path: "/project-templates/:id/detail", component: ProjectTemplateDetailPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
-
-  // FAMS MODULE GROUP MODULE
   {
-    path: "/fams/module-group-module",
-    component: ModuleGroupModulePage,
-    isPublic: true,
-  },
-  {
-    path: "/module-group-module",
-    component: ModuleGroupModulePage,
-    isPublic: true,
-  },
-
-  // ROLE HOME
-  {
-    path: "/dashboard",
-    component: Dashboard,
-  },
-  {
-    path: "/student",
-    component: StudentLandingPage,
-  },
-  {
-    path: "/teacher",
-    component: TeacherLandingPage,
-  },
-
-  // DASHBOARD
-  {
-    path: "/dashboard",
-    component: Dashboard,
-    isModuleDriven: true,
-  },
-
-  // RBAC
-  {
-    path: "/role-permissions",
+    path: "/fams/role-permission-matrix",
     component: RolePermissionMatrixPage,
     requiredPermission: "ROLE_UPDATE",
   },
-
-  // EXAMS
-  {
-    path: "/exams/curriculum",
-    component: ExamCurriculumPage,
-    requiredPermission: "EXAM_UPDATE",
+  { path: "/fams/module-group-module", component: ModuleGroupModulePage, isPublic: true },
+  { path: "/module-group-module", component: ModuleGroupModulePage, isPublic: true },
+  { path: "/dashboard", component: Dashboard, isModuleDriven: true },
+  { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
+ { 
+    path: "/locations", 
+    component: LocationPage, 
+    isPublic: true
   },
-  {
-    path: "/exams",
-    component: ExamManagementPage,
-    isModuleDriven: true,
+  { 
+    path: "/management/rbac/locations", 
+    component: LocationPage, 
+    isPublic: true
   },
-
-  {
-    path: "/management/exam/templates",
-    component: ExamTemplatesPage,
-    requiredPermission: "EXAM_UPDATE",
-  },
-
-  // INVITATIONS
   {
     path: "/invitations",
     component: UnifiedInvitationsPage,

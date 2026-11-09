@@ -172,8 +172,8 @@ export function CellRenderer({
       : undefined;
   const displayValue = optionLabel ?? value ?? "—";
   const displayStr =
-    (field.type === "date" || field.type === "datetime") && value
-      ? formatDateValue(value, dateFormat)
+    field.type === "date" && value
+      ? formatDateValue(value, dateFormat ?? "date")
       : String(displayValue);
 
   return (

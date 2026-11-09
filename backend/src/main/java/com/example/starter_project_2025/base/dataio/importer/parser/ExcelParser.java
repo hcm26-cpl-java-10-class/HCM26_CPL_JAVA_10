@@ -10,6 +10,10 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -70,7 +74,60 @@ public class ExcelParser implements FileParser {
         return rows;
     }
 
-    private String getCellValue(Cell cell) {
-        return cell == null ? "" : new DataFormatter(Locale.ROOT).formatCellValue(cell);
+    /**
+     * Text of a cell as the user typed it: numbers without ".0" or exponent notation (a phone number
+     * stored as a number used to come out as "9.01234567E8"), formulas evaluated, text trimmed, date cells as
+     * ISO text.
+     */
+    private String getCellValue(Cell cell, DataFormatter formatter, FormulaEvaluator evaluator) {
+        if (cell == null) return null;
+
+        CellType type = cell.getCellType();
+
+        if (type == CellType.FORMULA) {
+            CellValue evaluated;
+            try {
+                evaluated = evaluator.evaluate(cell);
+            } catch (RuntimeException e) {
+                return null;
+            }
+            if (evaluated == null) return null;
+
+            return switch (evaluated.getCellType()) {
+                case STRING -> blankToNull(evaluated.getStringValue());
+                case NUMERIC -> numberText(cell, evaluated.getNumberValue(), formatter);
+                case BOOLEAN -> String.valueOf(evaluated.getBooleanValue());
+                default -> null;
+            };
+        }
+
+        return switch (type) {
+            case STRING -> blankToNull(cell.getStringCellValue());
+            case NUMERIC -> numberText(cell, cell.getNumericCellValue(), formatter);
+            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+            default -> null;
+        };
+    }
+
+    private String numberText(Cell cell, double number, DataFormatter formatter) {
+        if (DateUtil.isCellDateFormatted(cell)) {
+            if (!DateUtil.isValidExcelDate(number)) {
+                return blankToNull(formatter.formatCellValue(cell));
+            }
+            // ISO text, independent of the cell's display format: yyyy-MM-dd, or yyyy-MM-ddTHH:mm when the
+            // cell has a time of day. The display text ("1/15/00", "15/01/2000") is ambiguous.
+            LocalDateTime dateTime = DateUtil.getJavaDate(number).toInstant()
+                    .atZone(ZoneId.systemDefault()).toLocalDateTime();
+            return dateTime.toLocalTime().equals(LocalTime.MIDNIGHT)
+                    ? dateTime.toLocalDate().toString()
+                    : dateTime.toString();
+        }
+        return BigDecimal.valueOf(number).stripTrailingZeros().toPlainString();
+    }
+
+    private String blankToNull(String text) {
+        if (text == null) return null;
+        String trimmed = text.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
