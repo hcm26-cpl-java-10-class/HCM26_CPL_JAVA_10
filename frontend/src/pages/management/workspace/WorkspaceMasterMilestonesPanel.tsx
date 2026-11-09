@@ -16,7 +16,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ProjectCompletionPanel } from "./ProjectCompletionPanel";
 import { describeDeadline } from "./workspace-milestone-deadline";
 import { WorkspaceMilestoneRow } from "./WorkspaceMilestoneRow";
 
@@ -64,7 +63,6 @@ export function WorkspaceMasterMilestonesPanel({ masterProjectId, returnTo, onCh
   if (!data) return null;
   let validUrl = false;
   try { const parsed = new URL(url.trim()); validUrl = ["http:", "https:"].includes(parsed.protocol) && !!parsed.hostname && !parsed.username && !parsed.password; } catch { /* Wait for a complete URL. */ }
-  const refresh = () => { void query.refetch(); onChanged(); };
   const actionable = data.milestones.filter(milestone => milestone.canSubmit).length;
   const isCollapsed = collapsed ?? actionable === 0;
   return <>
@@ -101,9 +99,6 @@ export function WorkspaceMasterMilestonesPanel({ masterProjectId, returnTo, onCh
           })}
       </div>}
     </Card>
-    {data.canManage && <ProjectCompletionPanel key={`${data.projectId}:${data.teamId}`}
-      projectId={data.projectId} teamId={data.teamId} title={`Master completion — ${data.projectName}`}
-      readOnly={data.readOnly} onChanged={refresh} />}
     <Dialog open={selected !== null} onOpenChange={open => { if (!open && !submit.isPending) setSelected(null); }}><DialogContent>
       <DialogHeader><DialogTitle>Record shared master submission</DialogTitle><DialogDescription>
         {selected?.title}. Record the common deliverable on behalf of the class, then review it using the milestone rubric.
