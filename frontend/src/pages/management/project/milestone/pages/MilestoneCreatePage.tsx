@@ -19,6 +19,7 @@ import { AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { useUnsavedChangesGuard } from "@/hooks/useUnsavedChangesGuard";
 import { MilestoneForm } from "../components/MilestoneForm";
 import { MilestoneActiveEditForm } from "../components/MilestoneActiveEditForm";
 import { milestoneDefaultValues, type MilestoneFormValues } from "../milestone-form.schema";
@@ -80,6 +81,7 @@ export function MilestoneCreatePage() {
   const [networkUncertain, setNetworkUncertain] = useState(false);
   const attemptRef = useRef<SubmissionAttempt | null>(null);
   const completedRef = useRef(false);
+  const leaveGuard = useUnsavedChangesGuard(isDirty);
 
   const existingQuery = useQuery({
     queryKey: ["milestone-edit", projectId, scopedTeamId, milestoneId],
@@ -209,15 +211,23 @@ export function MilestoneCreatePage() {
     if (isDirty) setCancelOpen(true);
     else navigate(listUrl);
   };
-  const discardChangesDialog = <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+  const closeDiscardDialog = () => { setCancelOpen(false); leaveGuard.cancel(); };
+  const discardChanges = () => {
+    setCancelOpen(false);
+    // The user already confirmed; don't ask again in beforeunload if Back leaves the app.
+    completedRef.current = true;
+    if (leaveGuard.pending) leaveGuard.confirm();
+    else navigate(listUrl);
+  };
+  const discardChangesDialog = <Dialog open={cancelOpen || leaveGuard.pending} onOpenChange={(open) => { if (!open) closeDiscardDialog(); }}>
     <DialogContent showCloseButton={!createMutation.isPending}>
       <DialogHeader>
         <DialogTitle>Discard changes?</DialogTitle>
         <DialogDescription>Your unsaved milestone information will be lost.</DialogDescription>
       </DialogHeader>
       <DialogFooter>
-        <Button variant="outline" onClick={() => setCancelOpen(false)}>Continue editing</Button>
-        <Button variant="destructive" onClick={() => navigate(listUrl)}>Discard changes</Button>
+        <Button variant="outline" onClick={closeDiscardDialog}>Continue editing</Button>
+        <Button variant="destructive" onClick={discardChanges}>Discard changes</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;
