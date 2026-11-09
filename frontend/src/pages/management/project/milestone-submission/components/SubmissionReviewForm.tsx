@@ -3,11 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import ConfirmDialog from "@/components/ui/confirmdialog";
+import { Progress } from "@/components/ui/progress";
+import styles from "./SubmissionReview.module.css";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { ReviewDecision, SubmissionDetail, RubricRatingLevel } from "@/types";
 import { AlertCircle, CheckCircle2, RotateCcw, XCircle } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type Draft = Record<string, { ratingLevel?: RubricRatingLevel; feedback: string }>;
 
@@ -32,11 +34,8 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
   const ordered = useMemo(() => [...submission.rubric.criteria].sort((a, b) => a.orderIndex - b.orderIndex), [submission]);
   const evaluated = ordered.filter((item) => draft[item.id]?.ratingLevel).length;
 
-  useEffect(() => {
-    if (submission.status !== "SUBMITTED") setDecision(null);
-  }, [submission.status]);
-
   const requestDecision = (next: ReviewDecision) => {
+    if (pending) return;
     const errors: Record<string, string> = {};
     ordered.forEach((item) => {
       const value = draft[item.id];
@@ -60,12 +59,14 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
 
   return (
     <>
-      <Card className="w-full min-w-0">
+      <Card className={`w-full min-w-0 ${styles.rubric}`}>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><CardTitle>Rubric evaluation</CardTitle><CardDescription>{submission.rubric.name} · {submission.rubric.version}. Evaluate every criterion before making a decision.</CardDescription></div>
-            <span className="text-sm font-medium">{evaluated}/{ordered.length} evaluated</span>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-950 dark:text-blue-200" aria-live="polite">{evaluated}/{ordered.length} evaluated</span>
           </div>
+          <p className="text-xs text-muted-foreground">Rubric maximum: {submission.rubric.totalMaxScore} points. Final scores are recorded after review.</p>
+          <Progress className="mt-3 h-1.5" value={ordered.length ? evaluated / ordered.length * 100 : 0} aria-label="Criteria evaluated" />
         </CardHeader>
         <CardContent className="grid gap-4">
           {apiError ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Review could not be saved</AlertTitle><AlertDescription>{apiError.errors?.decision?.[0] ?? apiError.message ?? "Check the highlighted fields and try again."}</AlertDescription></Alert> : null}
@@ -74,13 +75,15 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
             const serverFeedback = apiError?.errors?.[`criteria[${index}].feedback`]?.[0];
             const feedbackError = localErrors[`${criterion.id}.feedback`] ?? serverFeedback;
             return (
-              <section id={`criterion-${criterion.id}`} key={criterion.id} className="min-w-0 scroll-mt-24 rounded-xl border p-4">
+              <section id={`criterion-${criterion.id}`} key={criterion.id} className={styles.criterion}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div><p className="font-semibold">{index + 1}. {criterion.name}</p><p className="mt-1 text-sm text-muted-foreground">{criterion.description || criterion.code}</p></div>
+                  <div className="min-w-0 flex-1"><p className="font-semibold [overflow-wrap:anywhere]">{index + 1}. {criterion.name}</p><p className="mt-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">{criterion.description || criterion.code}</p></div>
                   <div className="text-right text-sm"><p className="font-medium">{criterion.maxScore} points</p><p className="text-xs text-muted-foreground">{criterion.weight}% weight</p></div>
                 </div>
+                <Label htmlFor={`rating-${criterion.id}`} className="mt-4 block">Rating for {criterion.name}</Label>
                 <select
-                  className="mt-4 h-11 w-full rounded-lg border bg-background px-3 text-sm"
+                  id={`rating-${criterion.id}`}
+                  className="mt-2 h-11 w-full min-w-0 rounded-lg border bg-blue-50/50 px-3 text-sm dark:bg-blue-950/20"
                   value={value.ratingLevel ?? ""}
                   disabled={pending || submission.status !== "SUBMITTED"}
                   aria-invalid={Boolean(localErrors[`${criterion.id}.rating`])}
@@ -90,12 +93,13 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
                   }}
                 >
                   <option value="">Select rating</option>
-                  {[...criterion.ratings].sort((a, b) => a.orderIndex - b.orderIndex).map((rating) => <option key={rating.id} value={rating.level}>{rating.level.replace("_", " ")} · {rating.percentage}% · {rating.description}</option>)}
+                  {[...criterion.ratings].sort((a, b) => a.orderIndex - b.orderIndex).map((rating) => <option key={rating.id} value={rating.level}>{rating.level.replace("_", " ")} · {rating.percentage}%{rating.description ? ` · ${rating.description}` : ""}</option>)}
                 </select>
+                {criterion.ratings.find(rating => rating.level === value.ratingLevel)?.description ? <p className="mt-2 text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">{criterion.ratings.find(rating => rating.level === value.ratingLevel)?.description}</p> : null}
                 {localErrors[`${criterion.id}.rating`] ? <p className="mt-2 text-sm text-destructive">{localErrors[`${criterion.id}.rating`]}</p> : null}
                 <div className="mt-4 grid gap-2">
-                  <div className="flex justify-between gap-2"><Label htmlFor={`feedback-${criterion.id}`}>Criterion feedback</Label><span className={`text-xs ${value.feedback.length > 500 ? "text-destructive" : "text-muted-foreground"}`}>{value.feedback.length}/500</span></div>
-                  <Textarea id={`feedback-${criterion.id}`} rows={3} value={value.feedback} disabled={pending || submission.status !== "SUBMITTED"} aria-invalid={Boolean(feedbackError)} placeholder="Explain what was met and what needs attention"
+                  <div className="flex flex-wrap justify-between gap-2"><Label htmlFor={`feedback-${criterion.id}`}>Criterion feedback</Label><span className={`text-xs ${value.feedback.length > 500 ? "text-destructive" : "text-muted-foreground"}`}>{value.feedback.length}/500 characters</span></div>
+                  <Textarea id={`feedback-${criterion.id}`} className="h-24 min-h-24 max-h-48 resize-y overflow-y-auto bg-muted/30 [field-sizing:fixed]" rows={3} value={value.feedback} disabled={pending || submission.status !== "SUBMITTED"} aria-invalid={Boolean(feedbackError)} placeholder="Explain what was met and what needs attention"
                     onChange={(event) => {
                       setDraft((current) => ({ ...current, [criterion.id]: { ...value, feedback: event.target.value } }));
                       setLocalErrors((current) => { const next = { ...current }; delete next[`${criterion.id}.feedback`]; return next; });
@@ -111,15 +115,15 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
             {localErrors.checklist || apiError?.errors?.checklist?.[0] ? <p className="mt-3 text-sm text-destructive">{localErrors.checklist ?? apiError?.errors?.checklist?.[0]}</p> : null}
           </section>
           <section className="rounded-xl border p-4">
-            <div className="flex justify-between gap-2"><Label htmlFor="overall-feedback">Revision instructions <span className="font-normal text-muted-foreground">(required for Request Changes)</span></Label><span className={`text-xs ${overallFeedback.length > 500 ? "text-destructive" : "text-muted-foreground"}`}>{overallFeedback.length}/500</span></div>
-            <Textarea id="overall-feedback" className="mt-3" rows={4} maxLength={501} disabled={pending} value={overallFeedback} aria-invalid={Boolean(localErrors.overallFeedback || apiError?.errors?.overallFeedback?.[0])} placeholder={sharedMaster ? "Describe what the shared master deliverable needs to revise" : "Summarize exactly what the student must revise"} onChange={(event) => { setOverallFeedback(event.target.value); setLocalErrors((current) => { const next = { ...current }; delete next.overallFeedback; return next; }); }} />
+            <div className="flex flex-wrap justify-between gap-2"><Label htmlFor="overall-feedback">Revision instructions <span className="font-normal text-muted-foreground">(required for Request Changes)</span></Label><span className={`text-xs ${overallFeedback.length > 500 ? "text-destructive" : "text-muted-foreground"}`}>{overallFeedback.length}/500 characters</span></div>
+            <Textarea id="overall-feedback" className="mt-3 h-28 max-h-48 resize-y overflow-y-auto [field-sizing:fixed]" rows={4} maxLength={501} disabled={pending} value={overallFeedback} aria-invalid={Boolean(localErrors.overallFeedback || apiError?.errors?.overallFeedback?.[0])} placeholder={sharedMaster ? "Describe what the shared master deliverable needs to revise" : "Summarize exactly what the student must revise"} onChange={(event) => { setOverallFeedback(event.target.value); setLocalErrors((current) => { const next = { ...current }; delete next.overallFeedback; return next; }); }} />
             {localErrors.overallFeedback || apiError?.errors?.overallFeedback?.[0] ? <p className="mt-2 text-sm text-destructive">{localErrors.overallFeedback ?? apiError?.errors?.overallFeedback?.[0]}</p> : null}
           </section>
         </CardContent>
       </Card>
 
       {submission.status === "SUBMITTED" ? (
-        <div className="sticky bottom-0 z-20 flex flex-col gap-2 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:justify-end">
+        <div className={styles.actions} aria-busy={pending}>
           <Button variant="destructive" disabled={pending || !submission.availableActions.reject} onClick={() => requestDecision("REJECT")}><XCircle className="size-4" /> Reject submission</Button>
           <Button variant="outline" disabled={pending || !submission.availableActions.requestChanges} onClick={() => requestDecision("REQUEST_CHANGES")}><RotateCcw className="size-4" /> {sharedMaster ? "Request shared revision" : "Request student revision"}</Button>
           <Button disabled={pending || !submission.availableActions.accept} onClick={() => requestDecision("ACCEPT")}><CheckCircle2 className="size-4" /> {pending ? "Saving..." : "Accept submission"}</Button>
@@ -127,7 +131,7 @@ export function SubmissionReviewForm({ submission, pending, apiError, onReview }
       ) : null}
 
       <ConfirmDialog
-        open={decision !== null}
+        open={decision !== null && submission.status === "SUBMITTED"}
         title={decision === "REJECT" ? "Reject this submission?" : "Request a new version?"}
         description={decision === "REJECT"
           ? "This is final: the submission becomes Rejected and the milestone becomes Failed."
