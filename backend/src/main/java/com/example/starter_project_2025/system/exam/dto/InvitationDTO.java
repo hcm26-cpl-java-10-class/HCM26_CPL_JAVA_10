@@ -75,12 +75,6 @@ public class InvitationDTO extends BaseDTO {
     private Integer accessAttemptCount;
 
     @JsonProperty(access = READ_ONLY)
-    private LocalDateTime examStartTime;
-
-    @JsonProperty(access = READ_ONLY)
-    private LocalDateTime examEndTime;
-
-    @JsonProperty(access = READ_ONLY)
     private Integer examDurationMinutes;
 
     @JsonProperty(access = READ_ONLY)

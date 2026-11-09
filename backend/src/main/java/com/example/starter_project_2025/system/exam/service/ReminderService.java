@@ -222,11 +222,7 @@ public class ReminderService {
             }
         }
         if (anchor == null) {
-            anchor = exam.getStartTime() != null ? exam.getStartTime() : exam.getEndTime();
-        }
-
-        if (anchor == null) {
-            throw new BadRequestException("Đề thi và lời mời chưa có mốc thời gian bắt đầu hoặc kết thúc, vui lòng chọn Nhắc nhở Tùy chỉnh (Custom)");
+            throw new BadRequestException("Lời mời chưa có mốc thời gian bắt đầu hoặc hết hạn, vui lòng chọn Nhắc nhở Tùy chỉnh (Custom)");
         }
 
         return switch (request.getReminderType()) {

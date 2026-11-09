@@ -1,3 +1,4 @@
+import { PassBadge } from "@/components/exam/PassBadge";
 import { useContext } from "react";
 import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import axiosInstance from "@/api/axios";
@@ -947,6 +948,7 @@ export default function ResultStatisticsPage() {
                                             </td>
                                             <td className="p-3 font-semibold">
                                                 {formatScore(attempt.firstScore ?? attempt.finalScore)}
+                                                {attempt.passed != null && <PassBadge passed={attempt.passed} className="ml-2" />}
                                             </td>
                                             <td className="p-3 font-semibold">
                                                 {attempt.secondScore == null
@@ -1146,6 +1148,7 @@ export default function ResultStatisticsPage() {
                                                 </td>
                                                 <td className="p-3 font-semibold">
                                                     {formatScore(attempt.firstScore ?? attempt.finalScore)}
+                                                    {attempt.passed != null && <PassBadge passed={attempt.passed} className="ml-2" />}
                                                 </td>
                                                 <td className="p-3 font-semibold">
                                                     {formatScore(attempt.secondScore)}

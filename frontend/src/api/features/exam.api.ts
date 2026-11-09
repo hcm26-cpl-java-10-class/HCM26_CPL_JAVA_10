@@ -23,6 +23,31 @@ import type {
 
 const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 
+export interface MyScoreInsights {
+  attempts: {
+    examId: number;
+    examTitle: string;
+    attemptNumber: number;
+    finalScore: number;
+    maxScore: number;
+    passed: boolean | null;
+    startedAt: string | null;
+    submittedAt: string;
+    durationMinutes: number;
+    timeSpentSeconds: number;
+  }[];
+  classAverages: { examId: number; averagePercent: number; participants: number }[];
+  awaitingPublicationCount: number;
+  pendingAppealCount: number;
+  accuracyByType: {
+    type: "MULTIPLE_CHOICE" | "ESSAY" | "CODING";
+    questionCount: number;
+    earned: number;
+    possible: number;
+    accuracyPercent: number;
+  }[];
+}
+
 export interface PublishedExamScore {
   examId: number;
   examTitle: string;
@@ -38,6 +63,10 @@ export interface PublishedExamScore {
   attemptId: number;
   /** Kết quả đã được giáo viên công bố hay chưa (chỉ khi công bố mới được khiếu nại). */
   resultPublished: boolean;
+  /** Pass score frozen when the attempt started (null when the exam has none). */
+  passScore?: number | null;
+  /** Passed / not passed; null when unpublished, ungraded or the exam has no pass score. */
+  passed?: boolean | null;
 }
 
 export const examApi = {
@@ -114,6 +143,10 @@ export const examApi = {
   },
   getMyPublishedExamScores: async (): Promise<PublishedExamScore[]> => {
     const response = await axiosInstance.get<PublishedExamScore[]>("/exams/my-scores");
+    return response.data;
+  },
+  getMyScoreInsights: async (): Promise<MyScoreInsights> => {
+    const response = await axiosInstance.get<MyScoreInsights>("/exams/my-scores/insights");
     return response.data;
   },
   addQuestions: async (examId: number, questionIds: number[]): Promise<ExamDTO> => {

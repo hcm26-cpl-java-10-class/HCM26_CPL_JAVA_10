@@ -21,6 +21,9 @@ public class ExamAttemptReviewDTO {
     private BigDecimal maxScore;
     private BigDecimal objectiveScore;
     private BigDecimal finalScore;
+    private BigDecimal passScore;
+    /** Dat/Truot theo diem dat da dong bang; chi co khi ket qua da cong bo. */
+    private Boolean passed;
     private Instant submittedAt;
     /** Da duoc cong bo diem va dap an dung/sai hay chua. */
     private boolean revealAnswers;

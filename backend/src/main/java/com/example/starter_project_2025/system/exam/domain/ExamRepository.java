@@ -31,10 +31,4 @@ public interface ExamRepository extends BaseCrudRepository<Exam, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select e from Exam e where e.id = :examId")
     Optional<Exam> lockForAttemptStart(@Param("examId") Long examId);
-
-    @Query("SELECT e FROM Exam e ORDER BY " +
-            "CASE WHEN (e.startTime IS NULL OR e.startTime <= CURRENT_TIMESTAMP) " +
-            "     AND (e.endTime IS NULL OR e.endTime >= CURRENT_TIMESTAMP) THEN 0 ELSE 1 END ASC, " +
-            "e.id DESC")
-    Page<Exam> findAllExamsSortedByOpenStatus(Pageable pageable);
 }

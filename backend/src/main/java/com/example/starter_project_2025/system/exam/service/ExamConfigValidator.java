@@ -14,9 +14,6 @@ import java.time.LocalDateTime;
 public class ExamConfigValidator {
 
     public void validate(Exam existing, ExamDTO r, Integer totalPoints, ValidationContext ctx) {
-        // Tinh nang dat lich da bi go bo: bo qua start/end.
-        LocalDateTime start = null;
-        LocalDateTime end = null;
         Integer duration = r.getDurationMinutes() != null ? r.getDurationMinutes()
                 : (existing == null ? null : Integer.valueOf(existing.getDurationMinutes()));
         Integer maxAttempts = r.getMaxAttempts() != null ? r.getMaxAttempts()
@@ -33,15 +30,6 @@ public class ExamConfigValidator {
                 : (existing == null ? null : existing.getLatePenaltyPercent());
         Integer lateGraceMinutes = r.getLateGraceMinutes() != null ? r.getLateGraceMinutes()
                 : (existing == null ? 0 : existing.getLateGraceMinutes());
-
-        if (start != null && end != null) {
-            if (!start.isBefore(end)) {
-                ctx.add("endTime", "Thời gian đóng phải sau thời gian mở");
-            } else if (duration != null && duration > Duration.between(start, end).toMinutes()) {
-                ctx.add("durationMinutes", "Thời lượng làm bài không được vượt quá khoảng thời gian từ lúc mở đến lúc đóng ("
-                        + Duration.between(start, end).toMinutes() + " phút)");
-            }
-        }
 
         if (maxAttempts == null || maxAttempts < 1) {
             ctx.add("maxAttempts", "Số lần làm tối đa phải >= 1");

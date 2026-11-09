@@ -50,8 +50,6 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setTitle(e.getTitle());
         d.setDurationMinutes(e.getDurationMinutes());
 
-        d.setStartTime(e.getStartTime());
-        d.setEndTime(e.getEndTime());
         d.setMaxAttempts(e.getMaxAttempts());
         d.setShuffleQuestions(e.getShuffleQuestions());
         d.setShuffleOptions(e.getShuffleOptions());
@@ -139,8 +137,6 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getTitle() != null) e.setTitle(d.getTitle().trim());
         if (d.getDurationMinutes() != null) e.setDurationMinutes(d.getDurationMinutes());
 
-        if (d.getStartTime() != null) e.setStartTime(d.getStartTime());
-        if (d.getEndTime() != null) e.setEndTime(d.getEndTime());
         if (d.getMaxAttempts() != null) e.setMaxAttempts(d.getMaxAttempts());
         if (d.getShuffleQuestions() != null) e.setShuffleQuestions(d.getShuffleQuestions());
         if (d.getShuffleOptions() != null) e.setShuffleOptions(d.getShuffleOptions());

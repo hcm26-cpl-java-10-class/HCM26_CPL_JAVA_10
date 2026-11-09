@@ -103,7 +103,6 @@ public class InvitationService {
 
         examAccessGuard.checkCanManage(exam, principal);
 
-        validateExamInvitable(exam);
 
         User user = userRepository.findById(request.getUserId())
                 .filter(u -> Boolean.TRUE.equals(u.getIsActive()))
@@ -156,7 +155,6 @@ public class InvitationService {
 
         examAccessGuard.checkCanManage(exam, principal);
 
-        validateExamInvitable(exam);
 
         List<InvitationDTO> successful = new ArrayList<>();
         List<String> errors = new ArrayList<>();
@@ -221,7 +219,6 @@ public class InvitationService {
 
         examAccessGuard.checkCanManage(exam, principal);
 
-        validateExamInvitable(exam);
 
         Course course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -596,7 +593,6 @@ public class InvitationService {
 
         examAccessGuard.checkCanManage(exam, principal);
 
-        validateExamInvitable(exam);
 
         LocalDateTime expiresAt = resolveExpiresAt(
                 request.getExpiresAt() != null ? request.getExpiresAt() : null, exam);
@@ -621,7 +617,7 @@ public class InvitationService {
                 .availableFrom(parseDateTime(request.getAvailableFrom()))
                 .maxAccessTime(request.getMaxAccessTime() != null ?
                         parseDateTime(request.getMaxAccessTime())
-                        : defaultMaxAccessTime(exam))
+                        : null)
                 .maxAccessAttempts(request.getMaxAccessAttempts() != null ?
                         request.getMaxAccessAttempts() : 1)
                 .build();
@@ -639,25 +635,6 @@ public class InvitationService {
     }
 
     /**
-     * Mặc định cửa sổ truy cập = thời gian bắt đầu đề + thời lượng thi.
-     */
-    private LocalDateTime defaultMaxAccessTime(Exam exam) {
-        if (exam.getStartTime() != null && exam.getDurationMinutes() > 0) {
-            return exam.getStartTime().plusMinutes(exam.getDurationMinutes());
-        }
-        return exam.getEndTime();
-    }
-
-    /**
-     * Chặn mời tham dự khi kỳ thi đã kết thúc.
-     */
-    private void validateExamInvitable(Exam exam) {
-        if (exam.getEndTime() != null && LocalDateTime.now().isAfter(exam.getEndTime())) {
-            throw new BadRequestException("Kỳ thi đã kết thúc, không thể mời tham dự");
-        }
-    }
-
-    /**
      * Tính thời điểm hết hạn của lời mời và kiểm tra tính hợp lệ.
      */
     private LocalDateTime resolveExpiresAt(String rawExpiresAt, Exam exam) {
@@ -665,14 +642,11 @@ public class InvitationService {
         if (rawExpiresAt != null && !rawExpiresAt.isBlank()) {
             expiresAt = parseDateTime(rawExpiresAt);
         } else {
-            expiresAt = exam.getEndTime() != null ? exam.getEndTime() : LocalDateTime.now().plusDays(30);
+            expiresAt = LocalDateTime.now().plusDays(30);
         }
 
         if (expiresAt != null && LocalDateTime.now().isAfter(expiresAt)) {
             throw new BadRequestException("Thời hạn lời mời không được nằm trong quá khứ");
-        }
-        if (exam.getEndTime() != null && expiresAt != null && expiresAt.isAfter(exam.getEndTime())) {
-            throw new BadRequestException("Thời hạn lời mời không được vượt quá thời gian kết thúc kỳ thi");
         }
         return expiresAt;
     }
@@ -952,8 +926,6 @@ public class InvitationService {
         dto.setSourceCourseId(invitation.getSourceCourseId());
 
         if (exam != null) {
-            dto.setExamStartTime(exam.getStartTime());
-            dto.setExamEndTime(exam.getEndTime());
             dto.setExamDurationMinutes(exam.getDurationMinutes());
             dto.setExamMaxAttempts(exam.getMaxAttempts());
             dto.setExamHasPassword(

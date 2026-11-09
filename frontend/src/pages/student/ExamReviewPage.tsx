@@ -1,3 +1,4 @@
+import { PassBadge } from "@/components/exam/PassBadge";
 import { getAttemptReview } from '@/api/exam.api';
 import { scoreAppealApi } from '@/api/features/score-appeal.api';
 import StudentSubmissionView from '@/components/features/exam/StudentSubmissionView';
@@ -76,6 +77,9 @@ export default function ExamReviewPage() {
                                     ? `${formatScore(score ?? 0)}/${formatScore(data.maxScore ?? 10)}`
                                     : 'Awaiting publication'}
                             </p>
+                            {revealAnswers && data.passed != null && (
+                                <PassBadge passed={data.passed} passScore={data.passScore} />
+                            )}
                             {revealAnswers && data.finalScore != null && (
                                 <Button
                                     variant="outline"

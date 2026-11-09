@@ -1,3 +1,4 @@
+import { PassBadge } from "@/components/exam/PassBadge";
 import {
     getMyExamAttempts,
     getStudentExams,
@@ -27,30 +28,6 @@ import { useNavigate } from 'react-router-dom';
 const examsQueryKey = ['student-exams'] as const;
 const attemptsQueryKey = ['student-exam-attempts'] as const;
 
-function isExamOpen(exam: Exam, now: number) {
-    const started = exam.startTime == null || now >= new Date(exam.startTime).getTime();
-    const notClosed = exam.endTime == null || now < new Date(exam.endTime).getTime();
-    return started && notClosed;
-}
-
-// CẬP NHẬT: Ưu tiên sắp xếp bài thi đang mở (Open) lên đầu,
-// tôn trọng thứ tự ID giảm dần do Backend (findAllExamsSortedByActive) trả về.
-function sortExams(exams: Exam[]) {
-    const now = Date.now();
-
-    return [...exams].sort((a, b) => {
-        const aIsOpen = isExamOpen(a, now);
-        const bIsOpen = isExamOpen(b, now);
-
-        // Bài thi đang Open luôn đứng trên
-        if (aIsOpen && !bIsOpen) return -1;
-        if (!aIsOpen && bIsOpen) return 1;
-
-        // Nếu cùng trạng thái (cùng Open hoặc cùng không Open), giữ nguyên thứ tự Backend gửi về (ID giảm dần)
-        return 0;
-    });
-}
-
 type ExamLock = { locked: boolean; reason: string | null };
 
 /** "Course › Section › Lesson" the exam belongs to, or null when it is not linked to a course. */
@@ -77,7 +54,6 @@ function getAttemptStatus(attempt?: ExamAttemptSummary) {
 function ExamCard({
                       exam,
                       attempt,
-                      now,
                       onOpen,
                       onReview,
                       disabled: externallyDisabled,
@@ -85,7 +61,6 @@ function ExamCard({
                   }: {
     exam: Exam;
     attempt?: ExamAttemptSummary;
-    now: number;
     onOpen: (examId: number) => void;
     onReview: (attemptId: number) => void;
     disabled: boolean;
@@ -94,9 +69,6 @@ function ExamCard({
     const status = getAttemptStatus(attempt);
     const canReview = (attempt?.status === 'SUBMITTED' || attempt?.status === 'PENDING_REVIEW')
         && (exam.showAnswersAfterExam === true || exam.resultVisibility === 'MANUAL_RELEASE');
-    const open = isExamOpen(exam, now);
-    const beforeOpen = exam.startTime != null && now < new Date(exam.startTime).getTime();
-    const afterClose = exam.endTime != null && now >= new Date(exam.endTime).getTime();
     const isInProgress = attempt?.status === 'IN_PROGRESS';
     // Locked by the lesson/section progress rules of the course the exam belongs to.
     const locked = lock?.locked === true && !isInProgress;
@@ -104,25 +76,18 @@ function ExamCard({
     const hasAttempts = (attempt?.attemptsUsed ?? 0) > 0;
     const isResultPublished = attempt?.resultPublished !== false;
     const outOfAttempts = hasAttempts && (attempt?.attemptsRemaining ?? 0) <= 0 && !isInProgress;
-    const disabledBySchedule = (beforeOpen || afterClose) && !isInProgress;
-    const isDisabled = externallyDisabled || locked || outOfAttempts || disabledBySchedule;
+    const isDisabled = externallyDisabled || locked || outOfAttempts;
     const buttonLabel = locked
         ? 'Locked'
         : isInProgress
         ? 'Continue Exam'
         : outOfAttempts
             ? 'No Attempts Left'
-            : beforeOpen
-                ? 'Not Opened Yet'
-                : afterClose
-                    ? 'Exam Closed'
-                    : 'Start Exam';
+            : 'Start Exam';
 
     return (
         <Card
-            className={`flex h-full flex-col bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                open ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-slate-200'
-            }`}
+            className={`flex h-full flex-col bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md border-slate-200`}
         >
             <CardHeader>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -130,8 +95,8 @@ function ExamCard({
                         <Clock3 className="size-3" />
                         {exam.durationMinutes} mins
                     </Badge>
-                    {open && <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Open</Badge>}
                     {status && <Badge variant={status.variant}>{status.label}</Badge>}
+                    {attempt?.passed != null && <PassBadge passed={attempt.passed} passScore={attempt.passScore} />}
                     {exam.category && (
                         <Badge variant="outline">{EXAM_CATEGORY_LABEL[exam.category]}</Badge>
                     )}
@@ -226,7 +191,6 @@ function ExamCard({
 export default function StudentExamList() {
     const navigate = useNavigate();
     const [passwordExam, setPasswordExam] = useState<Exam | null>(null);
-    const [now] = useState(() => Date.now());
 
     const examsQuery = useQuery({
         queryKey: examsQueryKey,
@@ -249,7 +213,7 @@ export default function StudentExamList() {
         void attemptsQuery.refetch();
     };
 
-    const exams = sortExams(examsQuery.data ?? []);
+    const exams = examsQuery.data ?? [];
     const attempts = attemptsQuery.data ?? [];
 
     // Lock state comes from the course the exam is linked to (shares the cache with the course learning page).
@@ -355,7 +319,6 @@ export default function StudentExamList() {
                                     key={exam.id}
                                     exam={exam}
                                     attempt={attempt}
-                                    now={now}
                                     disabled={attemptsQuery.isError}
                                     lock={lockById.get(exam.id)}
                                     onOpen={openExam}

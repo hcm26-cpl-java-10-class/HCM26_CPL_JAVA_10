@@ -41,18 +41,8 @@ public class Exam extends BaseEntity {
     @Column(nullable = false)
     private int durationMinutes;
 
-    private LocalDateTime startTime;
-
-    private LocalDateTime endTime;
-
-    /** Tinh nang dat lich (start/end) da bi go bo: luon tra ve null de moi noi coi nhu "mo tu do". Gia tri cu van nam trong DB. */
-    public LocalDateTime getStartTime() {
-        return null;
-    }
-
-    public LocalDateTime getEndTime() {
-        return null;
-    }
+    // Tinh nang dat lich (start/end) da bi go bo: de thi luon "mo tu do", chi gioi han boi thoi luong, so lan lam va
+    // loi moi. Cot start_time / end_time cu van con trong DB nhung khong con duoc ORM doc hay ghi.
 
     @Column(nullable = false)
     private Integer maxAttempts = 1;

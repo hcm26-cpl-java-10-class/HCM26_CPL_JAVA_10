@@ -1,6 +1,7 @@
 
 import { courseApi } from "@/api/features/demo/course.api";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { MyExamStatistics } from "@/pages/student/components/MyExamStatistics";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -28,6 +29,8 @@ export default function MyScoresPage() {
       <MainLayout pathName={{ "my-scores": "My Scores" }}>
         <div className="space-y-6 p-4">
           <h1 className="text-2xl font-bold">My Scores</h1>
+
+          <MyExamStatistics />
 
           <section className="space-y-4">
             <h2 className="text-xl font-semibold">Course Scores</h2>
