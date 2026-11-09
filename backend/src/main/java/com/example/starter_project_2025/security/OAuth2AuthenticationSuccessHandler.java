@@ -5,6 +5,8 @@ import com.example.starter_project_2025.system.auth.authentication.AuthService;
 import com.example.starter_project_2025.system.auth.authentication.SsoLoginException;
 import com.example.starter_project_2025.system.auth.authentication.dto.response.AuthenticationResponse;
 import com.example.starter_project_2025.system.auth.util.CookieUtil;
+import com.example.starter_project_2025.system.auth.util.DeviceUtil;
+import org.springframework.util.StringUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AccessLevel;
@@ -59,9 +61,13 @@ public class OAuth2AuthenticationSuccessHandler
             log.info("Google email available: {}", email != null && !email.isBlank());
             log.info("Google email verified: {}", emailVerified);
 
+            String userAgent = request.getHeader("User-Agent");
+            String clientDevice = request.getHeader("X-Device-Info");
+            String device = StringUtils.hasText(clientDevice) ? clientDevice.trim() : DeviceUtil.parse(userAgent);
+
             AuthenticationResponse authResponse =
                     authService.loginWithGoogle(
-                            email, emailVerified, firstName, lastName);
+                            email, emailVerified, firstName, lastName, device);
 
             log.info("loginWithGoogle completed");
 
@@ -83,7 +89,6 @@ public class OAuth2AuthenticationSuccessHandler
             }
 
             String baseUrl = frontendUrl.replaceAll("/+$", "");
-
             String redirectUrl = baseUrl
                     + "/oauth2/redirect#token="
                     + accessToken;

@@ -1,0 +1,2 @@
+package com.example.starter_project_2025.system.demo.certificate;
+public interface CertificateRepository extends org.springframework.data.jpa.repository.JpaRepository<Certificate,Long> { long countByCourse_Id(Long id); }

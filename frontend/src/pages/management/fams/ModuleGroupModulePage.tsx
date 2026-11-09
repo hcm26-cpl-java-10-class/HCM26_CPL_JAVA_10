@@ -275,7 +275,7 @@ export const ModuleGroupModulePage: React.FC = () => {
                             <button
                                 type="button"
                                 onClick={handleAddModule}
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium shadow-xs transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium shadow-xs transition-colors cursor-pointer"
                             >
                                 <Plus className="h-4 w-4" />
                                 <span>+ Thêm mới</span>

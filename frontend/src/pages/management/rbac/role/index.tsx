@@ -22,6 +22,8 @@ import type { PermissionDTO } from "@/types/features/rbac/permission";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { useEffect, useMemo, useState } from "react";
 
+// Role page fields are intentionally limited to the columns shown in the UI:
+// Name, Description, Permissions, Status, and Created At.
 const roleSchema: EntitySchema = {
   entityName: "role",
   idField: "id",
@@ -31,6 +33,8 @@ const roleSchema: EntitySchema = {
       label: "Name",
       type: "text",
       sortable: true,
+      filterable: true,
+      filterType: "text",
       bold: true,
       width: "18%",
       minWidth: 140,
@@ -40,6 +44,8 @@ const roleSchema: EntitySchema = {
       label: "Description",
       type: "textarea",
       sortable: true,
+      filterable: true,
+      filterType: "text",
       width: "27%",
       minWidth: 180,
     },
@@ -63,13 +69,22 @@ const roleSchema: EntitySchema = {
       name: "isActive",
       label: "Status",
       type: "boolean",
-      width: 110,
+       width: 110,
       booleanLabels: {
         true: "Active",
         false: "Inactive",
+        trueColor: "bg-blue-500 text-white",
+        falseColor: "bg-red-500 text-white",
       },
       filterable: true,
       filterType: "boolean",
+    },
+    {
+      name: "createdAt",
+      label: "Created At",
+      type: "date",
+      sortable: true,
+      editable: false,
     },
   ],
 };

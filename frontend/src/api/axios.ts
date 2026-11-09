@@ -60,6 +60,8 @@ axiosInstance.interceptors.request.use(
     },
 );
 
+let refreshRequest: Promise<ReturnType<typeof mapAuthResponse>> | null = null;
+
 axiosInstance.interceptors.response.use(
     (response) => response,
     async (error) => {
@@ -78,13 +80,18 @@ axiosInstance.interceptors.response.use(
             !requestUrl.includes("/auth/refresh")
         ) {
             originalReq._retry = true;
+            const account = store.getState().auth.email;
             try {
-                const res = await axios.post<BackendAuthenticationResponse>(
-                    `${API_BASE_URL}/auth/refresh`,
-                    {},
-                    { withCredentials: true },
-                );
-                const authData = mapAuthResponse(res.data);
+                // Parallel protected queries must share one rotating-refresh request.
+                if (!refreshRequest) {
+                    refreshRequest = axios.post<BackendAuthenticationResponse>(
+                        `${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true },
+                    ).then(res => mapAuthResponse(res.data)).finally(() => { refreshRequest = null; });
+                }
+                const authData = await refreshRequest;
+                if (store.getState().auth.email !== account || !store.getState().auth.isAuthenticated) {
+                    return Promise.reject(error);
+                }
 
                 store.dispatch(setLogin(authData));
                 originalReq.headers = {
@@ -94,8 +101,10 @@ axiosInstance.interceptors.response.use(
 
                 return axiosInstance(originalReq);
             } catch (err) {
-                store.dispatch(setLogout());
-                window.location.href = "/login";
+                if (store.getState().auth.email === account) {
+                    store.dispatch(setLogout());
+                    window.location.href = "/login";
+                }
                 return Promise.reject(err);
             }
         }

@@ -236,7 +236,7 @@ export const ModuleModal: React.FC<ModuleModalProps> = ({
                         </Button>
                         <Button
                             type="submit"
-                            className="bg-orange-500 hover:bg-orange-600 text-white cursor-pointer"
+                            className="bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
                         >
                             {isEdit ? "Cập nhật" : "Lưu"}
                         </Button>

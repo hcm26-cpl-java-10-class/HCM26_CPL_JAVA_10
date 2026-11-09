@@ -7,6 +7,7 @@ import com.example.starter_project_2025.system.auth.authentication.dto.request.R
 import com.example.starter_project_2025.system.auth.authentication.dto.request.TokenRequest;
 import com.example.starter_project_2025.system.auth.authentication.dto.response.AuthenticationResponse;
 import com.example.starter_project_2025.system.auth.util.CookieUtil;
+import com.example.starter_project_2025.system.auth.util.DeviceUtil;
 import com.example.starter_project_2025.system.auth.verify.VerificationService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -33,9 +35,12 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthenticationResponse> login(
             @Valid @RequestBody LoginRequest request,
+            @RequestHeader(value = "X-Device-Info", required = false) String clientDevice,
+            @RequestHeader(value = "User-Agent", required = false) String userAgent,
             HttpServletResponse response
     ) {
-        AuthenticationResponse authenticationResponse = authService.login(request);
+        String device = resolveDevice(clientDevice, request != null ? request.device() : null, userAgent);
+        AuthenticationResponse authenticationResponse = authService.login(request, device);
 
         cookieUtil.setRefreshTokenCookie(response, authenticationResponse.getRefreshToken());
         authenticationResponse.setRefreshToken(null);
@@ -111,12 +116,16 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-//    @PreAuthorize("isAuthenticated()")
-//    @PostMapping("/switch-role")
-//    public ResponseEntity<LoginResponse> getPermissions(HttpServletRequest request, HttpServletResponse response, @RequestBody GetPermissonReqDTO data)
-//    {
-//        var email = request.getUserPrincipal().getName();
-//        var res = authService.switchRole(data, email, response);
-//        return ResponseEntity.ok(res);
-//    }
+    private String resolveDevice(String clientDevice, String requestDevice, String userAgent) {
+        if (StringUtils.hasText(clientDevice)) {
+            return clientDevice.trim();
+        }
+        if (StringUtils.hasText(requestDevice)) {
+            return requestDevice.trim();
+        }
+        if (StringUtils.hasText(userAgent)) {
+            return DeviceUtil.parse(userAgent);
+        }
+        return null;
+    }
 }

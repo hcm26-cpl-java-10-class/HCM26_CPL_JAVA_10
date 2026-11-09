@@ -1,3 +1,5 @@
+import { useDispatch } from "react-redux";
+import { setLogout } from "@/store/slices/auth/authSlice";
 import HeaderRight from "@/components/layout/HeaderRight";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
@@ -25,9 +27,10 @@ const normalizePath = (path?: string) => {
 };
 
 export function StudentNavbar() {
+  const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
-  const { activeRole } = usePermissions();
+  const { activeRole, user } = usePermissions();
   const { data: moduleGroups = [] } = useActiveModuleGroups();
   const pathname = normalizePath(location.pathname);
 
@@ -62,8 +65,7 @@ export function StudentNavbar() {
   const hasMenuItems = navGroups.length > 0;
 
   const handleLogout = async () => {
-    await authApi.logout();
-    navigate("/login");
+    try { await authApi.logout(); } finally { dispatch(setLogout()); navigate("/login"); }
   };
 
   return (
@@ -72,13 +74,13 @@ export function StudentNavbar() {
         <Button
           type="button"
           variant="ghost"
-          onClick={() => navigate(getHomePathByRole(activeRole))}
+          onClick={() => navigate(getHomePathByRole(activeRole, user.permissions))}
           className="flex h-auto min-w-0 items-center justify-start gap-3 px-0 hover:bg-transparent"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-blue-800 text-sm font-semibold text-white">
             RB
           </div>
-          <span className="truncate text-lg font-bold text-blue-800">RBAC System</span>
+          <span className="hidden truncate text-lg font-bold text-blue-800 dark:text-blue-400 sm:block">RBAC System</span>
         </Button>
 
         <div className="hidden min-w-0 flex-1 items-center gap-2 lg:flex">
@@ -182,7 +184,7 @@ export function StudentNavbar() {
             <Button
               size="icon-sm"
               variant="ghost"
-              className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              className="hidden text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground sm:inline-flex"
               onClick={handleLogout}
             >
               <LogOutIcon className="size-4" />

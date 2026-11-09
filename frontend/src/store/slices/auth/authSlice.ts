@@ -121,6 +121,34 @@ const authSlice = createSlice({
             localStorage.setItem("permissions", JSON.stringify(normalized.permissions));
             localStorage.setItem("rolePermissions", JSON.stringify(normalized.rolePermissions));
         },
+        updateUserProfile: (
+            state,
+            action: PayloadAction<{ firstName?: string; lastName?: string; fullName?: string }>,
+        ) => {
+            const { firstName, lastName, fullName } = action.payload;
+
+            if (firstName !== undefined) {
+                state.firstName = firstName;
+            }
+            if (lastName !== undefined) {
+                state.lastName = lastName;
+            }
+
+            if (fullName !== undefined) {
+                const trimmed = fullName.trim();
+                const firstSpace = trimmed.indexOf(" ");
+                if (firstSpace > 0) {
+                    state.firstName = trimmed.substring(0, firstSpace).trim();
+                    state.lastName = trimmed.substring(firstSpace + 1).trim();
+                } else {
+                    state.firstName = trimmed;
+                    state.lastName = "";
+                }
+            }
+
+            localStorage.setItem("firstName", state.firstName);
+            localStorage.setItem("lastName", state.lastName);
+        },
         setLogout: (state) => {
             state.token = "";
             state.email = "";
@@ -136,5 +164,5 @@ const authSlice = createSlice({
     },
 });
 
-export const { setLogin, setLogout } = authSlice.actions;
+export const { setLogin, setLogout, updateUserProfile } = authSlice.actions;
 export default authSlice.reducer;
