@@ -213,7 +213,7 @@ export default function EnrollmentLogPage() {
 
     return (
         <MainLayout dense pathName={{ "enrollment-logs": "Enrollment Logs" }}>
-            <div className="space-y-3">
+            <div className="space-y-1.5">
                 {/* Header */}
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -226,11 +226,11 @@ export default function EnrollmentLogPage() {
                 </div>
 
                 {/* KPI Cards */}
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
                     {summaryCards.map((card) => {
                         const Icon = card.icon;
                         return (
-                            <div key={card.label} className="flex items-center justify-between rounded-xl border bg-card p-4 shadow-sm">
+                            <div key={card.label} className="flex items-center justify-between rounded-xl border bg-card px-4 py-2 shadow-sm">
                                 <div className="space-y-1">
                                     <p className="text-xs font-medium text-muted-foreground">{card.label}</p>
                                     <p className="text-2xl font-bold tracking-tight text-card-foreground">{card.value}</p>
@@ -244,7 +244,7 @@ export default function EnrollmentLogPage() {
                 </div>
 
                 {/* Filter Container */}
-                <div className="rounded-xl border bg-card p-4 shadow-sm space-y-3">
+                <div className="rounded-xl border bg-card px-4 py-2 shadow-sm space-y-1.5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <Tabs
                             value={activeTab}
@@ -274,7 +274,7 @@ export default function EnrollmentLogPage() {
                         )}
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
+                    <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
                         <div className="sm:col-span-2 space-y-1">
                             <span className="text-xs font-medium text-muted-foreground">Search</span>
                             <div className="relative">
