@@ -60,8 +60,8 @@ export default function CourseReportPage() {
   ] as const;
 
   return (
-    <MainLayout pathName={{ "course-enrollments": "Enrollments", enrollments: "Enrollments" }}>
-      <section className="space-y-6">
+    <MainLayout dense pathName={{ "course-enrollments": "Enrollments", enrollments: "Enrollments" }}>
+      <section className="space-y-1.5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div><p className="text-sm font-medium text-blue-600">COURSE OVERVIEW</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Enrollments</h1></div>
           <div className="flex items-center gap-2">
@@ -69,12 +69,12 @@ export default function CourseReportPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {cards.map(([label, value, Icon]) => <div key={label} className="rounded-xl border bg-card p-4 shadow-sm"><div className="flex items-center justify-between text-sm text-muted-foreground"><span>{label}</span><Icon className="size-4" /></div><div className="mt-3 text-3xl font-semibold">{value}</div></div>)}
+        <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-4">
+          {cards.map(([label, value, Icon]) => <div key={label} className="rounded-xl border bg-card px-4 py-2 shadow-sm"><div className="flex items-center justify-between text-sm text-muted-foreground"><span>{label}</span><Icon className="size-4" /></div><div className="mt-1 text-3xl font-semibold">{value}</div></div>)}
         </div>
 
-        <div className="rounded-xl border bg-card p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="rounded-xl border bg-card px-4 py-2">
+          <div className="mb-2 flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-blue-600">COURSE CATALOG</p>
               <h2 className="mt-1 text-xl font-semibold tracking-tight">Courses available</h2>

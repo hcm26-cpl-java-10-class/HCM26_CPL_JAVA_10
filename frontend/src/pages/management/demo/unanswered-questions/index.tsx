@@ -80,7 +80,7 @@ export default function UnansweredQuestionsPage() {
 
   return (
     <MainLayout dense pathName={{ "unanswered-questions": "Unanswered Questions" }}>
-      <section className="space-y-3">
+      <section className="space-y-1.5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-blue-700">Q&amp;A</p>
@@ -149,7 +149,7 @@ export default function UnansweredQuestionsPage() {
             </p>
           </div>
         ) : (
-          <ul className="space-y-2" aria-busy={listQuery.isPlaceholderData}>
+          <ul className="space-y-1" aria-busy={listQuery.isPlaceholderData}>
             {questions.map((question) => {
               const waiting = waitingTime(question.createdAt);
               return (

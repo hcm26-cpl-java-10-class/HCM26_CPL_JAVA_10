@@ -112,7 +112,7 @@ export function CourseCard({
         </Link>
       )}
 
-      <div className="flex flex-1 flex-col gap-3 p-5">
+      <div className="flex flex-1 flex-col gap-1.5 px-4 py-2">
         <div>
           {disableNavigation ? (
             titleContent
@@ -185,7 +185,7 @@ export function CourseCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-2xl border bg-card shadow-sm" aria-hidden>
       <div className="h-44 animate-pulse bg-muted" />
-      <div className="space-y-3 p-5">
+      <div className="space-y-1.5 px-4 py-2">
         <div className="h-5 w-3/4 animate-pulse rounded bg-muted" />
         <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
         <div className="h-14 animate-pulse rounded bg-muted" />

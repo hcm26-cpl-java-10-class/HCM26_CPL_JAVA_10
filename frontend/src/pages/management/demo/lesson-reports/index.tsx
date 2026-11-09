@@ -86,7 +86,7 @@ export default function LessonReportsPage() {
 
   return (
     <MainLayout dense pathName={{ "lesson-reports": "Lesson Reports" }}>
-      <section className="space-y-3">
+      <section className="space-y-1.5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-blue-700">Reports</p>
@@ -140,7 +140,7 @@ export default function LessonReportsPage() {
             </p>
           </div>
         ) : (
-          <ul className="space-y-2" aria-busy={listQuery.isPlaceholderData}>
+          <ul className="space-y-1" aria-busy={listQuery.isPlaceholderData}>
             {reports.map((report) => (
               <li key={report.id} className="rounded-xl border bg-card p-3">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
