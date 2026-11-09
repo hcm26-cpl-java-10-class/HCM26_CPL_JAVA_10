@@ -6,6 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { EXAM_CATEGORY_LABEL, EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT, type ExamCategory, type ExamDTO, type ExamType, type ResultVisibility } from "@/types";
 import type { Dispatch, SetStateAction } from "react";
 import { ExamLinkFields } from "./ExamLinkFields";
@@ -43,33 +44,34 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
   // Timing is set when inviting students, so the exam itself has no start/end time or late-submission rules.
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid min-w-0 max-w-full gap-4 sm:grid-cols-2">
       <SectionTitle>Basic</SectionTitle>
-      <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium sm:col-span-2">
         Exam Title
-        <Input required maxLength={200} value={newTitle} onChange={(event) => setNewTitle(event.target.value)} />
+        <Input required maxLength={200} className="w-full min-w-0 max-w-full" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} />
       </label>
 
-      <label className="grid gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
         Duration (minutes)
-        <Input required type="number" min={1} value={newDuration} onChange={(event) => setNewDuration(event.target.value)} />
+        <Input required type="number" min={1} className="w-full min-w-0 max-w-full" value={newDuration} onChange={(event) => setNewDuration(event.target.value)} />
       </label>
 
-      <label className="grid gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
         Exam Password / Access Code (leave blank if not required)
         <Input
           type="text"
           placeholder="e.g. EXAM2026"
           maxLength={100}
+          className="w-full min-w-0 max-w-full"
           value={cfg.accessCode}
           onChange={(event) => setCfg((c) => ({ ...c, accessCode: event.target.value }))}
         />
       </label>
 
-      <label className="grid gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
         Question Format
         <Select value={cfg.examType} onValueChange={(value) => { if (value) setCfg((c) => ({ ...c, examType: value as ExamType })); }}>
-          <SelectTrigger aria-label="Exam type" aria-invalid={Boolean(fieldErrors.examType)} className={fieldErrors.examType ? invalidClass : ""}>
+          <SelectTrigger aria-label="Exam type" aria-invalid={Boolean(fieldErrors.examType)} className={cn("w-full min-w-0 max-w-full", fieldErrors.examType && invalidClass)}>
             <SelectValue placeholder="Select question format" />
           </SelectTrigger>
           <SelectContent>
@@ -87,7 +89,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         )}
       </label>
 
-      <label className="grid gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
         Exam Category
         <Select value={cfg.category} onValueChange={(value) => {
           if (!value) return;
@@ -98,7 +100,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
             showAnswersAfterExam: EXAM_CATEGORY_SHOW_ANSWERS_DEFAULT[category],
           }));
         }}>
-          <SelectTrigger aria-label="Exam category" aria-invalid={Boolean(fieldErrors.category)} className={fieldErrors.category ? invalidClass : ""}>
+          <SelectTrigger aria-label="Exam category" aria-invalid={Boolean(fieldErrors.category)} className={cn("w-full min-w-0 max-w-full", fieldErrors.category && invalidClass)}>
             <SelectValue placeholder="Select category" />
           </SelectTrigger>
           <SelectContent>
@@ -118,10 +120,10 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
 
       <ExamLinkFields cfg={cfg} setCfg={setCfg} />
 
-      <div className="grid gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
+      <div className="grid min-w-0 max-w-full gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
         <SectionTitle>Attempts</SectionTitle>
 
-        <label className="grid gap-2 text-sm font-medium">
+        <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
           Maximum Attempts
           <Input
             type="number"
@@ -129,7 +131,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
             step={1}
             placeholder="e.g. 1"
             aria-invalid={Boolean(fieldErrors.maxAttempts)}
-            className={fieldErrors.maxAttempts ? invalidClass : ""}
+            className={cn("w-full min-w-0 max-w-full", fieldErrors.maxAttempts && invalidClass)}
             value={cfg.maxAttempts}
             onChange={(event) => setCfg((c) => ({ ...c, maxAttempts: event.target.value }))}
           />
@@ -143,27 +145,27 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         </label>
 
         <SectionTitle>Scoring</SectionTitle>
-        <label className="grid gap-2 text-sm font-medium">
+        <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
           Max Score (leave blank = 10)
-          <Input type="number" min={0.01} step="0.01" placeholder="10" value={cfg.maxScore} onChange={(event) => setCfg((c) => ({ ...c, maxScore: event.target.value }))} />
+          <Input type="number" min={0.01} step="0.01" placeholder="10" className="w-full min-w-0 max-w-full" value={cfg.maxScore} onChange={(event) => setCfg((c) => ({ ...c, maxScore: event.target.value }))} />
           <span className="text-xs font-normal text-muted-foreground">
             Question score = max score × question weight ÷ total weight.
           </span>
         </label>
 
-        <label className="grid gap-2 text-sm font-medium">
+        <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
           Passing Score (leave blank = no requirement)
-          <Input type="number" min={0} step="0.01" value={cfg.passScore} onChange={(event) => setCfg((c) => ({ ...c, passScore: event.target.value }))} />
+          <Input type="number" min={0} step="0.01" className="w-full min-w-0 max-w-full" value={cfg.passScore} onChange={(event) => setCfg((c) => ({ ...c, passScore: event.target.value }))} />
           <span className="text-xs font-normal text-muted-foreground">
             Minimum score required to pass (e.g. 5.0).
           </span>
         </label>
 
         <SectionTitle>Results</SectionTitle>
-        <div className="grid gap-2 text-sm font-medium">
+        <div className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
           Result Visibility
           <Select value={cfg.resultVisibility} onValueChange={(value) => setCfg((c) => ({ ...c, resultVisibility: value as ResultVisibility }))}>
-            <SelectTrigger aria-label="Result visibility"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Result visibility" className="w-full min-w-0 max-w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {(Object.keys(RESULT_VISIBILITY_LABEL) as ResultVisibility[]).map((key) => (
                 <SelectItem key={key} value={key}>{RESULT_VISIBILITY_LABEL[key]}</SelectItem>
@@ -175,7 +177,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
           </span>
         </div>
 
-        <div className="grid gap-2 text-sm font-medium">
+        <div className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
           Show Answers After Exam
           <label className="flex h-9 items-center gap-2 rounded-md border border-input bg-background/50 px-3 py-1 cursor-pointer">
             <input
@@ -195,7 +197,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
       </div>
 
       {/* NEW (anti-cheat): cau hinh chong gian lan theo tung de */}
-      <div className="grid gap-3 border-t pt-4 sm:col-span-2">
+      <div className="grid min-w-0 max-w-full gap-3 border-t pt-4 sm:col-span-2">
         <SectionTitle>Anti-cheat</SectionTitle>
         <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
           <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.antiCheatEnabled} onChange={(event) => setCfg((c) => ({ ...c, antiCheatEnabled: event.target.checked }))} />
@@ -205,7 +207,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
           Violations are only logged (the exam is never auto-submitted). View them in Result Statistics → Integrity Report.
         </p>
         {cfg.antiCheatEnabled && (
-          <div className="grid gap-3 pl-6 sm:grid-cols-2">
+          <div className="grid min-w-0 max-w-full gap-3 pl-6 sm:grid-cols-2">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.detectTabSwitch} onChange={(event) => setCfg((c) => ({ ...c, detectTabSwitch: event.target.checked }))} />
               Count tab / window switches

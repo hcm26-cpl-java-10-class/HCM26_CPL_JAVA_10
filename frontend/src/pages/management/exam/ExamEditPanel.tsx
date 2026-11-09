@@ -20,9 +20,9 @@ export function ExamEditPanel({ examId }: { examId: number }) {
   });
   const exam: ExamDTO | null = examQuery.data ?? null;
 
-  const [newTitle, setNewTitle] = useState("");
-  const [newDuration, setNewDuration] = useState("60");
-  const [cfg, setCfg] = useState<ExamConfigForm>(DEFAULT_CONFIG);
+  const [newTitle, setNewTitle] = useState(exam?.title ?? "");
+  const [newDuration, setNewDuration] = useState(String(exam?.durationMinutes ?? "60"));
+  const [cfg, setCfg] = useState<ExamConfigForm>(() => (exam ? configFromExam(exam) : DEFAULT_CONFIG));
   const [showErrors, setShowErrors] = useState(false);
 
   // Fill the form once per saved version of the exam (a refetch of the same version never wipes your edits).
@@ -45,6 +45,7 @@ export function ExamEditPanel({ examId }: { examId: number }) {
     mutationFn: () => examApi.update(String(examId), buildExamRequest(newTitle, newDuration, cfg, exam?.isActive ?? true)),
     onSuccess: (updated) => {
       queryClient.setQueryData(["exam-detail", examId], updated);
+      setCfg(configFromExam(updated));
       void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
       toast.success("Exam updated successfully");
     },
@@ -137,7 +138,7 @@ export function ExamEditPanel({ examId }: { examId: number }) {
   return (
     <>
       <form
-        className="flex flex-col gap-4"
+        className="flex min-w-0 max-w-full flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
           const problem = validateConfig(
@@ -211,7 +212,6 @@ export function ExamEditPanel({ examId }: { examId: number }) {
               event.preventDefault();
               if (!templateName.trim()) {
                 toast.error("Template name is required.");
-                return;
               }
               saveExamAsTemplateMutation.mutate();
             }}

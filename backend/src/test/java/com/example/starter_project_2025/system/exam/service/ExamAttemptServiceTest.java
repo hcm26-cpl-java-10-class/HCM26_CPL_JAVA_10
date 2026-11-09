@@ -57,6 +57,9 @@ class ExamAttemptServiceTest {
     @Mock
     private InvitationRepository invitationRepository;
 
+    @Mock
+    private ExamProgressLockService progressLockService;
+
     @InjectMocks
     private ExamAttemptService service;
 

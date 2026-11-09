@@ -30,6 +30,9 @@ export interface ExamConfigForm {
   courseId: string;
   sectionId: string;
   lessonId: string;
+  courseName?: string;
+  sectionTitle?: string;
+  lessonTitle?: string;
 }
 
 export const DEFAULT_CONFIG: ExamConfigForm = {
@@ -58,6 +61,9 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   courseId: "",
   sectionId: "",
   lessonId: "",
+  courseName: "",
+  sectionTitle: "",
+  lessonTitle: "",
 };
 
 export const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -125,6 +131,9 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   courseId: exam.courseId != null ? String(exam.courseId) : "",
   sectionId: exam.sectionId != null ? String(exam.sectionId) : "",
   lessonId: exam.lessonId != null ? String(exam.lessonId) : "",
+  courseName: exam.courseName ?? "",
+  sectionTitle: exam.sectionTitle ?? "",
+  lessonTitle: exam.lessonTitle ?? "",
 });
 
 /** Required selects that must be chosen by the teacher (no default value). */

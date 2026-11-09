@@ -45,6 +45,7 @@ public class ExamAttemptService {
     private final InvitationRepository invitationRepository;
     private final ExamResultAccessService resultAccessService;
     private final ExamProctorImageRepository proctorImageRepository;
+    private final ExamProgressLockService progressLockService;
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId) {
         return startOrResume(examId, studentId, null);
@@ -85,6 +86,9 @@ public class ExamAttemptService {
         }
 
         ensureExamWindowOpen(exam, nowLocal);
+        if (!anonymousGuest) {
+            progressLockService.assertUnlocked(exam, studentId);
+        }
         if (!anonymousGuest) {
             ensureInvitationAccepted(examId, studentId);
         }

@@ -12,7 +12,6 @@ import {
   ClipboardCheck,
   FolderOpen,
   GraduationCap,
-  Layers,
   Plus,
   Search,
   Unlink,
@@ -174,7 +173,7 @@ export default function ExamCurriculumPage() {
 
   const sectionsQuery = useQuery({
     queryKey: ["sections-for-curriculum", courseId],
-    queryFn: () => sectionApi.getByCourse(courseId),
+    queryFn: () => examApi.listByCourse(courseId).then(() => sectionApi.getByCourse(courseId)),
     enabled: courseId > 0,
   });
   const sections: SectionDTO[] = useMemo(() => {
@@ -219,7 +218,7 @@ export default function ExamCurriculumPage() {
     return courses.filter(
       (c) =>
         (c.name || "").toLowerCase().includes(s) ||
-        (c.code || "").toLowerCase().includes(s)
+        ((c as any).code || "").toLowerCase().includes(s)
     );
   }, [courses, courseSearch]);
 
@@ -240,364 +239,334 @@ export default function ExamCurriculumPage() {
       params.delete("courseId");
     }
     setSearchParams(params);
-    setExpandedSectionIds(new Set());
   };
 
   return (
     <MainLayout>
-      <div className="flex flex-col gap-6 p-6">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Assessment Management
-            </p>
-            <h1 className="text-2xl font-bold tracking-tight">Curriculum Mapping</h1>
-            <p className="text-sm text-muted-foreground">
-              Organize and distribute assessments across courses, sections, and lessons.
-            </p>
-          </div>
-        </header>
-
-        <div className="w-full flex-1 flex flex-col space-y-5">
-      {/* ----------------- When NO course is selected: Course Hub Dashboard ----------------- */}
-      {!courseId ? (
-        <div className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-indigo-500/20 bg-gradient-to-r from-indigo-500/[0.08] via-purple-500/[0.04] to-transparent p-6 shadow-xs">
-            <div className="space-y-1">
-              <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-                <GraduationCap className="size-6 text-indigo-500" />
-                <span>Curriculum Assessment Distribution</span>
-              </h2>
-              <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
-                Select a course to organize quizzes, assignments, midterm and final exams across sections and lessons.
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <div className="flex flex-col gap-6">
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b pb-6">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <GraduationCap className="size-5" />
+                </div>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                  Curriculum Assessment Mapping
+                </h1>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Attach and organize assessments directly across courses, sections, and individual lessons.
               </p>
             </div>
-
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search courses..."
-                className="pl-9 bg-background/80"
-                value={courseSearch}
-                onChange={(e) => setCourseSearch(e.target.value)}
-              />
-            </div>
           </div>
 
-          {coursesQuery.isLoading ? (
-            <div className="flex flex-1 min-h-[350px] flex-col items-center justify-center rounded-2xl border border-border/60 bg-card/30 p-12 text-center">
-              <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent mb-3" />
-              <p className="text-sm font-medium text-muted-foreground">Loading courses...</p>
-            </div>
-          ) : coursesQuery.isError ? (
-            <div className="flex flex-1 min-h-[300px] flex-col items-center justify-center rounded-2xl border border-dashed border-destructive/50 bg-destructive/5 p-12 text-center">
-              <BookOpen className="size-8 text-destructive mb-3" />
-              <h3 className="text-base font-semibold text-foreground">Failed to load courses</h3>
-              <p className="text-xs text-muted-foreground mt-1 mb-4">Please make sure the backend server is running and you are logged in.</p>
-              <Button variant="outline" size="sm" onClick={() => coursesQuery.refetch()}>
-                Retry
-              </Button>
-            </div>
-          ) : filteredCourses.length === 0 ? (
-            <div className="flex flex-1 min-h-[300px] flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 bg-card/30 p-12 text-center">
-              <BookOpen className="size-8 text-muted-foreground mb-3" />
-              <h3 className="text-base font-semibold text-foreground">No Courses Found</h3>
-              <p className="text-xs text-muted-foreground mt-1">No courses matched your search query.</p>
+          {/* ----------------- When NO Course Selected: Course Catalogue / Picker ----------------- */}
+          {!courseId ? (
+            <div className="space-y-5">
+              {/* Search & Stats Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="relative w-full max-w-md">
+                  <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    placeholder="Search courses by name or code..."
+                    value={courseSearch}
+                    onChange={(e) => setCourseSearch(e.target.value)}
+                    className="pl-9.5 h-10 bg-card/60 backdrop-blur-xs rounded-xl"
+                  />
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Showing <span className="font-semibold text-foreground">{filteredCourses.length}</span> of{" "}
+                  {courses.length} courses
+                </div>
+              </div>
+
+              {/* Course Grid */}
+              {coursesQuery.isLoading ? (
+                <div className="flex flex-1 min-h-[350px] flex-col items-center justify-center rounded-2xl border border-border/60 bg-card/30 p-12 text-center">
+                  <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">Loading your courses...</p>
+                </div>
+              ) : filteredCourses.length === 0 ? (
+                <div className="flex flex-1 min-h-[300px] flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 bg-card/30 p-12 text-center">
+                  <FolderOpen className="size-12 text-muted-foreground/60 mb-3" />
+                  <h3 className="font-semibold text-base">No courses found</h3>
+                  <p className="text-xs text-muted-foreground mt-1">No courses matched your search query.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4.5">
+                  {filteredCourses.map((course) => (
+                    <div
+                      key={course.id}
+                      onClick={() => course.id && handleSelectCourse(course.id)}
+                      className="group relative flex flex-col justify-between rounded-2xl border border-border/80 bg-card/70 p-5 shadow-xs transition-all hover:border-indigo-500/50 hover:bg-card hover:shadow-md cursor-pointer"
+                    >
+                      <div className="space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-500 dark:text-indigo-400 group-hover:scale-105 transition-transform">
+                            <FolderOpen className="size-5" />
+                          </div>
+                          {(course as any).code && (
+                            <Badge variant="outline" className="font-mono text-xs bg-muted/60">
+                              {(course as any).code}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div>
+                          <h3 className="font-semibold text-base text-foreground group-hover:text-primary transition-colors">
+                            {course.name}
+                          </h3>
+                          {course.description && (
+                            <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                              {course.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3.5 border-t border-border/60 flex items-center justify-between text-xs text-indigo-500 font-medium group-hover:translate-x-0.5 transition-transform">
+                        <span>Manage Curriculum & Assessments</span>
+                        <ChevronRight className="size-4" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4.5">
-              {filteredCourses.map((course) => (
-                <div
-                  key={course.id}
-                  onClick={() => handleSelectCourse(course.id)}
-                  className="group relative flex flex-col justify-between rounded-2xl border border-border/80 bg-card/70 p-5 shadow-xs transition-all hover:border-indigo-500/50 hover:bg-card hover:shadow-md cursor-pointer"
-                >
-                  <div className="space-y-2.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-500 dark:text-indigo-400 group-hover:scale-105 transition-transform">
-                        <FolderOpen className="size-5" />
-                      </div>
-                      {course.code && (
-                        <Badge variant="outline" className="font-mono text-xs bg-muted/60">
-                          {course.code}
-                        </Badge>
-                      )}
-                    </div>
+            /* ----------------- When Course IS Selected: Full Screen Section & Assessment View ----------------- */
+            <div className="space-y-5">
+              {/* Top Bar with Course Switcher */}
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/80 bg-card/70 backdrop-blur-xs p-4 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSelectCourse(0)}
+                    className="gap-1.5 text-xs text-muted-foreground hover:text-foreground h-8"
+                  >
+                    <ArrowLeft className="size-3.5" />
+                    All Courses
+                  </Button>
 
-                    <div>
-                      <h3 className="font-semibold text-base text-foreground group-hover:text-primary transition-colors">
-                        {course.name}
-                      </h3>
-                      {course.description && (
-                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                          {course.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  <div className="h-4 w-px bg-border/70" />
 
-                  <div className="mt-4 pt-3.5 border-t border-border/60 flex items-center justify-between text-xs text-indigo-500 font-medium group-hover:translate-x-0.5 transition-transform">
-                    <span>Manage Curriculum & Assessments</span>
-                    <ChevronRight className="size-4" />
+                  <div className="flex items-center gap-2">
+                    <FolderOpen className="size-4 text-indigo-500" />
+                    <span className="font-semibold text-sm text-foreground">
+                      {selectedCourse?.name || `Course #${courseId}`}
+                    </span>
+                    <Badge variant="outline" className="text-xs bg-muted/60 font-mono">
+                      {sections.length} sections
+                    </Badge>
+                    <Badge variant="outline" className="text-xs bg-indigo-500/10 text-indigo-400 border-indigo-500/30">
+                      {courseExams.length} assessments linked
+                    </Badge>
                   </div>
                 </div>
-              ))}
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Switch course:</span>
+                  <select
+                    className="rounded-lg border border-border/80 bg-background px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none"
+                    value={courseId}
+                    onChange={(e) => handleSelectCourse(Number(e.target.value))}
+                  >
+                    {courses.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Sections List */}
+              <div className="space-y-4">
+                {sectionsQuery.isLoading ? (
+                  <div className="flex flex-1 min-h-[350px] flex-col items-center justify-center rounded-2xl border border-border/60 bg-card/30 p-12 text-center">
+                    <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent mb-3" />
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Loading sections & curriculum...
+                    </p>
+                  </div>
+                ) : sectionsQuery.isError ? (
+                  <div
+                    role="alert"
+                    className="flex flex-1 min-h-[350px] flex-col items-center justify-center rounded-2xl border border-destructive/30 bg-destructive/5 p-12 text-center"
+                  >
+                    <p className="mb-3 text-sm font-semibold text-destructive">
+                      Failed to load sections for this course.
+                    </p>
+                    <Button variant="outline" size="sm" onClick={() => void sectionsQuery.refetch()}>
+                      Try Again
+                    </Button>
+                  </div>
+                ) : sections.length === 0 ? (
+                  <div className="flex flex-1 min-h-[380px] flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 bg-card/30 p-12 text-center">
+                    <div className="flex size-16 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-500 mb-4 shadow-xs">
+                      <BookOpen className="size-8" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-foreground tracking-tight">
+                      No Sections Found
+                    </h3>
+                    <p className="mt-2 max-w-md text-sm text-muted-foreground leading-relaxed">
+                      This course does not currently have any curriculum sections configured.
+                    </p>
+                  </div>
+                ) : (
+                  sections.map((section) => {
+                    const sectionExams = courseExams.filter((e) => e.sectionId === section.id && !e.lessonId);
+                    const isLessonsExpanded = expandedSectionIds.has(section.id!);
+
+                    return (
+                      <div
+                        key={section.id}
+                        className="space-y-4 rounded-2xl border border-border/80 bg-card/70 backdrop-blur-xs p-5 shadow-xs transition-all hover:border-primary/30"
+                      >
+                        {/* Section Header */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-3.5">
+                          <div className="flex items-center gap-3">
+                            <span className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-xs font-bold text-primary font-mono shrink-0">
+                              #{section.orderIndex}
+                            </span>
+                            <div>
+                              <h3 className="text-base font-semibold text-foreground tracking-tight">
+                                {section.title}
+                              </h3>
+                              <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                                <span>Position {section.orderIndex}</span>
+                                {sectionExams.length > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="font-semibold text-indigo-500 dark:text-indigo-400">
+                                      {sectionExams.length} section assessment{sectionExams.length > 1 ? "s" : ""}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs gap-1.5 font-medium"
+                              onClick={() => toggleSectionLessons(section.id!)}
+                            >
+                              {isLessonsExpanded ? (
+                                <ChevronUp className="size-3.5" />
+                              ) : (
+                                <ChevronDown className="size-3.5" />
+                              )}
+                              <span>Lessons</span>
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Section-level Assessment mapping */}
+                        <div className="space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                              Section-Level Assessments:
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 text-xs gap-1.5 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300 transition-all font-medium"
+                              onClick={() => {
+                                setLinkTarget({
+                                  type: "section",
+                                  id: section.id!,
+                                  title: `Section: ${section.title}`,
+                                });
+                                setLinkModalOpen(true);
+                              }}
+                            >
+                              <Plus className="size-3.5" />
+                              Attach Assessment
+                            </Button>
+                          </div>
+
+                          {sectionExams.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-border/70 bg-background/30 p-4 text-center">
+                              <p className="text-xs text-muted-foreground">
+                                No assessments attached to this section yet. Click{" "}
+                                <span className="font-semibold text-indigo-400">&quot;Attach Assessment&quot;</span> to link one.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-2.5">
+                              {sectionExams.map((exam) => (
+                                <CurriculumExamItem
+                                  key={exam.id}
+                                  exam={exam}
+                                  onUnlink={(ex) => setUnlinkTarget(ex)}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Lessons list when expanded */}
+                        {isLessonsExpanded && (
+                          <div className="space-y-2 pt-2 border-t">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
+                              Lessons in this Section:
+                            </span>
+                            <SectionLessonsList
+                              sectionId={section.id!}
+                              courseExams={courseExams}
+                              onAttachExam={(lesson) => {
+                                setLinkTarget({
+                                  type: "lesson",
+                                  id: lesson.id!,
+                                  title: `Lesson: ${lesson.title}`,
+                                });
+                                setLinkModalOpen(true);
+                              }}
+                              onUnlinkExam={(ex) => setUnlinkTarget(ex)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
-        </div>
-      ) : (
-        /* ----------------- When Course IS Selected: Full Screen Section & Assessment View ----------------- */
-        <div className="space-y-5">
-          {/* Top Bar with Course Switcher */}
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/80 bg-card/70 backdrop-blur-xs p-4 shadow-xs">
-            <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleSelectCourse(0)}
-                className="gap-1.5 text-xs text-muted-foreground hover:text-foreground h-8"
-              >
-                <ArrowLeft className="size-3.5" />
-                All Courses
-              </Button>
 
-              <div className="h-4 w-px bg-border/70" />
+          {/* ATTACH ASSESSMENT MODAL */}
+          <LinkExamModal
+            courseId={courseId}
+            target={linkTarget}
+            open={linkModalOpen}
+            onOpenChange={setLinkModalOpen}
+            onSuccess={() => {
+              void queryClient.invalidateQueries({ queryKey: ["course-exams", courseId] });
+            }}
+          />
 
-              <div className="flex items-center gap-2">
-                <FolderOpen className="size-4 text-indigo-500" />
-                <span className="font-semibold text-sm text-foreground">
-                  {selectedCourse?.name || `Course #${courseId}`}
-                </span>
-                <Badge variant="outline" className="text-xs bg-muted/60 font-mono">
-                  {sections.length} sections
-                </Badge>
-                <Badge variant="outline" className="text-xs bg-indigo-500/10 text-indigo-400 border-indigo-500/30">
-                  {courseExams.length} assessments linked
-                </Badge>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground hidden sm:inline">Switch course:</span>
-              <select
-                className="rounded-lg border border-border/80 bg-background px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none"
-                value={courseId}
-                onChange={(e) => handleSelectCourse(Number(e.target.value))}
-              >
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Sections List */}
-          <div className="space-y-4">
-            {sectionsQuery.isLoading ? (
-              <div className="flex flex-1 min-h-[350px] flex-col items-center justify-center rounded-2xl border border-border/60 bg-card/30 p-12 text-center">
-                <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent mb-3" />
-                <p className="text-sm font-medium text-muted-foreground">
-                  Loading sections & curriculum...
-                </p>
-              </div>
-            ) : sectionsQuery.isError ? (
-              <div
-                role="alert"
-                className="flex flex-1 min-h-[350px] flex-col items-center justify-center rounded-2xl border border-destructive/30 bg-destructive/5 p-12 text-center"
-              >
-                <p className="mb-3 text-sm font-semibold text-destructive">
-                  Failed to load sections for this course.
-                </p>
-                <Button variant="outline" size="sm" onClick={() => void sectionsQuery.refetch()}>
-                  Try Again
-                </Button>
-              </div>
-            ) : sections.length === 0 ? (
-              <div className="flex flex-1 min-h-[380px] flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 bg-card/30 p-12 text-center">
-                <div className="flex size-16 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-500 mb-4 shadow-xs">
-                  <BookOpen className="size-8" />
-                </div>
-                <h3 className="text-lg font-semibold text-foreground tracking-tight">
-                  No Sections Found
-                </h3>
-                <p className="mt-2 max-w-md text-sm text-muted-foreground leading-relaxed">
-                  This course does not currently have any curriculum sections configured.
-                </p>
-              </div>
-            ) : (
-              sections.map((section) => {
-                const sectionExams = courseExams.filter((e) => e.sectionId === section.id && !e.lessonId);
-                const isLessonsExpanded = expandedSectionIds.has(section.id);
-
-                return (
-                  <div
-                    key={section.id}
-                    className="space-y-4 rounded-2xl border border-border/80 bg-card/70 backdrop-blur-xs p-5 shadow-xs transition-all hover:border-primary/30"
-                  >
-                    {/* Section Header */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-3.5">
-                      <div className="flex items-center gap-3">
-                        <span className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-xs font-bold text-primary font-mono shrink-0">
-                          #{section.orderIndex}
-                        </span>
-                        <div>
-                          <h3 className="text-base font-semibold text-foreground tracking-tight">
-                            {section.title}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                            <span>Position {section.orderIndex}</span>
-                            {sectionExams.length > 0 && (
-                              <>
-                                <span>•</span>
-                                <span className="font-semibold text-indigo-500 dark:text-indigo-400">
-                                  {sectionExams.length} section assessment{sectionExams.length > 1 ? "s" : ""}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 text-xs gap-1.5 font-medium"
-                          onClick={() => toggleSectionLessons(section.id)}
-                        >
-                          {isLessonsExpanded ? (
-                            <ChevronUp className="size-3.5" />
-                          ) : (
-                            <ChevronDown className="size-3.5" />
-                          )}
-                          {isLessonsExpanded ? "Hide Lessons" : "View Lessons"}
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Section Assessment Box */}
-                    <div className="rounded-xl border border-indigo-500/25 bg-gradient-to-r from-indigo-500/[0.06] via-purple-500/[0.03] to-transparent p-4 shadow-xs">
-                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="flex size-7 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-500 dark:text-indigo-400">
-                            <ClipboardCheck className="size-4" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-foreground uppercase tracking-wider">
-                                Section Assessment
-                              </span>
-                              <span
-                                className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
-                                  sectionExams.length > 0
-                                    ? "bg-indigo-500/15 text-indigo-400 border-indigo-500/30"
-                                    : "bg-muted text-muted-foreground border-border/50"
-                                }`}
-                              >
-                                {sectionExams.length}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-muted-foreground mt-0.5">
-                              Quizzes, assignments, and exams evaluating this whole section
-                            </p>
-                          </div>
-                        </div>
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 text-xs gap-1.5 border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/15 hover:text-indigo-300 transition-all font-medium"
-                          onClick={() => {
-                            setLinkTarget({
-                              type: "section",
-                              id: section.id,
-                              title: `Section: ${section.title}`,
-                            });
-                            setLinkModalOpen(true);
-                          }}
-                        >
-                          <Plus className="size-3.5" />
-                          Attach Assessment
-                        </Button>
-                      </div>
-
-                      {sectionExams.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-border/70 bg-background/30 p-4 text-center">
-                          <p className="text-xs text-muted-foreground">
-                            No assessments attached to this section yet. Click{" "}
-                            <span className="font-semibold text-indigo-400">&quot;Attach Assessment&quot;</span> to link one.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2.5">
-                          {sectionExams.map((exam) => (
-                            <CurriculumExamItem
-                              key={exam.id}
-                              exam={exam}
-                              onUnlink={(ex) => setUnlinkTarget(ex)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Lessons list when expanded */}
-                    {isLessonsExpanded && (
-                      <div className="space-y-2 pt-2 border-t">
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-                          Lessons in this Section:
-                        </span>
-                        <SectionLessonsList
-                          sectionId={section.id}
-                          courseExams={courseExams}
-                          onAttachExam={(lesson) => {
-                            setLinkTarget({
-                              type: "lesson",
-                              id: lesson.id,
-                              title: `Lesson: ${lesson.title}`,
-                            });
-                            setLinkModalOpen(true);
-                          }}
-                          onUnlinkExam={(ex) => setUnlinkTarget(ex)}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ATTACH ASSESSMENT MODAL */}
-      <LinkExamModal
-        courseId={courseId}
-        target={linkTarget}
-        open={linkModalOpen}
-        onOpenChange={setLinkModalOpen}
-        onSuccess={() => {
-          void queryClient.invalidateQueries({ queryKey: ["course-exams", courseId] });
-        }}
-      />
-
-      {/* UNLINK CONFIRM DIALOG */}
-      {unlinkTarget && (
-        <ConfirmDialog
-          open={unlinkTarget !== null}
-          title="Unlink Assessment"
-          description={`Are you sure you want to detach assessment "${unlinkTarget.title}"? The assessment itself will remain safely in Assessment Management.`}
-          confirmLabel="Unlink"
-          cancelLabel="Cancel"
-          onConfirm={() => {
-            unlinkExamMutation.mutate(unlinkTarget);
-          }}
-          onCancel={() => setUnlinkTarget(null)}
-        />
-      )}
+          {/* UNLINK CONFIRM DIALOG */}
+          {unlinkTarget && (
+            <ConfirmDialog
+              open={unlinkTarget !== null}
+              title="Unlink Assessment"
+              description={`Are you sure you want to detach assessment "${unlinkTarget.title}"? The assessment itself will remain safely in Assessment Management.`}
+              confirmLabel="Unlink"
+              cancelLabel="Cancel"
+              onConfirm={() => {
+                unlinkExamMutation.mutate(unlinkTarget);
+              }}
+              onCancel={() => setUnlinkTarget(null)}
+            />
+          )}
         </div>
       </div>
     </MainLayout>

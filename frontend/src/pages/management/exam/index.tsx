@@ -40,11 +40,13 @@ const PAGE_SIZE = 9;
 
 type ExamStatus = "UPCOMING" | "OPEN" | "CLOSED";
 
-/** "Course › Section/Lesson" label of the course an exam belongs to ("—" when it is not linked). */
+/** "Course › Section › Lesson" label of the course an exam belongs to ("—" when it is not linked). */
 const courseLabel = (exam: ExamDTO): string => {
   if (!exam.courseName) return "—";
-  const place = exam.lessonTitle || exam.sectionTitle;
-  return place ? `${exam.courseName} › ${place}` : exam.courseName;
+  const parts = [exam.courseName];
+  if (exam.sectionTitle) parts.push(exam.sectionTitle);
+  if (exam.lessonTitle) parts.push(exam.lessonTitle);
+  return parts.join(" › ");
 };
 
 const examStatus = (exam: ExamDTO): ExamStatus => {
@@ -70,12 +72,30 @@ const SORT_OPTIONS: { value: string; label: string }[] = [
 const formatDateTime = (value?: string | null) =>
   value ? value.replace("T", " ").slice(0, 16) : "—";
 
-function InfoRow({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: React.ReactNode }) {
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+  multiline = false,
+}: {
+  icon: typeof Clock;
+  label: string;
+  value: React.ReactNode;
+  multiline?: boolean;
+}) {
   return (
-    <div className="flex items-center gap-2 text-sm">
-      <Icon className="size-4 shrink-0 text-muted-foreground" />
-      <span className="text-muted-foreground">{label}</span>
-      <span className="ml-auto truncate font-medium">{value}</span>
+    <div className={`flex gap-2 text-sm min-w-0 ${multiline ? "items-start justify-between" : "items-center justify-between"}`}>
+      <div className="flex shrink-0 items-center gap-2 text-muted-foreground">
+        <Icon className="size-4 shrink-0 text-muted-foreground" />
+        <span>{label}</span>
+      </div>
+      <span
+        className={`min-w-0 max-w-full text-right font-medium break-words [overflow-wrap:anywhere] ${
+          multiline ? "leading-snug" : "truncate"
+        }`}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -83,7 +103,7 @@ function InfoRow({ icon: Icon, label, value }: { icon: typeof Clock; label: stri
 export default function ExamManagementPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [_searchParams] = useSearchParams();
   const [examSearch, setExamSearch] = useState("");
   const [examCategoryFilter, setExamCategoryFilter] = useState<ExamCategory | "ALL">("ALL");
   const [courseFilter, setCourseFilter] = useState<string>("ALL");
@@ -196,6 +216,7 @@ export default function ExamManagementPage() {
             </Button>
           </div>
         </header>
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="relative w-full max-w-md">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -280,9 +301,9 @@ export default function ExamManagementPage() {
         </div>
 
         {examsQuery.isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Loading exams">
+          <div className="grid min-w-0 max-w-full gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Loading exams">
             {Array.from({ length: 6 }, (_, i) => (
-              <div key={i} className="flex flex-col gap-3 rounded-lg border p-4">
+              <div key={i} className="flex min-w-0 max-w-full flex-col gap-3 rounded-lg border p-4">
                 <Skeleton className="h-5 w-3/4" />
                 <Skeleton className="h-3 w-1/2" />
                 <div className="grid gap-2 border-t pt-3">
@@ -316,7 +337,7 @@ export default function ExamManagementPage() {
             )}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid min-w-0 max-w-full gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {examRows.map((exam) => {
               const status = STATUS_STYLE[examStatus(exam)];
               return (
@@ -327,10 +348,10 @@ export default function ExamManagementPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={`Open exam ${exam.title} in a new tab`}
-                  className="flex cursor-pointer flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm transition hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex min-w-0 max-w-full cursor-pointer flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm transition hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <h2 className="line-clamp-2 break-words text-base font-semibold leading-snug">{exam.title}</h2>
+                  <div className="flex items-start justify-between gap-3 min-w-0">
+                    <h2 className="line-clamp-2 min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-base font-semibold leading-snug">{exam.title}</h2>
                     <div className="flex shrink-0 flex-col items-end gap-1">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${status.className}`}>
                         {status.label}
@@ -343,15 +364,16 @@ export default function ExamManagementPage() {
                       )}
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="truncate text-xs text-muted-foreground">
                     {EXAM_CATEGORY_LABEL[exam.category ?? "ASSIGNMENT"]}
                     {" · "}
                     {EXAM_TYPE_LABEL[exam.examType ?? "MIXED"]}
                   </p>
-                  <div className="grid gap-2 border-t pt-3">
+
+                  <div className="grid min-w-0 max-w-full gap-2 border-t pt-3">
                     <InfoRow icon={CalendarClock} label="Created" value={formatDateTime(exam.createdAt)} />
-                    <InfoRow icon={User} label="Created by" value={exam.createdByName || "—"} />
-                    <InfoRow icon={BookOpen} label="Course" value={courseLabel(exam)} />
+                    <InfoRow icon={User} label="Created by" value={exam.createdByName || "—"} multiline />
+                    <InfoRow icon={BookOpen} label="Course" value={courseLabel(exam)} multiline />
                     <InfoRow icon={Clock} label="Duration" value={`${exam.durationMinutes} mins`} />
                     <InfoRow icon={ListChecks} label="Questions" value={exam.questionIds?.length ?? exam.questions?.length ?? 0} />
                     <InfoRow icon={Trophy} label="Max score" value={exam.maxScore ?? 10} />

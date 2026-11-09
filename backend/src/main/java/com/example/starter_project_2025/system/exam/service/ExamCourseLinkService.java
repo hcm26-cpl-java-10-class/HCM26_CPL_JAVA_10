@@ -24,13 +24,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
- * Gan bai thi vao course / section / lesson va doc bai thi theo course.
+ * Gan bai thi vao course / section / lesson va doc bai thi theo course / section / lesson.
  * <ul>
  *   <li>Lien ket la tuy chon; chon lesson thi section va course duoc suy ra, phai nhat quan.</li>
  *   <li>Giao vien (khong phai ADMIN) chi gan duoc vao course ma minh la giang vien (instructorUser).</li>
+ *   <li>Giao vien chi duoc quan ly / lien ket bai thi do chinh minh tao (Exam Owner).</li>
  * </ul>
  */
 @Service
@@ -44,6 +46,7 @@ public class ExamCourseLinkService {
     private final ExamRepository examRepository;
     private final UserRepository userRepository;
     private final ExamAccessGuard examAccessGuard;
+    private final ExamProgressLockService lockService;
 
     // ------------------------------------------------------------------ gan lien ket khi tao / sua bai thi
 
@@ -69,7 +72,7 @@ public class ExamCourseLinkService {
                 throw new ResourceNotFoundException("Lesson not found");
             }
             section = lesson.getSection();
-            course = section.getCourse();
+            course = section != null ? section.getCourse() : null;
         } else if (sectionId != null) {
             section = sectionRepository.findById(sectionId).orElse(null);
             if (section == null) {
@@ -83,10 +86,10 @@ public class ExamCourseLinkService {
             }
         }
 
-        if (lesson != null && sectionId != null && !sectionId.equals(section.getId())) {
+        if (lesson != null && sectionId != null && (section == null || !sectionId.equals(section.getId()))) {
             ctx.add("sectionId", "The selected lesson does not belong to the selected section");
         }
-        if (section != null && courseId != null && !courseId.equals(course.getId())) {
+        if (section != null && courseId != null && (course == null || !courseId.equals(course.getId()))) {
             ctx.add("courseId", "The selected section/lesson does not belong to the selected course");
         }
         if (ctx.hasErrors()) {
@@ -103,29 +106,96 @@ public class ExamCourseLinkService {
     }
 
     /** Giao vien chi duoc gan bai thi vao course cua minh; ADMIN va vai tro khac khong bi gioi han. */
-    private void checkCanLink(Course course) {
-        Long scopeUserId = ownerScopeUserId();
-        if (scopeUserId != null && !isInstructor(course, scopeUserId)) {
-            throw new AccessDeniedException("You can only attach assessments to courses you teach");
+    private void checkCanLink(Course course, UserPrincipal principal) {
+        if (principal != null) {
+            if (examAccessGuard.isOwnerScoped(principal)) {
+                Long userId = principal.getUser() == null ? null : principal.getUser().getId();
+                if (!isInstructor(course, userId)) {
+                    throw new AccessDeniedException("You can only attach assessments to courses you teach");
+                }
+            }
+        } else {
+            Long scopeUserId = ownerScopeUserId();
+            if (scopeUserId != null && !isInstructor(course, scopeUserId)) {
+                throw new AccessDeniedException("You can only attach assessments to courses you teach");
+            }
         }
     }
 
-    // ------------------------------------------------------------------ doc bai thi theo course
+    private void checkCanLink(Course course) {
+        checkCanLink(course, null);
+    }
+
+    // ------------------------------------------------------------------ kiem tra quyen truy cap khoa hoc
+
+    public boolean checkCourseAccess(Course course, UserPrincipal principal) {
+        Long userId = principal == null || principal.getUser() == null ? null : principal.getUser().getId();
+        boolean staff = examAccessGuard.isAdmin(principal) || isInstructor(course, userId);
+        if (!staff) {
+            boolean enrolled = userId != null && enrollmentRepository.existsByUser_IdAndCourse_Id(userId, course.getId());
+            if (!enrolled) {
+                throw new AccessDeniedException("You do not have access to this course");
+            }
+        }
+        return staff;
+    }
+
+    // ------------------------------------------------------------------ doc bai thi theo course / section / lesson
 
     @Transactional(readOnly = true)
     public List<CourseExamDTO> listByCourse(Long courseId, Long sectionId, Long lessonId, UserPrincipal principal) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+        boolean staff = checkCourseAccess(course, principal);
         Long userId = principal == null || principal.getUser() == null ? null : principal.getUser().getId();
-        boolean staff = examAccessGuard.isAdmin(principal) || isInstructor(course, userId);
-        if (!staff) {
-            boolean enrolled = userId != null && enrollmentRepository.existsByUser_IdAndCourse_Id(userId, courseId);
-            if (!enrolled) {
-                throw new AccessDeniedException("You do not have access to this course");
-            }
+        List<Exam> exams = examRepository.findByCourseLink(courseId, sectionId, lessonId, !staff);
+        Map<Long, ExamProgressLockService.LockState> locks =
+                staff ? Map.of() : lockService.evaluateAll(exams, userId, courseId);
+        return exams.stream()
+                .map(e -> toCourseExam(e, staff,
+                        locks.getOrDefault(e.getId(), ExamProgressLockService.LockState.OPEN)))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CourseExamDTO> listBySection(Long sectionId, UserPrincipal principal) {
+        Section section = sectionRepository.findById(sectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Section not found"));
+        Course course = section.getCourse();
+        if (course == null) {
+            throw new ResourceNotFoundException("Course not found");
         }
-        return examRepository.findByCourseLink(courseId, sectionId, lessonId, !staff).stream()
-                .map(e -> toCourseExam(e, staff))
+        boolean staff = checkCourseAccess(course, principal);
+        Long userId = principal == null || principal.getUser() == null ? null : principal.getUser().getId();
+        List<Exam> exams = examRepository.findByCourseLink(course.getId(), sectionId, null, !staff);
+        Map<Long, ExamProgressLockService.LockState> locks =
+                staff ? Map.of() : lockService.evaluateAll(exams, userId, course.getId());
+        return exams.stream()
+                .map(e -> toCourseExam(e, staff,
+                        locks.getOrDefault(e.getId(), ExamProgressLockService.LockState.OPEN)))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CourseExamDTO> listByLesson(Long lessonId, UserPrincipal principal) {
+        Lesson lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
+        Section section = lesson.getSection();
+        if (section == null) {
+            throw new ResourceNotFoundException("Section not found");
+        }
+        Course course = section.getCourse();
+        if (course == null) {
+            throw new ResourceNotFoundException("Course not found");
+        }
+        boolean staff = checkCourseAccess(course, principal);
+        Long userId = principal == null || principal.getUser() == null ? null : principal.getUser().getId();
+        List<Exam> exams = examRepository.findByCourseLink(course.getId(), section.getId(), lessonId, !staff);
+        Map<Long, ExamProgressLockService.LockState> locks =
+                staff ? Map.of() : lockService.evaluateAll(exams, userId, course.getId());
+        return exams.stream()
+                .map(e -> toCourseExam(e, staff,
+                        locks.getOrDefault(e.getId(), ExamProgressLockService.LockState.OPEN)))
                 .toList();
     }
 
@@ -133,10 +203,14 @@ public class ExamCourseLinkService {
     public CourseExamDTO linkExam(Long courseId, Long examId, Long sectionId, Long lessonId, UserPrincipal principal) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
-        checkCanLink(course);
+        checkCanLink(course, principal);
 
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
+        if (!examAccessGuard.canManage(exam, principal)) {
+            throw new AccessDeniedException("You do not have permission to manage this exam");
+        }
 
         Section section = null;
         Lesson lesson = null;
@@ -145,7 +219,7 @@ public class ExamCourseLinkService {
             lesson = lessonRepository.findById(lessonId)
                     .orElseThrow(() -> new ResourceNotFoundException("Lesson not found"));
             section = lesson.getSection();
-            if (!course.getId().equals(section.getCourse().getId())) {
+            if (section == null || section.getCourse() == null || !course.getId().equals(section.getCourse().getId())) {
                 throw new IllegalArgumentException("Lesson does not belong to this course");
             }
             if (sectionId != null && !sectionId.equals(section.getId())) {
@@ -154,7 +228,7 @@ public class ExamCourseLinkService {
         } else if (sectionId != null) {
             section = sectionRepository.findById(sectionId)
                     .orElseThrow(() -> new ResourceNotFoundException("Section not found"));
-            if (!course.getId().equals(section.getCourse().getId())) {
+            if (section.getCourse() == null || !course.getId().equals(section.getCourse().getId())) {
                 throw new IllegalArgumentException("Section does not belong to this course");
             }
         }
@@ -173,10 +247,18 @@ public class ExamCourseLinkService {
     public void unlinkExam(Long courseId, Long examId, boolean unlinkFromCourse, UserPrincipal principal) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
-        checkCanLink(course);
+        checkCanLink(course, principal);
 
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
+
+        if (!examAccessGuard.canManage(exam, principal)) {
+            throw new AccessDeniedException("You do not have permission to manage this exam");
+        }
+
+        if (exam.getCourse() != null && !courseId.equals(exam.getCourse().getId())) {
+            throw new IllegalArgumentException("Exam is not linked to this course");
+        }
 
         if (unlinkFromCourse) {
             exam.setCourse(null);
@@ -193,7 +275,7 @@ public class ExamCourseLinkService {
     public List<CourseExamDTO> availableExams(Long courseId, UserPrincipal principal) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
-        checkCanLink(course);
+        checkCanLink(course, principal);
 
         Long userId = principal == null || principal.getUser() == null ? null : principal.getUser().getId();
         boolean isAdmin = examAccessGuard.isAdmin(principal);
@@ -206,6 +288,10 @@ public class ExamCourseLinkService {
     }
 
     private CourseExamDTO toCourseExam(Exam e, boolean staff) {
+        return toCourseExam(e, staff, ExamProgressLockService.LockState.OPEN);
+    }
+
+    private CourseExamDTO toCourseExam(Exam e, boolean staff, ExamProgressLockService.LockState lock) {
         return new CourseExamDTO(
                 e.getId(),
                 e.getTitle(),
@@ -222,7 +308,9 @@ public class ExamCourseLinkService {
                 e.getLesson() == null ? null : e.getLesson().getId(),
                 e.getLesson() == null ? null : e.getLesson().getTitle(),
                 staff && e.getQuestions() != null ? e.getQuestions().size() : null,
-                staff ? creatorName(e.getCreatedBy()) : null);
+                staff ? creatorName(e.getCreatedBy()) : null,
+                lock.locked(),
+                lock.reason());
     }
 
     private String creatorName(Long userId) {

@@ -137,4 +137,12 @@ public class ExamDTO extends BaseDTO {
 
     @JsonProperty(access = READ_ONLY)
     private Boolean hasPassword;
+
+    @JsonProperty(value = "isCurrentlyOpen", access = READ_ONLY)
+    public Boolean getIsCurrentlyOpen() {
+        LocalDateTime now = LocalDateTime.now();
+        boolean afterStart = (startTime == null || !now.isBefore(startTime));
+        boolean beforeEnd = (endTime == null || !now.isAfter(endTime));
+        return afterStart && beforeEnd;
+    }
 }

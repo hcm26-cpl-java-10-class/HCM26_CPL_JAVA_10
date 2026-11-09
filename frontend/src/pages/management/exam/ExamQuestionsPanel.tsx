@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ExamDTO, QuestionDTO, QuestionDifficulty, QuestionType } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, ChevronUp, Dices, Eye, EyeOff, Pencil, Plus, Save, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronUp, Dices, Eye, EyeOff, Pencil, Plus, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { QuestionAnswersPreview } from "./question/components/QuestionAnswersPreview";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -49,6 +49,12 @@ const DIFFICULTY_CONFIG: Record<QuestionDifficulty, { label: string; badge: stri
     label: "Hard",
     badge: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/25",
   },
+};
+
+const DIFFICULTY_LABEL: Record<QuestionDifficulty, string> = {
+  EASY: "Easy",
+  MEDIUM: "Medium",
+  HARD: "Hard",
 };
 
 const normalizeTopic = (topic?: string | null) => (topic ?? "").trim().toLowerCase();
@@ -454,6 +460,9 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
     });
   };
 
+  const savedQuestions = activeExam?.questions ?? [];
+  const selectedAll = useMemo(() => [...savedQuestions, ...stagedQuestions], [savedQuestions, stagedQuestions]);
+
   const isAllSelectedExpanded =
     selectedAll.length > 0 && selectedAll.every((q) => expandedSelectedIds.has(q.id));
   const toggleSelectedPreviewAll = () => {
@@ -558,8 +567,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
     return <p className="py-10 text-center text-sm text-destructive">Failed to load the assessment.</p>;
   }
 
-  const savedQuestions = activeExam.questions ?? [];
-  const selectedAll = [...savedQuestions, ...stagedQuestions];
+
   const typeSummary = allowedTypes
     .map((type) => {
       const items = selectedAll.filter((q) => q.type === type);

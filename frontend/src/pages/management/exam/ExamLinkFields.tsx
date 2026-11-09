@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/select";
 import { examApi } from "@/api";
 import { useQuery } from "@tanstack/react-query";
-import type { Dispatch, SetStateAction } from "react";
+import { useMemo, type Dispatch, type SetStateAction } from "react";
 import type { ExamConfigForm } from "./examConfig";
 
 const NONE = "none";
@@ -48,80 +48,148 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
   const sectionOptions = courseId != null ? sections.data ?? [] : [];
   const lessonOptions = sectionId != null ? lessons.data ?? [] : [];
 
+  const selectedCourseTitle = useMemo(() => {
+    if (!cfg.courseId) return undefined;
+    const found = courseOptions.find((c) => String(c.id) === cfg.courseId);
+    return found?.title || cfg.courseName || `Course #${cfg.courseId}`;
+  }, [cfg.courseId, cfg.courseName, courseOptions]);
+
+  const selectedSectionTitle = useMemo(() => {
+    if (!cfg.sectionId) return undefined;
+    const found = sectionOptions.find((s) => String(s.id) === cfg.sectionId);
+    return found?.title || cfg.sectionTitle || `Section #${cfg.sectionId}`;
+  }, [cfg.sectionId, cfg.sectionTitle, sectionOptions]);
+
+  const selectedLessonTitle = useMemo(() => {
+    if (!cfg.lessonId) return undefined;
+    const found = lessonOptions.find((l) => String(l.id) === cfg.lessonId);
+    return found?.title || cfg.lessonTitle || `Lesson #${cfg.lessonId}`;
+  }, [cfg.lessonId, cfg.lessonTitle, lessonOptions]);
+
   return (
-    <div className="grid gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-3">
+    <div className="grid min-w-0 max-w-full gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-3">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:col-span-3">
         Course (optional)
       </h3>
 
-      <label className="grid gap-2 text-sm font-medium">
-        Course
+      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+        <span className="truncate">Course</span>
         <Select
           value={cfg.courseId || NONE}
-          onValueChange={(value) =>
-            setCfg((c) => ({ ...c, courseId: !value || value === NONE ? "" : value, sectionId: "", lessonId: "" }))
-          }
+          onValueChange={(value) => {
+            const next = !value || value === NONE ? "" : value;
+            if (next !== cfg.courseId) {
+              const selected = courseOptions.find((c) => String(c.id) === next);
+              setCfg((c) => ({
+                ...c,
+                courseId: next,
+                courseName: selected?.title ?? "",
+                sectionId: "",
+                sectionTitle: "",
+                lessonId: "",
+                lessonTitle: "",
+              }));
+            }
+          }}
         >
-          <SelectTrigger aria-label="Course">
-            <SelectValue placeholder="Not linked to a course" />
+          <SelectTrigger aria-label="Course" className="w-full min-w-0 max-w-full">
+            <SelectValue placeholder="Not linked to a course">
+              {selectedCourseTitle}
+            </SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-w-[90vw]">
             <SelectItem value={NONE}>Not linked to a course</SelectItem>
             {courseOptions.map((course) => (
-              <SelectItem key={course.id} value={String(course.id)}>{course.title}</SelectItem>
+              <SelectItem key={course.id} value={String(course.id)} className="break-words">
+                {course.title}
+              </SelectItem>
             ))}
             {/* Keep the current value visible even if it is not in the (filtered) list. */}
             {cfg.courseId && !courseOptions.some((course) => String(course.id) === cfg.courseId) && (
-              <SelectItem value={cfg.courseId}>Course #{cfg.courseId}</SelectItem>
+              <SelectItem value={cfg.courseId} className="break-words">
+                {cfg.courseName || `Course #${cfg.courseId}`}
+              </SelectItem>
             )}
           </SelectContent>
         </Select>
-        <span className="text-xs font-normal text-muted-foreground">
+        <span className="truncate text-xs font-normal text-muted-foreground">
           {courses.isError ? "Could not load courses." : "Only courses you teach are listed."}
         </span>
       </label>
 
-      <label className="grid gap-2 text-sm font-medium">
-        Section
+      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+        <span className="truncate">Section</span>
         <Select
           value={cfg.sectionId || NONE}
           disabled={courseId == null}
-          onValueChange={(value) =>
-            setCfg((c) => ({ ...c, sectionId: !value || value === NONE ? "" : value, lessonId: "" }))
-          }
+          onValueChange={(value) => {
+            const next = !value || value === NONE ? "" : value;
+            if (next !== cfg.sectionId) {
+              const selected = sectionOptions.find((s) => String(s.id) === next);
+              setCfg((c) => ({
+                ...c,
+                sectionId: next,
+                sectionTitle: selected?.title ?? "",
+                lessonId: "",
+                lessonTitle: "",
+              }));
+            }
+          }}
         >
-          <SelectTrigger aria-label="Section">
-            <SelectValue placeholder="Whole course" />
+          <SelectTrigger aria-label="Section" className="w-full min-w-0 max-w-full">
+            <SelectValue placeholder="Whole course">
+              {selectedSectionTitle}
+            </SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-w-[90vw]">
             <SelectItem value={NONE}>Whole course</SelectItem>
             {sectionOptions.map((section) => (
-              <SelectItem key={section.id} value={String(section.id)}>{section.title}</SelectItem>
+              <SelectItem key={section.id} value={String(section.id)} className="break-words">
+                {section.title}
+              </SelectItem>
             ))}
             {cfg.sectionId && !sectionOptions.some((section) => String(section.id) === cfg.sectionId) && (
-              <SelectItem value={cfg.sectionId}>Section #{cfg.sectionId}</SelectItem>
+              <SelectItem value={cfg.sectionId} className="break-words">
+                {cfg.sectionTitle || `Section #${cfg.sectionId}`}
+              </SelectItem>
             )}
           </SelectContent>
         </Select>
       </label>
 
-      <label className="grid gap-2 text-sm font-medium">
-        Lesson
+      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+        <span className="truncate">Lesson</span>
         <Select
           value={cfg.lessonId || NONE}
           disabled={sectionId == null}
-          onValueChange={(value) => setCfg((c) => ({ ...c, lessonId: !value || value === NONE ? "" : value }))}
+          onValueChange={(value) => {
+            const next = !value || value === NONE ? "" : value;
+            if (next !== cfg.lessonId) {
+              const selected = lessonOptions.find((l) => String(l.id) === next);
+              setCfg((c) => ({
+                ...c,
+                lessonId: next,
+                lessonTitle: selected?.title ?? "",
+              }));
+            }
+          }}
         >
-          <SelectTrigger aria-label="Lesson">
-            <SelectValue placeholder="Whole section" />
+          <SelectTrigger aria-label="Lesson" className="w-full min-w-0 max-w-full">
+            <SelectValue placeholder="Whole section">
+              {selectedLessonTitle}
+            </SelectValue>
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-w-[90vw]">
             <SelectItem value={NONE}>Whole section</SelectItem>
             {lessonOptions.map((lesson) => (
-              <SelectItem key={lesson.id} value={String(lesson.id)}>{lesson.title}</SelectItem>
+              <SelectItem key={lesson.id} value={String(lesson.id)} className="break-words">
+                {lesson.title}
+              </SelectItem>
             ))}
             {cfg.lessonId && !lessonOptions.some((lesson) => String(lesson.id) === cfg.lessonId) && (
-              <SelectItem value={cfg.lessonId}>Lesson #{cfg.lessonId}</SelectItem>
+              <SelectItem value={cfg.lessonId} className="break-words">
+                {cfg.lessonTitle || `Lesson #${cfg.lessonId}`}
+              </SelectItem>
             )}
           </SelectContent>
         </Select>

@@ -6,6 +6,8 @@ import com.example.starter_project_2025.base.crud.service.BaseCrudService;
 import com.example.starter_project_2025.base.crud.dto.OnUpdate;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.validation.annotation.Validated;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamFilter;
@@ -67,5 +69,7 @@ public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter
                                                   @Validated(OnUpdate.class) @RequestBody QuestionDTO request) {
         return ResponseEntity.ok(service.updateQuestion(id, questionId, request));
     }
+
+
 
 }
