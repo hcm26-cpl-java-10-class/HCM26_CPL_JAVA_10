@@ -8,6 +8,7 @@ import type { Trainee } from "@/types";
 import ClassDetailPage from "../ClassDetailPage";
 import ClassListPage from "../ClassListPage";
 import { getMockTraineesByClass, MOCK_TRAINING_CLASSES } from "../mocks/classTrainee.mock";
+import { resetClassAttendanceStoreForTest } from "./TraineeAttendanceView";
 import { formatFptStudentIdForSite, getFptStudentIdRuleBySite } from "./TraineeModal";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 
@@ -31,6 +32,7 @@ let serverTraineesState: Trainee[] = [];
 
 beforeEach(() => {
     fakeHttp.reset();
+    resetClassAttendanceStoreForTest();
     grant("SESSION_READ", "STUDENT_SCORE_READ");
     serverTraineesState = getMockTraineesByClass(2);
     fakeHttp.on("get", "/external/classes", MOCK_TRAINING_CLASSES);
@@ -424,17 +426,15 @@ describe("ClassDetailView & TraineeListTab", () => {
         }
     });
 
-    it("supports extended Bulk Actions: selection count badge, Change Status, Move to Class, and Send Email", async () => {
+    it("supports extended Bulk Actions: selection count badge and Change Status", async () => {
         const { user } = renderClassFlow("/classes/2");
         await screen.findByText("Hoàng Phương Bình");
 
         const changeStatusBtn = screen.getByRole("button", { name: /change status/i });
-        const moveClassBtn = screen.getByRole("button", { name: /move to class/i });
-        const sendEmailBtn = screen.getByRole("button", { name: /send email/i });
 
+        expect(screen.queryByRole("button", { name: /move to class/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /send email/i })).not.toBeInTheDocument();
         expect(changeStatusBtn).toBeDisabled();
-        expect(moveClassBtn).toBeDisabled();
-        expect(sendEmailBtn).toBeDisabled();
 
         // 1. Select two trainees
         await user.click(screen.getByRole("checkbox", { name: "Select Hoàng Phương Bình" }));
@@ -443,8 +443,6 @@ describe("ClassDetailView & TraineeListTab", () => {
         // Selection badge appears
         expect(screen.getByText("2 Trainees Selected")).toBeInTheDocument();
         expect(changeStatusBtn).toBeEnabled();
-        expect(moveClassBtn).toBeEnabled();
-        expect(sendEmailBtn).toBeEnabled();
 
         // 2. Change Status in bulk to "Inactive"
         await user.click(changeStatusBtn);
@@ -457,39 +455,53 @@ describe("ClassDetailView & TraineeListTab", () => {
         expect(inactiveBadges.length).toBeGreaterThanOrEqual(2);
         expect(screen.getByText("2 unsaved changes")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: /save changes/i })).toBeEnabled();
+    }, 15000);
 
-        // 3. Send Email Notification
-        await user.click(sendEmailBtn);
-        const emailDialog = await screen.findByRole("dialog", { name: "Send Email Notification" });
-        expect(within(emailDialog).getByText(/Recipients \(2\)/i)).toBeInTheDocument();
+    it("switches to Attendance Tracker view, renders 4 summary cards, attendance table, View Logs, and Take Daily Attendance", async () => {
+        const { user } = renderClassFlow("/classes/2");
+        await screen.findByText("Hoàng Phương Bình");
 
-        const subjectInput = within(emailDialog).getByLabelText(/Subject/i);
-        const bodyInput = within(emailDialog).getByLabelText(/Message Body/i);
-        await user.type(subjectInput, "Class Update Notice");
-        await user.type(bodyInput, "Please review the updated class schedule.");
-        await user.click(within(emailDialog).getByRole("button", { name: /send notification/i }));
+        // 1. Switch to Attendance Tracker view
+        await user.click(screen.getByRole("button", { name: /^attendance$/i }));
+        expect(await screen.findByTestId("attendance-tracker-view")).toBeInTheDocument();
+        expect(screen.getByTestId("summary-sessions-conducted")).toHaveTextContent("20 / 40 Sessions");
+        expect(screen.getByTestId("summary-attendance-rate")).toHaveTextContent("91%");
+        expect(screen.getByTestId("summary-at-risk")).toHaveTextContent("3 Trainees");
+        expect(screen.getByTestId("summary-critical")).toHaveTextContent("2 Trainees");
 
-        await waitFor(() => {
-            expect(screen.queryByRole("dialog", { name: "Send Email Notification" })).not.toBeInTheDocument();
+        // 2. Verify Attendance Table columns and status badges
+        const attTable = screen.getByRole("table", { name: "Trainee Attendance Table" });
+        expect(within(attTable).getAllByText("Eligible").length).toBeGreaterThan(0);
+        expect(within(attTable).getAllByText("Warning").length).toBe(3);
+        expect(within(attTable).getAllByText("Disqualified").length).toBe(2);
+
+        // 3. Open View Logs modal for a trainee
+        await user.click(screen.getByRole("button", { name: "View Logs for Trần Vũ Gia Bảo" }));
+        const logsDialog = await screen.findByRole("dialog", {
+            name: /Attendance Logs — Trần Vũ Gia Bảo/i,
         });
+        expect(within(logsDialog).getByText(/Session History \(20 Sessions\)/i)).toBeInTheDocument();
+        await user.click(within(logsDialog).getAllByRole("button", { name: "Close" })[0]);
 
-        // 4. Move to Class
-        await user.click(moveClassBtn);
-        const moveDialog = await screen.findByRole("dialog", { name: "Move Trainees to Another Class" });
-        expect(within(moveDialog).getByText(/Selected Trainees \(2\)/i)).toBeInTheDocument();
-
-        const destinationSelect = within(moveDialog).getByLabelText(/Destination Class/i);
-        const targetOption = within(destinationSelect).getAllByRole("option")[1];
-        await user.selectOptions(destinationSelect, targetOption.getAttribute("value")!);
-
-        await user.click(within(moveDialog).getByRole("button", { name: /move trainees/i }));
-
-        await waitFor(() => {
-            expect(screen.queryByRole("dialog", { name: "Move Trainees to Another Class" })).not.toBeInTheDocument();
+        // 4. Take Daily Attendance -> mark one trainee Unexcused -> Save Changes
+        await user.click(screen.getByRole("button", { name: /take attendance/i }));
+        const takeDialog = await screen.findByRole("dialog", {
+            name: /Take Daily Attendance — Session #21/i,
         });
+        await user.click(within(takeDialog).getByRole("button", { name: /mark all present/i }));
+        await user.selectOptions(
+            within(takeDialog).getByLabelText("Attendance status for Hoàng Phương Bình"),
+            "Unexcused",
+        );
+        await user.click(within(takeDialog).getByRole("button", { name: /save changes/i }));
 
-        // The moved trainees should be removed from the current class list
-        expect(screen.queryByText("Hoàng Phương Bình")).not.toBeInTheDocument();
-        expect(screen.queryByText("Trần Việt Anh")).not.toBeInTheDocument();
+        // Sessions Conducted increments to 21 / 40 Sessions
+        expect(await screen.findByTestId("summary-sessions-conducted")).toHaveTextContent(
+            "21 / 40 Sessions",
+        );
+
+        // 5. Click Back to Trainee List returns to Trainee List table
+        await user.click(screen.getByRole("button", { name: /back to trainee list/i }));
+        expect(await screen.findByRole("table", { name: "Trainee List" })).toBeInTheDocument();
     }, 15000);
 });

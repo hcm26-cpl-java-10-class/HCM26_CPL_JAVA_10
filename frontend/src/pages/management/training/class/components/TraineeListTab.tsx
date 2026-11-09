@@ -1,16 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-    ArrowRightLeft,
     ChevronDown,
     Download,
     Eye,
-    Mail,
     MoreVertical,
     Pencil,
     RotateCcw,
     Save,
     Search,
-    Send,
     Trash2,
     UserCheck,
     Users,
@@ -46,14 +43,13 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
-import { externalKeys, useClassTrainees, useExternalClasses } from "@/hooks/useExternalLookups";
+import { externalKeys, useClassTrainees } from "@/hooks/useExternalLookups";
 import { cn } from "@/lib/utils";
 import type { ExternalClass, Trainee } from "@/types";
 import { formatDate, splitLocalDateTime } from "@/utils/session.utils";
+import { TraineeAttendanceView } from "./TraineeAttendanceView";
 import {
     formatFptStudentIdForSite,
     normalizeTraineeGender,
@@ -144,25 +140,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
     // Confirmation dialog state for single row Delete & Bulk Delete
     const [deleteTarget, setDeleteTarget] = useState<Trainee | null>(null);
     const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-
-    // Bulk Action: Move to Another Class state
-    const [moveModalOpen, setMoveModalOpen] = useState(false);
-    const [targetClassId, setTargetClassId] = useState("");
-
-    // Bulk Action: Send Email Notification state
-    const [emailModalOpen, setEmailModalOpen] = useState(false);
-    const [emailSubject, setEmailSubject] = useState("");
-    const [emailBody, setEmailBody] = useState("");
-
-    // Destination classes for transfer
-    const { data: allClasses = [] } = useExternalClasses();
-    const availableDestinationClasses = useMemo(() => {
-        return allClasses.filter(
-            (c) =>
-                String(c.id) !== String(classId) &&
-                (!classItem?.code || c.code !== classItem.code),
-        );
-    }, [allClasses, classId, classItem?.code]);
+    const [isAttendanceView, setIsAttendanceView] = useState(false);
 
     const activeTrainees = draftTrainees ?? serverTrainees;
 
@@ -439,48 +417,6 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         );
     };
 
-    const handleConfirmMoveClass = () => {
-        if (!targetClassId || selectedCount === 0) return;
-        const destinationClass = availableDestinationClasses.find(
-            (c) => String(c.id) === targetClassId,
-        );
-        const targetLabel =
-            destinationClass?.code || destinationClass?.name || `Class #${targetClassId}`;
-        const currentList = draftTrainees ?? serverTrainees;
-        const count = selectedCount;
-
-        setDraftTrainees(currentList.filter((item) => !selectedIds.has(item.id)));
-        setSelectedIds(new Set());
-        setMoveModalOpen(false);
-        setTargetClassId("");
-        toast.success(
-            `Moved ${count} ${count === 1 ? "trainee" : "trainees"} to ${targetLabel}. Click Save Changes to persist.`,
-        );
-    };
-
-    const handleSendEmailNotification = (event: React.FormEvent) => {
-        event.preventDefault();
-        const subject = emailSubject.trim();
-        const body = emailBody.trim();
-
-        if (!subject) {
-            toast.error("Please enter an email subject.");
-            return;
-        }
-        if (!body) {
-            toast.error("Please enter email body content.");
-            return;
-        }
-
-        const count = selectedCount;
-        setEmailModalOpen(false);
-        setEmailSubject("");
-        setEmailBody("");
-        toast.success(
-            `Email notification sent to ${count} ${count === 1 ? "trainee" : "trainees"} successfully!`,
-        );
-    };
-
     const handleDiscardChanges = () => {
         setDraftTrainees(null);
         setSelectedIds((prev) => {
@@ -512,13 +448,21 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
     };
 
     const handleAttendance = () => {
-        toast.info(
-            `Attendance for ${classItem.code ?? `Class #${classId}`} will be connected once the Attendance API is ready.`,
-        );
+        setIsAttendanceView(true);
     };
 
     if (isError) {
         return <ApiErrorState error={error} resource="trainee list" onRetry={() => void refetch()} />;
+    }
+
+    if (isAttendanceView) {
+        return (
+            <TraineeAttendanceView
+                classItem={classItem}
+                trainees={activeTrainees}
+                onBack={() => setIsAttendanceView(false)}
+            />
+        );
     }
 
     return (
@@ -615,43 +559,6 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-
-                    {/* Bulk Action: Move to Another Class */}
-                    <Button
-                        type="button"
-                        variant="outline"
-                        disabled={selectedCount === 0 || isPending || saveMutation.isPending}
-                        onClick={() => {
-                            setTargetClassId("");
-                            setMoveModalOpen(true);
-                        }}
-                        className={cn(
-                            selectedCount > 0 &&
-                                "border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-950/40",
-                        )}
-                    >
-                        <ArrowRightLeft className="size-4" aria-hidden />
-                        <span>Move to Class</span>
-                    </Button>
-
-                    {/* Bulk Action: Send Email Notification */}
-                    <Button
-                        type="button"
-                        variant="outline"
-                        disabled={selectedCount === 0 || isPending || saveMutation.isPending}
-                        onClick={() => {
-                            setEmailSubject("");
-                            setEmailBody("");
-                            setEmailModalOpen(true);
-                        }}
-                        className={cn(
-                            selectedCount > 0 &&
-                                "border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-950/40",
-                        )}
-                    >
-                        <Mail className="size-4" aria-hidden />
-                        <span>Send Email</span>
-                    </Button>
 
                     <Button
                         type="button"
@@ -988,172 +895,6 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                             Delete Selected ({selectedCount})
                         </Button>
                     </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Move to Another Class Dialog */}
-            <Dialog open={moveModalOpen} onOpenChange={setMoveModalOpen}>
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <ArrowRightLeft className="size-5 text-blue-600" aria-hidden />
-                            Move Trainees to Another Class
-                        </DialogTitle>
-                        <DialogDescription>
-                            Select a destination class to move the selected {selectedCount}{" "}
-                            {selectedCount === 1 ? "trainee" : "trainees"}. They will be transferred from the current class.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4 py-2">
-                        {/* Selected trainees summary */}
-                        <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                Selected Trainees ({selectedCount})
-                            </Label>
-                            <div className="max-h-32 space-y-1 overflow-y-auto rounded-md border bg-muted/30 p-2.5 text-xs">
-                                {selectedTrainees.map((trainee) => (
-                                    <div key={trainee.id} className="flex items-center justify-between">
-                                        <span className="font-medium text-foreground">{trainee.fullName}</span>
-                                        <span className="text-muted-foreground">
-                                            {trainee.personalEmail || trainee.email || "—"}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Destination Class NativeSelect */}
-                        <div className="space-y-2">
-                            <Label htmlFor="destination-class-select" className="text-sm font-medium">
-                                Destination Class <span className="text-destructive">*</span>
-                            </Label>
-                            <NativeSelect
-                                id="destination-class-select"
-                                aria-label="Destination Class"
-                                value={targetClassId}
-                                onChange={(e) => setTargetClassId(e.target.value)}
-                            >
-                                <option value="">-- Choose a destination class --</option>
-                                {availableDestinationClasses.map((cls) => (
-                                    <option key={cls.id} value={String(cls.id)}>
-                                        {cls.code || `Class #${cls.id}`}
-                                        {cls.name && cls.name !== cls.code ? ` (${cls.name})` : ""}
-                                    </option>
-                                ))}
-                            </NativeSelect>
-                            {availableDestinationClasses.length === 0 ? (
-                                <p className="text-xs text-muted-foreground">No other classes available for transfer.</p>
-                            ) : null}
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setMoveModalOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            disabled={!targetClassId}
-                            onClick={handleConfirmMoveClass}
-                            className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-                        >
-                            Move Trainees ({selectedCount})
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Send Email Notification Dialog */}
-            <Dialog open={emailModalOpen} onOpenChange={setEmailModalOpen}>
-                <DialogContent className="sm:max-w-lg">
-                    <form onSubmit={handleSendEmailNotification}>
-                        <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2">
-                                <Mail className="size-5 text-blue-600" aria-hidden />
-                                Send Email Notification
-                            </DialogTitle>
-                            <DialogDescription>
-                                Compose a broadcast email message to send to the {selectedCount} selected{" "}
-                                {selectedCount === 1 ? "trainee" : "trainees"}.
-                            </DialogDescription>
-                        </DialogHeader>
-
-                        <div className="space-y-4 py-3">
-                            {/* Recipients badge / list */}
-                            <div className="space-y-1.5">
-                                <div className="flex items-center justify-between text-xs">
-                                    <Label className="font-semibold uppercase tracking-wider text-muted-foreground">
-                                        Recipients ({selectedCount})
-                                    </Label>
-                                    <span className="text-muted-foreground">
-                                        {selectedTrainees.filter((t) => t.personalEmail || t.email).length} email address(es)
-                                    </span>
-                                </div>
-                                <div className="max-h-24 overflow-y-auto rounded-md border bg-muted/30 p-2 text-xs">
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {selectedTrainees.map((trainee) => {
-                                            const email = trainee.personalEmail || trainee.email;
-                                            return (
-                                                <Badge
-                                                    key={trainee.id}
-                                                    variant="secondary"
-                                                    className="font-normal text-[11px]"
-                                                >
-                                                    {trainee.fullName} {email ? `(${email})` : "(No email)"}
-                                                </Badge>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Subject */}
-                            <div className="space-y-1.5">
-                                <Label htmlFor="email-subject" className="text-sm font-medium">
-                                    Subject <span className="text-destructive">*</span>
-                                </Label>
-                                <Input
-                                    id="email-subject"
-                                    aria-label="Email Subject"
-                                    placeholder="e.g. Schedule Update for Next Week"
-                                    value={emailSubject}
-                                    onChange={(e) => setEmailSubject(e.target.value)}
-                                    required
-                                />
-                            </div>
-
-                            {/* Message / Body */}
-                            <div className="space-y-1.5">
-                                <Label htmlFor="email-body" className="text-sm font-medium">
-                                    Message Body <span className="text-destructive">*</span>
-                                </Label>
-                                <Textarea
-                                    id="email-body"
-                                    aria-label="Email Body"
-                                    placeholder="Type your announcement or instructions here..."
-                                    rows={5}
-                                    value={emailBody}
-                                    onChange={(e) => setEmailBody(e.target.value)}
-                                    required
-                                    className="min-h-[120px] resize-y"
-                                />
-                            </div>
-                        </div>
-
-                        <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setEmailModalOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button
-                                type="submit"
-                                className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
-                            >
-                                <Send className="mr-1.5 size-4" aria-hidden />
-                                Send Notification
-                            </Button>
-                        </DialogFooter>
-                    </form>
                 </DialogContent>
             </Dialog>
         </div>
