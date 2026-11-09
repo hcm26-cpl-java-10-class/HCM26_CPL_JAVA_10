@@ -6,16 +6,21 @@ export interface AssignmentMember { memberId: number; name: string; userCode: st
 export interface AssignmentTeam {
   id: number; name: string; memberCount: number; status: string; eligible: boolean; reason: string | null;
   version: number; members: AssignmentMember[]; leaderMemberId: number | null;
+  assignedProjectName: string | null;
 }
 export interface AssignmentModule {
   templateId: number; code: string; name: string; minMembers: number; maxMembers: number;
   milestoneCount: number; modules: AssignmentModule[];
   rolePolicy: AssignmentRolePolicy;
 }
+export interface AssignmentOwner {
+  templateId: number; teamId: number; teamName: string;
+}
 export interface AssignmentPreview {
   master: AssignmentTemplate; minMembers: number; maxMembers: number; masterMilestoneCount: number;
   modules: AssignmentModule[]; teams: AssignmentTeam[];
   rolePolicy: AssignmentRolePolicy;
+  owners: AssignmentOwner[];
 }
 export interface ProjectAssignmentRequest {
   masterTemplateId: number; versionId: number; mode: ProjectAssignmentMode;

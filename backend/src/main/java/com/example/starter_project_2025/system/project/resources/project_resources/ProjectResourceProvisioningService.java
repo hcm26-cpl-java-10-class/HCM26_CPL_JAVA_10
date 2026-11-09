@@ -21,7 +21,7 @@ public class ProjectResourceProvisioningService {
     public record Attachment(String storageKey, String fileName, String contentType, Long sizeBytes) { }
 
     public record Resource(Long id, String title, String description, ResourceKind kind, String url,
-                           String category, Integer orderIndex, List<Attachment> attachments) { }
+                           Integer orderIndex, List<Attachment> attachments) { }
 
     public record Source(Long templateId, Long versionId, String name, String origin, List<Resource> resources) { }
 
@@ -35,7 +35,7 @@ public class ProjectResourceProvisioningService {
                 templateResources.findAllByTemplateVersionIdOrderByOrderIndexAscIdAsc(versionId).stream()
                         .filter(item -> Boolean.TRUE.equals(item.getIsActive()) && templateId.equals(item.getTemplateId()))
                         .map(item -> new Resource(item.getId(), item.getTitle(), item.getDescription(), item.getKind(),
-                                item.getUrl(), item.getCategory(), item.getOrderIndex(), templateFiles
+                                item.getUrl(), item.getOrderIndex(), templateFiles
                                 .findAllByResourceIdOrderByIdAsc(item.getId()).stream()
                                 .filter(file -> Boolean.TRUE.equals(file.getIsActive()))
                                 .map(file -> new Attachment(file.getStorageKey(), file.getOriginalName(),
@@ -53,7 +53,6 @@ public class ProjectResourceProvisioningService {
             row.setDescription(item.description());
             row.setKind(item.kind());
             row.setUrl(item.url());
-            row.setCategory(item.category());
             row.setOrderIndex(item.orderIndex());
             row.setSourceTemplateSnapshotId(source.versionId());
             row.setSourceTemplateResourceId(item.id());

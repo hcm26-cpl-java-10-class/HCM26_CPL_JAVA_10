@@ -57,6 +57,7 @@ public class AssignmentValidationService {
     public Selection validate(TeamAllocationSession session, AssignmentTemplateReader.Node master, AssignmentDtos.Request request,
                               Authentication authentication) {
         Map<Long, Long> selected = selectedTeams(master, request);
+        Set<Long> templateIds = master.templateIds();
         List<Long> ids = selected.values().stream().distinct().sorted().toList();
         List<ProjectTeam> locked = new ArrayList<>();
         for (Long id : ids) {
@@ -64,7 +65,7 @@ public class AssignmentValidationService {
                     .filter(value -> value.getAllocationSession().getId().equals(session.getId())
                             && value.getTrainingClass().getId().equals(session.getTrainingClass().getId()))
                     .orElseThrow(() -> AssignmentException.invalid("Every selected team must belong to this class and allocation session"));
-            String reason = unavailableReason(team);
+            String reason = unavailableReason(team, templateIds);
             if (reason != null) {
                 if ("unfinished".equals(reason)) throw AssignmentException.busy(team.getTeamName());
                 throw AssignmentException.invalid(team.getTeamName() + ": " + reason);
@@ -153,7 +154,7 @@ public class AssignmentValidationService {
         node.modules().forEach(child -> assignBranch(child, team, owners));
     }
 
-    public String unavailableReason(ProjectTeam team) {
+    public String unavailableReason(ProjectTeam team, Set<Long> templateIds) {
         if (!Boolean.TRUE.equals(team.getIsActive())) return "The team is no longer available";
         var current = workspaces.findCurrentByTeamId(team.getId());
         if (current.isPresent() && projectScope.projects(current.get()).stream()
@@ -164,6 +165,10 @@ public class AssignmentValidationService {
         if (team.getStatus() != ProjectTeamStatus.DRAFT
                 || team.getAllocationSession().getStatus() != TeamAllocationSessionStatus.OPEN)
             return "Chọn Team DRAFT trong phiên đang mở. Công bố chính thức sau khi lưu phân công.";
+        Long assignedTemplateId = team.getProjectTemplateId();
+        if (assignedTemplateId != null && !templateIds.contains(assignedTemplateId)) {
+            return "Đã gán Project khác.";
+        }
         if (activeMembers(team).isEmpty()) return "Add active members before assigning a project";
         return null;
     }

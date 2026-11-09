@@ -83,8 +83,8 @@ public class AssignmentProjectWriter {
         return combined;
     }
 
-    public AssignmentDtos.Result create(ProjectAssignment assignment, AssignmentTemplateReader.Node master,
-                                         AssignmentValidationService.Selection selection) {
+    public AssignmentDtos.Result createForPublication(ProjectAssignment assignment, AssignmentTemplateReader.Node master,
+                                                       AssignmentValidationService.Selection selection) {
         Map<Long, Project> created = new LinkedHashMap<>();
         createBranch(master, null, null, null, assignment, selection, created);
         Project root = created.get(master.templateId());
@@ -135,6 +135,7 @@ public class AssignmentProjectWriter {
         project.setCode("C" + assignment.getClassId() + "-A" + assignment.getId() + "-M" + node.templateId());
         project.setName(node.name());
         project.setDescription(shortText(node.content().path("description").asText(node.content().path("context").asText()), 2000));
+        // The hierarchy is created in the same transaction as official publication.
         project.setStatus(ProjectStatus.ACTIVE);
         project.setParentProject(parent);
         project.setTemplateSnapshotId(snapshot.getId());

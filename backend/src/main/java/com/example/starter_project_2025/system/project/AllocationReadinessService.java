@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.project.template.assignment.hierarchy.ProjectAssignmentService;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
@@ -47,6 +48,7 @@ public class AllocationReadinessService {
     public static final String ERR_TEAM_LEADER_REQUIRED = "ERR_TEAM_LEADER_REQUIRED";
     public static final String ERR_TEAM_MENTOR_REQUIRED = "ERR_TEAM_MENTOR_REQUIRED";
     public static final String ERR_TEAM_MENTOR_INVALID = "ERR_TEAM_MENTOR_INVALID";
+    public static final String ERR_TEAM_PROJECT_ALREADY_ASSIGNED = "ERR_TEAM_PROJECT_ALREADY_ASSIGNED";
     public static final String ERR_MULTI_ROLE_NOT_ALLOWED = "ERR_MULTI_ROLE_NOT_ALLOWED";
     public static final String ERR_TEAM_ROLE_QUOTA_NOT_MET = "ERR_TEAM_ROLE_QUOTA_NOT_MET";
 
@@ -57,6 +59,7 @@ public class AllocationReadinessService {
     private final ClassMemberRepository classMemberRepository;
     private final ScopeAuthorizationService scopeAuthorizationService;
     private final ProjectTeamMentorService teamMentorService;
+    private final ProjectAssignmentService projectAssignments;
     private final ObjectMapper objectMapper;
 
     /** US-12 pre-check endpoint: validates the caller can manage the class. */
@@ -182,6 +185,10 @@ public class AllocationReadinessService {
             } catch (TeamPublishValidationException invalidMentor) {
                 String code = team.getAssignedMentorId() == null ? ERR_TEAM_MENTOR_REQUIRED : ERR_TEAM_MENTOR_INVALID;
                 issues.add(issue(team, code, invalidMentor.getMessage(), List.of(), List.of()));
+            }
+            String assignmentIssue = projectAssignments.directAssignmentPublishIssue(team);
+            if (assignmentIssue != null) {
+                issues.add(issue(team, ERR_TEAM_PROJECT_ALREADY_ASSIGNED, assignmentIssue, List.of(), List.of()));
             }
         }
         if (ProjectTeamLeaderService.activeLeaderId(team, assignments) == null) {

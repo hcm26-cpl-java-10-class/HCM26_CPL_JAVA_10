@@ -4,18 +4,17 @@ import { Controller, type FieldErrors, type FieldPath, useForm, useWatch } from 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { MilestoneApiError, MilestoneCreateOptions } from "@/types";
-import { AlertCircle, AlertTriangle, CalendarClock, CheckCircle2, ChevronDown, ExternalLink, RefreshCw, Save } from "lucide-react";
+import { AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, Check, CheckCircle2, ExternalLink, RefreshCw, Save } from "lucide-react";
 import { MilestoneChecklistEditor } from "./MilestoneChecklistEditor";
 import { MilestoneErrorSummary } from "./MilestoneErrorSummary";
 import { MilestoneRubricSelector } from "./MilestoneRubricSelector";
-import { MILESTONE_FORM_LIMITS, milestoneFormSchemaForTenant, tenantStartOfDay, tenantToday, type MilestoneFormValues } from "../milestone-form.schema";
+import { MILESTONE_FORM_LIMITS, milestoneFormSchemaForTenant, milestoneStepSchemaForTenant, tenantStartOfDay, tenantToday, type MilestoneFormValues } from "../milestone-form.schema";
 import { formatTenantDateTime, toFormFieldPath } from "../milestone.utils";
 
 interface MilestoneFormProps {
@@ -38,15 +37,16 @@ function FieldMessage({ id, message }: { id: string; message?: string }) {
 }
 
 function fieldId(path: string): string {
+  if (path === "checklist") return "milestone-checklist-0";
   const checklist = /^checklist\.(\d+)/.exec(path);
   if (checklist) return `milestone-checklist-${checklist[1]}`;
   const ids: Record<string, string> = {
-    title: "milestone-title", description: "milestone-description", startDate: "milestone-start-date",
+    title: "milestone-title", description: "milestone-description", mandatory: "milestone-mandatory", startDate: "milestone-start-date",
     deadline: "milestone-deadline", rubricSnapshotId: "milestone-rubric",
-    "latePolicy.lateUntil": "late-until", "latePolicy.penaltyPercent": "late-penalty",
-    "resubmissionPolicy.maxAttempts": "max-submission-attempts",
+    "latePolicy.type": "milestone-late-policy", "latePolicy.lateUntil": "late-until", "latePolicy.penaltyPercent": "late-penalty",
+    resubmissionPolicy: "allow-resubmission", "resubmissionPolicy.allowed": "allow-resubmission", "resubmissionPolicy.maxAttempts": "max-submission-attempts",
   };
-  return ids[path] ?? "milestone-settings-trigger";
+  return ids[path] ?? "milestone-late-policy";
 }
 
 function formErrorLinks(errors: FieldErrors<MilestoneFormValues>) {
@@ -56,16 +56,31 @@ function formErrorLinks(errors: FieldErrors<MilestoneFormValues>) {
   };
   add("milestone-title", "Milestone name", errors.title?.message);
   add("milestone-description", "Description", errors.description?.message);
+  add("milestone-mandatory", "Mandatory milestone", errors.mandatory?.message);
   add("milestone-start-date", "Start date", errors.startDate?.message);
   add("milestone-deadline", "Deadline", errors.deadline?.message);
   add("milestone-checklist-0", "Acceptance checklist", errors.checklist?.message);
   errors.checklist?.forEach?.((item, index) => add(`milestone-checklist-${index}`, `Checklist item ${index + 1}`, item?.content?.message));
   add("milestone-rubric", "Evaluation rubric", errors.rubricSnapshotId?.message);
-  add("milestone-settings-trigger", "Late submission policy", errors.latePolicy?.type?.message);
+  add("milestone-late-policy", "Late submission policy", errors.latePolicy?.type?.message);
+  add("allow-resubmission", "Resubmission policy", errors.resubmissionPolicy?.allowed?.message);
   add("max-submission-attempts", "Maximum submission attempts", errors.resubmissionPolicy?.maxAttempts?.message);
   add("late-until", "Accept until", errors.latePolicy?.lateUntil?.message);
   add("late-penalty", "Penalty", errors.latePolicy?.penaltyPercent?.message);
   return links;
+}
+
+const steps = ["Basics", "Schedule & rules", "Acceptance & rubric", "Review"] as const;
+const stepFields: FieldPath<MilestoneFormValues>[][] = [
+  ["title", "description", "mandatory"],
+  ["startDate", "deadline", "latePolicy", "resubmissionPolicy"],
+  ["checklist", "rubricSnapshotId"],
+];
+
+function stepForId(id: string): number {
+  if (["milestone-title", "milestone-description", "milestone-mandatory"].includes(id)) return 0;
+  if (id.startsWith("milestone-checklist") || id === "milestone-rubric") return 2;
+  return 1;
 }
 
 export function MilestoneForm({
@@ -90,6 +105,7 @@ export function MilestoneForm({
     setError,
     setFocus,
     setValue,
+    getValues,
     trigger,
     formState: { errors, isDirty },
   } = useForm<MilestoneFormValues>({
@@ -101,13 +117,12 @@ export function MilestoneForm({
   const values = useWatch({ control });
   const latePolicyType = useWatch({ control, name: "latePolicy.type" });
   const allowResubmission = useWatch({ control, name: "resubmissionPolicy.allowed" });
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [step, setStep] = useState(0);
+  const [completedSteps, setCompletedSteps] = useState<boolean[]>([false, false, false]);
   const [showClientErrors, setShowClientErrors] = useState(false);
 
   const focusId = useCallback((id: string) => {
-    if (["late-until", "late-penalty", "max-submission-attempts", "milestone-settings-trigger"].includes(id)) {
-      setSettingsOpen(true);
-    }
+    setStep(stepForId(id));
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const element = document.getElementById(id);
       element?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -115,8 +130,31 @@ export function MilestoneForm({
     }));
   }, []);
 
-  const errorLinks = formErrorLinks(errors);
-  const settingsExpanded = settingsOpen || !!errors.latePolicy || !!errors.resubmissionPolicy;
+  const errorLinks = formErrorLinks(errors).filter((item) => step === 3 || stepForId(item.id) === step);
+
+  const goToStep = (nextStep: number) => {
+    setStep(nextStep);
+    setShowClientErrors(false);
+    requestAnimationFrame(() => document.getElementById("milestone-step-heading")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
+  const continueStep = (targetStep = step + 1) => {
+    if (step >= 3) return;
+    const result = milestoneStepSchemaForTenant(step, options.tenantTimeZone).safeParse(getValues());
+    clearErrors(stepFields[step]);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        const path = issue.path.join(".") as FieldPath<MilestoneFormValues>;
+        if (path) setError(path, { type: "manual", message: issue.message });
+      }
+      setShowClientErrors(true);
+      const firstPath = result.error.issues[0]?.path.join(".");
+      if (firstPath) focusId(fieldId(firstPath));
+      return;
+    }
+    setCompletedSteps((current) => current.map((done, index) => index === step ? true : done));
+    goToStep(targetStep);
+  };
 
   useEffect(() => onDirtyChange(isDirty), [isDirty, onDirtyChange]);
 
@@ -185,13 +223,29 @@ export function MilestoneForm({
   );
 
   return (
-    <form onSubmit={submitForm} noValidate className="grid gap-6">
+    <form onSubmit={(event) => { event.preventDefault(); if (step < 3) continueStep(); else void submitForm(); }} noValidate className="mx-auto grid w-full max-w-4xl gap-5 pb-20">
+      <div className="rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-background p-4 dark:border-indigo-900 dark:from-indigo-950/40 sm:p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">Step {step + 1} of 4</p>
+        <h2 id="milestone-step-heading" tabIndex={-1} className="mt-1 text-xl font-semibold text-foreground">{steps[step]}</h2>
+        <nav aria-label="Milestone creation steps" className="mt-4 hidden grid-cols-4 gap-2 sm:grid">
+          {steps.map((label, index) => (
+            <button key={label} type="button" aria-current={index === step ? "step" : undefined}
+              disabled={submitting || (index > step && !completedSteps[index - 1])}
+              onClick={() => index > step ? continueStep(index) : goToStep(index)}
+              className={`flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 ${index === step ? "border-indigo-300 bg-white text-indigo-800 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-200" : completedSteps[index] ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300" : "border-border bg-background text-muted-foreground"}`}>
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-current/30" aria-hidden="true">{completedSteps[index] ? <Check className="size-3.5" /> : index + 1}</span>
+              <span className="truncate">{label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="mt-3 flex gap-1.5 sm:hidden" aria-hidden="true">{steps.map((label, index) => <span key={label} className={`h-1.5 flex-1 rounded-full ${index <= step ? "bg-indigo-600" : "bg-indigo-200 dark:bg-indigo-900"}`} />)}</div>
+      </div>
       {apiError ? <MilestoneErrorSummary error={apiError} networkUncertain={networkUncertain} /> : null}
 
       {showClientErrors && errorLinks.length > 0 ? (
         <Alert variant="destructive" role="alert">
           <AlertCircle />
-          <AlertTitle>Review {errorLinks.length} field{errorLinks.length === 1 ? "" : "s"} before saving</AlertTitle>
+          <AlertTitle>Review {errorLinks.length} field{errorLinks.length === 1 ? "" : "s"} {step === 3 ? "before saving" : "to continue"}</AlertTitle>
           <AlertDescription>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               {errorLinks.map(({ id, label, message }) => (
@@ -206,7 +260,7 @@ export function MilestoneForm({
         </Alert>
       ) : null}
 
-      {hasMissingOptions ? (
+      {hasMissingOptions && step >= 2 ? (
         <Alert>
           <AlertTriangle />
           <AlertTitle>Milestone cannot be {isEditing ? "saved" : "created"} yet</AlertTitle>
@@ -220,8 +274,7 @@ export function MilestoneForm({
         </Alert>
       ) : null}
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-        <div className="grid min-w-0 gap-6">
+      <div className={step === 0 ? "grid gap-5" : "hidden"}>
           <Card>
             <CardHeader>
               <CardTitle>General information</CardTitle>
@@ -266,7 +319,9 @@ export function MilestoneForm({
               </div>
             </CardContent>
           </Card>
+      </div>
 
+      <div className={step === 1 ? "grid gap-5" : "hidden"}>
           <Card>
             <CardHeader>
               <CardTitle>Schedule</CardTitle>
@@ -294,7 +349,9 @@ export function MilestoneForm({
               ) : null}
             </CardContent>
           </Card>
+      </div>
 
+      <div className={step === 2 ? "grid gap-5" : "hidden"}>
           <MilestoneChecklistEditor
             control={control}
             errors={errors}
@@ -317,30 +374,23 @@ export function MilestoneForm({
               />
             )}
           />
+      </div>
 
-          <Collapsible open={settingsExpanded} onOpenChange={setSettingsOpen}>
+      <div className={step === 1 ? "grid gap-5" : "hidden"}>
             <Card>
               <CardHeader>
-                <CollapsibleTrigger asChild>
-                  <button id="milestone-settings-trigger" type="button" className="w-full rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
-                    <span className="flex items-center justify-between gap-3">
-                      <CardTitle>Submission settings</CardTitle>
-                      <ChevronDown className={`size-5 shrink-0 transition-transform ${settingsExpanded ? "rotate-180" : ""}`} />
-                    </span>
-                    <CardDescription className="mt-2">{policySummary}. Select to edit these settings.</CardDescription>
-                  </button>
-                </CollapsibleTrigger>
+                <CardTitle>Submission rules</CardTitle>
+                <CardDescription>{policySummary}</CardDescription>
               </CardHeader>
-              <CollapsibleContent>
                 <CardContent className="grid gap-6">
                   <div className="grid gap-4">
                     <h3 className="font-medium">Late submissions</h3>
-                    <RadioGroup value={latePolicyType} onValueChange={(value) => selectLatePolicy(value as "NO_LATE" | "ALLOW_LATE")} className="grid gap-3 md:grid-cols-2">
-                      <Label className="flex cursor-pointer items-start gap-3 rounded-xl border p-4 has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5">
+                    <RadioGroup id="milestone-late-policy" tabIndex={-1} value={latePolicyType} onValueChange={(value) => selectLatePolicy(value as "NO_LATE" | "ALLOW_LATE")} className="grid gap-3 md:grid-cols-2">
+                      <Label className="flex cursor-pointer items-start gap-3 rounded-xl border p-4 has-[[data-state=checked]]:border-indigo-400 has-[[data-state=checked]]:bg-indigo-50 dark:has-[[data-state=checked]]:bg-indigo-950/40">
                         <RadioGroupItem value="NO_LATE" />
                         <span><span className="block font-medium">No late submissions</span><span className="mt-1 block text-xs font-normal text-muted-foreground">Submissions after the deadline will be rejected.</span></span>
                       </Label>
-                      <Label className="flex cursor-pointer items-start gap-3 rounded-xl border p-4 has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5">
+                      <Label className="flex cursor-pointer items-start gap-3 rounded-xl border p-4 has-[[data-state=checked]]:border-indigo-400 has-[[data-state=checked]]:bg-indigo-50 dark:has-[[data-state=checked]]:bg-indigo-950/40">
                         <RadioGroupItem value="ALLOW_LATE" />
                         <span><span className="block font-medium">Allow late submissions</span><span className="mt-1 block text-xs font-normal text-muted-foreground">Accept submissions until a limit and apply a penalty.</span></span>
                       </Label>
@@ -404,35 +454,48 @@ export function MilestoneForm({
                     ) : null}
                   </div>
                 </CardContent>
-              </CollapsibleContent>
             </Card>
-          </Collapsible>
-        </div>
+      </div>
 
-        <Card className="xl:sticky xl:top-4">
+      <div className={step === 3 ? "grid gap-5" : "hidden"}>
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><CheckCircle2 className="size-5" /> {isEditing ? "Review changes" : "Review milestone"}</CardTitle>
             <CardDescription>Check the schedule and submission rules before saving.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 text-sm">
-            <div><p className="text-muted-foreground">Scope</p><p className="mt-1 font-medium">{options.project?.name ?? "Team workspace"}</p></div>
-            <div><p className="text-muted-foreground">Milestone</p><p className="mt-1 font-medium">{values.title?.trim() || "Not entered"}</p></div>
-            <div><p className="text-muted-foreground">Starts automatically</p><p className="mt-1 flex items-start gap-2 font-medium"><CalendarClock className="mt-0.5 size-4 shrink-0" />{scheduledStart ? formatTenantDateTime(scheduledStart.toISOString(), options.tenantTimeZone) : "Not selected"}</p></div>
-            <div><p className="text-muted-foreground">Deadline</p><p className="mt-1 font-medium">{validDeadline ? formatTenantDateTime(validDeadline.toISOString(), options.tenantTimeZone) : "Not selected"}</p></div>
-            <div><p className="text-muted-foreground">Acceptance checklist</p><p className="mt-1 font-medium">{validChecklistCount} filled item{validChecklistCount === 1 ? "" : "s"}</p></div>
-            <div><p className="text-muted-foreground">Evaluation rubric</p><p className="mt-1 font-medium">{rubric ? `${rubric.name} · ${rubric.version}` : "Not selected"}</p></div>
-            <div><p className="text-muted-foreground">Submission settings</p><p className="mt-1 font-medium">{policySummary}</p>
-              {latePolicyType === "ALLOW_LATE" ? <p className="mt-1 text-xs text-muted-foreground">Until {validLateUntil ? formatTenantDateTime(validLateUntil.toISOString(), options.tenantTimeZone) : "not set"} · {values.latePolicy?.penaltyPercent ?? "—"}% penalty</p> : null}
+          <CardContent className="grid gap-4 text-sm">
+            <div className="rounded-xl border bg-muted/20 p-4">
+              <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">Basics</h3><Button type="button" variant="ghost" size="sm" onClick={() => goToStep(0)}>Edit</Button></div>
+              <p className="font-medium">{values.title?.trim() || "Not entered"} {values.mandatory ? "· Mandatory" : "· Optional"}</p>
+              <p className="mt-1 text-muted-foreground">{values.description?.trim() || "No description"}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{options.project?.name ?? "Team workspace"}</p>
+            </div>
+            <div className="rounded-xl border bg-muted/20 p-4">
+              <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">Schedule & rules</h3><Button type="button" variant="ghost" size="sm" onClick={() => goToStep(1)}>Edit</Button></div>
+              <p className="mt-1 flex items-start gap-2"><CalendarClock className="mt-0.5 size-4 shrink-0 text-blue-700 dark:text-blue-300" />Starts {scheduledStart ? formatTenantDateTime(scheduledStart.toISOString(), options.tenantTimeZone) : "not selected"}</p>
+              <p className="mt-1">Due {validDeadline ? formatTenantDateTime(validDeadline.toISOString(), options.tenantTimeZone) : "not selected"}</p>
+              <p className="mt-2 text-muted-foreground">{policySummary}</p>
+              {latePolicyType === "ALLOW_LATE" ? <p className="mt-1 text-muted-foreground">Late until {validLateUntil ? formatTenantDateTime(validLateUntil.toISOString(), options.tenantTimeZone) : "not set"} · {values.latePolicy?.penaltyPercent ?? "—"}% penalty</p> : null}
+            </div>
+            <div className="rounded-xl border bg-muted/20 p-4">
+              <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">Acceptance & rubric</h3><Button type="button" variant="ghost" size="sm" onClick={() => goToStep(2)}>Edit</Button></div>
+              <p className="mt-1">{validChecklistCount} acceptance item{validChecklistCount === 1 ? "" : "s"}</p>
+              <p className="mt-1 text-muted-foreground">Rubric: {rubric ? `${rubric.name} · ${rubric.version}` : "Not selected"}</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="sticky bottom-0 z-20 -mx-1 flex flex-col-reverse gap-2 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:justify-end">
+      <div className="sticky bottom-3 z-20 flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur">
         <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>Cancel</Button>
-        <Button type="submit" disabled={submitting || hasMissingOptions}>
-          <Save className="size-4" /> {submitting ? "Saving..." : networkUncertain ? "Retry safely" : submitLabel ?? "Create milestone"}
-        </Button>
+        <div className="flex gap-2">
+          {step > 0 ? <Button type="button" variant="outline" onClick={() => goToStep(step - 1)} disabled={submitting}><ArrowLeft className="size-4" /> Back</Button> : null}
+          <Button type="button" className="bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+            onClick={(event) => { event.preventDefault(); if (step < 3) continueStep(); else void submitForm(); }}
+            disabled={submitting || (step >= 2 && hasMissingOptions)}>
+            {step < 3 ? <>Continue <ArrowRight className="size-4" /></> : <><Save className="size-4" /> {submitting ? "Saving..." : networkUncertain ? "Retry safely" : submitLabel ?? "Create milestone"}</>}
+          </Button>
+        </div>
       </div>
 
     </form>

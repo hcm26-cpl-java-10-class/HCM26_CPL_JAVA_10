@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,6 +45,16 @@ public interface ProjectTeamRepository
     List<ProjectTeam> findAllByProject_IdInOrderByIdDesc(List<Long> projectIds);
 
     boolean existsByProject_IdAndIdNot(Long projectId, Long teamId);
+
+    @Query("""
+            select team from ProjectTeam team join fetch team.projectTemplate template
+            where team.trainingClass.id = :classId and template.id in :templateIds
+              and team.isActive = true
+              and team.status <> com.example.starter_project_2025.system.project.ProjectTeamStatus.ARCHIVED
+              and team.allocationSession.status <> com.example.starter_project_2025.system.project.TeamAllocationSessionStatus.CANCELLED
+            order by team.id
+            """)
+    List<ProjectTeam> findTemplateBindings(Long classId, Collection<Long> templateIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select team from ProjectTeam team where team.id = :id")

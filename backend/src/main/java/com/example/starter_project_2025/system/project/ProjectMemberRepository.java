@@ -26,10 +26,15 @@ public interface ProjectMemberRepository
             Long tenantId,
             ClassMemberStatus status);
 
-    @EntityGraph(attributePaths = {"classMember", "classMember.user"})
+    @EntityGraph(attributePaths = {
+            "team", "team.trainingClass", "classMember", "classMember.trainingClass", "classMember.user"
+    })
     List<ProjectMember> findAllByTeam_IdOrderByIdAsc(Long teamId);
 
-    @EntityGraph(attributePaths = {"team", "classMember", "classMember.user"})
+    @EntityGraph(attributePaths = {
+            "team", "team.trainingClass", "classMember", "classMember.trainingClass", "classMember.user",
+            "classMember.user.tenant"
+    })
     List<ProjectMember> findAllByIdIn(Collection<Long> ids);
 
     long countByTeam_Id(Long teamId);

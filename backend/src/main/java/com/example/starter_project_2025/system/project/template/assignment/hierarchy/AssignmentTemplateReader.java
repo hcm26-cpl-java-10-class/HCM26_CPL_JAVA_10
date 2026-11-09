@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -22,6 +23,13 @@ public class AssignmentTemplateReader {
     public record Node(Long templateId, Long sourceVersionId, String version, ObjectNode content, List<Node> modules) {
         public String name() { return content.path("name").asText(); }
         public String code() { return content.path("code").asText(); }
+
+        public Set<Long> templateIds() {
+            Set<Long> ids = new LinkedHashSet<>();
+            ids.add(templateId);
+            modules.forEach(module -> ids.addAll(module.templateIds()));
+            return ids;
+        }
     }
 
     private final ProjectTemplateRepository templates;

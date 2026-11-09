@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderTree } from "lucide-react";
+import { FolderTree, Plus } from "lucide-react";
 import { projectAssignmentApi } from "@/api/features/project-assignment.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +31,9 @@ export function ProjectAssignmentPanel({ classId, sessionId, canAssign, publishe
         <CardTitle className="flex items-center gap-2"><FolderTree className="size-5 text-primary" />Đề bài dự án</CardTitle>
         <CardDescription>Giao trọn Master hoặc phân công các module cho những Team nháp của lớp.</CardDescription>
       </div>
-      {canAssign && <Button className="w-fit" asChild><Link to={classUrl + "/assign" + sessionQuery}>Gán đề bài cho lớp</Link></Button>}
+      {canAssign && <Button className="w-fit gap-2" asChild>
+        <Link to={classUrl + "/assign" + sessionQuery}><Plus className="size-4" />Gán đề bài cho lớp</Link>
+      </Button>}
       {published && (hasPermission("WORKSPACE_READ") || hasPermission("VIEW_PROJECT_WORKSPACE")) &&
         <Button className="w-fit" asChild>
           <Link to={`/management/workspaces/candidates?classId=${classId}&sessionId=${sessionId}`}>Mở Workspace của phiên</Link>

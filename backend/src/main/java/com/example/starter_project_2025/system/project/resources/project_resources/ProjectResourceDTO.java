@@ -34,8 +34,6 @@ public class ProjectResourceDTO extends BaseDTO {
 
     String url;
 
-    String category;
-
     Integer orderIndex;
 
     /** Provenance only, read-only for clients. */

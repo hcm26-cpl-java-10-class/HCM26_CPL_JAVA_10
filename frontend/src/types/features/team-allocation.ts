@@ -14,6 +14,7 @@ export interface AllocationSession {
 export interface AutoAllocationPreview {
   sessionId: number;
   standardMax: number;
+  minMembers: number;
   eligibleCount: number;
   fingerprint: string;
   teams: Array<{

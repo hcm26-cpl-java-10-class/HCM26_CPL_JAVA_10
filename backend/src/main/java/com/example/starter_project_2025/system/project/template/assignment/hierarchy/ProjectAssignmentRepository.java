@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project.template.assignment.hier
 import com.example.starter_project_2025.system.project.TeamAllocationSessionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.List;
 
@@ -14,10 +15,27 @@ public interface ProjectAssignmentRepository extends JpaRepository<ProjectAssign
 
     @Query("""
             select a from ProjectAssignment a
-            where a.tenantId = :tenantId and a.classId = :classId and a.isActive = true
+            where a.tenantId = :tenantId and a.classId = :classId and a.isActive = true and a.masterProjectId is null
               and a.sourceVersionId in (select v.id from ProjectTemplateSnapshot v where v.templateId = :templateId)
               and a.sessionId in (select s.id from TeamAllocationSession s where s.status <> :cancelled)
             """)
-    List<ProjectAssignment> findActiveForMaster(Long tenantId, Long classId, Long templateId,
+    List<ProjectAssignment> findPendingForMaster(Long tenantId, Long classId, Long templateId,
                                                 TeamAllocationSessionStatus cancelled);
+
+    @Query("""
+            select snapshot.templateId as templateId, project.teamId as teamId
+            from Project project, ProjectTemplateSnapshot snapshot, ProjectAssignment assignment
+            where project.templateSnapshotId = snapshot.id and project.assignmentId = assignment.id
+              and project.tenantId = :tenantId and project.isActive = true and project.teamId is not null
+              and assignment.classId = :classId and assignment.isActive = true
+              and snapshot.templateId in :templateIds
+              and assignment.sessionId in (select s.id from TeamAllocationSession s where s.status <> :cancelled)
+            """)
+    List<PublishedOwner> findPublishedOwners(Long tenantId, Long classId, Collection<Long> templateIds,
+                                             TeamAllocationSessionStatus cancelled);
+
+    interface PublishedOwner {
+        Long getTemplateId();
+        Long getTeamId();
+    }
 }

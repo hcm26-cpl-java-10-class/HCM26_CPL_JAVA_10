@@ -6,6 +6,7 @@ import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.assignment.hierarchy.ProjectAssignmentService;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateVersionStatus;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
@@ -60,6 +61,7 @@ public class ProjectTeamTemplateService {
     private final ProjectTeamAuditRepository auditRepository;
     private final ProjectTeamOutboxRepository outboxRepository;
     private final ScopeAuthorizationService scopeAuthorizationService;
+    private final ProjectAssignmentService projectAssignments;
     private final ObjectMapper objectMapper;
 
     // ------------------------------------------------------------------
@@ -160,7 +162,7 @@ public class ProjectTeamTemplateService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "The published template version has changed. Reload the preview");
         }
-        return applyAssignment(team, template, currentUserId(authentication), published.getId());
+        return applyAssignment(session, team, template, currentUserId(authentication), published.getId());
     }
 
     /**
@@ -187,12 +189,15 @@ public class ProjectTeamTemplateService {
                     "Chỉ Trưởng nhóm mới được gán đề bài.");
         }
 
+        Long sessionId = team.getAllocationSession().getId();
+        TeamAllocationSession session = sessionRepository.findByIdForUpdate(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("TeamAllocationSession", "id", sessionId));
         ProjectTemplate template = findActiveTemplate(projectTemplateId, team.getTrainingClass().getTenantId());
         var published = versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
                 template.getId(), ProjectTemplateVersionStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT,
                         "Template has no published version"));
-        return applyAssignment(team, template, userId, published.getId());
+        return applyAssignment(session, team, template, userId, published.getId());
     }
 
     // ------------------------------------------------------------------
@@ -200,6 +205,7 @@ public class ProjectTeamTemplateService {
     // ------------------------------------------------------------------
 
     private TeamProjectTemplateResponse applyAssignment(
+            TeamAllocationSession session,
             ProjectTeam team,
             ProjectTemplate template,
             Long actorId,
@@ -208,10 +214,14 @@ public class ProjectTeamTemplateService {
         if (team.getStatus() != ProjectTeamStatus.DRAFT) {
             throw new TeamNotDraftException(team.getId(), team.getStatus());
         }
+        if (session.getStatus() != TeamAllocationSessionStatus.OPEN || !Boolean.TRUE.equals(team.getIsActive())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Chỉ gán đề bài cho Team trong phiên đang mở.");
+        }
         if (team.getProject() != null && !Objects.equals(team.getProjectTemplateId(), template.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "This team already has a project. Its assigned project brief cannot be changed");
         }
+        projectAssignments.validateDirectTemplateAssignment(team, template, versionId);
 
         ProjectTemplateConstraints.Capacity capacity =
                 ProjectTemplateConstraints.parse(objectMapper, template, null);

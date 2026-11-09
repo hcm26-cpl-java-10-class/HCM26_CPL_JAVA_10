@@ -26,13 +26,15 @@ public final class AssignmentDtos {
     public record Template(Long id, Long versionId, String version, String code, String name) { }
     public record Member(Long memberId, String name, String userCode, List<String> roles) { }
     public record Team(Long id, String name, int memberCount, String status, boolean eligible, String reason,
-                       Long version, List<Member> members, Long leaderMemberId) { }
+                       Long version, List<Member> members, Long leaderMemberId, String assignedProjectName) { }
     public record Module(Long templateId, String code, String name, int minMembers, int maxMembers,
                          int milestoneCount, List<Module> modules,
                          com.example.starter_project_2025.system.project.ProjectTemplateConstraints.RolePolicy rolePolicy) { }
+    public record Owner(Long templateId, Long teamId, String teamName) { }
     public record Preview(Template master, int minMembers, int maxMembers, int masterMilestoneCount,
                           List<Module> modules, List<Team> teams,
-                          com.example.starter_project_2025.system.project.ProjectTemplateConstraints.RolePolicy rolePolicy) { }
+                          com.example.starter_project_2025.system.project.ProjectTemplateConstraints.RolePolicy rolePolicy,
+                          List<Owner> owners) { }
     public record Workspace(Long id, Long teamId, String teamName, Long projectId, String projectName) { }
     public record ClassMaster(Long projectId, String name, String status, Instant assignedAt) { }
     public record Result(Long assignmentId, Mode mode, Long masterProjectId, Instant assignedAt,

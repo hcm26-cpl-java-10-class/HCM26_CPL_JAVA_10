@@ -8,6 +8,12 @@ import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
+function readSidebarOpenCookie(): boolean {
+    if (typeof document === "undefined") return true;
+    const match = document.cookie.match(/(?:^|;\s*)sidebar_state=(true|false)/);
+    return match ? match[1] === "true" : true;
+}
+
 export function MainLayout({
                                children,
                                pathName,
@@ -41,7 +47,7 @@ export function MainLayout({
     }
 
     return (
-        <SidebarProvider>
+        <SidebarProvider defaultOpen={readSidebarOpenCookie()}>
             <SidebarMenu />
             <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
                 <header className="flex min-h-16 shrink-0 items-center gap-2 py-3">

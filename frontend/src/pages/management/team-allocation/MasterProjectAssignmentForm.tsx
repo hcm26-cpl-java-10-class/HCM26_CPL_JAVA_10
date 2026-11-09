@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { AssignmentModule, AssignmentRole, AssignmentRolePolicy, AssignmentTeam, AssignmentTemplate, ProjectAssignmentMode, ProjectAssignmentRequest } from "@/types/features/project-assignment";
+import type { AssignmentModule, AssignmentOwner, AssignmentRole, AssignmentRolePolicy, AssignmentTeam, AssignmentTemplate, ProjectAssignmentMode, ProjectAssignmentRequest } from "@/types/features/project-assignment";
 import { AssignmentTeamRoles, assignmentMemberRoles, assignmentRoleErrors, type MemberRoleChoices } from "./AssignmentTeamRoles";
 
 const selectClass = "h-10 w-full rounded-md border bg-background px-3 text-sm";
@@ -37,6 +37,26 @@ function fits(team: AssignmentTeam, min: number, max: number) {
   return team.eligible && team.memberCount >= min && team.memberCount <= max;
 }
 
+function matchesOwners(teamId: number, owners: AssignmentOwner[]) {
+  return owners.every(owner => owner.teamId === teamId);
+}
+
+function currentOwnerId(owners: AssignmentOwner[]) {
+  const owner = owners[0];
+  return owner && matchesOwners(owner.teamId, owners) ? String(owner.teamId) : "";
+}
+
+function includesModule(branch: AssignmentModule, templateId: number): boolean {
+  return branch.templateId === templateId || branch.modules.some(child => includesModule(child, templateId));
+}
+
+function OwnerNotice({ owners }: { owners: AssignmentOwner[] }) {
+  if (owners.length === 0) return null;
+  return <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+    Đã phân công trong lớp cho {[...new Set(owners.map(owner => owner.teamName))].join(", ")}.
+  </p>;
+}
+
 function ModuleBranch({ module }: { module: AssignmentModule }) {
   return <li className="space-y-1">
     <span className="font-medium">{module.name}</span>
@@ -60,21 +80,27 @@ function sharedRolePolicy(policies: AssignmentRolePolicy[]): AssignmentRolePolic
   return { allowMultiRole: policies.every(policy => policy.allowMultiRole), quotas: [...quotas.values()] };
 }
 
-function TeamSelect({ id, teams, value, min, max, onChange }: {
+function TeamSelect({ id, teams, value, min, max, owners, checkingOwnership, onChange }: {
   id: string;
   teams: AssignmentTeam[];
   value: string;
   min: number;
   max: number;
+  owners: AssignmentOwner[];
+  checkingOwnership: boolean;
   onChange: (value: string) => void;
 }) {
-  return <select id={id} className={selectClass} value={value} onChange={event => onChange(event.target.value)}>
-    <option value="">Chọn Team</option>
+  const locked = owners.length > 0;
+  return <select id={id} className={selectClass + " disabled:opacity-60"} value={value}
+    disabled={locked || checkingOwnership} onChange={event => onChange(event.target.value)}>
+    <option value="" disabled={locked}>{locked ? "Đã có Team phụ trách" : "Chọn Team"}</option>
     {teams.map(team => {
       const teamId = String(team.id);
-      const unavailable = !team.eligible ? team.reason ?? "Team không sẵn sàng" : !fits(team, min, max) ? "Sĩ số không phù hợp" : null;
+      const unavailable = !matchesOwners(team.id, owners) ? "Đã giao cho Team khác"
+        : !team.eligible ? team.reason ?? "Team không sẵn sàng" : !fits(team, min, max) ? "Sĩ số không phù hợp" : null;
       return <option key={team.id} value={teamId} disabled={!!unavailable}>
-        {team.name} · {team.memberCount} người{unavailable && " · " + unavailable}
+        {team.name} · {team.memberCount} người{team.assignedProjectName && ` · Đã gán: ${team.assignedProjectName}`}
+        {unavailable && " · " + unavailable}
       </option>;
     })}
   </select>;
@@ -113,6 +139,7 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
     queryFn: ({ signal }) => projectAssignmentApi.preview(classId, sessionId, selected!, signal),
     enabled: selected !== null,
     retry: false,
+    refetchOnMount: "always",
   });
   const assignment = useMutation({
     mutationKey: ["project-brief-assignment", classId, sessionId],
@@ -129,13 +156,23 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
 
   const data = preview.data;
   const mode = teamScoped || data?.modules.length === 0 ? "WHOLE" : preferredMode;
+  const hasOwnershipData = Array.isArray(data?.owners);
+  const owners = hasOwnershipData ? data.owners : [];
+  const ownershipReady = hasOwnershipData && !preview.isFetching && !preview.isError;
   const mappedTeams = data?.modules.map(module => {
-    const team = data.teams.find(item => String(item.id) === mapping[module.templateId]);
-    return { module, team, valid: !!team && fits(team, module.minMembers, module.maxMembers) };
+    const moduleOwners = owners.filter(owner => owner.templateId === data.master.id || includesModule(module, owner.templateId));
+    const selectedId = step === "project" && moduleOwners.length > 0
+      ? currentOwnerId(moduleOwners) : mapping[module.templateId] ?? currentOwnerId(moduleOwners);
+    const team = data.teams.find(item => String(item.id) === selectedId);
+    return { module, team, owners: moduleOwners,
+      valid: !!team && fits(team, module.minMembers, module.maxMembers) && matchesOwners(team.id, moduleOwners) };
   }) ?? [];
   const mapped = mappedTeams.length > 0 && mappedTeams.every(({ valid }) => valid);
-  const wholeTeam = data?.teams.find(team => teamScoped ? team.id === initialTeamId : String(team.id) === teamId);
-  const wholeValid = !!data && !!wholeTeam && fits(wholeTeam, data.minMembers, data.maxMembers);
+  const wholeOwnerId = currentOwnerId(owners);
+  const wholeTeamId = teamScoped ? String(initialTeamId)
+    : step === "project" && owners.length > 0 ? wholeOwnerId : teamId || wholeOwnerId;
+  const wholeTeam = data?.teams.find(team => String(team.id) === wholeTeamId);
+  const wholeValid = !!data && !!wholeTeam && fits(wholeTeam, data.minMembers, data.maxMembers) && matchesOwners(wholeTeam.id, owners);
   const briefsByTeam = new Map<number, { team: AssignmentTeam; briefs: Array<{ name: string; rolePolicy: AssignmentRolePolicy }> }>();
   if (mode === "WHOLE" && data && wholeValid && wholeTeam) {
     briefsByTeam.set(wholeTeam.id, { team: wholeTeam, briefs: [{ name: data.master.name, rolePolicy: data.rolePolicy }] });
@@ -159,11 +196,15 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
   });
   const roleTeam = roleTeams.find(({ team }) => team.id === roleTeamId) ?? roleTeams[0];
   const readyRoleCount = roleTeams.filter(({ errors }) => errors.length === 0).length;
-  const canConfigureRoles = !!data && !preview.isError && !preview.isFetching && (mode === "SPLIT" ? mapped : wholeValid);
+  const canConfigureRoles = ownershipReady && (mode === "SPLIT" ? mapped : wholeValid);
   const ready = canConfigureRoles && readyRoleCount === roleTeams.length;
   const review = step === "review";
 
   function goToStep(next: AssignmentStep) {
+    if (next === "roles" && step === "project") {
+      if (mode === "WHOLE") setTeamId(wholeTeamId);
+      else setMapping(Object.fromEntries(mappedTeams.map(({ module, team }) => [module.templateId, team ? String(team.id) : ""])));
+    }
     if (next === "roles" && !roleTeams.some(({ team }) => team.id === roleTeamId)) {
       const first = roleTeams.find(({ errors }) => errors.length > 0) ?? roleTeams[0];
       setRoleTeamId(first?.team.id ?? null);
@@ -190,8 +231,8 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
       versionId: data.master.versionId,
       mode,
       ...(mode === "WHOLE" ? { teamId: wholeTeam!.id } : {}),
-      modules: mode === "SPLIT" ? data.modules.map(module => ({
-        moduleTemplateId: module.templateId, teamId: Number(mapping[module.templateId]),
+      modules: mode === "SPLIT" ? mappedTeams.map(({ module, team }) => ({
+        moduleTemplateId: module.templateId, teamId: team!.id,
       })) : [],
       teamRoles: roleTeams.map(({ team, choices, leaderId }) => ({
         teamId: team.id,
@@ -224,10 +265,7 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
       <CardDescription>Về danh sách nhóm để chọn Mentor cho từng Team và kiểm tra điều kiện công bố. Workspace được tạo sau khi công bố thành công.</CardDescription>
     </CardHeader>
     <CardContent>
-      <div className="flex flex-wrap gap-2">
-        <Button asChild><Link to={backTo}>Về danh sách nhóm</Link></Button>
-        <Button variant="outline" onClick={() => selectTemplate(null)}>Gán Project khác</Button>
-      </div>
+      <Button asChild><Link to={backTo}>Về danh sách nhóm</Link></Button>
     </CardContent>
   </Card>;
 
@@ -292,17 +330,25 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
                 <span className="text-xs text-muted-foreground">{option.description}</span></span>
             </label>)}
           </fieldset>}
+          {preview.isFetching && <p role="status" className="text-xs text-muted-foreground">Đang kiểm tra phân công trong lớp…</p>}
+          {!hasOwnershipData && !preview.isFetching && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+            Chưa tải được thông tin Team phụ trách.
+            <Button type="button" variant="outline" size="sm" onClick={() => void preview.refetch()}>Kiểm tra lại</Button>
+          </div>}
           {mode === "SPLIT" ? <>
-            {mappedTeams.map(({ module, team }) => {
+            {mappedTeams.map(({ module, team, owners: moduleOwners }) => {
               const id = "module-team-" + module.templateId;
               return <div key={module.templateId} className="grid items-center gap-2 sm:grid-cols-2">
                 <Label htmlFor={review ? undefined : id}>{module.name}
                   <span className="text-xs font-normal text-muted-foreground">{module.minMembers}–{module.maxMembers} người</span>
                 </Label>
                 {review ? <p className="text-sm">{team?.name}</p>
-                  : <TeamSelect id={id} teams={data.teams} value={mapping[module.templateId] ?? ""}
-                      min={module.minMembers} max={module.maxMembers}
-                      onChange={value => { setMapping(current => ({ ...current, [module.templateId]: value })); assignment.reset(); }} />}
+                  : <div className="grid gap-1.5">
+                    <TeamSelect id={id} teams={data.teams} value={team ? String(team.id) : ""}
+                      min={module.minMembers} max={module.maxMembers} owners={moduleOwners} checkingOwnership={!ownershipReady}
+                      onChange={value => { setMapping(current => ({ ...current, [module.templateId]: value })); assignment.reset(); }} />
+                    <OwnerNotice owners={moduleOwners} />
+                  </div>}
               </div>;
             })}
             <p className="rounded-md bg-muted/40 p-3 text-sm text-muted-foreground">
@@ -311,12 +357,20 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
           </> : <div className="grid gap-2">
             <Label htmlFor={review || teamScoped ? undefined : "whole-project-team"}>Team nhận toàn bộ đề bài</Label>
             {review || teamScoped ? <p className="text-sm">{wholeTeam?.name ?? "Không tìm thấy Team trong phiên này"}</p>
-              : <TeamSelect id="whole-project-team" teams={data.teams} value={wholeTeam ? teamId : ""}
-                  min={data.minMembers} max={data.maxMembers}
+              : <TeamSelect id="whole-project-team" teams={data.teams} value={wholeTeam ? String(wholeTeam.id) : ""}
+                  min={data.minMembers} max={data.maxMembers} owners={owners} checkingOwnership={!ownershipReady}
                   onChange={value => { setTeamId(value); assignment.reset(); }} />}
             <p className="text-xs text-muted-foreground">Sĩ số yêu cầu: {data.minMembers}–{data.maxMembers} thành viên.</p>
+            <OwnerNotice owners={owners} />
+            {teamScoped && wholeTeam?.assignedProjectName && <p className="text-xs text-muted-foreground">
+              Đề bài đã gán: {wholeTeam.assignedProjectName}
+            </p>}
+            {!teamScoped && owners.length > 0 && !wholeOwnerId && <p role="alert" className="text-sm text-destructive">
+              Các module đã thuộc nhiều Team. Hãy dùng chế độ Phân công theo module.
+            </p>}
             {teamScoped && wholeTeam && !wholeValid && <p role="alert" className="text-sm text-destructive">
-              {wholeTeam.reason ?? `Team có ${wholeTeam.memberCount} thành viên. Hãy điều chỉnh sĩ số trước khi gán.`}
+              {!matchesOwners(wholeTeam.id, owners) ? "Đề bài hoặc module đã được giao cho Team khác trong lớp."
+                : wholeTeam.reason ?? `Team có ${wholeTeam.memberCount} thành viên. Hãy điều chỉnh sĩ số trước khi gán.`}
             </p>}
           </div>}
         </CardContent>
@@ -375,6 +429,9 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
         </>}
         {review && <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
           Lưu đề bài và vai trò cho các nhóm nháp. Workspace và hạn milestone bắt đầu từ lúc công bố chính thức.
+        </p>}
+        {step !== "project" && ownershipReady && !canConfigureRoles && <p role="alert" className="text-destructive">
+          Phân công của lớp đã thay đổi. Quay lại bước chọn Team để kiểm tra.
         </p>}
         {assignment.isError && <div role="alert" className="grid gap-2 text-destructive">
           <p>{failure(assignment.error)}</p>

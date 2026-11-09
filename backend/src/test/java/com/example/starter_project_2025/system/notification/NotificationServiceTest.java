@@ -25,6 +25,7 @@ class NotificationServiceTest {
         service.createOnce(7L, "course-completed:40", "Completed", "Done", "/courses/10");
 
         verify(notificationRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(notificationRepository).updateTargetUrlByEventKey("course-completed:40", "/courses/10");
     }
 
     @Test
@@ -37,4 +38,3 @@ class NotificationServiceTest {
         assertNotNull(notification.getReadAt());
     }
 }
-

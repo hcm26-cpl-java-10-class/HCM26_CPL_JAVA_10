@@ -67,15 +67,19 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const project = projects.find(item => item.id === (requestedProject ? Number(requestedProject) : context?.projectId));
   const invalidProject = requestedProject !== null && hierarchy.isSuccess && !project;
   const projectId = project?.id ?? context?.projectId;
-  const projectReadOnly = !!hierarchy.data?.readOnly || ["COMPLETED", "CANCELLED"].includes(project?.status ?? context?.projectStatus ?? "");
-  const projectScoped = hierarchy.data?.assignmentId != null || !!hierarchy.data?.readOnly;
+  const workspaceReadOnly = !!hierarchy.data?.readOnly;
+  const projectReadOnly = workspaceReadOnly || ["COMPLETED", "CANCELLED"].includes(project?.status ?? context?.projectStatus ?? "");
+  const projectScoped = hierarchy.data?.assignmentId != null || workspaceReadOnly;
   const isMaster = hierarchy.data?.assignmentId != null && project?.parentProjectId == null;
   const sharedMasterSelected = isMaster && hierarchy.data?.mode === "SPLIT";
+  const milestoneProjects = isMaster ? projects : projects.filter(item => item.parentProjectId != null);
+  const showAllMilestoneProjects = projectScoped && milestoneProjects.length > 1;
   function selectProject(projectId: number) {
     setParams(previous => { const next = new URLSearchParams(previous); next.set("project", String(projectId)); return next; }, { replace: true });
   }
   const sections = context?.sections.map(item => {
-    const permissions = projectReadOnly ? { ...item, actions: Object.fromEntries(Object.keys(item.actions).map(action => [action, false])) } : item;
+    const readOnly = item.key === "milestones" && showAllMilestoneProjects ? workspaceReadOnly : projectReadOnly;
+    const permissions = readOnly ? { ...item, actions: Object.fromEntries(Object.keys(item.actions).map(action => [action, false])) } : item;
     const resolved = sectionAccess(permissions, hasPermission);
     // Team-only workspaces own their Board through the workspace Team, so the
     // Board remains available even when legacy section permissions are absent.
@@ -115,9 +119,9 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
             {context.projectStatus && <div className="pt-1 sm:pt-6"><WorkspaceStatusBadge status={context.projectStatus} colored /></div>}
           </section>
           {hierarchy.data && <WorkspaceProjectHierarchy data={hierarchy.data} selectedId={projectId} onSelect={selectProject} />}
-          {tab !== "activity" && projectScoped && projectId && !sharedMasterSelected && <ProjectCompletionPanel key={`${projectId}:${context.teamId}`} workspaceId={workspaceId}
+          {tab !== "activity" && isMaster && projectId && !sharedMasterSelected && <ProjectCompletionPanel key={`${projectId}:${context.teamId}`} workspaceId={workspaceId}
             projectId={projectId} teamId={context.teamId} readOnly={projectReadOnly} onChanged={() => void refresh()}
-            title={`${isMaster ? "Master" : "Module"} completion — ${project?.name ?? context.projectName}`} />}
+            title={`Master completion — ${project?.name ?? context.projectName}`} />}
           <Tabs value={tab} onValueChange={changeTab} className="min-w-0 gap-5">
             <div className="min-w-0 overflow-x-auto overflow-y-hidden border-b"><TabsList aria-label="Workspace sections"
               className="h-10 w-max min-w-full justify-start gap-1 rounded-none bg-transparent p-0 align-top group-data-[orientation=horizontal]/tabs:h-10">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) =>
@@ -134,10 +138,13 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     onAccessChanged={reloadAccess} />
                 : tab === "resources" ? <WorkspaceResourcesPanel key={projectId} workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} selectedProjectId={projectId} onAccessChanged={reloadAccess} />
-                : tab === "milestones" ? !sharedMasterSelected && <WorkspaceMilestonesPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
-                      teamId={context.teamId} access={current} projectScoped={projectScoped} readOnly={projectReadOnly}
-                      projectStatus={project?.status ?? context.projectStatus ?? undefined}
-                      title={hierarchy.data?.assignmentId != null
+                : tab === "milestones" ? (showAllMilestoneProjects || !sharedMasterSelected) && <WorkspaceMilestonesPanel
+                      key={showAllMilestoneProjects ? "workspace" : projectId} workspaceId={workspaceId} projectId={projectId}
+                      teamId={context.teamId} access={current} projectScoped={projectScoped}
+                      projects={showAllMilestoneProjects ? milestoneProjects : undefined}
+                      readOnly={showAllMilestoneProjects ? workspaceReadOnly : projectReadOnly}
+                      projectStatus={showAllMilestoneProjects ? undefined : project?.status ?? context.projectStatus ?? undefined}
+                      title={showAllMilestoneProjects ? "Workspace milestones" : hierarchy.data?.assignmentId != null
                         ? `${isMaster ? "Master" : "Module"} milestones — ${project?.name ?? context.projectName}`
                         : `Milestones — ${context.projectName ?? context.teamName}`} />
                 : tab === "artifacts" ? <WorkspaceArtifactsPanel key={projectId} workspaceId={workspaceId} projectId={projectId}

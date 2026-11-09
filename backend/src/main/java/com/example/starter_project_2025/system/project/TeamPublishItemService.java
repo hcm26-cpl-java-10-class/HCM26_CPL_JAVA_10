@@ -3,10 +3,16 @@ package com.example.starter_project_2025.system.project;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
 import com.example.starter_project_2025.system.project.template.assignment.TemplateAssignmentProvisioningService;
+import com.example.starter_project_2025.system.project.template.assignment.hierarchy.ProjectAssignmentService;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus;
+import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
@@ -29,10 +35,13 @@ public class TeamPublishItemService {
     private final ClassMemberRepository classMemberRepository;
     private final ProjectTeamAuditRepository auditRepository;
     private final ProjectTeamOutboxRepository outboxRepository;
+    private final ProjectRepository projectRepository;
+    private final WorkspaceRepository workspaceRepository;
     private final ObjectMapper objectMapper;
     private final ProjectTeamMentorService teamMentorService;
     private final ProjectTeamMemberHistoryService historyService;
     private final TemplateAssignmentProvisioningService provisioning;
+    private final ProjectAssignmentService projectAssignments;
 
     @Transactional(noRollbackFor = {
             StudentAlreadyAssignedException.class,
@@ -62,6 +71,7 @@ public class TeamPublishItemService {
             throw new TeamPublishValidationException("Only DRAFT teams can be published");
         }
 
+        projectAssignments.validateDirectAssignmentPublication(team);
         Long assignedMentorId = teamMentorService.resolveMentorForPublish(team);
         List<ProjectMember> assignments = memberRepository.findAllByTeam_IdOrderByIdAsc(teamId);
         if (assignments.isEmpty()) {
@@ -124,6 +134,7 @@ public class TeamPublishItemService {
         if (team.getProjectTemplate() != null) {
             provisioning.provision(team, team.getProjectTemplate(), actorId, CorrelationIdFilter.currentId());
         }
+        activateProjectAndWorkspace(team);
         for (ProjectMember assignment : assignments) {
             historyService.record(
                     session,
@@ -158,6 +169,28 @@ public class TeamPublishItemService {
                 .correlationId(correlationId)
                 .status("PENDING")
                 .build());
+    }
+
+    /**
+     * The project/workspace provisioned for a DRAFT team are created as
+     * PLANNING / DRAFT. They become ACTIVE only when the team is published.
+     */
+    private void activateProjectAndWorkspace(ProjectTeam team) {
+        Project project = team.getProject();
+        if (project == null) {
+            return;
+        }
+        project.setStatus(ProjectStatus.ACTIVE);
+        projectRepository.saveAndFlush(project);
+
+        Workspace workspace = workspaceRepository.findCurrentByTeamId(team.getId()).orElse(null);
+        if (workspace == null
+                || workspace.getStatus() == WorkspaceStatus.ARCHIVED
+                || workspace.getStatus() == WorkspaceStatus.CLOSED) {
+            return;
+        }
+        workspace.setStatus(WorkspaceStatus.ACTIVE);
+        workspaceRepository.saveAndFlush(workspace);
     }
 
     /** US-11: publishing also enforces the template role quotas. */
