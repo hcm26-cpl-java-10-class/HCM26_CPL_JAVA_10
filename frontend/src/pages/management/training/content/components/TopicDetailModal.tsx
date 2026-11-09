@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import type { TopicItem } from "@/types/features/content";
 import {
   Dialog,
@@ -8,7 +8,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { Calendar, Clock, BookOpen, CheckCircle2 } from "lucide-react";
+import { Calendar, Clock, BookOpen } from "lucide-react";
+import { getTopicSyllabusPackage } from "./topicSyllabusData";
+import type { TopicSyllabusPackage } from "./topicSyllabusData";
+import { TopicSyllabusEditorDialog } from "./TopicSyllabusEditorDialog";
 
 interface TopicDetailModalProps {
   topic: TopicItem | null;
@@ -21,24 +24,30 @@ const PIE_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444"];
 
 export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDetailModalProps) {
   const [activeTab, setActiveTab] = useState<"syllabus" | "schedule">("syllabus");
+  const [isOutlineEditorOpen, setIsOutlineEditorOpen] = useState(false);
+
+  // Dynamic syllabus data
+  const [pkg, setPkg] = useState<TopicSyllabusPackage | null>(null);
+
+  useEffect(() => {
+    if (topic) {
+      setPkg(getTopicSyllabusPackage(topic));
+    }
+  }, [topic]);
 
   if (!topic) return null;
 
-  const totalH = topic.durationHours || 0;
+  const currentPkg = pkg || getTopicSyllabusPackage(topic);
+  const { chapters, totalSessions, timeAllocation } = currentPkg;
+  const totalH = timeAllocation.total || topic.durationHours || 0;
   const totalMins = totalH * 60;
 
-  // Breakdown for pie chart
-  const pieData = useMemo(() => {
-    if (totalH <= 0) return [];
-    const lab = Math.round(totalH * 0.45);
-    const lecture = Math.round(totalH * 0.40);
-    const exam = totalH - lab - lecture;
-    return [
-      { name: "Assignment/Lab", value: lab },
-      { name: "Concept/Lecture", value: lecture },
-      { name: "Exam / Quiz", value: Math.max(exam, 0) },
-    ].filter((d) => d.value > 0);
-  }, [totalH]);
+  // Breakdown for pie chart from actual package
+  const pieData = [
+    { name: "Assignment/Lab", value: timeAllocation.lab },
+    { name: "Concept/Lecture", value: timeAllocation.lecture },
+    { name: "Exam / Quiz", value: timeAllocation.exam },
+  ].filter((d) => d.value > 0);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -53,16 +62,6 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
     }
     return null;
   };
-
-  // Sample schedule sessions calculated based on duration
-  const sessionsCount = Math.max(Math.ceil(totalH / 4), 1);
-  const sampleSessions = Array.from({ length: sessionsCount }, (_, i) => ({
-    session: i + 1,
-    title: i === 0 ? "Introduction & Fundamentals" : i === sessionsCount - 1 ? "Review & Final Assessment" : `Advanced Practice & Hands-on Lab ${i}`,
-    duration: Math.min(4, totalH - i * 4 > 0 ? totalH - i * 4 : 4),
-    deliveryType: i % 2 === 0 ? "Classroom / Offline" : "Hands-on Lab",
-    objectives: i === 0 ? "Understand core architecture and setup environment" : i === sessionsCount - 1 ? "Comprehensive review and skill evaluation" : "Apply concepts to enterprise exercises and debugging",
-  }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -101,7 +100,7 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
                 : "text-gray-500 border-transparent hover:text-gray-700"
             }`}
           >
-            Schedule Detail ({sessionsCount} sessions)
+            Schedule Detail ({totalSessions} sessions)
           </button>
         </div>
 
@@ -122,7 +121,7 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
                       ["Version", `v${topic.version}`],
                       ["Technical Group", topic.technicalGroup || "—"],
                       ["Total Duration", `${totalH} hours (${totalMins.toLocaleString()} mins)`],
-                      ["Total Sessions", `${sessionsCount} sessions (4h/session)`],
+                      ["Total Sessions", totalSessions > 0 ? `${totalSessions} sessions` : "Not scheduled yet"],
                       ["Pass Criteria", ">= 60% on theory & practical tests"],
                       ["Re-Test Allowed", "1 re-test attempt"],
                       ["Status", topic.isActive ? "🟢 Active" : "⚪ Inactive"],
@@ -240,52 +239,101 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
             <section className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-800">Topic Schedule & Delivery Plan</h2>
+                  <h2 className="text-sm font-semibold text-gray-800">Topic Schedule &amp; Delivery Plan</h2>
                   <p className="text-xs text-gray-500">Day-by-day session outline and lesson objectives</p>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <span className="flex items-center gap-1"><Clock className="size-3.5 text-purple-600" /> Total: {totalH}h</span>
-                  <span className="flex items-center gap-1 ml-2"><Calendar className="size-3.5 text-purple-600" /> {sessionsCount} Sessions</span>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mr-2">
+                    <span className="flex items-center gap-1"><Clock className="size-3.5 text-purple-600" /> Total: {totalH}h</span>
+                    <span className="flex items-center gap-1 ml-2"><Calendar className="size-3.5 text-purple-600" /> {totalSessions} Sessions</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsOutlineEditorOpen(true)}
+                    className="bg-[#5b52e0] hover:bg-[#4a41d0] text-white text-xs gap-1.5 shadow-sm"
+                  >
+                    <BookOpen className="size-3.5" />
+                    Edit Outline
+                  </Button>
                 </div>
               </div>
 
-              <div className="space-y-3">
-                {sampleSessions.map((s) => (
-                  <div key={s.session} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:border-purple-200 transition-all">
-                    <div className="flex items-center justify-between pb-2 border-b border-gray-100 mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-purple-100 text-purple-700">
-                          Session {s.session}
+              {chapters.length === 0 ? (
+                <div className="text-center py-12 px-4 bg-white border border-dashed border-gray-200 rounded-lg">
+                  <BookOpen className="size-8 text-gray-300 mx-auto mb-2" />
+                  <p className="font-semibold text-xs text-gray-700">No schedule outline defined yet</p>
+                  <p className="text-[11px] text-gray-400 mt-1 mb-4">You can define chapters and sessions for this topic.</p>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsOutlineEditorOpen(true)}
+                    className="bg-[#5b52e0] hover:bg-[#4a41d0] text-white text-xs gap-1.5"
+                  >
+                    <BookOpen className="size-3.5" />
+                    Configure Schedule Outline
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {chapters.map((ch) => (
+                    <div key={ch.id} className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                      <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex items-center justify-between">
+                        <span className="font-semibold text-xs text-gray-800">{ch.title}</span>
+                        <span className="text-[11px] text-gray-500 font-medium">
+                          {ch.sessions.length} sessions &bull; {ch.sessions.reduce((a, b) => a + (Number(b.durationHours) || 0), 0)}h
                         </span>
-                        <h3 className="text-sm font-semibold text-gray-800">{s.title}</h3>
                       </div>
-                      <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
-                        <Clock className="size-3 text-gray-400" /> {s.duration} hours
-                      </span>
+                      <div className="p-3 space-y-2.5">
+                        {ch.sessions.map((s) => (
+                          <div key={s.session} className="border border-gray-100 rounded-lg p-3 hover:bg-gray-50/60 transition-colors">
+                            <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-gray-100">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-100 text-purple-700">
+                                  Session {s.session}
+                                </span>
+                                <h4 className="text-xs font-semibold text-gray-800">{s.content}</h4>
+                              </div>
+                              <span className="text-xs font-mono font-medium text-gray-500">
+                                {s.duration}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
+                              <div>
+                                <span className="text-gray-400 block text-[11px]">Format &amp; Delivery</span>
+                                <span className="text-gray-700 font-medium flex items-center gap-1">
+                                  <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] ${
+                                    s.deliveryType.includes("Lab") ? "bg-blue-50 text-blue-700" :
+                                    s.deliveryType.includes("Exam") ? "bg-amber-50 text-amber-700" : "bg-purple-50 text-purple-700"
+                                  }`}>
+                                    {s.deliveryType}
+                                  </span>
+                                  &bull; {s.trainingFormat}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400 block text-[11px]">Learning Objectives</span>
+                                <span className="text-gray-600 line-clamp-1">{s.objectives}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4 text-xs pt-1">
-                      <div>
-                        <span className="text-gray-400 block mb-0.5 font-medium">Training Format & Delivery</span>
-                        <span className="text-gray-700 flex items-center gap-1.5 font-medium">
-                          <BookOpen className="size-3.5 text-purple-500" /> {s.deliveryType}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400 block mb-0.5 font-medium">Learning Outcomes</span>
-                        <span className="text-gray-700 flex items-center gap-1.5">
-                          <CheckCircle2 className="size-3.5 text-green-500" /> {s.objectives}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
         </div>
       </DialogContent>
+
+      {/* Editor Modal */}
+      <TopicSyllabusEditorDialog
+        topic={topic}
+        open={isOutlineEditorOpen}
+        onOpenChange={setIsOutlineEditorOpen}
+        onSaved={(newPkg) => setPkg(newPkg)}
+      />
     </Dialog>
   );
 }

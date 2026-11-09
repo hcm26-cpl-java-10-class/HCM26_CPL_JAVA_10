@@ -664,143 +664,75 @@ const CURATED_SYLLABI: Record<string, TopicChapter[]> = {
   ],
 };
 
-// 2. Dynamic Generator for any custom or new topic
-function generateDynamicSyllabus(topic: TopicItem): TopicChapter[] {
-  const name = topic.name || "Technical Module";
-  const group = topic.technicalGroup || "Engineering";
-  const totalH = Math.max(topic.durationHours || 16, 4);
+// Storage key prefix for custom saved syllabi per topic
+const STORAGE_PREFIX = "fams_custom_syllabus_";
 
-  // Split hours across 4 standard chapters
-  const ch1H = Math.max(4, Math.round(totalH * 0.25));
-  const ch2H = Math.max(4, Math.round(totalH * 0.35));
-  const ch3H = Math.max(4, Math.round(totalH * 0.25));
-  const ch4H = Math.max(4, totalH - ch1H - ch2H - ch3H);
-
-  return [
-    {
-      id: 1,
-      title: `1. ${name} - Core Architecture & Fundamentals`,
-      sessions: [
-        {
-          session: 1,
-          content: `${name} Architecture, Syntax & Foundational Principles`,
-          objectives: `Understand foundational theory, environment configuration, and core concepts of ${name}`,
-          deliveryType: "Concept/Lecture",
-          duration: `${ch1H / 2}h`,
-          durationHours: ch1H / 2,
-          trainingFormat: "Online",
-          materials: `https://learn.microsoft.com/en-us/`,
-        },
-        {
-          session: 2,
-          content: `Hands-on Lab: ${name} Baseline Implementation`,
-          objectives: `Apply basic syntax and core building blocks to construct functional prototypes`,
-          deliveryType: "Assignment/Lab",
-          duration: `${ch1H / 2}h`,
-          durationHours: ch1H / 2,
-          trainingFormat: "Offline",
-          materials: `Lab-Fundamentals-${topic.code}.pdf`,
-        },
-      ],
-    },
-    {
-      id: 2,
-      title: `2. ${name} - Practical Patterns & Applied Engineering`,
-      sessions: [
-        {
-          session: 3,
-          content: `Enterprise Design Patterns & Best Practices in ${group}`,
-          objectives: `Master industry-standard design patterns, dependency structures, and clean modular code`,
-          deliveryType: "Concept/Lecture",
-          duration: `${ch2H / 2}h`,
-          durationHours: ch2H / 2,
-          trainingFormat: "Online",
-          materials: `https://www.baeldung.com/`,
-        },
-        {
-          session: 4,
-          content: `Hands-on Lab: Practical Exercise & Enterprise Use Cases`,
-          objectives: `Solve real-world business scenarios, author unit tests, and review code quality`,
-          deliveryType: "Assignment/Lab",
-          duration: `${ch2H / 2}h`,
-          durationHours: ch2H / 2,
-          trainingFormat: "Offline",
-          materials: `Lab-Advanced-${topic.code}.pdf`,
-        },
-      ],
-    },
-    {
-      id: 3,
-      title: `3. Performance Optimization, Debugging & Security`,
-      sessions: [
-        {
-          session: 5,
-          content: `Performance Tuning, Memory Profiling & Security Hardening`,
-          objectives: `Analyze bottlenecks, optimize latency and throughput, and remediate common vulnerabilities`,
-          deliveryType: "Concept/Lecture",
-          duration: `${ch3H / 2}h`,
-          durationHours: ch3H / 2,
-          trainingFormat: "Online",
-          materials: `Security-Best-Practices-${group}.pdf`,
-        },
-        {
-          session: 6,
-          content: `Hands-on Lab: Debugging, Error Handling & Refactoring`,
-          objectives: `Refactor legacy codebases, eliminate technical debt, and implement automated validation`,
-          deliveryType: "Assignment/Lab",
-          duration: `${ch3H / 2}h`,
-          durationHours: ch3H / 2,
-          trainingFormat: "Offline",
-          materials: `Lab-Optimization-${topic.code}.pdf`,
-        },
-      ],
-    },
-    {
-      id: 4,
-      title: `4. Final Comprehensive Assessment`,
-      sessions: [
-        {
-          session: 7,
-          content: `Theoretical Exam (60m) & Practical Capstone Evaluation (180m)`,
-          objectives: `Demonstrate end-to-end competence in ${name} through examination and project defense`,
-          deliveryType: "Exam",
-          duration: `${ch4H}h`,
-          durationHours: ch4H,
-          trainingFormat: "Offline",
-          materials: `Exam-Rubric-${topic.code}.pdf`,
-        },
-      ],
-    },
-  ];
+export function getCustomTopicSyllabus(topicId: number | string): TopicChapter[] | null {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_PREFIX}${topicId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to read custom syllabus from storage", e);
+  }
+  return null;
 }
 
-// 3. Main Resolver: returns chapters, accurate time allocations, and tailored assessment scheme
-export function getTopicSyllabusPackage(topic: TopicItem): TopicSyllabusPackage {
-  // Alias mapping to reuse high-fidelity syllabi
-  const code = topic.code.toUpperCase();
-  let chapters: TopicChapter[];
+export function hasCustomTopicSyllabus(topicId: number | string): boolean {
+  return getCustomTopicSyllabus(topicId) !== null;
+}
 
-  if (CURATED_SYLLABI[code]) {
-    chapters = CURATED_SYLLABI[code];
-  } else if (code.includes("ORM") || code.includes("HIBERNATE")) {
-    chapters = CURATED_SYLLABI["L2_JA_ORM"];
-  } else if (code.includes("SPRING") || code.includes("JSFW")) {
-    chapters = CURATED_SYLLABI["SPRING_BOOT"];
-  } else if (code.includes("JAVA") || code.includes("JA_JS")) {
-    chapters = CURATED_SYLLABI["JAVA_CORE"];
-  } else if (code.includes("SQL") || code.includes("DATA") || code.includes("DF")) {
-    chapters = CURATED_SYLLABI["DATABASE_SQL"];
-  } else if (code.includes("REACT") || code.includes("FRONTEND") || code.includes("ANGULAR") || code.includes("FF")) {
-    chapters = CURATED_SYLLABI["REACT_FRONTEND"];
-  } else if (code.includes("PROJECT") || code.includes("MOCK")) {
-    chapters = CURATED_SYLLABI["L4_MOCK_PROJECT"];
-  } else if (code.includes("CCGM") || code.includes("CULTURE")) {
-    chapters = CURATED_SYLLABI["L1_AL_CCGM"];
-  } else {
-    chapters = generateDynamicSyllabus(topic);
+export function saveTopicSyllabusPackage(
+  topicId: number | string,
+  chapters: TopicChapter[],
+  topic: TopicItem
+): TopicSyllabusPackage {
+  try {
+    localStorage.setItem(`${STORAGE_PREFIX}${topicId}`, JSON.stringify(chapters));
+    if (topic.code) {
+      localStorage.setItem(`${STORAGE_PREFIX}${topic.code}`, JSON.stringify(chapters));
+    }
+  } catch (e) {
+    console.error("Failed to save custom syllabus to storage", e);
+  }
+  return calculateSyllabusPackage(chapters, topic);
+}
+
+export function resetTopicSyllabusPackage(topicId: number | string, topicCode?: string): void {
+  try {
+    localStorage.removeItem(`${STORAGE_PREFIX}${topicId}`);
+    if (topicCode) {
+      localStorage.removeItem(`${STORAGE_PREFIX}${topicCode}`);
+    }
+  } catch (e) {
+    console.error("Failed to reset custom syllabus from storage", e);
+  }
+}
+
+// Helper to compute metrics, time allocations and assessment scheme for any chapters list
+export function calculateSyllabusPackage(
+  chapters: TopicChapter[],
+  topic: TopicItem
+): TopicSyllabusPackage {
+  if (!chapters || chapters.length === 0) {
+    return {
+      chapters: [],
+      totalSessions: 0,
+      timeAllocation: {
+        lab: 0,
+        lecture: 0,
+        exam: 0,
+        total: 0,
+      },
+      assessmentScheme: [],
+    };
   }
 
-  // Calculate session count & hours by delivery type
+  const code = (topic.code || "").toUpperCase();
   let totalSessions = 0;
   let labHours = 0;
   let lectureHours = 0;
@@ -809,24 +741,19 @@ export function getTopicSyllabusPackage(topic: TopicItem): TopicSyllabusPackage 
   chapters.forEach((ch) => {
     ch.sessions.forEach((sess) => {
       totalSessions++;
+      const hrs = Number(sess.durationHours) || 0;
       if (sess.deliveryType === "Assignment/Lab" || sess.deliveryType === "Seminar/Workshop") {
-        labHours += sess.durationHours;
+        labHours += hrs;
       } else if (sess.deliveryType === "Exam" || sess.deliveryType === "Test/Quiz") {
-        examHours += sess.durationHours;
+        examHours += hrs;
       } else {
-        lectureHours += sess.durationHours;
+        lectureHours += hrs;
       }
     });
   });
 
   const totalCalculatedHours = labHours + lectureHours + examHours;
-  const totalH = topic.durationHours > 0 ? topic.durationHours : totalCalculatedHours;
-
-  // Time allocation (proportional if durationHours differs)
-  const ratio = totalH > 0 && totalCalculatedHours > 0 ? totalH / totalCalculatedHours : 1;
-  const adjustedLab = Math.round(labHours * ratio);
-  const adjustedLecture = Math.round(lectureHours * ratio);
-  const adjustedExam = Math.max(0, totalH - adjustedLab - adjustedLecture);
+  const totalH = totalCalculatedHours > 0 ? totalCalculatedHours : (topic.durationHours || 0);
 
   // Tailor assessment scheme to topic type
   const isSoftSkill = topic.technicalGroup?.toLowerCase().includes("soft") || code.startsWith("L1_AL");
@@ -857,12 +784,136 @@ export function getTopicSyllabusPackage(topic: TopicItem): TopicSyllabusPackage 
     chapters,
     totalSessions,
     timeAllocation: {
-      lab: adjustedLab,
-      lecture: adjustedLecture,
-      exam: adjustedExam,
+      lab: labHours,
+      lecture: lectureHours,
+      exam: examHours,
       total: totalH,
     },
     assessmentScheme,
+  };
+}
+
+// Generate template chapters matching exact target hours
+export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
+  const targetH = Math.max(topic.durationHours || 40, 4);
+  const name = topic.name || "Topic Modules";
+  const code = topic.code || "TOPIC";
+  const group = topic.technicalGroup || "Engineering";
+
+  // Divide into 3 to 4 chapters
+  const numChapters = targetH >= 30 ? 4 : targetH >= 16 ? 3 : 2;
+  const sessionsPerChapter = 2;
+  const totalSessions = numChapters * sessionsPerChapter;
+  const baseSessionH = Math.max(1, Math.floor(targetH / totalSessions));
+  const remainder = targetH - baseSessionH * totalSessions;
+
+  const chapters: TopicChapter[] = [];
+  let currentSessionNumber = 1;
+  let remainingHoursToAdd = remainder;
+
+  const chapterThemes = [
+    { title: "1. Core Foundations & Environment Setup", topic: "Fundamentals & Architecture" },
+    { title: "2. Deep Dive & Core Implementation", topic: "Advanced Implementation & Clean Code" },
+    { title: "3. Applied Scenarios & Best Practices", topic: "Enterprise Patterns & Optimization" },
+    { title: "4. Practical Review & Comprehensive Assessment", topic: "Comprehensive Evaluation" },
+  ];
+
+  for (let chIdx = 0; chIdx < numChapters; chIdx++) {
+    const theme = chapterThemes[chIdx] || {
+      title: `${chIdx + 1}. Advanced Module & Practical Lab`,
+      topic: "Modular Practices",
+    };
+
+    const isLastChapter = chIdx === numChapters - 1;
+    const chSessions: TopicSession[] = [];
+
+    // Session 1 of chapter
+    let sess1Hours = baseSessionH;
+    if (remainingHoursToAdd > 0) {
+      sess1Hours += 1;
+      remainingHoursToAdd -= 1;
+    }
+
+    const sess1Delivery: TopicSession["deliveryType"] = isLastChapter
+      ? "Guides/Review"
+      : "Concept/Lecture";
+
+    chSessions.push({
+      session: currentSessionNumber++,
+      content: isLastChapter
+        ? `${name} - Comprehensive Review & Q&A Workshop`
+        : `${name} - ${theme.topic} Theory & Concepts`,
+      objectives: `Understand foundational concepts, workflow architecture, and engineering principles in ${group}`,
+      deliveryType: sess1Delivery,
+      duration: `${sess1Hours}h`,
+      durationHours: sess1Hours,
+      trainingFormat: "Online",
+      materials: `https://docs.oracle.com/en/java/`,
+    });
+
+    // Session 2 of chapter
+    let sess2Hours = baseSessionH;
+    if (remainingHoursToAdd > 0) {
+      sess2Hours += 1;
+      remainingHoursToAdd -= 1;
+    }
+
+    const sess2Delivery: TopicSession["deliveryType"] = isLastChapter
+      ? "Exam"
+      : "Assignment/Lab";
+
+    chSessions.push({
+      session: currentSessionNumber++,
+      content: isLastChapter
+        ? `Theoretical Final Test (60m) & Practical Capstone Exam (180m)`
+        : `Hands-on Lab Exercise: ${theme.topic} Assignment`,
+      objectives: isLastChapter
+        ? `Evaluate comprehensive competencies, problem solving, and applied skills in ${name}`
+        : `Implement practical exercises, unit tests, and code reviews under mentor guidance`,
+      deliveryType: sess2Delivery,
+      duration: `${sess2Hours}h`,
+      durationHours: sess2Hours,
+      trainingFormat: "Offline",
+      materials: isLastChapter
+        ? `Exam-Rubric-${code}.pdf`
+        : `Lab-Assignment-${code}-Ch${chIdx + 1}.pdf`,
+    });
+
+    chapters.push({
+      id: chIdx + 1,
+      title: theme.title,
+      sessions: chSessions,
+    });
+  }
+
+  return chapters;
+}
+
+// 3. Main Resolver: returns chapters, accurate time allocations, and tailored assessment scheme
+export function getTopicSyllabusPackage(topic: TopicItem): TopicSyllabusPackage {
+  // Check custom saved syllabus first (by id or code)
+  const custom = (topic.id ? getCustomTopicSyllabus(topic.id) : null) || getCustomTopicSyllabus(topic.code);
+  if (custom && custom.length > 0) {
+    return calculateSyllabusPackage(custom, topic);
+  }
+
+  // Exact match only for specific predefined seed syllabus (e.g. L2_JA_ORM demo from FAMS video)
+  const code = (topic.code || "").toUpperCase().trim();
+  if (code && CURATED_SYLLABI[code]) {
+    return calculateSyllabusPackage(CURATED_SYLLABI[code], topic);
+  }
+
+  // If user hasn't added any chapters, keep it completely empty. Do NOT generate fake data!
+  return {
+    chapters: [],
+    totalSessions: 0,
+    timeAllocation: {
+      lab: 0,
+      lecture: 0,
+      exam: 0,
+      total: 0,
+    },
+    assessmentScheme: [],
   };
 }
 

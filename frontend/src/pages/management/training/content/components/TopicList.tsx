@@ -35,6 +35,7 @@ import {
   RefreshCw,
   Power,
   Clock,
+  BookOpen,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -46,6 +47,7 @@ import {
 import { TopicDetailModal } from "./TopicDetailModal";
 import { TopicImportDialog } from "./TopicImportDialog";
 import { TopicExportDialog } from "./TopicExportDialog";
+import { TopicSyllabusEditorDialog } from "./TopicSyllabusEditorDialog";
 
 interface TopicListProps {
   onViewDetail?: (topic: TopicItem) => void;
@@ -98,6 +100,8 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [detailTopic, setDetailTopic] = useState<TopicItem | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [outlineEditorTopic, setOutlineEditorTopic] = useState<TopicItem | null>(null);
+  const [isOutlineEditorOpen, setIsOutlineEditorOpen] = useState(false);
 
   const handleOpenDetail = (t: TopicItem) => {
     if (onViewDetail) {
@@ -106,6 +110,11 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
       setDetailTopic(t);
       setIsDetailOpen(true);
     }
+  };
+
+  const handleOpenOutlineEditor = (t: TopicItem) => {
+    setOutlineEditorTopic(t);
+    setIsOutlineEditorOpen(true);
   };
 
   const [formData, setFormData] = useState({
@@ -188,7 +197,7 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
         });
         toast.success("Topic updated successfully!");
       } else {
-        await topicApi.create({
+        const created = await topicApi.create({
           code: formData.code.toUpperCase().trim(),
           name: formData.name,
           version: formData.version,
@@ -197,7 +206,12 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
           description: formData.description,
           isActive: formData.isActive,
         });
-        toast.success("Topic created successfully!");
+        toast.success("Topic created successfully!", {
+          action: {
+            label: "Configure Outline",
+            onClick: () => handleOpenOutlineEditor(created),
+          },
+        });
       }
       setIsFormOpen(false);
       loadTopics();
@@ -461,6 +475,9 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
                         <DropdownMenuContent align="end" className="w-44">
                           <DropdownMenuItem onClick={() => handleOpenDetail(t)} className="gap-2 text-xs">
                             <Eye className="size-3.5 text-gray-500" /> View Schedule
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenOutlineEditor(t)} className="gap-2 text-xs">
+                            <BookOpen className="size-3.5 text-[#5b52e0]" /> Edit Schedule Outline
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleOpenEdit(t)} className="gap-2 text-xs">
                             <Edit2 className="size-3.5 text-blue-500" /> Edit Topic
@@ -736,6 +753,21 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
         open={isExportOpen}
         onOpenChange={setIsExportOpen}
       />
+
+      {/* Schedule Outline Editor Dialog */}
+      {outlineEditorTopic && (
+        <TopicSyllabusEditorDialog
+          topic={outlineEditorTopic}
+          open={isOutlineEditorOpen}
+          onOpenChange={(v) => {
+            setIsOutlineEditorOpen(v);
+            if (!v) setOutlineEditorTopic(null);
+          }}
+          onSaved={() => {
+            loadTopics();
+          }}
+        />
+      )}
     </div>
   );
 }
