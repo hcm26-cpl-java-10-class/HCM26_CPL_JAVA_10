@@ -30,12 +30,14 @@ class MilestoneValidatorTest {
     }
 
     @Test
-    void startDateUsesTenantMidnightAndMustBeFuture() {
+    void startDateUsesTenantMidnightAndMustNotBeInThePast() {
         var zone = ZoneId.of("Asia/Ho_Chi_Minh");
         assertEquals(Instant.parse("2026-10-23T17:00:00Z"), validator.requireScheduledStart(
                 LocalDate.parse("2026-10-24"), now.plusSeconds(86400), now, zone));
+        assertEquals(Instant.parse("2026-10-22T17:00:00Z"), validator.requireScheduledStart(
+                LocalDate.parse("2026-10-23"), now.plusSeconds(86400), now, zone));
         assertTrue(assertThrows(MilestoneValidationException.class, () -> validator.requireScheduledStart(
-                LocalDate.parse("2026-10-23"), now.plusSeconds(86400), now, zone)).getErrors().containsKey("startDate"));
+                LocalDate.parse("2026-10-22"), now.plusSeconds(86400), now, zone)).getErrors().containsKey("startDate"));
         assertTrue(assertThrows(MilestoneValidationException.class, () -> validator.requireScheduledStart(
                 LocalDate.parse("2026-10-24"), Instant.parse("2026-10-23T17:00:00Z"), now, zone))
                 .getErrors().containsKey("startDate"));

@@ -89,11 +89,11 @@ class MilestoneIntegrationTest {
     }
 
     @Test
-    void rejectsStartDateTodayAndRemovedManualRoutes() throws Exception {
+    void rejectsPastStartDateAndRemovedManualRoutes() throws Exception {
         Map<String, Object> request = new LinkedHashMap<>(validRequest());
-        request.put("startDate", LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).toString());
+        request.put("startDate", LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(1).toString());
         mockMvc.perform(post(endpoint()).header("Authorization", "Bearer " + teacherToken)
-                        .header("Idempotency-Key", "start-today-rejected")
+                        .header("Idempotency-Key", "start-yesterday-rejected")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnprocessableEntity())

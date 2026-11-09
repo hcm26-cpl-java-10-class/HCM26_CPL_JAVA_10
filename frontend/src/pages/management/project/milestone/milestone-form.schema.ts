@@ -115,8 +115,8 @@ export function milestoneFormSchemaForTenant(timeZone: string) {
 }
 
 function validateTenantSchedule(value: Pick<MilestoneFormValues, "startDate" | "deadline">, context: z.RefinementCtx, timeZone: string) {
-    if (value.startDate && value.startDate <= tenantToday(timeZone)) {
-      context.addIssue({ code: "custom", path: ["startDate"], message: "Start date must be after today in the tenant time zone" });
+    if (value.startDate && value.startDate < tenantToday(timeZone)) {
+      context.addIssue({ code: "custom", path: ["startDate"], message: "Start date must be today or later in the tenant time zone" });
     }
     const start = tenantStartOfDay(value.startDate, timeZone);
     const deadline = value.deadline ? new Date(value.deadline) : null;
