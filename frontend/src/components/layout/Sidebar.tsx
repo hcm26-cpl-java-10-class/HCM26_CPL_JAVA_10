@@ -69,7 +69,10 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
         ) &&
         !placeholders.some(
             (pl) => pl.title.toLowerCase() === item.title.toLowerCase() || (pl.url && pl.url === item.url),
-        ),
+        ) &&
+        item.url !== "/content" &&
+        item.url !== "/training/content" &&
+        item.title.toLowerCase() !== "content"
     );
 
     return [...mappedActive, ...otherRealModules, ...placeholders];
