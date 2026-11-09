@@ -114,11 +114,11 @@ export function TemplateSampleContentForm({ content, editable, onSaved, save, pr
 
   return <form onSubmit={submit} noValidate aria-busy={mutation.isPending} className="grid min-w-0 gap-4">
     {submitError && <Alert variant="destructive"><AlertCircle /><AlertTitle>Unable to save sample content</AlertTitle><AlertDescription>{submitError.message}</AlertDescription></Alert>}
-    <Card>
-      <CardHeader>
+    <Card className="overflow-hidden pt-0">
+      <CardHeader className="border-b bg-indigo-50/50 pt-5 dark:bg-indigo-950/30">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle className="flex items-center gap-2"><ClipboardList className="size-5" />Sample backlog</CardTitle>
+            <CardTitle className="flex items-center gap-2"><ClipboardList className="size-5 text-indigo-600 dark:text-indigo-400" />Sample backlog</CardTitle>
             <CardDescription className="mt-2">Prepare initial work and suggested roles for teams using this template.</CardDescription>
           </div>
           <Badge variant="outline">{backlogItems.length} {backlogItems.length === 1 ? "item" : "items"}</Badge>
@@ -146,7 +146,7 @@ export function TemplateSampleContentForm({ content, editable, onSaved, save, pr
               const invalid = Object.keys(errors).some((field) => field === path || field.startsWith(`${path}.`));
               return <li key={item.key}>
                 <button type="button" aria-expanded={selected} aria-controls="template-backlog-editor"
-                  className={`flex w-full items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/5" : "hover:bg-muted/40"}`}
+                  className={`flex w-full items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/60" : "hover:bg-muted/40"}`}
                   onClick={() => selected ? collapseItem() : openItem(item.key)}>
                   <span className="shrink-0 font-medium text-muted-foreground">{index + 1}.</span>
                   <span className="min-w-0 flex-1">

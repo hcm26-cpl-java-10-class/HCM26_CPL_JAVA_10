@@ -12,8 +12,8 @@ export const sprintStatusOptions = [
 ];
 
 /**
- * A new sprint always starts as Planned, so the create form only offers that
- * status (the backend enforces the same rule).
+ * A new sprint always starts as Planned: the status field is hidden on create
+ * and the backend enforces the same rule, so no client value is needed.
  */
 export const sprintCreateStatusOptions = sprintStatusOptions.filter(
   (option) => option.value === "PLANNED",
@@ -92,6 +92,11 @@ export const sprintSchema: EntitySchema = {
       createOptions: sprintCreateStatusOptions,
       editOptions: sprintEditStatusOptions,
       defaultValue: "PLANNED",
+      /**
+       * A new sprint is always created as Planned, so the field is not shown
+       * in the Create Sprint modal and only appears when editing.
+       */
+      hideOnCreate: true,
       required: true,
       requiredMessage: "Vui lòng chọn trạng thái Sprint",
       helpText:

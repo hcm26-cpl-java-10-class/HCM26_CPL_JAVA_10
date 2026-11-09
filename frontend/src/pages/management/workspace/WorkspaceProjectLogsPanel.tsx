@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { WorkspaceEmptyState, getWorkspaceError } from "./workspace.shared";
-import { Activity, ChevronRight, FileText, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { Activity, ChevronRight, FileText, ListChecks, NotebookPen, Plus, Search, ShieldAlert, SlidersHorizontal, TriangleAlert, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 
 const LOG_TITLE_MAX_LENGTH = 100;
@@ -34,11 +34,29 @@ const emptyForm: LogForm = {
   targetType: "", targetId: ""
 };
 type LogView = ProjectLogType | "ALL" | "ACTIVITY";
-const LOG_TABS: { label: string; value: LogView }[] = [
-  { label: "All logs", value: "ALL" }, { label: "Decisions", value: "DECISION" },
-  { label: "Risks & issues", value: "RISK_ISSUE" }, { label: "Meeting notes", value: "MEETING_NOTE" },
-  { label: "Activity feed", value: "ACTIVITY" },
+const LOG_TABS: { label: string; value: LogView; icon: LucideIcon }[] = [
+  { label: "All logs", value: "ALL", icon: FileText },
+  { label: "Decisions", value: "DECISION", icon: ListChecks },
+  { label: "Risks & issues", value: "RISK_ISSUE", icon: TriangleAlert },
+  { label: "Meeting notes", value: "MEETING_NOTE", icon: NotebookPen },
+  { label: "Activity feed", value: "ACTIVITY", icon: Activity },
 ];
+const logTypeTone: Record<ProjectLogType, string> = {
+  RISK_ISSUE: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300",
+  DECISION: "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950 dark:text-indigo-300",
+  MEETING_NOTE: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300",
+};
+const riskStatusTone: Record<string, string> = {
+  OPEN: logTypeTone.MEETING_NOTE,
+  IN_MITIGATION: logTypeTone.RISK_ISSUE,
+  CLOSED: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300",
+};
+const severityTone: Record<NonNullable<ProjectLog["severity"]>, string> = {
+  LOW: logTypeTone.MEETING_NOTE,
+  MEDIUM: logTypeTone.RISK_ISSUE,
+  HIGH: "border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-300",
+  CRITICAL: "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-300",
+};
 const authorRoleLabel = (role: ProjectLogAuthorOption["role"]) => ({
   MEMBER: "Team member",
   MENTOR: "Assigned mentor",
@@ -207,19 +225,27 @@ export function WorkspaceProjectLogsPanel({ workspaceId, readOnly = false }: { w
     <Tabs value={view} onValueChange={value => {
       setView(value as LogView); setPage(0); setSelectedLogId(null);
     }} className="gap-4">
-      <Card className="gap-4">
-        <CardHeader>
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="bg-gradient-to-r from-amber-50 via-background to-sky-50/70 py-5 dark:from-amber-950/40 dark:to-sky-950/25">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-2">
-              <CardTitle>Risks, Decisions &amp; Logs</CardTitle>
-              <CardDescription>Review project decisions, track risks and issues, and revisit meeting notes.</CardDescription>
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+                <ShieldAlert className="size-5" aria-hidden />
+              </span>
+              <div className="space-y-1.5">
+                <CardTitle>Risks, Decisions &amp; Logs</CardTitle>
+                <CardDescription>Track risks, record decisions and keep meeting notes in one place.</CardDescription>
+              </div>
             </div>
-            {!readOnly && <Button onClick={openCreate}><Plus className="size-4" />Create log</Button>}
+            {!readOnly && <Button onClick={openCreate}><Plus className="size-4" />{type === "RISK_ISSUE" ? "Create risk or issue" : "Create log"}</Button>}
           </div>
         </CardHeader>
-        <CardContent>
-          <TabsList aria-label="Workspace logs" className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-5">
-            {LOG_TABS.map(tab => <TabsTrigger key={tab.value} value={tab.value}>{tab.label}</TabsTrigger>)}
+        <CardContent className="overflow-x-auto overflow-y-hidden border-t px-2 py-1.5 sm:px-4">
+          <TabsList aria-label="Workspace logs" className="h-auto w-max min-w-full justify-start gap-1 bg-transparent">
+            {LOG_TABS.map(({ label, value, icon: Icon }) => <TabsTrigger key={value} value={value}
+              className="min-h-9 px-3 text-xs data-[state=active]:border-blue-200 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 dark:data-[state=active]:border-blue-800 dark:data-[state=active]:bg-blue-950 dark:data-[state=active]:text-blue-300">
+              <Icon className="size-4" aria-hidden />{label}
+            </TabsTrigger>)}
           </TabsList>
         </CardContent>
       </Card>
@@ -239,6 +265,28 @@ export function WorkspaceProjectLogsPanel({ workspaceId, readOnly = false }: { w
               </Button>
               {filtered && <Button type="button" variant="ghost" onClick={clearFilters}>Clear filters</Button>}
             </div>
+            {type === "RISK_ISSUE" && <div className="grid gap-2 sm:grid-cols-3">
+              <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Category
+                <select aria-label="Filter risk category" className="h-9 rounded-md border bg-background px-2 text-sm text-foreground" value={riskCategory}
+                  onChange={event => { setRiskCategory(event.target.value); setPage(0); }}>
+                  <option value="">All categories</option><option value="RISK">Risk</option><option value="ISSUE">Issue</option>
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Severity
+                <select aria-label="Filter risk severity" className="h-9 rounded-md border bg-background px-2 text-sm text-foreground" value={riskSeverity}
+                  onChange={event => { setRiskSeverity(event.target.value); setPage(0); }}>
+                  <option value="">All severities</option><option value="LOW">Low</option><option value="MEDIUM">Medium</option>
+                  <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">Status
+                <select aria-label="Filter risk status" className="h-9 rounded-md border bg-background px-2 text-sm text-foreground" value={riskStatus}
+                  onChange={event => { setRiskStatus(event.target.value); setPage(0); }}>
+                  <option value="">All risk statuses</option><option value="OPEN">Open</option>
+                  <option value="IN_MITIGATION">In mitigation</option><option value="CLOSED">Closed</option>
+                </select>
+              </label>
+            </div>}
             {filtersOpen && <div id="workspace-log-filters" className="grid gap-3 border-t pt-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         <select aria-label="Filter by author" className="rounded-md border bg-background px-3 py-2" value={createdBy}
@@ -273,21 +321,7 @@ export function WorkspaceProjectLogsPanel({ workspaceId, readOnly = false }: { w
         <option value="TASK">Task</option><option value="BACKLOG_ITEM">Backlog item</option>
       </select>
     </div>}
-    {type === "RISK_ISSUE" && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <select aria-label="Filter risk category" className="rounded-md border bg-background px-3 py-2" value={riskCategory}
-        onChange={event => { setRiskCategory(event.target.value); setPage(0); }}>
-        <option value="">All categories</option><option value="RISK">Risk</option><option value="ISSUE">Issue</option>
-      </select>
-      <select aria-label="Filter risk severity" className="rounded-md border bg-background px-3 py-2" value={riskSeverity}
-        onChange={event => { setRiskSeverity(event.target.value); setPage(0); }}>
-        <option value="">All severities</option><option value="LOW">Low</option><option value="MEDIUM">Medium</option>
-        <option value="HIGH">High</option><option value="CRITICAL">Critical</option>
-      </select>
-      <select aria-label="Filter risk status" className="rounded-md border bg-background px-3 py-2" value={riskStatus}
-        onChange={event => { setRiskStatus(event.target.value); setPage(0); }}>
-        <option value="">All risk statuses</option><option value="OPEN">Open</option>
-        <option value="IN_MITIGATION">In mitigation</option><option value="CLOSED">Closed</option>
-      </select>
+    {type === "RISK_ISSUE" && (
       <select aria-label="Filter risk target" className="rounded-md border bg-background px-3 py-2" value={riskTarget}
         onChange={event => { setRiskTarget(event.target.value); setPage(0); }}>
         <option value="">All affected items</option>
@@ -295,7 +329,7 @@ export function WorkspaceProjectLogsPanel({ workspaceId, readOnly = false }: { w
           {option.type === "MILESTONE" ? "Milestone" : option.type === "TASK" ? "Task" : "Backlog item"}: {option.label}
         </option>)}
       </select>
-    </div>}
+    )}
     {type === "MEETING_NOTE" && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       <Input aria-label="Meeting date from" type="date" value={meetingFrom} onChange={event => { setMeetingFrom(event.target.value); setPage(0); }} />
       <Input aria-label="Meeting date to" type="date" value={meetingTo} onChange={event => { setMeetingTo(event.target.value); setPage(0); }} />
@@ -319,24 +353,29 @@ export function WorkspaceProjectLogsPanel({ workspaceId, readOnly = false }: { w
           <p role="alert" className="text-sm text-destructive">{getWorkspaceError(query.error)}</p>
           <Button variant="outline" onClick={() => void query.refetch()}>Retry</Button>
         </CardContent></Card> : selectedLog ? <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(15rem,0.8fr)_minmax(0,1.2fr)]">
-          <Card className="min-w-0 gap-3">
+          <Card className="min-w-0 gap-3 xl:sticky xl:top-4">
             <CardHeader className="px-4">
-              <CardTitle className="text-base">Log entries</CardTitle>
-              <CardDescription aria-live="polite">{query.data.totalElements} results</CardDescription>
+              <CardTitle className="flex items-center gap-2 text-base">
+                {type === "RISK_ISSUE" ? <><TriangleAlert className="size-4 text-amber-600 dark:text-amber-400" />Risk register</>
+                  : <><FileText className="size-4 text-blue-600 dark:text-blue-400" />Log entries</>}
+              </CardTitle>
+              <CardDescription aria-live="polite">{query.data.totalElements} {query.data.totalElements === 1 ? "result" : "results"}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 px-4">
               <ul className="grid max-h-[42vh] gap-2 overflow-y-auto p-0.5 xl:max-h-[55vh]" aria-label="Log entries">
                 {logs.map(item => <li key={item.id}>
                   <button type="button" aria-pressed={selectedLog.id === item.id}
                     className={"flex w-full items-start gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring "
-                      + (selectedLog.id === item.id ? "border-primary bg-primary/5" : "hover:bg-muted/40")}
+                      + (selectedLog.id === item.id ? "border-blue-200 bg-blue-50/70 dark:border-blue-800 dark:bg-blue-950/40" : "hover:bg-muted/40")}
                     onClick={() => {
                       setSelectedLogId(item.id);
-                      requestAnimationFrame(() => detail.current?.scrollIntoView({ block: "nearest" }));
+                      if (window.matchMedia("(max-width: 1279px)").matches) {
+                        requestAnimationFrame(() => detail.current?.scrollIntoView({ block: "start" }));
+                      }
                     }}>
-                    <span className="min-w-0 flex-1 space-y-1">
+                    <span className="min-w-0 flex-1 space-y-1.5">
                       <span className="block break-words text-sm font-medium">{item.title}</span>
-                      <span className="block text-xs text-muted-foreground">{logTypeLabel(item)} · {displayLabel(item.status)}</span>
+                      <LogBadges item={item} />
                       <span className="block text-xs text-muted-foreground">{item.authorName ?? "Unknown author"}
                         {item.createdAt && " · " + new Date(item.createdAt).toLocaleDateString()}</span>
                     </span>
@@ -394,8 +433,10 @@ export function WorkspaceProjectLogsPanel({ workspaceId, readOnly = false }: { w
       <DialogContent className="flex max-h-[90dvh] flex-col overflow-hidden sm:max-w-3xl" showCloseButton={!createMutation.isPending}
         onEscapeKeyDown={event => { if (createMutation.isPending) event.preventDefault(); }}
         onInteractOutside={event => { if (createMutation.isPending) event.preventDefault(); }}>
-        <DialogHeader>
-          <DialogTitle>Create project log</DialogTitle>
+        <DialogHeader className="rounded-lg border border-amber-100 bg-amber-50/70 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+          <DialogTitle className="flex items-center gap-2"><ShieldAlert className="size-4 text-amber-700 dark:text-amber-400" />
+            {form.type === "RISK_ISSUE" ? "Record a risk or issue" : "Create project log"}
+          </DialogTitle>
           <DialogDescription>Record a decision, risk, issue or meeting note.</DialogDescription>
         </DialogHeader>
         <form className="flex min-h-0 flex-col gap-4" onSubmit={submit}>
@@ -542,6 +583,16 @@ function logTypeLabel(item: ProjectLog) {
   return item.type === "DECISION" ? "Decision" : "Meeting note";
 }
 
+function LogBadges({ item }: { item: ProjectLog }) {
+  return <span className="flex flex-wrap gap-1.5">
+    <Badge variant="outline" className={logTypeTone[item.type]}>{logTypeLabel(item)}</Badge>
+    <Badge variant="outline" className={item.type === "RISK_ISSUE" ? riskStatusTone[item.status] : undefined}>
+      {displayLabel(item.status)}
+    </Badge>
+    {item.severity && <Badge variant="outline" className={severityTone[item.severity]}>{displayLabel(item.severity)} severity</Badge>}
+  </span>;
+}
+
 function displayLabel(value: string) {
   const label = value.toLowerCase().replaceAll("_", " ");
   return label.charAt(0).toUpperCase() + label.slice(1);
@@ -572,15 +623,10 @@ function LogDetail({ item, target, onUpdateRisk, updating, updateError, readOnly
     { label: "Mitigation plan", value: item.mitigationPlan },
     { label: "Action items", value: item.actionItems },
   ];
-  return <Card className="min-w-0 gap-4" aria-label="Log details">
-    <CardHeader className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        <Badge variant="outline">{logTypeLabel(item)}</Badge>
-        <Badge variant={item.status === "CLOSED" ? "secondary" : "default"}>{displayLabel(item.status)}</Badge>
-        {item.severity && <Badge variant={item.severity === "HIGH" || item.severity === "CRITICAL" ? "destructive" : "outline"}>
-          {displayLabel(item.severity)} severity
-        </Badge>}
-      </div>
+  return <Card className="min-w-0 gap-4 overflow-hidden pt-0" aria-label="Log details">
+    <CardHeader className={"space-y-2 border-b pt-4 " + (item.type === "RISK_ISSUE"
+      ? "bg-amber-50/50 dark:bg-amber-950/25" : "bg-blue-50/50 dark:bg-blue-950/25")}>
+      <LogBadges item={item} />
       <CardTitle className="break-words text-lg leading-snug">{item.title}</CardTitle>
       <CardDescription>{item.authorName ?? "Unknown author"}
         {item.createdAt && " · " + new Date(item.createdAt).toLocaleString()}</CardDescription>
@@ -597,7 +643,8 @@ function LogDetail({ item, target, onUpdateRisk, updating, updateError, readOnly
             {!!item.attendees?.length && " · " + item.attendees.map(person => person.name).join(", ")}</dd>
         </div>}
       </dl>}
-      {fields.filter(field => field.value).map(field => <section key={field.label} className="grid gap-1">
+      {fields.filter(field => field.value).map(field => <section key={field.label} className={"grid gap-1 "
+        + (field.label === "Mitigation plan" ? "rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/70 dark:bg-amber-950/30" : "")}>
         <h3 className="text-sm font-semibold">{field.label}</h3>
         <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{field.value}</p>
       </section>)}

@@ -1,12 +1,10 @@
 import axiosInstance from "@/api/axios";
 import type {
   AssignmentPreview, AssignmentTemplate, ProjectAssignmentRequest, ProjectAssignmentResult,
-  WorkspaceAssignmentContext, ProjectCompletionSummary, MasterMilestoneContext,
+  WorkspaceAssignmentContext, MasterMilestoneContext,
 } from "@/types/features/project-assignment";
 
 const base = (classId: number, sessionId: number) => `/v1/classes/${classId}/allocation-sessions/${sessionId}/project-assignments`;
-const assessment = (projectId: number, teamId: number | null) => teamId == null
-  ? `/projects/${projectId}` : `/projects/${projectId}/teams/${teamId}`;
 export const projectAssignmentApi = {
   async classMasters(classId: number, sessionId: number, signal?: AbortSignal) {
     return (await axiosInstance.get<Array<{ projectId: number; name: string; status: string; assignedAt: string }>>(
@@ -32,21 +30,5 @@ export const projectAssignmentApi = {
   },
   async workspace(workspaceId: number, signal?: AbortSignal) {
     return (await axiosInstance.get<WorkspaceAssignmentContext>(`/workspaces/${workspaceId}/project-hierarchy`, { signal })).data;
-  },
-  async masterMilestones(workspaceId: number, signal?: AbortSignal) {
-    return (await axiosInstance.get<MasterMilestoneContext | null>(`/workspaces/${workspaceId}/master-milestones`, { signal })).data || null;
-  },
-  async submitMaster(workspaceId: number, milestoneId: string, data: { evidenceUrl: string; notes: string }, key: string) {
-    return (await axiosInstance.post<{ id: string }>(`/workspaces/${workspaceId}/master-milestones/${milestoneId}/submissions`, data,
-      { headers: { "Idempotency-Key": key } })).data;
-  },
-  async completion(projectId: number, teamId: number | null, signal?: AbortSignal) {
-    return (await axiosInstance.get<ProjectCompletionSummary>(`${assessment(projectId, teamId)}/completion`, { signal })).data;
-  },
-  async lockGrade(projectId: number, teamId: number | null, finalScore: number) {
-    return (await axiosInstance.post(`${assessment(projectId, teamId)}/final-grade/lock`, { finalScore })).data;
-  },
-  async waive(projectId: number, teamId: number | null, milestoneId: string, reason: string) {
-    return (await axiosInstance.post(`${assessment(projectId, teamId)}/milestones/${milestoneId}/waive`, { reason })).data;
   },
 };

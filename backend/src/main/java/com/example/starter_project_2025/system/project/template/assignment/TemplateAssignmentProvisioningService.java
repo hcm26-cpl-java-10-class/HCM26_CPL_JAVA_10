@@ -63,14 +63,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TemplateAssignmentProvisioningService {
@@ -106,15 +104,13 @@ public class TemplateAssignmentProvisioningService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void provision(ProjectTeam team, ProjectTemplate template, Long actorId, String correlationId) {
-
-        if (team.getProjectId() != null) {
-            log.debug("US-13 team {} already owns project {} - provisioning skipped",
-                    team.getId(), team.getProjectId());
+        Long tenantId = Objects.requireNonNull(team.getTrainingClass().getTenantId(),
+                "The training class must belong to a tenant");
+        if (team.getProject() != null) {
+            ensureWorkspace(team, team.getProject(), tenantId, actorId, correlationId);
             return;
         }
 
-        Long tenantId = Objects.requireNonNull(team.getTrainingClass().getTenantId(),
-                "The training class must belong to a tenant");
         entityManager.refresh(template, jakarta.persistence.LockModeType.PESSIMISTIC_READ);
         if (template.getStatus() != ProjectTemplateStatus.ACTIVE || !Boolean.TRUE.equals(template.getIsActive())
                 || template.getTenantId() != null && !tenantId.equals(template.getTenantId())) {
@@ -130,7 +126,8 @@ public class TemplateAssignmentProvisioningService {
         milestoneRubrics.requirePublished(planRequest, tenantId);
 
         // ---- Step 1: immutable evidence snapshot of the active brief version
-        ProjectTemplateSnapshot snapshot = briefSnapshots.snapshotForAssignment(template, team.getId());
+        ProjectTemplateSnapshot snapshot = briefSnapshots.snapshotForAssignment(
+                template, team.getId(), team.getProjectTemplateVersionId());
 
         // ---- Step 2: project creation
         Project project = createProject(team, template, snapshot, tenantId, actorId);

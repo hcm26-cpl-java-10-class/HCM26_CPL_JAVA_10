@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { getMilestoneApiError } from "@/pages/management/project/milestone/milestone.utils";
 import { milestoneStatusStyles } from "@/pages/management/project/milestone/milestone-status.styles";
 import type { MilestoneLifecycleStatus, MilestoneListItem } from "@/types";
+import type { WorkspaceProjectNode } from "@/types/features/project-assignment";
 import type { WorkspaceSectionAccess } from "@/types/features/workspace";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { WorkspaceStatusBadge } from "./workspace.shared";
@@ -30,8 +31,7 @@ import {
 } from "./workspace-milestone-list-query";
 import { WorkspaceMilestoneRow } from "./WorkspaceMilestoneRow";
 
-/** The list API caps page size at 100; teams normally have far fewer milestones. */
-const FETCH_LIMIT = 100;
+const FETCH_PAGE_SIZE = 100;
 const PAGE_STEP = 20;
 
 const GROUPS: Array<{ value: WorkspaceMilestoneGroup; label: string }> = [
@@ -53,6 +53,23 @@ const SORT_OPTIONS = [
 
 type Section = "attention" | "upcoming" | "done";
 const SECTION_LABEL: Record<Section, string> = { attention: "Needs attention", upcoming: "Upcoming", done: "Done" };
+type MilestoneProject = Pick<WorkspaceProjectNode, "id" | "name" | "status">;
+
+async function fetchMilestones(teamId: number, projectId: number | null | undefined): Promise<MilestoneListItem[]> {
+  const fetchPage = (page: number) => {
+    const options = { page, size: FETCH_PAGE_SIZE, sort: "deadline:asc" };
+    return projectId != null
+      ? milestoneApi.getList(String(projectId), { ...options, teamId })
+      : milestoneApi.getTeamList(teamId, options);
+  };
+  const firstPage = await fetchPage(0);
+  const items = [...firstPage.content];
+  for (let page = 1; page < firstPage.totalPages; page += 1) {
+    const next = await fetchPage(page);
+    items.push(...next.content);
+  }
+  return items;
+}
 
 const time = (value: string) => new Date(value).getTime();
 const localDate = (value: string) => {
@@ -82,8 +99,9 @@ function MilestoneSearch({ initial, onSearch }: { initial: string; onSearch: (va
   </div>;
 }
 
-export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, access, projectScoped = false, readOnly = false, title = "Milestones", projectStatus }: {
+export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, access, projects, projectScoped = false, readOnly = false, title = "Milestones", projectStatus }: {
   projectId?: number | null; teamId: number; workspaceId: number; access: WorkspaceSectionAccess;
+  projects?: MilestoneProject[];
   projectScoped?: boolean; readOnly?: boolean; title?: string; projectStatus?: string;
 }) {
   const [pendingDelete, setPendingDelete] = useState<MilestoneListItem | null>(null);
@@ -93,10 +111,11 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
   const [visible, setVisible] = useState(PAGE_STEP);
   const [doneOpen, setDoneOpen] = useState(false);
   const [mountedAt] = useState(() => Date.now());
-  const { activeRole } = usePermissions();
+  const { user, activeRole } = usePermissions();
   const isStudent = normalizeRole(activeRole) === STUDENT_ROLE;
   const canManage = !isStudent && !readOnly && !!access.actions.create;
-  const canReview = !isStudent && !!access.actions.review;
+  const canReview = !isStudent && !readOnly && !!access.actions.review;
+  const closedProjects = new Set(projects?.filter(project => ["COMPLETED", "CANCELLED"].includes(project.status)).map(project => project.id));
   const client = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
@@ -110,16 +129,21 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
   }, [setSearchParams]);
   const updateSearch = useCallback((value: string) => updateList({ search: value }), [updateList]);
 
-  // One request for everything: filtering, grouping, sorting and counts all happen client-side.
-  const query = useQuery({
-    queryKey: ["workspace-milestones", projectId, teamId, projectScoped, "all"],
-    queryFn: () => {
-      const options = { page: 0, size: FETCH_LIMIT, sort: "deadline:asc" };
-      return projectScoped && projectId
-        ? milestoneApi.getList(String(projectId), { ...options, teamId })
-        : milestoneApi.getTeamList(teamId, options);
-    },
-    retry: false, refetchInterval: 30_000,
+  const scopeIds = projects?.map(project => project.id) ?? [projectScoped ? projectId : undefined];
+  const { all, failures, isLoading, hasData, updatedAt } = useQueries({
+    queries: scopeIds.map(id => ({
+      queryKey: ["workspace-milestones", projects ? id : projectId, teamId, projectScoped, "all", user.email, activeRole],
+      queryFn: () => fetchMilestones(teamId, id),
+      retry: false, refetchInterval: 30_000,
+    })),
+    combine: results => ({
+      all: results.flatMap(result => result.isError ? [] : result.data ?? []),
+      failures: results.flatMap((result, index) => result.isError
+        ? [{ id: scopeIds[index], name: projects?.[index]?.name, error: result.error, retry: result.refetch }] : []),
+      isLoading: results.some(result => result.isPending),
+      hasData: results.some(result => result.isSuccess),
+      updatedAt: Math.max(0, ...results.map(result => result.dataUpdatedAt)),
+    }),
   });
   const reviewQuery = useQuery({
     queryKey: ["team-artifact-submissions", teamId],
@@ -135,32 +159,34 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
     return counts;
   }, [reviewQuery.data]);
 
+  const actionProjectId = (milestone: MilestoneListItem) => projects ? milestone.projectId : projectId;
   const remove = useMutation({
-    mutationFn: ({ id, version }: { id: string; version: number }) =>
-      milestoneApi.deleteDraft(projectId ? String(projectId) : undefined, teamId, id, version),
-    onSuccess: () => {
+    mutationFn: (milestone: MilestoneListItem) => {
+      const target = actionProjectId(milestone);
+      return milestoneApi.deleteDraft(target ? String(target) : undefined, teamId, milestone.id, milestone.version);
+    },
+    onSuccess: (_, milestone) => {
       setPendingDelete(null);
-      void client.invalidateQueries({ queryKey: ["workspace-milestones", projectId, teamId] });
+      void client.invalidateQueries({ queryKey: ["workspace-milestones", actionProjectId(milestone), teamId] });
     },
   });
 
-  const create = () => navigate(projectId
-    ? "/projects/" + projectId + "/milestones/new?teamId=" + teamId + "&scope=team&workspaceId=" + workspaceId
+  const create = (target = projectId) => navigate(target
+    ? "/projects/" + target + "/milestones/new?teamId=" + teamId + "&scope=team&workspaceId=" + workspaceId
     : "/teams/" + teamId + "/milestones/new?workspaceId=" + workspaceId, { state: { returnTo } });
   const openDetail = (id: string) => navigate("/teams/" + teamId + "/milestones/" + id + "?workspaceId=" + workspaceId, { state: { returnTo } });
-  const edit = (milestone: MilestoneListItem) => navigate(
-    milestone.lifecycleStatus === "PLANNED" && projectId
-      ? "/projects/" + projectId + "/milestones/" + milestone.id + "/edit?teamId=" + teamId + "&scope=team&workspaceId=" + workspaceId
+  const edit = (milestone: MilestoneListItem) => {
+    const target = actionProjectId(milestone);
+    navigate(milestone.lifecycleStatus === "PLANNED" && target
+      ? "/projects/" + target + "/milestones/" + milestone.id + "/edit?teamId=" + teamId + "&scope=team&workspaceId=" + workspaceId
       : "/teams/" + teamId + "/milestones/" + milestone.id + "/edit?workspaceId=" + workspaceId,
-    { state: { returnTo } },
-  );
+    { state: { returnTo } });
+  };
   const submitUrl = (id: string) => "/teams/" + teamId + "/milestones/" + id + "/submit?workspaceId=" + workspaceId;
   const submissionsUrl = (id: string) => (isStudent ? "/student" : "") + "/teams/" + teamId + "/milestones/" + id + "/submissions?workspaceId=" + workspaceId;
   const clearQuery = () => updateList({ search: "", status: "ALL", mandatory: "ALL", latePolicy: "ALL", from: "", to: "" });
 
-  const all = useMemo(() => query.data?.content ?? [], [query.data]);
-  const truncated = (query.data?.totalElements ?? 0) > all.length;
-  const now = query.dataUpdatedAt || mountedAt;
+  const now = updatedAt || mountedAt;
 
   const derived = useMemo(() => {
     const needsAttention = (item: MilestoneListItem) => {
@@ -179,7 +205,8 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
     };
     const term = list.search.toLowerCase();
     const filtered = all.filter((item) => {
-      if (term && !item.title.toLowerCase().includes(term) && !(item.description ?? "").toLowerCase().includes(term)) return false;
+      const projectName = projects?.find(project => project.id === item.projectId)?.name;
+      if (term && ![item.title, item.description, projectName].some(text => text?.toLowerCase().includes(term))) return false;
       if (list.mandatory !== "ALL" && String(item.mandatory) !== list.mandatory) return false;
       if (list.latePolicy !== "ALL" && item.latePolicyType !== list.latePolicy) return false;
       const day = localDate(item.deadline);
@@ -188,7 +215,7 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
       return true;
     });
     const counts = Object.fromEntries(GROUPS.map(({ value }) => [value, filtered.filter((item) => inGroup(item, value)).length])) as Record<WorkspaceMilestoneGroup, number>;
-    const group: WorkspaceMilestoneGroup = list.group ?? (counts.attention ? "attention" : counts.active ? "active" : "all");
+    const group: WorkspaceMilestoneGroup = list.group ?? (projects ? "all" : counts.attention ? "attention" : counts.active ? "active" : "all");
     const shown = filtered.filter((item) => list.status !== "ALL" ? item.lifecycleStatus === list.status : inGroup(item, group));
 
     const byDeadline = (a: MilestoneListItem, b: MilestoneListItem) => time(a.deadline) - time(b.deadline);
@@ -210,7 +237,7 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
     const overdue = all.filter((item) => describeDeadline(item.deadline, item.lifecycleStatus, now, item.lateUntil).tone === "overdue").length;
     const next = all.filter((item) => (isActiveMilestone(item.lifecycleStatus) || item.lifecycleStatus === "PLANNED") && time(item.deadline) >= now).sort(byDeadline)[0];
     return { counts, group, shown, sections, overdue, next };
-  }, [all, canReview, list, now, submissionCounts]);
+  }, [all, canReview, list, now, projects, submissionCounts]);
 
   const filterCount = countWorkspaceMilestoneFilters(list);
   const invalidDateRange = !!list.from && !!list.to && list.from > list.to;
@@ -224,14 +251,15 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
   const renderRow = (milestone: MilestoneListItem) => {
     const counts = submissionCounts.get(milestone.id);
     const active = isActiveMilestone(milestone.lifecycleStatus);
-    const canEdit = canManage && ["PLANNED", "IN_PROGRESS", "CHANGES_REQUESTED"].includes(milestone.lifecycleStatus);
-    const canDelete = canManage && milestone.lifecycleStatus === "PLANNED";
-    const studentCanSubmit = isStudent && !readOnly && active;
+    const projectClosed = closedProjects.has(milestone.projectId);
+    const canEdit = canManage && !projectClosed && ["PLANNED", "IN_PROGRESS", "CHANGES_REQUESTED"].includes(milestone.lifecycleStatus);
+    const canDelete = canManage && !projectClosed && milestone.lifecycleStatus === "PLANNED";
+    const studentCanSubmit = isStudent && !readOnly && !projectClosed && active;
     const primaryAction = studentCanSubmit
       ? <Button size="sm" onClick={() => navigate(submitUrl(milestone.id))}><Upload className="size-4" /> {milestone.lifecycleStatus === "CHANGES_REQUESTED" ? "Resubmit" : "Submit"}</Button>
       : isStudent
         ? <Button size="sm" variant="outline" asChild><Link to={submissionsUrl(milestone.id)}><ClipboardCheck className="size-4" /> My submissions</Link></Button>
-        : canReview
+        : canReview && !projectClosed
           ? <Button size="sm" variant={counts?.pending ? "default" : "outline"} onClick={() => navigate(submissionsUrl(milestone.id))}
               title={counts ? `${counts.pending} awaiting review · ${counts.total} total` : "No submissions yet"}>
               <ClipboardCheck className="size-4" /> Review
@@ -256,22 +284,31 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
       </DropdownMenu>} />;
   };
 
-  // Progressive rendering across sections ("Show more"); a collapsed Done section does not use the budget.
-  const renderedSections = derived.sections.reduce<{ budget: number; result: Array<{ key: Section | "flat"; total: number; collapsible: boolean; open: boolean; items: MilestoneListItem[] }> }>(
+  const showStatusHeaders = list.sort === "smart" && derived.sections.length > 1;
+  const sections = projects ? projects.map(project => ({
+    key: String(project.id), label: project.name, status: project.status, collapsible: false,
+    items: derived.sections.flatMap(section => section.items.filter(item => item.projectId === project.id)),
+  })).filter(section => section.items.length > 0) : derived.sections.map(section => ({
+    ...section, label: showStatusHeaders && section.key !== "flat" ? SECTION_LABEL[section.key] : undefined,
+    status: undefined, collapsible: section.key === "done" && showStatusHeaders,
+  }));
+  const renderedSections = sections.reduce<{ budget: number; result: Array<{
+    key: string; label?: string; status?: string; total: number; collapsible: boolean; open: boolean; items: MilestoneListItem[];
+  }> }>(
     (acc, section) => {
-      const collapsible = section.key === "done" && derived.sections.length > 1;
-      const open = !collapsible || doneOpen;
-      const items = open ? section.items.slice(0, Math.max(0, acc.budget)) : [];
+      const open = !section.collapsible || doneOpen;
+      // Give each project its own initial rows, even when another project has a long list.
+      const items = open ? section.items.slice(0, projects ? visible : Math.max(0, acc.budget)) : [];
       return {
         budget: acc.budget - items.length,
-        result: [...acc.result, { key: section.key, total: section.items.length, collapsible, open, items }],
+        result: [...acc.result, { ...section, total: section.items.length, open, items }],
       };
     },
     { budget: visible, result: [] },
   ).result;
   const remaining = renderedSections.reduce((sum, section) => sum + (section.open ? section.total - section.items.length : 0), 0);
-  const showHeaders = list.sort === "smart" && renderedSections.length > 1;
   const groupLabel = GROUPS.find((item) => item.value === derived.group)?.label;
+  const createProjects = projects?.filter(project => !closedProjects.has(project.id)) ?? [];
 
   return <section className="min-w-0 space-y-3" aria-label="Workspace milestones">
     {/* Header + one-line summary */}
@@ -281,13 +318,20 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
           <h2 className="break-words text-xl font-semibold tracking-tight">{title}</h2>
           {projectStatus && <WorkspaceStatusBadge status={projectStatus} colored />}
         </div>
-        {query.data ? <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
-          <span>{all.length}{truncated ? "+" : ""} milestone{all.length === 1 ? "" : "s"}</span>
+        {hasData ? <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
+          <span>{all.length} milestone{all.length === 1 ? "" : "s"}</span>
           {derived.overdue > 0 && <><span aria-hidden>·</span><span className="font-medium text-red-700 dark:text-red-400">{derived.overdue} overdue</span></>}
           {derived.next && <><span aria-hidden>·</span><span>Next: <button type="button" className="font-medium text-foreground hover:underline" onClick={() => openDetail(derived.next!.id)}>{derived.next.title}</button> — {describeDeadline(derived.next.deadline, derived.next.lifecycleStatus, now).relative}</span></>}
         </p> : null}
       </div>
-      {canManage && <Button size="sm" className="shrink-0" onClick={create}><Plus className="size-4" /> Create milestone</Button>}
+      {canManage && (projects ? createProjects.length > 0 && <DropdownMenu>
+        <DropdownMenuTrigger asChild><Button size="sm" className="shrink-0"><Plus className="size-4" /> Create milestone</Button></DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {createProjects.map(project => <DropdownMenuItem key={project.id} onSelect={() => create(project.id)}>
+            {project.name}
+          </DropdownMenuItem>)}
+        </DropdownMenuContent>
+      </DropdownMenu> : <Button size="sm" className="shrink-0" onClick={() => create()}><Plus className="size-4" /> Create milestone</Button>)}
     </div>
 
     <Card className="min-w-0 gap-0 overflow-hidden py-0">
@@ -357,35 +401,39 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
         <Button variant="link" size="sm" className="h-auto px-1 text-xs" onClick={clearQuery}>Clear all</Button>
       </div>}
 
-      {query.isError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2.5 text-sm text-destructive">
-        <span className="inline-flex items-center gap-2"><AlertCircle className="size-4" />{getMilestoneApiError(query.error).message || "Unable to load milestones."}</span>
-        <Button variant="outline" size="sm" onClick={() => void query.refetch()}><RefreshCw className="size-4" /> Retry</Button>
-      </div>}
-      {truncated && <p className="border-b bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-        Showing the first {FETCH_LIMIT} milestones by deadline. Use search or filters to narrow the list.
-      </p>}
+      {failures.map(({ id, name, error, retry }) => <div key={id ?? "team"} role="alert" className="flex flex-wrap items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2.5 text-sm text-destructive">
+        <span className="inline-flex items-center gap-2"><AlertCircle className="size-4" />
+          {name && <strong>{name}</strong>}{getMilestoneApiError(error).message || "Unable to load milestones."}</span>
+        <Button variant="outline" size="sm" onClick={() => void retry()}><RefreshCw className="size-4" /> Retry</Button>
+      </div>)}
 
-      {query.isPending ? <div className="space-y-2 p-3" role="status" aria-label="Loading milestones">
+      {isLoading ? <div className="space-y-2 p-3" role="status" aria-label="Loading milestones">
         {[0, 1, 2].map((index) => <Skeleton key={index} className="h-14 w-full" />)}
-      </div> : query.isError ? null : derived.shown.length === 0 ? <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+      </div> : !hasData ? null : derived.shown.length === 0 ? <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
         <ClipboardCheck className="size-7 text-muted-foreground" />
         <p className="font-medium">{all.length === 0 ? "No milestones yet" : hasWorkspaceMilestoneQuery(list) ? "No matching milestones" : `Nothing in “${groupLabel}”`}</p>
         <p className="text-sm text-muted-foreground">{all.length === 0 ? "Milestones will appear here when they are created for this workspace."
           : hasWorkspaceMilestoneQuery(list) ? "Try another search term or clear the filters." : "Switch to another group to see more milestones."}</p>
-        {all.length === 0 ? (canManage && <Button size="sm" onClick={create}><Plus className="size-4" /> Create the first milestone</Button>)
+        {all.length === 0 ? (canManage && !projects && <Button size="sm" onClick={() => create()}><Plus className="size-4" /> Create the first milestone</Button>)
           : hasWorkspaceMilestoneQuery(list) ? <Button variant="outline" size="sm" onClick={clearQuery}>Clear search and filters</Button>
             : derived.group !== "all" ? <Button variant="outline" size="sm" onClick={() => updateList({ group: "all" })}>Show all milestones</Button> : null}
       </div> : <div>
         {renderedSections.map((section) => <div key={section.key}>
-          {showHeaders && (section.collapsible
+          {section.label && (projects
+            ? <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-4 py-2">
+                <h3 className="text-sm font-semibold">{section.label}</h3>
+                <span className="text-xs text-muted-foreground">{section.total} {section.total === 1 ? "milestone" : "milestones"}</span>
+                {section.status && <WorkspaceStatusBadge status={section.status} colored />}
+              </div>
+            : section.collapsible
             ? <button type="button" aria-expanded={section.open} onClick={() => setDoneOpen((open) => !open)}
                 className="flex w-full items-center gap-1.5 border-b bg-muted/30 px-4 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground">
                 <ChevronDown className={cn("size-3.5 transition-transform", !section.open && "-rotate-90")} />
-                {SECTION_LABEL[section.key as Section]} ({section.total})
+                {section.label} ({section.total})
               </button>
             : <div className={cn("border-b bg-muted/30 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide",
                 section.key === "attention" ? "text-red-700 dark:text-red-400" : "text-muted-foreground")}>
-                {SECTION_LABEL[section.key as Section]} ({section.total})
+                {section.label} ({section.total})
               </div>)}
           {section.items.map(renderRow)}
         </div>)}
@@ -400,6 +448,6 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
         {remove.isError && <p className="text-destructive">{getMilestoneApiError(remove.error).message}</p>}</div>}
       confirmLabel="Delete milestone" loading={remove.isPending}
       onCancel={() => { if (!remove.isPending) setPendingDelete(null); }}
-      onConfirm={() => { if (pendingDelete) remove.mutate({ id: pendingDelete.id, version: pendingDelete.version }); }} />
+      onConfirm={() => { if (pendingDelete) remove.mutate(pendingDelete); }} />
   </section>;
 }

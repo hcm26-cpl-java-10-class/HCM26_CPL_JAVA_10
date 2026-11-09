@@ -81,7 +81,7 @@ public class TeamArtifactSubmissionService {
     @Transactional
     public ArtifactDraftResponse save(Long teamId, UUID milestoneId, ArtifactDraftRequest request) {
         Scope s = studentScope(teamId);
-        ReleaseNotesWordLimit.validate(request.releaseNotes());
+        ReleaseNotesCharacterLimit.validate(request.releaseNotes());
         contributionLock.lockCurrentActor();
         var milestone = milestoneRepository.findByIdAndTeamIdAndTenantId(milestoneId, teamId, s.tenantId)
                 .filter(com.example.starter_project_2025.system.project.milestone.domain.Milestone::isActive)
@@ -115,7 +115,7 @@ public class TeamArtifactSubmissionService {
     @Transactional
     public ArtifactSubmissionResponse submit(Long teamId, UUID milestoneId, String key, ArtifactSubmissionRequest request) {
         Scope s = studentScope(teamId);
-        ReleaseNotesWordLimit.validate(request.releaseNotes());
+        ReleaseNotesCharacterLimit.validate(request.releaseNotes());
         contributionLock.lockCurrentActor();
         if (key == null || key.isBlank() || key.length() > 100) throw validation("idempotencyKey", "Idempotency-Key is required");
         var milestone = milestoneRepository.lockForTeamSubmission(milestoneId, teamId, s.tenantId)

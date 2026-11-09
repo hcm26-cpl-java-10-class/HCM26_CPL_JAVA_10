@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.template.assignment.hierarchy.demo;
 
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.project.ProjectTeamPublishCoordinator;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateVersionStatus;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateAudit;
@@ -29,6 +30,7 @@ public class HierarchyDemoDataService {
     private final ProjectTemplateAuditRepository audits;
     private final ProjectTemplateSnapshotRepository versions;
     private final ProjectAssignmentService assignments;
+    private final ProjectTeamPublishCoordinator publisher;
     private final HierarchyDemoTeams teams;
     private final HierarchyDemoTemplates templates;
     @Value("${app.seed.admin.email:admin@example.com}") private String seedAdminEmail;
@@ -49,17 +51,24 @@ public class HierarchyDemoDataService {
         SecurityContextHolder.setContext(context);
         try {
             var library = templates.create(admin);
-            var ready = teams.classroom(tenant, mentor, library.master(), true);
-            var view = teams.classroom(tenant, mentor, library.master(), false);
+            var ready = teams.classroom(tenant, mentor, library.master(), "HIER-DEMO-READY",
+                    "Hierarchy Demo - Assignment Ready", "ready", List.of("Auth", "Payment", "Catalog", "Whole", "Busy"));
+            var view = teams.classroom(tenant, mentor, library.master(), "HIER-DEMO-VIEW",
+                    "Hierarchy Demo - Assigned Modules", "view", List.of("Auth", "Payment", "Catalog"));
+            var whole = teams.classroom(tenant, mentor, library.master(), "HIER-DEMO-WHOLE",
+                    "Hierarchy Demo - Whole Master", "view", List.of("Whole"));
             Long versionId = versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
                     library.master().getId(), ProjectTemplateVersionStatus.PUBLISHED).orElseThrow().getId();
-            whole(ready, library, versionId, ready.teams().get(4).getId(), "hier-demo-busy", authentication);
             var mappings = IntStream.range(0, library.modules().size()).mapToObj(index ->
                     new AssignmentDtos.ModuleTeam(library.modules().get(index).getId(), view.teams().get(index).getId())).toList();
             assignments.assign(view.trainingClass().getId(), view.session().getId(), "hier-demo-split",
                     new AssignmentDtos.Request(library.master().getId(), versionId, AssignmentDtos.Mode.SPLIT,
                             null, mappings), authentication);
-            whole(view, library, versionId, view.teams().get(3).getId(), "hier-demo-whole", authentication);
+            assignments.assign(whole.trainingClass().getId(), whole.session().getId(), "hier-demo-whole",
+                    new AssignmentDtos.Request(library.master().getId(), versionId, AssignmentDtos.Mode.WHOLE,
+                            whole.teams().getFirst().getId(), List.of()), authentication);
+            publish(view, "hier-demo-publish-view", authentication);
+            publish(whole, "hier-demo-publish-whole", authentication);
             audits.saveAndFlush(new ProjectTemplateAudit(tenant.getId(), library.master().getId(), admin.getId(), ACTION,
                     null, "{\"readyClassId\":" + ready.trainingClass().getId() + ",\"viewClassId\":" + view.trainingClass().getId() + "}", marker));
         } finally {
@@ -67,10 +76,10 @@ public class HierarchyDemoDataService {
         }
     }
 
-    private void whole(HierarchyDemoTeams.Classroom classroom, HierarchyDemoTemplates.Library library, Long versionId,
-                       Long teamId, String key, Authentication authentication) {
-        assignments.assign(classroom.trainingClass().getId(), classroom.session().getId(), key,
-                new AssignmentDtos.Request(library.master().getId(), versionId, AssignmentDtos.Mode.WHOLE,
-                        teamId, List.of()), authentication);
+    private void publish(HierarchyDemoTeams.Classroom classroom, String key, Authentication authentication) {
+        var result = publisher.publishSession(classroom.trainingClass().getId(), classroom.session().getId(), key, authentication);
+        if (!result.getStatusCode().is2xxSuccessful()) {
+            throw new IllegalStateException("Unable to publish the hierarchy demo: " + result.getBody());
+        }
     }
 }

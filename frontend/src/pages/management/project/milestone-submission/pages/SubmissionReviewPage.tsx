@@ -1,3 +1,4 @@
+import styles from "../components/SubmissionReview.module.css";
 import { milestoneSubmissionApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -27,12 +28,14 @@ export function SubmissionReviewPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const client = useQueryClient();
+  const sending = useRef(false);
   const retry = useRef<{ key: string; payload: string } | null>(null);
   const [dirty, setDirty] = useState(false);
   const [reloadEpoch, setReloadEpoch] = useState(0);
   const query = useQuery({ queryKey: ["milestone-submissions", submissionId], queryFn: () => milestoneSubmissionApi.getDetail(submissionId as string), enabled: Boolean(submissionId), retry: false });
   const mutation = useMutation({
     mutationFn: ({ payload, key }: { payload: ReviewSubmissionRequest; key: string }) => milestoneSubmissionApi.review(submissionId as string, payload, key),
+    onSettled: () => { sending.current = false; },
     onSuccess: (data, variables) => {
       client.setQueryData(["milestone-submissions", submissionId], data);
       for (const key of ["milestone-submissions", "team-milestone-submissions", "team-milestone", "workspace-master-milestones", "project-completion"]) void client.invalidateQueries({ queryKey: [key] });
@@ -103,7 +106,8 @@ export function SubmissionReviewPage() {
     });
   };
   const review = (decision: ReviewDecision, values: Record<string, { ratingLevel?: RubricRatingLevel; feedback: string }>, checklist: Record<string, boolean>, overallFeedback?: string) => {
-    if (mutation.isPending) return;
+    if (sending.current || mutation.isPending) return;
+    sending.current = true;
     const payload: ReviewSubmissionRequest = { decision, expectedVersion: item.lockVersion, overallFeedback, criteria: item.rubric.criteria.map(criterion => ({ criterionId: criterion.id, ratingLevel: values[criterion.id].ratingLevel as RubricRatingLevel, feedback: values[criterion.id].feedback.trim() || undefined })), checklist: item.currentVersion.checklist.filter(entry => entry.id).map(entry => ({ checklistItemId: entry.id as string, completed: Boolean(checklist[entry.id as string]) })) };
     const serialized = JSON.stringify(payload);
     if (retry.current?.payload !== serialized) retry.current = { key: crypto.randomUUID(), payload: serialized };
@@ -111,7 +115,7 @@ export function SubmissionReviewPage() {
   };
   const canReview = item.teamId != null && item.status === "SUBMITTED" && (item.availableActions.accept || item.availableActions.reject || item.availableActions.requestChanges);
 
-  return <MainLayout pathName={{ "milestone-submissions": "Milestone reviews", [item.id]: "Review" }}><div className="mx-auto grid w-full min-w-0 max-w-6xl gap-4 pb-6">
+  return <MainLayout pathName={{ "milestone-submissions": "Milestone reviews", [item.id]: "Review" }}><div className={`mx-auto grid w-full min-w-0 max-w-[1200px] gap-4 pb-6 ${styles.page}`}>
     <Button type="button" variant="ghost" className="w-fit" onClick={back}><ArrowLeft className="size-4" /> Back</Button>
     <Card className="border-sky-200/70 dark:border-sky-900/70"><CardContent className="grid gap-3 py-4"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h1 className="text-xl font-semibold">{item.milestoneTitle}</h1><p className="mt-1 text-sm text-muted-foreground">{item.currentVersion.title} · Version {item.currentVersionNumber}</p></div><div className="flex flex-wrap gap-2"><SubmissionStatusBadge status={item.status} /><ExecutionStatusBadge status={item.executionStatus} />{item.currentVersion.late ? <Badge className="border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">Late · {item.currentVersion.penaltyPercent}% penalty</Badge> : null}</div></div><div className="flex flex-wrap gap-x-5 gap-y-1 border-t pt-3 text-sm text-muted-foreground"><span className="flex items-center gap-1.5"><Users className="size-4" /> {item.teamName}</span><span className="flex items-center gap-1.5"><UserRound className="size-4" /> {item.studentName}</span><span className="flex items-center gap-1.5"><CalendarClock className="size-4" /> {date(item.currentVersion.submittedAt)}</span><span>Rubric {item.rubric.name} · {item.rubric.version}</span></div></CardContent></Card>
     {canReview ? <SubmissionReviewForm key={`${item.id}-${item.currentVersion.id}-${reloadEpoch}`} submission={item} pending={mutation.isPending} apiError={mutation.isError ? errorOf(mutation.error) : null} onReview={review} onDirtyChange={setDraftDirty} onEdit={() => { if (mutation.isError) { const status = errorOf(mutation.error).status; if (status !== 409 && status !== 412) mutation.reset(); } }} onReload={reload} /> : <><Alert><AlertCircle /><AlertTitle>{item.teamId == null ? "Shared master assessment is read-only" : "This submission is not awaiting review"}</AlertTitle><AlertDescription>Current status: {item.status.replaceAll("_", " ")}.</AlertDescription></Alert><SubmissionEvidence submission={item} /></>}

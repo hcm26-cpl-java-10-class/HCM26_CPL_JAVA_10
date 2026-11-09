@@ -18,8 +18,7 @@ export default function ProjectAssignmentPage() {
   const sessionId = positiveId(search.get("sessionId"));
   const teamId = positiveId(search.get("teamId"));
   const backTo = classId == null ? "/team-allocation" : "/team-allocation/classes/" + classId
-    + (sessionId == null ? "" : "/setup?sessionId=" + sessionId + "&tab=review"
-      + (teamId == null ? "" : "&teamId=" + teamId));
+    + (sessionId == null ? "" : "/setup?sessionId=" + sessionId + "&tab=review");
 
   return (
     <MainLayout pathName={{ "team-allocation": "Phân nhóm dự án", assign: "Gán Master Project" }}>
@@ -30,7 +29,9 @@ export default function ProjectAssignmentPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Gán Master Project</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Chọn đề bài đã công bố, phân công Team và xác nhận vai trò trước khi tạo Workspace.</p>
+            <p className="mt-1 text-sm text-muted-foreground">{teamId == null
+              ? "Chọn đề bài đã công bố và phân công cho các Team nháp trong lớp."
+              : "Giao toàn bộ đề bài cho Team đã chọn và lưu vai trò để chuẩn bị công bố chính thức."}</p>
           </div>
         </header>
         {classId != null && sessionId != null

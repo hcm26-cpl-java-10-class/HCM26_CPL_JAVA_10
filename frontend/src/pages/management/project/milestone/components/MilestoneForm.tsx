@@ -204,8 +204,7 @@ export function MilestoneForm({
   const minimumDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
     .toISOString()
     .slice(0, 16);
-  const tenantTomorrow = new Date(Date.parse(`${tenantToday(options.tenantTimeZone)}T00:00:00Z`) + 86400_000)
-    .toISOString().slice(0, 10);
+  const tenantTodayDate = tenantToday(options.tenantTimeZone);
   const scheduledStart = tenantStartOfDay(values.startDate ?? "", options.tenantTimeZone);
   const deadlineInstant = values.deadline ? new Date(values.deadline) : null;
   const validDeadline = deadlineInstant && !Number.isNaN(deadlineInstant.getTime()) ? deadlineInstant : null;
@@ -330,10 +329,10 @@ export function MilestoneForm({
             <CardContent className="grid gap-5 md:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="milestone-start-date">Start date <span className="text-destructive">*</span></Label>
-                <Input id="milestone-start-date" type="date" required min={tenantTomorrow}
+                <Input id="milestone-start-date" type="date" required min={tenantTodayDate}
                   aria-invalid={!!errors.startDate} aria-describedby={`milestone-start-help${errors.startDate ? " milestone-start-error" : ""}`}
                   {...register("startDate")} />
-                <p id="milestone-start-help" className="text-xs text-muted-foreground">Choose a future date in {options.tenantTimeZone}.</p>
+                <p id="milestone-start-help" className="text-xs text-muted-foreground">Choose today or a later date in {options.tenantTimeZone}.</p>
                 <FieldMessage id="milestone-start-error" message={errors.startDate?.message} />
               </div>
               <div className="grid gap-2">

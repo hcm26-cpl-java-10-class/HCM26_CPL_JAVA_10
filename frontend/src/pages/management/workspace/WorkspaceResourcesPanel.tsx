@@ -13,13 +13,11 @@ import type {
   WorkspaceResourcePayload,
 } from "@/types/features/workspace-resource";
 import {
-  BookOpen,
   Clock3,
   Download,
   ExternalLink,
   FileText,
   FolderOpen,
-  Info,
   LayoutGrid,
   Link2,
   Loader2,
@@ -28,10 +26,8 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Sparkles,
   Trash2,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { normalizeExternalUrl } from "@/lib/utils";
@@ -49,61 +45,6 @@ function formatDate(value?: string | null) {
   if (!value) return "Not available";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Not available" : date.toLocaleString("en-GB");
-}
-
-const STAT_TONES = {
-  blue: {
-    overlay: "from-blue-500/10 via-transparent to-transparent dark:from-blue-500/15",
-    icon: "border-blue-500/20 bg-blue-500/10 text-blue-600 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-300",
-  },
-  emerald: {
-    overlay: "from-emerald-500/10 via-transparent to-transparent dark:from-emerald-500/15",
-    icon: "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300",
-  },
-  sky: {
-    overlay: "from-sky-500/10 via-transparent to-transparent dark:from-sky-500/15",
-    icon: "border-sky-500/20 bg-sky-500/10 text-sky-600 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-300",
-  },
-  amber: {
-    overlay: "from-amber-500/10 via-transparent to-transparent dark:from-amber-500/15",
-    icon: "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300",
-  },
-} as const;
-
-function ResourceStat({
-  icon: Icon,
-  label,
-  value,
-  tone,
-  hint,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string | number;
-  tone: keyof typeof STAT_TONES;
-  hint?: string;
-}) {
-  const palette = STAT_TONES[tone];
-  return (
-    <div className="group relative overflow-hidden rounded-xl border bg-card p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
-      <div
-        aria-hidden
-        className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${palette.overlay}`}
-      />
-      <div className="relative flex items-center gap-3">
-        <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl border ${palette.icon}`}>
-          <Icon className="size-5" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-xl font-semibold leading-none tracking-tight tabular-nums">{value}</p>
-          <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            {label}
-          </p>
-        </div>
-      </div>
-      {hint && <p className="relative mt-3 truncate text-[11px] text-muted-foreground" title={hint}>{hint}</p>}
-    </div>
-  );
 }
 
 /**
@@ -166,8 +107,9 @@ export function WorkspaceResourcesPanel({
   }
 
   const data = query.data;
+  const expectedProjectId = selectedProjectId ?? projectId ?? null;
   if (!data || data.workspaceId !== workspaceId || data.teamId !== teamId
-    || (data.projectId ?? null) !== (projectId ?? null)) {
+    || (data.projectId ?? null) !== expectedProjectId) {
     return (
       <WorkspaceSectionState
         error={new Error("Resources context does not match this workspace.")}
@@ -195,16 +137,8 @@ export function WorkspaceResourcesPanel({
   const sortedGroups = [...groups.entries()].sort(([firstId], [secondId]) =>
     Number(secondId !== data.projectId) - Number(firstId !== data.projectId) || firstId - secondId);
   const empty = data.items.length === 0;
-  const fileCount = data.items.reduce((total, item) => total + item.files.length, 0);
   const linkCount = data.items.filter((item) => item.kind === "LINK").length;
   const documentCount = data.items.length - linkCount;
-  const updatedTimestamps = data.items
-    .map((item) => item.updatedAt)
-    .filter((value): value is string => !!value)
-    .sort();
-  const lastUpdated = updatedTimestamps.length
-    ? updatedTimestamps[updatedTimestamps.length - 1]
-    : null;
   const noProject = data.projectId == null;
   const canManage = data.canManage;
   const acceptedExtensions = data.allowedExtensions.map((extension) => `.${extension}`).join(",");
@@ -365,79 +299,30 @@ export function WorkspaceResourcesPanel({
   ];
 
   return (
-    <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-2xl border bg-card shadow-sm">
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="absolute -right-24 -top-28 size-72 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/15" />
-          <div className="absolute -bottom-32 -left-24 size-72 rounded-full bg-emerald-500/10 blur-3xl dark:bg-emerald-500/10" />
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.04] via-transparent to-transparent dark:from-primary/[0.06]" />
-        </div>
-        <div className="relative flex flex-wrap items-start justify-between gap-4 px-5 py-5 sm:px-6 sm:py-6">
-          <div className="flex min-w-0 items-start gap-4">
-            <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25 ring-1 ring-white/25">
-              <BookOpen className="size-6" />
-            </span>
-            <div className="min-w-0 space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-semibold leading-tight tracking-tight">Project resources</h2>
-                <Badge
-                  variant="outline"
-                  className="gap-1 rounded-full border-blue-200 bg-blue-50 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300"
-                >
-                  <Sparkles className="size-3" />
-                  Resource hub
-                </Badge>
-              </div>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                Documents, repositories and reference links shared with your team for this project.
-              </p>
-              {!noProject && !empty && lastUpdated && (
-                <p className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-background/60 px-2.5 py-1 text-[11px] text-muted-foreground backdrop-blur">
-                  <Clock3 className="size-3 shrink-0" />
-                  <span className="truncate">Last updated {formatDate(lastUpdated)}</span>
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {canManage && (
-              <Button onClick={openCreate} className="gap-2 rounded-full px-4 shadow-sm">
-                <Plus />
-                Add resource
-              </Button>
-            )}
-            <Button variant="outline" className="gap-2 rounded-full bg-background/70 backdrop-blur" disabled={query.isFetching} onClick={() => void query.refetch()}>
-              <RefreshCw className={query.isFetching ? "animate-spin" : undefined} />
-              {query.isFetching ? "Refreshing…" : "Refresh"}
-            </Button>
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border bg-card p-3 sm:p-4">
         {canManage && (
-          <div className="relative flex flex-wrap items-center gap-2 border-t border-border/60 bg-muted/20 px-5 py-3 text-xs text-muted-foreground sm:px-6">
-            <Info className="size-3.5 shrink-0 text-blue-500 dark:text-blue-400" />
-            <span className="min-w-0 flex-1">
-              Changes apply to this team workspace only — the project template and other teams stay unchanged.
-            </span>
-            <Badge variant="outline" className="rounded-full bg-background/60">Allowed: {data.allowedExtensions.join(", ")}</Badge>
-            <Badge variant="outline" className="rounded-full bg-background/60">Max {humanSize(data.maxFileBytes)}</Badge>
-          </div>
+          <Button onClick={openCreate} className="gap-2">
+            <Plus />
+            Add resource
+          </Button>
         )}
-      </section>
-
-      {!noProject && !empty && (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <ResourceStat icon={FolderOpen} label="Resources" value={data.items.length} tone="blue" hint="All items shared with this project" />
-          <ResourceStat icon={FileText} label="Documents" value={documentCount} tone="emerald" hint="Resource entries that hold files" />
-          <ResourceStat icon={Link2} label="Links" value={linkCount} tone="sky" hint="External repositories and references" />
-          <ResourceStat icon={Paperclip} label="Files" value={fileCount} tone="amber" hint="Downloadable attachments" />
-        </div>
-      )}
+        <Button
+          variant="outline"
+          className="gap-2"
+          disabled={query.isFetching}
+          onClick={() => void query.refetch()}
+        >
+          <RefreshCw className={query.isFetching ? "animate-spin" : undefined} />
+          {query.isFetching ? "Refreshing…" : "Refresh"}
+        </Button>
+      </div>
 
       {noProject ? (
         <Card className="border-dashed bg-muted/20 shadow-none">
           <CardContent>
             <WorkspaceEmptyState
-              icon={BookOpen}
+              icon={FolderOpen}
               title="No project linked yet"
               description="This workspace has no project, so no learning resources are available."
             />

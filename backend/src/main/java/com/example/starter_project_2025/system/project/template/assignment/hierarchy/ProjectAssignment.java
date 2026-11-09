@@ -30,12 +30,15 @@ public class ProjectAssignment extends BaseEntity {
     private Long masterProjectId;
     @Column(name = "coordinator_team_id", updatable = false)
     private Long coordinatorTeamId;
-    @Column(name = "assigned_at", nullable = false, updatable = false)
+    @Column(name = "assigned_at", nullable = false)
     private Instant assignedAt;
     @Column(name = "idempotency_key", nullable = false, updatable = false, length = 100)
     private String idempotencyKey;
     @Column(name = "request_hash", nullable = false, updatable = false, length = 64)
     private String requestHash;
+    @Lob
+    @Column(name = "request_json")
+    private String requestJson;
     @Lob
     @Column(name = "response_json")
     private String responseJson;

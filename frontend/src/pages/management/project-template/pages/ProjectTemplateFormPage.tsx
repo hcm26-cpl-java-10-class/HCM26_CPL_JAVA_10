@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, LockKeyhole } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ProjectTemplateForm } from "../components/ProjectTemplateForm";
+import { ProjectTemplateHeader } from "../components/ProjectTemplateHeader";
 import { ProjectTemplateError, ProjectTemplateLoading } from "../components/ProjectTemplateState";
 import { useProjectTemplateOptions } from "../hooks/useProjectTemplateOptions";
 import { minimumTemplateDurationWeeks } from "../project-template.utils";
@@ -47,12 +48,14 @@ export function ProjectTemplateFormPage() {
   return (
     <MainLayout pathName={{ "project-templates": "Project Templates", create: "Create", edit: "Edit", ...(id ? { [id]: "Template" } : {}) }}>
       <section className="mx-auto grid min-w-0 w-full max-w-5xl grid-cols-1 gap-5">
-        <header className="border-b pb-4">
-          <p className="text-sm text-muted-foreground">Project Templates</p>
-          <h1 className="mt-1 text-2xl font-semibold">{id ? "Edit project template" : parentId ? "Create child module" : "Create project template"}</h1>
-          {parent.data && <p className="mt-2 text-sm text-muted-foreground">Parent: {parent.data.code} · {parent.data.name}</p>}
-          <p className="mt-1 text-sm text-muted-foreground">{id ? "Update the general information for this draft." : "Save the project brief as a draft before configuring its team and milestones."}</p>
-        </header>
+        <ProjectTemplateHeader
+          module={!!parentId || template.data?.parentTemplateId != null}
+          title={id ? "Edit project template" : parentId ? "Create child module" : "Create project template"}
+          description={<>
+            <p>{id ? "Update the general information for this draft." : "Save a draft to configure its team, milestones and backlog."}</p>
+            {parent.data && <p className="mt-1 font-medium text-indigo-700 dark:text-indigo-300">Master · {parent.data.code} · {parent.data.name}</p>}
+          </>}
+        />
         {!allowed ? <ProjectTemplateError denied />
           : options.isLoading || (!!id && options.isSuccess && template.isLoading) || milestonePlan.isLoading || (!!parentId && parent.isLoading) ? <ProjectTemplateLoading />
           : options.isError || template.isError || milestonePlan.isError || parent.isError ? <ProjectTemplateError error={options.error ?? template.error ?? milestonePlan.error ?? parent.error}

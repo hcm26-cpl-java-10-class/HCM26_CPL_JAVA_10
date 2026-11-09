@@ -24,6 +24,8 @@ import com.example.starter_project_2025.system.project.workspace.service.Workspa
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +34,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -49,33 +52,49 @@ public class AssignmentProjectWriter {
     private final TeamSubprojectAssignmentRepository mappings;
     private final AssignmentSnapshotService snapshotWriter;
     private final ProjectResourceProvisioningService resourceWriter;
-    private final AssignmentTemplateReader templateReader;
+    private final ObjectMapper json;
     private final CohortRepository cohorts;
     private final com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository classes;
     private final WorkspaceJournalService journal;
     private final UserRepository users;
 
-    public AssignmentDtos.Result create(ProjectAssignment assignment, AssignmentTemplateReader.Node master,
-                                         AssignmentValidationService.Selection selection) {
+    public void prepare(AssignmentValidationService.Selection selection) {
+        for (var brief : selection.briefs()) {
+            ProjectTeam team = brief.team();
+            var primary = brief.primary();
+            team.setProjectTemplate(templates.findById(primary.templateId()).orElseThrow());
+            team.setProjectTemplateVersionId(primary.sourceVersionId());
+            team.setAssignedConstraintsJson(assignedConstraints(brief).toString());
+            String name = brief.modules().stream().map(AssignmentTemplateReader.Node::name).collect(Collectors.joining(" + "));
+            team.setAssignedTemplateName(shortText(name, 255));
+            team.setMaxMembers(brief.capacity().maxMembers());
+            teams.saveAndFlush(team);
+        }
+    }
+
+    private JsonNode assignedConstraints(AssignmentValidationService.TeamBrief brief) {
+        JsonNode original = brief.primary().content().path("constraints");
+        if (brief.modules().size() == 1) return original;
+        ObjectNode combined = original.isObject() ? (ObjectNode) original.deepCopy() : json.createObjectNode();
+        combined.put("min_members", brief.capacity().minMembers());
+        combined.put("max_members", brief.capacity().maxMembers());
+        combined.put("allow_multi_role", brief.policy().allowMultiRole());
+        combined.set("role_quotas", json.valueToTree(brief.policy().quotas()));
+        return combined;
+    }
+
+    public AssignmentDtos.Result createForPublication(ProjectAssignment assignment, AssignmentTemplateReader.Node master,
+                                                       AssignmentValidationService.Selection selection) {
         Map<Long, Project> created = new LinkedHashMap<>();
         createBranch(master, null, null, null, assignment, selection, created);
         Project root = created.get(master.templateId());
         assignment.setMasterProjectId(root.getId());
         List<AssignmentDtos.Workspace> result = new ArrayList<>();
-        for (ProjectTeam team : selection.teams()) {
-            AssignmentTemplateReader.Node primary = assignment.getMode() == AssignmentDtos.Mode.WHOLE ? master
-                    : master.modules().stream().filter(node -> selection.owners().get(node.templateId()).getId().equals(team.getId()))
-                    .findFirst().orElseThrow();
-            Project project = created.get(primary.templateId());
+        for (var brief : selection.briefs()) {
+            ProjectTeam team = brief.team();
+            Project project = created.get(brief.primary().templateId());
             closePreviousWorkspace(team);
             team.setProject(project);
-            team.setProjectTemplate(templates.findById(primary.templateId()).orElseThrow());
-            team.setProjectTemplateVersionId(primary.sourceVersionId());
-            team.setAssignedConstraintsJson(primary.content().path("constraints").toString());
-            team.setAssignedTemplateName(primary.name());
-            team.setMaxMembers(templateReader.capacity(primary).maxMembers());
-            // Assignment must not publish the team: a DRAFT team stays DRAFT until it is
-            // explicitly published, which is the only step that activates its project/workspace.
             teams.saveAndFlush(team);
             Workspace workspace = workspace(assignment, team, project);
             List<TeamSubprojectAssignment> assigned = new ArrayList<>();
@@ -116,10 +135,8 @@ public class AssignmentProjectWriter {
         project.setCode("C" + assignment.getClassId() + "-A" + assignment.getId() + "-M" + node.templateId());
         project.setName(node.name());
         project.setDescription(shortText(node.content().path("description").asText(node.content().path("context").asText()), 2000));
-        // A DRAFT team must not own an ACTIVE project yet; publishing the team activates it.
-        project.setStatus(owner != null && owner.getStatus() == ProjectTeamStatus.DRAFT
-                ? ProjectStatus.PLANNING
-                : ProjectStatus.ACTIVE);
+        // The hierarchy is created in the same transaction as official publication.
+        project.setStatus(ProjectStatus.ACTIVE);
         project.setParentProject(parent);
         project.setTemplateSnapshotId(snapshot.getId());
         project.setCreatedBy(assignment.getCreatedBy());
@@ -210,10 +227,7 @@ public class AssignmentProjectWriter {
         workspace.setProject(project);
         workspace.setCode("WS-A" + assignment.getId() + "-T" + team.getId());
         workspace.setName(shortText(project.getName() + " / " + team.getTeamName(), 255));
-        // Only a published (ACTIVE) team gets an ACTIVE workspace.
-        workspace.setStatus(team.getStatus() == ProjectTeamStatus.ACTIVE
-                ? WorkspaceStatus.ACTIVE
-                : WorkspaceStatus.DRAFT);
+        workspace.setStatus(WorkspaceStatus.ACTIVE);
         workspace.setCreatedBy(assignment.getCreatedBy());
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
         workspaces.saveAndFlush(workspace);

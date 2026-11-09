@@ -17,7 +17,7 @@ import { authApi } from "@/api/features/auth.api";
 import { iconMap } from "@/components/datatable/iconMap";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { usePermissions } from "@/hooks/usePermissions";
-import { ChevronDown, LogOutIcon, Menu } from "lucide-react";
+import { ChevronDown, FileCheck2, LogOutIcon, Menu } from "lucide-react";
 import { useMemo } from "react";
 import { useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -139,20 +139,26 @@ export function StudentNavbar() {
       }
     }
 
-    const hasMySubmissions = groups.some((group) =>
-      group.items.some((item) => item.url === MY_SUBMISSIONS_URL),
-    );
-    if (!hasMySubmissions) {
-      const projectGroup = groups.find((group) => /project|dự án/i.test(group.name));
-      const item = {
+    // Keep the personal submissions entry with project work, even when the
+    // database menu originally places it under the general Student group.
+    for (const group of groups) {
+      group.items = group.items.filter((item) => normalizePath(item.url) !== MY_SUBMISSIONS_URL);
+    }
+    const projectGroup = groups.find((group) => !group.hiddenInMenu && group.items.some((item) =>
+      normalizePath(item.url).startsWith("/management/workspaces"),
+    )) ?? groups.find((group) => !group.hiddenInMenu && /project|dự án/i.test(group.name));
+    const submissionsItem = {
         id: "student-my-submissions",
         title: "My Submissions",
         url: MY_SUBMISSIONS_URL,
-        icon: resolveIcon("menu"),
+        icon: FileCheck2,
         isActive: pathname === MY_SUBMISSIONS_URL || pathname.startsWith(`${MY_SUBMISSIONS_URL}/`),
-      };
-      if (projectGroup) projectGroup.items.push(item);
-      else groups.push({ id: "student-project", name: "Dự án", hiddenInMenu: false, items: [item] });
+    };
+    if (projectGroup) {
+      const workspaceIndex = projectGroup.items.findIndex((item) => normalizePath(item.url).startsWith("/management/workspaces"));
+      projectGroup.items.splice(workspaceIndex >= 0 ? workspaceIndex + 1 : 0, 0, submissionsItem);
+    } else {
+      groups.push({ id: "student-project", name: "Project Management", hiddenInMenu: false, items: [submissionsItem] });
     }
 
     return groups.filter((group) => !group.hiddenInMenu && group.items.length > 0);
