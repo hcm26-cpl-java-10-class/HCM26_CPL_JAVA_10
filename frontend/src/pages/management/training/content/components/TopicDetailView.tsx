@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import type { TopicItem } from "@/types/features/content";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Download,
   ArrowLeft,
@@ -15,14 +16,24 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   ShieldCheck,
+  SlidersHorizontal,
+  Pencil,
+  RotateCcw,
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
 import { topicApi } from "@/api/features/topic.api";
-import { getTopicSyllabusPackage } from "./topicSyllabusData";
-import type { TopicSyllabusPackage } from "./topicSyllabusData";
+import {
+  getTopicSyllabusPackage,
+  getCustomAssessmentScheme,
+  saveCustomAssessmentScheme,
+  getCustomPassScore,
+  resetCustomAssessmentScheme,
+} from "./topicSyllabusData";
+import type { TopicSyllabusPackage, AssessmentItem } from "./topicSyllabusData";
 import { TopicSyllabusEditorDialog } from "./TopicSyllabusEditorDialog";
 import { SyllabusImportDialog } from "./SyllabusImportDialog";
+import { AssessmentSchemeDialog } from "./AssessmentSchemeDialog";
 import { exportFsoftSyllabusCsv } from "./syllabusParser";
 
 interface TopicDetailViewProps {
@@ -41,6 +52,11 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
   const [activeTab, setActiveTab] = useState<"syllabus" | "schedule">("syllabus");
   const [isOutlineEditorOpen, setIsOutlineEditorOpen] = useState(false);
   const [isSyllabusImportOpen, setIsSyllabusImportOpen] = useState(false);
+  const [isAssessmentSchemeDialogOpen, setIsAssessmentSchemeDialogOpen] = useState(false);
+
+  const [customPassScore, setCustomPassScore] = useState<string>(() =>
+    getCustomPassScore(topic.id) || ">= 6.0 / 10"
+  );
 
   // Dynamic syllabus data generated specifically for this topic
   const [syllabusPackage, setSyllabusPackage] = useState<TopicSyllabusPackage>(() =>
@@ -49,11 +65,35 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
 
   const reloadSyllabus = () => {
     setSyllabusPackage(getTopicSyllabusPackage(topic));
+    setCustomPassScore(getCustomPassScore(topic.id) || ">= 6.0 / 10");
   };
 
   useEffect(() => {
     reloadSyllabus();
   }, [topic]);
+
+  const hasCustomScheme = useMemo(() => {
+    return !!(
+      (topic.id && getCustomAssessmentScheme(topic.id)) ||
+      (topic.code && getCustomAssessmentScheme(topic.code))
+    );
+  }, [topic, syllabusPackage]);
+
+  const handleSaveAssessmentScheme = (newScheme: AssessmentItem[], passScore: string) => {
+    saveCustomAssessmentScheme(topic.id, newScheme, passScore, topic.code);
+    setCustomPassScore(passScore);
+    setSyllabusPackage((prev) => ({
+      ...prev,
+      assessmentScheme: newScheme,
+    }));
+  };
+
+  const handleResetAssessmentScheme = () => {
+    resetCustomAssessmentScheme(topic.id, topic.code);
+    setCustomPassScore(">= 6.0 / 10");
+    reloadSyllabus();
+    toast.success("Restored FSOFT standard assessment scheme");
+  };
 
   const { chapters, timeAllocation, assessmentScheme, meta } = syllabusPackage;
 
@@ -444,38 +484,110 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
 
             {/* 3. Assessment Scheme Table */}
             <div>
-              <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <CheckCircle2 className="size-4 text-emerald-600" />
-                3. Assessment Scheme &amp; Passing Standard
-              </h2>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <CheckCircle2 className="size-4 text-emerald-600" />
+                    3. Assessment Scheme &amp; Passing Standard
+                  </h2>
+                  {hasCustomScheme ? (
+                    <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200">
+                      Customized
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] bg-gray-50 text-gray-600 border-gray-200">
+                      FSOFT Standard
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {hasCustomScheme && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleResetAssessmentScheme}
+                      className="h-8 text-xs text-gray-500 hover:text-gray-700 gap-1.5"
+                    >
+                      <RotateCcw className="size-3" />
+                      Reset to Standard
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsAssessmentSchemeDialogOpen(true)}
+                    className="h-8 text-xs text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100/60 border-indigo-200 gap-1.5 font-medium shadow-sm"
+                  >
+                    <SlidersHorizontal className="size-3.5" />
+                    Adjust Scheme
+                  </Button>
+                </div>
+              </div>
+
               {assessmentScheme.length === 0 ? (
                 <div className="border border-gray-200 rounded-lg p-6 bg-white text-center text-xs text-gray-400">
                   No assessment criteria configured yet.
+                  <div className="mt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setIsAssessmentSchemeDialogOpen(true)}
+                      className="text-xs"
+                    >
+                      Configure Assessment Scheme
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold text-[11px]">
+                    <thead className="bg-gray-50/90 border-b border-gray-200 text-gray-600 font-semibold text-[11px]">
                       <tr>
-                        <th className="text-left px-4 py-3">Category</th>
-                        <th className="text-center px-4 py-3 w-20">Quantity</th>
-                        <th className="text-right px-4 py-3 w-28">Weight</th>
-                        <th className="text-left px-4 py-3">Notes / Passing Standard</th>
+                        <th className="text-left px-4 py-3 font-semibold text-gray-700">Assessment Category</th>
+                        <th className="text-left px-4 py-3 font-semibold text-gray-700">Evaluation Method</th>
+                        <th className="text-left px-4 py-3 w-36 font-semibold text-gray-700">Passing Score</th>
+                        <th className="text-right px-4 py-3 w-28 font-semibold text-gray-700">Weight</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-gray-700">
                       {assessmentScheme.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50">
-                          <td className="px-4 py-2.5 font-medium text-gray-800">{item.category}</td>
-                          <td className="px-4 py-2.5 text-center font-mono">{item.count || 1}</td>
-                          <td className="px-4 py-2.5 text-right font-bold text-indigo-600">{item.weight}</td>
-                          <td className="px-4 py-2.5 text-gray-500 text-[11px]">{item.notes || item.method || ">= 6.0 / 10"}</td>
+                        <tr
+                          key={idx}
+                          className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                          onClick={() => setIsAssessmentSchemeDialogOpen(true)}
+                          title="Click to adjust assessment scheme"
+                        >
+                          <td className="px-4 py-3 font-medium text-gray-900 group-hover:text-indigo-600 transition-colors">
+                            <span className="flex items-center gap-2">
+                              {item.category}
+                              <Pencil className="size-3 opacity-0 group-hover:opacity-100 text-indigo-500 transition-opacity" />
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600 leading-relaxed">
+                            {item.method || item.notes || "Standard evaluation method"}
+                          </td>
+                          <td className="px-4 py-3 font-mono font-medium text-gray-800">
+                            {item.passingScore || ">= 6.0 / 10"}
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-indigo-600 font-mono text-sm">
+                            {item.weight}
+                          </td>
                         </tr>
                       ))}
-                      <tr className="bg-purple-50/50 font-bold text-gray-900 border-t border-purple-100">
-                        <td className="px-4 py-2.5" colSpan={2}>Overall Topic Minimum GPA</td>
-                        <td className="px-4 py-2.5 text-right text-[#5b52e0]">100%</td>
-                        <td className="px-4 py-2.5 text-[#5b52e0]">&gt;= 6.0 / 10 (Completed 100% Online video, Quiz, Labs, Final Test)</td>
+                      <tr className="bg-purple-50/60 font-bold text-gray-900 border-t border-purple-100">
+                        <td className="px-4 py-3 text-[#5b52e0]">Overall Topic Result</td>
+                        <td className="px-4 py-3 text-gray-500 font-normal text-[11px]">
+                          Completed 100% Online video, Quiz, Labs, Final Test
+                        </td>
+                        <td className="px-4 py-3 text-[#5b52e0] font-mono text-sm">
+                          {customPassScore || ">= 6.0 / 10"}
+                        </td>
+                        <td className="px-4 py-3 text-right text-[#5b52e0] font-mono text-sm font-extrabold">
+                          100%
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -702,6 +814,16 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
         onOpenChange={setIsSyllabusImportOpen}
         targetTopic={topic}
         onSuccess={() => reloadSyllabus()}
+      />
+
+      {/* Assessment Scheme Configuration Modal */}
+      <AssessmentSchemeDialog
+        open={isAssessmentSchemeDialogOpen}
+        onOpenChange={setIsAssessmentSchemeDialogOpen}
+        initialScheme={assessmentScheme}
+        initialPassScore={customPassScore}
+        topicName={topic.name}
+        onSave={handleSaveAssessmentScheme}
       />
     </div>
   );

@@ -27,13 +27,54 @@ export interface TopicChapter {
 }
 
 export interface AssessmentItem {
+  id?: string;
   category: string;
   count?: number;
   method: string;
   passingScore: string;
   weight: string;
+  weightedNumber?: number;
   notes?: string;
 }
+
+export const DEFAULT_FSOFT_ASSESSMENT_SCHEME: AssessmentItem[] = [
+  {
+    category: "Class Participation & Attendance",
+    count: 1,
+    method: "Daily attendance roll-call, seminar discussion & active engagement",
+    passingScore: ">= 80%",
+    weight: "10%",
+    weightedNumber: 10,
+    notes: "Daily attendance roll-call",
+  },
+  {
+    category: "Hands-on Assignments & Lab Exercises",
+    count: 2,
+    method: "Evaluation of practical lab problems, code cleanlines & Git commit history",
+    passingScore: ">= 6.0 / 10",
+    weight: "40%",
+    weightedNumber: 40,
+    notes: "Practical assignments",
+  },
+  {
+    category: "Final Practical Examination",
+    count: 1,
+    method: "Comprehensive capstone coding exam covering core competencies",
+    passingScore: ">= 6.0 / 10",
+    weight: "35%",
+    weightedNumber: 35,
+    notes: "Final practice test",
+  },
+  {
+    category: "Final Knowledge Quiz",
+    count: 1,
+    method: "Multiple-choice online assessment on key concepts & best practices",
+    passingScore: ">= 6.0 / 10",
+    weight: "15%",
+    weightedNumber: 15,
+    notes: "Final theory test",
+  },
+];
 
 export interface SyllabusDocumentMeta {
   documentCode?: string;
@@ -61,6 +102,8 @@ export interface TopicSyllabusPackage {
 
 // Storage key prefix for custom saved syllabi per topic
 const STORAGE_PREFIX = "fams_custom_syllabus_";
+const STORAGE_ASSESSMENT_PREFIX = "fams_custom_assessment_";
+const STORAGE_PASS_SCORE_PREFIX = "fams_custom_pass_score_";
 
 export function getCustomTopicSyllabus(topicId: number | string): TopicChapter[] | null {
   try {
@@ -79,6 +122,66 @@ export function getCustomTopicSyllabus(topicId: number | string): TopicChapter[]
 
 export function hasCustomTopicSyllabus(topicId: number | string): boolean {
   return getCustomTopicSyllabus(topicId) !== null;
+}
+
+export function getCustomAssessmentScheme(topicId: number | string): AssessmentItem[] | null {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_ASSESSMENT_PREFIX}${topicId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to read custom assessment scheme from storage", e);
+  }
+  return null;
+}
+
+export function saveCustomAssessmentScheme(
+  topicId: number | string,
+  items: AssessmentItem[],
+  passScore?: string,
+  topicCode?: string
+): void {
+  try {
+    localStorage.setItem(`${STORAGE_ASSESSMENT_PREFIX}${topicId}`, JSON.stringify(items));
+    if (topicCode) {
+      localStorage.setItem(`${STORAGE_ASSESSMENT_PREFIX}${topicCode}`, JSON.stringify(items));
+    }
+    if (passScore) {
+      localStorage.setItem(`${STORAGE_PASS_SCORE_PREFIX}${topicId}`, passScore);
+      if (topicCode) {
+        localStorage.setItem(`${STORAGE_PASS_SCORE_PREFIX}${topicCode}`, passScore);
+      }
+    }
+  } catch (e) {
+    console.error("Failed to save custom assessment scheme to storage", e);
+  }
+}
+
+export function getCustomPassScore(topicId: number | string): string {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_PASS_SCORE_PREFIX}${topicId}`);
+    if (raw) return raw;
+  } catch (e) {
+    console.error("Failed to read custom pass score from storage", e);
+  }
+  return ">= 6.0 / 10";
+}
+
+export function resetCustomAssessmentScheme(topicId: number | string, topicCode?: string): void {
+  try {
+    localStorage.removeItem(`${STORAGE_ASSESSMENT_PREFIX}${topicId}`);
+    localStorage.removeItem(`${STORAGE_PASS_SCORE_PREFIX}${topicId}`);
+    if (topicCode) {
+      localStorage.removeItem(`${STORAGE_ASSESSMENT_PREFIX}${topicCode}`);
+      localStorage.removeItem(`${STORAGE_PASS_SCORE_PREFIX}${topicCode}`);
+    }
+  } catch (e) {
+    console.error("Failed to reset custom assessment scheme from storage", e);
+  }
 }
 
 export function saveTopicSyllabusPackage(
@@ -111,8 +214,14 @@ export function resetTopicSyllabusPackage(topicId: number | string, topicCode?: 
 // Helper to compute metrics, time allocations and assessment scheme for any chapters list
 export function calculateSyllabusPackage(
   chapters: TopicChapter[],
-  topic: TopicItem
+  topic: TopicItem,
+  overrideScheme?: AssessmentItem[]
 ): TopicSyllabusPackage {
+  // Check if custom assessment scheme exists in storage
+  const savedScheme = overrideScheme ||
+    (topic.id ? getCustomAssessmentScheme(topic.id) : null) ||
+    (topic.code ? getCustomAssessmentScheme(topic.code) : null);
+
   if (!chapters || chapters.length === 0) {
     return {
       chapters: [],
@@ -123,7 +232,7 @@ export function calculateSyllabusPackage(
         exam: 0,
         total: 0,
       },
-      assessmentScheme: [],
+      assessmentScheme: savedScheme && savedScheme.length > 0 ? savedScheme : DEFAULT_FSOFT_ASSESSMENT_SCHEME,
     };
   }
 
@@ -149,55 +258,65 @@ export function calculateSyllabusPackage(
   const totalCalculated = labHours + lectureHours + examHours;
   const targetDuration = topic.durationHours || totalCalculated;
 
-  // Derive realistic assessment items from chapters
-  const hasExam = examHours > 0;
-  const assessmentScheme: AssessmentItem[] = [
-    {
-      category: "Class Participation & Attendance",
-      count: 1,
-      method: "Daily attendance roll-call, seminar discussion & active engagement",
-      passingScore: ">= 80%",
-      weight: "10%",
-      notes: "Daily roll-call",
-    },
-    {
-      category: "Hands-on Assignments & Lab Exercises",
-      count: 2,
-      method: "Evaluation of practical lab problems, code cleanlines & Git commit history",
-      passingScore: ">= 6.0 / 10",
-      weight: hasExam ? "40%" : "50%",
-      notes: "Practical assignments",
-    },
-  ];
-
-  if (hasExam) {
-    assessmentScheme.push(
+  let assessmentScheme: AssessmentItem[];
+  if (savedScheme && savedScheme.length > 0) {
+    assessmentScheme = savedScheme;
+  } else {
+    // Derive realistic assessment items from chapters
+    const hasExam = examHours > 0;
+    assessmentScheme = [
       {
-        category: "Final Practical Examination",
+        category: "Class Participation & Attendance",
         count: 1,
-        method: "Comprehensive capstone coding exam covering core competencies",
-        passingScore: ">= 6.0 / 10",
-        weight: "35%",
-        notes: "Final practice test",
+        method: "Daily attendance roll-call, seminar discussion & active engagement",
+        passingScore: ">= 80%",
+        weight: "10%",
+        weightedNumber: 10,
+        notes: "Daily attendance roll-call",
       },
       {
-        category: "Final Knowledge Quiz",
-        count: 1,
-        method: "Multiple-choice online assessment on key concepts & best practices",
+        category: "Hands-on Assignments & Lab Exercises",
+        count: 2,
+        method: "Evaluation of practical lab problems, code cleanlines & Git commit history",
         passingScore: ">= 6.0 / 10",
-        weight: "15%",
-        notes: "Final theory test",
-      }
-    );
-  } else {
-    assessmentScheme.push({
-      category: "Capstone Mini-Project",
-      count: 1,
-      method: "End-of-module functional prototype review & presentation",
-      passingScore: ">= 6.0 / 10",
-      weight: "40%",
-      notes: "Final capstone project",
-    });
+        weight: hasExam ? "40%" : "50%",
+        weightedNumber: hasExam ? 40 : 50,
+        notes: "Practical assignments",
+      },
+    ];
+
+    if (hasExam) {
+      assessmentScheme.push(
+        {
+          category: "Final Practical Examination",
+          count: 1,
+          method: "Comprehensive capstone coding exam covering core competencies",
+          passingScore: ">= 6.0 / 10",
+          weight: "35%",
+          weightedNumber: 35,
+          notes: "Final practice test",
+        },
+        {
+          category: "Final Knowledge Quiz",
+          count: 1,
+          method: "Multiple-choice online assessment on key concepts & best practices",
+          passingScore: ">= 6.0 / 10",
+          weight: "15%",
+          weightedNumber: 15,
+          notes: "Final theory test",
+        }
+      );
+    } else {
+      assessmentScheme.push({
+        category: "Capstone Mini-Project",
+        count: 1,
+        method: "End-of-module functional prototype review & presentation",
+        passingScore: ">= 6.0 / 10",
+        weight: "40%",
+        weightedNumber: 40,
+        notes: "Final capstone project",
+      });
+    }
   }
 
   return {
@@ -314,11 +433,14 @@ export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
 export function getTopicSyllabusPackage(topic: TopicItem): TopicSyllabusPackage {
   // Check custom saved syllabus first (by id or code)
   const custom = (topic.id ? getCustomTopicSyllabus(topic.id) : null) || getCustomTopicSyllabus(topic.code);
+  const customAssessment = (topic.id ? getCustomAssessmentScheme(topic.id) : null) ||
+    (topic.code ? getCustomAssessmentScheme(topic.code) : null);
+
   if (custom && custom.length > 0) {
     return calculateSyllabusPackage(custom, topic);
   }
 
-  // If user has not added any chapters yet, return empty state. NO hardcoded fake data!
+  // If user has not added any chapters yet, return empty chapters but allow assessment scheme to be configured!
   return {
     chapters: [],
     totalSessions: 0,
@@ -328,6 +450,8 @@ export function getTopicSyllabusPackage(topic: TopicItem): TopicSyllabusPackage 
       exam: 0,
       total: 0,
     },
-    assessmentScheme: [],
+    assessmentScheme: customAssessment && customAssessment.length > 0
+      ? customAssessment
+      : DEFAULT_FSOFT_ASSESSMENT_SCHEME,
   };
 }

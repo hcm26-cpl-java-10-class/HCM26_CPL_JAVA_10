@@ -27,6 +27,7 @@ import {
 } from "./syllabusParser";
 import {
   saveTopicSyllabusPackage,
+  saveCustomAssessmentScheme,
   type TopicSyllabusPackage,
 } from "./topicSyllabusData";
 
@@ -180,6 +181,15 @@ export function SyllabusImportDialog({
       saveTopicSyllabusPackage(resolvedTopic.id, pkg.chapters, resolvedTopic);
       if (resolvedTopic.code) {
         saveTopicSyllabusPackage(resolvedTopic.code, pkg.chapters, resolvedTopic);
+      }
+
+      if (parsed.assessmentScheme && parsed.assessmentScheme.length > 0) {
+        saveCustomAssessmentScheme(
+          resolvedTopic.id,
+          parsed.assessmentScheme,
+          ">= 6.0 / 10",
+          resolvedTopic.code
+        );
       }
 
       toast.success(
@@ -453,27 +463,35 @@ export function SyllabusImportDialog({
                   <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
                       <CheckCircle2 className="size-4 text-emerald-600" />
-                      Assessment Scheme
+                      3. Assessment Scheme &amp; Passing Standard
                     </h4>
                     <div className="border border-gray-100 rounded-lg overflow-hidden text-xs">
                       <table className="w-full text-left">
                         <thead className="bg-gray-50 text-[10px] uppercase font-semibold text-gray-500">
                           <tr>
-                            <th className="px-3 py-2">Category</th>
-                            <th className="px-3 py-2 w-14 text-center">Qty</th>
-                            <th className="px-3 py-2 w-16 text-right">Weight</th>
-                            <th className="px-3 py-2">Passing Criteria</th>
+                            <th className="px-3 py-2">Assessment Category</th>
+                            <th className="px-3 py-2">Evaluation Method</th>
+                            <th className="px-3 py-2 w-28">Passing Score</th>
+                            <th className="px-3 py-2 w-20 text-right">Weight</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {parsed.assessmentScheme.map((a, idx) => (
                             <tr key={idx} className="hover:bg-gray-50">
-                              <td className="px-3 py-1.5 font-medium text-gray-800">{a.category}</td>
-                              <td className="px-3 py-1.5 text-center font-mono">{a.count || 1}</td>
-                              <td className="px-3 py-1.5 text-right font-bold text-indigo-600">{a.weight}</td>
-                              <td className="px-3 py-1.5 text-gray-500 text-[11px]">{a.notes || a.method || ">= 6.0"}</td>
+                              <td className="px-3 py-2 font-medium text-gray-800">{a.category}</td>
+                              <td className="px-3 py-2 text-gray-600 text-[11px]">{a.method || a.notes || "—"}</td>
+                              <td className="px-3 py-2 font-mono text-gray-700">{a.passingScore || ">= 6.0 / 10"}</td>
+                              <td className="px-3 py-2 text-right font-bold text-indigo-600">{a.weight}</td>
                             </tr>
                           ))}
+                          <tr className="bg-purple-50/60 font-bold text-gray-900 border-t border-purple-100">
+                            <td className="px-3 py-2 text-[#5b52e0]">Overall Topic Result</td>
+                            <td className="px-3 py-2 text-gray-500 font-normal text-[11px]">
+                              Completed 100% Online video, Quiz, Labs, Final Test
+                            </td>
+                            <td className="px-3 py-2 text-[#5b52e0] font-mono text-xs">&gt;= 6.0 / 10</td>
+                            <td className="px-3 py-2 text-right text-[#5b52e0] font-mono text-xs font-extrabold">100%</td>
+                          </tr>
                         </tbody>
                       </table>
                     </div>
