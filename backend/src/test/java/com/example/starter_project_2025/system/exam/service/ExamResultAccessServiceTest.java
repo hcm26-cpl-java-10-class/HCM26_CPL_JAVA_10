@@ -80,9 +80,10 @@ class ExamResultAccessServiceTest {
     }
 
     @Test
-    void allowsWhenAttemptsRemainButExamClosed() {
+    void deniesWhenAttemptsRemainEvenIfLegacyEndTimePassed() {
+        // Exam khong con gio dong de (lich thi da bi go bo) nen con luot lam thi chua cho xem dap an.
         exam.setEndTime(LocalDateTime.now().minusMinutes(1));
-        assertTrue(service.canStudentViewAnswers(exam, ExamAttemptStatus.SUBMITTED, 2));
+        assertFalse(service.canStudentViewAnswers(exam, ExamAttemptStatus.SUBMITTED, 2));
     }
 
     @Test

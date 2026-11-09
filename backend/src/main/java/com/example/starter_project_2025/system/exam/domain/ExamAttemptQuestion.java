@@ -45,6 +45,25 @@ public class ExamAttemptQuestion extends BaseEntity {
     @Column(name = "code_spec", columnDefinition = "TEXT")
     private String codeSpec;
 
+    /**
+     * Ban chup Reference answer / Rubric (ExamQuestionGradingConfig) tai thoi diem bai lam duoc cham lan dau.
+     * Sua rubric sau do chi ap dung cho bai chua cham. null guidelineSnapshotAt = chua chup.
+     */
+    @Column(name = "guideline_reference", columnDefinition = "TEXT")
+    private String guidelineReference;
+
+    @Column(name = "guideline_rubric", columnDefinition = "TEXT")
+    private String guidelineRubric;
+
+    @Column(name = "guideline_reference_at")
+    private java.time.Instant guidelineReferenceAt;
+
+    @Column(name = "guideline_rubric_at")
+    private java.time.Instant guidelineRubricAt;
+
+    @Column(name = "guideline_snapshot_at")
+    private java.time.Instant guidelineSnapshotAt;
+
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("displayOrder ASC")
     private List<ExamAttemptOption> options = new ArrayList<>();

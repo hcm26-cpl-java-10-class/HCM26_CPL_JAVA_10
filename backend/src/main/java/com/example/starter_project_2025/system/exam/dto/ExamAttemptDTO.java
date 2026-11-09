@@ -19,6 +19,7 @@ public class ExamAttemptDTO {
     private int durationMinutes;
     private int totalPoints;
     private BigDecimal maxScore;
+    private BigDecimal passScore;
     private BigDecimal objectiveScore;
     private BigDecimal finalScore;
     private BigDecimal provisionalScore;

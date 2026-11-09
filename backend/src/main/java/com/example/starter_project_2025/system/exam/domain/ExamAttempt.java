@@ -67,6 +67,10 @@ public class ExamAttempt extends BaseEntity {
     @Column(precision = 8, scale = 2)
     private BigDecimal maxScore;
 
+    /** Diem dat cua bai thi tai thoi diem bat dau lam bai (BR-UNI-16: sua de sau do khong doi luot da lam). */
+    @Column(name = "pass_score", precision = 8, scale = 2)
+    private BigDecimal passScore;
+
     @Column(precision = 12, scale = 4)
     private BigDecimal objectiveScore;
 
