@@ -13,6 +13,10 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 @Service
 public class ImportTemplateService {
@@ -26,21 +30,36 @@ public class ImportTemplateService {
 
             int colIndex = 0;
 
-            for (Field field : entityClass.getDeclaredFields()) {
+            for (Field field : getAllFields(entityClass)) {
+
                 ImportField col = field.getAnnotation(ImportField.class);
-                if (col == null) continue;
+
+                if (col == null) {
+                    continue;
+                }
 
                 headerRow.createCell(colIndex).setCellValue(col.name());
 
                 ExportField exportField = field.getAnnotation(ExportField.class);
+
                 if (exportField != null && !exportField.hint().isBlank()) {
-                    DataValidationHelper helper = sheet.getDataValidationHelper();
+
+                    DataValidationHelper helper =
+                            sheet.getDataValidationHelper();
+
                     DataValidation validation = helper.createValidation(
                             helper.createCustomConstraint("TRUE"),
-                            new CellRangeAddressList(1, 10_000, colIndex, colIndex));
+                            new CellRangeAddressList(1, 10_000, colIndex, colIndex)
+                    );
+
                     validation.setShowErrorBox(false);
                     validation.setShowPromptBox(true);
-                    validation.createPromptBox(col.name(), exportField.hint());
+
+                    validation.createPromptBox(
+                            col.name(),
+                            exportField.hint()
+                    );
+
                     sheet.addValidationData(validation);
                 }
 
@@ -52,6 +71,7 @@ public class ImportTemplateService {
             }
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
+
             workbook.write(out);
 
             return out.toByteArray();
@@ -59,5 +79,25 @@ public class ImportTemplateService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to generate template", e);
         }
+    }
+
+    private List<Field> getAllFields(Class<?> type) {
+
+        List<Class<?>> hierarchy = new ArrayList<>();
+
+        while (type != null && type != Object.class) {
+            hierarchy.add(type);
+            type = type.getSuperclass();
+        }
+
+        Collections.reverse(hierarchy);
+
+        List<Field> fields = new ArrayList<>();
+
+        for (Class<?> current : hierarchy) {
+            fields.addAll(Arrays.asList(current.getDeclaredFields()));
+        }
+
+        return fields;
     }
 }

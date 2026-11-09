@@ -21,6 +21,7 @@ public @interface ExportField {
 
     String separator() default ", ";
 
-    /** Excel export: note shown when the cell of this column is selected (an input message, nothing is restricted). */
     String hint() default "";
+
+    int order() default Integer.MAX_VALUE;
 }

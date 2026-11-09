@@ -151,7 +151,7 @@ class LearningDemoIntegrationTest {
         assertTrue(exportFailure.getMessage().contains("@ExportEntity"));
         var lookup = new RelationLookupEngine(context);
         var mapper = new GenericImportMapper(lookup, new RelationGraphBuilder(lookup, new RelationPathParser()), new ValueConverter());
-        var importer = new GenericImportService(new ParserFactory(List.of(new ExcelParser())), mapper, mock(org.springframework.security.crypto.password.PasswordEncoder.class), List.of());
+        var importer = new GenericImportService(new ParserFactory(List.of(new ExcelParser())), mapper, mock(org.springframework.security.crypto.password.PasswordEncoder.class), List.of(), lookup);
         byte[] bytes;
         try (var workbook = new XSSFWorkbook(); var output = new ByteArrayOutputStream()) {
             var sheet = workbook.createSheet("Courses");

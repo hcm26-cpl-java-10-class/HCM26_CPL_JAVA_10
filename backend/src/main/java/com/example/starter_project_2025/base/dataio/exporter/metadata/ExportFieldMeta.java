@@ -12,6 +12,7 @@ public record ExportFieldMeta(
         String path,
         boolean relation,
         String separator,
-        String hint
+        String hint,
+        int order
 ) {
 }

@@ -7,6 +7,8 @@ import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,14 +25,30 @@ public class ExportMetadataCache {
 
     private List<ExportFieldMeta> scan(Class<?> clazz) {
 
+        List<Field> allFields = new ArrayList<>();
+
+        Class<?> current = clazz;
+
+        while (current != null && current != Object.class) {
+
+            List<Field> fields = new ArrayList<>();
+
+            Collections.addAll(fields, current.getDeclaredFields());
+
+            allFields.addAll(0, fields);
+
+            current = current.getSuperclass();
+        }
+
         List<ExportFieldMeta> metas = new ArrayList<>();
 
-        for (Field field : clazz.getDeclaredFields()) {
+        for (Field field : allFields) {
 
             ExportField ann = field.getAnnotation(ExportField.class);
 
-            if (ann == null || ann.ignore())
+            if (ann == null || ann.ignore()) {
                 continue;
+            }
 
             field.setAccessible(true);
 
@@ -42,8 +60,11 @@ public class ExportMetadataCache {
                     .relation(ann.relation())
                     .separator(ann.separator())
                     .hint(ann.hint())
+                    .order(ann.order())
                     .build());
         }
+
+        metas.sort(Comparator.comparingInt(ExportFieldMeta::order));
 
         return metas;
     }

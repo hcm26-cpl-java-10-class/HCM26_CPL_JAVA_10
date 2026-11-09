@@ -25,6 +25,7 @@ const studentSchema: EntitySchema = {
       
       dateFormat: "date" 
     },
+    
     { 
       name: "gender", 
       label: "Giới tính", 

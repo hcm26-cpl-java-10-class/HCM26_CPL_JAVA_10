@@ -21,6 +21,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
+@Inheritance(strategy = InheritanceType.JOINED)
+@DiscriminatorColumn(name = "user_type", discriminatorType = DiscriminatorType.STRING, length = 30)
+@DiscriminatorValue("USER")
 @Getter
 @Setter
 @SuperBuilder
@@ -59,7 +62,7 @@ public class User extends BaseEntity {
      * Import: the "Password" column is optional. When it is empty the account is created with a random
      * password and the user receives an email to set their own. Passwords are never exported.
      */
-    @Column(nullable = false)
+    @Column(name = "password_hash", nullable = true)
     @ImportHash
     @ImportField(name = "Password")
     String passwordHash;
