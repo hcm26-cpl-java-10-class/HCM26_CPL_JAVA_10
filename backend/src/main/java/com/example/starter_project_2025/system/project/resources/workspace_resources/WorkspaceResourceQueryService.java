@@ -119,7 +119,7 @@ public class WorkspaceResourceQueryService {
         if (origin == null) origin = project.getParentProject() != null ? "SUB_PROJECT" : "PROJECT";
         return new WorkspaceResourceDtos.ResourceItem(resource.getId(), resource.getTitle(),
                 resource.getDescription(), resource.getKind() == null ? null : resource.getKind().name(),
-                resource.getUrl(), resource.getCategory(), resource.getOrderIndex(),
+                resource.getUrl(), resource.getOrderIndex(),
                 resource.getUpdatedAt(), resource.getUpdatedBy(), attached, resource.getSourceTemplateId(),
                 resource.getSourceTemplateName() == null ? project.getName() : resource.getSourceTemplateName(),
                 origin, project.getId(), editorPolicy.canManage(user, workspace, project));

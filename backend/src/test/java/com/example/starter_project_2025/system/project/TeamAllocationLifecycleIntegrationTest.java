@@ -12,6 +12,8 @@ import com.example.starter_project_2025.system.rbac.user.*;
 import com.fasterxml.jackson.databind.*;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -73,7 +75,7 @@ class TeamAllocationLifecycleIntegrationTest {
             var project=new Project();project.setTenantId(tenantId);project.setClassId(classId);project.setTeamId(teamId);
             project.setCode("ALLOC-"+UUID.randomUUID());project.setName("Assigned project");project.setStatus(ProjectStatus.PLANNING);em.persist(project);em.flush();projectId=project.getId();team.setProject(project);
             var workspace=new Workspace();workspace.setTenant(tenant);workspace.setTeam(team);workspace.setProject(project);
-            workspace.setCode("ALLOC-"+UUID.randomUUID());workspace.setName("Pre-created workspace");workspace.setStatus(WorkspaceStatus.ACTIVE);em.persist(workspace);em.flush();workspaceId=workspace.getId();
+            workspace.setCode("ALLOC-"+UUID.randomUUID());workspace.setName("Pre-created workspace");workspace.setStatus(WorkspaceStatus.DRAFT);em.persist(workspace);em.flush();workspaceId=workspace.getId();
         });
     }
     String path() {return "/api/v1/classes/"+classId+"/allocation-sessions";}
@@ -83,7 +85,7 @@ class TeamAllocationLifecycleIntegrationTest {
             assertThat(em.find(Project.class,projectId).getStatus()).isEqualTo(project);
             var workspace=em.find(Workspace.class,workspaceId);
             assertThat(workspace.getProject().getId()).isEqualTo(projectId);
-            assertThat(workspace.getStatus()).isEqualTo(WorkspaceStatus.ACTIVE);
+            assertThat(workspace.getStatus()).isEqualTo(team==ProjectTeamStatus.ACTIVE ? WorkspaceStatus.ACTIVE : WorkspaceStatus.DRAFT);
             assertThat(em.createQuery("select count(w) from Workspace w where w.team.id=:id",Long.class)
                     .setParameter("id",teamId).getSingleResult()).isEqualTo(1L);
         });
@@ -142,11 +144,18 @@ class TeamAllocationLifecycleIntegrationTest {
         assertStates(ProjectTeamStatus.DRAFT,ProjectStatus.PLANNING);
     }
     @Test void restartBackfillDoesNotStartUnpublishedProjectsJustBecauseWorkspaceExists() {
+        tx.executeWithoutResult(status->em.find(Workspace.class,workspaceId).setStatus(WorkspaceStatus.ACTIVE));
         tx.executeWithoutResult(status->{projects.activateProjectsWithWorkspace();em.clear();});
-        assertStates(ProjectTeamStatus.DRAFT,ProjectStatus.PLANNING);
+        tx.executeWithoutResult(status->{
+            assertThat(em.find(ProjectTeam.class,teamId).getStatus()).isEqualTo(ProjectTeamStatus.DRAFT);
+            assertThat(em.find(Project.class,projectId).getStatus()).isEqualTo(ProjectStatus.PLANNING);
+        });
     }
     @Test void restartBackfillRepairsPublishedTeamsButPreservesClosedProjects() {
-        tx.executeWithoutResult(status->em.find(ProjectTeam.class,teamId).setStatus(ProjectTeamStatus.ACTIVE));
+        tx.executeWithoutResult(status->{
+            em.find(ProjectTeam.class,teamId).setStatus(ProjectTeamStatus.ACTIVE);
+            em.find(Workspace.class,workspaceId).setStatus(WorkspaceStatus.ACTIVE);
+        });
         tx.executeWithoutResult(status->{projects.activateProjectsWithWorkspace();em.clear();});
         assertStates(ProjectTeamStatus.ACTIVE,ProjectStatus.ACTIVE);
         for(var closed:List.of(ProjectStatus.COMPLETED,ProjectStatus.CANCELLED)) {
@@ -161,5 +170,22 @@ class TeamAllocationLifecycleIntegrationTest {
                 .header("X-Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"teamIds\":["+teamId+"]}")).andExpect(status().isOk()).andExpect(jsonPath("$.failedItems").isEmpty());
         assertStates(ProjectTeamStatus.ACTIVE,ProjectStatus.ACTIVE);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value=ProjectStatus.class,names={"COMPLETED","CANCELLED"})
+    void retryForAlreadyPublishedTeamDoesNotReopenCompletedOrCancelledProject(ProjectStatus closed) throws Exception {
+        tx.executeWithoutResult(status->{
+            em.find(ProjectTeam.class,teamId).setStatus(ProjectTeamStatus.ACTIVE);
+            em.find(Project.class,projectId).setStatus(closed);
+            em.find(Workspace.class,workspaceId).setStatus(WorkspaceStatus.CLOSED);
+        });
+        mvc.perform(post(path()+"/"+sessionId+"/teams/publish").header("Authorization","Bearer "+admin)
+                .header("X-Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"teamIds\":["+teamId+"]}")).andExpect(status().isOk()).andExpect(jsonPath("$.failedItems").isEmpty());
+        tx.executeWithoutResult(status->{
+            assertThat(em.find(Project.class,projectId).getStatus()).isEqualTo(closed);
+            assertThat(em.find(Workspace.class,workspaceId).getStatus()).isEqualTo(WorkspaceStatus.CLOSED);
+        });
     }
 }

@@ -1,15 +1,15 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  AlertCircle, ArrowDownUp, CalendarClock, ChevronLeft, ChevronRight, ClipboardCheck,
-  Eye, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, Upload, X,
+  AlertCircle, ChevronDown, ClipboardCheck, Eye, MoreHorizontal, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2, Upload, X,
 } from "lucide-react";
 import { milestoneApi } from "@/api/features/milestone.api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import ConfirmDialog from "@/components/ui/confirmdialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -18,53 +18,47 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/lib/utils";
 import { getMilestoneApiError } from "@/pages/management/project/milestone/milestone.utils";
+import { milestoneStatusStyles } from "@/pages/management/project/milestone/milestone-status.styles";
 import type { MilestoneLifecycleStatus, MilestoneListItem } from "@/types";
 import type { WorkspaceSectionAccess } from "@/types/features/workspace";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import { WorkspaceStatusBadge } from "./workspace.shared";
+import { describeDeadline, isActiveMilestone } from "./workspace-milestone-deadline";
 import {
   countWorkspaceMilestoneFilters, hasWorkspaceMilestoneQuery, parseWorkspaceMilestoneList,
-  writeWorkspaceMilestoneList, type WorkspaceMilestoneListState,
+  writeWorkspaceMilestoneList, type WorkspaceMilestoneGroup, type WorkspaceMilestoneListState,
 } from "./workspace-milestone-list-query";
+import { WorkspaceMilestoneRow } from "./WorkspaceMilestoneRow";
 
-const statuses: Array<{ value: MilestoneLifecycleStatus | "ALL"; label: string }> = [
-  { value: "ALL", label: "All statuses" }, { value: "PLANNED", label: "Planned" },
-  { value: "IN_PROGRESS", label: "In progress" }, { value: "SUBMITTED", label: "Submitted" },
-  { value: "CHANGES_REQUESTED", label: "Changes requested" },
-  { value: "ACCEPTED", label: "Accepted" }, { value: "REJECTED", label: "Rejected" },
+/** The list API caps page size at 100; teams normally have far fewer milestones. */
+const FETCH_LIMIT = 100;
+const PAGE_STEP = 20;
+
+const GROUPS: Array<{ value: WorkspaceMilestoneGroup; label: string }> = [
+  { value: "attention", label: "Needs attention" },
+  { value: "active", label: "Active" },
+  { value: "review", label: "In review" },
+  { value: "done", label: "Done" },
+  { value: "all", label: "All" },
 ];
-const sortOptions = [
+const STATUS_OPTIONS: MilestoneLifecycleStatus[] = ["PLANNED", "IN_PROGRESS", "SUBMITTED", "CHANGES_REQUESTED", "ACCEPTED", "REJECTED"];
+const SORT_OPTIONS = [
+  { value: "smart", label: "Smart (needs attention first)" },
   { value: "deadline:asc", label: "Deadline: earliest" },
   { value: "deadline:desc", label: "Deadline: latest" },
   { value: "title:asc", label: "Name: A–Z" },
   { value: "title:desc", label: "Name: Z–A" },
   { value: "createdAt:desc", label: "Newest created" },
 ] as const;
-const statusColor: Record<MilestoneLifecycleStatus, string> = {
-  PLANNED: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
-  IN_PROGRESS: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300",
-  SUBMITTED: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300",
-  CHANGES_REQUESTED: "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-300",
-  ACCEPTED: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300",
-  REJECTED: "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300",
-};
-const statusDot: Record<MilestoneLifecycleStatus, string> = {
-  PLANNED: "bg-slate-400", IN_PROGRESS: "bg-amber-400", SUBMITTED: "bg-blue-500",
-  CHANGES_REQUESTED: "bg-orange-500", ACCEPTED: "bg-emerald-500", REJECTED: "bg-red-500",
-};
-const rowColumns = "lg:grid-cols-[minmax(180px,1.15fr)_minmax(180px,1.35fr)_minmax(170px,0.95fr)_minmax(135px,0.75fr)_minmax(170px,0.85fr)]";
-const dateFormatter = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
-function formatDeadline(value: string) {
+type Section = "attention" | "upcoming" | "done";
+const SECTION_LABEL: Record<Section, string> = { attention: "Needs attention", upcoming: "Upcoming", done: "Done" };
+
+const time = (value: string) => new Date(value).getTime();
+const localDate = (value: string) => {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Invalid deadline" : dateFormatter.format(date);
-}
-
-function StatusBadge({ status }: { status: MilestoneLifecycleStatus }) {
-  return <Badge variant="outline" className={cn("w-fit rounded-full px-3 py-1 text-xs font-semibold", statusColor[status])}>
-    {statuses.find((item) => item.value === status)?.label ?? status}
-  </Badge>;
-}
+  return Number.isNaN(date.getTime()) ? "" : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
 
 function MilestoneSearch({ initial, onSearch }: { initial: string; onSearch: (value: string) => void }) {
   const [text, setText] = useState(initial);
@@ -76,19 +70,17 @@ function MilestoneSearch({ initial, onSearch }: { initial: string; onSearch: (va
   useEffect(() => {
     const normalized = text.trim().replace(/\s+/g, " ").slice(0, 120);
     if (normalized === initial) return;
-    const timer = window.setTimeout(() => onSearch(normalized), 300);
+    const timer = window.setTimeout(() => onSearch(normalized), 200);
     return () => window.clearTimeout(timer);
   }, [initial, onSearch, text]);
-  return <div className="relative min-w-[220px] flex-1 lg:max-w-xl">
-    <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+  return <div className="relative w-full sm:w-56">
+    <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
     <Input value={text} onChange={(event) => setText(event.target.value)} maxLength={120}
-      className="h-10 w-full pl-10 pr-9" aria-label="Search milestones" placeholder="Search milestones by title or description..." />
-    {text && <button type="button" aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+      className="h-8 w-full pl-8 pr-8 text-sm" aria-label="Search milestones" placeholder="Search…" />
+    {text && <button type="button" aria-label="Clear search" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
       onClick={() => { setText(""); onSearch(""); }}><X className="size-4" /></button>}
   </div>;
 }
-
-type FilterDraft = Pick<WorkspaceMilestoneListState, "mandatory" | "latePolicy" | "from" | "to">;
 
 export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, access, projectScoped = false, readOnly = false, title = "Milestones", projectStatus }: {
   projectId?: number | null; teamId: number; workspaceId: number; access: WorkspaceSectionAccess;
@@ -98,10 +90,9 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
   const [searchParams, setSearchParams] = useSearchParams();
   const serializedParams = searchParams.toString();
   const list = useMemo(() => parseWorkspaceMilestoneList(new URLSearchParams(serializedParams)), [serializedParams]);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filterDraft, setFilterDraft] = useState<FilterDraft>({
-    mandatory: list.mandatory, latePolicy: list.latePolicy, from: list.from, to: list.to,
-  });
+  const [visible, setVisible] = useState(PAGE_STEP);
+  const [doneOpen, setDoneOpen] = useState(false);
+  const [mountedAt] = useState(() => Date.now());
   const { activeRole } = usePermissions();
   const isStudent = normalizeRole(activeRole) === STUDENT_ROLE;
   const canManage = !isStudent && !readOnly && !!access.actions.create;
@@ -112,29 +103,23 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
   const returnTo = location.pathname + location.search;
 
   const updateList = useCallback((patch: Partial<WorkspaceMilestoneListState>) => {
+    setVisible(PAGE_STEP);
     setSearchParams((current) => writeWorkspaceMilestoneList(current, {
       ...parseWorkspaceMilestoneList(current), ...patch,
     }), { replace: true });
   }, [setSearchParams]);
-  const updateSearch = useCallback((value: string) => updateList({ search: value, page: 0 }), [updateList]);
+  const updateSearch = useCallback((value: string) => updateList({ search: value }), [updateList]);
 
+  // One request for everything: filtering, grouping, sorting and counts all happen client-side.
   const query = useQuery({
-    queryKey: ["workspace-milestones", projectId, teamId, projectScoped, list.page, list.size, list.sort,
-      list.search, list.status, list.mandatory, list.latePolicy, list.from, list.to],
+    queryKey: ["workspace-milestones", projectId, teamId, projectScoped, "all"],
     queryFn: () => {
-      const options = {
-        page: list.page, size: list.size, sort: list.sort,
-        search: list.search || undefined,
-        status: list.status === "ALL" ? undefined : [list.status],
-        mandatory: list.mandatory === "ALL" ? undefined : list.mandatory === "true",
-        latePolicyType: list.latePolicy === "ALL" ? undefined : [list.latePolicy],
-        deadlineFrom: list.from || undefined, deadlineTo: list.to || undefined,
-      };
+      const options = { page: 0, size: FETCH_LIMIT, sort: "deadline:asc" };
       return projectScoped && projectId
         ? milestoneApi.getList(String(projectId), { ...options, teamId })
         : milestoneApi.getTeamList(teamId, options);
     },
-    placeholderData: keepPreviousData, retry: false, refetchInterval: 30_000,
+    retry: false, refetchInterval: 30_000,
   });
   const reviewQuery = useQuery({
     queryKey: ["team-artifact-submissions", teamId],
@@ -142,16 +127,13 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
     retry: false, refetchInterval: 20_000, enabled: canReview,
   });
   const submissionCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    reviewQuery.data?.forEach(({ submission }) => counts.set(submission.milestoneId, (counts.get(submission.milestoneId) ?? 0) + 1));
+    const counts = new Map<string, { total: number; pending: number }>();
+    reviewQuery.data?.forEach(({ submission }) => {
+      const current = counts.get(submission.milestoneId) ?? { total: 0, pending: 0 };
+      counts.set(submission.milestoneId, { total: current.total + 1, pending: current.pending + (submission.status === "SUBMITTED" ? 1 : 0) });
+    });
     return counts;
   }, [reviewQuery.data]);
-
-  useEffect(() => {
-    if (!query.data || query.isPlaceholderData) return;
-    if (query.data.totalPages === 0 && list.page > 0) updateList({ page: 0 });
-    else if (query.data.totalPages > 0 && list.page >= query.data.totalPages) updateList({ page: query.data.totalPages - 1 });
-  }, [list.page, query.data, query.isPlaceholderData, updateList]);
 
   const remove = useMutation({
     mutationFn: ({ id, version }: { id: string; version: number }) =>
@@ -161,152 +143,258 @@ export function WorkspaceMilestonesPanel({ projectId, teamId, workspaceId, acces
       void client.invalidateQueries({ queryKey: ["workspace-milestones", projectId, teamId] });
     },
   });
+
   const create = () => navigate(projectId
     ? "/projects/" + projectId + "/milestones/new?teamId=" + teamId + "&scope=team&workspaceId=" + workspaceId
     : "/teams/" + teamId + "/milestones/new?workspaceId=" + workspaceId, { state: { returnTo } });
-  const detailUrl = (id: string) => "/teams/" + teamId + "/milestones/" + id + "?workspaceId=" + workspaceId;
-  const openDetail = (id: string) => navigate(detailUrl(id), { state: { returnTo } });
+  const openDetail = (id: string) => navigate("/teams/" + teamId + "/milestones/" + id + "?workspaceId=" + workspaceId, { state: { returnTo } });
   const edit = (milestone: MilestoneListItem) => navigate(
     milestone.lifecycleStatus === "PLANNED" && projectId
       ? "/projects/" + projectId + "/milestones/" + milestone.id + "/edit?teamId=" + teamId + "&scope=team&workspaceId=" + workspaceId
       : "/teams/" + teamId + "/milestones/" + milestone.id + "/edit?workspaceId=" + workspaceId,
     { state: { returnTo } },
   );
-  const clearQuery = () => updateList({ search: "", status: "ALL", mandatory: "ALL", latePolicy: "ALL", from: "", to: "", page: 0 });
-  const openFilters = (open: boolean) => {
-    setFiltersOpen(open);
-    if (open) setFilterDraft({ mandatory: list.mandatory, latePolicy: list.latePolicy, from: list.from, to: list.to });
-  };
-  const invalidDateRange = !!filterDraft.from && !!filterDraft.to && filterDraft.from > filterDraft.to;
-  const response = query.data;
-  const total = response?.totalElements ?? 0;
-  const pageIndex = query.isPlaceholderData ? (response?.page ?? list.page) : list.page;
-  const shownSize = query.isPlaceholderData ? (response?.size ?? list.size) : list.size;
-  const first = total ? pageIndex * shownSize + 1 : 0;
-  const last = Math.min((pageIndex + 1) * shownSize, total);
-  const totalPages = response?.totalPages ?? 0;
-  const pageStart = Math.max(0, Math.min(pageIndex - 2, totalPages - 5));
-  const visiblePages = Array.from({ length: Math.min(5, totalPages) }, (_, index) => pageStart + index);
-  const filterCount = countWorkspaceMilestoneFilters(list);
-  const busy = query.isFetching && !!response;
-  const navigationDisabled = busy || query.isError;
+  const submitUrl = (id: string) => "/teams/" + teamId + "/milestones/" + id + "/submit?workspaceId=" + workspaceId;
+  const submissionsUrl = (id: string) => (isStudent ? "/student" : "") + "/teams/" + teamId + "/milestones/" + id + "/submissions?workspaceId=" + workspaceId;
+  const clearQuery = () => updateList({ search: "", status: "ALL", mandatory: "ALL", latePolicy: "ALL", from: "", to: "" });
 
-  return <section className="min-w-0 space-y-4" aria-label="Workspace milestones">
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0 space-y-1.5">
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 className="break-words text-2xl font-bold tracking-tight">{title}</h2>
+  const all = useMemo(() => query.data?.content ?? [], [query.data]);
+  const truncated = (query.data?.totalElements ?? 0) > all.length;
+  const now = query.dataUpdatedAt || mountedAt;
+
+  const derived = useMemo(() => {
+    const needsAttention = (item: MilestoneListItem) => {
+      const tone = describeDeadline(item.deadline, item.lifecycleStatus, now, item.lateUntil).tone;
+      return tone === "overdue" || tone === "late-window" || item.lifecycleStatus === "CHANGES_REQUESTED"
+        || (canReview && item.lifecycleStatus === "SUBMITTED" && (submissionCounts.get(item.id)?.pending ?? 0) > 0);
+    };
+    const inGroup = (item: MilestoneListItem, group: WorkspaceMilestoneGroup) => {
+      switch (group) {
+        case "attention": return needsAttention(item);
+        case "active": return isActiveMilestone(item.lifecycleStatus);
+        case "review": return item.lifecycleStatus === "SUBMITTED";
+        case "done": return item.lifecycleStatus === "ACCEPTED" || item.lifecycleStatus === "REJECTED";
+        default: return true;
+      }
+    };
+    const term = list.search.toLowerCase();
+    const filtered = all.filter((item) => {
+      if (term && !item.title.toLowerCase().includes(term) && !(item.description ?? "").toLowerCase().includes(term)) return false;
+      if (list.mandatory !== "ALL" && String(item.mandatory) !== list.mandatory) return false;
+      if (list.latePolicy !== "ALL" && item.latePolicyType !== list.latePolicy) return false;
+      const day = localDate(item.deadline);
+      if (list.from && day < list.from) return false;
+      if (list.to && day > list.to) return false;
+      return true;
+    });
+    const counts = Object.fromEntries(GROUPS.map(({ value }) => [value, filtered.filter((item) => inGroup(item, value)).length])) as Record<WorkspaceMilestoneGroup, number>;
+    const group: WorkspaceMilestoneGroup = list.group ?? (counts.attention ? "attention" : counts.active ? "active" : "all");
+    const shown = filtered.filter((item) => list.status !== "ALL" ? item.lifecycleStatus === list.status : inGroup(item, group));
+
+    const byDeadline = (a: MilestoneListItem, b: MilestoneListItem) => time(a.deadline) - time(b.deadline);
+    let sections: Array<{ key: Section | "flat"; items: MilestoneListItem[] }>;
+    if (list.sort === "smart") {
+      const bucket = (item: MilestoneListItem): Section =>
+        needsAttention(item) ? "attention" : item.lifecycleStatus === "ACCEPTED" || item.lifecycleStatus === "REJECTED" ? "done" : "upcoming";
+      sections = (["attention", "upcoming", "done"] as Section[]).map((key) => ({
+        key,
+        items: shown.filter((item) => bucket(item) === key).sort(key === "done" ? (a, b) => byDeadline(b, a) : byDeadline),
+      })).filter((section) => section.items.length > 0);
+    } else {
+      const [field, direction] = list.sort.split(":") as ["deadline" | "title" | "createdAt", "asc" | "desc"];
+      const sign = direction === "desc" ? -1 : 1;
+      const sorted = [...shown].sort((a, b) => sign * (field === "title" ? a.title.localeCompare(b.title)
+        : field === "createdAt" ? time(a.createdAt) - time(b.createdAt) : byDeadline(a, b)));
+      sections = [{ key: "flat", items: sorted }];
+    }
+    const overdue = all.filter((item) => describeDeadline(item.deadline, item.lifecycleStatus, now, item.lateUntil).tone === "overdue").length;
+    const next = all.filter((item) => (isActiveMilestone(item.lifecycleStatus) || item.lifecycleStatus === "PLANNED") && time(item.deadline) >= now).sort(byDeadline)[0];
+    return { counts, group, shown, sections, overdue, next };
+  }, [all, canReview, list, now, submissionCounts]);
+
+  const filterCount = countWorkspaceMilestoneFilters(list);
+  const invalidDateRange = !!list.from && !!list.to && list.from > list.to;
+  const activeChips = [
+    list.status !== "ALL" ? { key: "status", label: milestoneStatusStyles[list.status].label, clear: { status: "ALL" as const } } : null,
+    list.mandatory !== "ALL" ? { key: "mandatory", label: list.mandatory === "true" ? "Mandatory" : "Optional", clear: { mandatory: "ALL" as const } } : null,
+    list.latePolicy !== "ALL" ? { key: "late", label: list.latePolicy === "ALLOW_LATE" ? "Late allowed" : "No late", clear: { latePolicy: "ALL" as const } } : null,
+    list.from || list.to ? { key: "range", label: `Deadline ${list.from || "…"} → ${list.to || "…"}`, clear: { from: "", to: "" } } : null,
+  ].filter((chip): chip is NonNullable<typeof chip> => chip !== null);
+
+  const renderRow = (milestone: MilestoneListItem) => {
+    const counts = submissionCounts.get(milestone.id);
+    const active = isActiveMilestone(milestone.lifecycleStatus);
+    const canEdit = canManage && ["PLANNED", "IN_PROGRESS", "CHANGES_REQUESTED"].includes(milestone.lifecycleStatus);
+    const canDelete = canManage && milestone.lifecycleStatus === "PLANNED";
+    const studentCanSubmit = isStudent && !readOnly && active;
+    const primaryAction = studentCanSubmit
+      ? <Button size="sm" onClick={() => navigate(submitUrl(milestone.id))}><Upload className="size-4" /> {milestone.lifecycleStatus === "CHANGES_REQUESTED" ? "Resubmit" : "Submit"}</Button>
+      : isStudent
+        ? <Button size="sm" variant="outline" asChild><Link to={submissionsUrl(milestone.id)}><ClipboardCheck className="size-4" /> My submissions</Link></Button>
+        : canReview
+          ? <Button size="sm" variant={counts?.pending ? "default" : "outline"} onClick={() => navigate(submissionsUrl(milestone.id))}
+              title={counts ? `${counts.pending} awaiting review · ${counts.total} total` : "No submissions yet"}>
+              <ClipboardCheck className="size-4" /> Review
+              {counts?.pending ? <span className="rounded-full bg-background/20 px-1.5 text-[11px] leading-4">{counts.pending}</span> : null}
+            </Button>
+          : null;
+    return <WorkspaceMilestoneRow key={milestone.id}
+      title={milestone.title} description={milestone.description} status={milestone.lifecycleStatus}
+      deadline={describeDeadline(milestone.deadline, milestone.lifecycleStatus, now, milestone.lateUntil)}
+      onOpen={() => openDetail(milestone.id)}
+      badges={milestone.mandatory ? <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-medium text-muted-foreground">Mandatory</Badge> : null}
+      primaryAction={primaryAction}
+      menu={<DropdownMenu>
+        <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={"More actions for " + milestone.title}><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => openDetail(milestone.id)}><Eye className="size-4" /> View details</DropdownMenuItem>
+          {studentCanSubmit && <DropdownMenuItem onSelect={() => navigate(submissionsUrl(milestone.id))}><ClipboardCheck className="size-4" /> My submissions</DropdownMenuItem>}
+          {canEdit && <DropdownMenuItem onSelect={() => edit(milestone)}><Pencil className="size-4" /> {milestone.lifecycleStatus === "CHANGES_REQUESTED" ? "Extend deadline" : "Edit"}</DropdownMenuItem>}
+          {canDelete && <><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" disabled={remove.isPending}
+            onSelect={() => { remove.reset(); setPendingDelete(milestone); }}><Trash2 className="size-4" /> Delete</DropdownMenuItem></>}
+        </DropdownMenuContent>
+      </DropdownMenu>} />;
+  };
+
+  // Progressive rendering across sections ("Show more"); a collapsed Done section does not use the budget.
+  const renderedSections = derived.sections.reduce<{ budget: number; result: Array<{ key: Section | "flat"; total: number; collapsible: boolean; open: boolean; items: MilestoneListItem[] }> }>(
+    (acc, section) => {
+      const collapsible = section.key === "done" && derived.sections.length > 1;
+      const open = !collapsible || doneOpen;
+      const items = open ? section.items.slice(0, Math.max(0, acc.budget)) : [];
+      return {
+        budget: acc.budget - items.length,
+        result: [...acc.result, { key: section.key, total: section.items.length, collapsible, open, items }],
+      };
+    },
+    { budget: visible, result: [] },
+  ).result;
+  const remaining = renderedSections.reduce((sum, section) => sum + (section.open ? section.total - section.items.length : 0), 0);
+  const showHeaders = list.sort === "smart" && renderedSections.length > 1;
+  const groupLabel = GROUPS.find((item) => item.value === derived.group)?.label;
+
+  return <section className="min-w-0 space-y-3" aria-label="Workspace milestones">
+    {/* Header + one-line summary */}
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="break-words text-xl font-semibold tracking-tight">{title}</h2>
           {projectStatus && <WorkspaceStatusBadge status={projectStatus} colored />}
         </div>
-        <p className="text-sm text-muted-foreground">Track deadlines, deliverables, and assessment progress for this workspace.</p>
+        {query.data ? <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
+          <span>{all.length}{truncated ? "+" : ""} milestone{all.length === 1 ? "" : "s"}</span>
+          {derived.overdue > 0 && <><span aria-hidden>·</span><span className="font-medium text-red-700 dark:text-red-400">{derived.overdue} overdue</span></>}
+          {derived.next && <><span aria-hidden>·</span><span>Next: <button type="button" className="font-medium text-foreground hover:underline" onClick={() => openDetail(derived.next!.id)}>{derived.next.title}</button> — {describeDeadline(derived.next.deadline, derived.next.lifecycleStatus, now).relative}</span></>}
+        </p> : null}
       </div>
-      {canManage && <Button className="shrink-0" onClick={create}><Plus className="size-4" /> Create milestone</Button>}
+      {canManage && <Button size="sm" className="shrink-0" onClick={create}><Plus className="size-4" /> Create milestone</Button>}
     </div>
+
     <Card className="min-w-0 gap-0 overflow-hidden py-0">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
-        <MilestoneSearch initial={list.search} onSearch={updateSearch} />
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={list.status} onValueChange={(value) => updateList({ status: value as WorkspaceMilestoneListState["status"], page: 0 })}>
-            <SelectTrigger className="h-10 w-[165px]" aria-label="Filter milestones by status"><SelectValue /></SelectTrigger>
-            <SelectContent>{statuses.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={list.sort} onValueChange={(value) => updateList({ sort: value as WorkspaceMilestoneListState["sort"], page: 0 })}>
-            <SelectTrigger className="h-10 w-[190px]" aria-label="Sort milestones"><ArrowDownUp className="size-4" /><SelectValue /></SelectTrigger>
-            <SelectContent>{sortOptions.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
-          </Select>
-          <Popover open={filtersOpen} onOpenChange={openFilters}>
-            <PopoverTrigger asChild><Button variant="outline" className="h-10"><SlidersHorizontal className="size-4" /> More filters
-              {filterCount > 0 && <Badge variant="secondary" className="ml-1 px-1.5 py-0">{filterCount}</Badge>}
-            </Button></PopoverTrigger>
-            <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] space-y-4">
-              <div><p className="font-semibold">More filters</p><p className="text-xs text-muted-foreground">Deadline dates use the workspace time zone; table times use your device time zone.</p></div>
-              <div className="space-y-2"><Label htmlFor="ms-mandatory">Requirement</Label>
-                <Select value={filterDraft.mandatory} onValueChange={(value) => setFilterDraft((draft) => ({ ...draft, mandatory: value as FilterDraft["mandatory"] }))}>
-                  <SelectTrigger id="ms-mandatory" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="ALL">All milestones</SelectItem><SelectItem value="true">Mandatory</SelectItem><SelectItem value="false">Optional</SelectItem></SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2"><Label htmlFor="ms-late-policy">Late submissions</Label>
-                <Select value={filterDraft.latePolicy} onValueChange={(value) => setFilterDraft((draft) => ({ ...draft, latePolicy: value as FilterDraft["latePolicy"] }))}>
-                  <SelectTrigger id="ms-late-policy" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="ALL">Any policy</SelectItem><SelectItem value="NO_LATE">Not allowed</SelectItem><SelectItem value="ALLOW_LATE">Allowed</SelectItem></SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label htmlFor="ms-from">Deadline from</Label><Input id="ms-from" type="date" value={filterDraft.from} onChange={(event) => setFilterDraft((draft) => ({ ...draft, from: event.target.value }))} /></div>
-                <div className="space-y-2"><Label htmlFor="ms-to">Deadline to</Label><Input id="ms-to" type="date" value={filterDraft.to} onChange={(event) => setFilterDraft((draft) => ({ ...draft, to: event.target.value }))} /></div>
-              </div>
-              {invalidDateRange && <p role="alert" className="text-xs text-destructive">Deadline from must be on or before deadline to.</p>}
-              <div className="flex justify-between gap-2 border-t pt-3">
-                <Button variant="ghost" size="sm" onClick={() => { updateList({ mandatory: "ALL", latePolicy: "ALL", from: "", to: "", page: 0 }); setFiltersOpen(false); }}>Clear filters</Button>
-                <Button size="sm" disabled={invalidDateRange} onClick={() => { updateList({ ...filterDraft, page: 0 }); setFiltersOpen(false); }}>Apply filters</Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+      {/* Single toolbar row: group tabs · search · view menu */}
+      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
+        <div className="-mx-1 flex min-w-0 flex-1 gap-0.5 overflow-x-auto px-1" role="tablist" aria-label="Milestone groups">
+          {GROUPS.map((item) => {
+            const selected = list.status === "ALL" && derived.group === item.value;
+            return <button key={item.value} type="button" role="tab" aria-selected={selected}
+              onClick={() => updateList({ group: item.value, status: "ALL" })}
+              className={cn("flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-sm transition-colors",
+                selected ? "bg-muted font-semibold text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground")}>
+              {item.label}
+              <span className={cn("rounded-full px-1.5 text-[11px] leading-4",
+                item.value === "attention" && derived.counts.attention ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" : "bg-muted-foreground/10")}>{derived.counts[item.value]}</span>
+            </button>;
+          })}
         </div>
+        <MilestoneSearch initial={list.search} onSearch={updateSearch} />
+        <Popover>
+          <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-8"><SlidersHorizontal className="size-4" /> View
+            {filterCount > 0 && <Badge variant="secondary" className="ml-0.5 px-1.5 py-0">{filterCount}</Badge>}
+          </Button></PopoverTrigger>
+          <PopoverContent align="end" className="w-[min(20rem,calc(100vw-2rem))] space-y-3">
+            <div className="space-y-1.5"><Label htmlFor="ms-sort">Sort by</Label>
+              <Select value={list.sort} onValueChange={(value) => updateList({ sort: value as WorkspaceMilestoneListState["sort"] })}>
+                <SelectTrigger id="ms-sort" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{SORT_OPTIONS.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label htmlFor="ms-status">Exact status</Label>
+              <Select value={list.status} onValueChange={(value) => updateList({ status: value as WorkspaceMilestoneListState["status"] })}>
+                <SelectTrigger id="ms-status" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="ALL">Use group tabs</SelectItem>{STATUS_OPTIONS.map((status) => <SelectItem key={status} value={status}>{milestoneStatusStyles[status].label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5"><Label htmlFor="ms-mandatory">Requirement</Label>
+                <Select value={list.mandatory} onValueChange={(value) => updateList({ mandatory: value as WorkspaceMilestoneListState["mandatory"] })}>
+                  <SelectTrigger id="ms-mandatory" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="ALL">Any</SelectItem><SelectItem value="true">Mandatory</SelectItem><SelectItem value="false">Optional</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5"><Label htmlFor="ms-late-policy">Late submissions</Label>
+                <Select value={list.latePolicy} onValueChange={(value) => updateList({ latePolicy: value as WorkspaceMilestoneListState["latePolicy"] })}>
+                  <SelectTrigger id="ms-late-policy" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="ALL">Any</SelectItem><SelectItem value="NO_LATE">Not allowed</SelectItem><SelectItem value="ALLOW_LATE">Allowed</SelectItem></SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5"><Label htmlFor="ms-from">Deadline from</Label><Input id="ms-from" type="date" value={list.from} onChange={(event) => updateList({ from: event.target.value })} /></div>
+              <div className="space-y-1.5"><Label htmlFor="ms-to">Deadline to</Label><Input id="ms-to" type="date" value={list.to} onChange={(event) => updateList({ to: event.target.value })} /></div>
+            </div>
+            {invalidDateRange ? <p role="alert" className="text-xs text-destructive">Deadline from must be on or before deadline to.</p>
+              : <p className="text-xs text-muted-foreground">Dates use your device time zone.</p>}
+            <div className="flex justify-end border-t pt-2">
+              <Button variant="ghost" size="sm" disabled={!filterCount && list.sort === "smart"}
+                onClick={() => updateList({ sort: "smart", status: "ALL", mandatory: "ALL", latePolicy: "ALL", from: "", to: "" })}>Reset view</Button>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
-      {query.isError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-3 text-sm text-destructive">
+      {activeChips.length > 0 && <div className="flex flex-wrap items-center gap-1.5 border-b px-3 py-1.5">
+        {activeChips.map((chip) => <Badge key={chip.key} variant="secondary" className="gap-1 pr-1 font-normal">{chip.label}
+          <button type="button" aria-label={"Remove filter " + chip.label} className="rounded-full p-0.5 hover:bg-background" onClick={() => updateList(chip.clear)}><X className="size-3" /></button></Badge>)}
+        <Button variant="link" size="sm" className="h-auto px-1 text-xs" onClick={clearQuery}>Clear all</Button>
+      </div>}
+
+      {query.isError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2.5 text-sm text-destructive">
         <span className="inline-flex items-center gap-2"><AlertCircle className="size-4" />{getMilestoneApiError(query.error).message || "Unable to load milestones."}</span>
         <Button variant="outline" size="sm" onClick={() => void query.refetch()}><RefreshCw className="size-4" /> Retry</Button>
       </div>}
-      {query.isPending ? <div className="space-y-3 p-4" role="status" aria-label="Loading milestones">
-        {[0, 1, 2, 3].map((index) => <Skeleton key={index} className="h-16 w-full" />)}
-      </div> : response?.content.length === 0 ? <div className="flex min-h-56 flex-col items-center justify-center gap-3 px-4 py-9 text-center">
-        <ClipboardCheck className="size-8 text-muted-foreground" />
-        <div><p className="font-semibold">{hasWorkspaceMilestoneQuery(list) ? "No matching milestones" : "No milestones yet"}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{hasWorkspaceMilestoneQuery(list) ? "Try another search term or clear the active filters." : "Milestones will appear here when they are created for this workspace."}</p></div>
-        {hasWorkspaceMilestoneQuery(list) ? <Button variant="outline" size="sm" onClick={clearQuery}>Clear search and filters</Button>
-          : canManage ? <Button size="sm" onClick={create}><Plus className="size-4" /> Create the first milestone</Button> : null}
-      </div> : response ? <div aria-busy={busy} className={cn("transition-opacity", busy && "opacity-60")}>
-        <div className={cn("hidden gap-5 border-b bg-muted/30 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid", rowColumns)}>
-          <span>Milestone</span><span>Description</span><span>Deadline</span><span>Status</span><span className="text-right">Actions</span>
-        </div>
-        {response.content.map((milestone) => {
-          const overdue = ["IN_PROGRESS", "CHANGES_REQUESTED"].includes(milestone.lifecycleStatus)
-            && new Date(milestone.deadline).getTime() < query.dataUpdatedAt;
-          return <div key={milestone.id} className={cn("grid gap-3 border-b px-4 py-4 last:border-b-0 hover:bg-muted/20 lg:items-center lg:gap-5", rowColumns)}>
-            <div className="flex min-w-0 items-start gap-3">
-              <span aria-hidden="true" className={cn("mt-2 size-2.5 shrink-0 rounded-full", statusDot[milestone.lifecycleStatus])} />
-              <div className="min-w-0"><button type="button" className="break-words text-left font-semibold leading-5 hover:underline" onClick={() => openDetail(milestone.id)}>{milestone.title}</button>
-                <p className="mt-1 text-xs text-muted-foreground">{milestone.mandatory ? "Mandatory milestone" : "Optional milestone"}</p></div>
-            </div>
-            <div className="min-w-0"><span className="text-xs font-medium uppercase text-muted-foreground lg:hidden">Description</span>
-              <p className="line-clamp-2 text-sm text-muted-foreground" title={milestone.description || "No description"}>{milestone.description || "No description"}</p></div>
-            <div className="min-w-0"><span className="text-xs font-medium uppercase text-muted-foreground lg:hidden">Deadline</span>
-              <p className={cn("flex items-center gap-2 text-sm", overdue ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
-                <CalendarClock className="size-4 shrink-0" /><span>{formatDeadline(milestone.deadline)}</span></p></div>
-            <div><span className="mb-1 block text-xs font-medium uppercase text-muted-foreground lg:hidden">Status</span><StatusBadge status={milestone.lifecycleStatus} /></div>
-            <div className="flex flex-wrap items-center gap-1 lg:justify-end" aria-label={"Actions for " + milestone.title}>
-              {canManage && ["PLANNED", "IN_PROGRESS", "CHANGES_REQUESTED"].includes(milestone.lifecycleStatus) && <Button size="icon-sm" variant="ghost" title="Edit milestone" aria-label={"Edit " + milestone.title} onClick={() => edit(milestone)}><Pencil className="size-4" /></Button>}
-              {canManage && milestone.lifecycleStatus === "PLANNED" && <Button size="icon-sm" variant="ghost" className="text-destructive" title="Delete milestone" aria-label={"Delete " + milestone.title} disabled={remove.isPending}
-                onClick={() => { remove.reset(); setPendingDelete(milestone); }}><Trash2 className="size-4" /></Button>}
-              <Button size="icon-sm" variant="ghost" title="View milestone" aria-label={"View " + milestone.title} onClick={() => openDetail(milestone.id)}><Eye className="size-4" /></Button>
-              {isStudent && !readOnly && ["IN_PROGRESS", "CHANGES_REQUESTED"].includes(milestone.lifecycleStatus) && <Button size="icon-sm" variant="ghost" title="Prepare and submit artifact" aria-label={"Submit artifact for " + milestone.title}
-                onClick={() => navigate("/teams/" + teamId + "/milestones/" + milestone.id + "/submit?workspaceId=" + workspaceId)}><Upload className="size-4" /></Button>}
-              {isStudent ? <Button asChild size="icon-sm" variant="secondary" title="View my submissions"><Link aria-label={"View my submissions for " + milestone.title}
-                to={"/student/teams/" + teamId + "/milestones/" + milestone.id + "/submissions?workspaceId=" + workspaceId}><ClipboardCheck className="size-4" /></Link></Button>
-                : canReview ? <Button size="icon-sm" variant="secondary" className="relative" title="Review submissions" aria-label={"Review submissions for " + milestone.title + " (" + (submissionCounts.get(milestone.id) ?? 0) + ")"}
-                  onClick={() => navigate("/teams/" + teamId + "/milestones/" + milestone.id + "/submissions?workspaceId=" + workspaceId)}><ClipboardCheck className="size-4" />
-                  <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-background px-1 text-[10px] leading-4 text-foreground ring-1 ring-border">{submissionCounts.get(milestone.id) ?? 0}</span></Button> : null}
-            </div>
-          </div>;
-        })}
-      </div> : null}
-      {response && total > 0 && <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground">
-        <p>Showing <span className="font-medium text-foreground">{first}–{last}</span> of <span className="font-medium text-foreground">{total}</span> milestones</p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Label htmlFor="ms-page-size" className="sr-only">Milestones per page</Label>
-          <Select value={String(list.size)} onValueChange={(value) => updateList({ size: Number(value) as WorkspaceMilestoneListState["size"], page: 0 })}>
-            <SelectTrigger id="ms-page-size" className="h-8 w-[95px]" aria-label="Milestones per page"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="10">10 / page</SelectItem><SelectItem value="20">20 / page</SelectItem><SelectItem value="50">50 / page</SelectItem></SelectContent>
-          </Select>
-          <Button variant="outline" size="sm" disabled={pageIndex <= 0 || navigationDisabled} onClick={() => updateList({ page: pageIndex - 1 })}><ChevronLeft className="size-4" /> Previous</Button>
-          {visiblePages.map((page) => <Button key={page} size="sm" variant={page === pageIndex ? "default" : "outline"} className="min-w-8 px-2" aria-label={"Page " + (page + 1)}
-            aria-current={page === pageIndex ? "page" : undefined} disabled={navigationDisabled} onClick={() => updateList({ page })}>{page + 1}</Button>)}
-          <Button variant="outline" size="sm" disabled={pageIndex >= totalPages - 1 || navigationDisabled} onClick={() => updateList({ page: pageIndex + 1 })}>Next <ChevronRight className="size-4" /></Button>
-        </div>
+      {truncated && <p className="border-b bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+        Showing the first {FETCH_LIMIT} milestones by deadline. Use search or filters to narrow the list.
+      </p>}
+
+      {query.isPending ? <div className="space-y-2 p-3" role="status" aria-label="Loading milestones">
+        {[0, 1, 2].map((index) => <Skeleton key={index} className="h-14 w-full" />)}
+      </div> : query.isError ? null : derived.shown.length === 0 ? <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+        <ClipboardCheck className="size-7 text-muted-foreground" />
+        <p className="font-medium">{all.length === 0 ? "No milestones yet" : hasWorkspaceMilestoneQuery(list) ? "No matching milestones" : `Nothing in “${groupLabel}”`}</p>
+        <p className="text-sm text-muted-foreground">{all.length === 0 ? "Milestones will appear here when they are created for this workspace."
+          : hasWorkspaceMilestoneQuery(list) ? "Try another search term or clear the filters." : "Switch to another group to see more milestones."}</p>
+        {all.length === 0 ? (canManage && <Button size="sm" onClick={create}><Plus className="size-4" /> Create the first milestone</Button>)
+          : hasWorkspaceMilestoneQuery(list) ? <Button variant="outline" size="sm" onClick={clearQuery}>Clear search and filters</Button>
+            : derived.group !== "all" ? <Button variant="outline" size="sm" onClick={() => updateList({ group: "all" })}>Show all milestones</Button> : null}
+      </div> : <div>
+        {renderedSections.map((section) => <div key={section.key}>
+          {showHeaders && (section.collapsible
+            ? <button type="button" aria-expanded={section.open} onClick={() => setDoneOpen((open) => !open)}
+                className="flex w-full items-center gap-1.5 border-b bg-muted/30 px-4 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground">
+                <ChevronDown className={cn("size-3.5 transition-transform", !section.open && "-rotate-90")} />
+                {SECTION_LABEL[section.key as Section]} ({section.total})
+              </button>
+            : <div className={cn("border-b bg-muted/30 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide",
+                section.key === "attention" ? "text-red-700 dark:text-red-400" : "text-muted-foreground")}>
+                {SECTION_LABEL[section.key as Section]} ({section.total})
+              </div>)}
+          {section.items.map(renderRow)}
+        </div>)}
+        {remaining > 0 && <div className="border-t px-4 py-2 text-center">
+          <Button variant="ghost" size="sm" onClick={() => setVisible((count) => count + PAGE_STEP)}>Show more ({remaining})</Button>
+        </div>}
       </div>}
     </Card>
+
     <ConfirmDialog open={pendingDelete !== null} title="Delete milestone?"
       description={<div className="space-y-2"><p><strong>{pendingDelete?.title}</strong> will be removed from this workspace.</p>
         {remove.isError && <p className="text-destructive">{getMilestoneApiError(remove.error).message}</p>}</div>}

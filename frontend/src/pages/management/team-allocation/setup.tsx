@@ -51,6 +51,8 @@ import {
   Info,
   ListChecks,
   LoaderCircle,
+  LockKeyhole,
+  Monitor,
   Plus,
   RefreshCw,
   Save,
@@ -59,6 +61,7 @@ import {
   Send,
   ShieldCheck,
   Trash2,
+  TriangleAlert,
   Users,
   UsersRound,
   X,
@@ -292,6 +295,33 @@ function getStoredKey(
     ref.current = { fingerprint, key: makeIdempotencyKey() };
   }
   return ref.current.key;
+}
+
+function describeAutoTeamSizes(preview: AutoAllocationPreview): string {
+  const counts = new Map<number, number>();
+  for (const team of preview.teams) {
+    counts.set(team.members.length, (counts.get(team.members.length) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort(([a], [b]) => b - a)
+    .map(([size, teams]) => `${teams} nhóm ${size} người`)
+    .join(", ");
+}
+
+/**
+ * Next free "Nhóm N" name, counting saved teams as well as unsaved drafts so a
+ * new team never reuses a name that already exists in the session (for example
+ * right after "Lưu nhóm DRAFT").
+ */
+function nextDraftTeamName(usedNames: Iterable<string>): string {
+  const usedNumbers = new Set<number>();
+  for (const name of usedNames) {
+    const match = /^nhóm\s*(\d+)$/i.exec(name.trim());
+    if (match) usedNumbers.add(Number(match[1]));
+  }
+  let index = 1;
+  while (usedNumbers.has(index)) index += 1;
+  return `Nhóm ${index}`;
 }
 
 export default function TeamAllocationSetupPage() {
@@ -1035,6 +1065,16 @@ export default function TeamAllocationSetupPage() {
       .filter((team) => team.status === "DRAFT" || team.status === "ACTIVE")
       .flatMap((team) => team.memberIds),
   );
+  /**
+   * Học viên đã được xếp vào một nhóm DRAFT/ACTIVE đã lưu hoặc một nhóm nháp khác.
+   * Dùng chung cho cả việc disable checkbox lẫn kiểm tra khi toggle.
+   */
+  const blockedMemberIds = new Set([
+    ...otherSavedTeamMemberIds,
+    ...draftTeams
+      .filter((team) => team.localId !== memberPickerTeam?.localId)
+      .flatMap((team) => team.memberIds),
+  ]);
   const memberById = new Map(
     [...members, ...(rosterQuery.data ?? [])].map((member) => [member.memberId, member]),
   );
@@ -1050,6 +1090,15 @@ export default function TeamAllocationSetupPage() {
   const teamsMissingRoles = publishableTeams.filter(
     (team) => !hasCompleteTeamRoles(team),
   );
+  const teamsMissingTemplate = savedTeams.filter((team) => !team.projectTemplateId);
+  const missingSetupNote = [
+    teamsMissingTemplate.length > 0
+      ? `${teamsMissingTemplate.length} nhóm còn thiếu thông tin đề bài`
+      : null,
+    teamsMissingRoles.length > 0
+      ? `${teamsMissingRoles.length} nhóm còn thiếu vai trò thành viên`
+      : null,
+  ].filter(Boolean).join(" · ");
   const addDraftTeam = () => {
     if (editingSavedTeamId !== null) {
       toast.error("Hãy lưu hoặc hủy chỉnh sửa nhóm trước khi thêm nhóm mới.");
@@ -1062,7 +1111,10 @@ export default function TeamAllocationSetupPage() {
       ...current,
       {
         localId,
-        teamName: `Nhóm ${current.length + 1}`,
+        teamName: nextDraftTeamName([
+          ...savedTeams.map((team) => team.teamName),
+          ...current.map((team) => team.teamName),
+        ]),
         assignedMentorId: rememberedMentorId,
         memberIds: [],
         memberRoles: {},
@@ -1101,6 +1153,14 @@ export default function TeamAllocationSetupPage() {
     const targetTeam = draftTeams.find((item) => item.localId === teamId);
     if (!targetTeam) return;
     if (checked && !targetTeam.memberIds.includes(memberId)) {
+      // Chặn cả khi checkbox bị bỏ qua: học viên đã thuộc nhóm khác trong phiên.
+      if (blockedMemberIds.has(memberId)) {
+        toast.warning(
+          "Học viên đã thuộc một nhóm khác trong phiên phân nhóm này.",
+          { duration: 2500 },
+        );
+        return;
+      }
       const maxMembers = targetTeam.effectiveMaxMembers ?? session?.maxMembers ?? 0;
       if (maxMembers > 0 && targetTeam.memberIds.length >= maxMembers) {
         toast.warning(
@@ -1481,17 +1541,10 @@ export default function TeamAllocationSetupPage() {
                           <h3 className="text-sm font-semibold">Xem trước chia tự động</h3>
                           <p className="text-xs text-muted-foreground">
                             {autoPreview.eligibleCount} học viên · {autoPreview.teams.length} nhóm ·
-                            sức chứa chuẩn {autoPreview.standardMax} ·
-                            {autoPreview.eligibleCount % autoPreview.standardMax > 0
-                              ? `nhóm phần dư có ${autoPreview.eligibleCount % autoPreview.standardMax} học viên.`
-                              : "không có học viên dư."}
+                            sĩ số mỗi nhóm {autoPreview.minMembers}–{autoPreview.standardMax} ·
+                            {describeAutoTeamSizes(autoPreview)}.
                             Các nhóm Draft đã lưu được giữ nguyên.
                           </p>
-                          {autoPreview.eligibleCount % autoPreview.standardMax > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              Nhóm phần dư có thể cần điều chỉnh thành viên để đáp ứng sĩ số tối thiểu của đề bài trước khi công bố.
-                            </p>
-                          )}
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <Button type="button" size="sm" variant="outline"
@@ -1847,8 +1900,7 @@ export default function TeamAllocationSetupPage() {
                               {filteredMembers.map((member) => {
                                 const selected = memberPickerTeam.memberIds.includes(member.memberId);
                                 const assignedToOtherTeam = !selected &&
-                                  (draftMemberIds.has(member.memberId) ||
-                                    otherSavedTeamMemberIds.has(member.memberId) ||
+                                  (blockedMemberIds.has(member.memberId) ||
                                     (memberPickerTeam.savedTeamId !== undefined &&
                                       (rosterQuery.data ?? []).some(
                                         (rosterMember) =>
@@ -1900,7 +1952,7 @@ export default function TeamAllocationSetupPage() {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="space-y-1.5">
                       <CardTitle className="flex items-center gap-2">
-                        <ClipboardList className="size-5 text-primary" />
+                        <LockKeyhole className="size-5 text-primary" />
                         Nhóm đã lưu
                         <Badge variant="secondary" className="tabular-nums">{savedTeams.length}</Badge>
                       </CardTitle>
@@ -2146,41 +2198,42 @@ export default function TeamAllocationSetupPage() {
                     </div>
                   )}
                   {savedTeams.length > 0 && (
-                    <>
-                      {teamsMissingRoles.length > 0 && (
-                        <p className="text-sm text-muted-foreground">
-                          Một số nhóm còn thiếu điều kiện công bố. Hãy kiểm tra trước khi tiếp tục.
-                        </p>
-                      )}
-                      <WithHint
-                        hint={
-                          !hasPermission("PEO_TEAM_ALLOCATE")
-                            ? "Bạn không có quyền kiểm tra điều kiện công bố."
-                            : session.status !== "OPEN"
-                              ? "Phiên không ở trạng thái mở."
-                              : draftTeams.length > 0
-                                ? "Hãy lưu hoặc hủy nhóm nháp trước khi kiểm tra."
-                                : null
+                    <WithHint
+                      className="flex w-full cursor-not-allowed"
+                      hint={
+                        !hasPermission("PEO_TEAM_ALLOCATE")
+                          ? "Bạn không có quyền kiểm tra điều kiện công bố."
+                          : session.status !== "OPEN"
+                            ? "Phiên không ở trạng thái mở."
+                            : draftTeams.length > 0
+                              ? "Hãy lưu hoặc hủy nhóm nháp trước khi kiểm tra."
+                              : null
+                      }
+                    >
+                      <button
+                        type="button"
+                        className="flex w-full flex-col items-center justify-center gap-0.5 rounded-xl border bg-muted/20 px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={
+                          readinessMutation.isPending ||
+                          !hasPermission("PEO_TEAM_ALLOCATE") ||
+                          session.status !== "OPEN" ||
+                          draftTeams.length > 0
                         }
+                        onClick={checkPublishReadiness}
                       >
-                        <Button
-                          className="w-full gap-1.5 transition-transform active:scale-[0.99]"
-                          variant="outline"
-                          disabled={
-                            readinessMutation.isPending ||
-                            !hasPermission("PEO_TEAM_ALLOCATE") ||
-                            session.status !== "OPEN" ||
-                            draftTeams.length > 0
-                          }
-                          onClick={checkPublishReadiness}
-                        >
+                        <span className="flex items-center gap-2">
                           {readinessMutation.isPending
                             ? <LoaderCircle className="size-4 animate-spin" />
                             : <ListChecks className="size-4" />}
                           Kiểm tra điều kiện công bố
-                        </Button>
-                      </WithHint>
-                    </>
+                        </span>
+                        {missingSetupNote && (
+                          <span className="text-[11px] font-normal text-muted-foreground">
+                            ({missingSetupNote})
+                          </span>
+                        )}
+                      </button>
+                    </WithHint>
                   )}
                 </CardContent>
               </Card>
@@ -2659,16 +2712,18 @@ export default function TeamAllocationSetupPage() {
 /** Wraps a disabled control so its blocking reason stays discoverable. */
 function WithHint({
   hint,
+  className = "inline-flex cursor-not-allowed",
   children,
 }: {
   hint?: string | null;
+  className?: string;
   children: ReactNode;
 }) {
   if (!hint) return <>{children}</>;
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span tabIndex={0} className="inline-flex cursor-not-allowed">
+        <span tabIndex={0} className={className}>
           {children}
         </span>
       </TooltipTrigger>
@@ -3106,64 +3161,130 @@ function SavedTeamCard({
     .slice(-2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
+  const initialsOf = (fullName: string) => {
+    const parts = fullName.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "";
+    if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? "";
+    return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
+  };
   return (
     <>
-      <div className={team.status === "DRAFT"
-        ? "grid gap-3 rounded-xl border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.65fr)]"
-        : ""}>
-      <button
-        type="button"
-        className={`flex w-full items-center justify-between gap-3 text-left transition-colors hover:bg-muted/40 ${
-          team.status === "DRAFT"
-            ? "rounded-lg p-2"
-            : "rounded-xl border p-4"
-        }`}
-        aria-label={`Xem chi tiết ${team.teamName}`}
-        onClick={() => setDetailsOpen(true)}
-      >
-        <span className="min-w-0">
-          <span className="block truncate font-semibold">{team.teamName}</span>
-          <span className="mt-1 block text-xs text-muted-foreground">
-            {team.memberIds.length} thành viên
-          </span>
-          <span
-            className={`mt-1 block truncate text-xs ${
-              team.projectTemplateId ? "text-primary" : "text-muted-foreground"
-            }`}
-          >
-            {team.projectTemplateId
-              ? `Đề bài: ${team.projectTemplateName ?? `#${team.projectTemplateId}`}`
-              : team.status === "DRAFT"
-                ? "Chưa gán đề bài · nhấn để gán"
-                : "Chưa gán đề bài"}
-          </span>
-          <span className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">
-              {mentorInitials || "?"}
-            </span>
-            {mentorName ?? "Chưa gán Mentor"}
-          </span>
-        </span>
-      </button>
-      {team.status === "DRAFT" && (
-        <div className="min-w-0 rounded-lg border bg-muted/20 px-3 py-2">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">
-            Thành viên ({team.memberIds.length})
-          </p>
-          {team.memberIds.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nhóm chưa có thành viên.</p>
-          ) : (
-            <ul className="max-h-28 divide-y overflow-y-auto pr-1">
-              {team.memberIds.map((memberId) => (
-                <li key={memberId} className="py-1 text-xs">
-                  {memberName(memberId)}
-                </li>
-              ))}
-            </ul>
-          )}
+      <article className="rounded-xl border bg-background p-4">
+        <div className="grid items-stretch gap-4 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.3fr)]">
+          <div className="flex min-w-0 flex-col gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="shrink-0 border-muted-foreground/20 bg-muted/60 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+                >
+                  {team.status}
+                </Badge>
+                <h3 className="truncate text-base font-semibold">{team.teamName}</h3>
+              </div>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {team.memberIds.length} thành viên
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">Đề bài dự án:</p>
+              {team.projectTemplateId ? (
+                <p className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                  <Monitor className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">
+                    {team.projectTemplateName ?? `#${team.projectTemplateId}`}
+                  </span>
+                </p>
+              ) : team.status === "DRAFT" ? (
+                <Link
+                  to={"/team-allocation/classes/" + classId + "/assign?sessionId=" + sessionId
+                    + "&teamId=" + team.teamId}
+                  className="flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-500/20 dark:text-amber-300"
+                >
+                  <TriangleAlert className="size-3.5 shrink-0" />
+                  <span className="min-w-0 truncate">Chưa gán đề bài · Nhấn để gán ngay</span>
+                </Link>
+              ) : (
+                <p className="text-sm text-muted-foreground">Chưa gán đề bài</p>
+              )}
+            </div>
+
+            <div className="mt-auto space-y-1.5">
+              <p className="text-xs text-muted-foreground">Mentor phụ trách</p>
+              {mentorName ? (
+                <div className="flex min-w-0 items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                    {mentorInitials || "?"}
+                  </span>
+                  <span className="min-w-0 truncate text-sm font-medium">{mentorName}</span>
+                  <span className="ml-auto shrink-0 rounded-full border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
+                    Giảng viên
+                  </span>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Chưa gán Mentor</p>
+              )}
+            </div>
+          </div>
+
+          <div className="min-w-0 border-t pt-3 md:border-l md:border-t-0 md:pl-4 md:pt-0">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Danh sách thành viên ({members.length})
+              </p>
+              <button
+                type="button"
+                aria-label={`Chỉnh sửa ${team.teamName}`}
+                onClick={() => setDetailsOpen(true)}
+                className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-xs font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Chỉnh sửa
+                <ChevronRight className="size-3.5" />
+              </button>
+            </div>
+            {members.length === 0 ? (
+              <p className="mt-2 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                Nhóm chưa có thành viên.
+              </p>
+            ) : (
+              <ul className="mt-2 divide-y">
+                {members.map((member) => {
+                  const leader = team.leaderMemberId === member.memberId;
+                  return (
+                    <li
+                      key={member.memberId}
+                      className="flex min-w-0 items-center justify-between gap-3 py-2 text-sm"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold uppercase text-muted-foreground">
+                          {initialsOf(member.fullName)}
+                        </span>
+                        <span className="min-w-0 truncate">
+                          <span className="font-medium">{member.fullName}</span>
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            ({member.userCode ?? `#${member.memberId}`})
+                          </span>
+                        </span>
+                      </span>
+                      {leader ? (
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 border-amber-500/40 bg-amber-500/10 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+                        >
+                          Trưởng nhóm
+                        </Badge>
+                      ) : (
+                        <span className="shrink-0 text-xs text-muted-foreground">Thành viên</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </div>
-      )}
-      </div>
+      </article>
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-h-[85vh] w-[calc(100vw-2rem)] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
@@ -3258,6 +3379,7 @@ function SavedTeamCard({
                 Gán đề bài dự án để áp dụng định suất và quy tắc kiêm nhiệm vai trò.
               </p>
             )}
+            {team.projectTemplateId != null && (
             <section className="min-w-0 space-y-2">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-medium">Danh sách thành viên ({members.length})</p>
@@ -3382,14 +3504,9 @@ function SavedTeamCard({
                 </ul>
               )}
             </section>
-            {canManageRoles && members.length > 0 && (
+            )}
+            {canManageRoles && members.length > 0 && team.projectTemplateId != null && (
               <div className="space-y-2">
-                {!team.projectTemplateId && (
-                  <p className="text-xs text-muted-foreground">
-                    Nhóm chưa gán đề bài: mặc định mỗi thành viên chỉ chọn 1 vai trò.
-                    Gán đề bài để áp dụng định suất và quy tắc kiêm nhiệm của đề bài.
-                  </p>
-                )}
                 {roleSaveError && (
                   <div
                     role="alert"

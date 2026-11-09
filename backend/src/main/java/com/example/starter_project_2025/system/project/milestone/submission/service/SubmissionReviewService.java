@@ -66,7 +66,7 @@ public class SubmissionReviewService {
             throw validation("overallFeedback", "Revision instructions are required and must not exceed 500 characters");
         }
         if (request.decision() == ReviewDecision.REQUEST_CHANGES && !queryService.canRequestChanges(submission)) {
-            throw validation("decision", "Không thể yêu cầu nộp lại do Milestone đã hết hạn theo Late Policy");
+            throw validation("decision", "Cannot request changes: " + queryService.resubmissionBlockMessage(submission));
         }
 
         SubmissionVersion version = versions.findBySubmissionIdAndVersionNumber(

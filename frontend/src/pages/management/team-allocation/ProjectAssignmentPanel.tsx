@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderTree } from "lucide-react";
+import { FolderTree, Plus } from "lucide-react";
 import { projectAssignmentApi } from "@/api/features/project-assignment.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,7 @@ export function ProjectAssignmentPanel({ classId, sessionId }: { classId: number
         <CardTitle className="flex items-center gap-2"><FolderTree className="size-5 text-primary" />Đề bài dự án</CardTitle>
         <CardDescription>Giao trọn Master cho một Team hoặc chia các module cho nhiều Team.</CardDescription>
       </div>
-      <Button className="w-fit" asChild><Link to={classUrl + "/assign" + sessionQuery}>Gán Master Project</Link></Button>
+      <Button className="w-fit gap-2" asChild><Link to={classUrl + "/assign" + sessionQuery}><Plus className="size-4" />Gán Master Project</Link></Button>
     </CardHeader>
     {masters.isError && <CardContent className="flex flex-wrap items-center gap-2">
       <p role="alert" className="text-sm">Không tải được danh sách Master của lớp.</p>

@@ -55,17 +55,7 @@ public interface ProjectRepository extends BaseCrudRepository<Project, Long> {
     }
 
     @org.springframework.data.jpa.repository.Modifying
-    @org.springframework.data.jpa.repository.Query("""
-            update Project p set p.status = com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE
-             where p.status = com.example.starter_project_2025.system.project.domain.ProjectStatus.PLANNING
-               and p.isActive = true
-               and exists (select w.id from Workspace w where w.project.id = p.id
-                    and w.isActive = true and w.currentSlot = 1
-                    and w.status = com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus.ACTIVE
-                    and w.team.isActive = true
-                    and w.team.status = com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE
-                    and w.team.trainingClass.tenantId = p.tenantId)
-            """)
+    @org.springframework.data.jpa.repository.Query("update Project p set p.status = com.example.starter_project_2025.system.project.domain.ProjectStatus.ACTIVE where p.status = com.example.starter_project_2025.system.project.domain.ProjectStatus.PLANNING and exists (select w.id from Workspace w where w.project.id = p.id and w.status = com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus.ACTIVE) and exists (select t.id from ProjectTeam t where t.project.id = p.id and t.status = com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE and t.isActive = true)")
     int activateProjectsWithWorkspace();
 
     java.util.List<Project> findAllByTenantIdAndIdInAndIsActiveTrueOrderByNameAsc(

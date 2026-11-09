@@ -18,7 +18,6 @@ export interface WorkspaceResource {
   description?: string | null;
   kind: WorkspaceResourceKind;
   url?: string | null;
-  category?: string | null;
   orderIndex: number;
   updatedAt?: string | null;
   updatedBy?: number | null;
@@ -48,7 +47,6 @@ export interface WorkspaceResourcePayload {
   description?: string | null;
   kind: WorkspaceResourceKind;
   url?: string | null;
-  category?: string | null;
   orderIndex?: number | null;
 }
 

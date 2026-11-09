@@ -2,17 +2,28 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { CalendarClock, ClipboardCheck, Upload } from "lucide-react";
+import { ChevronDown, ClipboardCheck, Upload } from "lucide-react";
 import { projectAssignmentApi } from "@/api/features/project-assignment.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { milestoneStatusStyles } from "@/pages/management/project/milestone/milestone-status.styles";
+import type { MilestoneLifecycleStatus } from "@/types";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ProjectCompletionPanel } from "./ProjectCompletionPanel";
+import { describeDeadline } from "./workspace-milestone-deadline";
+import { WorkspaceMilestoneRow } from "./WorkspaceMilestoneRow";
+
+const toLifecycle = (status: string): MilestoneLifecycleStatus | null =>
+  status in milestoneStatusStyles ? status as MilestoneLifecycleStatus : null;
+const formatStatus = (status: string) =>
+  status.replaceAll("_", " ").toLowerCase().replace(/^\w/, (char) => char.toUpperCase());
 
 export function WorkspaceMasterMilestonesPanel({ workspaceId, masterProjectId, returnTo, onOpenMaster, onChanged }: {
   workspaceId?: number; masterProjectId?: number; returnTo?: string;
@@ -24,6 +35,9 @@ export function WorkspaceMasterMilestonesPanel({ workspaceId, masterProjectId, r
   const [selected, setSelected] = useState<{ id: string; title: string } | null>(null);
   const [url, setUrl] = useState("");
   const [notes, setNotes] = useState("");
+  // null = automatic: expanded only when a milestone needs a submission recorded.
+  const [collapsed, setCollapsed] = useState<boolean | null>(null);
+  const [mountedAt] = useState(() => Date.now());
   const requestKey = useRef<string | null>(null);
   const query = useQuery({
     queryKey: ["workspace-master-milestones", workspaceId, masterProjectId, user.email, activeRole],
@@ -45,9 +59,10 @@ export function WorkspaceMasterMilestonesPanel({ workspaceId, masterProjectId, r
       navigate(`/milestone-submissions/${result.id}`, { state: { returnTo: backLink } });
     },
   });
-  if (query.isError) return <Card><CardContent className="space-y-3 pt-5"><p role="alert">Unable to load shared master milestones.</p>
+  if (query.isError) return <Card className="py-4"><CardContent className="flex flex-wrap items-center justify-between gap-3 px-4 text-sm">
+    <p role="alert" className="text-destructive">Unable to load master milestones.</p>
     <Button variant="outline" size="sm" onClick={() => void query.refetch()}>Retry</Button></CardContent></Card>;
-  if (query.isPending) return <p role="status" className="text-sm text-muted-foreground">Loading master milestones…</p>;
+  if (query.isPending) return <div role="status" aria-label="Loading master milestones" className="space-y-2"><Skeleton className="h-10" /><Skeleton className="h-16" /></div>;
   const data = query.data;
   if (!data) return null;
   const backLink = returnTo ?? `/management/workspaces/${workspaceId}?tab=milestones`;
@@ -55,36 +70,43 @@ export function WorkspaceMasterMilestonesPanel({ workspaceId, masterProjectId, r
   let validUrl = false;
   try { const parsed = new URL(url.trim()); validUrl = ["http:", "https:"].includes(parsed.protocol) && !!parsed.hostname && !parsed.username && !parsed.password; } catch { /* Wait for a complete URL. */ }
   const refresh = () => { void query.refetch(); onChanged(); };
+  const actionable = data.milestones.filter(milestone => milestone.canSubmit).length;
+  const isCollapsed = collapsed ?? actionable === 0;
   return <>
-    <Card><CardHeader><div className="flex flex-wrap items-center justify-between gap-3">
-      <CardTitle>Master milestones{shared ? " — Shared" : " — Your team"}</CardTitle>
-      <Badge variant="outline">{shared ? "Managed by class mentors" : "Complete master assignment"}</Badge>
-    </div><CardDescription>{data.projectName}. {shared
-      ? "All assigned teams see these same milestones and progress. Class mentors record shared submissions and manage their assessment."
-      : "These milestones belong to the master project. Open the master to work on them; module milestones remain separate."}</CardDescription>
-      {!shared && onOpenMaster && <Button className="w-fit" size="sm" variant="outline" onClick={() => onOpenMaster(data.projectId)}>Open master project</Button>}
-    </CardHeader><CardContent className="space-y-3">
-      {data.milestones.length === 0 && <p className="text-sm text-muted-foreground">No master milestones configured.</p>}
-      {data.milestones.map(milestone => <div key={milestone.id} className="space-y-3 rounded-lg border p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3"><div className="space-y-1">
-          <p className="text-sm font-semibold">{milestone.title}</p>
-          {milestone.description && <p className="whitespace-pre-wrap text-xs text-muted-foreground">{milestone.description}</p>}
-        </div><div className="flex flex-wrap gap-2"><Badge variant="secondary">Master</Badge>
-          {milestone.mandatory && <Badge variant="outline">Required</Badge>}
-          <Badge variant="outline">{milestone.waived ? "Waived" : milestone.status.replaceAll("_", " ")}</Badge></div></div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="flex items-center gap-1 text-xs text-muted-foreground"><CalendarClock className="size-3" />
-            {milestone.deadline ? new Date(milestone.deadline).toLocaleString("en-GB") : "No deadline"}</p>
-          <div className="flex flex-wrap gap-2">
-            {milestone.canSubmit && <Button size="sm" variant="outline" onClick={() => {
-              submit.reset(); requestKey.current = null; setUrl(""); setNotes(""); setSelected(milestone);
-            }}><Upload className="size-4" />Record shared submission</Button>}
-            {milestone.submissionId && <Button size="sm" variant="outline" onClick={() => navigate(`/milestone-submissions/${milestone.submissionId}`,
-              { state: { returnTo: backLink } })}><ClipboardCheck className="size-4" />Review / history</Button>}
-          </div>
-        </div>
-      </div>)}
-    </CardContent></Card>
+    <Card className="min-w-0 gap-0 overflow-hidden py-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+        <button type="button" className="flex min-w-0 items-center gap-2 text-left" aria-expanded={!isCollapsed} onClick={() => setCollapsed(!isCollapsed)}>
+          <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", isCollapsed && "-rotate-90")} />
+          <span className="min-w-0">
+            <span className="block font-semibold">{shared ? "Shared master milestones" : "Master milestones"} <span className="font-normal text-muted-foreground">({data.milestones.length})</span>
+              {actionable > 0 && <span className="ml-2 rounded-full bg-amber-100 px-1.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">{actionable} need action</span>}</span>
+            <span className="block truncate text-xs text-muted-foreground">{data.projectName} · {shared ? "Managed by class mentors; all assigned teams share the same progress." : "Belongs to the master project; module milestones are listed separately."}</span>
+          </span>
+        </button>
+        {!shared && onOpenMaster && <Button size="sm" variant="outline" onClick={() => onOpenMaster(data.projectId)}>Open master project</Button>}
+      </div>
+      {!isCollapsed && <div className="border-t">
+        {data.milestones.length === 0 ? <p className="px-4 py-6 text-center text-sm text-muted-foreground">No master milestones configured.</p>
+          : data.milestones.map(milestone => {
+            const lifecycle = milestone.waived ? null : toLifecycle(milestone.status);
+            return <WorkspaceMilestoneRow key={milestone.id}
+              title={milestone.title} description={milestone.description} status={lifecycle}
+              statusLabel={milestone.waived ? "Waived" : lifecycle ? undefined : formatStatus(milestone.status)}
+              deadline={describeDeadline(milestone.deadline, lifecycle, query.dataUpdatedAt || mountedAt)}
+              badges={<>
+                <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">Master</Badge>
+                <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-medium text-muted-foreground">{milestone.mandatory ? "Mandatory" : "Optional"}</Badge>
+              </>}
+              primaryAction={<>
+                {milestone.canSubmit && <Button size="sm" onClick={() => {
+                  submit.reset(); requestKey.current = null; setUrl(""); setNotes(""); setSelected(milestone);
+                }}><Upload className="size-4" /> Record submission</Button>}
+                {milestone.submissionId && <Button size="sm" variant="outline" onClick={() => navigate(`/milestone-submissions/${milestone.submissionId}`,
+                  { state: { returnTo: backLink } })}><ClipboardCheck className="size-4" /> Review / history</Button>}
+              </>} />;
+          })}
+      </div>}
+    </Card>
     {data.canManage && <ProjectCompletionPanel key={`${data.projectId}:${data.teamId}`} workspaceId={workspaceId}
       projectId={data.projectId} teamId={data.teamId} title={`Master completion — ${data.projectName}`}
       readOnly={data.readOnly} onChanged={refresh} />}

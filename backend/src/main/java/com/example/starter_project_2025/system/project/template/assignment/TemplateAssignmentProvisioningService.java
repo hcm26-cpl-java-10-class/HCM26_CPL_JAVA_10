@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.project.ProjectMemberRepository;
 import com.example.starter_project_2025.system.project.ProjectMemberRole;
 import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.ProjectTeamAudit;
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
 import com.example.starter_project_2025.system.project.ProjectTeamAuditRepository;
 import com.example.starter_project_2025.system.project.ProjectTeamOutboxEvent;
 import com.example.starter_project_2025.system.project.ProjectTeamOutboxRepository;
@@ -171,7 +172,10 @@ public class TemplateAssignmentProvisioningService {
         project.setTenant(tenants.findById(tenantId)
                 .orElseThrow(() -> new IllegalStateException("Tenant was not found")));
         project.setCohort(cohortOf(team));
-        project.setStatus(ProjectStatus.PLANNING);
+        // A DRAFT team must not own an ACTIVE project yet; publishing activates it.
+        project.setStatus(team.getStatus() == ProjectTeamStatus.ACTIVE
+                ? ProjectStatus.ACTIVE
+                : ProjectStatus.PLANNING);
         project.setTemplateSnapshotId(snapshot.getId());
         project.setClassId(team.getTrainingClass().getId());
         project.setTeamId(team.getId());
@@ -228,6 +232,7 @@ public class TemplateAssignmentProvisioningService {
                 existing.setProject(project);
                 workspaces.saveAndFlush(existing);
             }
+            syncWorkspaceStatus(existing, team);
             return existing;
         }
 
@@ -240,7 +245,8 @@ public class TemplateAssignmentProvisioningService {
         workspace.setProject(project);
         workspace.setCode("WS-TEAM-" + team.getId());
         workspace.setName("Workspace / " + team.getTeamName());
-        workspace.setStatus(WorkspaceStatus.ACTIVE);
+        // Only a published (ACTIVE) team gets an ACTIVE workspace.
+        workspace.setStatus(workspaceStatusFor(team));
         workspace.setCreatedBy(actorId);
         workspace.setIsActive(true);
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
@@ -249,6 +255,25 @@ public class TemplateAssignmentProvisioningService {
         workspaceJournal.recordCreation(saved, actor(actorId), response(saved, tenantId, project, team), correlationId);
 
         return saved;
+    }
+
+    private WorkspaceStatus workspaceStatusFor(ProjectTeam team) {
+        return team.getStatus() == ProjectTeamStatus.ACTIVE
+                ? WorkspaceStatus.ACTIVE
+                : WorkspaceStatus.DRAFT;
+    }
+
+    /** Keeps legacy workspaces aligned with the team publish state. */
+    private void syncWorkspaceStatus(Workspace workspace, ProjectTeam team) {
+        if (workspace.getStatus() == WorkspaceStatus.ARCHIVED
+                || workspace.getStatus() == WorkspaceStatus.CLOSED) {
+            return;
+        }
+        WorkspaceStatus desired = workspaceStatusFor(team);
+        if (workspace.getStatus() != desired) {
+            workspace.setStatus(desired);
+            workspaces.saveAndFlush(workspace);
+        }
     }
 
     private WorkspaceResponse response(Workspace workspace, Long tenantId, Project project, ProjectTeam team) {

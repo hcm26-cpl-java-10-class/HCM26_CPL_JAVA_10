@@ -56,7 +56,6 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
     static final int MAX_TITLE_LENGTH = 255;
     static final int MAX_DESCRIPTION_LENGTH = 1000;
     static final int MAX_URL_LENGTH = 1000;
-    static final int MAX_CATEGORY_LENGTH = 50;
 
     static final String ACTION_CREATE = "RESOURCE_CREATE";
     static final String ACTION_UPDATE = "RESOURCE_UPDATE";
@@ -309,7 +308,6 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
         String description = trim(request.description());
         ResourceKind kind = request.kind() == null ? ResourceKind.LINK : request.kind();
         String url = trim(request.url());
-        String category = trim(request.category());
         Integer orderIndex = request.orderIndex() == null ? entity.getOrderIndex() : request.orderIndex();
         if (orderIndex == null || orderIndex < 0) {
             orderIndex = 0;
@@ -337,11 +335,6 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
                     .add("Url must not exceed " + MAX_URL_LENGTH + " characters");
         }
 
-        if (category != null && category.length() > MAX_CATEGORY_LENGTH) {
-            errors.computeIfAbsent("category", key -> new ArrayList<>())
-                    .add("Category must not exceed " + MAX_CATEGORY_LENGTH + " characters");
-        }
-
         if (!errors.isEmpty()) {
             throw new BusinessValidationException(errors);
         }
@@ -350,7 +343,6 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
         entity.setDescription(description);
         entity.setKind(kind);
         entity.setUrl(url);
-        entity.setCategory(category);
         entity.setOrderIndex(orderIndex);
     }
 
@@ -366,7 +358,7 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
 
         return new TemplateResourceView(resource.getId(), resource.getTemplateId(), versionId,
                 resource.getTitle(), resource.getDescription(), resource.getKind(), resource.getUrl(),
-                resource.getCategory(), resource.getOrderIndex(), files);
+                resource.getOrderIndex(), files);
     }
 
     private TemplateResourceFileView fileView(Long versionId, TemplateResourceFile file) {
