@@ -52,7 +52,7 @@ export function useActiveModuleGroups(enabled = true) {
                         id: 1,
                         name: "Training Operations",
                         description: "Academic & Training Operations",
-                        displayOrder: 1,
+                        displayOrder: -1,
                         isActive: true,
                     },
                     {
@@ -178,12 +178,15 @@ export function useActiveModuleGroups(enabled = true) {
                     id: 9998,
                     name: "Training Operations",
                     description: "Academic & Training Operations",
-                    displayOrder: 1,
+                    displayOrder: -1,
                     isActive: true,
                 };
                 groups.push(fallbackGroup);
                 trainingGroup = fallbackGroup;
             }
+
+            trainingGroup.name = "Training Operations";
+            trainingGroup.displayOrder = -1;
 
             const trainingGroupId = String(trainingGroup.id ?? 9998);
             if (!groupedModules[trainingGroupId]) {
@@ -229,15 +232,18 @@ export function useActiveModuleGroups(enabled = true) {
             return groups
                 .map((group) => {
                     const groupId = String(group.id ?? "");
+                    const isTraining = trainingGroupNames.includes((group.name || "").trim().toLowerCase());
                     const groupMods = (groupedModules[groupId] ?? []).sort(
                         (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
                     );
                     return {
                         ...group,
+                        displayOrder: isTraining ? -1 : (group.displayOrder ?? 0),
                         modules: groupMods,
                     };
                 })
-                .filter((group) => group.modules.length > 0);
+                .filter((group) => group.modules.length > 0)
+                .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
         },
         staleTime: 5 * 60 * 1000,
     });
