@@ -8,7 +8,9 @@ import type { Trainee } from "@/types";
 import ClassDetailPage from "../ClassDetailPage";
 import ClassListPage from "../ClassListPage";
 import { getMockTraineesByClass, MOCK_TRAINING_CLASSES } from "../mocks/classTrainee.mock";
+import { resetClassAttendanceStoreForTest } from "./TraineeAttendanceView";
 import { formatFptStudentIdForSite, getFptStudentIdRuleBySite } from "./TraineeModal";
+import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 
 vi.mock("@/api/axios", () => import("@/test/mocks").then((m) => m.axiosModule()));
 vi.mock("@/components/layout/MainLayout", () => import("@/test/mocks").then((m) => m.layoutModule()));
@@ -20,7 +22,7 @@ function renderClassFlow(route = "/classes/2") {
             { path: "/classes", element: <ClassListPage /> },
             { path: "/classes/:classId", element: <ClassDetailPage /> },
             { path: "/training-operations/class-details/:classCode", element: <ClassDetailPage /> },
-            { path: "/topic-marks", element: <div>Topic Marks Page</div> },
+            { path: "/topic-marks", element: <TopicMarkGradebookDemoPage /> },
         ],
         { route },
     );
@@ -30,13 +32,38 @@ let serverTraineesState: Trainee[] = [];
 
 beforeEach(() => {
     fakeHttp.reset();
-    grant("SESSION_READ");
+    resetClassAttendanceStoreForTest();
+    grant("SESSION_READ", "STUDENT_SCORE_READ");
     serverTraineesState = getMockTraineesByClass(2);
     fakeHttp.on("get", "/external/classes", MOCK_TRAINING_CLASSES);
     fakeHttp.on("get", "/classes", MOCK_TRAINING_CLASSES);
     fakeHttp.on("get", "/external/classes/2", MOCK_TRAINING_CLASSES[0]);
     fakeHttp.on("get", "/classes/2", MOCK_TRAINING_CLASSES[0]);
     fakeHttp.on("get", "/external/classes/2/trainees", () => serverTraineesState);
+    fakeHttp.on("get", "/topic-marks/gradebook/search", () => {
+        return {
+            columns: [
+                { key: "quiz1", label: "Quiz 1" },
+                { key: "assignment", label: "Assignment" },
+                { key: "FINAL_SCORE", label: "Final Score" },
+                { key: "IS_PASSED", label: "Is Passed" },
+            ],
+            rows: {
+                content: [
+                    {
+                        userId: "stu-101",
+                        fullName: "Hoàng Phương Bình",
+                        email: "phuongbinh.conan@gmail.com",
+                        values: { quiz1: 8.5, assignment: 9.0, FINAL_SCORE: 8.75, IS_PASSED: true },
+                    },
+                ],
+                page: 0,
+                size: 10,
+                totalElements: 1,
+                totalPages: 1,
+            },
+        };
+    });
     fakeHttp.on("put", "/external/classes/2/trainees/batch", (call: RecordedCall) => {
         const payload = call.data as TraineeBatchPayload;
         const deletedSet = new Set(payload.deletedIds);
@@ -170,9 +197,24 @@ describe("ClassDetailView & TraineeListTab", () => {
         expect(within(menu).getByRole("menuitem", { name: /^edit$/i })).toBeInTheDocument();
         expect(within(menu).getByRole("menuitem", { name: /^delete$/i })).toBeInTheDocument();
 
-        // Topic Mark navigation
+        // Topic Mark navigation passes classId and classCode, displays Back to Class Detail, and returns
         await user.click(screen.getByRole("button", { name: "Topic Mark" }));
-        expect(await screen.findByText("Topic Marks Page")).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: "Topic Marks : HCM26_FR_JAVA_03" })).toBeInTheDocument();
+
+        // Verify gradebook search received classId and classCode
+        await waitFor(() => {
+            const calls = fakeHttp.callsTo("get", "/topic-marks/gradebook/search");
+            expect(calls.length).toBeGreaterThanOrEqual(1);
+            const params = calls[calls.length - 1].params as Record<string, string>;
+            expect(params.classId).toBe("2");
+            expect(params.classCode).toBe("HCM26_FR_JAVA_03");
+        });
+
+        // Click "Back to Class Detail" navigates back to Class Details
+        const backLink = screen.getByRole("link", { name: /back to class detail/i });
+        expect(backLink).toBeInTheDocument();
+        await user.click(backLink);
+        expect(await screen.findByRole("heading", { name: "Class Details : HCM26_FR_JAVA_03" })).toBeInTheDocument();
     });
 
     it("enforces site-specific FPT Student ID rules (HCM: SE/SS/AI/IA, HN: HE/HS/AI/IA, Other: DE + 6 digits)", () => {
@@ -268,7 +310,7 @@ describe("ClassDetailView & TraineeListTab", () => {
         await user.click(within(editDialog).getByRole("button", { name: "Update Trainee" }));
 
         expect(await screen.findByText("Trần Việt Anh Updated")).toBeInTheDocument();
-        expect(screen.getByText("Inactive")).toBeInTheDocument();
+        expect(within(table).getByText("Inactive")).toBeInTheDocument();
 
         // 3. Delete an existing trainee ("Đỗ Gia Huy") with confirmation modal
         await user.click(screen.getByRole("button", { name: "Actions for Đỗ Gia Huy" }));
@@ -405,4 +447,83 @@ describe("ClassDetailView & TraineeListTab", () => {
             expect(term.nextElementSibling).toHaveTextContent(value);
         }
     });
+
+    it("supports extended Bulk Actions: selection count badge and Change Status", async () => {
+        const { user } = renderClassFlow("/classes/2");
+        await screen.findByText("Hoàng Phương Bình");
+
+        const changeStatusBtn = screen.getByRole("button", { name: /change status/i });
+
+        expect(screen.queryByRole("button", { name: /move to class/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /send email/i })).not.toBeInTheDocument();
+        expect(changeStatusBtn).toBeDisabled();
+
+        // 1. Select two trainees
+        await user.click(screen.getByRole("checkbox", { name: "Select Hoàng Phương Bình" }));
+        await user.click(screen.getByRole("checkbox", { name: "Select Trần Việt Anh" }));
+
+        // Selection badge appears
+        expect(screen.getByText("2 Trainees Selected")).toBeInTheDocument();
+        expect(changeStatusBtn).toBeEnabled();
+
+        // 2. Change Status in bulk to "Inactive"
+        await user.click(changeStatusBtn);
+        const inactiveItem = await screen.findByRole("menuitem", { name: /inactive/i });
+        await user.click(inactiveItem);
+
+        // Status badges for both trainees should now reflect "Inactive"
+        const traineeTable = screen.getByRole("table", { name: "Trainee List" });
+        const inactiveBadges = within(traineeTable).getAllByText("Inactive");
+        expect(inactiveBadges.length).toBeGreaterThanOrEqual(2);
+        expect(screen.getByText("2 unsaved changes")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /save changes/i })).toBeEnabled();
+    }, 15000);
+
+    it("switches to Attendance Tracker view, renders 4 summary cards, attendance table, View Logs, and Take Daily Attendance", async () => {
+        const { user } = renderClassFlow("/classes/2");
+        await screen.findByText("Hoàng Phương Bình");
+
+        // 1. Switch to Attendance Tracker view
+        await user.click(screen.getByRole("button", { name: /^attendance$/i }));
+        expect(await screen.findByTestId("attendance-tracker-view")).toBeInTheDocument();
+        expect(screen.getByTestId("summary-sessions-conducted")).toHaveTextContent("20 / 40 Sessions");
+        expect(screen.getByTestId("summary-attendance-rate")).toHaveTextContent("91%");
+        expect(screen.getByTestId("summary-at-risk")).toHaveTextContent("3 Trainees");
+        expect(screen.getByTestId("summary-critical")).toHaveTextContent("2 Trainees");
+
+        // 2. Verify Attendance Table columns and status badges
+        const attTable = screen.getByRole("table", { name: "Trainee Attendance Table" });
+        expect(within(attTable).getAllByText("Eligible").length).toBeGreaterThan(0);
+        expect(within(attTable).getAllByText("Warning").length).toBe(3);
+        expect(within(attTable).getAllByText("Disqualified").length).toBe(2);
+
+        // 3. Open View Logs modal for a trainee
+        await user.click(screen.getByRole("button", { name: "View Logs for Trần Vũ Gia Bảo" }));
+        const logsDialog = await screen.findByRole("dialog", {
+            name: /Attendance Logs — Trần Vũ Gia Bảo/i,
+        });
+        expect(within(logsDialog).getByText(/Session History \(20 Sessions\)/i)).toBeInTheDocument();
+        await user.click(within(logsDialog).getAllByRole("button", { name: "Close" })[0]);
+
+        // 4. Take Daily Attendance -> mark one trainee Unexcused -> Save Changes
+        await user.click(screen.getByRole("button", { name: /take attendance/i }));
+        const takeDialog = await screen.findByRole("dialog", {
+            name: /Take Daily Attendance — Session #21/i,
+        });
+        await user.click(within(takeDialog).getByRole("button", { name: /mark all present/i }));
+        await user.selectOptions(
+            within(takeDialog).getByLabelText("Attendance status for Hoàng Phương Bình"),
+            "Unexcused",
+        );
+        await user.click(within(takeDialog).getByRole("button", { name: /save changes/i }));
+
+        // Sessions Conducted increments to 21 / 40 Sessions
+        expect(await screen.findByTestId("summary-sessions-conducted")).toHaveTextContent(
+            "21 / 40 Sessions",
+        );
+
+        // 5. Click Back to Trainee List returns to Trainee List table
+        await user.click(screen.getByRole("button", { name: /back to trainee list/i }));
+        expect(await screen.findByRole("table", { name: "Trainee List" })).toBeInTheDocument();
+    }, 15000);
 });

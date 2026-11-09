@@ -9,7 +9,7 @@ import {
 } from "@/pages/management/training/class/mocks/classTrainee.mock";
 
 export type TraineeGender = "Male" | "Female" | "Other";
-export type TraineeStatus = "Active" | "Inactive" | "Dropped Out";
+export type TraineeStatus = "Active" | "Inactive" | "Dropped";
 
 export interface TraineeFormInput {
     fullName: string;

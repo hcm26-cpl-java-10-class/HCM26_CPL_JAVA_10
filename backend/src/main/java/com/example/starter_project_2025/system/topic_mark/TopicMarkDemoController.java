@@ -42,9 +42,11 @@ public class TopicMarkDemoController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "fullName,asc") String sort,
-            @RequestParam(required = false) String keyword
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long classId,
+            @RequestParam(required = false) String classCode
     ) {
-        return topicMarkDemoService.searchGradebook(keyword, page, size, sort);
+        return topicMarkDemoService.searchGradebook(keyword, page, size, sort, classId, classCode);
     }
 
     @GetMapping("/students/{userId}")

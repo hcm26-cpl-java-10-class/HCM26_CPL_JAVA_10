@@ -3,7 +3,19 @@ import { classEnrollmentApi, classEnrollmentKey } from "@/api/features/class-enr
 import { usePermissions } from "@/hooks/usePermissions";
 import { paginate } from "@/utils/class.utils";
 import { TraineeImportModal } from "./TraineeImportModal";
-import { Download, Eye, MoreVertical, Pencil, RotateCcw, Save, Search, Trash2, Users } from "lucide-react";
+import {
+    ChevronDown,
+    Download,
+    Eye,
+    MoreVertical,
+    Pencil,
+    RotateCcw,
+    Save,
+    Search,
+    Trash2,
+    UserCheck,
+    Users,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -14,6 +26,7 @@ import {
     traineeService,
 } from "@/api/features/trainee.api";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
+import { NativeSelect } from "@/components/common/NativeSelect";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +53,7 @@ import { externalKeys, useClassTrainees } from "@/hooks/useExternalLookups";
 import { cn } from "@/lib/utils";
 import type { ExternalClass, Trainee } from "@/types";
 import { formatDate, splitLocalDateTime } from "@/utils/session.utils";
+import { TraineeAttendanceView } from "./TraineeAttendanceView";
 import {
     formatFptStudentIdForSite as legacyStudentId,
     normalizeTraineeGender,
@@ -126,6 +140,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
     // Local staging state: null means synchronized with serverTrainees
     const [draftTrainees, setDraftTrainees] = useState<Trainee[] | null>(null);
     const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState("");
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
     // Modal state for Create / Edit / View Profile
@@ -142,6 +157,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
     // Confirmation dialog state for single row Delete & Bulk Delete
     const [deleteTarget, setDeleteTarget] = useState<Trainee | null>(null);
     const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+    const [isAttendanceView, setIsAttendanceView] = useState(false);
 
     const activeTrainees = draftTrainees ?? serverTrainees;
 
@@ -237,9 +253,14 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
 
     const filteredTrainees = useMemo(() => {
         const keyword = search.trim().toLowerCase();
-        if (!keyword) return activeTrainees;
 
         return activeTrainees.filter((trainee) => {
+            if (statusFilter && normalizeTraineeStatus(trainee.status) !== statusFilter) {
+                return false;
+            }
+
+            if (!keyword) return true;
+
             const studentId = formatFptStudentIdForSite(
                 trainee.fptAccount ?? trainee.code,
                 classSite,
@@ -256,7 +277,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                 trainee.status,
             ].some((field) => String(field ?? "").toLowerCase().includes(keyword));
         });
-    }, [activeTrainees, classSite, search, formatFptStudentIdForSite]);
+    }, [activeTrainees, classSite, search, statusFilter, formatFptStudentIdForSite]);
 
     const traineePage = paginate(filteredTrainees, page, 10);
     const visibleTrainees = traineePage.items;
@@ -406,6 +427,22 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         toast.success(`Exported ${selectedCount} selected ${selectedCount === 1 ? "trainee" : "trainees"} to ${fileName}`);
     };
 
+    const handleBulkChangeStatus = (newStatus: "Active" | "Inactive" | "Dropped") => {
+        if (selectedCount === 0) return;
+        const currentList = draftTrainees ?? serverTrainees;
+        const count = selectedCount;
+        setDraftTrainees(
+            currentList.map((trainee) =>
+                selectedIds.has(trainee.id)
+                    ? { ...trainee, status: newStatus }
+                    : trainee,
+            ),
+        );
+        toast.success(
+            `Updated status of ${count} ${count === 1 ? "trainee" : "trainees"} to ${newStatus}. Click Save Changes to persist.`,
+        );
+    };
+
     const handleDiscardChanges = () => {
         setDraftTrainees(null);
         setSelectedIds((prev) => {
@@ -438,9 +475,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
     };
 
     const handleAttendance = () => {
-        toast.info(
-            `Attendance for ${classItem.code ?? `Class #${classId}`} will be connected once the Attendance API is ready.`,
-        );
+        setIsAttendanceView(true);
     };
 
     if (!canRead) return <p role="alert">You do not have permission to view trainee profiles.</p>;
@@ -448,12 +483,22 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         return <ApiErrorState error={error} resource="trainee list" onRetry={() => void refetch()} />;
     }
 
+    if (isAttendanceView) {
+        return (
+            <TraineeAttendanceView
+                classItem={classItem}
+                trainees={activeTrainees}
+                onBack={() => setIsAttendanceView(false)}
+            />
+        );
+    }
+
     return (
         <div className="space-y-4">
             {/* Top Action Bar */}
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2.5">
-                    <div className="relative w-full sm:w-72">
+                    <div className="relative w-full sm:w-64">
                         <Search
                             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
                             aria-hidden
@@ -467,12 +512,35 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                         />
                     </div>
 
+                    <div className="w-full sm:w-36">
+                        <NativeSelect
+                            aria-label="Filter by Status"
+                            value={statusFilter}
+                            onChange={(event) => setStatusFilter(event.target.value)}
+                            className="h-9"
+                        >
+                            <option value="">All Statuses</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                            <option value="Dropped">Dropped</option>
+                        </NativeSelect>
+                    </div>
+
                     {hasUnsavedChanges ? (
                         <Badge
                             variant="secondary"
                             className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
                         >
                             {pendingChanges.total} unsaved {pendingChanges.total === 1 ? "change" : "changes"}
+                        </Badge>
+                    ) : null}
+
+                    {selectedCount > 0 ? (
+                        <Badge
+                            variant="secondary"
+                            className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800 dark:bg-blue-950/60 dark:text-blue-300"
+                        >
+                            {selectedCount} {selectedCount === 1 ? "Trainee" : "Trainees"} Selected
                         </Badge>
                     ) : null}
                 </div>
@@ -488,6 +556,39 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                     </Button>
                     {internal && <Button type="button" variant="outline" disabled={isPending || saveMutation.isPending || hasUnsavedChanges || !canCreate}
                         title={hasUnsavedChanges ? "Save or discard staged changes before importing." : undefined} onClick={() => setImportOpen(true)}>Import Excel</Button>}
+
+                    {/* Bulk Action: Change Status Dropdown */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                disabled={selectedCount === 0 || isPending || saveMutation.isPending}
+                                className={cn(
+                                    selectedCount > 0 &&
+                                        "border-blue-600 text-blue-700 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-950/40",
+                                )}
+                            >
+                                <UserCheck className="size-4" aria-hidden />
+                                <span>Change Status</span>
+                                <ChevronDown className="size-3.5 opacity-60" aria-hidden />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                            <DropdownMenuItem onClick={() => handleBulkChangeStatus("Active")}>
+                                <span className="mr-2 inline-block size-2 rounded-full bg-emerald-500" />
+                                <span>Active (Đang học)</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleBulkChangeStatus("Inactive")}>
+                                <span className="mr-2 inline-block size-2 rounded-full bg-gray-400" />
+                                <span>Inactive (Không hoạt động)</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleBulkChangeStatus("Dropped")}>
+                                <span className="mr-2 inline-block size-2 rounded-full bg-rose-500" />
+                                <span>Dropped (Thôi học)</span>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
 
                     <Button
                         type="button"

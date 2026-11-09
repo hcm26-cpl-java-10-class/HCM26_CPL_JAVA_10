@@ -1,16 +1,16 @@
 import type {
     AttendanceRecord,
-        AuditRecord,
-        ClassActivity,
-        ClassBudget,
-        ClassOperationData,
-        ClassSession,
-        ExternalClass,
-        ExternalRoom,
-        ExternalTrainer,
-        StatusTransitionInfo,
-        TopicAssessment,
-        Trainee,
+    AuditRecord,
+    ClassActivity,
+    ClassBudget,
+    ClassOperationData,
+    ClassSession,
+    ExternalClass,
+    ExternalRoom,
+    ExternalTrainer,
+    StatusTransitionInfo,
+    TopicAssessment,
+    Trainee,
 } from "@/types";
 import axiosInstance from "../axios";
 import { traineeService } from "./trainee.api";

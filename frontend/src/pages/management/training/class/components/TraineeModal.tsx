@@ -132,7 +132,7 @@ export function formatFptStudentIdForSite(rawValue?: string, site?: string, trai
 }
 
 const GENDER_OPTIONS: TraineeGender[] = ["Male", "Female", "Other"];
-const STATUS_OPTIONS: TraineeStatus[] = ["Active", "Inactive", "Dropped Out"];
+const STATUS_OPTIONS: TraineeStatus[] = ["Active", "Inactive", "Dropped"];
 
 export const MAX_TRAINEE_NAME_LENGTH = 100;
 export const MIN_TRAINEE_AGE_YEARS = 17;
@@ -193,9 +193,16 @@ export function normalizeTraineeGender(gender?: string): TraineeGender {
 
 export function normalizeTraineeStatus(status?: string): TraineeStatus {
     const normalized = (status ?? "").trim().toLowerCase();
-    if (normalized === "inactive") return "Inactive";
+    if (
+        normalized === "inactive" ||
+        normalized === "suspended" ||
+        normalized === "graduated" ||
+        normalized === "completed"
+    ) {
+        return "Inactive";
+    }
     if (normalized === "dropped" || normalized === "drop-out" || normalized === "dropped out") {
-        return "Dropped Out";
+        return "Dropped";
     }
     return "Active";
 }
@@ -203,31 +210,28 @@ export function normalizeTraineeStatus(status?: string): TraineeStatus {
 export function resolveTraineeStatusBadge(status?: string) {
     const normalized = (status ?? "Active").trim().toLowerCase();
 
-    if (!normalized || normalized === "active" || normalized === "studying") {
-        return {
-            label: "Active",
-            className: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300",
-        };
-    }
-
-    if (normalized === "inactive") {
+    if (
+        normalized === "inactive" ||
+        normalized === "suspended" ||
+        normalized === "graduated" ||
+        normalized === "completed"
+    ) {
         return {
             label: "Inactive",
-            className: "bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300",
+            className: "bg-gray-100 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300",
         };
     }
 
     if (normalized === "dropped" || normalized === "drop-out" || normalized === "dropped out") {
         return {
-            label: "Dropped Out",
+            label: "Dropped",
             className: "bg-rose-100 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300",
         };
     }
 
-    const raw = (status ?? "").trim();
     return {
-        label: raw.charAt(0).toUpperCase() + raw.slice(1),
-        className: "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300",
+        label: "Active",
+        className: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300",
     };
 }
 
