@@ -13,11 +13,13 @@ import {
 } from "@/components/ui/sheet";
 import { usePermissions } from "@/hooks/usePermissions";
 import type {
+  AiApplyResult,
   AiChatMessage,
   AiCourseLevel,
-  AiLanguage,
   AiCourseOption,
   AiCourseOutline,
+  AiLanguage,
+  AiOptionsResponse,
 } from "@/types/features/demo/ai-course-builder";
 import { ArrowLeft, Loader2, Plus, Send, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -333,6 +335,17 @@ function OutlineEditor({
   );
 }
 
+type GenState = {
+  courseId: number;
+  courseName: string;
+  total: number;
+  done: number;
+  failed: number;
+  current: string;
+  running: boolean;
+  stoppedReason?: string;
+};
+
 function AiCourseBuilderSheet({
   open,
   onOpenChange,
@@ -347,11 +360,49 @@ function AiCourseBuilderSheet({
   const [draft, setDraft] = useState<AiCourseOutline | null>(null);
   const [creating, setCreating] = useState(false);
   const [language, setLanguage] = useState<AiLanguage>("en");
+  const [pickers, setPickers] = useState<AiOptionsResponse | null>(null);
+  const [instructorId, setInstructorId] = useState<number | null>(null);
+  const [categoryIds, setCategoryIds] = useState<number[]>([]);
+  const [writeContent, setWriteContent] = useState(true);
+  const [gen, setGen] = useState<GenState | null>(null);
+  const cancelRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [items, loading, draft]);
+
+  // Teachers and categories for the pickers (optional: the window still works if this fails).
+  useEffect(() => {
+    if (!open || pickers) return;
+    aiCourseBuilderApi
+      .options()
+      .then(setPickers)
+      .catch(() => undefined);
+  }, [open, pickers]);
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next && gen?.running) {
+      toast.info("Lessons are still being written. Press Stop first, or wait until it finishes.");
+      return;
+    }
+    onOpenChange(next);
+  };
+
+  const resetAll = () => {
+    setItems([]);
+    setInput("");
+    setDraft(null);
+    setGen(null);
+    setCategoryIds([]);
+    setInstructorId(null);
+  };
+
+  const openCourse = (courseId: number) => {
+    resetAll();
+    onOpenChange(false);
+    navigate(`/courses/${courseId}`);
+  };
 
   const send = async (text: string) => {
     const content = text.trim();
@@ -379,16 +430,72 @@ function AiCourseBuilderSheet({
     }
   };
 
+  const chooseOption = (option: AiCourseOption) => {
+    setDraft(structuredClone(option.course));
+    setCategoryIds(option.categoryIds ?? []);
+    setInstructorId(
+      pickers?.currentTeacherId ?? (pickers?.teachers.length === 1 ? pickers.teachers[0].id : null),
+    );
+  };
+
+  const toggleCategory = (id: number) =>
+    setCategoryIds((current) =>
+      current.includes(id) ? current.filter((c) => c !== id) : [...current, id],
+    );
+
+  /** Writes the full text of every new lesson, one after another, with progress. A failed lesson does not stop the rest. */
+  const runGeneration = async (result: AiApplyResult) => {
+    cancelRef.current = false;
+    const total = result.lessonRefs.length;
+    let done = 0;
+    let failed = 0;
+    let stoppedReason: string | undefined;
+
+    setGen({
+      courseId: result.courseId,
+      courseName: result.courseName,
+      total,
+      done,
+      failed,
+      current: result.lessonRefs[0]?.title ?? "",
+      running: true,
+    });
+
+    for (const ref of result.lessonRefs) {
+      if (cancelRef.current) {
+        stoppedReason = "Stopped. The remaining lessons keep the short AI summary.";
+        break;
+      }
+      setGen((g) => (g ? { ...g, current: ref.title } : g));
+      try {
+        await aiCourseBuilderApi.generateLessonContent(ref.id, { save: true, overwrite: true, language });
+        done++;
+      } catch (error: any) {
+        failed++;
+        const message: string = error?.response?.data?.message ?? "";
+        if (/rate limit|quota/i.test(message)) {
+          stoppedReason = message;
+          break;
+        }
+      }
+      setGen((g) => (g ? { ...g, done, failed } : g));
+    }
+    setGen((g) => (g ? { ...g, done, failed, running: false, stoppedReason } : g));
+  };
+
   const create = async () => {
     if (!draft || creating) return;
     setCreating(true);
     try {
-      const result = await aiCourseBuilderApi.apply(draft);
-      toast.success(
-        `Created "${result.courseName}" as a draft (${result.sections} sections, ${result.lessons} lessons)`,
-      );
-      onOpenChange(false);
-      navigate(`/courses/${result.courseId}`);
+      const result = await aiCourseBuilderApi.apply(draft, categoryIds, instructorId);
+      if (writeContent && result.lessonRefs.length > 0) {
+        void runGeneration(result);
+      } else {
+        toast.success(
+          `Created "${result.courseName}" as a draft (${result.sections} sections, ${result.lessons} lessons)`,
+        );
+        openCourse(result.courseId);
+      }
     } catch (error: any) {
       toast.error(error?.response?.data?.message ?? "Could not create the course.");
     } finally {
@@ -398,9 +505,11 @@ function AiCourseBuilderSheet({
 
   const errors = draft ? validateOutline(draft) : null;
   const canCreate = !!draft && !!errors && !errors.hasError;
+  const lessonTotal = draft ? countLessons(draft) : 0;
+  const teacherSelf = pickers?.teachers.find((t) => t.id === pickers?.currentTeacherId);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b p-4">
           <SheetTitle className="flex items-center gap-2">
@@ -411,18 +520,131 @@ function AiCourseBuilderSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {draft ? (
+        {gen ? (
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+            <div>
+              <p className="font-medium">
+                {gen.running ? "Writing lesson content..." : "Your course is ready"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                &quot;{gen.courseName}&quot; was created as a Draft.
+              </p>
+            </div>
+
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${Math.round(((gen.done + gen.failed) / gen.total) * 100)}%` }}
+              />
+            </div>
+            <p className="text-sm">
+              {gen.done + gen.failed}/{gen.total} lessons
+              {gen.running && gen.current ? ` · now writing: ${gen.current}` : ""}
+            </p>
+
+            {gen.failed > 0 && (
+              <p className="text-sm text-destructive">
+                {gen.failed} lesson(s) could not be written. They keep the short AI summary; open the lesson and use
+                &quot;Generate with AI&quot; to try again.
+              </p>
+            )}
+            {gen.stoppedReason && <p className="text-sm text-muted-foreground">{gen.stoppedReason}</p>}
+
+            {gen.running ? (
+              <Button variant="outline" onClick={() => (cancelRef.current = true)}>
+                Stop
+              </Button>
+            ) : (
+              <Button onClick={() => openCourse(gen.courseId)}>Open course</Button>
+            )}
+          </div>
+        ) : draft ? (
           <>
             <div className="flex-1 overflow-y-auto p-4">
               <Button variant="ghost" size="sm" className="mb-3 -ml-2" onClick={() => setDraft(null)}>
                 <ArrowLeft className="mr-1 h-4 w-4" /> Back to options
               </Button>
+
+              <div className="mb-4 space-y-3 rounded-xl border p-3">
+                <p className="text-sm font-medium">Course settings</p>
+
+                {pickers?.currentTeacherId != null ? (
+                  <p className="text-sm">
+                    Instructor: <span className="font-medium">{teacherSelf?.name ?? "You"}</span> (you)
+                  </p>
+                ) : pickers ? (
+                  <div>
+                    <label className="text-sm font-medium">Instructor</label>
+                    <select
+                      value={instructorId ?? ""}
+                      onChange={(e) => setInstructorId(e.target.value ? Number(e.target.value) : null)}
+                      className="mt-1 h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+                    >
+                      <option value="">No instructor yet (assign later)</option>
+                      {pickers.teachers.map((teacher) => (
+                        <option key={teacher.id} value={teacher.id}>
+                          {teacher.name} ({teacher.email})
+                        </option>
+                      ))}
+                    </select>
+                    {pickers.teachers.length === 0 && (
+                      <p className="mt-1 text-xs text-muted-foreground">No active teacher accounts found.</p>
+                    )}
+                  </div>
+                ) : null}
+
+                {pickers && (
+                  <div>
+                    <label className="text-sm font-medium">Categories</label>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {pickers.categories.map((category) => {
+                        const selected = categoryIds.includes(category.id);
+                        return (
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={() => toggleCategory(category.id)}
+                            className={
+                              "rounded-full border px-3 py-1 text-xs " +
+                              (selected ? "bg-primary text-primary-foreground" : "hover:bg-muted")
+                            }
+                          >
+                            {category.name}
+                          </button>
+                        );
+                      })}
+                      {pickers.categories.length === 0 && (
+                        <p className="text-xs text-muted-foreground">No active categories found.</p>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      The AI pre-selected the best match. A course needs at least one category to be published.
+                    </p>
+                  </div>
+                )}
+
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={writeContent}
+                    onChange={(e) => setWriteContent(e.target.checked)}
+                  />
+                  <span>
+                    Write the full lesson content with AI after creating
+                    <span className="block text-xs text-muted-foreground">
+                      About 10 seconds per lesson (around {Math.max(1, Math.ceil((lessonTotal * 10) / 60))} min for
+                      this course). Otherwise each lesson keeps a short summary.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
               <OutlineEditor draft={draft} errors={errors!} onChange={setDraft} />
             </div>
             <div className="border-t p-4">
               <p className="mb-2 text-xs text-muted-foreground">
-                The course is created as a Draft. Each lesson gets the AI summary as draft text; you can replace it
-                with your own content, then assign categories and publish.
+                The course is created as a Draft, so students cannot see it until you publish it.
               </p>
               {errors?.hasError && (
                 <p className="mb-2 text-xs font-medium text-destructive">
@@ -431,7 +653,8 @@ function AiCourseBuilderSheet({
               )}
               <Button className="w-full" disabled={!canCreate || creating} onClick={create}>
                 {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create course ({draft.sections.length} sections · {countLessons(draft)} lessons)
+                {writeContent ? "Create course & write content" : "Create course"} ({draft.sections.length} sections ·{" "}
+                {lessonTotal} lessons)
               </Button>
             </div>
           </>
@@ -466,11 +689,7 @@ function AiCourseBuilderSheet({
                         <div className="max-w-[90%] rounded-2xl bg-muted px-3 py-2 text-sm">{item.text}</div>
                       )}
                       {item.options?.map((option, i) => (
-                        <OptionCard
-                          key={i}
-                          option={option}
-                          onChoose={() => setDraft(structuredClone(option.course))}
-                        />
+                        <OptionCard key={i} option={option} onChoose={() => chooseOption(option)} />
                       ))}
                     </>
                   )}
@@ -513,7 +732,9 @@ function AiCourseBuilderSheet({
                 value={input}
                 maxLength={4000}
                 disabled={loading}
-                placeholder={items.length ? "Ask for changes, e.g. add a hands-on project" : "What course do you want to create?"}
+                placeholder={
+                  items.length ? "Ask for changes, e.g. add a hands-on project" : "What course do you want to create?"
+                }
                 onChange={(e) => setInput(e.target.value)}
               />
               <Button type="submit" size="icon" disabled={loading || !input.trim()} aria-label="Send">

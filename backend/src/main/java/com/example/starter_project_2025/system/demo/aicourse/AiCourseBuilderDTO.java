@@ -14,6 +14,18 @@ public final class AiCourseBuilderDTO {
     private AiCourseBuilderDTO() {
     }
 
+    // ---------- picker data (instructor / categories) ----------
+
+    public record PersonOption(Long id, String name, String email) {
+    }
+
+    public record CategoryOption(Long id, String name) {
+    }
+
+    /** teachers = active users with role TEACHER; currentTeacherId = set when the logged-in user is a teacher. */
+    public record OptionsResponse(List<PersonOption> teachers, List<CategoryOption> categories, Long currentTeacherId) {
+    }
+
     // ---------- chat ----------
 
     /** role = "user" | "assistant". */
@@ -41,8 +53,8 @@ public final class AiCourseBuilderDTO {
     public record CourseOutline(String name, String description, String level, List<SectionOutline> sections) {
     }
 
-    /** One choice shown to the user, e.g. "Compact - 4 sections / 16 lessons". */
-    public record Option(String label, String rationale, CourseOutline course) {
+    /** One choice shown to the user. categoryIds = categories the AI suggests (already validated). */
+    public record Option(String label, String rationale, CourseOutline course, List<Long> categoryIds) {
     }
 
     /** options is empty when the AI is asking a clarifying question. */
@@ -53,10 +65,32 @@ public final class AiCourseBuilderDTO {
 
     public record ApplyRequest(
             @NotNull @Valid CourseOutline course,
-            List<Long> categoryIds
+            List<Long> categoryIds,
+            Long instructorId
     ) {
     }
 
-    public record ApplyResult(Long courseId, String courseName, int sections, int lessons) {
+    public record LessonRef(Long id, String title) {
+    }
+
+    public record ApplyResult(Long courseId, String courseName, int sections, int lessons, List<LessonRef> lessonRefs) {
+    }
+
+    // ---------- lesson content generation ----------
+
+    /** Generate (and optionally save) the text of an existing lesson. language = "en" | "vi" | null (same as the course). */
+    public record GenerateContentRequest(Boolean save, Boolean overwrite, String language) {
+    }
+
+    /** Draft the text of a lesson from the form (works for a lesson that is not saved yet). Nothing is saved. */
+    public record DraftContentRequest(
+            @NotBlank @Size(max = 200) String title,
+            @Size(max = 20000) String notes,
+            Long lessonId,
+            String language
+    ) {
+    }
+
+    public record GenerateContentResponse(Long lessonId, String content, boolean saved, boolean skipped, String message) {
     }
 }

@@ -24,6 +24,8 @@ export interface AiCourseOption {
   label: string;
   rationale: string;
   course: AiCourseOutline;
+  /** Categories the AI suggests (ids that exist and are active). */
+  categoryIds: number[];
 }
 
 export interface AiChatMessage {
@@ -36,9 +38,41 @@ export interface AiChatResponse {
   options: AiCourseOption[];
 }
 
+export interface AiPersonOption {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface AiCategoryOption {
+  id: number;
+  name: string;
+}
+
+export interface AiOptionsResponse {
+  teachers: AiPersonOption[];
+  categories: AiCategoryOption[];
+  /** Set when the logged-in user is a teacher. */
+  currentTeacherId: number | null;
+}
+
+export interface AiLessonRef {
+  id: number;
+  title: string;
+}
+
 export interface AiApplyResult {
   courseId: number;
   courseName: string;
   sections: number;
   lessons: number;
+  lessonRefs: AiLessonRef[];
+}
+
+export interface AiGenerateContentResult {
+  lessonId: number | null;
+  content: string | null;
+  saved: boolean;
+  skipped: boolean;
+  message: string | null;
 }
