@@ -18,20 +18,33 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
     );
     const classItems = CLASS_SECTION_URLS.flatMap((url) => withoutSessions.filter((item) => item.url === url));
     const remaining = withoutSessions.filter((item) => !CLASS_SECTION_URLS.includes(item.url));
-    const sections: NavItem[] = [
-        { title: "Class", url: "", icon: iconMap["graduation-cap"], children: classItems },
+
+    const activeSections: NavItem[] = [
+        ...(classItems.length > 0
+            ? [{ title: "Class", url: "", icon: iconMap["graduation-cap"], children: classItems }]
+            : []),
         { title: "Training Calendar", url: "/calendar/adjust", icon: iconMap.calendar },
         { title: "Weekly Timetable", url: "/calendar/preview", icon: iconMap.calendar },
-        { title: "Audit", url: "/training/audit", icon: iconMap["clipboard-check"] },
-        { title: "Trainee", url: "/training/trainee", icon: iconMap.users },
-        { title: "Log Work", url: "/training/log-work", icon: iconMap.briefcase },
-        { title: "Content", url: "/training/content", icon: iconMap["book-open"] },
-        { title: "Reports", url: "/training/reports", icon: iconMap["bar-chart"] },
     ];
 
-    const navigation = sections.map((section): NavItem => {
-        const existing = remaining.find((item) => item.title.toLowerCase() === section.title.toLowerCase() || item.url === section.url);
-        if (existing) return existing;
+    const placeholders: NavItem[] = [
+        { title: "Audit", url: "/training/audit", icon: iconMap["clipboard-check"], disabled: true },
+        { title: "Trainee", url: "/training/trainee", icon: iconMap.users, disabled: true },
+        { title: "Log Work", url: "/training/log-work", icon: iconMap.briefcase, disabled: true },
+        { title: "Content", url: "/training/content", icon: iconMap["book-open"], disabled: true },
+        { title: "Reports", url: "/training/reports", icon: iconMap["bar-chart"], disabled: true },
+    ];
+
+    const mappedActive = activeSections.map((section): NavItem => {
+        const existing = remaining.find(
+            (item) => item.title.toLowerCase() === section.title.toLowerCase() || (item.url && item.url === section.url),
+        );
+        if (existing) {
+            return {
+                ...existing,
+                isActive: pathname === existing.url || pathname.startsWith(`${existing.url}/`),
+            };
+        }
         return {
             ...section,
             disabled: !section.url && !section.children?.length,
@@ -40,9 +53,17 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
         };
     });
 
-    return [...navigation, ...remaining.filter((item) =>
-        !sections.some((section) => section.title.toLowerCase() === item.title.toLowerCase() || section.url === item.url),
-    )];
+    // Teammate actual modules (Subject, Training Program, Topic Mark, etc.)
+    const otherRealModules = remaining.filter((item) =>
+        !activeSections.some(
+            (sec) => sec.title.toLowerCase() === item.title.toLowerCase() || (sec.url && sec.url === item.url),
+        ) &&
+        !placeholders.some(
+            (pl) => pl.title.toLowerCase() === item.title.toLowerCase() || (pl.url && pl.url === item.url),
+        ),
+    );
+
+    return [...mappedActive, ...otherRealModules, ...placeholders];
 }
 
 export function SidebarMenu({

@@ -147,18 +147,33 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
-            // Ensure Training Operations group and its critical menus (Training Calendar & Timetable) always exist
-            const isAdmin = activeRole === "ADMIN";
-            const canViewSessions = isAdmin || canAccessByPermission("SESSION_READ", hasPermission);
+            // Unify "Training Management" and "Training Operations" into a single group if both exist
+            const trainingGroupNames = ["training operations", "training management"];
+            const trainingGroups = groups.filter((g) =>
+                trainingGroupNames.includes((g.name || "").trim().toLowerCase()),
+            );
+            if (trainingGroups.length > 1) {
+                const primary = trainingGroups[0];
+                const primaryId = String(primary.id ?? 9998);
+                for (let i = 1; i < trainingGroups.length; i++) {
+                    const otherId = String(trainingGroups[i].id ?? "");
+                    if (groupedModules[otherId]) {
+                        if (!groupedModules[primaryId]) groupedModules[primaryId] = [];
+                        groupedModules[primaryId].push(...groupedModules[otherId]);
+                        delete groupedModules[otherId];
+                    }
+                }
+                groups = groups.filter(
+                    (g) => g === primary || !trainingGroupNames.includes((g.name || "").trim().toLowerCase()),
+                );
+            }
 
-            let trainingGroup = groups.find(
-                (g) => {
-                    const name = (g.name || "").toLowerCase();
-                    return name === "training operations" || name === "training management";
-                },
+            // Ensure Training Management / Operations group exists and contains critical menus
+            let trainingGroup = groups.find((g) =>
+                trainingGroupNames.includes((g.name || "").trim().toLowerCase()),
             );
 
-            if (!trainingGroup && canViewSessions) {
+            if (!trainingGroup) {
                 const fallbackGroup: ModuleGroupDTO = {
                     id: 9998,
                     name: "Training Operations",
@@ -170,41 +185,45 @@ export function useActiveModuleGroups(enabled = true) {
                 trainingGroup = fallbackGroup;
             }
 
-            if (trainingGroup && canViewSessions) {
-                const groupId = String(trainingGroup.id ?? 9998);
-                if (!groupedModules[groupId]) {
-                    groupedModules[groupId] = [];
-                }
+            const trainingGroupId = String(trainingGroup.id ?? 9998);
+            if (!groupedModules[trainingGroupId]) {
+                groupedModules[trainingGroupId] = [];
+            }
 
-                const hasAdjust = modules.some((m) => m.url === "/calendar/adjust" || m.url === "/schedule-versions");
-                if (!hasAdjust) {
-                    groupedModules[groupId].push({
-                        id: 99998,
-                        moduleGroupId: groupId,
-                        title: "Training Calendar",
-                        name: "Training Calendar",
-                        url: "/calendar/adjust",
-                        icon: "calendar",
-                        displayOrder: 1,
-                        requiredPermission: "SESSION_READ",
-                        isActive: true,
-                    });
-                }
+            const currentTrainingMods = groupedModules[trainingGroupId];
 
-                const hasTimetable = modules.some((m) => m.url === "/calendar/preview" || m.url === "/calendar/timetable");
-                if (!hasTimetable) {
-                    groupedModules[groupId].push({
-                        id: 99997,
-                        moduleGroupId: groupId,
-                        title: "Weekly Timetable",
-                        name: "Weekly Timetable",
-                        url: "/calendar/preview",
-                        icon: "calendar",
-                        displayOrder: 2,
-                        requiredPermission: "SESSION_READ",
-                        isActive: true,
-                    });
-                }
+            const hasAdjust = currentTrainingMods.some(
+                (m) => m.url === "/calendar/adjust" || m.url === "/schedule-versions",
+            );
+            if (!hasAdjust) {
+                currentTrainingMods.unshift({
+                    id: 99998,
+                    moduleGroupId: trainingGroupId,
+                    title: "Training Calendar",
+                    name: "Training Calendar",
+                    url: "/calendar/adjust",
+                    icon: "calendar",
+                    displayOrder: 1,
+                    requiredPermission: "SESSION_READ",
+                    isActive: true,
+                });
+            }
+
+            const hasTimetable = currentTrainingMods.some(
+                (m) => m.url === "/calendar/preview" || m.url === "/calendar/timetable",
+            );
+            if (!hasTimetable) {
+                currentTrainingMods.splice(1, 0, {
+                    id: 99997,
+                    moduleGroupId: trainingGroupId,
+                    title: "Weekly Timetable",
+                    name: "Weekly Timetable",
+                    url: "/calendar/preview",
+                    icon: "calendar",
+                    displayOrder: 2,
+                    requiredPermission: "SESSION_READ",
+                    isActive: true,
+                });
             }
 
             return groups
