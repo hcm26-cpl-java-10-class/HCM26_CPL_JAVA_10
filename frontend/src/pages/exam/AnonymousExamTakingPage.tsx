@@ -1,6 +1,7 @@
 import {
     runAnonymousCode,
     saveAnonymousAnswers,
+    sendAnonymousEntryPhoto,
     sendAnonymousIntegrityEvents, // NEW (anti-cheat)
     startAnonymousExam,
     submitAnonymousExam,
@@ -20,6 +21,8 @@ import { toast } from "sonner";
 import { CodingWorkspace } from '@/pages/student/components/CodingWorkspace';
 import { EssayPopup } from '@/pages/student/components/EssayPopup';
 import { ExamIntegrityNotice, useExamIntegrity } from '@/hooks/useExamIntegrity'; // NEW (anti-cheat)
+import { FontSizeControl, useQuestionFontSize } from '@/hooks/useQuestionFontSize';
+import { SubmitConfirmOverlay } from '@/components/exam/SubmitConfirmOverlay';
 
 const attemptQueryKey = (examId: string) => ["anonymous-exam-attempt", examId] as const;
 
@@ -94,7 +97,12 @@ export default function AnonymousExamTakingPage() {
         config: attempt?.integrity,
         active: attempt?.status === 'IN_PROGRESS',
         send: (id, payload) => sendAnonymousIntegrityEvents(id, sessionToken, payload),
+        sendEntryPhoto: (id, imageData) => sendAnonymousEntryPhoto(id, sessionToken, imageData),
+        onEntryPhotoSaved: () => void attemptQuery.refetch(),
     });
+    const questionFont = useQuestionFontSize();
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const skipConfirmRef = useRef(false);
     const flagKey = attempt ? `anonymous-exam-flagged-${attempt.id}` : null;
 
     const submitMutation = useMutation({
@@ -303,12 +311,12 @@ export default function AnonymousExamTakingPage() {
             return;
         }
 
-        if (
-            requireConfirmation &&
-            !window.confirm('Bạn có chắc muốn nộp bài? Vui lòng kiểm tra lại các câu trả lời.')
-        ) {
+        if (requireConfirmation && !skipConfirmRef.current) {
+            // In-page dialog: a native confirm() would take the browser out of fullscreen.
+            setConfirmOpen(true);
             return;
         }
+        skipConfirmRef.current = false;
 
         submitStartedRef.current = true;
         timerRefs.current.forEach((timer) => window.clearTimeout(timer));
@@ -500,6 +508,20 @@ export default function AnonymousExamTakingPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
+            {confirmOpen && (
+                <SubmitConfirmOverlay
+                    title="Nộp bài?"
+                    message="Bạn có chắc muốn nộp bài? Vui lòng kiểm tra lại các câu trả lời."
+                    confirmLabel="Nộp bài"
+                    cancelLabel="Hủy"
+                    onCancel={() => setConfirmOpen(false)}
+                    onConfirm={() => {
+                        setConfirmOpen(false);
+                        skipConfirmRef.current = true;
+                        void submitCurrentAnswers(true);
+                    }}
+                />
+            )}
             <header className="sticky top-0 z-30 border-b bg-white/95 backdrop-blur">
                 <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -621,6 +643,8 @@ export default function AnonymousExamTakingPage() {
                             </section>
                         )}
 
+                        <FontSizeControl font={questionFont} />
+
                         {attempt.questions.map((question, index) => {
                             if (question.type === 'CODING') return null;
                             const answer = answers[question.id] ?? {
@@ -645,7 +669,7 @@ export default function AnonymousExamTakingPage() {
                                         {starButton(question.id, index + 1)}
                                     </div>
 
-                                    <p className="mt-3 whitespace-pre-wrap">{question.content}</p>
+                                    <p className="mt-3 whitespace-pre-wrap" style={questionFont.style}>{question.content}</p>
 
                                     {question.imageUrl?.trim() && (
                                         <div className="mt-3">
@@ -709,7 +733,7 @@ export default function AnonymousExamTakingPage() {
                                                             className="mt-1"
                                                         />
                                                         <div className="flex flex-col gap-2">
-                                                            <span>{option.content}</span>
+                                                            <span style={questionFont.style}>{option.content}</span>
                                                             {option.imageUrl?.trim() && (
                                                                 <img
                                                                     src={option.imageUrl}

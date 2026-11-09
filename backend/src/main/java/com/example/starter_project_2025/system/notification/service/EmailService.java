@@ -92,15 +92,16 @@ public class EmailService {
         }
 
         String examTitle = invitation.getExam().getTitle();
-        LocalDateTime startTime = invitation.getExam().getStartTime();
-        String countdown = buildCountdown(startTime, now);
+        LocalDateTime startTime = invitation.getAvailableFrom() != null ? invitation.getAvailableFrom() : invitation.getExam().getStartTime();
+        LocalDateTime endTime = invitation.getExpiresAt() != null ? invitation.getExpiresAt() : invitation.getExam().getEndTime();
+        String countdown = buildCountdown(startTime != null ? startTime : endTime, now);
         String examLink = String.format("%s/student/exams/%d", frontendUrl, invitation.getExam().getId());
 
         List<Map.Entry<String, Object>> vars = new ArrayList<>();
         vars.add(Map.entry("username", invitation.getUser().getFullName()));
         vars.add(Map.entry("examTitle", examTitle));
         vars.add(Map.entry("startTime", formatDateTime(startTime)));
-        vars.add(Map.entry("endTime", formatDateTime(invitation.getExam().getEndTime())));
+        vars.add(Map.entry("endTime", formatDateTime(endTime)));
         vars.add(Map.entry("durationMinutes", invitation.getExam().getDurationMinutes()));
         vars.add(Map.entry("countdown", countdown));
         vars.add(Map.entry("examLink", examLink));

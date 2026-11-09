@@ -14,4 +14,13 @@ public class ExamFilter extends BaseFilter {
 
     @FilterField(entityField = "category", operator = FilterOperator.EQUAL)
     private ExamCategory category;
+
+    @FilterField(entityField = "course.id", operator = FilterOperator.EQUAL)
+    private Long courseId;
+
+    @FilterField(entityField = "section.id", operator = FilterOperator.EQUAL)
+    private Long sectionId;
+
+    @FilterField(entityField = "lesson.id", operator = FilterOperator.EQUAL)
+    private Long lessonId;
 }

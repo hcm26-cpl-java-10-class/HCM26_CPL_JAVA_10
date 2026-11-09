@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.exam.controller;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.exam.dto.ExamIntegrityReportDTO;
 import com.example.starter_project_2025.system.exam.dto.IntegrityEventRequest;
+import com.example.starter_project_2025.system.exam.dto.ProctorPhotoRequest;
 import com.example.starter_project_2025.system.exam.service.AnonymousExamService;
 import com.example.starter_project_2025.system.exam.service.ExamIntegrityService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -49,6 +50,35 @@ public class ExamIntegrityController {
         anonymousExamService.recordIntegrity(sessionToken, attemptId, request,
                 http.getHeader("User-Agent"), clientIp(http));
         return ResponseEntity.noContent().build();
+    }
+
+    /** Anh chup nguoi thi luc vao thi (camera proctoring). */
+    @PostMapping("/attempts/{attemptId}/proctor-photo")
+    @PreAuthorize("hasAuthority('EXAM_TAKE')")
+    public ResponseEntity<Void> entryPhoto(
+            @PathVariable Long attemptId,
+            @Valid @RequestBody ProctorPhotoRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        service.saveEntryPhoto(attemptId, principal.getUser().getId(), request.getImageData());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/anonymous/attempts/{attemptId}/proctor-photo")
+    public ResponseEntity<Void> entryPhotoAnonymous(
+            @PathVariable Long attemptId,
+            @RequestHeader("X-Anonymous-Session") String sessionToken,
+            @Valid @RequestBody ProctorPhotoRequest request
+    ) {
+        anonymousExamService.saveEntryPhoto(sessionToken, attemptId, request.getImageData());
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{examId}/integrity-report/attempts/{attemptId}/entry-photo")
+    @PreAuthorize("hasAuthority('EXAM_UPDATE')")
+    public ResponseEntity<ExamIntegrityReportDTO.EntryPhotoDTO> entryPhotoOf(
+            @PathVariable Long examId, @PathVariable Long attemptId) {
+        return ResponseEntity.ok(service.getEntryPhoto(examId, attemptId));
     }
 
     /** Giao vien xem bao cao vi pham (hien trong trang Thong ke). */
