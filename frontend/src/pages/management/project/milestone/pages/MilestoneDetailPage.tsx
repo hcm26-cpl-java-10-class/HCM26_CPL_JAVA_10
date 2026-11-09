@@ -20,6 +20,8 @@ export function MilestoneDetailPage() {
   const workspaceReturn = routeState?.returnTo && /^\/management\/workspaces\/\d+\?/.test(routeState.returnTo)
     && new URLSearchParams(routeState.returnTo.split("?")[1]).get("tab") === "milestones"
     ? routeState.returnTo : null;
+  const workspaceIdParam = Number(searchParams.get("workspaceId") ?? (workspaceReturn ? workspaceReturn.split("/")[3]?.split("?")[0] : undefined));
+  const workspaceId = Number.isSafeInteger(workspaceIdParam) && workspaceIdParam > 0 ? workspaceIdParam : undefined;
   const returnUrl = workspaceReturn ?? (routeState?.returnTo?.startsWith(`/projects/${projectId}/milestones`)
     ? routeState.returnTo : defaultListUrl);
 
@@ -38,6 +40,6 @@ export function MilestoneDetailPage() {
 
   const milestone = detailQuery.data;
   return <MainLayout pathName={{ projects: "Projects", [milestone.project?.id ?? projectId ?? "project"]: milestone.project?.name ?? "Project", milestones: "Milestones", [milestone.id]: milestone.title }}>
-    <MilestoneDetailView milestone={milestone} projectId={projectId} teamId={milestone.teamId ?? teamId} backLabel={workspaceReturn ? "Back to workspace" : "Back to milestones"} onBack={() => navigate(returnUrl)} onRefresh={() => { void detailQuery.refetch(); }} />
+    <MilestoneDetailView milestone={milestone} projectId={projectId} workspaceId={workspaceId} teamId={milestone.teamId ?? teamId} backLabel={workspaceReturn ? "Back to workspace" : "Back to milestones"} onBack={() => navigate(returnUrl)} onRefresh={() => { void detailQuery.refetch(); }} />
   </MainLayout>;
 }

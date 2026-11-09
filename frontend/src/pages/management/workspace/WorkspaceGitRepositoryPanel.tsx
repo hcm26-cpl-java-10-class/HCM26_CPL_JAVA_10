@@ -40,7 +40,7 @@ function errorDetails(error: unknown): { message: string; fields: Record<string,
   }
   return { message: "Could not complete the repository request. Please retry.", fields: {}, conflict: false };
 }
-const EDIT_REASON = "Chỉ Admin có quyền truy cập Workspace, Team Leader, thành viên có quyền Edit Workspace hoặc Mentor phụ trách mới có quyền thay đổi thông tin Git Repository.";
+const EDIT_REASON = "Only an Admin with access to this workspace, the Team Leader, a member with Edit Workspace permission, or the assigned Mentor can change the Git repository.";
 
 export function WorkspaceGitRepositoryPanel({ workspaceId }: { workspaceId: number }) {
   const client = useQueryClient();

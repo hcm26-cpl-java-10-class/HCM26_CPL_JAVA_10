@@ -5,15 +5,19 @@ import type {
   BacklogAssigneeOption,
   BacklogStatus,
   SprintPlanningItem,
+  SprintStatus,
 } from "@/types";
 import { ChevronDown } from "lucide-react";
 import type { DragEvent, ReactNode } from "react";
+import { sprintStatusMeta } from "../../sprint/workspace/board.constants";
 import { backlogItemKey } from "../backlog.constants";
 import { BacklogRow } from "./BacklogRow";
 
 interface BacklogSectionProps {
   title: ReactNode;
   meta?: ReactNode;
+  /** Lifecycle status of the sprint box (`null` for the product backlog). */
+  status?: SprintStatus | null;
   items: SprintPlanningItem[];
   itemKeyPrefix: string;
   selectedIds: number[];
@@ -60,6 +64,7 @@ const countStyles = {
 export function BacklogSection({
   title,
   meta,
+  status,
   items,
   itemKeyPrefix,
   selectedIds,
@@ -87,6 +92,7 @@ export function BacklogSection({
 }: BacklogSectionProps) {
   const allSelected =
     items.length > 0 && items.every((item) => selectedIds.includes(item.id));
+  const statusMeta = status ? sprintStatusMeta(status) : null;
 
   return (
     <div className="flex shrink-0 flex-col gap-1">
@@ -130,6 +136,19 @@ export function BacklogSection({
           <h3 className="truncate text-sm font-semibold text-foreground">
             {title}
           </h3>
+
+          {statusMeta && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                statusMeta.badge,
+              )}
+              title={`Sprint status: ${statusMeta.label}`}
+            >
+              <span className={cn("h-1.5 w-1.5 rounded-full", statusMeta.dot)} />
+              {statusMeta.label}
+            </span>
+          )}
 
           {meta && (
             <span className="text-xs text-muted-foreground">{meta}</span>

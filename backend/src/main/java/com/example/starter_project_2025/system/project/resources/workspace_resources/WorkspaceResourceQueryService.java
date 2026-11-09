@@ -45,18 +45,20 @@ public class WorkspaceResourceQueryService {
         Workspace workspace = contexts.require(user, workspaceId);
         Map<Long, Project> visible = visibleProjects(workspace);
         Long primaryId = workspace.getProject() == null ? null : workspace.getProject().getId();
-        Project target = visible.get(selectedProjectId == null ? primaryId : selectedProjectId);
+        Long scopedId = selectedProjectId == null ? primaryId : selectedProjectId;
+        Project target = scopedId == null ? null : visible.get(scopedId);
         if (selectedProjectId != null && target == null) throw outsideScope();
 
         var seen = new HashSet<Source>();
-        List<WorkspaceResourceDtos.ResourceItem> items = visible.isEmpty() ? List.of() :
-                resources.findAllByProjectIdInOrderByOrderIndexAscIdAsc(visible.keySet()).stream()
+        List<WorkspaceResourceDtos.ResourceItem> items = target == null ? List.of() :
+                resources.findAllByProjectIdInOrderByOrderIndexAscIdAsc(List.of(target.getId())).stream()
                         .filter(row -> Objects.equals(row.getTenantId(), workspace.getTenant().getId()))
                         .filter(row -> row.getSourceTemplateId() == null || row.getSourceTemplateResourceId() == null
                                 || seen.add(new Source(row.getSourceTemplateId(), row.getSourceTemplateResourceId())))
                         .filter(row -> Boolean.TRUE.equals(row.getIsActive()))
-                        .map(row -> toItem(user, workspace, visible.get(row.getProjectId()), row)).toList();
-        return new WorkspaceResourceDtos.ResourceCollection(workspaceId, primaryId, workspace.getTeam().getId(),
+                        .map(row -> toItem(user, workspace, target, row)).toList();
+        return new WorkspaceResourceDtos.ResourceCollection(workspaceId,
+                target == null ? null : target.getId(), workspace.getTeam().getId(),
                 items.size(), editorPolicy.canManage(user, workspace, target), storage.maxBytes(),
                 storage.allowedExtensions(), items);
     }

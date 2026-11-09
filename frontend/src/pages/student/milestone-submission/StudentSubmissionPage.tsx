@@ -1,3 +1,4 @@
+import { SubmittedArtifactDetail } from "./SubmittedArtifactDetail";
 import { milestoneSubmissionApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -10,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { SaveSubmissionDraftRequest, SubmissionArtifactType, SubmissionDetail } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, CalendarClock, ExternalLink, Link2, Plus, RotateCcw, Save, Send, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, CalendarClock, Link2, Plus, RotateCcw, Save, Send, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -141,7 +142,7 @@ export function StudentSubmissionPage() {
 
   if (item.status === "CHANGES_REQUESTED") return (
     <MainLayout pathName={{ student: "Student", submission: item.milestoneTitle }}>
-      <div className="mx-auto grid max-w-5xl gap-5">
+      <div className="mx-auto grid w-full max-w-7xl gap-4 px-4 pb-8 sm:px-6">
         <Button variant="ghost" className="w-fit" onClick={() => navigate("/student/milestone-submissions")}><ArrowLeft className="size-4" /> Back to My Submissions</Button>
         <Alert className="border-amber-400 bg-amber-50 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100"><RotateCcw /><AlertTitle>Changes requested by reviewer</AlertTitle><AlertDescription>Version {item.currentVersionNumber} is preserved. Review the feedback and prepare version {item.currentVersionNumber + 1} before resubmission closes.</AlertDescription></Alert>
         <Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>{item.teamName} · Version {item.currentVersionNumber}</CardDescription></div><SubmissionStatusBadge status={item.status} /></div></CardHeader><CardContent className="flex flex-wrap gap-4 text-sm text-muted-foreground"><span className="flex items-center gap-2"><CalendarClock className="size-4" /> Deadline: {new Date(item.deadline).toLocaleString()}</span>{item.lateUntil ? <span>Late policy closes: {new Date(item.lateUntil).toLocaleString()}</span> : null}<span>Attempt: {item.submissionAttempts}{item.maxSubmissionAttempts ? `/${item.maxSubmissionAttempts}` : ""}</span></CardContent></Card>
@@ -154,7 +155,7 @@ export function StudentSubmissionPage() {
 
   if (item.status !== "DRAFT" || !form) return (
     <MainLayout pathName={{ student: "Student", submission: item.milestoneTitle }}>
-      <div className="mx-auto grid max-w-5xl gap-5"><Button variant="ghost" className="w-fit" onClick={() => navigate("/student/milestone-submissions")}><ArrowLeft className="size-4" /> Back to My Submissions</Button><Card><CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>Version {item.currentVersionNumber} is read-only because it has been submitted.</CardDescription></div><SubmissionStatusBadge status={item.status} /></div></CardHeader><CardContent className="grid gap-4 text-sm"><p className="whitespace-pre-wrap"><strong>Summary:</strong> {item.currentVersion.notes || "—"}</p>{item.product ? <div className="grid gap-2 rounded-lg border p-3"><p><strong>Repository:</strong> {item.product.repositoryUrl ? <a className="text-primary underline" href={item.product.repositoryUrl} target="_blank" rel="noreferrer">{item.product.repositoryUrl} <ExternalLink className="inline size-3" /></a> : "—"}</p><p><strong>Deployment:</strong> {item.product.deploymentUrl ? <a className="text-primary underline" href={item.product.deploymentUrl} target="_blank" rel="noreferrer">{item.product.deploymentUrl} <ExternalLink className="inline size-3" /></a> : "—"}</p><p><strong>Release notes:</strong> {item.product.releaseNotes || "—"}</p><p><strong>Attachments:</strong> {item.product.attachments.length}</p></div> : null}</CardContent></Card>{latestFeedback ? <Card><CardHeader><CardTitle>Latest feedback</CardTitle><CardDescription className="whitespace-pre-wrap">{latestFeedback.overallFeedback || "No overall feedback was provided."}</CardDescription></CardHeader></Card> : null}<SubmissionVersionHistory item={item} /></div>
+      <SubmittedArtifactDetail key={item.id} item={item} onBack={() => navigate("/student/milestone-submissions")} />
     </MainLayout>
   );
 
@@ -167,7 +168,7 @@ export function StudentSubmissionPage() {
 
   return (
     <MainLayout pathName={{ student: "Student", submission: item.milestoneTitle }}>
-      <div className="mx-auto grid max-w-5xl gap-5">
+      <div className="mx-auto grid w-full max-w-7xl gap-4 px-4 pb-8 sm:px-6">
         <Button variant="ghost" className="w-fit" onClick={() => navigate(-1)}><ArrowLeft className="size-4" /> Back</Button>
         <Card className="border-primary/20"><CardHeader><div className="flex flex-wrap justify-between gap-3"><div><CardTitle>{item.milestoneTitle}</CardTitle><CardDescription>Student submission · Version {item.currentVersionNumber} · Attempt {item.submissionAttempts + 1}{item.maxSubmissionAttempts ? `/${item.maxSubmissionAttempts}` : ""}</CardDescription></div><SubmissionStatusBadge status={item.status} /></div></CardHeader></Card>
         {error ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Check the submission</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}

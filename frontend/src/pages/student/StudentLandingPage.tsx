@@ -8,7 +8,7 @@ import { EnrollmentProgressBar } from "@/pages/management/demo/progress/Enrollme
 import { formatRoleLabel } from "@/utils/rbac.utils";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { ArrowRight, BookOpen, CalendarDays, CheckCircle2, FileCheck2, GraduationCap, Kanban, UserRound } from "lucide-react";
+import { ArrowRight, BookOpen, CalendarDays, CheckCircle2, GraduationCap, UserRound } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAdminStudentPreview } from "./useAdminStudentPreview";
 
@@ -100,17 +100,6 @@ export default function StudentLandingPage() {
                 Khong co quyen BOOK_READ
               </Button>
             )}
-            <Button asChild variant="outline" className="border-slate-300 bg-white/80">
-              <Link to="/project-board">
-                <Kanban className="mr-2 size-4" />
-                Mo bang cong viec
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100">
-              <Link to="/student/milestone-submissions">
-                <FileCheck2 className="mr-2 size-4" /> My Submissions
-              </Link>
-            </Button>
           </div>
         </motion.div>
       </section>

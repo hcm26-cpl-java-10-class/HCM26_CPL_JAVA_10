@@ -149,7 +149,7 @@ Các trang review như `SubmissionReviewPage.tsx` và `SubmissionReviewForm.tsx`
 | `service/ArtifactSubmissionService.java` | Nghiệp vụ submit theo Project; lock, validation, version, idempotency, audit/outbox |
 | `service/ArtifactReviewSubmissionSyncService.java` | Cầu nối artifact store với submission/version bên reviewer |
 | `service/MilestoneSubmissionWindow.java` | Kiểm tra lifecycle và hạn/late window để cho phép nộp |
-| `service/ReleaseNotesWordLimit.java` | Release notes tối đa 1.000 từ, khác với summary/mô tả 1.000 ký tự |
+| `service/ReleaseNotesCharacterLimit.java` | Release notes tối đa 1.000 ký tự; summary/mô tả cũng giới hạn 1.000 ký tự |
 | `dto/SubmissionDtos.java` | Request/response của luồng submission/review; summary tối đa 1.000 ký tự |
 | `domain/MilestoneArtifactDraft.java`, repository | Nháp có thể sửa, bảng `milestone_artifact_drafts` |
 | `domain/MilestoneArtifactSubmission.java`, repository | Nội dung version chính thức, bảng `milestone_artifact_submissions` |
