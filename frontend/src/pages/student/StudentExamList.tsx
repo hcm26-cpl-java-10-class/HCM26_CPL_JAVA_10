@@ -4,6 +4,7 @@ import {
     type Exam,
     type ExamAttemptSummary,
 } from '@/api/exam.api';
+import { examApi } from '@/api';
 import { EXAM_CATEGORY_LABEL } from '@/types';
 import { formatScore } from '@/utils/examScore';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -18,9 +19,9 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { ExamPasswordDialog } from '@/pages/student/components/ExamPasswordDialog';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { AlertCircle, ArrowRight, CalendarDays, Clock3, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowRight, BookOpen, CalendarDays, Clock3, Lock, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const examsQueryKey = ['student-exams'] as const;
@@ -50,6 +51,14 @@ function sortExams(exams: Exam[]) {
     });
 }
 
+type ExamLock = { locked: boolean; reason: string | null };
+
+/** "Course › Section › Lesson" the exam belongs to, or null when it is not linked to a course. */
+function examCourseLabel(exam: Exam): string | null {
+    if (!exam.courseName) return null;
+    return [exam.courseName, exam.sectionTitle, exam.lessonTitle].filter(Boolean).join(' › ');
+}
+
 function getAttemptStatus(attempt?: ExamAttemptSummary) {
     if (!attempt) return null;
 
@@ -72,6 +81,7 @@ function ExamCard({
                       onOpen,
                       onReview,
                       disabled: externallyDisabled,
+                      lock,
                   }: {
     exam: Exam;
     attempt?: ExamAttemptSummary;
@@ -79,6 +89,7 @@ function ExamCard({
     onOpen: (examId: number) => void;
     onReview: (attemptId: number) => void;
     disabled: boolean;
+    lock?: ExamLock;
 }) {
     const status = getAttemptStatus(attempt);
     const canReview = (attempt?.status === 'SUBMITTED' || attempt?.status === 'PENDING_REVIEW')
@@ -87,12 +98,17 @@ function ExamCard({
     const beforeOpen = exam.startTime != null && now < new Date(exam.startTime).getTime();
     const afterClose = exam.endTime != null && now >= new Date(exam.endTime).getTime();
     const isInProgress = attempt?.status === 'IN_PROGRESS';
+    // Locked by the lesson/section progress rules of the course the exam belongs to.
+    const locked = lock?.locked === true && !isInProgress;
+    const courseText = examCourseLabel(exam);
     const hasAttempts = (attempt?.attemptsUsed ?? 0) > 0;
     const isResultPublished = attempt?.resultPublished !== false;
     const outOfAttempts = hasAttempts && (attempt?.attemptsRemaining ?? 0) <= 0 && !isInProgress;
     const disabledBySchedule = (beforeOpen || afterClose) && !isInProgress;
-    const isDisabled = externallyDisabled || outOfAttempts || disabledBySchedule;
-    const buttonLabel = isInProgress
+    const isDisabled = externallyDisabled || locked || outOfAttempts || disabledBySchedule;
+    const buttonLabel = locked
+        ? 'Locked'
+        : isInProgress
         ? 'Continue Exam'
         : outOfAttempts
             ? 'No Attempts Left'
@@ -119,8 +135,20 @@ function ExamCard({
                     {exam.category && (
                         <Badge variant="outline">{EXAM_CATEGORY_LABEL[exam.category]}</Badge>
                     )}
+                    {locked && (
+                        <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-700">
+                            <Lock className="size-3" />
+                            Locked
+                        </Badge>
+                    )}
                 </div>
                 <CardTitle className="pt-2 text-lg text-slate-900">{exam.title}</CardTitle>
+                {courseText && (
+                    <p className="flex items-start gap-1 text-xs text-slate-500" title={courseText}>
+                        <BookOpen className="mt-0.5 size-3 shrink-0" />
+                        <span className="break-words">{courseText}</span>
+                    </p>
+                )}
                 <CardDescription>
                     Max Score:{' '}
                     <span className="font-medium text-slate-700">
@@ -130,6 +158,11 @@ function ExamCard({
             </CardHeader>
 
             <CardContent className="flex-1">
+                {locked && (
+                    <p className="mb-2 text-sm text-amber-700">
+                        {lock?.reason ?? 'Complete the required lessons to unlock this exam.'}
+                    </p>
+                )}
                 {attempt?.status === 'PENDING_REVIEW' && isResultPublished && (
                     <p className="text-sm text-amber-700">
                         Provisional Score: {formatScore(attempt.objectiveScore ?? 0)}/{formatScore(attempt.maxScore ?? 10)} (ungraded essays count as 0).
@@ -219,9 +252,27 @@ export default function StudentExamList() {
     const exams = sortExams(examsQuery.data ?? []);
     const attempts = attemptsQuery.data ?? [];
 
+    // Lock state comes from the course the exam is linked to (shares the cache with the course learning page).
+    const courseIds = Array.from(
+        new Set(exams.map((item) => item.courseId).filter((id): id is number => id != null)),
+    );
+    const lockQueries = useQueries({
+        queries: courseIds.map((courseId) => ({
+            queryKey: ['course-exams', courseId],
+            queryFn: () => examApi.listByCourse(courseId),
+            retry: false,
+            staleTime: 30_000,
+        })),
+    });
+    const lockById = new Map<number, ExamLock>();
+    lockQueries.forEach((query) =>
+        query.data?.forEach((item) => lockById.set(item.id, { locked: item.locked, reason: item.lockReason })),
+    );
+
     const openExam = (examId: number) => {
         const exam = exams.find((item) => item.id === examId);
         const isInProgress = attempts.some((item) => item.examId === examId && item.status === 'IN_PROGRESS');
+        if (lockById.get(examId)?.locked && !isInProgress) return;
         if (exam?.hasPassword && !isInProgress) {
             setPasswordExam(exam);
             return;
@@ -306,6 +357,7 @@ export default function StudentExamList() {
                                     attempt={attempt}
                                     now={now}
                                     disabled={attemptsQuery.isError}
+                                    lock={lockById.get(exam.id)}
                                     onOpen={openExam}
                                     onReview={(attemptId) => navigate(`/student/exams/attempts/${attemptId}/review`)}
                                 />
