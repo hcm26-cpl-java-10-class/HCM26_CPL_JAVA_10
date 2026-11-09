@@ -14,3 +14,5 @@ export * from "./features/demo/enrollment.api";
 export * from "./features/demo/lesson.api";
 export * from "./features/rbac/department.api";
 export * from "./features/cls.api";
+export * from "./features/calendar.api";
+export * from "./features/demo/schedule_version.api";

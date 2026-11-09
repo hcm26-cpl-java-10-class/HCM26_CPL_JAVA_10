@@ -1,3 +1,5 @@
+import WeeklyCalendarPage from "@/pages/management/calendar/WeeklyCalendarPage";
+import ScheduleVersionListPage from "@/pages/management/demo/schedule_version";
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -46,6 +48,9 @@ export const routes: RouteConfig[] = [
   { path: "/training-operations/class-details/:classCode", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/class-details/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/sessions/:sessionId", component: SessionDetailPage, requiredPermission: "SESSION_READ" },
+    { path: "/calendar/preview", component: WeeklyCalendarPage, requiredPermission: "SESSION_READ" },
+  { path: "/schedule-versions", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/calendar/adjust", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ" },
   { path: "/dashboard", component: Dashboard, isModuleDriven: true },
   { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   {
