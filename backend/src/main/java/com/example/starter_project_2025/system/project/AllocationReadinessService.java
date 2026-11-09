@@ -45,6 +45,8 @@ public class AllocationReadinessService {
     public static final String ERR_TEAM_CAPACITY_EXCEEDED = "ERR_TEAM_CAPACITY_EXCEEDED";
     public static final String ERR_TEAM_ROLE_REQUIRED = "ERR_TEAM_ROLE_REQUIRED";
     public static final String ERR_TEAM_LEADER_REQUIRED = "ERR_TEAM_LEADER_REQUIRED";
+    public static final String ERR_TEAM_MENTOR_REQUIRED = "ERR_TEAM_MENTOR_REQUIRED";
+    public static final String ERR_TEAM_MENTOR_INVALID = "ERR_TEAM_MENTOR_INVALID";
     public static final String ERR_MULTI_ROLE_NOT_ALLOWED = "ERR_MULTI_ROLE_NOT_ALLOWED";
     public static final String ERR_TEAM_ROLE_QUOTA_NOT_MET = "ERR_TEAM_ROLE_QUOTA_NOT_MET";
 
@@ -54,6 +56,7 @@ public class AllocationReadinessService {
     private final ProjectMemberRepository memberRepository;
     private final ClassMemberRepository classMemberRepository;
     private final ScopeAuthorizationService scopeAuthorizationService;
+    private final ProjectTeamMentorService teamMentorService;
     private final ObjectMapper objectMapper;
 
     /** US-12 pre-check endpoint: validates the caller can manage the class. */
@@ -173,6 +176,14 @@ public class AllocationReadinessService {
     ) {
         List<ProjectMember> assignments = memberRepository.findAllByTeam_IdOrderByIdAsc(team.getId());
         List<AllocationReadinessResponse.TeamReadinessIssue> issues = new ArrayList<>();
+        if (team.getStatus() == ProjectTeamStatus.DRAFT) {
+            try {
+                teamMentorService.resolveMentorForPublish(team);
+            } catch (TeamPublishValidationException invalidMentor) {
+                String code = team.getAssignedMentorId() == null ? ERR_TEAM_MENTOR_REQUIRED : ERR_TEAM_MENTOR_INVALID;
+                issues.add(issue(team, code, invalidMentor.getMessage(), List.of(), List.of()));
+            }
+        }
         if (ProjectTeamLeaderService.activeLeaderId(team, assignments) == null) {
             issues.add(issue(team, ERR_TEAM_LEADER_REQUIRED,
                     "Chọn một thành viên ACTIVE làm Leader trước khi công bố nhóm.", List.of(), List.of()));

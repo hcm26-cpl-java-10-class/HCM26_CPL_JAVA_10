@@ -8,7 +8,6 @@ import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthor
 import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateVersionStatus;
-import com.example.starter_project_2025.system.project.template.assignment.TemplateAssignmentProvisioningService;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -61,7 +60,6 @@ public class ProjectTeamTemplateService {
     private final ProjectTeamAuditRepository auditRepository;
     private final ProjectTeamOutboxRepository outboxRepository;
     private final ScopeAuthorizationService scopeAuthorizationService;
-    private final TemplateAssignmentProvisioningService provisioningService;
     private final ObjectMapper objectMapper;
 
     // ------------------------------------------------------------------
@@ -233,6 +231,8 @@ public class ProjectTeamTemplateService {
 
         team.setProjectTemplate(template);
         team.setProjectTemplateVersionId(versionId);
+        team.setAssignedConstraintsJson(template.getConstraintsJson());
+        team.setAssignedTemplateName(template.getName());
         // Keep the per-team capacity in sync with the template window so adding
         // members later cannot break the rule that was just validated.
         team.setMaxMembers(capacity.maxMembers());
@@ -242,11 +242,6 @@ public class ProjectTeamTemplateService {
         if (correlationId == null || correlationId.isBlank()) {
             correlationId = UUID.randomUUID().toString();
         }
-
-        // US-13: assigning the brief also activates the workspace creation flow:
-        // snapshot the active template version, insert the project silently and
-        // fan the brief out into workspace components.
-        provisioningService.provision(team, template, actorId, correlationId);
 
         TeamTemplateAuditState before = new TeamTemplateAuditState(
                 team.getId(),

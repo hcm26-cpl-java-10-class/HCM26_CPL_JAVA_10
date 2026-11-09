@@ -10,12 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { AssignmentModule, AssignmentTeam, AssignmentTemplate, ProjectAssignmentMode, ProjectAssignmentRequest } from "@/types/features/project-assignment";
+import type { AssignmentModule, AssignmentRole, AssignmentRolePolicy, AssignmentTeam, AssignmentTemplate, ProjectAssignmentMode, ProjectAssignmentRequest } from "@/types/features/project-assignment";
 import { AssignmentTeamRoles, assignmentMemberRoles, assignmentRoleErrors, type MemberRoleChoices } from "./AssignmentTeamRoles";
 
 const selectClass = "h-10 w-full rounded-md border bg-background px-3 text-sm";
 const modeOptions = [
-  { id: "SPLIT", title: "Chia module cho nhiều Team", description: "Mỗi module trực tiếp giao cho một Team riêng. Mentor quản lý milestone chung của Master." },
+  { id: "SPLIT", title: "Phân công theo module", description: "Mỗi module giao cho một Team. Một Team có thể nhận nhiều module." },
   { id: "WHOLE", title: "Giao trọn Master cho một Team", description: "Một Team phụ trách cả Master và toàn bộ module trong cùng Workspace." },
 ] as const;
 const assignmentSteps = [
@@ -47,22 +47,32 @@ function ModuleBranch({ module }: { module: AssignmentModule }) {
   </li>;
 }
 
-function TeamSelect({ id, teams, value, min, max, used = [], onChange }: {
+function sharedRolePolicy(policies: AssignmentRolePolicy[]): AssignmentRolePolicy {
+  const quotas = new Map<AssignmentRole, AssignmentRolePolicy["quotas"][number]>();
+  for (const policy of policies) {
+    for (const quota of policy.quotas) {
+      const previous = quotas.get(quota.role);
+      quotas.set(quota.role, previous ? {
+        role: quota.role, min: Math.max(previous.min, quota.min), max: Math.min(previous.max, quota.max),
+      } : quota);
+    }
+  }
+  return { allowMultiRole: policies.every(policy => policy.allowMultiRole), quotas: [...quotas.values()] };
+}
+
+function TeamSelect({ id, teams, value, min, max, onChange }: {
   id: string;
   teams: AssignmentTeam[];
   value: string;
   min: number;
   max: number;
-  used?: string[];
   onChange: (value: string) => void;
 }) {
   return <select id={id} className={selectClass} value={value} onChange={event => onChange(event.target.value)}>
     <option value="">Chọn Team</option>
     {teams.map(team => {
       const teamId = String(team.id);
-      const reserved = used.includes(teamId) && value !== teamId;
-      const unavailable = !team.eligible ? team.reason ?? "Team không sẵn sàng" : !fits(team, min, max) ? "Sĩ số không phù hợp"
-        : reserved ? "Đã gán module khác" : null;
+      const unavailable = !team.eligible ? team.reason ?? "Team không sẵn sàng" : !fits(team, min, max) ? "Sĩ số không phù hợp" : null;
       return <option key={team.id} value={teamId} disabled={!!unavailable}>
         {team.name} · {team.memberCount} người{unavailable && " · " + unavailable}
       </option>;
@@ -77,6 +87,7 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
   backTo: string;
 }) {
   const { user, activeRole } = usePermissions();
+  const teamScoped = initialTeamId != null;
   const client = useQueryClient();
   const [search, setSearch] = useState("");
   const [keyword, setKeyword] = useState("");
@@ -111,39 +122,45 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
       for (const section of ["teams", "unassigned-members", "class-roster"]) {
         void client.invalidateQueries({ queryKey: ["team-allocation", section, classId, sessionId] });
       }
-      void client.invalidateQueries({ queryKey: ["workspace-candidates"] });
       void client.invalidateQueries({ queryKey: ["master-assignment-preview", classId, sessionId] });
-      void client.invalidateQueries({ queryKey: ["class-master-projects", classId, sessionId] });
     },
     onSettled: () => { sending.current = false; },
   });
 
   const data = preview.data;
-  const mode = data?.modules.length === 0 ? "WHOLE" : preferredMode;
+  const mode = teamScoped || data?.modules.length === 0 ? "WHOLE" : preferredMode;
   const mappedTeams = data?.modules.map(module => {
     const team = data.teams.find(item => String(item.id) === mapping[module.templateId]);
     return { module, team, valid: !!team && fits(team, module.minMembers, module.maxMembers) };
   }) ?? [];
-  const selectedTeamIds = mappedTeams.flatMap(({ team }) => team ? [String(team.id)] : []);
-  const mapped = mappedTeams.length > 0 && mappedTeams.every(({ valid }) => valid)
-    && new Set(selectedTeamIds).size === mappedTeams.length;
-  const wholeTeam = data?.teams.find(team => String(team.id) === teamId);
+  const mapped = mappedTeams.length > 0 && mappedTeams.every(({ valid }) => valid);
+  const wholeTeam = data?.teams.find(team => teamScoped ? team.id === initialTeamId : String(team.id) === teamId);
   const wholeValid = !!data && !!wholeTeam && fits(wholeTeam, data.minMembers, data.maxMembers);
-  const selectedTeams = !data ? [] : mode === "WHOLE"
-    ? wholeValid && wholeTeam ? [{ team: wholeTeam, policy: data.rolePolicy, projectName: data.master.name }] : []
-    : mappedTeams.flatMap(({ module, team, valid }) => valid && team
-        ? [{ team, policy: module.rolePolicy, projectName: module.name }] : []);
-  const roleTeams = selectedTeams.map(({ team, policy, projectName }) => {
+  const briefsByTeam = new Map<number, { team: AssignmentTeam; briefs: Array<{ name: string; rolePolicy: AssignmentRolePolicy }> }>();
+  if (mode === "WHOLE" && data && wholeValid && wholeTeam) {
+    briefsByTeam.set(wholeTeam.id, { team: wholeTeam, briefs: [{ name: data.master.name, rolePolicy: data.rolePolicy }] });
+  } else if (mode === "SPLIT") {
+    for (const { module, team, valid } of mappedTeams) {
+      if (!valid || !team) continue;
+      const existing = briefsByTeam.get(team.id);
+      if (existing) existing.briefs.push(module);
+      else briefsByTeam.set(team.id, { team, briefs: [module] });
+    }
+  }
+  const roleTeams = [...briefsByTeam.values()].map(({ team, briefs }) => {
+    const policy = sharedRolePolicy(briefs.map(brief => brief.rolePolicy));
+    const projectName = briefs.map(brief => brief.name).join(" + ");
     const choices = roleChoices[team.id] ?? {};
-    const leaderId = team.leaderMemberId ?? (team.status === "DRAFT" ? leaderChoices[team.id] ?? null : null);
-    const errors = assignmentRoleErrors(team, policy, choices, leaderId);
+    const leaderId = leaderChoices[team.id] === undefined ? team.leaderMemberId : leaderChoices[team.id];
+    const errors = policy.quotas.some(quota => quota.min > quota.max)
+      ? ["Các module của Team có định suất vai trò xung đột. Quay lại để đổi cách phân công."]
+      : assignmentRoleErrors(team, policy, choices, leaderId);
     return { team, policy, projectName, choices, leaderId, errors };
   });
   const roleTeam = roleTeams.find(({ team }) => team.id === roleTeamId) ?? roleTeams[0];
   const readyRoleCount = roleTeams.filter(({ errors }) => errors.length === 0).length;
   const canConfigureRoles = !!data && !preview.isError && !preview.isFetching && (mode === "SPLIT" ? mapped : wholeValid);
   const ready = canConfigureRoles && readyRoleCount === roleTeams.length;
-  const draftTeams = roleTeams.filter(({ team }) => team.status === "DRAFT");
   const review = step === "review";
 
   function goToStep(next: AssignmentStep) {
@@ -172,7 +189,7 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
       masterTemplateId: data.master.id,
       versionId: data.master.versionId,
       mode,
-      ...(mode === "WHOLE" ? { teamId: Number(teamId) } : {}),
+      ...(mode === "WHOLE" ? { teamId: wholeTeam!.id } : {}),
       modules: mode === "SPLIT" ? data.modules.map(module => ({
         moduleTemplateId: module.templateId, teamId: Number(mapping[module.templateId]),
       })) : [],
@@ -203,13 +220,10 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
 
   if (assignment.isSuccess) return <Card role="status">
     <CardHeader>
-      <CardTitle className="flex items-center gap-2"><CheckCircle2 className="size-5 text-emerald-600" /> Đã gán Master Project</CardTitle>
-      <CardDescription>{assignment.data.workspaces.length} Workspace đã được tạo.</CardDescription>
+      <CardTitle className="flex items-center gap-2"><CheckCircle2 className="size-5 text-emerald-600" /> Đã lưu phân công Master</CardTitle>
+      <CardDescription>Về danh sách nhóm để chọn Mentor cho từng Team và kiểm tra điều kiện công bố. Workspace được tạo sau khi công bố thành công.</CardDescription>
     </CardHeader>
-    <CardContent className="grid gap-4">
-      <div className="flex flex-wrap gap-2">{assignment.data.workspaces.map(workspace => <Button key={workspace.id} asChild variant="outline">
-        <Link to={"/management/workspaces/" + workspace.id}>{workspace.teamName} · {workspace.projectName}</Link>
-      </Button>)}</div>
+    <CardContent>
       <div className="flex flex-wrap gap-2">
         <Button asChild><Link to={backTo}>Về danh sách nhóm</Link></Button>
         <Button variant="outline" onClick={() => selectTemplate(null)}>Gán Project khác</Button>
@@ -268,12 +282,12 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
             <summary className="cursor-pointer font-medium">Xem cây module</summary>
             <ul className="mt-3 space-y-2">{data.modules.map(module => <ModuleBranch key={module.templateId} module={module} />)}</ul>
           </details>}
-          {!review && <fieldset className="grid gap-3 sm:grid-cols-2">
+          {!review && !teamScoped && data.modules.length > 0 && <fieldset className="grid gap-3 sm:grid-cols-2">
             <legend className="mb-2 text-sm font-medium">Cách phân công Master</legend>
             {modeOptions.map(option => <label key={option.id} className={"flex gap-3 rounded-lg border p-3 "
               + (mode === option.id ? "border-primary bg-primary/5" : "")}>
               <input type="radio" name="master-distribution" value={option.id} checked={mode === option.id}
-                disabled={option.id === "SPLIT" && !data.modules.length} onChange={() => { setPreferredMode(option.id); assignment.reset(); }} />
+                onChange={() => { setPreferredMode(option.id); assignment.reset(); }} />
               <span><span className="block text-sm font-medium">{option.title}</span>
                 <span className="text-xs text-muted-foreground">{option.description}</span></span>
             </label>)}
@@ -287,20 +301,23 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
                 </Label>
                 {review ? <p className="text-sm">{team?.name}</p>
                   : <TeamSelect id={id} teams={data.teams} value={mapping[module.templateId] ?? ""}
-                      min={module.minMembers} max={module.maxMembers} used={selectedTeamIds}
+                      min={module.minMembers} max={module.maxMembers}
                       onChange={value => { setMapping(current => ({ ...current, [module.templateId]: value })); assignment.reset(); }} />}
               </div>;
             })}
             <p className="rounded-md bg-muted/40 p-3 text-sm text-muted-foreground">
-              Mỗi Team thấy milestone chung của Master trong Workspace. Mentor lớp quản lý việc nộp và chấm phần chung.
+              Mỗi Team thực hiện milestone của các module được giao. Mentor lớp quản lý milestone Master ở cấp lớp.
             </p>
           </> : <div className="grid gap-2">
-            <Label htmlFor={review ? undefined : "whole-project-team"}>Team nhận toàn bộ đề bài</Label>
-            {review ? <p className="text-sm">{wholeTeam?.name}</p>
+            <Label htmlFor={review || teamScoped ? undefined : "whole-project-team"}>Team nhận toàn bộ đề bài</Label>
+            {review || teamScoped ? <p className="text-sm">{wholeTeam?.name ?? "Không tìm thấy Team trong phiên này"}</p>
               : <TeamSelect id="whole-project-team" teams={data.teams} value={wholeTeam ? teamId : ""}
                   min={data.minMembers} max={data.maxMembers}
                   onChange={value => { setTeamId(value); assignment.reset(); }} />}
             <p className="text-xs text-muted-foreground">Sĩ số yêu cầu: {data.minMembers}–{data.maxMembers} thành viên.</p>
+            {teamScoped && wholeTeam && !wholeValid && <p role="alert" className="text-sm text-destructive">
+              {wholeTeam.reason ?? `Team có ${wholeTeam.memberCount} thành viên. Hãy điều chỉnh sĩ số trước khi gán.`}
+            </p>}
           </div>}
         </CardContent>
       </Card>}
@@ -356,8 +373,8 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
             {readyRoleCount}/{roleTeams.length} Team đã đủ Leader và vai trò.
           </p>}
         </>}
-        {review && draftTeams.length > 0 && <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
-          Khi xác nhận, các Team DRAFT sau sẽ được công bố cùng Workspace: {draftTeams.map(({ team }) => team.name).join(", ")}.
+        {review && <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+          Lưu đề bài và vai trò cho các nhóm nháp. Workspace và hạn milestone bắt đầu từ lúc công bố chính thức.
         </p>}
         {assignment.isError && <div role="alert" className="grid gap-2 text-destructive">
           <p>{failure(assignment.error)}</p>
@@ -368,7 +385,7 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
           : <>
             <Button disabled={!ready || assignment.isPending} onClick={() => review ? submit() : goToStep("review")}>
               {assignment.isPending && <LoaderCircle className="size-4 animate-spin" />}
-              {assignment.isPending ? "Đang tạo Workspace…" : review ? "Xác nhận gán" : "Xem lại phân công"}
+              {assignment.isPending ? "Đang lưu phân công…" : review ? "Lưu phân công" : "Xem lại phân công"}
             </Button>
             <Button variant="outline" disabled={assignment.isPending} onClick={() => goToStep(review ? "roles" : "project")}>
               <ArrowLeft />{review ? "Quay lại phân vai" : "Quay lại chọn Project"}

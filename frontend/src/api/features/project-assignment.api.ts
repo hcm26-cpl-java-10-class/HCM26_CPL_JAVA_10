@@ -33,13 +33,6 @@ export const projectAssignmentApi = {
   async workspace(workspaceId: number, signal?: AbortSignal) {
     return (await axiosInstance.get<WorkspaceAssignmentContext>(`/workspaces/${workspaceId}/project-hierarchy`, { signal })).data;
   },
-  async masterMilestones(workspaceId: number, signal?: AbortSignal) {
-    return (await axiosInstance.get<MasterMilestoneContext | null>(`/workspaces/${workspaceId}/master-milestones`, { signal })).data || null;
-  },
-  async submitMaster(workspaceId: number, milestoneId: string, data: { evidenceUrl: string; notes: string }, key: string) {
-    return (await axiosInstance.post<{ id: string }>(`/workspaces/${workspaceId}/master-milestones/${milestoneId}/submissions`, data,
-      { headers: { "Idempotency-Key": key } })).data;
-  },
   async completion(projectId: number, teamId: number | null, signal?: AbortSignal) {
     return (await axiosInstance.get<ProjectCompletionSummary>(`${assessment(projectId, teamId)}/completion`, { signal })).data;
   },

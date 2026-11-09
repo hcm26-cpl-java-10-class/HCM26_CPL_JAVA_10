@@ -14,9 +14,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ProjectCompletionPanel } from "./ProjectCompletionPanel";
 
-export function WorkspaceMasterMilestonesPanel({ workspaceId, masterProjectId, returnTo, onOpenMaster, onChanged }: {
-  workspaceId?: number; masterProjectId?: number; returnTo?: string;
-  onOpenMaster?: (id: number) => void; onChanged: () => void;
+export function WorkspaceMasterMilestonesPanel({ masterProjectId, returnTo, onChanged }: {
+  masterProjectId: number; returnTo: string; onChanged: () => void;
 }) {
   const { user, activeRole } = usePermissions();
   const client = useQueryClient();
@@ -26,23 +25,21 @@ export function WorkspaceMasterMilestonesPanel({ workspaceId, masterProjectId, r
   const [notes, setNotes] = useState("");
   const requestKey = useRef<string | null>(null);
   const query = useQuery({
-    queryKey: ["workspace-master-milestones", workspaceId, masterProjectId, user.email, activeRole],
-    queryFn: ({ signal }) => masterProjectId != null ? projectAssignmentApi.classMasterMilestones(masterProjectId, signal)
-      : projectAssignmentApi.masterMilestones(workspaceId!, signal),
+    queryKey: ["workspace-master-milestones", masterProjectId, user.email, activeRole],
+    queryFn: ({ signal }) => projectAssignmentApi.classMasterMilestones(masterProjectId, signal),
     retry: false, refetchInterval: 20_000,
   });
   const submit = useMutation({
     mutationFn: (milestoneId: string) => {
       requestKey.current ??= crypto.randomUUID();
       const payload = { evidenceUrl: url.trim(), notes: notes.trim() };
-      return masterProjectId != null ? projectAssignmentApi.submitClassMaster(masterProjectId, milestoneId, payload, requestKey.current)
-        : projectAssignmentApi.submitMaster(workspaceId!, milestoneId, payload, requestKey.current);
+      return projectAssignmentApi.submitClassMaster(masterProjectId, milestoneId, payload, requestKey.current);
     },
     onSuccess: result => {
       setSelected(null); requestKey.current = null;
       void client.invalidateQueries({ queryKey: ["workspace-master-milestones"] });
       onChanged();
-      navigate(`/milestone-submissions/${result.id}`, { state: { returnTo: backLink } });
+      navigate(`/milestone-submissions/${result.id}`, { state: { returnTo } });
     },
   });
   if (query.isError) return <Card><CardContent className="space-y-3 pt-5"><p role="alert">Unable to load shared master milestones.</p>
@@ -50,19 +47,14 @@ export function WorkspaceMasterMilestonesPanel({ workspaceId, masterProjectId, r
   if (query.isPending) return <p role="status" className="text-sm text-muted-foreground">Loading master milestones…</p>;
   const data = query.data;
   if (!data) return null;
-  const backLink = returnTo ?? `/management/workspaces/${workspaceId}?tab=milestones`;
-  const shared = data.mode === "SPLIT";
   let validUrl = false;
   try { const parsed = new URL(url.trim()); validUrl = ["http:", "https:"].includes(parsed.protocol) && !!parsed.hostname && !parsed.username && !parsed.password; } catch { /* Wait for a complete URL. */ }
   const refresh = () => { void query.refetch(); onChanged(); };
   return <>
     <Card><CardHeader><div className="flex flex-wrap items-center justify-between gap-3">
-      <CardTitle>Master milestones{shared ? " — Shared" : " — Your team"}</CardTitle>
-      <Badge variant="outline">{shared ? "Managed by class mentors" : "Complete master assignment"}</Badge>
-    </div><CardDescription>{data.projectName}. {shared
-      ? "All assigned teams see these same milestones and progress. Class mentors record shared submissions and manage their assessment."
-      : "These milestones belong to the master project. Open the master to work on them; module milestones remain separate."}</CardDescription>
-      {!shared && onOpenMaster && <Button className="w-fit" size="sm" variant="outline" onClick={() => onOpenMaster(data.projectId)}>Open master project</Button>}
+      <CardTitle>Master milestones</CardTitle>
+      <Badge variant="outline">Managed by class mentors</Badge>
+    </div><CardDescription>{data.projectName}. Class mentors record submissions and assess the Master milestones here.</CardDescription>
     </CardHeader><CardContent className="space-y-3">
       {data.milestones.length === 0 && <p className="text-sm text-muted-foreground">No master milestones configured.</p>}
       {data.milestones.map(milestone => <div key={milestone.id} className="space-y-3 rounded-lg border p-4">
@@ -80,12 +72,12 @@ export function WorkspaceMasterMilestonesPanel({ workspaceId, masterProjectId, r
               submit.reset(); requestKey.current = null; setUrl(""); setNotes(""); setSelected(milestone);
             }}><Upload className="size-4" />Record shared submission</Button>}
             {milestone.submissionId && <Button size="sm" variant="outline" onClick={() => navigate(`/milestone-submissions/${milestone.submissionId}`,
-              { state: { returnTo: backLink } })}><ClipboardCheck className="size-4" />Review / history</Button>}
+              { state: { returnTo } })}><ClipboardCheck className="size-4" />Review / history</Button>}
           </div>
         </div>
       </div>)}
     </CardContent></Card>
-    {data.canManage && <ProjectCompletionPanel key={`${data.projectId}:${data.teamId}`} workspaceId={workspaceId}
+    {data.canManage && <ProjectCompletionPanel key={`${data.projectId}:${data.teamId}`}
       projectId={data.projectId} teamId={data.teamId} title={`Master completion — ${data.projectName}`}
       readOnly={data.readOnly} onChanged={refresh} />}
     <Dialog open={selected !== null} onOpenChange={open => { if (!open && !submit.isPending) setSelected(null); }}><DialogContent>

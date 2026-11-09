@@ -24,7 +24,6 @@ import { WorkspaceBacklogPanel } from "./WorkspaceBacklogPanel";
 import { WorkspaceProjectLogsPanel } from "./WorkspaceProjectLogsPanel";
 import { WorkspaceProjectHierarchy, flattenWorkspaceProjects } from "./WorkspaceProjectHierarchy";
 import { ProjectCompletionPanel } from "./ProjectCompletionPanel";
-import { WorkspaceMasterMilestonesPanel } from "./WorkspaceMasterMilestonesPanel";
 import { WorkspaceResourcesPanel } from "./WorkspaceResourcesPanel";
 import { WorkspaceAlertsPanel } from "@/pages/management/alerts/WorkspaceAlertsPanel";
 
@@ -116,7 +115,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
             {context.projectStatus && <div className="pt-1 sm:pt-6"><WorkspaceStatusBadge status={context.projectStatus} colored /></div>}
           </section>
           {hierarchy.data && <WorkspaceProjectHierarchy data={hierarchy.data} selectedId={projectId} onSelect={selectProject} />}
-          {projectScoped && projectId && !sharedMasterSelected && <ProjectCompletionPanel key={`${projectId}:${context.teamId}`} workspaceId={workspaceId}
+          {tab !== "activity" && projectScoped && projectId && !sharedMasterSelected && <ProjectCompletionPanel key={`${projectId}:${context.teamId}`} workspaceId={workspaceId}
             projectId={projectId} teamId={context.teamId} readOnly={projectReadOnly} onChanged={() => void refresh()}
             title={`${isMaster ? "Master" : "Module"} completion — ${project?.name ?? context.projectName}`} />}
           <Tabs value={tab} onValueChange={changeTab} className="min-w-0 gap-5">
@@ -135,16 +134,12 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     onAccessChanged={reloadAccess} />
                 : tab === "resources" ? <WorkspaceResourcesPanel key={projectId} workspaceId={workspaceId} projectId={context.projectId}
                     teamId={context.teamId} selectedProjectId={projectId} onAccessChanged={reloadAccess} />
-                : tab === "milestones" ? <>
-                    {hierarchy.data?.assignmentId != null && (!isMaster || hierarchy.data.mode === "SPLIT") &&
-                      <WorkspaceMasterMilestonesPanel workspaceId={workspaceId} onOpenMaster={selectProject} onChanged={() => void refresh()} />}
-                    {!sharedMasterSelected && <WorkspaceMilestonesPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
+                : tab === "milestones" ? !sharedMasterSelected && <WorkspaceMilestonesPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
                       teamId={context.teamId} access={current} projectScoped={projectScoped} readOnly={projectReadOnly}
                       projectStatus={project?.status ?? context.projectStatus ?? undefined}
                       title={hierarchy.data?.assignmentId != null
                         ? `${isMaster ? "Master" : "Module"} milestones — ${project?.name ?? context.projectName}`
-                        : `Milestones — ${context.projectName ?? context.teamName}`} />}
-                  </>
+                        : `Milestones — ${context.projectName ?? context.teamName}`} />
                 : tab === "artifacts" ? <WorkspaceArtifactsPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
                     teamId={context.teamId} access={current} projectScoped={projectScoped} readOnly={projectReadOnly} />
                 : tab === "sprints" ? <WorkspaceTeamBoardPanel key={projectId} workspaceId={workspaceId} teamId={context.teamId}

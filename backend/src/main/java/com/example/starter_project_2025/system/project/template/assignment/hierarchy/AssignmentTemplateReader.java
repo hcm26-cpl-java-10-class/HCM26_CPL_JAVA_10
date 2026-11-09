@@ -77,6 +77,19 @@ public class AssignmentTemplateReader {
         return ProjectTemplateConstraints.parse(json, constraintsTemplate(node), null);
     }
 
+    public Node loadAssigned(Long templateId, Long versionId, Long tenantId) {
+        var version = versions.findById(versionId).filter(value -> templateId.equals(value.getTemplateId())
+                && value.getProjectId() == null && value.getStatus() != ProjectTemplateVersionStatus.DRAFT)
+                .orElseThrow(() -> AssignmentException.invalid("The assigned template version is unavailable"));
+        try {
+            ObjectNode content = (ObjectNode) json.readTree(version.getContentJson());
+            content.put("templateId", templateId);
+            return node(content, version.getId(), version.getVersion(), tenantId, new HashSet<>());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException | ClassCastException exception) {
+            throw AssignmentException.invalid("The assigned template configuration is invalid");
+        }
+    }
+
     public ProjectTemplateConstraints.RolePolicy roles(Node node) {
         return ProjectTemplateConstraints.parseRolePolicy(json, constraintsTemplate(node));
     }

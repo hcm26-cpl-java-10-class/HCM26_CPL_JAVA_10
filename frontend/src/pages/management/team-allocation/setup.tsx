@@ -715,6 +715,9 @@ export default function TeamAllocationSetupPage() {
         queryClient.invalidateQueries({
           queryKey: ["workspace-candidates"],
         }),
+        queryClient.invalidateQueries({
+          queryKey: ["class-master-projects", classId, sessionId],
+        }),
       ]);
     },
     onError: (error) => {
@@ -1892,7 +1895,8 @@ export default function TeamAllocationSetupPage() {
               {sessionId !== null &&
                 (hasPermission("PEO_TEAM_ALLOCATE") || hasPermission("PRJ_WORKSPACE_MANAGE")) && (
                 <div className="shrink-0">
-                  <ProjectAssignmentPanel key={sessionId} classId={classId} sessionId={sessionId} />
+                  <ProjectAssignmentPanel key={sessionId} classId={classId} sessionId={sessionId}
+                    canAssign={session.status === "OPEN"} published={session.status === "PUBLISHED"} />
                 </div>
               )}
               <Card className="flex min-h-0 flex-1 flex-col">
@@ -2138,8 +2142,8 @@ export default function TeamAllocationSetupPage() {
                             }
                           }}
                           canAssignTemplate={
-                            hasPermission("PEO_TEAM_ALLOCATE") ||
-                            hasPermission("PRJ_WORKSPACE_MANAGE")
+                            session.status === "OPEN" && (hasPermission("PEO_TEAM_ALLOCATE") ||
+                            hasPermission("PRJ_WORKSPACE_MANAGE"))
                           }
                         />
                       ))}
@@ -3192,6 +3196,27 @@ function SavedTeamCard({
                 </p>
               </div>
             </div>
+            {isDraft && canManageMentor && (
+              <label className="grid gap-1.5 text-sm font-medium">
+                Chọn Mentor phụ trách
+                <select
+                  className="h-9 w-full rounded-md border bg-background px-3 font-normal"
+                  value={selectedMentor}
+                  disabled={savePending}
+                  onChange={(event) => setSelectedMentor(event.target.value)}
+                >
+                  <option value="">Chưa gán Mentor</option>
+                  {mentors.map((mentor) => (
+                    <option key={mentor.mentorId} value={mentor.mentorId}>
+                      {mentor.fullName}{mentor.defaultMentor ? " · Mentor của lớp" : ""}
+                    </option>
+                  ))}
+                </select>
+                {!selectedMentor && <span className="text-xs font-normal text-muted-foreground">
+                  Chọn Mentor và bấm Lưu trước khi kiểm tra điều kiện công bố.
+                </span>}
+              </label>
+            )}
             {isActive && canManageMentor && (
               <div className="flex flex-wrap gap-2">
                 <select
@@ -3246,10 +3271,10 @@ function SavedTeamCard({
                   ? ` · Đề bài yêu cầu ${team.minMembers}–${team.maxMembers} thành viên`
                   : ""}
               </p>
-              {canAssignTemplate && (isDraft || isActive) && <Button size="sm" variant="outline" asChild>
+              {canAssignTemplate && isDraft && <Button size="sm" variant="outline" asChild>
                 <Link to={"/team-allocation/classes/" + classId + "/assign?sessionId=" + sessionId
                   + "&teamId=" + team.teamId}>
-                  Gán Master Project
+                  Gán Master cho Team này
                 </Link>
               </Button>}
             </div>

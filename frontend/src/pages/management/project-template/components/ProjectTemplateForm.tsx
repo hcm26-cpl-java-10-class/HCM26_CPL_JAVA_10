@@ -10,12 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import type { ProjectTemplateDTO, ProjectTemplateLevel, ProjectTemplateOptions, ProjectTemplatePayload } from "@/types/features/project-template";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, ArrowLeft, Loader2, Save } from "lucide-react";
+import { AlertCircle, ArrowLeft, FileText, Loader2, Save } from "lucide-react";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { getTemplateError, templateLevelOptions, toTemplateFormValues, validateTemplateForm,
   maxDescriptionLength,
   type TemplateFieldErrors, type TemplateFormValues } from "../project-template.utils";
+import { ProjectTemplateStatusBadge } from "./ProjectTemplateStatusBadge";
 
 function TemplateField({ name, label, errors, suffix, children, required = true }: {
   name: string;
@@ -116,14 +117,14 @@ export function ProjectTemplateForm({ template, parentTemplate, options, minimum
         </Alert>
       )}
       <fieldset disabled={mutation.isPending} className="min-w-0">
-        <Card className="min-w-0">
-          <CardHeader>
+        <Card className="min-w-0 overflow-hidden pt-0">
+          <CardHeader className="border-b bg-indigo-50/50 pt-5 dark:bg-indigo-950/30">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <CardTitle>General information</CardTitle>
+                <CardTitle className="flex items-center gap-2"><FileText className="size-5 text-indigo-600 dark:text-indigo-400" />General information</CardTitle>
                 <CardDescription className="mt-1">Define the project brief, category and expected duration.</CardDescription>
               </div>
-              <div className="flex flex-wrap gap-2"><Badge variant="secondary">Draft</Badge><Badge variant="outline">Version {template?.templateVersion ?? 1}</Badge></div>
+              <div className="flex flex-wrap gap-2"><ProjectTemplateStatusBadge status="DRAFT" /><Badge variant="outline">Version {template?.templateVersion ?? 1}</Badge></div>
             </div>
           </CardHeader>
           <CardContent className="grid min-w-0 grid-cols-1 gap-5">

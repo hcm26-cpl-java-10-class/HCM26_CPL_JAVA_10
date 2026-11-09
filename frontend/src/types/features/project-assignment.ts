@@ -24,7 +24,7 @@ export interface ProjectAssignmentRequest {
   teamRoles?: Array<{ teamId: number; expectedVersion: number; leaderMemberId: number | null; members: Array<{ memberId: number; roles: AssignmentRole[] }> }>;
 }
 export interface ProjectAssignmentResult {
-  assignmentId: number; mode: ProjectAssignmentMode; masterProjectId: number; assignedAt: string;
+  assignmentId: number; mode: ProjectAssignmentMode; masterProjectId: number | null; assignedAt: string;
   workspaces: Array<{ id: number; teamId: number; teamName: string; projectId: number; projectName: string }>;
 }
 export interface WorkspaceProjectNode {
