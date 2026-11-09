@@ -22,6 +22,7 @@ import java.util.*;
 @RequiredArgsConstructor
 public class SubmissionReviewService {
     private final SubmissionQueryService queryService;
+    private final SubmissionReviewAccess reviewAccess;
     private final MilestoneSubmissionRepository submissions;
     private final SubmissionVersionRepository versions;
     private final RubricVersionRepository rubrics;
@@ -37,6 +38,8 @@ public class SubmissionReviewService {
     @Transactional
     public SubmissionDtos.Detail review(UUID submissionId, String idempotencyKey,
                                         SubmissionDtos.ReviewRequest request) {
+        MilestoneSubmission submission = queryService.require(submissionId);
+        reviewAccess.require(submission);
         validateKey(idempotencyKey);
         UUID actorId = actorProvider.requireCurrentActorId();
         String action = "SUBMISSION_" + request.decision().name();
@@ -45,7 +48,7 @@ public class SubmissionReviewService {
             return queryService.getDetail(submissionId);
         }
 
-        MilestoneSubmission submission = queryService.require(submissionId);
+
         if (submission.getTeamId() == null)
             completionPort.lockHierarchy(submission.getProjectId(), submission.getTenantId(), null);
         projectCompletionService.requireActive(submission.getTenantId(), submission.getProjectId());

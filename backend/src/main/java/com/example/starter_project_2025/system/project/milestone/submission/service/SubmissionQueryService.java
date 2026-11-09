@@ -31,6 +31,7 @@ public class SubmissionQueryService {
 
     private final MilestoneSubmissionRepository submissions;
     private final SubmissionVersionRepository versions;
+    private final SubmissionReviewAccess reviewAccess;
     private final MilestoneReviewRepository reviews;
     private final MilestoneArtifactSubmissionRepository artifactSubmissions;
     private final RubricVersionRepository rubrics;
@@ -143,10 +144,11 @@ public class SubmissionQueryService {
                                            List<MilestoneReview> reviewList) {
         ResubmissionBlockReason blockReason = resubmissionBlockReason(value);
         boolean requestAllowed = blockReason == null;
+        boolean reviewer = reviewAccess.canReview(value);
         Map<String, Boolean> actions = new LinkedHashMap<>();
-        actions.put("accept", value.getStatus() == SubmissionStatus.SUBMITTED);
-        actions.put("reject", value.getStatus() == SubmissionStatus.SUBMITTED);
-        actions.put("requestChanges", value.getStatus() == SubmissionStatus.SUBMITTED && requestAllowed);
+        actions.put("accept", reviewer && value.getStatus() == SubmissionStatus.SUBMITTED);
+        actions.put("reject", reviewer && value.getStatus() == SubmissionStatus.SUBMITTED);
+        actions.put("requestChanges", reviewer && value.getStatus() == SubmissionStatus.SUBMITTED && requestAllowed);
         actions.put("createNextVersion", value.getStatus() == SubmissionStatus.CHANGES_REQUESTED && requestAllowed);
         actions.put("submit", value.getStatus() == SubmissionStatus.DRAFT
                 && submissionWindow.canSubmitNow(value.getMilestone()));
