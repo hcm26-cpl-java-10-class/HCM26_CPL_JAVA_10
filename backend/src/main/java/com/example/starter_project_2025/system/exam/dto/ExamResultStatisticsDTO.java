@@ -14,13 +14,43 @@ public record ExamResultStatisticsDTO(
         BigDecimal highestFinalScore,
         BigDecimal lowestFinalScore,
         List<ScoreBandDTO> scoreDistribution,
-        /** Diem dat hien tai cua de (null neu khong dat diem dat). */
-        BigDecimal passScore,
-        /** So luot da cham xong va dat. */
         long passedAttempts,
-        /** Ti le dat (%) tren cac luot da cham xong co diem dat; null neu khong tinh duoc. */
-        Double passRate
+        Double passRate,
+        long failedAttempts,
+        Double failRate,
+        BigDecimal passScore
 ) {
+    public ExamResultStatisticsDTO(
+            Long examId,
+            String examTitle,
+            long totalAttempts,
+            long fullyGradedAttempts,
+            long pendingGradingAttempts,
+            long uniqueStudents,
+            Double averageFinalScore,
+            BigDecimal highestFinalScore,
+            BigDecimal lowestFinalScore,
+            List<ScoreBandDTO> scoreDistribution
+    ) {
+        this(
+                examId,
+                examTitle,
+                totalAttempts,
+                fullyGradedAttempts,
+                pendingGradingAttempts,
+                uniqueStudents,
+                averageFinalScore,
+                highestFinalScore,
+                lowestFinalScore,
+                scoreDistribution,
+                0L,
+                0.0,
+                0L,
+                0.0,
+                null
+        );
+    }
+
     public record ScoreBandDTO(
             String range,
             long count

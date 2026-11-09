@@ -21,7 +21,44 @@ public record ExamAttemptStatisticsDTO(
         long violationCount,
         boolean editable,
         String lockReason,
-        /** Dat/Truot theo diem dat da dong bang; null khi chua co diem cuoi hoac de khong dat diem dat. */
         Boolean passed
 ) {
+    public ExamAttemptStatisticsDTO(
+            Long attemptId,
+            Long studentId,
+            String studentName,
+            String studentEmail,
+            Integer attemptNumber,
+            Instant startedAt,
+            Instant submittedAt,
+            BigDecimal finalScore,
+            ExamAttemptStatus status,
+            BigDecimal maxScore,
+            BigDecimal firstScore,
+            BigDecimal secondScore,
+            boolean flagged,
+            long violationCount,
+            boolean editable,
+            String lockReason
+    ) {
+        this(
+                attemptId,
+                studentId,
+                studentName,
+                studentEmail,
+                attemptNumber,
+                startedAt,
+                submittedAt,
+                finalScore,
+                status,
+                maxScore,
+                firstScore,
+                secondScore,
+                flagged,
+                violationCount,
+                editable,
+                lockReason,
+                null
+        );
+    }
 }
