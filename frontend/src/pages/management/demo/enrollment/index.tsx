@@ -48,7 +48,7 @@ export default function EnrollmentManagementPage() {
 
     return (
         <MainLayout dense pathName={{ "course-enrollments": "Enrollments", enrollments: "Enrollments" }}>
-            <section className="space-y-3">
+            <section className="space-y-1.5">
                 <div>
                     <div className="flex flex-wrap items-end justify-between gap-3">
                         <div>
@@ -92,30 +92,30 @@ export default function EnrollmentManagementPage() {
                     </div>
                 ) : (
                     <>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                            <div className="rounded-xl border bg-card p-4">
+                        <div className="grid gap-1.5 sm:grid-cols-3">
+                            <div className="rounded-xl border bg-card px-4 py-2">
                                 <p className="text-sm text-muted-foreground">Courses enrolled</p>
                                 <p className="mt-1 text-2xl font-bold">{enrollments.length}</p>
                             </div>
-                            <div className="rounded-xl border bg-card p-4">
+                            <div className="rounded-xl border bg-card px-4 py-2">
                                 <p className="text-sm text-muted-foreground">Course access</p>
                                 <p className="mt-2 flex items-center gap-2 text-lg font-semibold">
                                     <BookOpen className="size-5 text-blue-700" /> Available anytime
                                 </p>
                             </div>
-                            <div className="rounded-xl border bg-card p-4">
+                            <div className="rounded-xl border bg-card px-4 py-2">
                                 <p className="text-sm text-muted-foreground">Discover</p>
                                 <p className="mt-2 text-lg font-semibold">Explore the catalog</p>
                             </div>
                         </div>
                         <section>
-                            <div className="mb-3">
+                            <div className="mb-1.5">
                                 <h2 className="text-xl font-semibold">My courses</h2>
                                 <p className="mt-1 text-sm text-muted-foreground">
                                     Courses you have enrolled in.
                                 </p>
                             </div>
-                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
                                 {enrollments.map((enrollment) => {
                                     return (
                                         <article key={enrollment.id} className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -132,7 +132,7 @@ export default function EnrollmentManagementPage() {
                                                     </div>
                                                 )}
                                             </div>
-                                            <div className="space-y-3 p-4">
+                                            <div className="space-y-2 px-4 py-2">
                                                 <div>
                                                     <h3 className="line-clamp-2 min-h-12 text-lg font-semibold">
                                                         {enrollment.courseName}
