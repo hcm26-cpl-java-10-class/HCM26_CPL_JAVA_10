@@ -338,12 +338,19 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
           {mode === "SPLIT" ? <>
             {mappedTeams.map(({ module, team, owners: moduleOwners }) => {
               const id = "module-team-" + module.templateId;
-              return <div key={module.templateId} className="grid items-center gap-2 sm:grid-cols-2">
-                <Label htmlFor={review ? undefined : id}>{module.name}
-                  <span className="text-xs font-normal text-muted-foreground">{module.minMembers}–{module.maxMembers} người</span>
-                </Label>
-                {review ? <p className="text-sm">{team?.name}</p>
-                  : <div className="grid gap-1.5">
+              return <div key={module.templateId} className="grid min-w-0 items-center gap-3 rounded-lg border bg-background p-3 sm:grid-cols-[minmax(0,1fr)_minmax(16rem,1fr)]">
+                <div className="min-w-0 space-y-1">
+                  <Label htmlFor={review ? undefined : id} className="text-sm font-semibold">{module.name}</Label>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    <span>{module.code}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{module.milestoneCount} milestone</span>
+                    <Badge variant="outline" className="font-normal">{module.minMembers}–{module.maxMembers} thành viên</Badge>
+                  </div>
+                </div>
+                {review ? <div className="rounded-md bg-muted/40 px-3 py-2 text-sm font-medium">
+                  {team?.name ?? "Chưa chọn Team"}
+                </div> : <div className="grid min-w-0 gap-1.5">
                     <TeamSelect id={id} teams={data.teams} value={team ? String(team.id) : ""}
                       min={module.minMembers} max={module.maxMembers} owners={moduleOwners} checkingOwnership={!ownershipReady}
                       onChange={value => { setMapping(current => ({ ...current, [module.templateId]: value })); assignment.reset(); }} />

@@ -24,6 +24,8 @@ public interface ProjectTeamRepository
 
     List<ProjectTeam> findAllByAllocationSession_IdOrderByIdAsc(Long sessionId);
 
+    List<ProjectTeam> findAllByAllocationSession_IdAndIsActiveTrueOrderByIdAsc(Long sessionId);
+
     List<ProjectTeam> findAllByAllocationSession_IdAndStatusOrderByIdAsc(
             Long sessionId,
             ProjectTeamStatus status

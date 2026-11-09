@@ -261,10 +261,12 @@ public class ProjectTeamDraftService {
                 session.getTrainingClass(), request.assignedMentorId());
         List<ProjectMember> oldMembers =
                 projectMemberRepository.findAllByTeam_IdOrderByIdAsc(teamId);
-        String beforeState = writeJson(new TeamSnapshot(
+        String beforeState = writeJson(new TeamDeletedBeforeSnapshot(
                 team.getId(),
                 team.getTeamName(),
                 team.getProjectId(),
+                team.getProjectTemplateId(),
+                team.getProjectTemplateName(),
                 team.getMaxMembers(),
                 team.getStatus(),
                 team.getAssignedMentorId(),
@@ -327,6 +329,85 @@ public class ProjectTeamDraftService {
                 .build());
     }
 
+    @Transactional
+    public void deleteDraftTeam(
+            Long classId,
+            Long sessionId,
+            Long teamId,
+            Authentication authentication
+    ) {
+        TeamAllocationSession session = sessionRepository.findByIdForUpdate(sessionId)
+                .filter(value -> value.getTrainingClass().getId().equals(classId))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "TeamAllocationSession", "id", sessionId));
+        scopeAuthorizationService.assertCanManageClass(
+                authentication, session.getTrainingClass());
+        if (session.getStatus() != TeamAllocationSessionStatus.OPEN) {
+            throw new BadRequestException("Allocation session is not open");
+        }
+
+        ProjectTeam team = teamRepository.findByIdAndAllocationSession_Id(teamId, sessionId)
+                .filter(value -> Boolean.TRUE.equals(value.getIsActive()))
+                .orElseThrow(() -> new ResourceNotFoundException("ProjectTeam", "id", teamId));
+        if (team.getStatus() != ProjectTeamStatus.DRAFT) {
+            throw new BadRequestException("Only DRAFT teams can be deleted");
+        }
+        if (team.getProject() != null) {
+            throw new BadRequestException(
+                    "Không thể xóa nhóm Draft đã được tạo Project hoặc Workspace.");
+        }
+
+        List<ProjectMember> members =
+                projectMemberRepository.findAllByTeam_IdOrderByIdAsc(teamId);
+        String beforeState = writeJson(new TeamSnapshot(
+                team.getId(),
+                team.getTeamName(),
+                team.getProjectId(),
+                team.getMaxMembers(),
+                team.getStatus(),
+                team.getAssignedMentorId(),
+                team.getLeaderMemberId(),
+                members.stream()
+                        .map(member -> new MemberSnapshot(
+                                member.getClassMember().getId(), member.getRole()))
+                        .toList()));
+
+        Long actorId = ((UserPrincipal) authentication.getPrincipal()).getUser().getId();
+        entityManager.lock(team, LockModeType.OPTIMISTIC_FORCE_INCREMENT);
+        projectMemberRepository.deleteAllByTeam_Id(teamId);
+        projectMemberRepository.flush();
+        team.setProjectTemplate(null);
+        team.setProjectTemplateVersionId(null);
+        team.setAssignedConstraintsJson(null);
+        team.setAssignedTemplateName(null);
+        team.setIsActive(false);
+        team.setUpdatedBy(actorId);
+        teamRepository.saveAndFlush(team);
+
+        String afterState = writeJson(new TeamDeletedSnapshot(
+                team.getId(), team.getTeamName(), team.getStatus(), false));
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+        }
+        auditRepository.save(ProjectTeamAudit.builder()
+                .action("DELETE_DRAFT_TEAM")
+                .actorId(actorId)
+                .classId(classId)
+                .allocationSessionId(sessionId)
+                .beforeState(beforeState)
+                .afterState(afterState)
+                .correlationId(correlationId)
+                .build());
+        outboxRepository.save(ProjectTeamOutboxEvent.builder()
+                .eventType("PROJECT_TEAM_DRAFT_DELETED")
+                .aggregateId(teamId)
+                .payload(afterState)
+                .correlationId(correlationId)
+                .status("PENDING")
+                .build());
+    }
+
     private record TeamBatchSnapshot(
             Long allocationSessionId,
             Long classId,
@@ -340,6 +421,28 @@ public class ProjectTeamDraftService {
             Long teamId,
             String teamName,
             Long projectId,
+            Integer maxMembers,
+            ProjectTeamStatus status,
+            Long assignedMentorId,
+            Long leaderMemberId,
+            List<MemberSnapshot> members
+    ) {
+    }
+
+    private record TeamDeletedSnapshot(
+            Long teamId,
+            String teamName,
+            ProjectTeamStatus status,
+            boolean active
+    ) {
+    }
+
+    private record TeamDeletedBeforeSnapshot(
+            Long teamId,
+            String teamName,
+            Long projectId,
+            Long projectTemplateId,
+            String projectTemplateName,
             Integer maxMembers,
             ProjectTeamStatus status,
             Long assignedMentorId,
@@ -433,7 +536,8 @@ public class ProjectTeamDraftService {
                         memberIdsByTeam.getOrDefault(team.getId(), List.of()).size(),
                         policy.allowMultiRole(),
                         policy.quotas(),
-                        team.getLeaderMemberId()
+                        team.getLeaderMemberId(),
+                        team.getProjectId()
                     );
                 })
                 .toList();

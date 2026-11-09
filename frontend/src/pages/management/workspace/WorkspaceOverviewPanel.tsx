@@ -72,7 +72,6 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
               <h3 className={labelClass}>Mô tả dự án (Description)</h3>
               <p className="whitespace-pre-wrap break-words rounded-lg border border-slate-100 bg-slate-50/50 p-3 text-sm leading-6 text-muted-foreground dark:border-border dark:bg-muted/20">{information(projectDescription)}</p>
             </section>
-            {selectedProject?.technologyStack && <div className={fieldClass}><p className={labelClass}>Technical stack</p><p className="break-words text-sm">{selectedProject.technologyStack}</p></div>}
           </>}
         </CardContent>
       </Card>
