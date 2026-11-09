@@ -88,4 +88,11 @@ export const sessionApi = Object.assign({}, base, {
             }
         }
     },
+    createBatch: async (sessions: SessionDTO[]): Promise<SessionDTO[]> => {
+        const response = await axiosInstance.post<SessionDTO[]>(`${path}/batch`, sessions);
+        return response.data;
+    },
+    deleteByClassId: async (classId: number | string): Promise<void> => {
+        await axiosInstance.delete(`${path}/class/${classId}`);
+    },
 });

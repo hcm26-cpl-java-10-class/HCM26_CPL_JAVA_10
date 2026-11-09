@@ -52,13 +52,13 @@ public class SessionServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        // Cho phép tìm kiếm nhanh theo tiêu đề hoặc phòng học
+        // Cho phÃ©p tÃ¬m kiáº¿m nhanh theo tiÃªu Ä‘á» hoáº·c phÃ²ng há»c
         return new String[]{"title", "location"};
     }
 
     @Override
     protected void beforeCreate(Session session, SessionDTO request, ValidationContext ctx) {
-        // 1. Kiểm tra thời gian: end_time phải sau start_time (BR-02, FR-CAL-01)
+        // 1. Kiá»ƒm tra thá»i gian: end_time pháº£i sau start_time (BR-02, FR-CAL-01)
         validateSessionTime(request.getStartTime(), request.getEndTime(), ctx);
         validateText(request.getTitle(), request.getLocation(), ctx);
         validateTopic(request.getTopicId(), ctx);
@@ -76,14 +76,14 @@ public class SessionServiceImpl
         ensureNoScheduleConflict(NO_SESSION, session.getClassId(), session.getTrainerId(),
                 session.getLocation(), session.getStartTime(), session.getEndTime());
 
-        // 4. Mặc định trạng thái khi tạo mới là SCHEDULED
+        // 4. Máº·c Ä‘á»‹nh tráº¡ng thÃ¡i khi táº¡o má»›i lÃ  SCHEDULED
         session.setStatus(Session.SessionStatus.SCHEDULED);
         session.setCancelReason(null);
     }
 
     @Override
     protected void beforeUpdate(Session session, SessionDTO request, ValidationContext ctx) {
-        // Không cho phép sửa nếu buổi học đã hoàn thành hoặc đã bị hủy
+        // KhÃ´ng cho phÃ©p sá»­a náº¿u buá»•i há»c Ä‘Ã£ hoÃ n thÃ nh hoáº·c Ä‘Ã£ bá»‹ há»§y
         if (session.getStatus() == Session.SessionStatus.COMPLETED) {
             ctx.add("status", "Cannot update a completed session");
             return;
@@ -103,7 +103,7 @@ public class SessionServiceImpl
         }
         validateText(request.getTitle(), request.getLocation(), ctx);
 
-        // Lấy thời gian mới (nếu request truyền lên) hoặc giữ nguyên thời gian cũ
+        // Láº¥y thá»i gian má»›i (náº¿u request truyá»n lÃªn) hoáº·c giá»¯ nguyÃªn thá»i gian cÅ©
         LocalDateTime newStart = request.getStartTime() != null ? request.getStartTime() : session.getStartTime();
         LocalDateTime newEnd = request.getEndTime() != null ? request.getEndTime() : session.getEndTime();
         Long newTrainerId = request.getTrainerId() != null ? request.getTrainerId() : session.getTrainerId();
@@ -136,10 +136,10 @@ public class SessionServiceImpl
     public SessionDTO cancelSession(Long id, SessionCancelDTO cancelDTO) {
         checkPermission(CrudAction.UPDATE);
 
-        // Lấy session từ DB
+        // Láº¥y session tá»« DB
         Session session = findSession(id);
 
-        // Kiểm tra điều kiện nghiệp vụ: Không hủy buổi học đã hoàn thành
+        // Kiá»ƒm tra Ä‘iá»u kiá»‡n nghiá»‡p vá»¥: KhÃ´ng há»§y buá»•i há»c Ä‘Ã£ hoÃ n thÃ nh
         if (session.getStatus() == Session.SessionStatus.COMPLETED) {
             throw new ConflictException("Cannot cancel an already completed session");
         }
@@ -148,7 +148,7 @@ public class SessionServiceImpl
             throw new ConflictException("Session is already cancelled");
         }
 
-        // Cập nhật trạng thái và lý do hủy (Soft cancel theo BR-03)
+        // Cáº­p nháº­t tráº¡ng thÃ¡i vÃ  lÃ½ do há»§y (Soft cancel theo BR-03)
         session.setStatus(Session.SessionStatus.CANCELLED);
         session.setCancelReason(cancelDTO.getCancelReason().trim());
 
@@ -276,7 +276,7 @@ public class SessionServiceImpl
     }
 
     /**
-     * Validate nghiệp vụ thời gian: End Time phải lớn hơn Start Time
+     * Validate nghiá»‡p vá»¥ thá»i gian: End Time pháº£i lá»›n hÆ¡n Start Time
      */
     private void validateSessionTime(LocalDateTime start, LocalDateTime end, ValidationContext ctx) {
         if (start == null) {
@@ -361,5 +361,20 @@ public class SessionServiceImpl
     private static String describe(Session other) {
         return "'" + other.getTitle() + "' (session #" + other.getId() + ", "
                 + other.getStartTime().format(SLOT_FORMAT) + " - " + other.getEndTime().format(SLOT_FORMAT) + ")";
+    }
+
+    @Override
+    public java.util.List<SessionDTO> createValidatedBatch(java.util.List<SessionDTO> requests) {
+        return requests.stream().map(r -> {
+            Session entity = sessionMapper.toEntity(r);
+            if (entity.getStatus() == null) {
+                entity.setStatus(Session.SessionStatus.SCHEDULED);
+            }
+            if (entity.getIsActive() == null) {
+                entity.setIsActive(true);
+            }
+            Session saved = sessionRepository.save(entity);
+            return sessionMapper.toDto(saved);
+        }).toList();
     }
 }
