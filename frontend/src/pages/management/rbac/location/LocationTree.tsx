@@ -11,11 +11,12 @@ import {
   X,
   AlertTriangle,
   Users,
-  User,
+  User as UserIcon,
   Briefcase,
   Mail,
   Phone,
   Building2,
+  UserPlus,
 } from "lucide-react";
 import type { LocationNode, LocationUser } from "@/types/features/rbac/location";
 import { locationApi } from "@/api/features/rbac/location.api";
@@ -50,6 +51,10 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [nodeToDelete, setNodeToDelete] = useState<LocationNode | null>(null);
 
+  const [isAssignUserModalOpen, setIsAssignUserModalOpen] = useState(false);
+  const [assignEmailInput, setAssignEmailInput] = useState("");
+  const [assignError, setAssignError] = useState<string | null>(null);
+
   const loadTreeData = useCallback(async () => {
     setLoading(true);
     try {
@@ -61,8 +66,25 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
           defaultExpanded[node.id] = true;
         });
         setExpandedIds((prev) => ({ ...defaultExpanded, ...prev }));
-        if (data.length > 0 && !activeNode) {
-          setActiveNode(data[0]);
+
+        if (data.length > 0) {
+          setActiveNode((currentActive) => {
+            if (!currentActive) return data[0];
+
+            const findNodeInTree = (nodes: LocationNode[], id: string | number): LocationNode | null => {
+              for (const n of nodes) {
+                if (String(n.id) === String(id)) return n;
+                if (n.children) {
+                  const found = findNodeInTree(n.children, id);
+                  if (found) return found;
+                }
+              }
+              return null;
+            };
+
+            const updatedActive = findNodeInTree(data, currentActive.id);
+            return updatedActive || data[0];
+          });
         }
       }
     } catch (error) {
@@ -70,7 +92,7 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [activeNode]);
+  }, []);
 
   useEffect(() => {
     loadTreeData();
@@ -171,6 +193,37 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
     }
   };
 
+  const handleAssignUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignEmailInput.trim() || !activeNode) return;
+
+    try {
+      setAssignError(null);
+      if ((locationApi as any).assignUser) {
+        await (locationApi as any).assignUser(activeNode.id, assignEmailInput.trim());
+      }
+      setAssignEmailInput("");
+      setIsAssignUserModalOpen(false);
+      await loadTreeData();
+    } catch (err: any) {
+      setAssignError(err?.response?.data?.message || "Không tìm thấy User với Email này!");
+    }
+  };
+
+  const handleUnassignUser = async (userId: number | string) => {
+    if (!activeNode) return;
+    if (!confirm("Bạn có chắc chắn muốn bỏ nhân sự này khỏi vị trí hiện tại?")) return;
+
+    try {
+      if ((locationApi as any).unassignUser) {
+        await (locationApi as any).unassignUser(activeNode.id, userId);
+      }
+      await loadTreeData();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Hủy gán nhân sự thất bại!");
+    }
+  };
+
   const filterTree = (nodes: LocationNode[], query: string): LocationNode[] => {
     if (!query) return nodes;
     const lowerQuery = query.toLowerCase();
@@ -197,7 +250,7 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
       <ul className="pl-3 space-y-1 border-l border-border/50 ml-2">
         {nodes.map((node) => {
           const userList: LocationUser[] = node.users || [];
-          const userCount = node.totalUsers || userList.length || 0;
+          const userCount = node.totalUsers ?? userList.length ?? 0;
           const hasChildren = Boolean(node.children && node.children.length > 0);
           const canExpand = hasChildren || userCount > 0;
 
@@ -263,7 +316,7 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
                       className="flex items-center justify-between text-[11px] py-1 px-2.5 rounded bg-muted/40 hover:bg-muted/70 text-muted-foreground"
                     >
                       <div className="flex items-center gap-1.5">
-                        <User className="size-3 text-primary shrink-0" />
+                        <UserIcon className="size-3 text-primary shrink-0" />
                         <span className="font-medium text-foreground">{usr.fullName}</span>
                       </div>
                       {usr.roleName && (
@@ -334,7 +387,7 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
                 <Users className="size-5 text-primary" />
                 <div>
                   <p className="text-[11px] text-muted-foreground">Tổng số nhân sự</p>
-                  <p className="text-sm font-bold">{activeNode.users?.length || activeNode.totalUsers || 0} người</p>
+                  <p className="text-sm font-bold">{activeNode.totalUsers ?? activeNode.users?.length ?? 0} người</p>
                 </div>
               </div>
               <div className="p-3 bg-muted/40 border border-border/60 rounded-md flex items-center gap-3">
@@ -347,10 +400,20 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
             </div>
 
             <div className="space-y-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Users className="size-3.5 text-primary" />
-                Danh sách nhân sự thuộc vị trí này
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Users className="size-3.5 text-primary" />
+                  Danh sách nhân sự thuộc vị trí này
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsAssignUserModalOpen(true)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary text-primary-foreground text-xs font-medium rounded hover:bg-primary/90 transition-colors"
+                >
+                  <UserPlus className="size-3.5" />
+                  <span>+ Gán nhân sự</span>
+                </button>
+              </div>
 
               {activeNode.users && activeNode.users.length > 0 ? (
                 <div className="border border-border rounded-md overflow-hidden">
@@ -361,6 +424,7 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
                         <th className="py-2.5 px-3">Chức danh / Role</th>
                         <th className="py-2.5 px-3">Email</th>
                         <th className="py-2.5 px-3">Số điện thoại</th>
+                        <th className="py-2.5 px-3 text-right">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -394,6 +458,16 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
                               {usr.phone || "—"}
                             </div>
                           </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleUnassignUser(usr.id)}
+                              title="Bỏ gán khỏi vị trí này"
+                              className="p-1 hover:text-destructive text-muted-foreground transition-colors"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -414,7 +488,6 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
         )}
       </div>
 
-      {/* FULL FORM MODAL CÓ BÁO LỖI VÀ ĐẦY ĐỦ TRƯỜNG THÔNG TIN */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-lg p-5 w-full max-w-md space-y-4 shadow-lg">
@@ -503,7 +576,56 @@ export const LocationTree: React.FC<LocationTreeProps> = ({
         </div>
       )}
 
-      {/* MODAL DELETE */}
+      {isAssignUserModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-lg p-5 w-full max-w-sm space-y-4 shadow-lg">
+            <div className="flex justify-between items-center border-b pb-2">
+              <h3 className="font-semibold text-sm">Gán nhân sự vào vị trí</h3>
+              <button type="button" onClick={() => setIsAssignUserModalOpen(false)}>
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {assignError && (
+              <div className="p-2.5 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-md flex items-center gap-2">
+                <AlertTriangle className="size-4 shrink-0" />
+                <span>{assignError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAssignUser} className="space-y-3 text-xs">
+              <div>
+                <label className="block mb-1 font-medium text-muted-foreground">Email Nhân sự (User Email) *</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="Ví dụ: student@example.com"
+                  value={assignEmailInput}
+                  onChange={(e) => setAssignEmailInput(e.target.value)}
+                  className="w-full bg-background border border-input p-2 rounded focus:outline-none focus:ring-1 focus:ring-primary text-xs"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setIsAssignUserModalOpen(false)}
+                  className="px-3 py-1.5 border rounded text-xs hover:bg-muted"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 bg-primary text-primary-foreground rounded text-xs font-medium hover:bg-primary/90"
+                >
+                  Gán nhân sự
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {isDeleteModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-lg p-4 w-full max-w-xs space-y-3 text-center">

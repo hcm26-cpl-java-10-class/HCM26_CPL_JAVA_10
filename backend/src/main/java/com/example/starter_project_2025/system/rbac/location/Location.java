@@ -19,7 +19,7 @@ import java.util.Set;
 @Entity
 @Table(name = "locations")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
 @ImportEntity("location")
@@ -48,15 +48,23 @@ public class Location extends BaseEntity {
     @ExportField(name = "Status")
     private LocationStatus status = LocationStatus.ACTIVE;
 
+    @Transient
+    @ImportField(name = "Parent Code")
+    private String parentCode;
+
+    @Transient
+    @ImportField(name = "Assigned User Emails")
+    private String assignedUserEmails;
+
     // --- Bổ sung phục vụ Mô hình Cây (Tree Structure) ---
 
     @Column(name = "path", length = 500)
     @ExportField(name = "Path")
-    private String path; // Lưu đường dẫn hiển thị: "VN / HN / Cơ sở 1"
+    private String path;
 
     @Builder.Default
     @Column(name = "level")
-    private Integer level = 0; // Độ sâu cây: 0 = VN, 1 = HN, 2 = Cơ sở 1
+    private Integer level = 0;
 
     // --- Quan hệ Cha - Con (Self-Referencing) ---
 
@@ -83,9 +91,6 @@ public class Location extends BaseEntity {
     // Domain Methods (Hành vi OOP cho mô hình Cây)
     // =========================================================================
 
-    /**
-     * Cập nhật thông tin cơ bản và tính toán lại Path nếu tên thay đổi
-     */
     public void updateInfo(String name, String description) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Tên vị trí không được để trống");
@@ -95,11 +100,7 @@ public class Location extends BaseEntity {
         this.recalculatePath();
     }
 
-    /**
-     * Đồng bộ quan hệ Cấp cha - Cấp con và tính toán lại Path, Level
-     */
     public void setParentLocation(Location newParent) {
-        // Chặn chọn chính nó làm nút cha
         if (newParent != null && Objects.equals(this.getId(), newParent.getId())) {
             throw new IllegalArgumentException("Không thể chọn chính vị trí này làm vị trí cha");
         }
@@ -112,7 +113,8 @@ public class Location extends BaseEntity {
 
         if (newParent != null) {
             newParent.children.add(this);
-            this.level = newParent.getLevel() + 1;
+            int parentLevel = (newParent.getLevel() != null) ? newParent.getLevel() : 0;
+            this.level = parentLevel + 1;
         } else {
             this.level = 0;
         }
@@ -120,16 +122,16 @@ public class Location extends BaseEntity {
         this.recalculatePath();
     }
 
-    /**
-     * Phương thức đệ quy tính toán lại Path dạng: "VN / HN / Cơ sở 1"
-     */
     public void recalculatePath() {
         if (this.parent == null) {
             this.path = this.name;
         } else {
-            this.path = this.parent.getPath() + " / " + this.name;
+            String parentPath = (this.parent.getPath() != null && !this.parent.getPath().isBlank())
+                    ? this.parent.getPath()
+                    : this.parent.getName();
+            this.path = parentPath + " / " + this.name;
         }
-        // Tự động cập nhật Path cho tất cả các nút con bên dưới
+
         if (this.children != null) {
             for (Location child : this.children) {
                 child.recalculatePath();
@@ -165,20 +167,16 @@ public class Location extends BaseEntity {
         this.status = LocationStatus.ACTIVE;
     }
 
-    // =========================================================================
-    // Standard Hibernate equals & hashCode
-    // =========================================================================
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Location location = (Location) o;
-        return getId() != null && Objects.equals(getId(), location.getId());
+        return code != null && Objects.equals(code, location.getCode());
     }
 
     @Override
     public int hashCode() {
-        return getClass().hashCode();
+        return Objects.hash(code);
     }
 }

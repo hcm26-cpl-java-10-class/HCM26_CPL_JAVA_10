@@ -32,31 +32,30 @@ public class LocationDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-
         ensurePermissionsAndAssignToAdmin();
 
+        Location root = ensure("VN_SYS", "Hệ thống Cơ sở Việt Nam", null);
 
-        Location vn = ensure("VN", "Việt Nam (Hệ thống Cơ sở)", null);
+        Location hn = ensure("CAMPUS_HN", "Cơ sở Hà Nội", root);
+        Location hcm = ensure("CAMPUS_HCM", "Cơ sở TP. Hồ Chí Minh", root);
+        Location dn = ensure("CAMPUS_DN", "Cơ sở Đà Nẵng", root);
 
-        Location hn = ensure("CAMPUS_HN", "Cơ sở Hà Nội", vn);
-        Location hcm = ensure("CAMPUS_HCM", "Cơ sở TP. Hồ Chí Minh", vn);
-        Location dn = ensure("CAMPUS_DN", "Cơ sở Đà Nẵng", vn);
+        Location hnBuildingA = ensure("HN_BLD_A", "Tòa nhà A (Hà Nội)", hn);
+        Location hnBuildingB = ensure("HN_BLD_B", "Tòa nhà B (Hà Nội)", hn);
+        Location hcmBuildingAlpha = ensure("HCM_BLD_ALPHA", "Tòa nhà Alpha (HCM)", hcm);
+        Location dnMain = ensure("DN_BLD_MAIN", "Tòa nhà Trung tâm Đà Nẵng", dn);
 
-        Location hnBuildingA = ensure("HN_BUILDING_A", "Tòa nhà A (Hà Nội)", hn);
-        Location hnBuildingB = ensure("HN_BUILDING_B", "Tòa nhà B (Hà Nội)", hn);
+        Location hnA_F1 = ensure("HN_A_F1", "Tầng 1 - Lễ tân", hnBuildingA);
+        Location hnA_F2 = ensure("HN_A_F2", "Tầng 2 - Ban Giám hiệu", hnBuildingA);
+        Location hnB_F1 = ensure("HN_B_F1", "Tầng 1 - Khu Phòng Máy", hnBuildingB);
+        Location hcmAlpha_F1 = ensure("HCM_ALP_F1", "Tầng 1 - Giảng đường", hcmBuildingAlpha);
 
-        ensure("HN_A_F1", "Tầng 1 - Lễ tân", hnBuildingA);
-        Location hnF2 = ensure("HN_A_F2", "Văn phòng Ban Giám hiệu", hnBuildingA);
-        Location hnLab01 = ensure("HN_A_LAB01", "Phòng Máy tính Lab 01", hnBuildingB);
+        Location hnF2Office = ensure("HN_A_F2_OFFICE", "Văn phòng Ban Giám hiệu", hnA_F2);
+        Location hnLab01 = ensure("HN_B_LAB01", "Phòng Máy tính Lab 01", hnB_F1);
+        Location hcmR101 = ensure("HCM_ALP_R101", "Phòng học 101", hcmAlpha_F1);
+        ensure("HCM_ALP_R102", "Phòng học 102", hcmAlpha_F1);
 
-        Location hcmBuildingAlpha = ensure("HCM_ALPHA", "Tòa nhà Alpha (HCM)", hcm);
-        Location hcmR101 = ensure("HCM_ALP_R101", "Phòng học 101", hcmBuildingAlpha);
-        ensure("HCM_ALP_R102", "Phòng học 102", hcmBuildingAlpha);
-
-        ensure("DN_MAIN", "Tòa nhà Trung tâm Đà Nẵng", dn);
-
-
-        assignUserToLocation("admin@example.com", hnF2);
+        assignUserToLocation("admin@example.com", hnF2Office);
         assignUserToLocation("teacher@example.com", hcmR101);
         assignUserToLocation("student@example.com", hnLab01);
 
@@ -95,14 +94,16 @@ public class LocationDataInitializer implements CommandLineRunner {
     }
 
     private Location ensure(String code, String name, Location parent) {
-        return locationRepository.findByCode(code).orElseGet(() -> {
+        return locationRepository.findByCode(code).map(existing -> {
+            existing.setParentLocation(parent);
+            return locationRepository.save(existing);
+        }).orElseGet(() -> {
             Location location = Location.builder()
                     .code(code)
                     .name(name)
                     .status(LocationStatus.ACTIVE)
                     .build();
 
-            
             location.setParentLocation(parent);
 
             return locationRepository.save(location);
@@ -113,7 +114,6 @@ public class LocationDataInitializer implements CommandLineRunner {
         if (location == null) return;
 
         userRepository.findByEmail(email).ifPresent(user -> {
-
             location.addUser(user);
             locationRepository.save(location);
             log.info("Assigned user {} to location {}", email, location.getName());
