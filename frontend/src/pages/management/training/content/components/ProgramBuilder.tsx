@@ -216,11 +216,21 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
         {/* === LEFT: Form Fields === */}
         <div className="bg-white rounded-lg border border-gray-200 p-5 shadow-sm space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-gray-700">
-              Type <span className="text-red-500">*</span>
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-gray-700">
+                Type <span className="text-red-500">*</span>
+              </Label>
+              <span
+                className={`text-[10px] font-mono ${
+                  programType.length >= 50 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                }`}
+              >
+                {programType.length}/50
+              </span>
+            </div>
             <Input
               value={programType}
+              maxLength={50}
               onChange={(e) => setProgramType(e.target.value)}
               placeholder="FR, CPL, NLS..."
               className="text-sm"
@@ -228,11 +238,21 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-gray-700">
-              Code <span className="text-red-500">*</span>
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-gray-700">
+                Code <span className="text-red-500">*</span>
+              </Label>
+              <span
+                className={`text-[10px] font-mono ${
+                  code.length >= 50 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                }`}
+              >
+                {code.length}/50
+              </span>
+            </div>
             <Input
               value={code}
+              maxLength={50}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="e.g. NFP_JAVA_2"
               className="text-sm font-mono"
@@ -240,11 +260,21 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-gray-700">
-              Version <span className="text-red-500">*</span>
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-gray-700">
+                Version <span className="text-red-500">*</span>
+              </Label>
+              <span
+                className={`text-[10px] font-mono ${
+                  version.length >= 20 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                }`}
+              >
+                {version.length}/20
+              </span>
+            </div>
             <Input
               value={version}
+              maxLength={20}
               onChange={(e) => setVersion(e.target.value)}
               placeholder="1.0"
               className="text-sm font-mono"
@@ -252,11 +282,21 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-gray-700">
-              Name <span className="text-red-500">*</span>
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-gray-700">
+                Name <span className="text-red-500">*</span>
+              </Label>
+              <span
+                className={`text-[10px] font-mono ${
+                  name.length >= 255 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                }`}
+              >
+                {name.length}/255
+              </span>
+            </div>
             <Input
               value={name}
+              maxLength={255}
               onChange={(e) => setName(e.target.value)}
               placeholder="Full program name"
               className="text-sm"
@@ -322,9 +362,19 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-gray-700">Content Link</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-gray-700">Content Link</Label>
+              <span
+                className={`text-[10px] font-mono ${
+                  contentLink.length >= 500 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                }`}
+              >
+                {contentLink.length}/500
+              </span>
+            </div>
             <Input
               value={contentLink}
+              maxLength={500}
               onChange={(e) => setContentLink(e.target.value)}
               placeholder="https://..."
               className="text-sm"
@@ -332,13 +382,23 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-gray-700">Description</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-gray-700">Description</Label>
+              <span
+                className={`text-[10px] font-mono ${
+                  description.length >= 1000 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                }`}
+              >
+                {description.length}/1000
+              </span>
+            </div>
             <textarea
               value={description}
+              maxLength={1000}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Program description..."
-              rows={3}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+              rows={4}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-y min-h-[80px] max-h-[220px]"
             />
           </div>
         </div>

@@ -302,7 +302,7 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
             <Upload className="size-4" /> Import
           </Button>
 
-          {/* Export Button - Opens Hình 3 Modal */}
+          {/* Export Button */}
           <Button
             variant="outline"
             size="sm"
@@ -528,112 +528,156 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
 
       {/* Create/Edit Form Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[540px] max-h-[90vh] flex flex-col p-6 overflow-hidden">
+          <DialogHeader className="shrink-0 pb-1">
             <DialogTitle>{editingTopic ? "Edit Topic" : "Create New Topic"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSaveTopic} className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
+          <form onSubmit={handleSaveTopic} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto space-y-4 py-2 pr-2 -mr-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold">
+                      Topic Code <span className="text-red-500">*</span>
+                    </Label>
+                    <span
+                      className={`text-[10px] font-mono ${
+                        formData.code.length >= 50 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                      }`}
+                    >
+                      {formData.code.length}/50
+                    </span>
+                  </div>
+                  <Input
+                    disabled={!!editingTopic}
+                    placeholder="e.g. L1_AL_CCGM"
+                    value={formData.code}
+                    maxLength={50}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                    className="font-mono uppercase text-xs"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold">
+                      Version <span className="text-red-500">*</span>
+                    </Label>
+                    <span
+                      className={`text-[10px] font-mono ${
+                        formData.version.length >= 20 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                      }`}
+                    >
+                      {formData.version.length}/20
+                    </span>
+                  </div>
+                  <Input
+                    placeholder="e.g. 1.0"
+                    value={formData.version}
+                    maxLength={20}
+                    onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                    className="font-mono text-xs"
+                    required
+                  />
+                </div>
+              </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  Topic Code <span className="text-red-500">*</span>
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">
+                    Topic Name <span className="text-red-500">*</span>
+                  </Label>
+                  <span
+                    className={`text-[10px] font-mono ${
+                      formData.name.length >= 255 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                    }`}
+                  >
+                    {formData.name.length}/255
+                  </span>
+                </div>
                 <Input
-                  disabled={!!editingTopic}
-                  placeholder="e.g. L1_AL_CCGM"
-                  value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                  className="font-mono uppercase text-xs"
+                  placeholder="e.g. Clean Code and Git Multi-platform"
+                  value={formData.name}
+                  maxLength={255}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="text-xs"
                   required
                 />
               </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Technical Group</Label>
+                  <Select
+                    value={formData.technicalGroup}
+                    onValueChange={(v) => setFormData({ ...formData, technicalGroup: v })}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Java">Java</SelectItem>
+                      <SelectItem value="React">React</SelectItem>
+                      <SelectItem value="Frontend">Frontend</SelectItem>
+                      <SelectItem value="Backend">Backend</SelectItem>
+                      <SelectItem value="Database">Database</SelectItem>
+                      <SelectItem value="DevOps">DevOps</SelectItem>
+                      <SelectItem value="Testing">Testing</SelectItem>
+                      <SelectItem value="Soft Skills">Soft Skills</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">
+                    Duration (Hours) <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={formData.durationHours}
+                    onChange={(e) => setFormData({ ...formData, durationHours: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                    className="text-xs font-mono"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Status</Label>
+                  <Select
+                    value={formData.isActive ? "ACTIVE" : "INACTIVE"}
+                    onValueChange={(v) => setFormData({ ...formData, isActive: v === "ACTIVE" })}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="INACTIVE">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  Version <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  placeholder="e.g. 1.0"
-                  value={formData.version}
-                  onChange={(e) => setFormData({ ...formData, version: e.target.value })}
-                  className="font-mono text-xs"
-                  required
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Description</Label>
+                  <span
+                    className={`text-[10px] font-mono ${
+                      (formData.description?.length || 0) >= 1000
+                        ? "text-amber-600 font-semibold"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {formData.description?.length || 0}/1000
+                  </span>
+                </div>
+                <Textarea
+                  rows={4}
+                  placeholder="Detailed objectives, outline..."
+                  value={formData.description}
+                  maxLength={1000}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="text-xs resize-y min-h-[90px] max-h-[220px]"
                 />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">
-                Topic Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                placeholder="e.g. Clean Code and Git Multi-platform"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="text-xs"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Technical Group</Label>
-                <Select
-                  value={formData.technicalGroup}
-                  onValueChange={(v) => setFormData({ ...formData, technicalGroup: v })}
-                >
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Java">Java</SelectItem>
-                    <SelectItem value="React">React</SelectItem>
-                    <SelectItem value="Frontend">Frontend</SelectItem>
-                    <SelectItem value="Backend">Backend</SelectItem>
-                    <SelectItem value="Database">Database</SelectItem>
-                    <SelectItem value="DevOps">DevOps</SelectItem>
-                    <SelectItem value="Testing">Testing</SelectItem>
-                    <SelectItem value="Soft Skills">Soft Skills</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  Duration (Hours) <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={formData.durationHours}
-                  onChange={(e) => setFormData({ ...formData, durationHours: parseInt(e.target.value, 10) || 1 })}
-                  className="text-xs font-mono"
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Status</Label>
-                <Select
-                  value={formData.isActive ? "ACTIVE" : "INACTIVE"}
-                  onValueChange={(v) => setFormData({ ...formData, isActive: v === "ACTIVE" })}
-                >
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ACTIVE">Active</SelectItem>
-                    <SelectItem value="INACTIVE">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Description</Label>
-              <Textarea
-                rows={3}
-                placeholder="Detailed objectives, outline..."
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="text-xs resize-none"
-              />
-            </div>
-            <DialogFooter>
+            <DialogFooter className="pt-3 border-t mt-3 flex justify-end gap-2 shrink-0">
               <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
               <Button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white">
                 {editingTopic ? "Save Changes" : "Create Topic"}
@@ -654,8 +698,23 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
               Cloning <b>{cloningTopic?.code}</b> (v{cloningTopic?.version}) to a new version.
             </p>
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">New Version</Label>
-              <Input placeholder="e.g. 1.1" value={newVersion} onChange={(e) => setNewVersion(e.target.value)} className="font-mono" />
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">New Version</Label>
+                <span
+                  className={`text-[10px] font-mono ${
+                    newVersion.length >= 20 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                  }`}
+                >
+                  {newVersion.length}/20
+                </span>
+              </div>
+              <Input
+                placeholder="e.g. 1.1"
+                value={newVersion}
+                maxLength={20}
+                onChange={(e) => setNewVersion(e.target.value)}
+                className="font-mono text-xs"
+              />
             </div>
           </div>
           <DialogFooter>
@@ -665,14 +724,14 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
         </DialogContent>
       </Dialog>
 
-      {/* Import Dialog - Theo đúng Hình 2 với tính năng Preview và Rollback */}
+      {/* Import Dialog */}
       <TopicImportDialog
         open={isImportOpen}
         onOpenChange={setIsImportOpen}
         onSuccess={loadTopics}
       />
 
-      {/* Export Dialog - Theo đúng Hình 3 với lựa chọn Excel, CSV, PDF */}
+      {/* Export Dialog */}
       <TopicExportDialog
         open={isExportOpen}
         onOpenChange={setIsExportOpen}

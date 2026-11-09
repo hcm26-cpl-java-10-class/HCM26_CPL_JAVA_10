@@ -96,7 +96,7 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
       setTotalPages(res.totalPages || 1);
       setTotalElements(res.totalElements || 0);
     } catch {
-      toast.error("Không thể tải danh sách chương trình");
+      toast.error("Failed to load training programs");
     } finally {
       setLoading(false);
     }
@@ -127,11 +127,11 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
     if (!cloningProgram || !newVersion.trim()) return;
     try {
       await programApi.cloneVersion(cloningProgram.id, newVersion.trim());
-      toast.success(`Đã nhân bản sang phiên bản ${newVersion}`);
+      toast.success(`Successfully cloned to version ${newVersion}`);
       setIsCloneOpen(false);
       loadPrograms();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Lỗi nhân bản");
+      toast.error(err.response?.data?.message || "Clone failed");
     }
   };
 
@@ -139,25 +139,25 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
     try {
       if (p.status === "ACTIVE") {
         await programApi.changeStatus(p.id, "INACTIVE");
-        toast.success(`Đã chuyển "${p.name}" sang Inactive`);
+        toast.success(`Deactivated "${p.name}"`);
       } else {
         await programApi.changeStatus(p.id, "ACTIVE");
-        toast.success(`Đã kích hoạt "${p.name}"`);
+        toast.success(`Activated "${p.name}"`);
       }
       loadPrograms();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Lỗi đổi trạng thái");
+      toast.error(err.response?.data?.message || "Status change failed");
     }
   };
 
   const handleDeleteProgram = async (p: TrainingProgramItem) => {
-    if (!confirm(`Xóa chương trình "${p.name}"?`)) return;
+    if (!confirm(`Delete training program "${p.name}"?`)) return;
     try {
       await programApi.delete(p.id);
-      toast.success("Đã xóa chương trình");
+      toast.success("Training program deleted successfully");
       loadPrograms();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Không thể xóa chương trình này");
+      toast.error(err.response?.data?.message || "Cannot delete this training program");
     }
   };
 
@@ -433,10 +433,20 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
               The new version will have a separate ID.
             </p>
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">New Version</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">New Version</Label>
+                <span
+                  className={`text-[10px] font-mono ${
+                    newVersion.length >= 20 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                  }`}
+                >
+                  {newVersion.length}/20
+                </span>
+              </div>
               <Input
                 placeholder="e.g. 1.1 or 2.0"
                 value={newVersion}
+                maxLength={20}
                 onChange={(e) => setNewVersion(e.target.value)}
                 className="font-mono text-sm"
               />
