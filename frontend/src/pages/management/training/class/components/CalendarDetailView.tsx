@@ -40,10 +40,11 @@ export function CalendarDetailView({ calendar, classItem, onBack }: {
 }) {
     const groups = useMemo(() => {
         const result = new Map<string, CalendarTopic>();
-        for (const topic of calendar.overviewItems ?? []) result.set(topic.label.replace(/^\[|\]$/g, ""), { ...topic, lessons: [...(topic.lessons ?? [])] });
+        for (const topic of calendar.overviewItems ?? []) result.set(topic.id, { ...topic, lessons: [...(topic.lessons ?? [])] });
         const sessionsByTopic = new Map<string, CalendarLesson[]>();
         for (const session of calendar.sessions ?? []) {
-            const key = session.topicCode || session.topic || `Session ${session.id}`;
+            const label = session.topicCode || session.topic || `Session ${session.id}`;
+            const key = [...result.entries()].find(([, topic]) => topic.label.replace(/^\[|\]$/g, "") === label)?.[0] ?? label;
             const existing = result.get(key);
             const lessons = sessionsByTopic.get(key) ?? [];
             lessons.push({ id: `session-${session.id}`, name: session.topic || key, from: session.date, to: session.date,
@@ -80,6 +81,7 @@ export function CalendarDetailView({ calendar, classItem, onBack }: {
             <div className="max-h-[62dvh] min-h-48 space-y-3 overflow-y-auto p-3 sm:p-5">
                 <div className="flex flex-wrap gap-x-12 gap-y-2 pb-2 text-sm">
                     <p><span className="font-medium">Class Start Date:</span> {displayDate(calendar.classStartDate || classItem.startDate || "")}</p>
+                    <p><span className="font-medium">Class End Date:</span> {displayDate(calendar.classEndDate || classItem.endDate || "")}</p>
                     <p><span className="font-medium">Actual Learning Start Date:</span> {displayDate(calendar.actualLearningStartDate ?? "")}</p>
                 </div>
                 {groups.length ? groups.map((topic, index) => (

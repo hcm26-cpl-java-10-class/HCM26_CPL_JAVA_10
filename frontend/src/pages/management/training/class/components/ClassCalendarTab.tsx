@@ -83,7 +83,7 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
     const save = useMutation({
         mutationFn: (updates: Array<{ id: number; name: string; historyChange: string }>) => externalApi.saveClassCalendars(classItem.id, updates),
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["class-calendars", classItem.id] });
+            await queryClient.invalidateQueries({ queryKey: ["session", "class-calendars", classItem.id] });
             await queryClient.invalidateQueries({ queryKey: ["classes", "readiness", String(classItem.id)] });
             setPending({});
             setEditingIds([]);
@@ -123,14 +123,14 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
         writeFile(workbook, `${item.name.replace(/[<>:"/\\|?*]/g, "_")}${detailed ? "_detailed_time" : ""}.xlsx`);
     };
     const query = useQuery({
-        queryKey: ["class-calendars", classItem.id],
+        queryKey: ["session", "class-calendars", classItem.id, classItem.startDate, classItem.endDate, classItem.program, classItem.masterTrainer, classItem.location],
         queryFn: () => externalApi.getClassCalendars(classItem.id),
         enabled: canRead,
         retry: retryUnlessClientError,
     });
     const rows = useMemo(() => (query.data ?? []).map((item) => pending[item.id] ?? item)
         .filter((item) => statuses.includes(item.status))
-        .sort((a, b) => b.lastModifiedDate.localeCompare(a.lastModifiedDate) || b.id - a.id), [query.data, statuses, pending]);
+        .sort((a, b) => Number(b.id === 0) - Number(a.id === 0) || b.lastModifiedDate.localeCompare(a.lastModifiedDate) || b.id - a.id), [query.data, statuses, pending]);
     const pendingCount = Object.keys(pending).length;
     const fieldError = (value: string, label: string, max: number) => !value.trim()
         ? `${label} is required.` : value.length > max ? `${label} must be ${max} characters or fewer.` : undefined;
@@ -230,6 +230,7 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
                             <TableRow><TableCell colSpan={7} className="h-40 text-center">
                                 <CalendarDays className="mx-auto mb-3 size-8 text-muted-foreground" />
                                 <p className="text-sm text-muted-foreground">{query.data?.length ? "No calendars match the selected statuses." : "No calendar versions available for this class yet."}</p>
+
                             </TableCell></TableRow>
                         ) : rows.map((item, index) => (
                             <TableRow key={item.id} className={pending[item.id] ? "bg-amber-50/50 dark:bg-amber-950/20" : ""}>
@@ -277,7 +278,7 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
                                 <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
                                 <TableCell className="text-center">
                                     <div className="flex items-center justify-center gap-1">
-                                    {canUpdate && (editingIds.includes(item.id) ? (
+                                    {canUpdate && item.id > 0 && (editingIds.includes(item.id) ? (
                                         <Button type="button" size="sm" variant="outline" disabled={save.isPending} aria-label={`Cancel editing version ${item.version}`} onClick={() => cancelEdit(item.id)}><X className="size-3" /> Cancel</Button>
                                     ) : (
                                         <Button type="button" size="sm" variant="outline" disabled={save.isPending} aria-label={`Edit calendar version ${item.version}`} onClick={() => setEditingIds((prev) => [...prev, item.id])}><Pencil className="size-3" /> Edit</Button>

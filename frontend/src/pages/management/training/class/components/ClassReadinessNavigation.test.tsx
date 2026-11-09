@@ -64,7 +64,7 @@ beforeEach(() => {
         fakeHttp.on("get", `/classes/${id}`, classItem(id));
         fakeHttp.on("get", `/classes/${id}/readiness`, readiness(id));
         fakeHttp.on("get", `/classes/${id}/trainees`, []);
-        fakeHttp.on("get", `/external/classes/${id}/calendars`, []);
+        fakeHttp.on("get", `/classes/${id}/calendars`, []);
     }
 });
 
@@ -99,7 +99,7 @@ describe("Readiness navigation through the application router and RBAC", () => {
         expect(heading).toBeInTheDocument();
         expect(within(heading.closest("header")!).getByRole("link", { name: "Back to Class List" })).toHaveAttribute("href", `/classes?${pageState.listSearch}`);
         expect(screen.getAllByRole("tab")).toHaveLength(5);
-        await waitFor(() => expect(fakeHttp.callsTo("get", tab === "trainees" ? `/classes/${id}/trainees` : `/external/classes/${id}/calendars`)).toHaveLength(1));
+        await waitFor(() => expect(fakeHttp.callsTo("get", tab === "trainees" ? `/classes/${id}/trainees` : `/classes/${id}/calendars`)).toHaveLength(1));
     });
 
     it("opens the existing edit modal prefilled for this class without navigating or writing", async () => {
@@ -131,7 +131,7 @@ describe("Readiness navigation through the application router and RBAC", () => {
     });
 
     it("shows a calendar API 403 as Access denied in the current tab", async () => {
-        fakeHttp.on("get", "/external/classes/42/calendars", () => { throw httpError(403); });
+        fakeHttp.on("get", "/classes/42/calendars", () => { throw httpError(403); });
         const { user } = renderApp();
         await user.click(await screen.findByRole("button", { name: "Open Calendar" }));
         expect(await screen.findByRole("alert")).toHaveTextContent("Access denied");
@@ -140,7 +140,7 @@ describe("Readiness navigation through the application router and RBAC", () => {
     });
 
     it("keeps the unsaved-changes guard and URL state when leaving a readiness calendar", async () => {
-        fakeHttp.on("get", "/external/classes/42/calendars", [{
+        fakeHttp.on("get", "/classes/42/calendars", [{
             id: 100, classId: 42, name: "Navigation calendar", version: "1.0", historyChange: "Initial",
             lastModifiedDate: "2026-11-07T09:00:00", lastModifiedBy: "Admin", status: "active",
         }]);

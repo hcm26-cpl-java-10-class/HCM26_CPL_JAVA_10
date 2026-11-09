@@ -1,13 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { normalizeSessionFilter, sessionApi } from "@/api/features/demo/session.api";
 import { ALL_STATUSES, externalApi } from "@/api/features/external.api";
-import { fakeHttp, pageOf } from "@/test/fake-http";
+import { fakeHttp, pageOf, httpError } from "@/test/fake-http";
 
 vi.mock("@/api/axios", () => import("@/test/mocks").then((m) => m.axiosModule()));
 
 beforeEach(() => {
     fakeHttp.reset();
     vi.spyOn(console, "log").mockImplementation(() => {});
+});
+
+it("never substitutes a sample calendar when the real calendar API fails outside tests", async () => {
+    vi.stubEnv("VITEST", "");
+    try {
+        fakeHttp.on("get", "/classes/42/calendars", () => { throw httpError(503); });
+        await expect(externalApi.getClassCalendars(42)).rejects.toBeDefined();
+        expect(fakeHttp.callsTo("get", "/external/classes/42/calendars")).toHaveLength(0);
+    } finally {
+        vi.unstubAllEnvs();
+    }
 });
 
 describe("session lifecycle calls", () => {

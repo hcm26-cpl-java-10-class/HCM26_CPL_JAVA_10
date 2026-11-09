@@ -17,7 +17,7 @@ const source: ClassCalendarVersion = {
 beforeEach(() => fakeHttp.reset());
 
 it("adds, deletes and reorders topics before creating a new version", async () => {
-    fakeHttp.on("post", "/external/classes/1/calendars/2/versions", { ...source, id: 3 });
+    fakeHttp.on("post", "/classes/1/calendars/2/versions", { ...source, id: 3 });
     const back = vi.fn();
     const { user } = renderAt(<CalendarAdjustView calendar={source} classItem={{ id: 1 }} onBack={back} />, { route: "/" });
     await user.click(screen.getByRole("button", { name: "Add New Topic & Activities" }));
@@ -30,13 +30,13 @@ it("adds, deletes and reorders topics before creating a new version", async () =
     await user.click(screen.getByRole("button", { name: "Move up" }));
     await user.click(screen.getByRole("button", { name: "Save as New Version" }));
     await waitFor(() => expect(back).toHaveBeenCalledOnce());
-    const data = fakeHttp.callsTo("post", "/external/classes/1/calendars/2/versions")[0].data as { overviewItems: Array<{ label: string }> };
+    const data = fakeHttp.callsTo("post", "/classes/1/calendars/2/versions")[0].data as { overviewItems: Array<{ label: string }> };
     expect(data.overviewItems.map(item => item.label)).toEqual(["NEW", "REACT"]);
     expect(source.overviewItems?.map(item => item.label)).toEqual(["JAVA", "REACT"]);
 });
 
 it("keeps adjustments available after a save failure", async () => {
-    fakeHttp.on("post", "/external/classes/1/calendars/2/versions", () => { throw httpError(503); });
+    fakeHttp.on("post", "/classes/1/calendars/2/versions", () => { throw httpError(503); });
     const back = vi.fn();
     const { user } = renderAt(<CalendarAdjustView calendar={source} classItem={{ id: 1 }} onBack={back} />, { route: "/" });
     await user.click(screen.getByRole("button", { name: "Delete JAVA" }));

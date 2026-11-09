@@ -22,7 +22,22 @@ const records = [
 beforeEach(() => {
     fakeHttp.reset();
     grant("SESSION_READ");
-    fakeHttp.on("get", "/external/classes/1/calendars", records);
+    fakeHttp.on("get", "/classes/1/calendars", records);
+});
+
+it("shows the calendar supplied from Class Info without requiring calendar creation", async () => {
+    grant("SESSION_READ", "SESSION_UPDATE");
+    fakeHttp.on("get", "/classes/2/calendars", [{ id: 0, classId: 2, name: "HCM02666_Calendar",
+        version: "Live", status: "active", historyChange: "Synchronized from Class Info", lastModifiedDate: "2026-11-09", lastModifiedBy: "",
+        classStartDate: "2026-11-09", classEndDate: "2027-02-07", overviewItems: [{ id: "class-2", label: "FR_NFP_JAVA", startDate: "2026-11-09", endDate: "2027-02-07",
+            lessons: [{ id: "class-range-2", name: "HCM02666", from: "2026-11-09", to: "2027-02-07", trainer: "NgaTTT45", venue: "Center Building, HCM" }] }] }]);
+    const { user } = renderAt(<ClassCalendarTab classItem={{ id: 2, code: "HCM02666", startDate: "2026-11-09", endDate: "2027-02-07" }} />, { route: "/" });
+    await user.click(await screen.findByRole("button", { name: "HCM02666_Calendar" }));
+    expect(screen.queryByRole("button", { name: "Create calendar" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Calendar Detail" })).toHaveTextContent("07-Feb-2027");
+    await user.click(screen.getByRole("button", { name: /Show lesson details/ }));
+    expect(screen.getByText("NgaTTT45")).toBeInTheDocument();
+    expect(screen.getByText("Center Building, HCM")).toBeInTheDocument();
 });
 
 it("links the bottom horizontal scrollbar to the table in both directions", async () => {
@@ -40,7 +55,7 @@ it("links the bottom horizontal scrollbar to the table in both directions", asyn
 
 it("downloads the formatted detailed workbook from the selected calendar export endpoint", async () => {
     const file = new Blob(["xlsx workbook"], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-    fakeHttp.on("get", "/external/classes/1/calendars/2/export", file);
+    fakeHttp.on("get", "/classes/1/calendars/2/export", file);
     const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
     await user.click(await screen.findByRole("button", { name: "Actions for calendar version 1.2" }));
     await user.click(screen.getByRole("menuitem", { name: "Download with detailed time" }));
@@ -64,7 +79,7 @@ it("shows newest versions first, filters statuses and opens version details", as
 });
 
 it("keeps column headers visible on API errors", async () => {
-    fakeHttp.on("get", "/external/classes/1/calendars", () => { throw httpError(503); });
+    fakeHttp.on("get", "/classes/1/calendars", () => { throw httpError(503); });
     renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
     await screen.findByRole("button", { name: /try again/i });
     expect(screen.getByRole("columnheader", { name: "Calendar Name" })).toBeInTheDocument();
@@ -74,15 +89,15 @@ it("keeps column headers visible on API errors", async () => {
 it("does not request calendar data without read permission", async () => {
     grant();
     renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
-    expect(fakeHttp.callsTo("get", "/external/classes/1/calendars")).toHaveLength(0);
+    expect(fakeHttp.callsTo("get", "/classes/1/calendars")).toHaveLength(0);
 });
 
 it("offers all five actions and saves Adjust as a new version", async () => {
     grant("SESSION_READ", "SESSION_UPDATE");
-    fakeHttp.on("get", "/external/classes/1/calendars", [{ ...records[1], classStartDate: "2026-05-23", actualLearningStartDate: "2026-05-25", overviewItems: [
+    fakeHttp.on("get", "/classes/1/calendars", [{ ...records[1], classStartDate: "2026-05-23", actualLearningStartDate: "2026-05-25", overviewItems: [
         { id: "topic-1", label: "[OC]", name: "Opening Ceremony", startDate: "2026-05-25", endDate: "2026-05-25", lessons: [] },
     ] }]);
-    fakeHttp.on("post", "/external/classes/1/calendars/2/versions", { ...records[1], id: 3, version: "1.3", status: "draft" });
+    fakeHttp.on("post", "/classes/1/calendars/2/versions", { ...records[1], id: 3, version: "1.3", status: "draft" });
     const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
     await screen.findByRole("button", { name: "Java_Calendar_1.2" });
     await user.click(screen.getByRole("button", { name: "Actions for calendar version 1.2" }));
@@ -98,21 +113,21 @@ it("offers all five actions and saves Adjust as a new version", async () => {
     await user.type(screen.getByLabelText("Actual Learning Start Date", { exact: true }), "2026-05-01");
     await user.click(screen.getByRole("button", { name: "Save as New Version" }));
     expect(screen.getByRole("alert")).toHaveTextContent("on or after Class Start Date");
-    expect(fakeHttp.callsTo("post", "/external/classes/1/calendars/2/versions")).toHaveLength(0);
+    expect(fakeHttp.callsTo("post", "/classes/1/calendars/2/versions")).toHaveLength(0);
     fireEvent.change(screen.getByLabelText("Actual Learning Start Date", { exact: true }), { target: { value: "2026-05-25" } });
     await user.click(screen.getByRole("button", { name: /\[OC\] Opening Ceremony/ }));
     await user.clear(screen.getByRole("textbox", { name: "Topic Name" }));
     await user.type(screen.getByRole("textbox", { name: "Topic Name" }), "New opening plan");
     await user.click(screen.getByRole("button", { name: "Save as New Version" }));
-    await waitFor(() => expect(fakeHttp.callsTo("post", "/external/classes/1/calendars/2/versions")).toHaveLength(1));
-    expect(fakeHttp.callsTo("post", "/external/classes/1/calendars/2/versions")[0].data).toMatchObject({
+    await waitFor(() => expect(fakeHttp.callsTo("post", "/classes/1/calendars/2/versions")).toHaveLength(1));
+    expect(fakeHttp.callsTo("post", "/classes/1/calendars/2/versions")[0].data).toMatchObject({
         classStartDate: "2026-05-23", actualLearningStartDate: "2026-05-25", overviewItems: [{ id: "topic-1", name: "New opening plan" }],
     });
-    expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")).toHaveLength(0);
+    expect(fakeHttp.callsTo("put", "/classes/1/calendars")).toHaveLength(0);
 });
 
 it("opens the overview chart with topic date ranges and closes back to the calendar", async () => {
-    fakeHttp.on("get", "/external/classes/1/calendars", [{ ...records[1], sessions: [
+    fakeHttp.on("get", "/classes/1/calendars", [{ ...records[1], sessions: [
         { id: 1, classId: 1, date: "2026-05-25", topic: "Java" },
         { id: 2, classId: 1, date: "2026-06-02", topic: "Java" },
         { id: 3, classId: 1, date: "2026-05-26", topic: "React" },
@@ -132,7 +147,7 @@ it("opens the overview chart with topic date ranges and closes back to the calen
 });
 
 it("draws calendar subject ranges even when the version has no session records", async () => {
-    fakeHttp.on("get", "/external/classes/1/calendars", [{ ...records[1], sessions: [], overviewItems: [
+    fakeHttp.on("get", "/classes/1/calendars", [{ ...records[1], sessions: [], overviewItems: [
         { id: "OC", label: "[OC]", startDate: "2026-05-25", endDate: "2026-05-25" },
         { id: "JS", label: "[L2_JA_JS]", startDate: "2026-06-18", endDate: "2026-06-29" },
     ] }]);
@@ -146,7 +161,7 @@ it("draws calendar subject ranges even when the version has no session records",
 });
 
 it("opens Detail as a topic page with expandable lesson rows and preserves list filters on return", async () => {
-    fakeHttp.on("get", "/external/classes/1/calendars", [{ ...records[1], actualLearningStartDate: "2026-05-25", overviewItems: [{
+    fakeHttp.on("get", "/classes/1/calendars", [{ ...records[1], actualLearningStartDate: "2026-05-25", overviewItems: [{
         id: "teamwork", label: "[L1_AL_TESO]", name: "Teamwork Essentials", version: "1.0",
         startDate: "2026-05-27", endDate: "2026-05-27", slot: "Morning (08:30-12:00)",
         lessons: [{ id: "lesson-1", name: "Stand Out as a Valuable Team Member", from: "2026-05-27", to: "2026-05-27", trainer: "NgaTTT45" }],
@@ -171,7 +186,7 @@ it("opens Detail as a topic page with expandable lesson rows and preserves list 
 
 it("enables Save changes when inline changes are made and submits update batch", async () => {
     grant("SESSION_READ", "SESSION_UPDATE");
-    fakeHttp.on("put", "/external/classes/1/calendars", { message: "Saved" });
+    fakeHttp.on("put", "/classes/1/calendars", { message: "Saved" });
     const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
     await screen.findByRole("button", { name: "Java_Calendar_1.2" });
     const saveBtn = screen.getByRole("button", { name: "Save changes" });
@@ -187,8 +202,8 @@ it("enables Save changes when inline changes are made and submits update batch",
     expect(saveBtn).toBeEnabled();
 
     await user.click(saveBtn);
-    await waitFor(() => expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")).toHaveLength(1));
-    expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")[0].data).toEqual({
+    await waitFor(() => expect(fakeHttp.callsTo("put", "/classes/1/calendars")).toHaveLength(1));
+    expect(fakeHttp.callsTo("put", "/classes/1/calendars")[0].data).toEqual({
         updates: [
             { id: 2, name: "Java_Calendar_1.2", historyChange: "Updated schedule for sprint" }
         ]
@@ -246,13 +261,13 @@ it("validates required fields and lengths before sending any request", async () 
     expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
     fireEvent.change(note, { target: { value: "x".repeat(201) } });
     await user.click(screen.getByRole("button", { name: "Save changes" }));
-    expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")).toHaveLength(0);
+    expect(fakeHttp.callsTo("put", "/classes/1/calendars")).toHaveLength(0);
 });
 
 it("locks edits during saving and preserves drafts after failure for retry", async () => {
     grant("SESSION_READ", "SESSION_UPDATE");
     let rejectSave!: (reason: unknown) => void;
-    fakeHttp.on("put", "/external/classes/1/calendars", () => new Promise((_, reject) => { rejectSave = reject; }));
+    fakeHttp.on("put", "/classes/1/calendars", () => new Promise((_, reject) => { rejectSave = reject; }));
     const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
     await user.click(await screen.findByRole("button", { name: "Edit calendar version 1.2" }));
     fireEvent.change(screen.getByLabelText("Calendar name for version 1.2"), { target: { value: " New name " } });
@@ -265,18 +280,18 @@ it("locks edits during saving and preserves drafts after failure for retry", asy
     rejectSave(httpError(503));
     await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled());
     expect(screen.getByLabelText("Calendar name for version 1.2")).toHaveValue(" New name ");
-    fakeHttp.on("put", "/external/classes/1/calendars", {});
-    fakeHttp.on("get", "/external/classes/1/calendars", [{ ...records[1], name: "New name" }, records[0]]);
+    fakeHttp.on("put", "/classes/1/calendars", {});
+    fakeHttp.on("get", "/classes/1/calendars", [{ ...records[1], name: "New name" }, records[0]]);
     await user.click(screen.getByRole("button", { name: "Save changes" }));
     await screen.findByRole("button", { name: "New name" });
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
-    expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")[1].data).toEqual({ updates: [{ id: 2, name: "New name", historyChange: "Update trainer" }] });
+    expect(fakeHttp.callsTo("put", "/classes/1/calendars")[1].data).toEqual({ updates: [{ id: 2, name: "New name", historyChange: "Update trainer" }] });
 });
 
 it("cancels only the selected row and saves the remaining changes together", async () => {
     grant("SESSION_READ", "SESSION_UPDATE");
-    fakeHttp.on("put", "/external/classes/1/calendars", {});
+    fakeHttp.on("put", "/classes/1/calendars", {});
     const { user } = renderAt(<ClassCalendarTab classItem={{ id: 1 }} />, { route: "/" });
     await user.click(await screen.findByRole("button", { name: "Edit calendar version 1.2" }));
     await user.click(screen.getByRole("button", { name: "Edit calendar version 1.1" }));
@@ -289,8 +304,8 @@ it("cancels only the selected row and saves the remaining changes together", asy
     expect(screen.getByRole("menuitem", { name: "Adjust" })).toHaveAttribute("aria-disabled", "true");
     await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")).toHaveLength(1));
-    expect(fakeHttp.callsTo("put", "/external/classes/1/calendars")[0].data).toEqual({ updates: [{ id: 2, name: records[1].name, historyChange: "New active note" }] });
+    await waitFor(() => expect(fakeHttp.callsTo("put", "/classes/1/calendars")).toHaveLength(1));
+    expect(fakeHttp.callsTo("put", "/classes/1/calendars")[0].data).toEqual({ updates: [{ id: 2, name: records[1].name, historyChange: "New active note" }] });
 });
 
 it("warns before leaving through a link or closing the page and removes the warning after Cancel", async () => {

@@ -74,6 +74,26 @@ beforeEach(() => {
 });
 
 describe("ClassDetailView & TraineeListTab", () => {
+    it("opens HCM02666 by its own ID and does not reuse the HCM026 calendar", async () => {
+        const first = { id: 1, code: "HCM026", name: "HCM026", status: "planning" };
+        const second = { id: 2, code: "HCM02666", name: "HCM02666", status: "planning" };
+        fakeHttp.on("get", "/classes", [first, second]);
+        fakeHttp.on("get", "/classes/1", first);
+        fakeHttp.on("get", "/classes/2", second);
+        fakeHttp.on("get", "/classes/1/calendars", [{ id: 1, classId: 1, name: "HCM026_Calendar", version: "1.0", status: "draft", lastModifiedDate: "2026-11-09", historyChange: "Created", lastModifiedBy: "Admin" }]);
+        fakeHttp.on("get", "/classes/2/calendars", []);
+        const { user } = renderClassFlow("/classes");
+        await user.click(await screen.findByRole("link", { name: "HCM026" }));
+        await user.click(await screen.findByRole("tab", { name: "Calendar" }));
+        await screen.findByRole("button", { name: "HCM026_Calendar" });
+        await user.click(screen.getAllByRole("link", { name: "Back to Class List" })[0]);
+        await user.click(await screen.findByRole("link", { name: "HCM02666" }));
+        await screen.findByRole("heading", { name: "Class Details : HCM02666" });
+        await user.click(screen.getByRole("tab", { name: "Calendar" }));
+        await screen.findByText("No calendar versions available for this class yet.");
+        expect(screen.queryByRole("button", { name: "HCM026_Calendar" })).not.toBeInTheDocument();
+        expect(fakeHttp.callsTo("get", "/classes/2/calendars")).toHaveLength(1);
+    });
     it("navigates from Class List link to Class Details header and renders all 5 tabs", async () => {
         const { user } = renderClassFlow("/classes");
 

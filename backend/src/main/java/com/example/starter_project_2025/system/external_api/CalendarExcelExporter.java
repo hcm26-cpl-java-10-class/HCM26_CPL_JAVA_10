@@ -35,7 +35,7 @@ public class CalendarExcelExporter {
         return build(calendar);
     }
 
-    byte[] build(JsonNode calendar) throws IOException {
+    public byte[] build(JsonNode calendar) throws IOException {
         try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("Training Calendar");
             CellStyle normal = style(workbook, false, false, null);

@@ -1,4 +1,4 @@
-import type { ClassBudget, ClassCalendarVersion, ExternalClass, Trainee } from "@/types";
+import type { ClassBudget, ExternalClass, Trainee } from "@/types";
 
 export interface MockTraineeMutationInput {
     fullName: string;
@@ -407,44 +407,4 @@ export function getMockBudgetByClass(idOrCode: string | number): ClassBudget {
             { id: 3, category: "Materials", description: "Learning materials & lab setup", amount: 1_000_000, actual: 600_000, type: "expense" },
         ],
     };
-}
-
-export function getMockCalendarsByClass(idOrCode: string | number): ClassCalendarVersion[] {
-    const classItem = findMockClass(idOrCode) ?? MOCK_TRAINING_CLASSES[0];
-    return [
-        {
-            id: 1,
-            classId: classItem.id,
-            name: `${classItem.code ?? "Class"}_Calendar`,
-            version: "1.0",
-            historyChange: "Initial training calendar",
-            lastModifiedDate: "2026-05-20T09:00:00",
-            lastModifiedBy: "AnhVNP2",
-            status: "active",
-            classStartDate: classItem.startDate ?? "2026-05-23",
-            actualLearningStartDate: classItem.startDate ?? "2026-05-23",
-            overviewItems: [
-                {
-                    id: "topic-1",
-                    label: "Java Core & OOP",
-                    name: "Java Core & OOP",
-                    version: "1.0",
-                    startDate: "2026-05-23",
-                    endDate: "2026-06-20",
-                    slot: "Morning (08:30-12:00)",
-                    lessons: [],
-                },
-                {
-                    id: "topic-2",
-                    label: "Spring Boot & REST API",
-                    name: "Spring Boot & REST API",
-                    version: "1.0",
-                    startDate: "2026-06-22",
-                    endDate: "2026-08-15",
-                    slot: "Morning (08:30-12:00)",
-                    lessons: [],
-                },
-            ],
-        },
-    ];
 }

@@ -32,8 +32,8 @@ export function CalendarAdjustView({ calendar, classItem, onBack }: {
     calendar: ClassCalendarVersion; classItem: ExternalClass; onBack: () => void;
 }) {
     const [topics, setTopics] = useState(() => startingTopics(calendar));
-    const [classStart, setClassStart] = useState(calendar.classStartDate || classItem.startDate || "");
-    const [learningStart, setLearningStart] = useState(calendar.actualLearningStartDate || "");
+    const [classStart] = useState(classItem.startDate || calendar.classStartDate || "");
+    const [learningStart, setLearningStart] = useState(calendar.actualLearningStartDate || classItem.startDate || "");
     const [expanded, setExpanded] = useState<string[]>([]);
     const [dragged, setDragged] = useState<string | null>(null);
     const [adding, setAdding] = useState(false);
@@ -48,12 +48,15 @@ export function CalendarAdjustView({ calendar, classItem, onBack }: {
             classStartDate: classStart, actualLearningStartDate: learningStart, overviewItems: topics,
         }),
         onSuccess: async () => {
-            await client.invalidateQueries({ queryKey: ["class-calendars", classItem.id] });
+            await client.invalidateQueries({ queryKey: ["session", "class-calendars", classItem.id] });
             await client.invalidateQueries({ queryKey: ["classes", "readiness", String(classItem.id)] });
             toast.success("A new draft calendar version was created.");
             onBack();
         },
-        onError: () => setError("Could not save the new calendar version. Your adjustments are kept; please try again."),
+        onError: (error: unknown) => {
+            const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+            setError(message || "Could not save the new calendar version. Your adjustments are kept; please try again.");
+        },
     });
     const patch = (id: string, update: Partial<CalendarTopic>) => setTopics(current => current.map(topic => topic.id === id ? { ...topic, ...update } : topic));
     const move = (id: string, target: number) => setTopics(current => {
@@ -67,6 +70,9 @@ export function CalendarAdjustView({ calendar, classItem, onBack }: {
             setError("Actual Learning Start Date must be on or after Class Start Date."); return;
         }
         if (!topics.length) { setError("Add at least one topic or activity."); return; }
+        if (classItem.endDate && (learningStart > classItem.endDate || topics.some(topic => topic.endDate > classItem.endDate!))) {
+            setError("Calendar dates must be within the class date range."); return;
+        }
         for (const topic of topics) {
             if (!topic.label.trim() || !validDate(topic.startDate) || !validDate(topic.endDate) || topic.startDate < learningStart || topic.endDate < topic.startDate) {
                 setError(`Check the name and date range for ${topic.label || "this topic"}. Topics must start on or after Actual Learning Start Date.`); return;
@@ -94,7 +100,7 @@ export function CalendarAdjustView({ calendar, classItem, onBack }: {
             </header>
             <fieldset disabled={save.isPending} className="max-h-[62dvh] space-y-5 overflow-y-auto p-4 sm:p-5">
                 <div className="flex flex-wrap items-end gap-4">
-                    <label className="min-w-52 flex-1 space-y-2 text-sm font-medium">Class Start Date<span className="text-red-600"> *</span><Input aria-label="Class Start Date" type="date" required value={classStart} onChange={event => setClassStart(event.target.value)} /></label>
+                    <label className="min-w-52 flex-1 space-y-2 text-sm font-medium">Class Start Date<span className="text-red-600"> *</span><Input aria-label="Class Start Date" type="date" required readOnly value={classStart} /></label>
                     <label className="min-w-52 flex-1 space-y-2 text-sm font-medium">Actual Learning Start Date<span className="text-red-600"> *</span><Input aria-label="Actual Learning Start Date" type="date" required min={classStart} value={learningStart} onChange={event => setLearningStart(event.target.value)} /></label>
                     <Button className="ml-auto bg-blue-800 hover:bg-blue-900" onClick={() => { setNewFrom(learningStart); setNewTo(learningStart); setAdding(true); }}><Plus className="size-4" /> Add New Topic & Activities</Button>
                 </div>

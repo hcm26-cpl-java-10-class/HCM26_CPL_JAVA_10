@@ -69,6 +69,7 @@ export interface ClassCalendarVersion {
     overviewItems?: CalendarTopic[];
     actualLearningStartDate?: string;
     classStartDate?: string;
+    classEndDate?: string;
 }
 
 export interface ClassSession {

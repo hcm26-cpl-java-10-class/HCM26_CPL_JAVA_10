@@ -18,7 +18,6 @@ import type { ClassCalendarVersion } from "@/types/features/external";
 import {
     findMockClass,
     getMockBudgetByClass,
-    getMockCalendarsByClass,
     MOCK_TRAINEES_POOL,
     MOCK_TRAINING_CLASSES,
 } from "@/pages/management/training/class/mocks/classTrainee.mock";
@@ -44,21 +43,18 @@ export const externalApi = {
     createCalendarVersion: async (classId: number, calendarId: number, data: {
         classStartDate: string; actualLearningStartDate: string; overviewItems: import("@/types/features/external").CalendarTopic[];
     }): Promise<ClassCalendarVersion> => {
-        const response = await axiosInstance.post<ClassCalendarVersion>(`/external/classes/${classId}/calendars/${calendarId}/versions`, data);
+        const response = await axiosInstance.post<ClassCalendarVersion>(calendarId < 0 ? `/classes/${classId}/calendars` : `/classes/${classId}/calendars/${calendarId}/versions`, data);
         return response.data;
     },
     downloadCalendarWithDetailedTime: async (classId: number, calendarId: number): Promise<Blob> => {
-        const response = await axiosInstance.get<Blob>(`/external/classes/${classId}/calendars/${calendarId}/export`, { responseType: "blob" });
+        const response = await axiosInstance.get<Blob>(`/classes/${classId}/calendars/${calendarId}/export`, { responseType: "blob" });
         return response.data;
     },
     saveClassCalendars: async (classId: number, updates: Array<{ id: number; name: string; historyChange: string }>): Promise<void> => {
-        await axiosInstance.put(`/external/classes/${classId}/calendars`, { updates });
+        await axiosInstance.put(`/classes/${classId}/calendars`, { updates });
     },
     getClassCalendars: async (classId: number): Promise<ClassCalendarVersion[]> => {
-        return withFallback(
-            async () => (await axiosInstance.get<ClassCalendarVersion[]>(`/external/classes/${classId}/calendars`)).data,
-            () => getMockCalendarsByClass(classId),
-        );
+        return (await axiosInstance.get<ClassCalendarVersion[]>(`/classes/${classId}/calendars`)).data;
     },
     // ===================== CLASSES =====================
     getClasses: async (status: string = ALL_STATUSES): Promise<ExternalClass[]> => {
