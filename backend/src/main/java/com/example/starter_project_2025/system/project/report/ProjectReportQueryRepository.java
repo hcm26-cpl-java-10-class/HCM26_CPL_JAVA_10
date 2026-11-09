@@ -54,7 +54,7 @@ public class ProjectReportQueryRepository {
 
         Map<Long,Long> workspaceByProject = new HashMap<>();
         var spaces = em.createQuery("select w from Workspace w where w.tenant.id=:tenant and w.isActive=true "
-                + "and w.team.id in :teams order by w.id desc",Workspace.class)
+                + "and w.team.id in :teams and w.team.status=com.example.starter_project_2025.system.project.ProjectTeamStatus.ACTIVE order by w.id desc",Workspace.class)
                 .setParameter("tenant",actor.tenantId()).setParameter("teams",byTeam.keySet()).getResultList();
         Set<Long> workspaceIds = new HashSet<>();
         spaces.forEach(workspace -> { workspaceIds.add(workspace.getId()); if(workspace.getProject()!=null)

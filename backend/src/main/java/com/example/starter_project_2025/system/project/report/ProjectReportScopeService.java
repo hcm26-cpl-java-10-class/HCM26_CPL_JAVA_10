@@ -61,6 +61,7 @@ public class ProjectReportScopeService {
         return em.createQuery("select distinct t from ProjectTeam t join fetch t.trainingClass c join fetch t.project p "
                 + "left join fetch t.projectTemplate tpl where t.isActive=true "
                 + "and c.isActive=true and p.isActive=true and c.tenantId=:tenant and p.tenantId=:tenant "
+                + "and t.allocationSession.status<>com.example.starter_project_2025.system.project.TeamAllocationSessionStatus.CANCELLED "
                 + "and (tpl.id is null or tpl.tenantId is null or tpl.tenantId=:tenant) "
                 + "and (:admin=true or t.assignedMentorId=:actor or (:manager=true and ("
                 + "exists(select s.id from UserDataScope s where s.user.id=:actor and s.tenantId=:tenant and s.isActive=true and ("

@@ -7,6 +7,10 @@ export const statusLabels: Record<ReportStatus, string> = {
 export const statusColors: Record<ReportStatus, string> = {
   DRAFT: "bg-slate-400", PLANNING: "bg-violet-400", ACTIVE: "bg-blue-500", COMPLETED: "bg-emerald-500", CANCELLED: "bg-rose-400",
 };
+export function reportStatuses(additional: ReportStatus[] = []): ReportStatus[] {
+  return (Object.keys(statusLabels) as ReportStatus[]).filter(status => status === "ACTIVE" || status === "COMPLETED"
+    || status !== "CANCELLED" && additional.includes(status));
+}
 export function reportDate(value: string | null, timeZone: string) {
   return value ? new Date(value).toLocaleString("vi-VN", { timeZone }) : "—";
 }

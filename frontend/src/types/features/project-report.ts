@@ -43,7 +43,7 @@ export interface ReportDashboard {
   asOf: string; timeZone: string; inactiveDays: number;
 }
 export interface ReportExport {
-  id: string; status: "QUEUED" | "RUNNING" | "READY" | "FAILED" | "EXPIRED"; format: "EXCEL" | "CSV";
+  id: string; status: "QUEUED" | "RUNNING" | "READY" | "FAILED" | "EXPIRED"; format: "EXCEL";
   fileName: string | null; createdAt: string; generatedAt: string | null; expiresAt: string | null;
   rowCount: number | null; message: string | null;
 }

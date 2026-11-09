@@ -102,7 +102,8 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
       </div>
       {invalidProject ? <p role="alert" className="rounded-lg border p-5 text-destructive">The selected project is outside this workspace.</p>
         : !validId || navigation.isError || navigation.isPending || hierarchy.isError || hierarchy.isPending || !validContext
-        ? <WorkspaceSectionState loading={validId && (navigation.isPending || hierarchy.isPending)} denied={sectionForbidden(navigation.error ?? hierarchy.error)}
+        ? <WorkspaceSectionState loading={validId && !navigation.isError && !hierarchy.isError
+              && (navigation.isPending || (navigation.isSuccess && hierarchy.isPending))} denied={sectionForbidden(navigation.error ?? hierarchy.error)}
             error={navigation.error ?? hierarchy.error} retry={() => void refresh()} />
         : <>
           <section aria-label="Workspace heading" className="flex flex-wrap items-start justify-between gap-3 pt-1">

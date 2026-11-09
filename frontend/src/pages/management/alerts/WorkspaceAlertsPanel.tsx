@@ -16,7 +16,7 @@ import { getAlertError } from "./alert-errors";
 
 type KindFilter = AlertKind | "ALL";
 type TimeFilter = "ALL" | "TODAY" | "7" | "30";
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 5;
 const DAY = 86_400_000;
 const kinds: { value: KindFilter; label: string }[] = [
   { value: "ALL", label: "Tất cả" },

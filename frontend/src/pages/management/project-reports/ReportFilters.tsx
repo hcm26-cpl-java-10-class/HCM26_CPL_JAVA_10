@@ -4,13 +4,12 @@ import { SearchInput } from "@/components/datatable/toolbar/SearchInput";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ReportFilters, ReportOption, ReportOptions, ReportRisk, ReportStatus } from "@/types/features/project-report";
-import { statusLabels } from "./report-utils";
+import { reportStatuses, statusLabels } from "./report-utils";
 
 interface ReportFilterToolbarProps {
   options: ReportOptions;
@@ -45,7 +44,7 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
   const activeCount = [applied.programId, applied.cohortId, applied.classId, applied.teamId,
     applied.mentorId, applied.templateId, applied.sourceVersionId, applied.projectId,
     applied.masterStatus, applied.status, applied.createdFrom, applied.createdTo].filter(item => item !== undefined && item !== "").length
-    + Number(!!applied.risk && applied.risk !== "ALL") + Number(applied.includeCancelled === false);
+    + Number(!!applied.risk && applied.risk !== "ALL");
 
   const name = (label: string, id: number | undefined, values: ReportOption[]) => id === undefined ? "" : `${label}: ${values.find(item => item.id === id)?.name ?? `#${id}`}`;
   const riskLabels: Record<ReportRisk, string> = { ALL: "", OVERDUE: "Đang quá hạn", INACTIVE_MEMBERS: "Thành viên không hoạt động", NEEDS_ATTENTION: "Đang cần xử lý", LATE_SUBMISSION: "Lịch sử nộp trễ" };
@@ -54,7 +53,7 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
     name("Đề bài", applied.templateId, options.templates), name("Phiên bản", applied.sourceVersionId, options.versions),
     applied.masterStatus ? "Master: " + statusLabels[applied.masterStatus] : "", applied.status ? "Sub-project: " + statusLabels[applied.status] : "", applied.risk ? riskLabels[applied.risk] : "",
     applied.createdFrom ? `Từ ${applied.createdFrom}` : "", applied.createdTo ? `Đến ${applied.createdTo}` : "",
-    applied.includeCancelled === false ? "Ẩn dự án đã hủy" : "", applied.q ? `Tìm: ${applied.q}` : ""].filter(Boolean);
+    applied.q ? `Tìm: ${applied.q}` : ""].filter(Boolean);
 
   return <div className="space-y-3 rounded-xl border bg-card p-4" aria-label="Bộ lọc báo cáo"><div className="flex flex-wrap items-center gap-2">
     <Popover open={open} onOpenChange={setOpen}>
@@ -82,16 +81,16 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
             <FilterSelect label="Phiên bản đề bài" value={value.sourceVersionId} options={options.versions.filter(v => !value.templateId || v.templateId === value.templateId)} onChange={sourceVersionId => update({ sourceVersionId })} />
             <div className="grid gap-1.5">
               <Label className="text-xs text-muted-foreground">Trạng thái Master</Label>
-              <Select value={value.masterStatus ?? "all"} onValueChange={status => update({ masterStatus: status === "all" ? undefined : status as ReportStatus, includeCancelled: status === "CANCELLED" ? true : value.includeCancelled })}>
+              <Select value={value.masterStatus ?? "all"} onValueChange={status => update({ masterStatus: status === "all" ? undefined : status as ReportStatus })}>
                 <SelectTrigger className="w-full" aria-label="Trạng thái Master"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="all">Tất cả</SelectItem>{(Object.keys(statusLabels) as ReportStatus[]).map(status => <SelectItem key={status} value={status}>{statusLabels[status]}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value="all">Tất cả</SelectItem>{reportStatuses(value.masterStatus ? [value.masterStatus] : []).map(status => <SelectItem key={status} value={status}>{statusLabels[status]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid gap-1.5">
               <Label className="text-xs text-muted-foreground">Trạng thái Sub-project</Label>
-              <Select value={value.status ?? "all"} onValueChange={status => update({ status: status === "all" ? undefined : status as ReportStatus, includeCancelled: status === "CANCELLED" ? true : value.includeCancelled })}>
+              <Select value={value.status ?? "all"} onValueChange={status => update({ status: status === "all" ? undefined : status as ReportStatus })}>
                 <SelectTrigger className="w-full" aria-label="Trạng thái Sub-project"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="all">Tất cả</SelectItem>{(Object.keys(statusLabels) as ReportStatus[]).map(status => <SelectItem key={status} value={status}>{statusLabels[status]}</SelectItem>)}</SelectContent>
+                <SelectContent><SelectItem value="all">Tất cả</SelectItem>{reportStatuses(value.status ? [value.status] : []).map(status => <SelectItem key={status} value={status}>{statusLabels[status]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid gap-1.5">
@@ -105,7 +104,6 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
             </div>
             <div className="grid gap-1.5"><Label className="text-xs text-muted-foreground" htmlFor="report-from">Ngày tạo Project từ</Label><Input id="report-from" type="date" value={value.createdFrom ?? ""} max={value.createdTo} onChange={event => update({ createdFrom: event.target.value || undefined })} /></div>
             <div className="grid gap-1.5"><Label className="text-xs text-muted-foreground" htmlFor="report-to">Ngày tạo Project đến</Label><Input id="report-to" type="date" value={value.createdTo ?? ""} min={value.createdFrom} onChange={event => update({ createdTo: event.target.value || undefined })} /></div>
-            <label className="flex items-center gap-2 text-sm"><Checkbox checked={value.includeCancelled !== false} onCheckedChange={checked => update({ includeCancelled: checked === true, status: checked !== true && value.status === "CANCELLED" ? undefined : value.status, masterStatus: checked !== true && value.masterStatus === "CANCELLED" ? undefined : value.masterStatus })} />Hiển thị Project đã hủy</label>
           </div>
           <div className="flex shrink-0 justify-end gap-2 border-t p-3">
             <Button type="button" variant="outline" size="sm" onClick={onReset}>Đặt lại</Button>

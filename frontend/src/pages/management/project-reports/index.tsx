@@ -14,7 +14,7 @@ import { ReportExports } from "./ReportExports";
 import { ReportFilterToolbar } from "./ReportFilters";
 import { reportDate, reportErrorMessage } from "./report-utils";
 
-const defaults: ReportFilters = { risk: "ALL", includeCancelled: true, page: 0, size: 10 };
+const defaults: ReportFilters = { risk: "ALL", includeCancelled: false, page: 0, size: 10 };
 function LoadingReport() {
   return <div className="space-y-5" role="status" aria-label="Đang tổng hợp báo cáo">
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[0, 1, 2, 3].map(key =>

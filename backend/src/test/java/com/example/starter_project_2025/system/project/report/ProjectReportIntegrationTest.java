@@ -13,6 +13,8 @@ import com.example.starter_project_2025.system.project.project_template_version.
 import com.example.starter_project_2025.system.project.sprint_backlog.*;
 import com.example.starter_project_2025.system.project.tenant.*;
 import com.example.starter_project_2025.system.project.trainingclass.*;
+import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceStatus;
 import com.example.starter_project_2025.system.rbac.permission.*;
 import com.example.starter_project_2025.system.rbac.role.*;
 import com.example.starter_project_2025.system.rbac.user.*;
@@ -209,25 +211,63 @@ class ProjectReportIntegrationTest {
         var key=UUID.randomUUID();var id=export("EXCEL",key);assertThat(export("EXCEL",key)).isEqualTo(id);exports.process(id);
         mvc.perform(get("/api/project-reports/exports/{id}",id).header("Authorization","Bearer "+admin)).andExpect(jsonPath("$.status").value("READY")).andExpect(jsonPath("$.rowCount").value(3));
         byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
-        try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){assertThat(workbook.getSheetAt(0).getPhysicalNumberOfRows()).isEqualTo(4);}
+        try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
+            assertThat(workbook.getNumberOfSheets()).isEqualTo(1);
+            var sheet=workbook.getSheet("Tiến độ dự án");
+            assertThat(sheet.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(3);
+            var header=sheet.getRow(ProjectReportExcelWriter.HEADER_ROW);
+            assertThat(header.getLastCellNum()).isEqualTo((short)7);
+            assertThat(java.util.stream.StreamSupport.stream(header.spliterator(),false).map(org.apache.poi.ss.usermodel.Cell::getStringCellValue).toList())
+                    .containsExactly("Lớp","Nhóm phụ trách","Master Project","Sub-project","Trạng thái","Mentor","Tiến độ milestone");
+            assertThat(sheet.getPaneInformation().isFreezePane()).isTrue();
+            assertThat(sheet.getColumnWidth(2)).isGreaterThan(30*256);
+        }
         mvc.perform(get("/api/project-reports/exports").header("Authorization","Bearer "+admin)).andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(id.toString()));
         mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+mentor)).andExpect(status().isNotFound());
         Long downloads=tx.execute(status->em.createQuery("select count(a) from ProjectReportExportAudit a where a.jobId=:id and a.action='DOWNLOADED'",Long.class).setParameter("id",id).getSingleResult());
         assertThat(downloads).isEqualTo(1);
     }
-    @Test void csvEscapesTextAndDownloadExpiresAndClearsStoredFile() throws Exception {
+    @Test void excelKeepsFormulaLikeNamesAsTextAndDownloadExpiresAndClearsStoredFile() throws Exception {
         tx.executeWithoutResult(status->em.find(Project.class,projectA).setName("=1+1, \"Tên Việt\"\nDòng hai"));
-        var id=export("CSV",UUID.randomUUID());exports.process(id);
-        String csv=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        assertThat(csv).startsWith("\uFEFF").contains("'=1+1, \"\"Tên Việt\"\"\nDòng hai");
+        var id=export("EXCEL",UUID.randomUUID());exports.process(id);
+        byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andExpect(content().contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .andReturn().getResponse().getContentAsByteArray();
+        try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
+            boolean found=false;
+            for(var row:workbook.getSheetAt(0))for(var cell:row){
+                assertThat(cell.getCellType()).isNotEqualTo(org.apache.poi.ss.usermodel.CellType.FORMULA);
+                if(cell.getCellType()==org.apache.poi.ss.usermodel.CellType.STRING&&cell.getStringCellValue().contains("=1+1, \"Tên Việt\"\nDòng hai"))found=true;
+            }
+            assertThat(found).isTrue();
+        }
         when(clock.instant()).thenReturn(now.plus(Duration.ofHours(25)));
         mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin)).andExpect(status().isGone());
         var job=jobs.findById(id).orElseThrow();assertThat(job.getFileContent()).isNull();assertThat(job.getStatus()).isEqualTo(ProjectReportExportJob.State.EXPIRED);
     }
+    @Test void csvIsRejectedAndLegacyCsvDoesNotAppearOrBlockExcelExports() throws Exception {
+        mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+admin)
+                .header("Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"format\":\"CSV\"}")).andExpect(status().isUnprocessableEntity());
+        var legacy=export("EXCEL",UUID.randomUUID());
+        // Emulate a CSV job stored by an older release, without deleting historical data.
+        tx.executeWithoutResult(status->{em.createNativeQuery("update project_report_exports set format='CSV' where id=:id")
+                .setParameter("id",legacy).executeUpdate();em.clear();});
+        var excel=export("EXCEL",UUID.randomUUID());
+        mvc.perform(get("/api/project-reports/exports").header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(excel.toString())).andExpect(jsonPath("$[0].format").value("EXCEL"));
+        assertThat(jobs.pending(ProjectReportExportJob.State.QUEUED,org.springframework.data.domain.PageRequest.of(0,20)))
+                .contains(excel).doesNotContain(legacy);
+        exports.process(legacy);
+        assertThat(jobs.findById(legacy).orElseThrow().getStatus()).isEqualTo(ProjectReportExportJob.State.QUEUED);
+        mvc.perform(get("/api/project-reports/exports/{id}",legacy).header("Authorization","Bearer "+admin)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/project-reports/exports/{id}/download",legacy).header("Authorization","Bearer "+admin)).andExpect(status().isNotFound());
+    }
     @Test void exportDownloadRechecksProjectScopeAndPermissionRevocation() throws Exception {
         tx.executeWithoutResult(status->em.find(Milestone.class,milestoneA).editActive(null,now.minusSeconds(1),UUID.randomUUID(),now));
         var result=mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+mentor).header("Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"format\":\"CSV\",\"filters\":{\"risk\":\"OVERDUE\"}}"));
+                .content("{\"format\":\"EXCEL\",\"filters\":{\"risk\":\"OVERDUE\"}}"));
         var id=UUID.fromString(body(result.andExpect(status().isAccepted())).get("id").asText());exports.process(id);
         tx.executeWithoutResult(status->em.find(ProjectTeam.class,teamA).setAssignedMentorId(otherMentorId));
         mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+mentor)).andExpect(status().isForbidden());
@@ -247,21 +287,21 @@ class ProjectReportIntegrationTest {
         var first=a.get("project").get("milestones").get(0);
         assertThat(first.get("backlog").get("total").asLong()).isEqualTo(2);
     }
-    @Test void downloadChecksHiddenModulesThatContributedToFilteredMasterBacklog() throws Exception {
+    @Test void downloadRechecksHierarchyScopeForFilteredExcel() throws Exception {
         splitHierarchy();
         tx.executeWithoutResult(status->{var s=new UserDataScope();s.setUser(em.find(User.class,managerId));s.setTenantId(tenantId);s.setScopeType(UserScopeType.PROGRAM);s.setTargetId(801L);em.persist(s);
             em.find(Milestone.class,milestoneA).editActive(null,now.minusSeconds(1),UUID.randomUUID(),now);});
         var result=mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+manager).header("Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"format\":\"CSV\",\"filters\":{\"risk\":\"OVERDUE\"}}"));
+                .content("{\"format\":\"EXCEL\",\"filters\":{\"risk\":\"OVERDUE\"}}"));
         var id=UUID.fromString(body(result.andExpect(status().isAccepted())).get("id").asText());exports.process(id);
         assertThat(jobs.findById(id).orElseThrow().getRowCount()).isEqualTo(1);
         tx.executeWithoutResult(status->em.find(ProjectTeam.class,teamB).setTrainingClass(school(em.find(Tenant.class,tenantId),802L)));
         mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+manager)).andExpect(status().isForbidden());
     }
     @Test void exportRejectsReusedKeyWithChangedPayloadAndMalformedFilters() throws Exception {
-        var key=UUID.randomUUID();export("CSV",key);
+        var key=UUID.randomUUID();export("EXCEL",key);
         mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+admin).header("Idempotency-Key",key.toString()).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"format\":\"EXCEL\",\"filters\":{\"classId\":"+classId+"}}" )).andExpect(status().isConflict());
+                .content("{\"format\":\"EXCEL\",\"filters\":{\"classId\":"+classId+",\"q\":\"changed\"}}" )).andExpect(status().isConflict());
         mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+admin).header("Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"format\":\"PDF\"}" )).andExpect(status().isUnprocessableEntity());
         mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("status","UNKNOWN")).andExpect(status().isUnprocessableEntity());
@@ -282,6 +322,46 @@ class ProjectReportIntegrationTest {
         });
         String response=report(admin).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(response).doesNotContain("Secret template","Secret version");
+    }
+    Long workspace(ProjectTeam team) {
+        var workspace=new Workspace();workspace.setTenant(em.find(Tenant.class,tenantId));workspace.setTeam(team);
+        workspace.setProject(team.getProject());workspace.setCode("REPORT-"+UUID.randomUUID());workspace.setName("Prepared workspace");
+        workspace.setStatus(WorkspaceStatus.ACTIVE);em.persist(workspace);em.flush();return workspace.getId();
+    }
+    @Test void planningProjectIsReportedButItsWorkspaceIsOnlyLinkedAfterTeamPublication() throws Exception {
+        Long workspaceId=tx.execute(status->{
+            var team=em.find(ProjectTeam.class,teamA);team.setStatus(ProjectTeamStatus.DRAFT);
+            team.getAllocationSession().setStatus(TeamAllocationSessionStatus.OPEN);
+            team.getProject().setStatus(ProjectStatus.PLANNING);return workspace(team);
+        });
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("projectId",projectA.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.statuses.PLANNING").value(1))
+                .andExpect(jsonPath("$.content[0].project.workspaceId").isEmpty());
+        tx.executeWithoutResult(status->{
+            var team=em.find(ProjectTeam.class,teamA);team.setStatus(ProjectTeamStatus.ACTIVE);team.getProject().setStatus(ProjectStatus.ACTIVE);
+        });
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("projectId",projectA.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].project.workspaceId").value(workspaceId));
+    }
+    @Test void cancelledAllocationIsExcludedWithoutChangingItsProjectOrWorkspaceAndOldExportsLoseAccess() throws Exception {
+        Long[] prepared=tx.execute(status->{
+            var team=em.find(ProjectTeam.class,teamA);team.setStatus(ProjectTeamStatus.DRAFT);team.getProject().setStatus(ProjectStatus.PLANNING);
+            team.getAllocationSession().setStatus(TeamAllocationSessionStatus.OPEN);
+            return new Long[]{workspace(team),team.getAllocationSession().getId()};
+        });
+        var file=export("EXCEL",UUID.randomUUID());exports.process(file);
+        assertThat(jobs.findById(file).orElseThrow().getStatus()).isEqualTo(ProjectReportExportJob.State.READY);
+        mvc.perform(post("/api/v1/classes/{classId}/allocation-sessions/{sessionId}/cancel",classId,prepared[1])
+                .header("Authorization","Bearer "+admin)).andExpect(status().isOk());
+        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.summary.masters").value(1))
+                .andExpect(jsonPath("$.statuses.PLANNING").value(0)).andExpect(jsonPath("$.content[0].id").value(projectB));
+        tx.executeWithoutResult(status->{
+            assertThat(em.find(Project.class,projectA).getStatus()).isEqualTo(ProjectStatus.PLANNING);
+            assertThat(em.find(Workspace.class,prepared[0]).getStatus()).isEqualTo(WorkspaceStatus.ACTIVE);
+            assertThat(em.find(ProjectTeam.class,teamA).getStatus()).isEqualTo(ProjectTeamStatus.ARCHIVED);
+        });
+        mvc.perform(get("/api/project-reports/exports/{id}/download",file).header("Authorization","Bearer "+admin))
+                .andExpect(status().isForbidden());
     }
     Project module(Project parent,ProjectTeam owner,String code,ProjectStatus state) {
         var project=new Project();project.setTenantId(tenantId);project.setClassId(classId);project.setCode(code+"-"+UUID.randomUUID());
@@ -359,14 +439,35 @@ class ProjectReportIntegrationTest {
                 .andExpect(jsonPath("$.content[0].backlog.total").value(3)).andExpect(jsonPath("$.content[0].projects.length()").value(2))
                 .andExpect(jsonPath("$.content[0].projects[1].depth").value(2));
     }
-    @Test void hierarchyExcelContainsMasterAndModuleRowsWithCountsAndNoProgressColumns() throws Exception {
+    @Test void hierarchyExcelUsesOneSheetWithMasterAndModuleRowsWithoutInventedPercentages() throws Exception {
         splitHierarchy();var id=export("EXCEL",UUID.randomUUID());exports.process(id);
         byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
-            var sheet=workbook.getSheetAt(0);assertThat(sheet.getPhysicalNumberOfRows()).isEqualTo(4);
+            assertThat(workbook.getNumberOfSheets()).isEqualTo(1);
+            var sheet=workbook.getSheet("Tiến độ dự án");assertThat(sheet.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(3);
             StringBuilder text=new StringBuilder();sheet.forEach(row->row.forEach(cell->text.append(cell.toString()).append("|")));
-            assertThat(text.toString()).contains("Split commerce","Auth","Payment","MASTER","SUB_PROJECT","ACTIVE","Backlog").doesNotContain("Progress (%)","Master progress");
+            assertThat(text.toString()).contains("Split commerce","Auth","Payment","Phần việc trực tiếp Master","Đang triển khai","0/1 được chấp nhận","1/1 được chấp nhận","Chưa có milestone")
+                    .doesNotContain("Progress (%)","Master progress","Tổng backlog");
+        }
+    }
+    @Test void filteredExcelContainsOnlyPermittedModuleAndKeepsErdMilestoneWithNoBacklog() throws Exception {
+        splitHierarchy();
+        tx.executeWithoutResult(status->milestone(em.find(ProjectTeam.class,teamA),null,true));
+        var created=mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+mentor)
+                .header("Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"format\":\"EXCEL\",\"filters\":{\"teamId\":"+teamA+"}}"));
+        var id=UUID.fromString(body(created.andExpect(status().isAccepted())).get("id").asText());exports.process(id);
+        byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+mentor))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
+            assertThat(workbook.getNumberOfSheets()).isEqualTo(1);
+            var assignments=workbook.getSheet("Tiến độ dự án");
+            assertThat(assignments.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(1);
+            assertThat(assignments.getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(3).getStringCellValue()).contains("Auth");
+            assertThat(assignments.getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(6).getStringCellValue()).isEqualTo("1/2 được chấp nhận");
+            StringBuilder text=new StringBuilder();assignments.forEach(row->row.forEach(cell->text.append(cell.toString()).append("|")));
+            assertThat(text.toString()).doesNotContain("Payment");
         }
     }
     @Test void unassignedDirectBacklogWithTeamMembersDoesNotBreakDashboardOrCreateInactivity() throws Exception {

@@ -70,6 +70,7 @@ export function ReportMasters({ masters, timeZone }: { masters: ReportMaster[]; 
       <div className="mx-5 space-y-3 rounded-lg border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="text-xs font-semibold">Phần việc trực tiếp của Master</h4>
         <p className="mt-1 text-xs text-muted-foreground">{master.project.teamName ?? "Dùng chung"} · Mentor: {master.project.mentorName ?? "Chưa gán"}</p></div>
         {master.project.workspaceId && <Link className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline" to={"/management/workspaces/" + master.project.workspaceId}>Mở Workspace<ArrowUpRight className="size-3" /></Link>}
+        {!master.project.workspaceId && !master.project.contextOnly && master.project.status === "PLANNING" && <span className="text-xs text-muted-foreground">Chờ publish nhóm để mở Workspace</span>}
       </div>
         {master.project.contextOnly ? <p className="text-xs text-muted-foreground">Bạn được xem Master để định vị Project con; phần việc trực tiếp nằm ngoài phạm vi được cấp.</p> : <>
           <p className="text-xs text-muted-foreground">{master.project.backlog.total} backlog item trực tiếp</p><BacklogSummary counts={master.project.backlog} />
@@ -82,6 +83,7 @@ export function ReportMasters({ masters, timeZone }: { masters: ReportMaster[]; 
             <TableCell className="min-w-48 max-w-72 py-4 pl-4 whitespace-normal"><div style={{ paddingLeft: Math.min(project.depth - 1, 5) * 12 }}><p className="text-xs font-mono text-muted-foreground">{project.code}</p><p className="mt-1 text-sm font-medium leading-5">{project.name}</p>
               {project.depth > 1 && <p className="mt-1 text-[10px] text-muted-foreground">Project cha: #{project.parentProjectId}</p>}
               {project.workspaceId && <Link className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline" to={"/management/workspaces/" + project.workspaceId}>Mở Workspace<ArrowUpRight className="size-3" /></Link>}</div>
+              {!project.workspaceId && project.status === "PLANNING" && <p className="mt-2 text-[11px] text-muted-foreground">Chờ publish nhóm để mở Workspace</p>}
             </TableCell>
             <TableCell className="py-4 text-xs whitespace-normal"><p>{project.teamName ?? "Dùng chung"}</p><p className="mt-1.5 text-muted-foreground">{project.mentorName ?? "Chưa gán"}</p><p className="mt-1 text-muted-foreground">{project.className}</p></TableCell>
             <TableCell className="py-4"><StatusBadge status={project.status} /></TableCell>
