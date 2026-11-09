@@ -179,6 +179,9 @@ export interface CourseExam {
   /** Only returned to the course teacher and admin. */
   questionCount: number | null;
   createdByName: string | null;
+  /** Student view: true while blocked by LessonProgress. Staff always get false. */
+  locked: boolean;
+  lockReason: string | null;
 }
 
 export type EssayAttemptStatus = "IN_PROGRESS" | "SUBMITTED" | "PENDING_REVIEW" | "EXPIRED";

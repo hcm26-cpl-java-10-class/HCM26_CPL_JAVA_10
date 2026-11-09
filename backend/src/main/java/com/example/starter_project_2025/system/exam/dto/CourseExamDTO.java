@@ -24,6 +24,10 @@ public record CourseExamDTO(
         /** Chi giao vien/admin thay: so cau hoi. Sinh vien nhan null. */
         Integer questionCount,
         /** Chi giao vien/admin thay: ten nguoi tao. Sinh vien nhan null. */
-        String createdByName
+        String createdByName,
+        /** Student view: true while blocked by LessonProgress. Staff always get false. */
+        boolean locked,
+        /** Why it is locked (null when unlocked). */
+        String lockReason
 ) {
 }

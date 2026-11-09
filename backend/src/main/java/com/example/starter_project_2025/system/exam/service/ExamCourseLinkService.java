@@ -22,7 +22,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import java.util.Map;
 import java.util.List;
 import java.util.Objects;
 
@@ -124,8 +124,12 @@ public class ExamCourseLinkService {
                 throw new AccessDeniedException("You do not have access to this course");
             }
         }
-        return examRepository.findByCourseLink(courseId, sectionId, lessonId, !staff).stream()
-                .map(e -> toCourseExam(e, staff))
+        List<Exam> exams = examRepository.findByCourseLink(courseId, sectionId, lessonId, !staff);
+        Map<Long, ExamProgressLockService.LockState> locks =
+                staff ? Map.of() : lockService.evaluateAll(exams, userId, courseId);
+        return exams.stream()
+                .map(e -> toCourseExam(e, staff,
+                        locks.getOrDefault(e.getId(), ExamProgressLockService.LockState.OPEN)))
                 .toList();
     }
 
@@ -206,6 +210,10 @@ public class ExamCourseLinkService {
     }
 
     private CourseExamDTO toCourseExam(Exam e, boolean staff) {
+        return toCourseExam(e, staff, ExamProgressLockService.LockState.OPEN);
+    }
+
+    private CourseExamDTO toCourseExam(Exam e, boolean staff, ExamProgressLockService.LockState lock) {
         return new CourseExamDTO(
                 e.getId(),
                 e.getTitle(),
@@ -222,7 +230,9 @@ public class ExamCourseLinkService {
                 e.getLesson() == null ? null : e.getLesson().getId(),
                 e.getLesson() == null ? null : e.getLesson().getTitle(),
                 staff && e.getQuestions() != null ? e.getQuestions().size() : null,
-                staff ? creatorName(e.getCreatedBy()) : null);
+                staff ? creatorName(e.getCreatedBy()) : null,
+                lock.locked(),
+                lock.reason());
     }
 
     private String creatorName(Long userId) {
@@ -282,4 +292,6 @@ public class ExamCourseLinkService {
         }
         return null;
     }
+
+    private final ExamProgressLockService lockService;
 }
