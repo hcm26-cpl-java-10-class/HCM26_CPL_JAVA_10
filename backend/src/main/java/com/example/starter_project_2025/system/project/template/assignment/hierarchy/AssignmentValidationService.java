@@ -149,11 +149,8 @@ public class AssignmentValidationService {
 
     private void validateConstraints(AssignmentTemplateReader.Node node, ProjectTeam team) {
         List<ProjectMember> roster = activeMembers(team);
-        Long leader = ProjectTeamLeaderService.effectiveLeader(team, roster);
-        List<Long> pmIds = roster.stream().filter(member -> ProjectMemberRole.hasRole(member.getRole(), "PM"))
-                .map(member -> member.getClassMember().getId()).toList();
-        if (leader == null || !pmIds.equals(List.of(leader))) {
-            throw AssignmentException.invalid(team.getTeamName() + " requires exactly one Leader/PM");
+        if (ProjectTeamLeaderService.activeLeaderId(team, roster) == null) {
+            throw AssignmentException.invalid(team.getTeamName() + " requires an active Leader");
         }
         var capacity = templates.capacity(node);
         if (!capacity.accepts(roster.size())) throw AssignmentException.invalid(team.getTeamName() + " requires "

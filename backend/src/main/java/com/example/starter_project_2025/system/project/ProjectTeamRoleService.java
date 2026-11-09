@@ -16,7 +16,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -45,8 +44,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ProjectTeamRoleService {
-
-    private static final String TEAM_LEADER_ROLE = "PM";
 
     private final TeamAllocationSessionRepository sessionRepository;
     private final ProjectTeamRepository teamRepository;
@@ -90,7 +87,7 @@ public class ProjectTeamRoleService {
                     "Chỉ có thể cập nhật vai trò cho nhóm DRAFT hoặc ACTIVE");
         }
 
-        applyRoleConfiguration(session, team, request, authentication, null, null, null);
+        applyRoleConfiguration(session, team, request, authentication, null, null);
     }
 
     @Transactional
@@ -100,7 +97,7 @@ public class ProjectTeamRoleService {
         scopeAuthorizationService.assertCanManageTeamMentor(authentication, session.getTrainingClass());
         if (!team.getAllocationSession().getId().equals(session.getId()))
             throw new AccessDeniedException("The team belongs to another allocation session");
-        applyRoleConfiguration(session, team, request, authentication, null, policy, requestedLeaderId);
+        applyRoleConfiguration(session, team, request, authentication, policy, requestedLeaderId);
     }
 
     // ------------------------------------------------------------------
@@ -108,9 +105,7 @@ public class ProjectTeamRoleService {
     // ------------------------------------------------------------------
 
     /**
-     * US-11: a student who is the PM (team leader) may configure the roles of
-     * their own DRAFT team. The leader must keep the PM role so the team stays
-     * manageable from the student workspace.
+     * US-11: the designated leader may configure the roles of their own DRAFT team.
      */
     @Transactional
     public void updateRolesAsTeamLeader(
@@ -126,9 +121,9 @@ public class ProjectTeamRoleService {
                 .findByTeam_IdAndClassMember_User_Id(teamId, userId)
                 .orElseThrow(() -> new AccessDeniedException(
                         "Bạn không phải thành viên của nhóm này."));
-        if (!ProjectMemberRole.hasRole(membership.getRole(), TEAM_LEADER_ROLE)) {
+        if (!team.isLedBy(membership.getClassMember().getId()) || !ProjectTeamLeaderService.eligible(membership)) {
             throw new AccessDeniedException(
-                    "Chỉ Trưởng nhóm (vai trò PM) mới được cấu hình vai trò thành viên.");
+                    "Chỉ Trưởng nhóm mới được cấu hình vai trò thành viên.");
         }
         if (team.getStatus() != ProjectTeamStatus.DRAFT) {
             throw new BadRequestException(
@@ -140,12 +135,7 @@ public class ProjectTeamRoleService {
                     "Phiên phân nhóm không còn mở để cấu hình vai trò");
         }
 
-        applyRoleConfiguration(
-                session,
-                team,
-                request,
-                authentication,
-                membership.getClassMember().getId(), null, null);
+        applyRoleConfiguration(session, team, request, authentication, null, null);
     }
 
     // ------------------------------------------------------------------
@@ -157,7 +147,6 @@ public class ProjectTeamRoleService {
             ProjectTeam team,
             UpdateTeamRolesRequest request,
             Authentication authentication,
-            Long requiredLeaderMemberId,
             ProjectTemplateConstraints.RolePolicy assignmentPolicy,
             Long requestedLeaderId
     ) {
@@ -215,26 +204,21 @@ public class ProjectTeamRoleService {
                     invalidMemberIds.stream().distinct().toList());
         }
 
-        validateTemplatePolicy(team, requestedRoles, requiredLeaderMemberId, assignmentPolicy);
-        Long leaderId = ProjectTeamLeaderService.effectiveLeader(team, assignments);
-        if (requestedLeaderId != null && !Objects.equals(leaderId, requestedLeaderId)) {
-            if (leaderId != null || team.getStatus() != ProjectTeamStatus.DRAFT
-                    || session.getStatus() != TeamAllocationSessionStatus.OPEN
-                    || !assignmentsByMemberId.containsKey(requestedLeaderId)) {
-                throw new BadRequestException("Chỉ định hoặc đổi PM bằng thao tác Chỉ định làm Leader");
+        validateTemplatePolicy(team, requestedRoles, assignmentPolicy);
+        Long leaderToAssign = null;
+        if (assignmentPolicy != null) {
+            Long currentLeader = ProjectTeamLeaderService.activeLeaderId(team, assignments);
+            if (currentLeader == null) {
+                ProjectMember selected = assignmentsByMemberId.get(requestedLeaderId);
+                if (team.getStatus() != ProjectTeamStatus.DRAFT || session.getStatus() != TeamAllocationSessionStatus.OPEN
+                        || selected == null || !ProjectTeamLeaderService.eligible(selected)) {
+                    throw new BadRequestException("Chọn một thành viên ACTIVE làm Leader trước khi gán dự án");
+                }
+                leaderToAssign = requestedLeaderId;
+            } else if (requestedLeaderId != null && !currentLeader.equals(requestedLeaderId)) {
+                throw new BadRequestException("Đổi Leader bằng thao tác Chỉ định Leader");
             }
-            leaderId = requestedLeaderId;
         }
-        List<Long> pmIds = requestedRoles.entrySet().stream()
-                .filter(entry -> entry.getValue().contains(TEAM_LEADER_ROLE))
-                .map(Map.Entry::getKey).toList();
-        if (assignmentPolicy != null && leaderId == null) {
-            throw new BadRequestException("Chọn Leader/PM cho nhóm trước khi gán dự án");
-        }
-        if (leaderId == null ? !pmIds.isEmpty() : !pmIds.equals(List.of(leaderId))) {
-            throw new BadRequestException("Chỉ định hoặc đổi PM bằng thao tác Chỉ định làm Leader");
-        }
-        boolean setLeader = assignmentPolicy != null && team.getLeaderMemberId() == null;
 
         List<ProjectMember> changedAssignments = assignments.stream()
                 .filter(assignment -> !ProjectMemberRole.isValidSpec(assignment.getRole()) || !equalsRoleSpec(
@@ -242,7 +226,7 @@ public class ProjectTeamRoleService {
                                 assignment.getClassMember().getId())),
                         assignment.getRole()))
                 .toList();
-        if (changedAssignments.isEmpty() && !setLeader) {
+        if (changedAssignments.isEmpty() && leaderToAssign == null) {
             return;
         }
 
@@ -260,7 +244,7 @@ public class ProjectTeamRoleService {
         changedAssignments.forEach(assignment -> assignment.setRole(
                 ProjectMemberRole.formatRoles(requestedRoles.get(
                         assignment.getClassMember().getId()))));
-        if (setLeader) team.setLeaderMemberId(leaderId);
+        if (leaderToAssign != null) team.setLeaderMemberId(leaderToAssign);
         memberRepository.saveAllAndFlush(changedAssignments);
         String afterState = serialize(snapshot(team, assignments));
 
@@ -307,7 +291,6 @@ public class ProjectTeamRoleService {
     private void validateTemplatePolicy(
             ProjectTeam team,
             Map<Long, List<String>> requestedRoles,
-            Long requiredLeaderMemberId,
             ProjectTemplateConstraints.RolePolicy assignmentPolicy
     ) {
         ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
@@ -349,13 +332,6 @@ public class ProjectTeamRoleService {
         if (!violations.isEmpty()) {
             throw TeamRolePolicyException.quotaNotMet(
                     buildQuotaMessage(violations), violations);
-        }
-
-        if (requiredLeaderMemberId != null) {
-            List<String> leaderRoles = requestedRoles.get(requiredLeaderMemberId);
-            if (leaderRoles == null || !leaderRoles.contains(TEAM_LEADER_ROLE)) {
-                throw TeamRolePolicyException.leaderRoleRequired(requiredLeaderMemberId);
-            }
         }
     }
 

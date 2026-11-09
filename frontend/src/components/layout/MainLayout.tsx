@@ -8,14 +8,22 @@ import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
+function readSidebarOpenCookie(): boolean {
+    if (typeof document === "undefined") return true;
+    const match = document.cookie.match(/(?:^|;\s*)sidebar_state=(true|false)/);
+    return match ? match[1] === "true" : true;
+}
+
 export function MainLayout({
                                children,
                                pathName,
+                               mainClassName,
                                pathLinks,
                                contentClassName,
                            }: {
     children: ReactNode;
     pathName?: Record<string, string>;
+    mainClassName?: string;
     contentClassName?: string;
     pathLinks?: Record<string, string>;
 }) {
@@ -31,7 +39,7 @@ export function MainLayout({
                     <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} variant="student" />
                 </header>
 
-                <main className={cn("flex-1 px-6 pb-6 pt-4", contentClassName)}>
+                <main className={cn("flex-1 px-6 pb-6 pt-4", mainClassName, contentClassName)}>
                     {children}
                 </main>
             </div>
@@ -39,7 +47,7 @@ export function MainLayout({
     }
 
     return (
-        <SidebarProvider>
+        <SidebarProvider defaultOpen={readSidebarOpenCookie()}>
             <SidebarMenu />
             <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
                 <header className="flex min-h-16 shrink-0 items-center gap-2 py-3">
@@ -52,7 +60,7 @@ export function MainLayout({
                     </div>
                 </header>
 
-                <main className={cn("min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6", contentClassName)}>
+                <main className={cn("min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6", mainClassName, contentClassName)}>
                     {children}
                 </main>
             </SidebarInset>

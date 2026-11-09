@@ -17,7 +17,7 @@ import type { CreateMilestoneRequest, MilestoneApiError, MilestoneDetailRouteSta
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { MilestoneForm } from "../components/MilestoneForm";
 import { MilestoneActiveEditForm } from "../components/MilestoneActiveEditForm";
@@ -55,6 +55,7 @@ function CreatePageSkeleton() {
 export function MilestoneCreatePage() {
   const { projectId, teamId: routeTeamId, milestoneId } = useParams<{ projectId?: string; teamId?: string; milestoneId?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const teamId = Number(routeTeamId ?? searchParams.get("teamId"));
   const scopedTeamId = Number.isSafeInteger(teamId) && teamId > 0 ? teamId : undefined;
@@ -62,11 +63,16 @@ export function MilestoneCreatePage() {
     && (routeTeamId !== undefined || searchParams.get("scope") === "team");
   const workspaceId = Number(searchParams.get("workspaceId"));
   const scopedWorkspaceId = Number.isSafeInteger(workspaceId) && workspaceId > 0 ? workspaceId : undefined;
-  const listUrl = teamScoped && scopedWorkspaceId
+  const routeReturn = (location.state as { returnTo?: unknown } | null)?.returnTo;
+  const workspaceReturn = typeof routeReturn === "string" && scopedWorkspaceId
+    && routeReturn.startsWith(`/management/workspaces/${scopedWorkspaceId}?`)
+    && new URLSearchParams(routeReturn.split("?")[1]).get("tab") === "milestones"
+    ? routeReturn : null;
+  const listUrl = workspaceReturn ?? (teamScoped && scopedWorkspaceId
     ? `/management/workspaces/${scopedWorkspaceId}?tab=milestones`
     : projectId
     ? `/projects/${projectId}/milestones${scopedTeamId ? `?teamId=${scopedTeamId}` : ""}`
-    : teamScoped ? "/milestones/teams" : "/teacher";
+    : teamScoped ? "/milestones/teams" : "/teacher");
   const queryClient = useQueryClient();
   const [isDirty, setDirty] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -245,7 +251,7 @@ export function MilestoneCreatePage() {
             queryClient.invalidateQueries({ queryKey: ["workspace-milestones"] }),
             queryClient.invalidateQueries({ queryKey: ["milestone-edit", projectId, scopedTeamId, milestoneId] }),
           ]);
-          navigate(detailUrl, { replace: true });
+          navigate(detailUrl, { replace: true, state: { returnTo: listUrl } });
         }}
       />
       {discardChangesDialog}
@@ -286,7 +292,7 @@ export function MilestoneCreatePage() {
   return (
     <MainLayout pathName={{ projects: "Projects", milestones: "Milestones", new: "Create", [projectId ?? `team-${scopedTeamId}`]: optionsQuery.data.project?.name ?? "Team workspace" }}>
       <div className="mx-auto grid w-full max-w-7xl gap-6">
-        <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-background">
+        <Card className="border-indigo-100 bg-gradient-to-r from-indigo-50/80 via-background to-background dark:border-indigo-900 dark:from-indigo-950/30">
           <CardHeader className="gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">{optionsQuery.data.project?.status ?? "TEAM_ONLY"}</Badge>
@@ -305,8 +311,11 @@ export function MilestoneCreatePage() {
           submitting={createMutation.isPending || plannedMutation.isPending}
           apiError={apiError}
           networkUncertain={networkUncertain}
+          onReloadOptions={() => void optionsQuery.refetch()}
+          reloadingOptions={optionsQuery.isFetching}
           onSubmit={milestoneId ? (values) => plannedMutation.mutate(values) : handleSubmit}
           submitLabel={milestoneId ? "Save changes" : undefined}
+          isEditing={!!milestoneId}
           onCancel={requestCancel}
           onDirtyChange={handleDirtyChange}
         />

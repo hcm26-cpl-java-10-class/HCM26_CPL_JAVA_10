@@ -70,12 +70,6 @@ public class ProjectTeamDraftService {
 
         validateNoDuplicateWithinTeam(request);
 
-        for (BatchSaveDraftRequest.TeamDraftRequest draft : request.teams()) {
-            long pmCount = draft.members().stream().filter(member ->
-                    ProjectMemberRole.hasRole(member.role(), "PM")).count();
-            if (pmCount > 1) throw new BadRequestException("Mỗi nhóm chỉ có một Leader/PM");
-        }
-
         for (BatchSaveDraftRequest.TeamDraftRequest team : request.teams()) {
             if (team.members().size() > session.getMaxMembers()) {
                 throw new TeamCapacityExceededException(session.getMaxMembers());
@@ -103,11 +97,21 @@ public class ProjectTeamDraftService {
 
         List<ProjectTeam> newTeams = new ArrayList<>();
         for (BatchSaveDraftRequest.TeamDraftRequest teamRequest : request.teams()) {
+            Long leaderId = teamRequest.leaderMemberId();
+            if (leaderId != null) {
+                ClassMember leader = membersById.get(leaderId);
+                if (leader == null || !Boolean.TRUE.equals(leader.getIsActive())
+                        || !AllocationStudentEligibility.isEligible(leader)
+                        || teamRequest.members().stream().noneMatch(member -> leaderId.equals(member.memberId()))) {
+                    throw new BadRequestException("Leader phải là thành viên ACTIVE của nhóm");
+                }
+            }
             newTeams.add(ProjectTeam.builder()
                     .trainingClass(session.getTrainingClass())
                     .allocationSession(session)
                     .teamName(teamRequest.teamName().trim())
                     .assignedMentorId(teamRequest.assignedMentorId())
+                    .leaderMemberId(leaderId)
                     .maxMembers(session.getMaxMembers())
                     .allocationSource(TeamAllocationSource.MANUAL)
                     .status(ProjectTeamStatus.DRAFT)
@@ -132,13 +136,6 @@ public class ProjectTeamDraftService {
             }
         }
         projectMemberRepository.saveAllAndFlush(newMembers);
-        for (int i = 0; i < request.teams().size(); i++) {
-            final int teamIndex = i;
-            request.teams().get(i).members().stream()
-                    .filter(member -> ProjectMemberRole.hasRole(member.role(), "PM"))
-                    .findFirst().ifPresent(member -> newTeams.get(teamIndex).setLeaderMemberId(member.memberId()));
-        }
-        teamRepository.saveAllAndFlush(newTeams);
 
         List<BatchSaveDraftResponse.DraftWarning> warnings =
                 buildDraftWarnings(
@@ -171,6 +168,7 @@ public class ProjectTeamDraftService {
                                 team.getMaxMembers(),
                                 team.getStatus(),
                                 team.getAssignedMentorId(),
+                                team.getLeaderMemberId(),
                                 newMembers.stream()
                                         .filter(member -> member.getTeam().getId().equals(team.getId()))
                                         .map(member -> new MemberSnapshot(
@@ -236,10 +234,9 @@ public class ProjectTeamDraftService {
 
         List<UpdateDraftTeamRequest.MemberRequest> assignments =
                 request.members() == null ? List.of() : request.members();
-        int effectiveMax = team.getProjectTemplateId() == null
-                ? (team.getAllocationSource() == TeamAllocationSource.AUTO
-                        ? Math.addExact(session.getMaxMembers(), 1) : session.getMaxMembers())
-                : team.getMaxMembers();
+        // The stored limit also preserves the extra seat of AUTO drafts created
+        // before the remainder-group allocation rule was introduced.
+        int effectiveMax = team.getMaxMembers();
         if (assignments.size() > effectiveMax) {
             throw new TeamCapacityExceededException(effectiveMax);
         }
@@ -264,16 +261,6 @@ public class ProjectTeamDraftService {
                 session.getTrainingClass(), request.assignedMentorId());
         List<ProjectMember> oldMembers =
                 projectMemberRepository.findAllByTeam_IdOrderByIdAsc(teamId);
-        long pmCount = assignments.stream().filter(member ->
-                ProjectMemberRole.hasRole(member.role(), "PM")).count();
-        if (pmCount > 1) throw new BadRequestException("Mỗi nhóm chỉ có một Leader/PM");
-        Long selectedLeader = assignments.stream().filter(member ->
-                ProjectMemberRole.hasRole(member.role(), "PM"))
-                .map(UpdateDraftTeamRequest.MemberRequest::memberId).findFirst().orElse(null);
-        if (team.getLeaderMemberId() != null && selectedLeader != null
-                && !team.getLeaderMemberId().equals(selectedLeader)) {
-            throw new BadRequestException("Đổi Leader bằng thao tác Chỉ định làm Leader");
-        }
         String beforeState = writeJson(new TeamSnapshot(
                 team.getId(),
                 team.getTeamName(),
@@ -281,6 +268,7 @@ public class ProjectTeamDraftService {
                 team.getMaxMembers(),
                 team.getStatus(),
                 team.getAssignedMentorId(),
+                team.getLeaderMemberId(),
                 oldMembers.stream()
                         .map(member -> new MemberSnapshot(
                                 member.getClassMember().getId(), member.getRole()))
@@ -290,7 +278,7 @@ public class ProjectTeamDraftService {
         entityManager.flush();
         team.setTeamName(request.teamName().trim());
         team.setAssignedMentorId(request.assignedMentorId());
-        team.setLeaderMemberId(selectedLeader);
+        if (!memberIds.contains(team.getLeaderMemberId())) team.setLeaderMemberId(null);
         teamRepository.saveAndFlush(team);
         projectMemberRepository.deleteAllByTeam_Id(teamId);
         projectMemberRepository.flush();
@@ -311,6 +299,7 @@ public class ProjectTeamDraftService {
                 team.getMaxMembers(),
                 team.getStatus(),
                 team.getAssignedMentorId(),
+                team.getLeaderMemberId(),
                 newMembers.stream()
                         .map(member -> new MemberSnapshot(
                                 member.getClassMember().getId(), member.getRole()))
@@ -354,6 +343,7 @@ public class ProjectTeamDraftService {
             Integer maxMembers,
             ProjectTeamStatus status,
             Long assignedMentorId,
+            Long leaderMemberId,
             List<MemberSnapshot> members
     ) {
     }

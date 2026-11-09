@@ -55,7 +55,6 @@ public class WorkspaceResourceCommandService {
     static final int MAX_TITLE_LENGTH = 255;
     static final int MAX_DESCRIPTION_LENGTH = 1000;
     static final int MAX_URL_LENGTH = 1000;
-    static final int MAX_CATEGORY_LENGTH = 50;
 
     static final String ACTION_CREATE = "RESOURCE_CREATE";
     static final String ACTION_UPDATE = "RESOURCE_UPDATE";
@@ -216,7 +215,7 @@ public class WorkspaceResourceCommandService {
     private void apply(ProjectResource entity, WorkspaceResourceDtos.ResourcePayload request) {
 
         WorkspaceResourceDtos.ResourcePayload safe = request == null
-                ? new WorkspaceResourceDtos.ResourcePayload(null, null, null, null, null, null)
+                ? new WorkspaceResourceDtos.ResourcePayload(null, null, null, null, null)
                 : request;
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
@@ -225,7 +224,6 @@ public class WorkspaceResourceCommandService {
         String description = trim(safe.description());
         ResourceKind kind = parseKind(safe.kind(), errors);
         String url = trim(safe.url());
-        String category = trim(safe.category());
         Integer orderIndex = safe.orderIndex() == null ? entity.getOrderIndex() : safe.orderIndex();
 
         if (orderIndex == null || orderIndex < 0) {
@@ -251,10 +249,6 @@ public class WorkspaceResourceCommandService {
             add(errors, "url", "Url must not exceed " + MAX_URL_LENGTH + " characters");
         }
 
-        if (category != null && category.length() > MAX_CATEGORY_LENGTH) {
-            add(errors, "category", "Category must not exceed " + MAX_CATEGORY_LENGTH + " characters");
-        }
-
         if (!errors.isEmpty()) {
             throw new BusinessValidationException(errors);
         }
@@ -263,7 +257,6 @@ public class WorkspaceResourceCommandService {
         entity.setDescription(description);
         entity.setKind(kind);
         entity.setUrl(url);
-        entity.setCategory(category);
         entity.setOrderIndex(orderIndex);
     }
 
@@ -278,7 +271,7 @@ public class WorkspaceResourceCommandService {
 
         return new WorkspaceResourceDtos.ResourceItem(resource.getId(), resource.getTitle(),
                 resource.getDescription(), resource.getKind() == null ? null : resource.getKind().name(),
-                resource.getUrl(), resource.getCategory(), resource.getOrderIndex(),
+                resource.getUrl(), resource.getOrderIndex(),
                 resource.getUpdatedAt(), resource.getUpdatedBy(), attached, resource.getSourceTemplateId(),
                 resource.getSourceTemplateName(), resource.getSourceOrigin(), resource.getProjectId(), true);
     }

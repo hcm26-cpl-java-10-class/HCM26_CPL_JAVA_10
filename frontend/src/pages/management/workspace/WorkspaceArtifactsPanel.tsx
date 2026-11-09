@@ -175,6 +175,7 @@ export function WorkspaceArtifactsPanel({
   const currentPage = Math.min(page, pageCount - 1);
   const pageRows = filteredRows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const clearFilters = () => { setSearch(""); setMilestoneFilter("ALL"); setStatusFilter("ALL"); setPage(0); };
+  const singleRow = milestone ? rows[0] : null;
 
   return (
     <div className="min-w-0 space-y-3">
@@ -201,6 +202,25 @@ export function WorkspaceArtifactsPanel({
         <Button type="button" variant="outline" size="sm" onClick={() => void submissionsQuery.refetch()}>Try again</Button>
       </div>}
 
+      {milestone ? <section aria-label="Milestone deliverable" className="rounded-xl border bg-card p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3"><span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"><FileCheck2 className="size-5" /></span><div><h3 className="font-semibold">{milestone.title}</h3><p className="mt-1 text-sm text-muted-foreground">{historyReady ? singleRow?.history.length ?? 0 : "—"} submitted version(s)</p></div></div>
+          {submissionsQuery.isPending ? <Skeleton className="h-7 w-28" /> : <Badge variant="outline" className={ARTIFACT_REVIEW_STATES[singleRow?.state ?? "UNKNOWN"].tone}>{historyReady ? ARTIFACT_REVIEW_STATES[singleRow?.state ?? "UNKNOWN"].label : "Not verified"}</Badge>}
+        </div>
+        {submissionsQuery.isPending ? <div className="mt-5 grid gap-3"><Skeleton className="h-5 w-56" /><Skeleton className="h-5 w-40" /></div> : singleRow?.latest ? <div className="mt-5 grid gap-3 border-t pt-4 text-sm sm:grid-cols-2">
+          <div><p className="text-muted-foreground">Latest version</p><p className="mt-1 font-medium">v{singleRow.latest.version} · {new Date(singleRow.latest.submittedAt).toLocaleString()}</p></div>
+          <div><p className="text-muted-foreground">Submission timing</p><p className="mt-1 font-medium">{singleRow.latest.submittedLate ? `Late${singleRow.latest.latePenaltyPercent != null ? ` · ${singleRow.latest.latePenaltyPercent}% penalty` : ""}` : "On time"}</p></div>
+          {singleRow.latest.repositoryUrl ? <div className="min-w-0"><p className="text-muted-foreground">Repository</p><a className="mt-1 block truncate font-medium text-blue-700 underline underline-offset-2 dark:text-blue-300" href={singleRow.latest.repositoryUrl} target="_blank" rel="noreferrer">{singleRow.latest.repositoryUrl}</a></div> : null}
+          {singleRow.latest.deploymentUrl ? <div className="min-w-0"><p className="text-muted-foreground">Deployment</p><a className="mt-1 block truncate font-medium text-blue-700 underline underline-offset-2 dark:text-blue-300" href={singleRow.latest.deploymentUrl} target="_blank" rel="noreferrer">{singleRow.latest.deploymentUrl}</a></div> : null}
+          {singleRow.latest.releaseNotes ? <div className="sm:col-span-2"><p className="text-muted-foreground">Release notes</p><p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words">{singleRow.latest.releaseNotes}</p></div> : null}
+        </div> : !historyReady ? <p className="mt-5 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">Submission status could not be verified. Try Refresh.</p> : <p className="mt-5 rounded-lg border border-dashed p-5 text-sm text-muted-foreground">No submitted versions yet. The team can submit when this milestone is open.</p>}
+        <div className="mt-5 flex flex-wrap gap-2 border-t pt-4">
+          <Button type="button" variant="outline" size="sm" onClick={() => setHistoryMilestone(milestone)} disabled={!historyReady}><History className="size-4" /> Submission history</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => handleOpenSubmissionsPage(milestone.id)}><ExternalLink className="size-4" /> Full submission page</Button>
+          {historyReady && !readOnly && isStudent && hasPermission("ARTIFACT_SUBMIT") && singleRow?.state === "CHANGES_REQUESTED" ? <Button type="button" size="sm" onClick={() => handleOpenSubmit(milestone.id)}><Send className="size-4" /> Resubmit v{(singleRow.latest?.version ?? 0) + 1}</Button> : null}
+          {historyReady && !readOnly && isStudent && hasPermission("ARTIFACT_SUBMIT") && !singleRow?.latest && (milestone.lifecycleStatus === "IN_PROGRESS" || milestone.lifecycleStatus === "CHANGES_REQUESTED") ? <Button type="button" size="sm" onClick={() => handleOpenSubmit(milestone.id)}><Upload className="size-4" /> Submit artifact</Button> : null}
+        </div>
+      </section> : <>
       {!milestoneError && <section aria-label="Search and filter deliverables" className="min-w-0 space-y-2 rounded-xl border bg-card px-3 py-2.5">
         <div className="flex flex-wrap items-center gap-2">
           <label className="relative min-w-48 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -278,6 +298,7 @@ export function WorkspaceArtifactsPanel({
             </div>
           </>}
       </section>
+      </>}
 
       {/* History Dialog (Fix Bug #28) */}
       <Dialog open={Boolean(historyMilestone)} onOpenChange={(open) => !open && setHistoryMilestone(null)}>

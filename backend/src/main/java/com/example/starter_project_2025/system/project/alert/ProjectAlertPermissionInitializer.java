@@ -23,6 +23,6 @@ public class ProjectAlertPermissionInitializer implements CommandLineRunner {
         }
         for(String name:List.of("ADMIN","ADMINISTRATOR","SYSTEM_ADMIN","SUPER_ADMIN","TEACHER","MENTOR","TRAINER","TEAM_LEADER","STUDENT","TRAINEE"))
             roles.findByName(name).ifPresent(role->{role.getPermissions().addAll(alertPermissions);roles.save(role);});
-        // STUDENT still needs an active PM/leader membership in the selected team.
+        // STUDENT still needs to be the active, designated leader of the selected team.
     }
 }

@@ -151,6 +151,9 @@ export interface SubmissionDetail {
   submissionAttempts: number;
   allowResubmission: boolean;
   maxSubmissionAttempts?: number | null;
+  /** Why requestChanges / createNextVersion are unavailable; null when allowed. */
+  resubmissionBlockedReason?: ResubmissionBlockReason | null;
+  resubmissionBlockedMessage?: string | null;
   deadline: string;
   latePolicyType: "NO_LATE" | "ALLOW_LATE";
   lateUntil?: string | null;
@@ -189,3 +192,11 @@ export interface SaveSubmissionDraftRequest {
   submissionUrl?: string;
   artifacts: Array<{ type: SubmissionArtifactType; name: string; url: string }>;
 }
+
+export type ResubmissionBlockReason =
+  | "MILESTONE_INACTIVE"
+  | "MILESTONE_NOT_OPEN"
+  | "MILESTONE_NOT_UNDER_REVIEW"
+  | "RESUBMISSION_DISABLED"
+  | "ATTEMPT_LIMIT_REACHED"
+  | "PROJECT_NOT_ACTIVE";

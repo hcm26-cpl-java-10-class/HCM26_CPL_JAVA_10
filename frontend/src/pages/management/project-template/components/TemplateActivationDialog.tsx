@@ -23,11 +23,16 @@ function ActivationIssues({ errors }: { errors: Record<string, string[]> }) {
   </ul>;
 }
 
-export function TemplateActivationDialog({ template, onActivated, onOpenSection, compact = false }: {
-  template: ProjectTemplateDTO;
+const sectionLabels: Record<TemplateConfigurationSection, string> = {
+  overview: "general information", "team-constraints": "team constraints", milestones: "milestones", modules: "modules",
+};
+
+export function TemplateActivationDialog({ template, onActivated, onOpenSection, compact = false, row = false }: {
+  template: Pick<ProjectTemplateDTO, "id" | "code">;
   onActivated: (template: ProjectTemplateDTO) => void;
   onOpenSection: (section: TemplateConfigurationSection) => void;
   compact?: boolean;
+  row?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTemplateError> | null>(null);
@@ -76,8 +81,8 @@ export function TemplateActivationDialog({ template, onActivated, onOpenSection,
       setOpen(value);
       if (value) setSubmitError(null);
     }}>
-      <DialogTrigger asChild><Button variant={compact ? "outline" : "default"} size={compact ? "icon" : "default"}
-        aria-label={compact ? `Activate template ${template.code}` : undefined} title={compact ? "Activate template" : undefined}>
+      <DialogTrigger asChild><Button variant={compact || row ? "outline" : "default"} size={compact ? "icon" : row ? "sm" : "default"}
+        aria-label={compact || row ? `Activate template ${template.code}` : undefined} title={compact ? "Activate template" : undefined}>
         <Rocket />{!compact && "Activate"}
       </Button></DialogTrigger>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl" showCloseButton={!mutation.isPending}
@@ -85,7 +90,7 @@ export function TemplateActivationDialog({ template, onActivated, onOpenSection,
         onInteractOutside={(event) => { if (submitting.current) event.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>Activate project template</DialogTitle>
-          <DialogDescription>Review the saved configuration before making this template available for classes and cohorts.</DialogDescription>
+          <DialogDescription>Review the saved configuration for {template.code} before activating this template.</DialogDescription>
         </DialogHeader>
         <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
           Save any pending changes first. Once activated, this template becomes read-only.
@@ -117,7 +122,7 @@ export function TemplateActivationDialog({ template, onActivated, onOpenSection,
             {!item.passed && <>
               <ActivationIssues errors={item.errors} />
               <Button variant="link" size="sm" className="mt-2 h-auto px-0" disabled={mutation.isPending}
-                onClick={() => openSection(item.section)}>Open {item.section === "overview" ? "general information" : item.section === "team-constraints" ? "team constraints" : "milestones"}</Button>
+                onClick={() => openSection(item.section)}>Open {sectionLabels[item.section]}</Button>
             </>}
           </section>)}
           <p className="text-sm text-muted-foreground" aria-live="polite">

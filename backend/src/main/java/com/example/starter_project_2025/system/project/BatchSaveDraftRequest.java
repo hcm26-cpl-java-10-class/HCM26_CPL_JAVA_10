@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -21,6 +22,10 @@ public record BatchSaveDraftRequest(
 
             @Positive(message = "assignedMentorId must be positive")
             Long assignedMentorId,
+
+            @Positive
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            Long leaderMemberId,
 
             @NotEmpty(message = "Each team must have at least one member")
             @Valid

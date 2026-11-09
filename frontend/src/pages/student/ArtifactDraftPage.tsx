@@ -233,7 +233,7 @@ export default function ArtifactDraftPage() {
   const reviewStatus = submission?.status === "SUBMITTED" && milestone.lifecycleStatus === "SUBMITTED" ? "SUBMITTED" : reviewSubmissionQuery.data?.status ?? submission?.status ?? milestone.lifecycleStatus;
   const canSaveDraft = !submissionMutation.isPending && !saveMutation.isPending && !uploadMutation.isPending && releaseNotesWithinLimit(releaseNotes) && ["IN_PROGRESS", "CHANGES_REQUESTED"].includes(milestone.lifecycleStatus);
 
-  return <MainLayout pathName={{ projects: "Projects", [projectId ?? "project"]: milestone.project.name, milestones: "Milestones", [milestone.id]: milestone.title, submit: "Submit artifact" }} contentClassName="bg-slate-50/80 dark:bg-background">
+  return <MainLayout pathName={{ projects: "Projects", [projectId ?? "project"]: milestone.project?.name ?? "Team workspace", milestones: "Milestones", [milestone.id]: milestone.title, submit: "Submit artifact" }} contentClassName="bg-slate-50/80 dark:bg-background">
     <main className={styles.shell}>
       <header className="mb-5 space-y-4">
         <Button variant="ghost" size="sm" className="-ml-3 text-muted-foreground" onClick={() => workspaceId ? navigate('/management/workspaces/' + encodeURIComponent(workspaceId) + '?tab=artifacts') : navigate(-1)}><ArrowLeft className="size-4" /> Back to workspace</Button>

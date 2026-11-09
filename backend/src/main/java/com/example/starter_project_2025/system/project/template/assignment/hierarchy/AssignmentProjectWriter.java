@@ -26,7 +26,6 @@ import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.security.core.Authentication;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -51,14 +50,13 @@ public class AssignmentProjectWriter {
     private final AssignmentSnapshotService snapshotWriter;
     private final ProjectResourceProvisioningService resourceWriter;
     private final AssignmentTemplateReader templateReader;
-    private final TeamPublishItemService teamPublisher;
     private final CohortRepository cohorts;
     private final com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository classes;
     private final WorkspaceJournalService journal;
     private final UserRepository users;
 
     public AssignmentDtos.Result create(ProjectAssignment assignment, AssignmentTemplateReader.Node master,
-                                         AssignmentValidationService.Selection selection, Authentication authentication) {
+                                         AssignmentValidationService.Selection selection) {
         Map<Long, Project> created = new LinkedHashMap<>();
         createBranch(master, null, null, null, assignment, selection, created);
         Project root = created.get(master.templateId());
@@ -76,8 +74,9 @@ public class AssignmentProjectWriter {
             team.setAssignedConstraintsJson(primary.content().path("constraints").toString());
             team.setAssignedTemplateName(primary.name());
             team.setMaxMembers(templateReader.capacity(primary).maxMembers());
+            // Assignment must not publish the team: a DRAFT team stays DRAFT until it is
+            // explicitly published, which is the only step that activates its project/workspace.
             teams.saveAndFlush(team);
-            teamPublisher.publish(assignment.getSessionId(), team.getId(), assignment.getCreatedBy(), authentication);
             Workspace workspace = workspace(assignment, team, project);
             List<TeamSubprojectAssignment> assigned = new ArrayList<>();
             for (var entry : selection.owners().entrySet()) {
@@ -117,7 +116,10 @@ public class AssignmentProjectWriter {
         project.setCode("C" + assignment.getClassId() + "-A" + assignment.getId() + "-M" + node.templateId());
         project.setName(node.name());
         project.setDescription(shortText(node.content().path("description").asText(node.content().path("context").asText()), 2000));
-        project.setStatus(ProjectStatus.ACTIVE);
+        // A DRAFT team must not own an ACTIVE project yet; publishing the team activates it.
+        project.setStatus(owner != null && owner.getStatus() == ProjectTeamStatus.DRAFT
+                ? ProjectStatus.PLANNING
+                : ProjectStatus.ACTIVE);
         project.setParentProject(parent);
         project.setTemplateSnapshotId(snapshot.getId());
         project.setCreatedBy(assignment.getCreatedBy());
@@ -208,7 +210,10 @@ public class AssignmentProjectWriter {
         workspace.setProject(project);
         workspace.setCode("WS-A" + assignment.getId() + "-T" + team.getId());
         workspace.setName(shortText(project.getName() + " / " + team.getTeamName(), 255));
-        workspace.setStatus(WorkspaceStatus.ACTIVE);
+        // Only a published (ACTIVE) team gets an ACTIVE workspace.
+        workspace.setStatus(team.getStatus() == ProjectTeamStatus.ACTIVE
+                ? WorkspaceStatus.ACTIVE
+                : WorkspaceStatus.DRAFT);
         workspace.setCreatedBy(assignment.getCreatedBy());
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
         workspaces.saveAndFlush(workspace);

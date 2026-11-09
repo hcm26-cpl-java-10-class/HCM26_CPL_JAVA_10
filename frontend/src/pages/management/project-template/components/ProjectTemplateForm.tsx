@@ -37,10 +37,9 @@ function TemplateField({ name, label, errors, suffix, children, required = true 
   );
 }
 
-export function ProjectTemplateForm({ template, parentTemplate, masterTemplate, options, minimumDurationWeeks = 0, onCancel, onSaved, save }: {
+export function ProjectTemplateForm({ template, parentTemplate, options, minimumDurationWeeks = 0, onCancel, onSaved, save }: {
   template?: ProjectTemplateDTO;
   parentTemplate?: ProjectTemplateDTO;
-  masterTemplate?: ProjectTemplateDTO;
   options: ProjectTemplateOptions;
   minimumDurationWeeks?: number;
   onCancel: () => void;
@@ -49,11 +48,11 @@ export function ProjectTemplateForm({ template, parentTemplate, masterTemplate, 
 }) {
   const queryClient = useQueryClient();
   const [values, setValues] = useState(() => ({ ...toTemplateFormValues(template),
-    ...(!template && parentTemplate ? { category: masterTemplate?.category ?? parentTemplate.category, level: parentTemplate.level,
-      estimatedDurationWeeks: String(parentTemplate.estimatedDurationWeeks), technologyStack: parentTemplate.technologyStack ?? "" } : {}) }));
+    ...(!template && parentTemplate ? { category: parentTemplate.category, level: parentTemplate.level,
+      estimatedDurationWeeks: String(parentTemplate.estimatedDurationWeeks) } : {}) }));
   const module = template?.parentTemplateId != null || parentTemplate != null;
   const descriptionLength = values.description.length;
-  const categories = [...new Set([...options.categories, ...[template?.category, masterTemplate?.category, parentTemplate?.category]
+  const categories = [...new Set([...options.categories, ...[template?.category, parentTemplate?.category]
     .filter((value): value is string => !!value)])];
   const [lockVersion] = useState(template?.lockVersion);
   const [minimumDuration] = useState(minimumDurationWeeks);
@@ -94,7 +93,6 @@ export function ProjectTemplateForm({ template, parentTemplate, masterTemplate, 
       code: values.code.trim(),
       name: values.name.trim(),
       description: values.description.trim(),
-      technologyStack: values.technologyStack.trim(),
       ...(template?.parentTemplateId || parentTemplate?.id ? { parentTemplateId: template?.parentTemplateId ?? parentTemplate?.id } : {}),
       category: values.category.trim(),
       level: values.level as ProjectTemplateLevel,
@@ -150,11 +148,6 @@ export function ProjectTemplateForm({ template, parentTemplate, masterTemplate, 
                 className="min-w-0 max-w-full resize-y whitespace-pre-wrap [field-sizing:fixed] [overflow-wrap:anywhere]"
                 value={values.description} onChange={(event) => change("description", event.target.value)}
                 placeholder="Describe the project background, objectives and expected scope." />
-            </TemplateField>
-            <TemplateField name="technologyStack" label="Technical stack" errors={errors.technologyStack} required={false}>
-              <Textarea {...inputProps("technologyStack")} rows={2} value={values.technologyStack}
-                onChange={(event) => change("technologyStack", event.target.value)}
-                placeholder="E.g. Java Spring Boot, ReactJS, PostgreSQL" />
             </TemplateField>
             <div className="grid gap-5 md:grid-cols-3">
               <TemplateField name="category" label="Domain / category" errors={errors.category}>

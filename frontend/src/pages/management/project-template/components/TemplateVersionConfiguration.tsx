@@ -37,6 +37,15 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
     retry: false, refetchOnWindowFocus: false, refetchOnReconnect: false });
   const configuration = query.data;
   const editable = !!configuration?.editable && hasPermission("PROJECT_TEMPLATE_VERSION_UPDATE") && hasPermission("PROJECT_TEMPLATE_UPDATE");
+  const templateId = configuration?.template.id;
+  const activation = useQuery({
+    queryKey: ["project-templates", user.email, activeRole, "activation", templateId],
+    queryFn: ({ signal }) => projectTemplateApi.getActivationChecklist(templateId!, signal),
+    enabled: publishOpen && templateId != null,
+    retry: false,
+  });
+  const modulesCheck = activation.data?.items.find(item => item.section === "modules");
+  const publishBlocked = !activation.isSuccess || activation.isFetching || modulesCheck?.passed === false;
   const rubricQuery = useQuery({ queryKey: ["project-templates", user.email, activeRole, "milestone-options", configuration?.template.id],
     queryFn: ({ signal }) => projectTemplateApi.getMilestoneOptions(configuration!.template.id, signal), enabled: !!configuration && editable, retry: false });
   const audit = useQuery({ queryKey: ["project-template-versions", user.email, activeRole, "audit", versionId],
@@ -50,7 +59,7 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
     return saved;
   };
   const publish = async () => {
-    if (pending.current || !configuration) return;
+    if (pending.current || !configuration || publishBlocked) return;
     pending.current = true; setPublishing(true); setPublishError(null);
     try {
       remember(await projectTemplateVersionApi.publish(versionId, configuration.template.lockVersion));
@@ -93,7 +102,6 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
             {editable && <Button variant="outline" disabled={!options.data} onClick={() => setEditingOverview(true)}><Pen />Edit version overview</Button>}</div></CardHeader>
             <CardContent className="grid min-w-0 gap-5"><p className="whitespace-pre-wrap text-sm leading-7 [overflow-wrap:anywhere]">{template.description || "No description"}</p>
               <dl className="grid gap-4 text-sm sm:grid-cols-3">{[["Code", template.code], ["Category", template.category], ["Level", templateLevelLabel(template.level)],
-                ["Technical stack", template.technologyStack || "Not specified"],
                 ["Duration", template.estimatedDurationWeeks == null ? "—" : `${template.estimatedDurationWeeks} weeks`]].map(([label, value]) =>
                   <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="mt-1 break-words font-medium">{value || "—"}</dd></div>)}</dl>
             </CardContent></Card>}
@@ -117,17 +125,27 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
             <span className="font-medium">{item.action?.replaceAll("_", " ")}</span><span className="text-muted-foreground">{item.actorEmail ?? "System"} · {item.createdAt ? new Date(item.createdAt).toLocaleString("en-GB") : "—"}</span>
           </li>)}</ul>}</CardContent></Card>}</TabsContent>
       <TabsContent value="modules"><TemplateModulesPanel templateId={template.id} versionId={versionId}
-        historical={!editable} canCreate={editable && !!options.data?.canCreate} /></TabsContent>
+        historical={!editable} canCreate={editable && !!options.data?.canCreate}
+        canActivate={editable && !template.readOnly && !!options.data?.canActivate && hasPermission("PROJECT_TEMPLATE_ACTIVATE")} /></TabsContent>
     </Tabs>
     <Dialog open={publishOpen} onOpenChange={value => { if (!publishing) setPublishOpen(value); }}>
       <DialogContent showCloseButton={!publishing}><DialogHeader><DialogTitle>Publish {version.version}?</DialogTitle><DialogDescription>
         This version will become active and the previous active version will be archived. Existing projects and workspaces keep their saved brief, milestones and backlog.
       </DialogDescription></DialogHeader>
+        {activation.isFetching && <p role="status" className="text-sm text-muted-foreground">Checking child module activation…</p>}
+        {activation.isError && <Alert variant="destructive"><AlertTitle>Unable to check module activation</AlertTitle>
+          <AlertDescription>{getTemplateError(activation.error).message}
+            <Button variant="link" size="sm" onClick={() => void activation.refetch()}>Check again</Button>
+          </AlertDescription></Alert>}
+        {modulesCheck?.passed === false && <Alert variant="destructive"><AlertTitle>Activate the child modules first</AlertTitle>
+          <AlertDescription><ul className="list-disc pl-4">{Object.values(modulesCheck.errors).flat().map(message => <li key={message}>{message}</li>)}</ul>
+            <Button variant="link" size="sm" onClick={() => { setPublishOpen(false); setTab("modules"); }}>Open modules</Button>
+          </AlertDescription></Alert>}
         {publishError && <Alert variant="destructive"><AlertTitle>Unable to publish version</AlertTitle><AlertDescription>
           <p>{publishError.message}</p><ul className="list-disc pl-4">{[...new Set(Object.values(publishError.fields).flat())].map(message => <li key={message}>{message}</li>)}</ul>
         </AlertDescription></Alert>}
         <DialogFooter><Button variant="outline" disabled={publishing} onClick={() => setPublishOpen(false)}>Cancel</Button>
-          <Button disabled={publishing} onClick={() => void publish()}>{publishing ? <Loader2 className="animate-spin" /> : <Rocket />}Publish version</Button></DialogFooter>
+          <Button disabled={publishing || publishBlocked} onClick={() => void publish()}>{publishing ? <Loader2 className="animate-spin" /> : <Rocket />}Publish version</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   </section>;

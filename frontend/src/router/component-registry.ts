@@ -26,6 +26,7 @@ import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_grade
 import TeamAllocationPage from "@/pages/management/team-allocation";
 import TeamAllocationSetupPage from "@/pages/management/team-allocation/setup";
 import TeamAllocationClassListPage from "@/pages/management/team-allocation/class-list";
+import ProjectAssignmentPage from "@/pages/management/team-allocation/ProjectAssignmentPage";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
@@ -270,6 +271,11 @@ export const routes: RouteConfig[] = [
     // Allocation workspace of one session: "Allocate Teams" + "Set up Teams".
     path: "/team-allocation/classes/:classId/setup",
     component: TeamAllocationSetupPage,
+    requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
+  },
+  {
+    path: "/team-allocation/classes/:classId/assign",
+    component: ProjectAssignmentPage,
     requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
   },
   { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
