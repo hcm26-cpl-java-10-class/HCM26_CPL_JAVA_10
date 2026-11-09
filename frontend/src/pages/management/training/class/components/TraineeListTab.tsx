@@ -271,7 +271,6 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                 studentId,
                 trainee.fptAccount ?? trainee.code,
                 trainee.personalEmail ?? trainee.email,
-                trainee.nationalId,
                 formatDob(trainee.dob),
                 trainee.gender,
                 trainee.status,
@@ -407,13 +406,12 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         const rows = selectedTrainees.map((trainee, index) => ({
             "No.": index + 1,
             "Full Name": trainee.fullName ?? "",
-            "FPT Student ID": formatFptStudentIdForSite(
+            "Student ID": formatFptStudentIdForSite(
                 trainee.fptAccount || trainee.code,
                 classSite,
                 trainee.id,
             ),
             "Personal Email": trainee.personalEmail || trainee.email || "",
-            ...(!internal ? { "National ID": trainee.nationalId ?? "" } : {}),
             DOB: formatDob(trainee.dob),
             Gender: trainee.gender ?? "",
             Status: resolveTraineeStatusBadge(trainee.status).label,
@@ -546,16 +544,25 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5 self-end sm:self-auto">
+                    {internal && (
+                        <Button
+                            type="button"
+                            disabled={isPending || saveMutation.isPending || hasUnsavedChanges || !canCreate}
+                            title={hasUnsavedChanges ? "Save or discard staged changes before importing." : undefined}
+                            onClick={() => setImportOpen(true)}
+                            className="bg-[#283593] text-white hover:bg-[#1a237e] dark:bg-blue-600 dark:hover:bg-blue-500"
+                        >
+                            Import Excel
+                        </Button>
+                    )}
                     <Button
                         type="button"
+                        variant="outline"
                         onClick={handleOpenCreate}
                         disabled={isPending || saveMutation.isPending || !canCreate || !canUpdate}
-                        className="bg-[#283593] text-white hover:bg-[#1a237e] dark:bg-blue-600 dark:hover:bg-blue-500"
                     >
                         + Add Trainee
                     </Button>
-                    {internal && <Button type="button" variant="outline" disabled={isPending || saveMutation.isPending || hasUnsavedChanges || !canCreate}
-                        title={hasUnsavedChanges ? "Save or discard staged changes before importing." : undefined} onClick={() => setImportOpen(true)}>Import Excel</Button>}
 
                     {/* Bulk Action: Change Status Dropdown */}
                     <DropdownMenu>
@@ -577,15 +584,15 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                         <DropdownMenuContent align="end" className="w-56">
                             <DropdownMenuItem onClick={() => handleBulkChangeStatus("Active")}>
                                 <span className="mr-2 inline-block size-2 rounded-full bg-emerald-500" />
-                                <span>Active (Đang học)</span>
+                                <span>Active</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleBulkChangeStatus("Inactive")}>
                                 <span className="mr-2 inline-block size-2 rounded-full bg-gray-400" />
-                                <span>Inactive (Không hoạt động)</span>
+                                <span>Inactive</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleBulkChangeStatus("Dropped")}>
                                 <span className="mr-2 inline-block size-2 rounded-full bg-rose-500" />
-                                <span>Dropped (Thôi học)</span>
+                                <span>Dropped</span>
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -651,9 +658,8 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                             </TableHead>
                             <TableHead className="w-12 px-3 font-semibold text-foreground">No.</TableHead>
                             <TableHead className="px-3 font-semibold text-foreground">Full Name</TableHead>
-                            <TableHead className="px-3 font-semibold text-foreground">FPT Student ID</TableHead>
+                            <TableHead className="px-3 font-semibold text-foreground">Student ID</TableHead>
                             <TableHead className="px-3 font-semibold text-foreground">Personal Email</TableHead>
-                            <TableHead className="px-3 font-semibold text-foreground">National ID</TableHead>
                             <TableHead className="px-3 font-semibold text-foreground">DOB</TableHead>
                             <TableHead className="px-3 font-semibold text-foreground">Gender</TableHead>
                             <TableHead className="px-3 font-semibold text-foreground">Status</TableHead>
@@ -665,7 +671,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                         {isPending ? (
                             Array.from({ length: 6 }, (_, rowIdx) => (
                                 <TableRow key={rowIdx}>
-                                    {Array.from({ length: 10 }, (_, colIdx) => (
+                                    {Array.from({ length: 9 }, (_, colIdx) => (
                                         <TableCell key={colIdx} className="px-3 py-3">
                                             <Skeleton className="h-4 w-full" />
                                         </TableCell>
@@ -674,7 +680,7 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                             ))
                         ) : filteredTrainees.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={10} className="py-12 text-center text-muted-foreground">
+                                <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
                                     <div className="flex flex-col items-center gap-2">
                                         <Users className="size-7 text-muted-foreground/70" aria-hidden />
                                         <p className="text-sm">
@@ -746,9 +752,6 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
                                         </TableCell>
                                         <TableCell className="px-3 py-3 text-sm text-foreground">
                                             {personalEmail}
-                                        </TableCell>
-                                        <TableCell className="px-3 py-3 text-sm text-foreground">
-                                            {trainee.nationalId ?? ""}
                                         </TableCell>
                                         <TableCell className="px-3 py-3 text-sm whitespace-nowrap text-foreground">
                                             {formatDob(trainee.dob)}

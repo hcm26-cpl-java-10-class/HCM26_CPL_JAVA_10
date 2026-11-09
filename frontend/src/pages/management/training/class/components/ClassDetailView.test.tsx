@@ -143,18 +143,17 @@ describe("ClassDetailView & TraineeListTab", () => {
         expect(await screen.findByText("Hoàng Phương Bình")).toBeInTheDocument();
     });
 
-    it("renders all 10 Trainee List columns with FPT Student ID, searches trainees, selects checkboxes, and navigates on Topic Mark", async () => {
+    it("renders all 9 Trainee List columns with Student ID, searches trainees, selects checkboxes, and navigates on Topic Mark", async () => {
         const { user } = renderClassFlow("/classes/2");
 
         const table = await screen.findByRole("table", { name: "Trainee List" });
         const headers = within(table).getAllByRole("columnheader");
-        expect(headers).toHaveLength(10);
+        expect(headers).toHaveLength(9);
         expect(headers.slice(1).map((h) => h.textContent)).toEqual([
             "No.",
             "Full Name",
-            "FPT Student ID",
+            "Student ID",
             "Personal Email",
-            "National ID",
             "DOB",
             "Gender",
             "Status",
@@ -173,10 +172,9 @@ describe("ClassDetailView & TraineeListTab", () => {
         expect(firstRowCells[2]).toHaveTextContent("Hoàng Phương Bình");
         expect(firstRowCells[3]).toHaveTextContent("SE180101");
         expect(firstRowCells[4]).toHaveTextContent("phuongbinh.conan@gmail.com");
-        expect(firstRowCells[5]).toHaveTextContent("075204005839");
-        expect(firstRowCells[6]).toHaveTextContent("23-Aug-2004");
-        expect(firstRowCells[7]).toHaveTextContent("Male");
-        expect(firstRowCells[8]).toHaveTextContent("Active");
+        expect(firstRowCells[5]).toHaveTextContent("23-Aug-2004");
+        expect(firstRowCells[6]).toHaveTextContent("Male");
+        expect(firstRowCells[7]).toHaveTextContent("Active");
 
         // Select all & individual selection
         const selectAll = screen.getByRole("checkbox", { name: "Select all trainees" });
@@ -254,9 +252,9 @@ describe("ClassDetailView & TraineeListTab", () => {
         await user.click(within(addDialog).getByRole("button", { name: "Add Trainee" }));
 
         expect(within(addDialog).getByText("Full Name is required.")).toBeInTheDocument();
-        expect(within(addDialog).getByText("FPT Student ID is required.")).toBeInTheDocument();
+        expect(within(addDialog).getByText("Student ID is required.")).toBeInTheDocument();
         expect(within(addDialog).getByText("Personal Email is required.")).toBeInTheDocument();
-        expect(within(addDialog).getByText("National ID is required.")).toBeInTheDocument();
+        expect(within(addDialog).queryByLabelText(/National ID/i)).not.toBeInTheDocument();
         expect(within(addDialog).getByText("Date of Birth is required.")).toBeInTheDocument();
 
         // Full Name hard-capped at 100 characters
@@ -268,23 +266,22 @@ describe("ClassDetailView & TraineeListTab", () => {
 
         // Reject invalid HN prefix on HCM class and DOB under 17 years old
         await user.type(addNameInput, "Nguyễn Minh Khang");
-        await user.type(within(addDialog).getByLabelText(/FPT Student ID/i), "HE180999");
+        await user.type(within(addDialog).getByLabelText(/Student ID/i), "HE180999");
         await user.type(within(addDialog).getByLabelText(/Personal Email/i), "khang.nguyen@gmail.com");
-        await user.type(within(addDialog).getByLabelText(/National ID/i), "079204009999");
         const dobInput = within(addDialog).getByLabelText(/DOB/i);
         await user.type(dobInput, "2015-05-10");
         await user.click(within(addDialog).getByRole("button", { name: "Add Trainee" }));
         expect(
             within(addDialog).getByText(
-                "FPT Student ID for HCM site must be SE, SS, AI, or IA followed by 6 digits (e.g. SE180101).",
+                "Student ID for HCM site must be SE, SS, AI, or IA followed by 6 digits (e.g. SE180101).",
             ),
         ).toBeInTheDocument();
         expect(
             within(addDialog).getByText("Trainee must be at least 17 years old (University level)."),
         ).toBeInTheDocument();
 
-        // Fill valid HCM FPT Student ID and valid DOB (>= 17 years old)
-        const studentIdInput = within(addDialog).getByLabelText(/FPT Student ID/i);
+        // Fill valid HCM Student ID and valid DOB (>= 17 years old)
+        const studentIdInput = within(addDialog).getByLabelText(/Student ID/i);
         await user.clear(studentIdInput);
         await user.type(studentIdInput, "SE180999");
         await user.clear(dobInput);

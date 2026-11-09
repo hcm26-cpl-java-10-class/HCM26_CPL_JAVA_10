@@ -8,7 +8,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Membership only. Personal profiles stay in the existing master trainee directory. */
 @Entity
 @Table(name = "class_enrollments", uniqueConstraints = @UniqueConstraint(
         name = "uk_class_enrollment_trainee", columnNames = {"class_id", "trainee_id"}))
@@ -18,10 +17,28 @@ public class ClassEnrollment extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "class_id", nullable = false)
     private TrainingClass trainingClass;
+
     @Column(name = "trainee_id", nullable = false)
     private Long traineeId;
+
+    @Column(name = "student_id", length = 64)
+    private String studentId;
+
+    @Column(name = "full_name", length = 100)
+    private String fullName;
+
+    @Column(name = "personal_email", length = 254)
+    private String personalEmail;
+
+    @Column(name = "dob", length = 20)
+    private String dob;
+
+    @Column(name = "gender", length = 20)
+    private String gender;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Status status = Status.ACTIVE;
+
     public enum Status { ACTIVE, INACTIVE, DROPPED_OUT }
 }
