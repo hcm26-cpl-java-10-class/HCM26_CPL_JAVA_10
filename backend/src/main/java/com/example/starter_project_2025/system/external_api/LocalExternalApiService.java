@@ -5,14 +5,18 @@ import com.example.starter_project_2025.system.external_api.dto.ExternalRoomDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalClassRequest;
 import com.example.starter_project_2025.system.external_api.exception.ExternalApiException;
+import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import com.example.starter_project_2025.exception.ConflictException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -23,6 +27,9 @@ import java.util.concurrent.atomic.AtomicLong;
 public class LocalExternalApiService implements ExternalApiService {
     private final ConcurrentHashMap<Long, ExternalClassDTO> classes = new ConcurrentHashMap<>();
     private final AtomicLong classIds = new AtomicLong(3);
+
+    @Autowired(required = false)
+    private SessionRepository sessionRepository;
 
     public LocalExternalApiService() {
         classes.put(1L, ExternalClassDTO.builder().id(1L).code("LOCAL_JAVA_01").name("Lớp Chuyên sâu Java Backend (K26)")
@@ -108,6 +115,29 @@ public class LocalExternalApiService implements ExternalApiService {
                 new ExternalRoomDTO(5L, "Online MS Teams", 100),
                 new ExternalRoomDTO(6L, "Room A101", 30)
         );
+    }
+
+    @Override
+    public Object fetchClassSessions(Long classId) {
+        if (sessionRepository == null) return List.of();
+        return sessionRepository.findByClassId(classId).stream()
+                .filter(s -> Boolean.TRUE.equals(s.getIsActive()))
+                .map(s -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("id", s.getId());
+                    map.put("classId", s.getClassId());
+                    map.put("date", s.getStartTime() != null ? s.getStartTime().toLocalDate().toString() : "");
+                    map.put("slot", (s.getStartTime() != null ? s.getStartTime().toLocalTime() : "") + " - " + (s.getEndTime() != null ? s.getEndTime().toLocalTime() : ""));
+                    map.put("topic", s.getTitle());
+                    map.put("topicCode", s.getTitle() != null && s.getTitle().startsWith("[") && s.getTitle().contains("]") ? s.getTitle().substring(1, s.getTitle().indexOf("]")) : "");
+                    map.put("trainer", "Nguyễn Ngọc Tân (Trainer)");
+                    map.put("room", s.getLocation() != null ? s.getLocation() : "Phòng Lab 201 (F-Town 2)");
+                    map.put("status", s.getStatus() != null ? s.getStatus().name().toLowerCase() : "scheduled");
+                    map.put("type", "lecture");
+                    map.put("notes", s.getNote());
+                    return map;
+                })
+                .toList();
     }
 
     private ExternalClassDTO toClass(Long id, ExternalClassRequest request, Long programId, Integer enrolledCount) {

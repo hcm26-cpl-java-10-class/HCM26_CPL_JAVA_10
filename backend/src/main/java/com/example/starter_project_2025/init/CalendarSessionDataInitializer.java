@@ -4,6 +4,8 @@ import com.example.starter_project_2025.system.demo.session.Session;
 import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import com.example.starter_project_2025.system.subject.Subject;
 import com.example.starter_project_2025.system.subject.SubjectRepository;
+import com.example.starter_project_2025.system.training.TrainingClassRepository;
+import com.example.starter_project_2025.system.training.entity.TrainingClass;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -25,10 +27,13 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
 
     SessionRepository sessionRepository;
     SubjectRepository subjectRepository;
+    TrainingClassRepository trainingClassRepository;
 
     @Override
     @Transactional
     public void run(String... args) {
+        ensureTrainingClasses();
+
         if (sessionRepository.count() > 0) {
             return;
         }
@@ -126,7 +131,6 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
 
         // =========================================================================
         // 2. SESSIONS CHO TUẦN HIỆN TẠI (09/11/2026 - 15/11/2026)
-        // Đảm bảo khi bấm "Hôm nay" vẫn có dữ liệu đầy đủ
         // =========================================================================
         LocalDate now = LocalDate.now();
         LocalDate monday = now.minusDays(now.getDayOfWeek().getValue() - 1);
@@ -151,6 +155,50 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
                 monday.plusDays(4).atTime(13, 30), monday.plusDays(4).atTime(17, 30), "Phòng 304 (Innovation Hall)", "SCHEDULED");
 
         log.info("Initialized comprehensive training calendar sessions matching SRS specification.");
+    }
+
+    private void ensureTrainingClasses() {
+        if (trainingClassRepository != null && trainingClassRepository.count() == 0) {
+            TrainingClass c1 = new TrainingClass();
+            c1.setCode("LOCAL_JAVA_01");
+            c1.setName("Lớp Chuyên sâu Java Backend (K26)");
+            c1.setStartDate(LocalDate.of(2026, 10, 1));
+            c1.setEndDate(LocalDate.of(2027, 1, 31));
+            c1.setStatus("active");
+            c1.setPlannedSize(25);
+            c1.setSite("TP. Hồ Chí Minh");
+            c1.setTraineeType("Fresher");
+            c1.setProgram("LOCAL_JAVA");
+            c1.setClassAdmin("admin@example.com");
+            c1.setMasterTrainer("Nguyễn Ngọc Tân (Trainer)");
+            c1.setDeliveryType("Class");
+            c1.setFormatType("Offline");
+            c1.setSkills("Java, Spring Boot");
+            c1.setLocation("Phòng Lab 201 (F-Town 2)");
+            c1.setIsActive(true);
+            trainingClassRepository.save(c1);
+
+            TrainingClass c2 = new TrainingClass();
+            c2.setCode("LOCAL_JAVA_02");
+            c2.setName("Lớp Lập trình Fullstack Java Web (K26)");
+            c2.setStartDate(LocalDate.of(2026, 11, 15));
+            c2.setEndDate(LocalDate.of(2027, 3, 15));
+            c2.setStatus("active");
+            c2.setPlannedSize(30);
+            c2.setSite("TP. Hồ Chí Minh");
+            c2.setTraineeType("Fresher");
+            c2.setProgram("LOCAL_FULLSTACK");
+            c2.setClassAdmin("admin@example.com");
+            c2.setMasterTrainer("Nguyễn Mạnh Hoàng (Trainer)");
+            c2.setDeliveryType("Class");
+            c2.setFormatType("Hybrid");
+            c2.setSkills("Java, React");
+            c2.setLocation("Phòng 304 (Innovation Hall)");
+            c2.setIsActive(true);
+            trainingClassRepository.save(c2);
+
+            log.info("Initialized sample TrainingClass entities for LOCAL_JAVA_01 and LOCAL_JAVA_02.");
+        }
     }
 
     private void createSession(Long classId, Long topicId, Long trainerId, String title,
