@@ -18,9 +18,10 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { ValidationErrorResponse } from "@/types/common/error";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { apiErrorMessage } from "@/utils/api-error.utils";
 
 const DYNAMIC_FIELD_PREFIX = "__dynamic__";
 
@@ -645,6 +646,9 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     setFormOpen(true);
   };
 
+  /** Why the last delete was refused, shown when several records are deleted together. */
+  const lastDeleteError = useRef("");
+
   const bulkDelete = async () => {
     if (!permission.canDelete) return;
 
@@ -653,6 +657,7 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     }
 
     const ids = [...selected];
+    lastDeleteError.current = "";
 
     const results = await Promise.all(
       ids.map((id) => remove(id, { silent: true, skipInvalidate: true })),
@@ -669,10 +674,11 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
       toast.success(`Deleted ${successCount} ${entityLabel} record(s) successfully.`);
     } else if (successCount > 0) {
       toast.error(
-        `Deleted ${successCount}/${ids.length} ${entityLabel} record(s). ${failedCount} failed.`,
+        `Deleted ${successCount}/${ids.length} ${entityLabel} record(s). ${failedCount} failed.` +
+          (lastDeleteError.current ? ` ${lastDeleteError.current}` : ""),
       );
     } else {
-      toast.error(`Delete ${entityLabel} failed.`);
+      toast.error(lastDeleteError.current || `Delete ${entityLabel} failed.`);
     }
 
     setSelected([]);
@@ -707,8 +713,11 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
 
       return true;
     } catch (error) {
-      if (!options.silent) {
-        toast.error(getMutationErrorMessage(error, `Delete ${entityLabel} failed.`));
+      const reason = apiErrorMessage(error, "");
+      if (options.silent) {
+        lastDeleteError.current = reason;
+      } else {
+        toast.error(reason || `Delete ${entityLabel} failed.`);
       }
 
       return false;

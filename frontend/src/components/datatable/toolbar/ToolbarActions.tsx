@@ -1,5 +1,7 @@
 import { Download, Plus, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+import { apiErrorMessage } from "@/utils/api-error.utils";
 import ActionButton from "../common/ActionButton";
 import { ConfirmDeleteModal } from "../modal/ConfirmDeleteModal";
 import { ImportResultModal } from "../dataio/ImportResultModal";
@@ -17,13 +19,31 @@ export function ToolbarActions({ table, headerActions }: ToolbarActionsProps) {
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [lastImportFile, setLastImportFile] = useState<File | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
 
-  const handleImportSuccess = (result: ImportResult) => {
+  const handleImportSuccess = (result: ImportResult, file: File) => {
     setImportResult(result);
+    setLastImportFile(file);
     setResultOpen(true);
+  };
+
+  /** Imports the same file again (after the missing departments were added) and shows the new result. */
+  const handleRetryImport = async () => {
+    if (!lastImportFile || !table.importFile) return;
+
+    try {
+      const result = await table.importFile(lastImportFile);
+      setImportResult(result);
+      toast.success("Import successful!");
+    } catch (err: any) {
+      if (err?.response?.data) {
+        setImportResult(err.response.data);
+      }
+      toast.error(apiErrorMessage(err, "Failed to import data"));
+    }
   };
 
   const handleBulkDeleteConfirm = async () => {
@@ -109,6 +129,7 @@ export function ToolbarActions({ table, headerActions }: ToolbarActionsProps) {
         open={resultOpen}
         onOpenChange={setResultOpen}
         result={importResult}
+        onRetryImport={lastImportFile ? handleRetryImport : undefined}
         onBackToImport={() => {
           setResultOpen(false);
           setImportOpen(true);

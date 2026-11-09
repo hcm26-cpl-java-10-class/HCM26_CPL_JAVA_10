@@ -25,6 +25,9 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     List<RefreshToken> findAllByUserId(Long userId);
 
+    /** True while the user has a sign-in that was not signed out and has not expired yet. */
+    boolean existsByUser_IdAndRevokedFalseAndExpiryDateAfter(Long userId, Instant now);
+
     /** Xóa toàn bộ refresh token của một user (cần trước khi xóa user vì có khóa ngoại). */
     @Modifying(flushAutomatically = true)
     @Query("DELETE FROM RefreshToken rt WHERE rt.user.id = ?1")

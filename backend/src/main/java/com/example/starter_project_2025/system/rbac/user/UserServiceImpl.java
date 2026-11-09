@@ -23,6 +23,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -139,6 +140,14 @@ public class UserServiceImpl
 
     @Override
     protected void beforeDelete(User user) {
+
+        // A user who is signed in cannot be deleted (this also stops an admin from deleting their own account).
+        // Their sign-in ends when they sign out or when it expires.
+        if (refreshTokenRepository.existsByUser_IdAndRevokedFalseAndExpiryDateAfter(user.getId(), Instant.now())) {
+            ValidationContext ctx = new ValidationContext();
+            ctx.add("id", "Cannot delete a user who is signed in. Ask them to sign out, or wait until their session ends");
+            ctx.throwIfErrors();
+        }
 
         // Còn dữ liệu nghiệp vụ gắn với user thì chặn xóa và báo rõ lý do (thay vì lỗi khóa ngoại).
         if (courseEnrollmentRepository.existsByUser_Id(user.getId())) {
