@@ -38,7 +38,7 @@ export default function ProgramManagementPage() {
   };
 
   return (
-    <MainLayout pathName={{ training: "Training Operations", content: "Training Programs" }}>
+    <MainLayout pathName={{ training: "Training Management", content: "Training Programs" }}>
       <div className="flex-1 flex flex-col space-y-4">
         {/* Page Title Header under Breadcrumbs */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3.5 border-b border-gray-200/80 gap-3">

@@ -74,10 +74,12 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
         ) &&
         item.url !== "/content" &&
         item.url !== "/training/content" &&
-        item.title.toLowerCase() !== "content"
+        item.url !== "/class-setup" &&
+        item.title.toLowerCase() !== "content" &&
+        !item.title.toLowerCase().includes("kế hoạch môn học")
     );
 
-    return [...mappedActive, ...otherRealModules, ...placeholders];
+    return [...mappedActive, ...otherRealModules];
 }
 
 export function SidebarMenu({
@@ -117,7 +119,41 @@ export function SidebarMenu({
             return iconMap[key];
         };
 
-        return moduleGroups
+        // Consolidate any duplicate training groups into a single "Training Management" group
+        const consolidatedGroups: typeof moduleGroups = [];
+        let unifiedTrainingGroup: (typeof moduleGroups)[number] | null = null;
+
+        for (const group of moduleGroups) {
+            const groupNameLower = (group.name ?? "").toLowerCase();
+            const isTraining =
+                groupNameLower.includes("training") ||
+                groupNameLower.includes("lms") ||
+                group.modules.some((m) => m.url === "/subjects" || m.url === "/programs" || m.url === "/classes");
+
+            if (isTraining) {
+                if (!unifiedTrainingGroup) {
+                    unifiedTrainingGroup = {
+                        ...group,
+                        id: group.id ?? 99999,
+                        name: "Training Management",
+                        modules: [...group.modules],
+                    };
+                    consolidatedGroups.push(unifiedTrainingGroup);
+                } else {
+                    const existingUrls = new Set(unifiedTrainingGroup.modules.map((m) => m.url));
+                    for (const mod of group.modules) {
+                        if (!existingUrls.has(mod.url)) {
+                            unifiedTrainingGroup.modules.push(mod);
+                            existingUrls.add(mod.url);
+                        }
+                    }
+                }
+            } else {
+                consolidatedGroups.push(group);
+            }
+        }
+
+        return consolidatedGroups
             .map((group) => {
                 const groupNameLower = (group.name ?? "").toLowerCase();
                 const isAssessmentGroup =
@@ -135,7 +171,8 @@ export function SidebarMenu({
                             !!module.url &&
                             !module.hiddenInMenu &&
                             url !== "/project-template-versions" &&
-                            url !== "/enrollments"
+                            url !== "/enrollments" &&
+                            url !== "/class-setup"
                         );
                     })
                     .map((module) => {

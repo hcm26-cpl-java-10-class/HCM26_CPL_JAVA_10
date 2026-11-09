@@ -41,7 +41,7 @@ import lombok.experimental.SuperBuilder;
 @ResourcePermission("SUBJECT")
 @ResourceMenu(
     title = "Topics & Syllabus",
-    group = "Training Operations",
+    group = "Training Management",
     icon = "book-open",
     url = "/subjects",
     order = 3,

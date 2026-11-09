@@ -127,7 +127,8 @@ export function ClassDetailView() {
         <MainLayout
             pathName={{
                 classes: "Class List",
-                "training-operations": "Training Operations",
+                "training-operations": "Training Management",
+                "training-management": "Training Management",
                 "class-details": "Class Details",
                 ...(identifier && resolvedName ? { [identifier]: resolvedName } : {}),
             }}

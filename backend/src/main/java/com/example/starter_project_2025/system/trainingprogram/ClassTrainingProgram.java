@@ -1,7 +1,6 @@
 package com.example.starter_project_2025.system.trainingprogram;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
-import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -26,8 +25,6 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("CLASS")
-@ResourceMenu(title = "Kế hoạch môn học lớp", group = "Training Management", icon = "graduation-cap",
-        url = "/class-setup", order = 3, permission = "CLASS_READ")
 public class ClassTrainingProgram extends BaseEntity {
     @Column(name = "class_id", nullable = false)
     Long classId;

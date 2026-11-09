@@ -6,8 +6,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
 
-@Entity
-@Table(name = "training_classes")
+@Entity(name = "TrainingOperationClass")
+@Table(name = "training_operation_classes")
 @ResourcePermission("CLASS")
 @Getter @Setter @NoArgsConstructor
 public class TrainingClass extends BaseEntity {

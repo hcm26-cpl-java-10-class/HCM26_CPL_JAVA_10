@@ -6,14 +6,17 @@ import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import java.util.*;
 
+import org.springframework.stereotype.Repository;
+
+@Repository("trainingOperationsClassRepository")
 public interface TrainingClassRepository extends JpaRepository<TrainingClass, Long>, JpaSpecificationExecutor<TrainingClass> {
     Optional<TrainingClass> findByIdAndIsActiveTrue(Long id);
     boolean existsByIdAndIsActiveTrue(Long id);
     boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
-    @Query("select distinct c.program from TrainingClass c where c.isActive = true and c.program is not null order by c.program")
+    @Query("select distinct c.program from TrainingOperationClass c where c.isActive = true and c.program is not null order by c.program")
     List<String> findPrograms();
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select c from TrainingClass c where c.id = :id and c.isActive = true")
+    @Query("select c from TrainingOperationClass c where c.id = :id and c.isActive = true")
     Optional<TrainingClass> findForUpdate(@Param("id") Long id);
 
     interface Statistics {
@@ -29,7 +32,7 @@ public interface TrainingClassRepository extends JpaRepository<TrainingClass, Lo
           coalesce(sum(case when c.status in ('planning', 'assigned')
             and c.startDate between :today and :through then 1 else 0 end), 0) as upcomingClasses,
           coalesce(sum(case when c.status in ('completed', 'closed') then 1 else 0 end), 0) as completedClasses
-        from TrainingClass c where c.isActive = true
+        from TrainingOperationClass c where c.isActive = true
         """)
     Statistics statistics(@Param("today") java.time.LocalDate today,
                           @Param("through") java.time.LocalDate through);

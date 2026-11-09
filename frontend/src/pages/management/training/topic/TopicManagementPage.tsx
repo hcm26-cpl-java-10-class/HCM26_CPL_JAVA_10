@@ -11,7 +11,7 @@ export default function TopicManagementPage() {
   const [selectedTopic, setSelectedTopic] = useState<TopicItem | null>(null);
 
   return (
-    <MainLayout pathName={{ training: "Training Operations", content: "Topics & Syllabus" }}>
+    <MainLayout pathName={{ training: "Training Management", content: "Topics & Syllabus" }}>
       <div className="flex-1 flex flex-col space-y-4">
         {/* Page Title Header under Breadcrumbs */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3.5 border-b border-gray-200/80 gap-3">
