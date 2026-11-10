@@ -278,7 +278,11 @@ export default function TeamAllocationSessionPage() {
     "inline-flex items-center gap-1.5 rounded-full border border-indigo-200/70 bg-background/70 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur dark:border-indigo-900/60";
 
   return (
-    <MainLayout pathName={{ "team-allocation": "Project Team Allocation" }}>
+    <MainLayout
+      pathName={{ "team-allocation": "Project Team Allocation" }}
+      // `classes` has no route of its own; send the crumb to the class list.
+      pathLinks={{ classes: "/team-allocation" }}
+    >
       <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-5">
         <section className="relative shrink-0 overflow-hidden rounded-2xl border border-indigo-200/70 bg-card shadow-sm dark:border-indigo-900/60">
           <div

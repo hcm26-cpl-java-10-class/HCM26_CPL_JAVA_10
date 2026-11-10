@@ -1265,7 +1265,17 @@ export default function TeamAllocationSetupPage() {
   const hasUnsavedDrafts = draftTeams.length > 0;
 
   return (
-    <MainLayout pathName={{ "team-allocation": "Project Team Allocation" }}>
+    <MainLayout
+      pathName={{ "team-allocation": "Project Team Allocation" }}
+      // The breadcrumb builds hrefs from URL segments, but the numeric class id is
+      // filtered out, so "classes" would otherwise link to the non-existent
+      // `/team-allocation/classes`. Map it to the current class page instead.
+      pathLinks={{
+        classes: Number.isSafeInteger(classId) && classId > 0
+          ? `/team-allocation/classes/${classId}`
+          : "/team-allocation",
+      }}
+    >
       <div className="mx-auto flex min-h-full w-full max-w-7xl flex-1 flex-col gap-2 pb-1">
         {!hasPermission("PEO_TEAM_ALLOCATE") &&
           !hasPermission("PRJ_WORKSPACE_MANAGE") && (
