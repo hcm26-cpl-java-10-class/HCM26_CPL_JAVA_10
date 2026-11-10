@@ -11,6 +11,35 @@ import type {
 } from "@/types";
 import type { CourseMyScoresDTO } from "@/types/features/course-my-scores";
 
+/** Source-only preview: the Backend filters inactive Sections and Topics. */
+export interface CourseSyllabusSourceTopic {
+  id: number;
+  title: string;
+}
+export interface CourseSyllabusSourceSection {
+  id: number;
+  title: string;
+  mission: string | null;
+  topics: CourseSyllabusSourceTopic[];
+}
+export interface CourseSyllabusPreview {
+  syllabusId: number;
+  syllabusCode: string;
+  syllabusName: string;
+  syllabusDescription: string | null;
+  sections: CourseSyllabusSourceSection[];
+}
+export interface CourseNameSuggestion { name: string; sequence: number }
+export interface CourseNameAvailability { available: boolean }
+export interface CourseDraftOutlineSection {
+  title: string;
+  lessons: string[];
+}
+export interface CustomizedCourseFromSyllabusRequest {
+  course: CourseDTO;
+  sections: CourseDraftOutlineSection[];
+}
+
 const path = "/courses";
 const catalogPath = "/catalog/courses";
 
@@ -19,6 +48,32 @@ const base = createBaseApiService<CourseDTO, CourseFilter>({
 });
 
 export const courseApi = Object.assign({}, base, {
+  suggestFromSyllabusName: async (syllabusId: number, startAt = 1): Promise<CourseNameSuggestion> => {
+    const response = await axiosInstance.get<CourseNameSuggestion>(`${path}/from-syllabus/${syllabusId}/suggested-name`, { params: { startAt } });
+    return response.data;
+  },
+
+  checkFromSyllabusName: async (syllabusId: number, name: string): Promise<CourseNameAvailability> => {
+    const response = await axiosInstance.get<CourseNameAvailability>(`${path}/from-syllabus/${syllabusId}/name-availability`, { params: { name } });
+    return response.data;
+  },
+
+  getFromSyllabusPreview: async (syllabusId: number): Promise<CourseSyllabusPreview> => {
+    const response = await axiosInstance.get<CourseSyllabusPreview>(
+      `${path}/from-syllabus/${syllabusId}/preview`,
+    );
+    return response.data;
+  },
+
+  createCustomizedFromSyllabus: async (
+    data: CustomizedCourseFromSyllabusRequest,
+  ): Promise<CourseDTO> => {
+    const response = await axiosInstance.post<CourseDTO>(
+      `${path}/from-syllabus/customized`, data,
+    );
+    return response.data;
+  },
+
   createFromSyllabus: async (data: CourseDTO): Promise<CourseDTO> => {
     const response = await axiosInstance.post<CourseDTO>(`${path}/from-syllabus`, data);
     return response.data;

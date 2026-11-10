@@ -534,15 +534,24 @@ export default function SyllabusDetailPage() {
                             <div className="flex flex-wrap items-center gap-3">
                                 {published && syllabus.isActive ? (
                                     <Button asChild>
-                                        <Link to={`/courses?fromSyllabus=${syllabusId}`}>
+                                        <Link to={`/syllabuses/${syllabusId}/create-course`}>
                                             <Plus className="size-4" />
                                             Create Course from Syllabus
                                         </Link>
                                     </Button>
                                 ) : (
-                                    <p className="text-sm text-muted-foreground">
-                                        Publish and activate this Syllabus to create a Course.
-                                    </p>
+                                    <>
+                                        <p className="text-sm text-muted-foreground">
+                                            Publish and activate this Syllabus to create a Course.
+                                        </p>
+                                        {canEdit && (
+                                            <Button asChild variant="outline" size="sm">
+                                                <Link to={`/syllabuses/${syllabusId}/workspace`}>
+                                                    <Pencil className="size-4" /> Prepare Course alongside Syllabus
+                                                </Link>
+                                            </Button>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         )}
