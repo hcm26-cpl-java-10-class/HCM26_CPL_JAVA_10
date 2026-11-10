@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { usePermissions } from "@/hooks/usePermissions";
 import { STUDENT_ROLE, normalizeRole } from "@/utils/rbac.utils";
 import { CourseEnrollmentAssignmentDialog } from "../components/CourseEnrollmentAssignmentDialog";
+import { StudentQuestionInsights } from "../components/StudentQuestionInsights.tsx";
 import { DepartmentMemberPicker } from "@/pages/student/DepartmentMemberPicker";
 import { StudentCheckboxList } from "@/pages/student/StudentCheckboxList";
 import {
@@ -170,6 +171,11 @@ export function CourseDetailContent({
           <span className="inline-flex items-center gap-1.5"><BookOpen className="size-4" /> {course.lessonCount} lessons</span>
           <span className="inline-flex items-center gap-1.5"><Clock className="size-4" /> {formatTotalDuration(course.totalDuration)}</span>
         </div>
+        <PermissionGate permission="LESSON_ANSWER_CREATE">
+          <div className="pt-1">
+            <StudentQuestionInsights courseId={course.id} />
+          </div>
+        </PermissionGate>
       </div>
     </section>
   );
