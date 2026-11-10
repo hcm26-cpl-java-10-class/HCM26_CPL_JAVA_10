@@ -1,3 +1,4 @@
+import styles from "./WorkspaceArtifactsPanel.module.css";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -13,7 +14,6 @@ import {
   CheckCircle2,
   CircleX,
   Clock3,
-  Layers3,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -176,26 +176,18 @@ export function WorkspaceArtifactsPanel({
   const pageRows = filteredRows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const clearFilters = () => { setSearch(""); setMilestoneFilter("ALL"); setStatusFilter("ALL"); setPage(0); };
   const singleRow = milestone ? rows[0] : null;
-
-  return (
-    <div className="min-w-0 space-y-3">
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card px-4 py-2 shadow-sm" aria-labelledby="workspace-artifacts-title">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300"><Layers3 className="size-4" /></span>
-          <div className="min-w-0">
-            <h2 id="workspace-artifacts-title" className="text-sm font-semibold leading-5">{milestone ? "Submit and track artifacts" : "Artifact management"}</h2>
-            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Track deliverables, submitted versions, and review outcomes for your team's milestones.</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+  const toolbarActions = <div className="flex flex-wrap items-center gap-2">
         {isStudent && <Button type="button" variant="outline" size="sm" className="h-8 text-xs" title="View your submissions across all projects" onClick={() => navigate("/student/milestone-submissions")}>
           <FileCheck2 className="size-3.5" />My Submissions
         </Button>}
         <Button type="button" variant="outline" size="sm" className="h-8 text-xs" disabled={refreshing} onClick={() => { refreshMilestones(); void submissionsQuery.refetch(); }}>
           <RotateCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />Refresh
         </Button>
-        </div>
-      </section>
+  </div>;
+
+  return (
+    <div className="min-w-0 space-y-3">
+      {(milestone || milestoneError) && <div className="flex flex-wrap justify-end gap-2">{toolbarActions}</div>}
 
       {submissionsQuery.isError && !milestoneError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-xs">
         <span>Could not load artifact history. Versions and review outcomes have not been verified.</span>
@@ -234,11 +226,12 @@ export function WorkspaceArtifactsPanel({
             <option value="ALL">All statuses</option>
             {Object.entries(ARTIFACT_REVIEW_STATES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
           </select>
+          {toolbarActions}
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-t pt-2.5 text-[10px]" aria-live="polite">
+        <div className="flex flex-wrap items-center gap-2 border-t pt-2.5 text-xs" aria-live="polite">
           <span className="font-medium uppercase tracking-wide text-muted-foreground">Overview</span>
-          <Badge variant="secondary" className="rounded px-2 py-0.5 text-[10px]">Total: {loadingMilestones ? "—" : rows.length}</Badge>
-          {(["ACCEPTED", "SUBMITTED", "CHANGES_REQUESTED", "REJECTED"] as const).map(key => <Badge key={key} variant="outline" className={`rounded px-2 py-0.5 text-[10px] ${ARTIFACT_REVIEW_STATES[key].tone}`}>
+          <Badge variant="secondary" className="rounded px-2 py-0.5 text-xs">Total: {loadingMilestones ? "—" : rows.length}</Badge>
+          {(["ACCEPTED", "SUBMITTED", "CHANGES_REQUESTED", "REJECTED"] as const).map(key => <Badge key={key} variant="outline" className={`rounded px-2 py-0.5 text-xs ${ARTIFACT_REVIEW_STATES[key].tone}`}>
             <span className="size-1.5 rounded-full bg-current" />{ARTIFACT_REVIEW_STATES[key].label}: {historyReady ? counts[key] ?? 0 : "—"}
           </Badge>)}
         </div>
@@ -253,14 +246,14 @@ export function WorkspaceArtifactsPanel({
           : milestones.length === 0 ? <div className="grid justify-items-center gap-2 px-5 py-12 text-center"><FolderOpen className="size-9 text-muted-foreground/60" /><h3 className="text-sm font-semibold">No milestones in this workspace yet</h3><p className="max-w-md text-xs text-muted-foreground">You can submit and track deliverables here once an instructor or administrator creates milestones for your team.</p></div>
           : <>
             <div className="min-w-0 overflow-x-auto overscroll-x-contain" role="region" aria-label="Artifacts table; scroll horizontally when needed" tabIndex={0}>
-              <Table className="min-w-[970px] table-fixed text-xs">
+              <Table className="min-w-[1200px] table-fixed text-sm">
                 <TableHeader className="bg-muted/40"><TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[25%] px-4 py-3 text-[10px] font-semibold uppercase tracking-wide">Deliverable</TableHead>
-                  <TableHead className="w-[16%] px-3 text-[10px] font-semibold uppercase tracking-wide">Milestone</TableHead>
-                  <TableHead className="w-[15%] px-3 text-[10px] font-semibold uppercase tracking-wide">Deadline</TableHead>
-                  <TableHead className="w-[14%] px-3 text-[10px] font-semibold uppercase tracking-wide">Versions & submissions</TableHead>
-                  <TableHead className="w-[15%] px-3 text-[10px] font-semibold uppercase tracking-wide">Review status</TableHead>
-                  <TableHead className="w-[15%] px-3 text-right text-[10px] font-semibold uppercase tracking-wide">Actions</TableHead>
+                  <TableHead className="w-[22%] px-4 py-3 text-xs font-semibold uppercase tracking-wide">Deliverable</TableHead>
+                  <TableHead className="w-[14%] px-3 text-xs font-semibold uppercase tracking-wide">Milestone</TableHead>
+                  <TableHead className="w-[14%] px-3 text-xs font-semibold uppercase tracking-wide">Deadline</TableHead>
+                  <TableHead className="w-[12%] px-3 text-xs font-semibold uppercase tracking-wide">Versions & submissions</TableHead>
+                  <TableHead className="w-[12%] px-3 text-xs font-semibold uppercase tracking-wide">Review status</TableHead>
+                  <TableHead className="w-[26%] px-3 text-right text-xs font-semibold uppercase tracking-wide">Actions</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {pageRows.map(({ milestone: item, latest, history, state }) => {
@@ -268,31 +261,32 @@ export function WorkspaceArtifactsPanel({
                     const status = ARTIFACT_REVIEW_STATES[state];
                     const canResubmit = historyReady && !readOnly && state === "CHANGES_REQUESTED" && isStudent && hasPermission("ARTIFACT_SUBMIT");
                     const hasSubmission = Boolean(latest);
-                    return <TableRow key={item.id} className="align-top hover:bg-muted/20">
-                      <TableCell className="whitespace-normal px-4 py-3"><div className="flex min-w-0 items-start gap-2.5">
+                    return <TableRow key={item.id} className="h-24 hover:bg-muted/20">
+                      <TableCell className="whitespace-normal px-4 py-2"><div className={styles.cell}><div className="flex min-w-0 items-start gap-2.5">
                         <span className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border ${status.tone}`}><FileCheck2 className="size-4" /></span>
-                        <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-1.5 gap-y-1"><span className="line-clamp-2 break-words font-semibold [overflow-wrap:anywhere]" title={item.title || undefined}>{item.title || "Untitled milestone"}</span>{item.mandatory && <Badge variant="secondary" className="rounded px-1 py-0 text-[9px]">Required</Badge>}</div>
-                          <p className="mt-1 line-clamp-2 break-words text-[11px] leading-4 text-muted-foreground [overflow-wrap:anywhere]" title={item.description || undefined}>{item.description?.trim() || "No description provided."}</p>
+                        <div className="min-w-0 flex-1"><div className="flex min-w-0 items-start gap-1.5"><span className="min-w-0 flex-1 line-clamp-2 break-words font-semibold leading-5 [overflow-wrap:anywhere]" title={item.title || undefined}>{item.title || "Untitled milestone"}</span>{item.mandatory && <Badge variant="secondary" className="shrink-0 rounded px-1 py-0 text-xs">Required</Badge>}</div>
+                          <p className="mt-1 line-clamp-2 break-words text-xs leading-4 text-muted-foreground [overflow-wrap:anywhere]" title={item.description || undefined}>{item.description?.trim() || "No description provided."}</p>
                         </div>
-                      </div></TableCell>
-                      <TableCell className="whitespace-normal px-3 py-3"><button type="button" className="max-w-full rounded-md border border-blue-100 bg-blue-50/60 px-2 py-1.5 text-left text-[11px] leading-4 text-blue-700 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300" onClick={() => navigate(`/teams/${teamId}/milestones/${item.id}${workspaceId ? `?workspaceId=${workspaceId}` : ""}`)} title="View milestone"><span className="line-clamp-2 break-words [overflow-wrap:anywhere]">{item.title || "Untitled milestone"}</span></button></TableCell>
-                      <TableCell className="whitespace-normal px-3 py-3">{deadline ? <div className="space-y-1.5"><span className="flex items-start gap-1.5 leading-4"><CalendarClock className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" /><time dateTime={deadline.date.toISOString()}>{deadline.label}</time></span>{deadline.past && <span className="inline-block rounded border border-rose-100 bg-rose-50 px-1.5 py-0.5 text-[10px] text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300" title="The deadline has passed. See submission timing in the version column.">Deadline passed</span>}</div> : <span className="text-muted-foreground">No deadline set</span>}</TableCell>
-                      <TableCell className="whitespace-normal px-3 py-3">{submissionsQuery.isPending ? <Skeleton className="h-5 w-20" /> : !historyReady ? <span className="text-muted-foreground">Not verified</span> : latest ? <div className="space-y-1.5"><span className="inline-block rounded bg-emerald-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">{state === "DRAFT" ? "Draft" : "Submitted"} v{latest.version ?? "—"}</span><p className="text-[10px] leading-4 text-muted-foreground">{history.length} {history.length === 1 ? "version" : "versions"} in history</p>{latest.submittedLate === true ? <span className="text-[10px] text-amber-700 dark:text-amber-300">Submitted late{latest.latePenaltyPercent != null ? ` (−${latest.latePenaltyPercent}%)` : ""}</span> : latest.submittedLate === false ? <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><CheckCircle2 className="size-3 text-emerald-600" />Submitted on time</span> : null}</div> : <span className="text-muted-foreground">No versions yet</span>}</TableCell>
-                      <TableCell className="whitespace-normal px-3 py-3">{submissionsQuery.isPending ? <Skeleton className="h-5 w-24" /> : <Badge variant="outline" className={`max-w-full gap-1 rounded-full px-2 py-1 text-[10px] leading-4 whitespace-normal ${status.tone}`}>
+                      </div></div></TableCell>
+                      <TableCell className="whitespace-normal px-3 py-2"><div className={styles.cell}><button type="button" className="max-w-full rounded-md border border-blue-100 bg-blue-50/60 px-2 py-1.5 text-left text-xs leading-4 text-blue-700 hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300" onClick={() => navigate(`/teams/${teamId}/milestones/${item.id}${workspaceId ? `?workspaceId=${workspaceId}` : ""}`)} title="View milestone"><span className="line-clamp-2 break-words [overflow-wrap:anywhere]">{item.title || "Untitled milestone"}</span></button></div></TableCell>
+                      <TableCell className="whitespace-normal px-3 py-2"><div className={styles.cell}>{deadline ? <div className="space-y-1.5"><span className="flex items-start gap-1.5 leading-4"><CalendarClock className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" /><time dateTime={deadline.date.toISOString()}>{deadline.label}</time></span>{deadline.past && <span className="inline-block rounded border border-rose-100 bg-rose-50 px-1.5 py-0.5 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300" title="The deadline has passed. See submission timing in the version column.">Deadline passed</span>}</div> : <span className="text-muted-foreground">No deadline set</span>}</div></TableCell>
+                      <TableCell className="whitespace-normal px-3 py-2"><div className={styles.cell}>{submissionsQuery.isPending ? <Skeleton className="h-5 w-20" /> : !historyReady ? <span className="text-muted-foreground">Not verified</span> : latest ? <div className="space-y-1.5"><span className="inline-block rounded bg-emerald-700 px-1.5 py-0.5 text-xs font-semibold text-white">{state === "DRAFT" ? "Draft" : "Submitted"} v{latest.version ?? "—"}</span><p className="text-xs leading-4 text-muted-foreground">{history.length} {history.length === 1 ? "version" : "versions"} in history</p>{latest.submittedLate === true ? <span className="text-xs text-amber-700 dark:text-amber-300">Submitted late{latest.latePenaltyPercent != null ? ` (−${latest.latePenaltyPercent}%)` : ""}</span> : latest.submittedLate === false ? <span className="flex items-center gap-1 text-xs text-muted-foreground"><CheckCircle2 className="size-3 text-emerald-600" />Submitted on time</span> : null}</div> : <span className="text-muted-foreground">No versions yet</span>}</div></TableCell>
+                      <TableCell className="whitespace-normal px-3 py-2"><div className={styles.cell}>{submissionsQuery.isPending ? <Skeleton className="h-5 w-24" /> : <Badge variant="outline" className={`max-w-full gap-1 rounded-full px-2 py-1 text-xs leading-4 whitespace-normal ${status.tone}`}>
                         {state === "ACCEPTED" ? <CheckCircle2 className="size-3 shrink-0" /> : state === "REJECTED" ? <CircleX className="size-3 shrink-0" /> : <Clock3 className="size-3 shrink-0" />}{historyReady ? status.label : "Not verified"}
-                      </Badge>}</TableCell>
-                      <TableCell className="whitespace-normal px-3 py-3"><div className="flex flex-col items-end gap-2">
-                        <Button type="button" variant="outline" size="sm" className="h-auto min-h-8 max-w-full gap-1.5 whitespace-normal px-2 py-1 text-[11px]" onClick={() => setHistoryMilestone(item)} title="View the history of all submitted versions"><History className="size-3.5 shrink-0" />Submission history {historyReady ? `(${history.length})` : ""}</Button>
-                        {canResubmit ? <Button type="button" size="sm" variant="secondary" className="h-auto min-h-7 max-w-full gap-1 whitespace-normal border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-900 hover:bg-amber-100" onClick={() => handleOpenSubmit(item.id)}><Send className="size-3 shrink-0" />Resubmit v{(latest?.version ?? 0) + 1}</Button> : !hasSubmission ? <Button type="button" size="sm" className="h-auto min-h-7 max-w-full gap-1 whitespace-normal px-2 py-1 text-[10px]" disabled={readOnly || !hasPermission("ARTIFACT_SUBMIT") || !historyReady || (item.lifecycleStatus !== "IN_PROGRESS" && item.lifecycleStatus !== "CHANGES_REQUESTED")} onClick={() => handleOpenSubmit(item.id)} title={item.lifecycleStatus === "PLANNED" ? "This milestone is not open for submissions." : "Prepare and submit an artifact for this milestone"}><Upload className="size-3 shrink-0" />Submit artifact</Button> : null}
-                        {item.lifecycleStatus === "PLANNED" && !hasSubmission && <span className="text-right text-[10px] leading-4 text-muted-foreground">This milestone is not open for submissions.</span>}
-                      </div></TableCell>
+                      </Badge>}</div></TableCell>
+                      <TableCell className="whitespace-normal px-3 py-2"><div className={styles.cell}><div className={styles.actions}><div className={styles.actionButtons}>
+                        <Button type="button" variant="outline" size="sm" className="h-8 min-h-8 max-w-full shrink-0 gap-1.5 whitespace-nowrap px-2 py-1 text-xs leading-4" onClick={() => setHistoryMilestone(item)} title="View the history of all submitted versions"><History className="size-3.5 shrink-0" />Submission history {historyReady ? `(${history.length})` : ""}</Button>
+                        {canResubmit ? <Button type="button" size="sm" variant="secondary" className="h-8 min-h-8 max-w-full shrink-0 gap-1 whitespace-nowrap border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900 hover:bg-amber-100" onClick={() => handleOpenSubmit(item.id)}><Send className="size-3 shrink-0" />Resubmit v{(latest?.version ?? 0) + 1}</Button> : !hasSubmission ? <Button type="button" size="sm" className="h-8 min-h-8 max-w-full shrink-0 gap-1 whitespace-nowrap px-2 py-1 text-xs" disabled={readOnly || !hasPermission("ARTIFACT_SUBMIT") || !historyReady || (item.lifecycleStatus !== "IN_PROGRESS" && item.lifecycleStatus !== "CHANGES_REQUESTED")} onClick={() => handleOpenSubmit(item.id)} title={item.lifecycleStatus === "PLANNED" ? "This milestone is not open for submissions." : "Prepare and submit an artifact for this milestone"}><Upload className="size-3 shrink-0" />Submit artifact</Button> : null}
+                        </div>
+                        {item.lifecycleStatus === "PLANNED" && !hasSubmission && <span className="line-clamp-2 text-right text-xs leading-4 text-muted-foreground">This milestone is not open for submissions.</span>}
+                      </div></div></TableCell>
                     </TableRow>;
                   })}
                   {filteredRows.length === 0 && <TableRow><TableCell colSpan={6} className="px-4 py-12 text-center"><p className="font-medium">No matching deliverables</p><p className="mt-1 text-xs text-muted-foreground">Try another search term or clear the current filters.</p><Button type="button" variant="outline" size="sm" className="mt-3" onClick={clearFilters}>Clear filters</Button></TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/20 px-4 py-2.5 text-[11px] text-muted-foreground" aria-live="polite">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/20 px-4 py-2.5 text-xs text-muted-foreground" aria-live="polite">
               <span>Showing {pageRows.length ? currentPage * pageSize + 1 : 0}–{Math.min((currentPage + 1) * pageSize, filteredRows.length)} of {filteredRows.length} deliverables{filteredRows.length !== rows.length ? ` (total ${rows.length})` : ""}</span>
               <div className="flex items-center gap-1"><Button type="button" variant="outline" size="icon-sm" className="size-7" aria-label="Previous page" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}><ChevronLeft className="size-3.5" /></Button><span className="min-w-12 text-center tabular-nums">{currentPage + 1} / {pageCount}</span><Button type="button" variant="outline" size="icon-sm" className="size-7" aria-label="Next page" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}><ChevronRight className="size-3.5" /></Button></div>
             </div>
@@ -371,11 +365,11 @@ export function WorkspaceArtifactsPanel({
                         </TableCell>
                         <TableCell>
                           {submission.submittedLate ? (
-                            <Badge variant="destructive" className="text-[11px]">
+                            <Badge variant="destructive" className="text-xs">
                               Late{submission.latePenaltyPercent != null ? ` (-${submission.latePenaltyPercent}%)` : ""}
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50 text-[11px]">
+                            <Badge variant="outline" className="border-emerald-300 text-emerald-700 bg-emerald-50 text-xs">
                               On time
                             </Badge>
                           )}
