@@ -50,6 +50,13 @@ public class LessonProgress extends BaseEntity {
     @Column(name = "last_accessed_at")
     LocalDateTime lastAccessedAt;
 
+    /**
+     * Tổng số giây học viên đã dành cho bài học này (tích luỹ qua các lần ghi nhận
+     * thời lượng học). Dùng để tính "số giờ học" trong Course Analytics.
+     */
+    @Column(name = "study_seconds")
+    Long studySeconds;
+
     @Lob
     @Column(name = "student_answer")
     String studentAnswer;

@@ -26,4 +26,8 @@ public class CourseReportDTO {
     private int completionRate;
     private long certificatesIssued;
     private List<CourseLearnerReportDTO> learners;
+    /** Ảnh bìa khóa học (dùng cho card chọn khóa học trong Course Analytics). */
+    private String thumbnailUrl;
+    /** Số bài học active của khóa học. */
+    private int lessonCount;
 }

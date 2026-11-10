@@ -76,6 +76,7 @@ import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
 
 import CourseReportPage from "@/pages/management/demo/report";
 import StudentAnalyticsPage from "@/pages/management/analytics/StudentAnalyticsPage";
+import CourseAnalyticsPage from "@/pages/management/demo/analytics";
 import { CourseEnrollmentDetailPage } from "@/pages/management/demo/course/pages/CourseEnrollmentDetailPage";
 import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-questions";
 import LessonReportsPage from "@/pages/management/demo/lesson-reports";
@@ -503,6 +504,12 @@ export const routes: RouteConfig[] = [
   {
     path: "/course-enrollments",
     component: CourseReportPage,
+    requiredPermission: "COURSE_REPORT_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/course-analytics",
+    component: CourseAnalyticsPage,
     requiredPermission: "COURSE_REPORT_READ",
     isModuleDriven: true,
   },

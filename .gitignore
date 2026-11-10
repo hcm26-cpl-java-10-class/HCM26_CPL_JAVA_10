@@ -53,6 +53,9 @@ docker/.env
 # === Nested clone / local workspace folder ===
 HCM26_CPL_JAVA_10/
 frontend-dev.err
+frontend/vite.err
+frontend/vite.out
+backend/portability-test.log
 
 # === Runtime uploaded files (khong commit) ===
 uploads/

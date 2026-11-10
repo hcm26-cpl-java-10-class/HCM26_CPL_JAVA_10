@@ -14,6 +14,8 @@ export interface LessonProgressItem {
   completed: boolean;
   completedAt?: string | null;
   lastAccessedAt?: string | null;
+  /** Tổng số giây học viên đã dành cho bài học này. */
+  studySeconds?: number | null;
 }
 
 export interface EnrollmentProgress {
