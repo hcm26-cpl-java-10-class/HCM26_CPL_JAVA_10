@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import type { TraineeImportRow } from "@/api/features/class-enrollment.api";
 
-export const TRAINEE_IMPORT_HEADERS = ["Student ID*", "Full Name*", "Personal Email", "DOB", "Gender"];
+export const TRAINEE_IMPORT_HEADERS = ["Student ID*", "Full Name*", "Personal Email", "DOB", "Gender", "Status"];
 export const MAX_TRAINEE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_TRAINEE_IMPORT_ROWS = 500;
 
@@ -11,15 +11,16 @@ export interface TraineeImportIssue {
     message: string;
 }
 
-const HEADER_ALIASES: Record<"studentId" | "fullName" | "personalEmail" | "dob" | "gender", readonly string[]> = {
+const HEADER_ALIASES: Record<"studentId" | "fullName" | "personalEmail" | "dob" | "gender" | "status", readonly string[]> = {
     studentId: ["student id", "fpt student id", "student code", "code", "fpt account", "ma sinh vien", "mã sinh viên", "ma hoc vien", "mã học viên"],
     fullName: ["full name", "fullname", "name", "student name", "ho va ten", "họ và tên", "ho ten", "họ tên"],
     personalEmail: ["personal email", "email", "mail", "e-mail"],
     dob: ["dob", "date of birth", "birth date", "birthdate", "ngay sinh", "ngày sinh"],
     gender: ["gender", "sex", "gioi tinh", "giới tính"],
+    status: ["status", "trạng thái", "trang thai", "enrollment status", "student status"],
 };
 
-const IGNORED_LEGACY_HEADERS = new Set(["national id", "cccd", "cmnd", "status", "trạng thái", "trang thai", "no", "no."]);
+const IGNORED_LEGACY_HEADERS = new Set(["national id", "cccd", "cmnd", "no", "no."]);
 
 const MONTH_MAP: Record<string, number> = {
     jan: 1, january: 1,
@@ -147,29 +148,102 @@ export function normalizeImportedGender(raw: string): { value: string; valid: bo
     return { value: cleaned, valid: false };
 }
 
+export function normalizeImportedStatus(raw: string): { value: string; valid: boolean } {
+    const cleaned = cleanText(raw);
+    if (!cleaned) return { value: "Active", valid: true };
+    const lower = cleaned.toLowerCase();
+    if (lower === "active" || lower === "hoạt động" || lower === "hoat dong") return { value: "Active", valid: true };
+    if (lower === "inactive" || lower === "không hoạt động" || lower === "khong hoat dong") return { value: "Inactive", valid: true };
+    if (lower === "dropped" || lower === "dropped out" || lower === "dropped_out" || lower === "bỏ học" || lower === "bo hoc") return { value: "Dropped", valid: true };
+    return { value: cleaned, valid: false };
+}
+
+export const DEFAULT_TRAINEE_COL_MIN_WIDTHS: Record<string, number> = {
+    "no.": 6,
+    "full name": 25,
+    "full name*": 25,
+    "student id": 14,
+    "student id*": 14,
+    "personal email": 30,
+    email: 30,
+    dob: 15,
+    gender: 10,
+    status: 12,
+};
+
+/**
+ * Dynamically calculates and sets SheetJS column widths (`!cols`) so that
+ * headers and cell contents fit comfortably without manual resizing in Excel.
+ */
+export function autoFitWorksheetColumns(
+    worksheet: XLSX.WorkSheet,
+    minWidths: Record<string, number> = DEFAULT_TRAINEE_COL_MIN_WIDTHS,
+): XLSX.WorkSheet {
+    const ref = worksheet["!ref"];
+    if (!ref) return worksheet;
+
+    const range = XLSX.utils.decode_range(ref);
+    const cols: XLSX.ColInfo[] = [];
+
+    for (let c = range.s.c; c <= range.e.c; c += 1) {
+        const headerCell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c })] as
+            | XLSX.CellObject
+            | undefined;
+        const headerText = headerCell
+            ? String(headerCell.w ?? headerCell.v ?? "").normalize("NFC").trim()
+            : "";
+
+        let maxLen = headerText.length;
+
+        for (let r = range.s.r + 1; r <= range.e.r; r += 1) {
+            const cell = worksheet[XLSX.utils.encode_cell({ r, c })] as XLSX.CellObject | undefined;
+            if (!cell) continue;
+            const rawText = String(cell.w ?? cell.v ?? "").normalize("NFC");
+            for (const line of rawText.split(/\r?\n/)) {
+                if (line.length > maxLen) {
+                    maxLen = line.length;
+                }
+            }
+        }
+
+        const normalizedKey = headerText.toLowerCase();
+        const minWidth =
+            minWidths[headerText] ??
+            minWidths[normalizedKey] ??
+            DEFAULT_TRAINEE_COL_MIN_WIDTHS[normalizedKey] ??
+            10;
+
+        cols.push({ wch: Math.max(minWidth, maxLen + 5) });
+    }
+
+    worksheet["!cols"] = cols;
+    return worksheet;
+}
+
 export function traineeTemplate(): XLSX.WorkBook {
     const book = XLSX.utils.book_new();
     const sampleRows = [
         TRAINEE_IMPORT_HEADERS,
-        ["SE180101", "John Doe", "john.doe@example.com", "23/08/2004", "Male"],
-        ["SS180102", "Jane Smith", "jane.smith@example.com", "2004-01-28", "Female"],
+        ["SE180101", "John Doe", "john.doe@example.com", "23/08/2004", "Male", "Active"],
+        ["SS180102", "Jane Smith", "jane.smith@example.com", "2004-01-28", "Female", "Active"],
     ];
-    const sheet = XLSX.utils.aoa_to_sheet(sampleRows);
-    sheet["!cols"] = [{ wch: 18 }, { wch: 28 }, { wch: 30 }, { wch: 18 }, { wch: 14 }];
+    const sheet = autoFitWorksheetColumns(XLSX.utils.aoa_to_sheet(sampleRows));
     XLSX.utils.book_append_sheet(book, sheet, "Trainees");
-    XLSX.utils.book_append_sheet(
-        book,
+    const instructionsSheet = autoFitWorksheetColumns(
         XLSX.utils.aoa_to_sheet([
             ["Column", "Requirement & Format"],
             ["Student ID*", "Required. 2–64 letters, digits, underscores or hyphens (e.g. SE180101)."],
             ["Full Name*", "Required. Maximum 100 characters."],
-            ["Personal Email", "Optional. Valid email format (e.g. student@gmail.com)."],
+            ["Personal Email", "Optional. Valid email format (e.g. student@gmail.com). Must be unique."],
             ["DOB", "Optional. Supports DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, DD-MMM-YYYY, or Excel Date cell."],
             ["Gender", "Optional. Male, Female, or Other (case-insensitive)."],
+            ["Status", "Optional. Active, Inactive, or Dropped (defaults to Active)."],
             ["Limits", "XLSX only, up to 2 MB and 500 rows per import."],
+            ["Policy", "Strict All-or-Nothing: If any single row contains an error, zero rows will be imported."],
         ]),
-        "Instructions",
+        { Column: 18, "Requirement & Format": 60 },
     );
+    XLSX.utils.book_append_sheet(book, instructionsSheet, "Instructions");
     return book;
 }
 
@@ -240,6 +314,7 @@ export function parseTraineeWorkbook(book: XLSX.WorkBook): {
     const todayIso = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
     const date1904 = !!book.Workbook?.WBProps?.date1904;
     const seenStudentIds = new Map<string, number[]>();
+    const seenEmails = new Map<string, number[]>();
 
     cells.slice(1).forEach((values, index) => {
         if (values.every((v) => !cleanText(v))) return;
@@ -255,6 +330,7 @@ export function parseTraineeWorkbook(book: XLSX.WorkBook): {
         const personalEmail = cleanText(getCell("personalEmail"));
         const parsedDob = parseFlexibleDob(getCell("dob"), date1904);
         const parsedGender = normalizeImportedGender(cleanText(getCell("gender")));
+        const parsedStatus = normalizeImportedStatus(cleanText(getCell("status")));
 
         const row: TraineeImportRow = {
             rowNumber,
@@ -263,6 +339,7 @@ export function parseTraineeWorkbook(book: XLSX.WorkBook): {
             personalEmail,
             dob: parsedDob.iso,
             gender: parsedGender.value,
+            status: parsedStatus.value,
         };
 
         const addIssue = (field: string, message: string) => issues.push({ rowNumber, field, message });
@@ -291,9 +368,16 @@ export function parseTraineeWorkbook(book: XLSX.WorkBook): {
         if (!parsedGender.valid) {
             addIssue("gender", "Gender must be Male, Female or Other.");
         }
+        if (!parsedStatus.valid) {
+            addIssue("status", "Status must be Active, Inactive or Dropped.");
+        }
 
         if (studentId) {
             seenStudentIds.set(studentId, [...(seenStudentIds.get(studentId) ?? []), rowNumber]);
+        }
+        if (personalEmail) {
+            const lowerEmail = personalEmail.toLowerCase();
+            seenEmails.set(lowerEmail, [...(seenEmails.get(lowerEmail) ?? []), rowNumber]);
         }
         rows.push(row);
     });
@@ -305,6 +389,18 @@ export function parseTraineeWorkbook(book: XLSX.WorkBook): {
                     rowNumber,
                     field: "studentId",
                     message: "Duplicate Student ID within the file.",
+                });
+            }
+        }
+    }
+
+    for (const duplicateRows of seenEmails.values()) {
+        if (duplicateRows.length > 1) {
+            for (const rowNumber of duplicateRows) {
+                issues.push({
+                    rowNumber,
+                    field: "personalEmail",
+                    message: "Duplicate Personal Email within the file.",
                 });
             }
         }

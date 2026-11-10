@@ -37,9 +37,9 @@ describe("Trainee Excel preview, smart validation, and confirmation", () => {
         const parsed = parseTraineeWorkbook(book);
         expect(parsed.issues).toEqual([]);
         expect(parsed.rows).toEqual([
-            { rowNumber: 2, studentId: "SE180101", fullName: "Hoàng Phương Bình", personalEmail: "phuongbinh@gmail.com", dob: "2004-08-23", gender: "Male" },
-            { rowNumber: 3, studentId: "SS180102", fullName: "Trần Việt Anh", personalEmail: "anhviet@gmail.com", dob: "2004-01-28", gender: "Female" },
-            { rowNumber: 4, studentId: "AI180103", fullName: "Trần Vũ Gia Bảo", personalEmail: "baohse@gmail.com", dob: "2003-09-23", gender: "Male" },
+            { rowNumber: 2, studentId: "SE180101", fullName: "Hoàng Phương Bình", personalEmail: "phuongbinh@gmail.com", dob: "2004-08-23", gender: "Male", status: "Active" },
+            { rowNumber: 3, studentId: "SS180102", fullName: "Trần Việt Anh", personalEmail: "anhviet@gmail.com", dob: "2004-01-28", gender: "Female", status: "Active" },
+            { rowNumber: 4, studentId: "AI180103", fullName: "Trần Vũ Gia Bảo", personalEmail: "baohse@gmail.com", dob: "2003-09-23", gender: "Male", status: "Active" },
         ]);
     });
     it("downloads the template, sends nothing on file selection, previews without saving, and imports only after Confirm", async () => {
@@ -47,6 +47,10 @@ describe("Trainee Excel preview, smart validation, and confirmation", () => {
         const { user } = renderAt(<TraineeImportModal open classId={12} onOpenChange={close} />, { route: "/classes/12" });
         await user.click(screen.getByRole("button", { name: "Download Template" }));
         expect(XLSX.writeFile).toHaveBeenCalledOnce();
+        const templateBook = vi.mocked(XLSX.writeFile).mock.calls[0][0];
+        const templateCols = templateBook.Sheets.Trainees["!cols"] ?? [];
+        expect(templateCols.map((c) => c.wch)).toEqual([16, 25, 30, 15, 11, 12]);
+        expect(templateBook.Sheets.Instructions["!cols"]?.length).toBe(2);
         await user.upload(screen.getByLabelText(/Select Excel file/), file());
         expect(fakeHttp.calls).toHaveLength(0);
         expect(screen.getByRole("button", { name: /Confirm Import/ })).toBeDisabled();
@@ -77,6 +81,17 @@ describe("Trainee Excel preview, smart validation, and confirmation", () => {
         await user.click(screen.getByRole("button", { name: /Preview & Validate/ }));
         expect(await screen.findByText(/studentId: Student ID is required/)).toBeInTheDocument();
         expect(fakeHttp.calls).toHaveLength(0);
+    });
+    it("strictly enforces all-or-nothing on duplicate emails or invalid status", () => {
+        const book = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
+            ["Student ID*", "Full Name*", "Personal Email", "DOB", "Gender", "Status"],
+            ["SE999001", "Student One", "dup@test.com", "2000-01-01", "Male", "Active"],
+            ["SE999002", "Student Two", "dup@test.com", "2000-01-02", "Female", "UnknownStatus"],
+        ]), "Trainees");
+        const parsed = parseTraineeWorkbook(book);
+        expect(parsed.issues.some((i) => i.field === "personalEmail" && i.message.includes("Duplicate"))).toBe(true);
+        expect(parsed.issues.some((i) => i.field === "status" && i.message.includes("Status must be Active"))).toBe(true);
     });
     it("requires a new preview after stale capacity is rejected at Confirm", async () => {
         fakeHttp.on("post", "/classes/12/trainees/import", () => { throw httpError(400, { message: "Validation failed", errors: { "rows[2].capacity": ["Class capacity changed"] } }); });
@@ -147,8 +162,58 @@ describe("Trainee Excel preview, smart validation, and confirmation", () => {
         await user.click(screen.getByRole("checkbox", { name: "Select Test Student 11" }));
         await user.click(screen.getByRole("button", { name: /Export Selected/ }));
         const workbook = vi.mocked(XLSX.writeFile).mock.calls[0][0];
-        const exported = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[workbook.SheetNames[0]]);
+        const exportedSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const exported = XLSX.utils.sheet_to_json<Record<string, unknown>>(exportedSheet);
         expect(exported).toHaveLength(1); expect(exported[0]["Student ID"]).toBe("STUDENT_11");
         expect(exported[0]).not.toHaveProperty("National ID");
+        expect(exportedSheet["!cols"]?.map((c) => c.wch)).toEqual([8, 25, 15, 30, 15, 11, 12]);
+    });
+    it("selects and deselects trainees across all paginated pages with accurate header checkbox states and bulk actions", async () => {
+        const trainees = Array.from({ length: 14 }, (_, index) => ({
+            id: index + 1,
+            fptAccount: `STUDENT_${index + 1}`,
+            fullName: `Test Student ${index + 1}`,
+            status: "Active",
+        }));
+        fakeHttp.on("get", "/classes/12/trainees", trainees);
+        const { user } = renderAt(<TraineeListTab classItem={{ id: 12, traineeSource: "internal" }} />, { route: "/classes/12" });
+        await screen.findByText("Showing 1–10 of 14 trainees");
+
+        const selectAll = screen.getByRole("checkbox", { name: "Select all trainees" });
+        expect(selectAll).toHaveAttribute("data-state", "unchecked");
+
+        // Click header checkbox selects ALL 14 trainees across all pages
+        await user.click(selectAll);
+        expect(screen.getByText("14 Trainees Selected")).toBeInTheDocument();
+        expect(selectAll).toHaveAttribute("data-state", "checked");
+
+        // Page 2 items are also checked
+        await user.click(screen.getByRole("button", { name: "Next trainees" }));
+        expect(await screen.findByText("Showing 11–14 of 14 trainees")).toBeInTheDocument();
+        expect(screen.getByRole("checkbox", { name: "Select Test Student 11" })).toBeChecked();
+        expect(screen.getByRole("checkbox", { name: "Select Test Student 14" })).toBeChecked();
+
+        // Unchecking 1 row puts header checkbox into indeterminate state and keeps 13 selected
+        await user.click(screen.getByRole("checkbox", { name: "Select Test Student 14" }));
+        expect(screen.getByText("13 Trainees Selected")).toBeInTheDocument();
+        expect(selectAll).toHaveAttribute("data-state", "indeterminate");
+        expect(selectAll).toHaveAttribute("aria-checked", "mixed");
+
+        // Export Selected operates across all pages (13 trainees)
+        await user.click(screen.getByRole("button", { name: /Export Selected/ }));
+        const workbook = vi.mocked(XLSX.writeFile).mock.calls[0][0];
+        const exported = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[workbook.SheetNames[0]]);
+        expect(exported).toHaveLength(13);
+
+        // Clicking indeterminate header checkbox selects all 14 again
+        await user.click(selectAll);
+        expect(screen.getByText("14 Trainees Selected")).toBeInTheDocument();
+        expect(selectAll).toHaveAttribute("data-state", "checked");
+
+        // Clicking checked header checkbox deselects all across all pages
+        await user.click(selectAll);
+        expect(screen.queryByText(/Trainees? Selected/)).not.toBeInTheDocument();
+        expect(selectAll).toHaveAttribute("data-state", "unchecked");
+        expect(screen.getByRole("checkbox", { name: "Select Test Student 11" })).not.toBeChecked();
     });
 });

@@ -16,6 +16,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useClasses } from "@/hooks/useClasses";
+import { cn } from "@/lib/utils";
 import { classTitle, getClassStatusMeta } from "@/utils/class.utils";
 import { ClassActivitiesTab } from "./ClassActivitiesTab";
 import { ClassBudgetTab } from "./ClassBudgetTab";
@@ -133,7 +134,7 @@ export function ClassDetailView() {
                 ...(identifier && resolvedName ? { [identifier]: resolvedName } : {}),
             }}
         >
-            <section className="w-full min-w-0 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col h-[calc(100vh-140px)] min-h-[620px] overflow-hidden">
+            <section className="w-full min-w-0 flex-1 min-h-0 rounded-xl border bg-card text-card-foreground shadow-sm flex flex-col overflow-hidden">
                 {!identifier ? (
                     <ApiErrorState
                         error={undefined}
@@ -198,12 +199,19 @@ export function ClassDetailView() {
                                 ))}
                             </TabsList>
 
-                            <div className="flex-1 min-h-0 overflow-y-auto p-5 fams-scrollbar">
+                            <div
+                                className={cn(
+                                    "flex-1 min-h-0 p-4 sm:p-5",
+                                    activeTab === "trainees"
+                                        ? "flex flex-col overflow-hidden"
+                                        : "overflow-y-auto fams-scrollbar",
+                                )}
+                            >
                                 <TabsContent value="info">
                                     <ClassInfoTab classItem={classItem} onNavigate={handleTabChange} />
                                 </TabsContent>
 
-                                <TabsContent value="trainees">
+                                <TabsContent value="trainees" className="m-0 flex-1 min-h-0 flex flex-col">
                                     <TraineeListTab
                                         key={classItem.id}
                                         classItem={classItem}

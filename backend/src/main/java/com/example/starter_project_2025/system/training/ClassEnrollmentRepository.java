@@ -12,4 +12,7 @@ public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment
     long countByTrainingClass_IdAndIsActiveTrueAndStatus(Long classId, ClassEnrollment.Status status);
     @Query("select count(e) from ClassEnrollment e where e.trainingClass.id = :classId and e.isActive = true and e.status <> com.example.starter_project_2025.system.training.ClassEnrollment.Status.DROPPED_OUT")
     long occupiedSeats(@Param("classId") Long classId);
+
+    @Query("select e from ClassEnrollment e where e.isActive = true and lower(e.personalEmail) in :emails")
+    List<ClassEnrollment> findActiveByPersonalEmailsIgnoreCase(@Param("emails") java.util.Collection<String> emails);
 }

@@ -10,6 +10,7 @@ export interface TraineeImportRow {
     nationalId?: string;
     dob?: string;
     gender?: string;
+    status?: string;
 }
 
 export interface TraineeImportPreview {
@@ -60,6 +61,7 @@ export const classEnrollmentApi = {
                         ...(row.personalEmail || row.dob || (row.gender && row.gender !== "Male")
                             ? { gender: row.gender }
                             : {}),
+                        ...(row.status && row.status !== "Active" ? { status: row.status } : {}),
                     })),
                     updated: payload.updated.map((row) => ({ id: row.id, status: row.status })),
                     deletedIds: payload.deletedIds,

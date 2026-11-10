@@ -38,7 +38,7 @@ public class ClassEnrollmentService {
             .withResolverStyle(ResolverStyle.STRICT);
 
     private record Candidate(MasterTraineeDirectory.Profile profile, String studentId, String fullName,
-                             String personalEmail, String dob, String gender) {}
+                             String personalEmail, String dob, String gender, ClassEnrollment.Status status) {}
     private record Validation(Preview preview, List<Candidate> candidates) {}
 
     public List<TraineeView> list(Long classId, boolean sensitive) {
@@ -69,19 +69,19 @@ public class ClassEnrollmentService {
     }
 
     public Preview preview(Long classId, List<Row> rows, boolean sensitive) {
-        return validate(requireClass(classId, false), rows).preview();
+        return validate(requireClass(classId, false), rows, sensitive).preview();
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public Imported importRows(Long classId, List<Row> rows, boolean sensitive) {
         var item = requireClass(classId, true);
-        var result = validate(item, rows);
+        var result = validate(item, rows, sensitive);
         rejectInvalid(result.preview());
         insertBatch(item, result.candidates());
         return new Imported(rows.size(), enrollments.occupiedSeats(classId));
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public BatchResult batch(Long classId, Batch batch, boolean sensitive) {
         var item = requireClass(classId, true);
         if (batch == null || batch.created() == null || batch.updated() == null || batch.deletedIds() == null
@@ -110,7 +110,7 @@ public class ClassEnrollmentService {
         }
         enrollments.flush();
         if (!batch.created().isEmpty()) {
-            var validation = validate(item, batch.created());
+            var validation = validate(item, batch.created(), sensitive);
             rejectInvalid(validation.preview());
             insertBatch(item, validation.candidates());
         }
@@ -120,7 +120,7 @@ public class ClassEnrollmentService {
         return new BatchResult("Enrollment changes saved", list(classId, sensitive), enrollments.occupiedSeats(classId));
     }
 
-    private Validation validate(TrainingClass item, List<Row> rows) {
+    private Validation validate(TrainingClass item, List<Row> rows, boolean sensitive) {
         if (!EDITABLE.contains(item.getStatus())) {
             throw new ConflictException("Enrollment changes are allowed only for planning, assigned or active classes.");
         }
@@ -130,9 +130,13 @@ public class ClassEnrollmentService {
 
         var pool = directory.load();
         Map<String, MasterTraineeDirectory.Profile> byCode = new HashMap<>();
+        Map<String, MasterTraineeDirectory.Profile> byEmail = new HashMap<>();
         for (var p : pool) {
             if (p.studentId() != null && !p.studentId().isBlank()) {
                 byCode.put(p.studentId().toUpperCase(Locale.ROOT), p);
+            }
+            if (p.personalEmail() != null && !p.personalEmail().isBlank()) {
+                byEmail.put(p.personalEmail().toLowerCase(Locale.ROOT).trim(), p);
             }
         }
 
@@ -154,11 +158,52 @@ public class ClassEnrollmentService {
                 .filter(s -> !s.isBlank())
                 .collect(Collectors.toSet());
 
+        Set<String> existingEmailsInClass = activeMemberships.stream()
+                .map(e -> {
+                    if (e.getPersonalEmail() != null && !e.getPersonalEmail().isBlank()) {
+                        return e.getPersonalEmail().toLowerCase(Locale.ROOT).trim();
+                    }
+                    return pool.stream()
+                            .filter(p -> Objects.equals(p.id(), e.getTraineeId()))
+                            .map(p -> p.personalEmail() != null ? p.personalEmail().toLowerCase(Locale.ROOT).trim() : "")
+                            .findFirst()
+                            .orElse("");
+                })
+                .filter(s -> !s.isBlank())
+                .collect(Collectors.toSet());
+
+        Set<String> batchEmails = rows.stream()
+                .filter(Objects::nonNull)
+                .map(r -> clean(r.personalEmail()).toLowerCase(Locale.ROOT))
+                .filter(e -> !e.isBlank())
+                .collect(Collectors.toSet());
+
+        Map<String, String> emailToExistingStudent = new HashMap<>();
+        if (!batchEmails.isEmpty()) {
+            List<ClassEnrollment> matchedEnrollments = enrollments.findActiveByPersonalEmailsIgnoreCase(batchEmails);
+            for (var me : matchedEnrollments) {
+                if (me.getPersonalEmail() != null && !me.getPersonalEmail().isBlank()) {
+                    String em = me.getPersonalEmail().toLowerCase(Locale.ROOT).trim();
+                    String stId = me.getStudentId() != null ? me.getStudentId().toUpperCase(Locale.ROOT) : "";
+                    emailToExistingStudent.putIfAbsent(em, stId);
+                }
+            }
+        }
+
         Map<String, Long> codeCounts = rows.stream()
                 .filter(Objects::nonNull)
-                .collect(Collectors.groupingBy(r -> clean(r.studentId()).toUpperCase(Locale.ROOT), Collectors.counting()));
+                .map(r -> clean(r.studentId()).toUpperCase(Locale.ROOT))
+                .filter(c -> !c.isBlank())
+                .collect(Collectors.groupingBy(c -> c, Collectors.counting()));
+
+        Map<String, Long> emailCounts = rows.stream()
+                .filter(Objects::nonNull)
+                .map(r -> clean(r.personalEmail()).toLowerCase(Locale.ROOT))
+                .filter(e -> !e.isBlank())
+                .collect(Collectors.groupingBy(e -> e, Collectors.counting()));
 
         Set<String> seenCodesInBatch = new HashSet<>();
+        Set<String> seenEmailsInBatch = new HashSet<>();
         List<RowResult> results = new ArrayList<>();
         List<Candidate> candidates = new ArrayList<>();
         Set<Integer> rowNumbers = new HashSet<>();
@@ -183,8 +228,10 @@ public class ClassEnrollmentService {
             String code = clean(row.studentId()).toUpperCase(Locale.ROOT);
             String fullName = clean(row.fullName());
             String email = clean(row.personalEmail());
+            String lowerEmail = email.toLowerCase(Locale.ROOT);
             String rawDob = clean(row.dob());
             String rawGender = clean(row.gender());
+            String rawStatus = clean(row.status());
 
             if (!code.matches("[A-Z0-9_-]{2,64}")) {
                 error(errors, "studentId", "Student ID is required and must contain 2–64 letters, digits, underscores or hyphens.");
@@ -211,8 +258,26 @@ public class ClassEnrollmentService {
                 error(errors, "gender", "Gender must be Male, Female or Other.");
             }
 
+            ClassEnrollment.Status parsedStatus = ClassEnrollment.Status.ACTIVE;
+            if (!rawStatus.isEmpty()) {
+                try {
+                    parsedStatus = parseStatus(rawStatus);
+                } catch (BadRequestException ex) {
+                    error(errors, "status", "Status must be Active, Inactive or Dropped.");
+                }
+            }
+
+            if (!sensitive && row.nationalId() != null && !row.nationalId().isBlank()) {
+                error(errors, "nationalId", "National ID cannot be submitted without permission.");
+            }
+
             if (!code.isEmpty() && codeCounts.getOrDefault(code, 0L) > 1) {
                 error(errors, "studentId", "Duplicate Student ID within the file.");
+                duplicate = true;
+            }
+
+            if (!lowerEmail.isEmpty() && emailCounts.getOrDefault(lowerEmail, 0L) > 1) {
+                error(errors, "personalEmail", "Duplicate Personal Email within the file.");
                 duplicate = true;
             }
 
@@ -232,6 +297,29 @@ public class ClassEnrollmentService {
                 }
             }
 
+            if (!lowerEmail.isEmpty()) {
+                boolean emailInThisClass = existingEmailsInClass.contains(lowerEmail);
+                if (emailInThisClass) {
+                    error(errors, "personalEmail", "Personal Email is already registered for an enrolled trainee in this class.");
+                    duplicate = true;
+                } else if (!seenEmailsInBatch.add(lowerEmail)) {
+                    if (!duplicate) {
+                        error(errors, "personalEmail", "Duplicate Personal Email within the file.");
+                        duplicate = true;
+                    }
+                } else {
+                    String existingStudentForEmail = emailToExistingStudent.get(lowerEmail);
+                    MasterTraineeDirectory.Profile profileForEmail = byEmail.get(lowerEmail);
+                    if (existingStudentForEmail != null && !existingStudentForEmail.isBlank() && !existingStudentForEmail.equalsIgnoreCase(code)) {
+                        error(errors, "personalEmail", "Personal Email is already registered to another trainee.");
+                        duplicate = true;
+                    } else if (profileForEmail != null && profileForEmail.studentId() != null && !profileForEmail.studentId().equalsIgnoreCase(code)) {
+                        error(errors, "personalEmail", "Personal Email is already registered to another student in the directory.");
+                        duplicate = true;
+                    }
+                }
+            }
+
             String finalEmail = !email.isEmpty() ? email : (existingProfile != null ? existingProfile.personalEmail() : "");
             String finalDob = !normalizedDob.isEmpty() ? normalizedDob : (existingProfile != null ? existingProfile.dob() : "");
             String finalGender = normalizedGender != null && !normalizedGender.isEmpty()
@@ -239,7 +327,7 @@ public class ClassEnrollmentService {
                     : (existingProfile != null && !existingProfile.gender().isBlank() ? existingProfile.gender() : "Male");
 
             results.add(new RowResult(number, errors.isEmpty(), duplicate, errors));
-            candidates.add(new Candidate(existingProfile, code, fullName, finalEmail, finalDob, finalGender));
+            candidates.add(new Candidate(existingProfile, code, fullName, finalEmail, finalDob, finalGender, parsedStatus));
         }
 
         long validCandidates = results.stream().filter(RowResult::valid).count();
@@ -283,7 +371,7 @@ public class ClassEnrollmentService {
             membership.setDob(c.dob());
             membership.setGender(c.gender());
             membership.setIsActive(true);
-            membership.setStatus(ClassEnrollment.Status.ACTIVE);
+            membership.setStatus(c.status() != null ? c.status() : ClassEnrollment.Status.ACTIVE);
             batchToSave.add(membership);
         }
         enrollments.saveAll(batchToSave);
@@ -363,10 +451,11 @@ public class ClassEnrollmentService {
     }
 
     private ClassEnrollment.Status parseStatus(String status) {
-        return switch (clean(status)) {
-            case "Active" -> ClassEnrollment.Status.ACTIVE;
-            case "Inactive" -> ClassEnrollment.Status.INACTIVE;
-            case "Dropped", "Dropped Out" -> ClassEnrollment.Status.DROPPED_OUT;
+        if (status == null || status.isBlank()) return ClassEnrollment.Status.ACTIVE;
+        return switch (clean(status).toLowerCase(Locale.ROOT)) {
+            case "active", "hoạt động", "hoat dong" -> ClassEnrollment.Status.ACTIVE;
+            case "inactive", "không hoạt động", "khong hoat dong" -> ClassEnrollment.Status.INACTIVE;
+            case "dropped", "dropped out", "dropped_out", "bỏ học", "bo hoc" -> ClassEnrollment.Status.DROPPED_OUT;
             default -> throw new BadRequestException("Status must be Active, Inactive or Dropped.");
         };
     }

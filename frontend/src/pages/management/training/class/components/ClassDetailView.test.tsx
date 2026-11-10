@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as XLSX from "xlsx";
 import type { TraineeBatchPayload } from "@/api/features/trainee.api";
 import { fakeHttp, type RecordedCall } from "@/test/fake-http";
 import { grant } from "@/test/mocks";
@@ -15,6 +16,10 @@ import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_grade
 vi.mock("@/api/axios", () => import("@/test/mocks").then((m) => m.axiosModule()));
 vi.mock("@/components/layout/MainLayout", () => import("@/test/mocks").then((m) => m.layoutModule()));
 vi.mock("@/hooks/usePermissions", () => import("@/test/mocks").then((m) => m.permissionsModule()));
+vi.mock("xlsx", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("xlsx")>()),
+    writeFile: vi.fn(),
+}));
 
 function renderClassFlow(route = "/classes/2") {
     return renderRoutes(
@@ -476,37 +481,125 @@ describe("ClassDetailView & TraineeListTab", () => {
         expect(screen.getByRole("button", { name: /save changes/i })).toBeEnabled();
     }, 15000);
 
-    it("switches to Attendance Tracker view, renders 4 summary cards, attendance table, View Logs, and Take Daily Attendance", async () => {
+    it("switches to Attendance Tracker view, renders 3 interactive summary cards, clickable trainee name logs, sorting, Export Report, and Take Daily Attendance", async () => {
         const { user } = renderClassFlow("/classes/2");
         await screen.findByText("Hoàng Phương Bình");
 
         // 1. Switch to Attendance Tracker view
         await user.click(screen.getByRole("button", { name: /^attendance$/i }));
         expect(await screen.findByTestId("attendance-tracker-view")).toBeInTheDocument();
-        expect(screen.getByTestId("summary-sessions-conducted")).toHaveTextContent("20 / 40 Sessions");
+        expect(screen.getByRole("heading", { name: "Attendance & Absence Statistics" })).toBeInTheDocument();
+        expect(screen.queryByText("Attendance Tracker")).not.toBeInTheDocument();
+        expect(screen.queryByText(/< 10%: Good/)).not.toBeInTheDocument();
+        expect(screen.queryByTestId("summary-sessions-conducted")).not.toBeInTheDocument();
         expect(screen.getByTestId("summary-attendance-rate")).toHaveTextContent("91%");
         expect(screen.getByTestId("summary-at-risk")).toHaveTextContent("3 Trainees");
         expect(screen.getByTestId("summary-critical")).toHaveTextContent("2 Trainees");
 
-        // 2. Verify Attendance Table columns and status badges
+        // 2. Verify 9 Attendance Table columns (Full Name, Student ID & Email split, Action removed), English abbreviations, and standardized badges
         const attTable = screen.getByRole("table", { name: "Trainee Attendance Table" });
+        expect(within(attTable).getAllByRole("columnheader")).toHaveLength(9);
+        expect(within(attTable).getByRole("columnheader", { name: "Full Name" })).toBeInTheDocument();
+        expect(within(attTable).getByRole("columnheader", { name: "Student ID" })).toBeInTheDocument();
+        expect(within(attTable).getByRole("columnheader", { name: "Email" })).toBeInTheDocument();
+        expect(within(attTable).queryByRole("columnheader", { name: "Personal Email" })).not.toBeInTheDocument();
+        expect(within(attTable).queryByRole("columnheader", { name: "Action" })).not.toBeInTheDocument();
+        const firstAttRowCells = within(within(attTable).getAllByRole("row")[1]).getAllByRole("cell");
+        expect(firstAttRowCells[1]).toHaveTextContent("Hoàng Phương Bình");
+        expect(firstAttRowCells[1]).not.toHaveTextContent("phuongbinh.conan@gmail.com");
+        expect(firstAttRowCells[1]).not.toHaveTextContent("SE180101");
+        expect(firstAttRowCells[2]).toHaveTextContent("SE180101");
+        expect(firstAttRowCells[3]).toHaveTextContent("phuongbinh.conan@gmail.com");
+        expect(within(attTable).getByText("Absent Rate (Max 20%)")).toBeInTheDocument();
+        expect(within(attTable).queryByText("Max: 20%")).not.toBeInTheDocument();
+        expect(within(attTable).getAllByText(/\(.*E \/ .*U\)/).length).toBeGreaterThan(0);
+        expect(within(attTable).queryByText(/\(.*P \/ .*K\)/)).not.toBeInTheDocument();
         expect(within(attTable).getAllByText("Eligible").length).toBeGreaterThan(0);
-        expect(within(attTable).getAllByText("Warning").length).toBe(3);
+        expect(within(attTable).getAllByText("At Risk").length).toBe(3);
         expect(within(attTable).getAllByText("Disqualified").length).toBe(2);
 
-        // 3. Open View Logs modal for a trainee
-        await user.click(screen.getByRole("button", { name: "View Logs for Trần Vũ Gia Bảo" }));
+        // 2b. Interactive KPI cards sync with filter dropdown
+        const statusSelect = screen.getByLabelText("Filter by Attendance Status");
+        await user.click(screen.getByRole("button", { name: /At Risk \(10% - 19% Absent\)/i }));
+        expect(statusSelect).toHaveValue("At Risk");
+        expect(within(attTable).getAllByRole("row").slice(1)).toHaveLength(3);
+
+        await user.click(screen.getByRole("button", { name: /Critical \(>= 20% Absent\)/i }));
+        expect(statusSelect).toHaveValue("Disqualified");
+        expect(within(attTable).getAllByRole("row").slice(1)).toHaveLength(2);
+
+        // Clicking active KPI card again clears the filter
+        await user.click(screen.getByRole("button", { name: /Critical \(>= 20% Absent\)/i }));
+        expect(statusSelect).toHaveValue("");
+        expect(within(attTable).getAllByRole("row").slice(1)).toHaveLength(10);
+
+        // 2c. Column sorting (desc -> asc) and Export Report
+        await user.click(screen.getByRole("button", { name: "Absent Rate (Max 20%)" }));
+        const firstSortedRow = within(attTable).getAllByRole("row")[1];
+        expect(within(firstSortedRow).getByText("25%")).toBeInTheDocument();
+
+        await user.click(screen.getByRole("button", { name: /Export Report/i }));
+        expect(XLSX.writeFile).toHaveBeenCalled();
+        const reportBook = vi.mocked(XLSX.writeFile).mock.calls[
+            vi.mocked(XLSX.writeFile).mock.calls.length - 1
+        ][0];
+        const reportCols = reportBook.Sheets["Attendance Report"]["!cols"] ?? [];
+        expect(reportCols).toHaveLength(12);
+        expect(reportCols.every((c) => (c.wch ?? 0) >= 8)).toBe(true);
+
+        // 3. Click trainee's Full Name directly to open Attendance Logs modal
+        const traineeNameLink = within(attTable).getByRole("button", { name: "View Logs for Trần Vũ Gia Bảo" });
+        expect(traineeNameLink).toHaveTextContent("Trần Vũ Gia Bảo");
+        expect(traineeNameLink).toHaveAttribute("title", "Click to view attendance logs");
+        await user.click(traineeNameLink);
         const logsDialog = await screen.findByRole("dialog", {
             name: /Attendance Logs — Trần Vũ Gia Bảo/i,
         });
         expect(within(logsDialog).getByText(/Session History \(20 Sessions\)/i)).toBeInTheDocument();
         await user.click(within(logsDialog).getAllByRole("button", { name: "Close" })[0]);
 
-        // 4. Take Daily Attendance -> mark one trainee Unexcused -> Save Changes
+        // 4. Take Daily Attendance: Session Selector, Excused Note Validation, Past Session Audit Trail & Real-Time Recalculation
         await user.click(screen.getByRole("button", { name: /take attendance/i }));
         const takeDialog = await screen.findByRole("dialog", {
             name: /Take Daily Attendance — Session #21/i,
         });
+
+        // 4a. Current Session (#21) selected by default; Future Sessions (#22..#40) are locked/disabled
+        const sessionSelect = within(takeDialog).getByLabelText("Select Attendance Session") as HTMLSelectElement;
+        expect(sessionSelect.value).toBe("21");
+        const futureOption22 = within(sessionSelect).getByRole("option", {
+            name: /Session #22.*Upcoming - Locked/i,
+        }) as HTMLOptionElement;
+        expect(futureOption22.disabled).toBe(true);
+
+        // 4a-2. Selecting a future date (> today) strictly locks attendance and shows warning banner
+        const dateInput = within(takeDialog).getByLabelText("Session Date") as HTMLInputElement;
+        const defaultTodayDate = dateInput.value;
+        fireEvent.change(dateInput, { target: { value: "2099-11-26" } });
+        expect(
+            await within(takeDialog).findByText(
+                /Cannot take attendance for a future date \(Session scheduled for 2099-11-26\)\./i,
+            ),
+        ).toBeInTheDocument();
+        expect(within(takeDialog).getByRole("button", { name: /save changes/i })).toBeDisabled();
+        expect(
+            within(takeDialog).getByRole("button", { name: "Mark Hoàng Phương Bình as Present" }),
+        ).toBeDisabled();
+
+        // Restore today's date to unlock Current Session #21
+        fireEvent.change(dateInput, { target: { value: defaultTodayDate } });
+        expect(within(takeDialog).getByRole("button", { name: /save changes/i })).toBeEnabled();
+
+        // 4b. Marking a trainee as Excused requires a Note / Reason
+        await user.click(within(takeDialog).getByRole("button", { name: "Mark Hoàng Phương Bình as Excused" }));
+        await user.click(within(takeDialog).getByRole("button", { name: /save changes/i }));
+        expect(
+            await within(takeDialog).findByText(
+                /Note \/ Reason is required when marking Hoàng Phương Bình as Excused/i,
+            ),
+        ).toBeInTheDocument();
+
+        // Reset to Present via Mark All Present, then mark Unexcused and save Current Session #21
         await user.click(within(takeDialog).getByRole("button", { name: /mark all present/i }));
         await user.selectOptions(
             within(takeDialog).getByLabelText("Attendance status for Hoàng Phương Bình"),
@@ -514,13 +607,73 @@ describe("ClassDetailView & TraineeListTab", () => {
         );
         await user.click(within(takeDialog).getByRole("button", { name: /save changes/i }));
 
-        // Sessions Conducted increments to 21 / 40 Sessions
-        expect(await screen.findByTestId("summary-sessions-conducted")).toHaveTextContent(
-            "21 / 40 Sessions",
+        // Attended / Total updates in real time to reflect 21 conducted sessions
+        expect((await within(attTable).findAllByText(/\/ 21$/)).length).toBe(10);
+
+        // 4c. Open Take Attendance again -> Select Past Session #4 -> Edit status -> Require Audit Reason -> Verify Audit Trail in Logs
+        await user.click(screen.getByRole("button", { name: /take attendance/i }));
+        const pastDialog = await screen.findByRole("dialog", {
+            name: /Take Daily Attendance — Session #22/i,
+        });
+        await user.selectOptions(
+            within(pastDialog).getByLabelText("Select Attendance Session"),
+            "4",
         );
+        expect(await within(pastDialog).findByText("Editing Past Session")).toBeInTheDocument();
+
+        // Change Hoàng Phương Bình in Session #4 from Present to Excused with a note
+        await user.click(within(pastDialog).getByRole("button", { name: "Mark Hoàng Phương Bình as Excused" }));
+        fireEvent.change(
+            within(pastDialog).getByLabelText("Attendance note for Hoàng Phương Bình"),
+            { target: { value: "Approved hospital visit" } },
+        );
+
+        // Saving without Audit Reason is blocked
+        await user.click(within(pastDialog).getByRole("button", { name: /save changes/i }));
+        expect(
+            await within(pastDialog).findByText(
+                /Audit Reason for Modification is required when updating past session attendance/i,
+            ),
+        ).toBeInTheDocument();
+
+        // Enter Audit Reason and save
+        fireEvent.change(
+            within(pastDialog).getByLabelText("Audit Reason for Modification"),
+            { target: { value: "Late medical certificate submitted" } },
+        );
+        await user.click(within(pastDialog).getByRole("button", { name: /save changes/i }));
+
+        // Verify Audit Trail appears in Hoàng Phương Bình's Attendance Logs modal & test Session-Level editing
+        await user.click(within(attTable).getByRole("button", { name: "View Logs for Hoàng Phương Bình" }));
+        const updatedLogsDialog = await screen.findByRole("dialog", {
+            name: /Attendance Logs — Hoàng Phương Bình/i,
+        });
+        expect(within(updatedLogsDialog).queryByText("Quick Edit Attendance Counts")).not.toBeInTheDocument();
+        const auditBadge = await within(updatedLogsDialog).findByTestId("audit-trail-session-4");
+        expect(auditBadge).toHaveTextContent(
+            /Updated from Present to Excused by Admin on .* — Reason: Late medical certificate submitted/i,
+        );
+
+        // Edit Session #1 status directly inside Session History -> requires Reason for Edit -> Save Changes recalculates totals
+        await user.selectOptions(
+            within(updatedLogsDialog).getByLabelText("Session #1 status"),
+            "Late",
+        );
+        await user.click(within(updatedLogsDialog).getByRole("button", { name: /save changes/i }));
+        expect(
+            await within(updatedLogsDialog).findByText(
+                /Reason for Edit is required when changing a past session's attendance status/i,
+            ),
+        ).toBeInTheDocument();
+
+        fireEvent.change(
+            within(updatedLogsDialog).getByLabelText("Reason for Edit"),
+            { target: { value: "Verified bus delay" } },
+        );
+        await user.click(within(updatedLogsDialog).getByRole("button", { name: /save changes/i }));
 
         // 5. Click Back to Trainee List returns to Trainee List table
         await user.click(screen.getByRole("button", { name: /back to trainee list/i }));
         expect(await screen.findByRole("table", { name: "Trainee List" })).toBeInTheDocument();
-    }, 15000);
+    }, 30000);
 });

@@ -1,12 +1,14 @@
 import {
     AlertTriangle,
+    ArrowDown,
     ArrowLeft,
-    CalendarCheck,
+    ArrowUp,
+    ArrowUpDown,
     CheckCircle2,
     ClipboardCheck,
     Clock,
+    Download,
     History,
-    Pencil,
     Save,
     Search,
     ShieldAlert,
@@ -14,6 +16,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { utils, writeFile } from "xlsx";
+import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { NativeSelect } from "@/components/common/NativeSelect";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,9 +34,18 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { ExternalClass, Trainee } from "@/types";
-import { formatFptStudentIdForSite } from "./TraineeModal";
+import { autoFitWorksheetColumns } from "@/utils/trainee-import.utils";
+import { formatFptStudentIdForSite, normalizeTraineeStatus } from "./TraineeModal";
 
 export type SessionAttendanceMark = "Present" | "Excused" | "Unexcused" | "Late";
+
+export interface AttendanceAuditEntry {
+    previousStatus: SessionAttendanceMark;
+    newStatus: SessionAttendanceMark;
+    modifiedBy: string;
+    modifiedAt: string;
+    reason: string;
+}
 
 export interface TraineeAttendanceLogItem {
     sessionNumber: number;
@@ -40,6 +53,7 @@ export interface TraineeAttendanceLogItem {
     topic: string;
     status: SessionAttendanceMark;
     note?: string;
+    auditTrail?: AttendanceAuditEntry[];
 }
 
 export interface TraineeAttendanceRecord {
@@ -146,11 +160,11 @@ function buildInitialLogs(
 
         if (remUnexcused > 0 && i >= 3 && i % 4 === 3) {
             status = "Unexcused";
-            note = "Absent without prior notice (Không phép)";
+            note = "Absent without prior notice (Unexcused)";
             remUnexcused--;
         } else if (remExcused > 0 && i >= 5 && i % 5 === 0) {
             status = "Excused";
-            note = "Approved leave request (Có phép)";
+            note = "Approved leave request (Excused)";
             remExcused--;
         } else if (remLate > 0 && i >= 2 && i % 6 === 2) {
             status = "Late";
@@ -165,11 +179,11 @@ function buildInitialLogs(
         if (logs[i].status !== "Present") continue;
         if (remUnexcused > 0) {
             logs[i].status = "Unexcused";
-            logs[i].note = "Absent without prior notice (Không phép)";
+            logs[i].note = "Absent without prior notice (Unexcused)";
             remUnexcused--;
         } else if (remExcused > 0) {
             logs[i].status = "Excused";
-            logs[i].note = "Approved leave request (Có phép)";
+            logs[i].note = "Approved leave request (Excused)";
             remExcused--;
         } else if (remLate > 0) {
             logs[i].status = "Late";
@@ -181,6 +195,57 @@ function buildInitialLogs(
     return logs;
 }
 
+const AUTO_DEFAULT_NOTES = new Set([
+    "Attended on time",
+    "Absent without prior notice (Unexcused)",
+    "Arrived 15 minutes late",
+    "Arrived late",
+]);
+
+export function getTodayLocalIsoDate(now: Date = new Date()): string {
+    const yyyy = String(now.getFullYear()).padStart(4, "0");
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+export function addDaysToIsoDate(isoDate: string, daysToAdd: number): string {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
+    const base = match
+        ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+        : new Date();
+    base.setDate(base.getDate() + daysToAdd);
+    return getTodayLocalIsoDate(base);
+}
+
+function recalculateRecordFromLogs(
+    traineeId: number,
+    logs: TraineeAttendanceLogItem[],
+    todayIso: string = getTodayLocalIsoDate(),
+): TraineeAttendanceRecord {
+    // Strictly clean up/exclude any erroneously recorded future session logs (date > today)
+    const validLogs = logs.filter((log) => !log.date || log.date <= todayIso);
+
+    let excusedAbsent = 0;
+    let unexcusedAbsent = 0;
+    let lateCount = 0;
+
+    for (const log of validLogs) {
+        if (log.status === "Excused") excusedAbsent += 1;
+        else if (log.status === "Unexcused") unexcusedAbsent += 1;
+        else if (log.status === "Late") lateCount += 1;
+    }
+
+    const sortedLogs = [...validLogs].sort((a, b) => a.sessionNumber - b.sessionNumber);
+    return {
+        traineeId,
+        excusedAbsent,
+        unexcusedAbsent,
+        lateCount,
+        logs: sortedLogs,
+    };
+}
+
 const classAttendanceStore = new Map<string, ClassAttendanceState>();
 
 export function resetClassAttendanceStoreForTest() {
@@ -188,25 +253,42 @@ export function resetClassAttendanceStoreForTest() {
 }
 
 function getOrInitClassAttendanceState(classId: string, trainees: Trainee[]): ClassAttendanceState {
+    const todayIso = getTodayLocalIsoDate();
     const existing = classAttendanceStore.get(classId);
-    const conductedSessions = existing?.conductedSessions ?? 20;
     const plannedSessions = existing?.plannedSessions ?? 40;
-    const recordsByTraineeId: Record<number, TraineeAttendanceRecord> = {
-        ...(existing?.recordsByTraineeId ?? {}),
-    };
+    const recordsByTraineeId: Record<number, TraineeAttendanceRecord> = {};
+
+    let maxValidConducted = 20;
 
     trainees.forEach((trainee, index) => {
-        if (!recordsByTraineeId[trainee.id]) {
+        const existingRecord = existing?.recordsByTraineeId?.[trainee.id];
+        if (existingRecord) {
+            const sanitized = recalculateRecordFromLogs(trainee.id, existingRecord.logs, todayIso);
+            recordsByTraineeId[trainee.id] = sanitized;
+            if (sanitized.logs.length > 0) {
+                const maxSessionInLogs = sanitized.logs.reduce(
+                    (max, l) => Math.max(max, l.sessionNumber),
+                    0,
+                );
+                maxValidConducted = Math.max(maxValidConducted, maxSessionInLogs);
+            }
+        } else {
             const preset = PRESET_ABSENCE_PROFILES[index % PRESET_ABSENCE_PROFILES.length];
-            recordsByTraineeId[trainee.id] = {
-                traineeId: trainee.id,
-                excusedAbsent: preset.excused,
-                unexcusedAbsent: preset.unexcused,
-                lateCount: preset.late,
-                logs: buildInitialLogs(conductedSessions, preset.excused, preset.unexcused, preset.late),
-            };
+            const initialLogs = buildInitialLogs(20, preset.excused, preset.unexcused, preset.late);
+            recordsByTraineeId[trainee.id] = recalculateRecordFromLogs(
+                trainee.id,
+                initialLogs,
+                todayIso,
+            );
         }
     });
+
+    // Ensure conductedSessions only reflects sessions with date <= todayIso
+    const sampleTraineeId = trainees[0]?.id;
+    const sampleLogsCount = sampleTraineeId
+        ? (recordsByTraineeId[sampleTraineeId]?.logs.length ?? 20)
+        : Math.min(existing?.conductedSessions ?? 20, maxValidConducted);
+    const conductedSessions = Math.max(20, sampleLogsCount);
 
     const nextState: ClassAttendanceState = {
         conductedSessions,
@@ -217,8 +299,47 @@ function getOrInitClassAttendanceState(classId: string, trainees: Trainee[]): Cl
     return nextState;
 }
 
+export type AttendanceStatusLabel = "Eligible" | "At Risk" | "Disqualified";
+export type AttendanceSortKey = "attended" | "absent" | "late" | "absentRate";
+
+const ATTENDANCE_STICKY_HEADER_CLASS =
+    "sticky top-0 z-20 bg-slate-50 px-3 font-semibold text-foreground shadow-[inset_0_-1px_0_#e2e8f0] dark:bg-slate-900 dark:shadow-[inset_0_-1px_0_#334155]";
+
+function SortableHeaderButton({
+    label,
+    columnKey,
+    sortKey,
+    sortDir,
+    onSort,
+}: {
+    label: string;
+    columnKey: AttendanceSortKey;
+    sortKey: AttendanceSortKey | null;
+    sortDir: "asc" | "desc";
+    onSort: (key: AttendanceSortKey) => void;
+}) {
+    const isActive = sortKey === columnKey;
+    const Icon = !isActive ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+    return (
+        <button
+            type="button"
+            onClick={() => onSort(columnKey)}
+            className="inline-flex cursor-pointer items-center gap-1 font-semibold text-foreground transition-colors hover:text-[#283593] dark:hover:text-blue-300"
+        >
+            <span>{label}</span>
+            <Icon
+                className={cn(
+                    "size-3.5 shrink-0",
+                    isActive ? "text-[#283593] dark:text-blue-300" : "opacity-50",
+                )}
+                aria-hidden
+            />
+        </button>
+    );
+}
+
 export function getAbsentRateMeta(absentRate: number): {
-    statusLabel: "Eligible" | "Warning" | "Disqualified";
+    statusLabel: AttendanceStatusLabel;
     badgeClassName: string;
     barClassName: string;
     textClassName: string;
@@ -234,7 +355,7 @@ export function getAbsentRateMeta(absentRate: number): {
     }
     if (absentRate >= 10) {
         return {
-            statusLabel: "Warning",
+            statusLabel: "At Risk",
             badgeClassName:
                 "bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800",
             barClassName: "bg-amber-500 dark:bg-amber-400",
@@ -264,22 +385,29 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
         getOrInitClassAttendanceState(classId, trainees),
     );
     const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState<"" | "Eligible" | "Warning" | "Disqualified">("");
+    const [statusFilter, setStatusFilter] = useState<"" | AttendanceStatusLabel>("");
+    const [sortKey, setSortKey] = useState<AttendanceSortKey | null>(null);
+    const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
     // Take Daily Attendance modal state
+    const todayIso = getTodayLocalIsoDate();
     const [takeAttendanceOpen, setTakeAttendanceOpen] = useState(false);
-    const [sessionDate, setSessionDate] = useState("2026-07-10");
+    const [selectedSessionNumber, setSelectedSessionNumber] = useState(
+        () => attendanceState.conductedSessions + 1,
+    );
+    const [sessionDate, setSessionDate] = useState(() => getTodayLocalIsoDate());
     const [sessionTopic, setSessionTopic] = useState("");
     const [dailyMarks, setDailyMarks] = useState<Record<number, SessionAttendanceMark>>({});
     const [dailyNotes, setDailyNotes] = useState<Record<number, string>>({});
+    const [auditReason, setAuditReason] = useState("");
+    const [attendanceFormError, setAttendanceFormError] = useState("");
 
-    // View Logs & Quick Edit modal state
+    // View Logs & Session-Level Edit modal state
     const [activeLogTrainee, setActiveLogTrainee] = useState<Trainee | null>(null);
-    const [quickEditValues, setQuickEditValues] = useState<{
-        excusedAbsent: number;
-        unexcusedAbsent: number;
-        lateCount: number;
-    }>({ excusedAbsent: 0, unexcusedAbsent: 0, lateCount: 0 });
+    const [logDraftMarks, setLogDraftMarks] = useState<Record<number, SessionAttendanceMark>>({});
+    const [logDraftNotes, setLogDraftNotes] = useState<Record<number, string>>({});
+    const [logEditReason, setLogEditReason] = useState("");
+    const [logModalError, setLogModalError] = useState("");
 
     useEffect(() => {
         const synced = getOrInitClassAttendanceState(classId, trainees);
@@ -373,44 +501,233 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
         });
     }, [computedRows, search, statusFilter]);
 
-    const handleOpenTakeAttendance = () => {
-        const nextSessionNum = attendanceState.conductedSessions + 1;
+    const sortedRows = useMemo(() => {
+        if (!sortKey) return filteredRows;
+        const factor = sortDir === "asc" ? 1 : -1;
+        return [...filteredRows].sort((a, b) => {
+            let diff = 0;
+            if (sortKey === "attended") diff = a.attended - b.attended;
+            else if (sortKey === "absent") diff = a.totalAbsent - b.totalAbsent;
+            else if (sortKey === "late") diff = a.record.lateCount - b.record.lateCount;
+            else if (sortKey === "absentRate") diff = a.absentRate - b.absentRate;
+            if (diff !== 0) return factor * diff;
+            return (a.trainee.fullName ?? "").localeCompare(b.trainee.fullName ?? "");
+        });
+    }, [filteredRows, sortDir, sortKey]);
+
+    const handleToggleSort = (key: AttendanceSortKey) => {
+        if (sortKey === key) {
+            setSortDir((prev) => (prev === "desc" ? "asc" : "desc"));
+        } else {
+            setSortKey(key);
+            setSortDir("desc");
+        }
+    };
+
+    const handleExportReport = () => {
+        if (sortedRows.length === 0) {
+            toast.info("No attendance records to export.");
+            return;
+        }
+        const exportRows = sortedRows.map((row, index) => ({
+            "No.": index + 1,
+            "Student ID": row.studentId,
+            "Full Name": row.trainee.fullName ?? "",
+            Email: row.trainee.personalEmail || row.trainee.email || "",
+            "Attended / Total": `${row.attended} / ${row.totalConducted}`,
+            "Total Absent": row.totalAbsent,
+            "Excused (E)": row.record.excusedAbsent,
+            "Unexcused (U)": row.record.unexcusedAbsent,
+            Late: row.record.lateCount,
+            "Absent Rate (%)": row.absentRate,
+            "Max Absence Limit (%)": 20,
+            "Attendance Status": row.meta.statusLabel,
+        }));
+        const worksheet = autoFitWorksheetColumns(utils.json_to_sheet(exportRows), {
+            "No.": 6,
+            "Student ID": 14,
+            "Full Name": 25,
+            Email: 30,
+            "Attended / Total": 18,
+            "Total Absent": 14,
+            "Excused (E)": 13,
+            "Unexcused (U)": 15,
+            Late: 10,
+            "Absent Rate (%)": 17,
+            "Max Absence Limit (%)": 23,
+            "Attendance Status": 18,
+        });
+        const workbook = utils.book_new();
+        utils.book_append_sheet(workbook, worksheet, "Attendance Report");
+        const fileName = `${classItem.code ?? `Class_${classId}`}_Attendance_Report.xlsx`;
+        writeFile(workbook, fileName);
+        toast.success(`Exported attendance report (${sortedRows.length} trainees) to ${fileName}`);
+    };
+
+    const getScheduledDateForSession = (sessionNum: number, state: ClassAttendanceState): string => {
+        const sampleLog = trainees
+            .map((t) => state.recordsByTraineeId[t.id]?.logs.find((l) => l.sessionNumber === sessionNum))
+            .find(Boolean);
+        if (sampleLog?.date && sampleLog.date <= todayIso) {
+            return sampleLog.date;
+        }
+        if (sessionNum <= SESSION_DATES.length) {
+            return SESSION_DATES[sessionNum - 1];
+        }
+        if (sessionNum === state.conductedSessions + 1) {
+            return todayIso;
+        }
+        const daysAhead = Math.max(1, sessionNum - (state.conductedSessions + 1)) * 2;
+        return addDaysToIsoDate(todayIso, daysAhead);
+    };
+
+    const loadSessionIntoModal = (sessionNum: number, state: ClassAttendanceState) => {
+        setSelectedSessionNumber(sessionNum);
+        setAuditReason("");
+        setAttendanceFormError("");
+
+        const isPast = sessionNum <= state.conductedSessions;
         const initialMarks: Record<number, SessionAttendanceMark> = {};
         const initialNotes: Record<number, string> = {};
+
+        let detectedDate = getScheduledDateForSession(sessionNum, state);
+        let detectedTopic =
+            SESSION_TOPICS[sessionNum - 1] ??
+            `Session ${String(sessionNum).padStart(2, "0")}: Practical Lab & Code Review`;
+
         for (const trainee of trainees) {
-            initialMarks[trainee.id] = "Present";
-            initialNotes[trainee.id] = "";
+            if (isPast) {
+                const existingLog = state.recordsByTraineeId[trainee.id]?.logs.find(
+                    (l) => l.sessionNumber === sessionNum && (!l.date || l.date <= todayIso),
+                );
+                if (existingLog) {
+                    detectedDate = existingLog.date || detectedDate;
+                    detectedTopic = existingLog.topic || detectedTopic;
+                    initialMarks[trainee.id] = existingLog.status;
+                    initialNotes[trainee.id] =
+                        existingLog.status !== "Excused" && AUTO_DEFAULT_NOTES.has(existingLog.note ?? "")
+                            ? ""
+                            : (existingLog.note ?? "");
+                } else {
+                    initialMarks[trainee.id] = "Present";
+                    initialNotes[trainee.id] = "";
+                }
+            } else {
+                initialMarks[trainee.id] = "Present";
+                initialNotes[trainee.id] = "";
+            }
         }
+
+        setSessionDate(detectedDate);
+        setSessionTopic(detectedTopic);
         setDailyMarks(initialMarks);
         setDailyNotes(initialNotes);
-        setSessionTopic(
-            `Session ${String(nextSessionNum).padStart(2, "0")}: Practical Lab & Code Review`,
-        );
+    };
+
+    const handleOpenTakeAttendance = () => {
+        const nextSessionNum = attendanceState.conductedSessions + 1;
+        loadSessionIntoModal(nextSessionNum, attendanceState);
         setTakeAttendanceOpen(true);
     };
 
+    const handleSessionSelectChange = (nextSessionNum: number) => {
+        const scheduledDate = getScheduledDateForSession(nextSessionNum, attendanceState);
+        if (nextSessionNum > attendanceState.conductedSessions + 1 || scheduledDate > todayIso) {
+            loadSessionIntoModal(nextSessionNum, attendanceState);
+            toast.warning(
+                `Cannot take attendance for a future date (Session scheduled for ${scheduledDate}).`,
+            );
+            return;
+        }
+        loadSessionIntoModal(nextSessionNum, attendanceState);
+    };
+
+    const isFutureSession = Boolean(
+        (sessionDate.trim() && sessionDate > todayIso) ||
+            selectedSessionNumber > attendanceState.conductedSessions + 1,
+    );
+    const isPastSession =
+        !isFutureSession && selectedSessionNumber <= attendanceState.conductedSessions;
+
+    const modifiedPastTrainees = useMemo(() => {
+        if (!isPastSession) return [];
+        return trainees.filter((trainee) => {
+            if (normalizeTraineeStatus(trainee.status) !== "Active") return false;
+            const existingLog = attendanceState.recordsByTraineeId[trainee.id]?.logs.find(
+                (l) => l.sessionNumber === selectedSessionNumber,
+            );
+            const prevStatus = existingLog?.status ?? "Present";
+            const nextStatus = dailyMarks[trainee.id] ?? prevStatus;
+            return prevStatus !== nextStatus;
+        });
+    }, [attendanceState.recordsByTraineeId, dailyMarks, isPastSession, selectedSessionNumber, trainees]);
+
     const handleMarkAllPresent = () => {
-        const nextMarks: Record<number, SessionAttendanceMark> = {};
+        if (isFutureSession) {
+            toast.error(`Cannot take attendance for a future date (Session scheduled for ${sessionDate}).`);
+            return;
+        }
+        const nextMarks: Record<number, SessionAttendanceMark> = { ...dailyMarks };
         for (const trainee of trainees) {
-            nextMarks[trainee.id] = "Present";
+            if (normalizeTraineeStatus(trainee.status) === "Active") {
+                nextMarks[trainee.id] = "Present";
+            }
         }
         setDailyMarks(nextMarks);
-        toast.info("Marked all trainees as Present.");
+        setAttendanceFormError("");
+        toast.info("Marked all active trainees as Present.");
     };
 
     const handleSaveDailyAttendance = () => {
+        setAttendanceFormError("");
+
         if (!sessionDate.trim()) {
-            toast.error("Please select an attendance date.");
+            const msg = "Please select an attendance date.";
+            setAttendanceFormError(msg);
+            toast.error(msg);
             return;
         }
 
-        const nextSessionNumber = attendanceState.conductedSessions + 1;
+        // Strict Date-Based Future Locking (session.date > today)
+        if (sessionDate > todayIso || selectedSessionNumber > attendanceState.conductedSessions + 1) {
+            const msg = `Cannot take attendance for a future date (Session scheduled for ${sessionDate}).`;
+            setAttendanceFormError(msg);
+            toast.error(msg);
+            return;
+        }
+
+        // Validate mandatory Note / Reason when any active trainee is marked Excused
+        const missingExcusedNoteTrainee = trainees.find((trainee) => {
+            if (normalizeTraineeStatus(trainee.status) !== "Active") return false;
+            const mark = dailyMarks[trainee.id] ?? "Present";
+            const note = (dailyNotes[trainee.id] ?? "").trim();
+            return mark === "Excused" && !note;
+        });
+
+        if (missingExcusedNoteTrainee) {
+            const msg = `Note / Reason is required when marking ${missingExcusedNoteTrainee.fullName} as Excused.`;
+            setAttendanceFormError(msg);
+            toast.error(msg);
+            return;
+        }
+
+        // Validate mandatory Audit Reason when modifying any trainee's status in a Past Session
+        if (isPastSession && modifiedPastTrainees.length > 0 && !auditReason.trim()) {
+            const msg = "Audit Reason for Modification is required when updating past session attendance.";
+            setAttendanceFormError(msg);
+            toast.error(msg);
+            return;
+        }
+
+        const targetSessionNumber = selectedSessionNumber;
         const topicLabel =
             sessionTopic.trim() ||
-            `Session ${String(nextSessionNumber).padStart(2, "0")}: Daily Class Session`;
+            `Session ${String(targetSessionNumber).padStart(2, "0")}: Daily Class Session`;
+        const auditDateStr = todayIso;
 
         updateAttendanceState((prev) => {
             const nextRecords: Record<number, TraineeAttendanceRecord> = { ...prev.recordsByTraineeId };
+            const editingPast = targetSessionNumber <= prev.conductedSessions;
 
             for (const trainee of trainees) {
                 const current = nextRecords[trainee.id] ?? {
@@ -420,88 +737,109 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                     lateCount: 0,
                     logs: [],
                 };
-                const mark: SessionAttendanceMark = dailyMarks[trainee.id] ?? "Present";
+
+                const isInactiveOrDropped = normalizeTraineeStatus(trainee.status) !== "Active";
+                const existingLog = current.logs.find((l) => l.sessionNumber === targetSessionNumber);
+                const prevStatus: SessionAttendanceMark = existingLog?.status ?? "Present";
+                const mark: SessionAttendanceMark = isInactiveOrDropped
+                    ? prevStatus
+                    : (dailyMarks[trainee.id] ?? "Present");
                 const customNote = (dailyNotes[trainee.id] ?? "").trim();
 
-                const defaultNote =
-                    mark === "Present"
-                        ? "Attended on time"
-                        : mark === "Excused"
-                          ? "Approved leave request (Có phép)"
-                          : mark === "Unexcused"
-                            ? "Absent without prior notice (Không phép)"
-                            : "Arrived late";
+                const defaultNote = isInactiveOrDropped
+                    ? `Excluded (${normalizeTraineeStatus(trainee.status)})`
+                    : mark === "Present"
+                      ? "Attended on time"
+                      : mark === "Excused"
+                        ? "Approved leave request (Excused)"
+                        : mark === "Unexcused"
+                          ? "Absent without prior notice (Unexcused)"
+                          : "Arrived late";
 
-                const newLog: TraineeAttendanceLogItem = {
-                    sessionNumber: nextSessionNumber,
-                    date: sessionDate,
-                    topic: topicLabel,
-                    status: mark,
-                    note: customNote || defaultNote,
-                };
+                if (editingPast) {
+                    const statusChanged = !isInactiveOrDropped && prevStatus !== mark;
+                    const nextAuditTrail: AttendanceAuditEntry[] = [
+                        ...(existingLog?.auditTrail ?? []),
+                        ...(statusChanged
+                            ? [
+                                  {
+                                      previousStatus: prevStatus,
+                                      newStatus: mark,
+                                      modifiedBy: "Admin",
+                                      modifiedAt: auditDateStr,
+                                      reason: auditReason.trim(),
+                                  },
+                              ]
+                            : []),
+                    ];
 
-                nextRecords[trainee.id] = {
-                    traineeId: trainee.id,
-                    excusedAbsent: current.excusedAbsent + (mark === "Excused" ? 1 : 0),
-                    unexcusedAbsent: current.unexcusedAbsent + (mark === "Unexcused" ? 1 : 0),
-                    lateCount: current.lateCount + (mark === "Late" ? 1 : 0),
-                    logs: [newLog, ...current.logs],
-                };
+                    const updatedLog: TraineeAttendanceLogItem = {
+                        sessionNumber: targetSessionNumber,
+                        date: sessionDate,
+                        topic: topicLabel,
+                        status: mark,
+                        note: customNote || (statusChanged ? defaultNote : (existingLog?.note ?? defaultNote)),
+                        ...(nextAuditTrail.length > 0 ? { auditTrail: nextAuditTrail } : {}),
+                    };
+
+                    const otherLogs = current.logs.filter((l) => l.sessionNumber !== targetSessionNumber);
+                    nextRecords[trainee.id] = recalculateRecordFromLogs(
+                        trainee.id,
+                        [...otherLogs, updatedLog],
+                        todayIso,
+                    );
+                } else {
+                    const newLog: TraineeAttendanceLogItem = {
+                        sessionNumber: targetSessionNumber,
+                        date: sessionDate,
+                        topic: topicLabel,
+                        status: mark,
+                        note: customNote || defaultNote,
+                    };
+
+                    const otherLogs = current.logs.filter((l) => l.sessionNumber !== targetSessionNumber);
+                    nextRecords[trainee.id] = recalculateRecordFromLogs(
+                        trainee.id,
+                        [...otherLogs, newLog],
+                        todayIso,
+                    );
+                }
             }
+
+            const nextConducted = editingPast
+                ? prev.conductedSessions
+                : Math.max(prev.conductedSessions, targetSessionNumber);
 
             return {
                 ...prev,
-                conductedSessions: nextSessionNumber,
-                plannedSessions: Math.max(prev.plannedSessions, nextSessionNumber),
+                conductedSessions: nextConducted,
+                plannedSessions: Math.max(prev.plannedSessions, nextConducted),
                 recordsByTraineeId: nextRecords,
             };
         });
 
         setTakeAttendanceOpen(false);
         toast.success(
-            `Saved attendance for Session #${nextSessionNumber} (${sessionDate}). Statistics updated!`,
+            isPastSession
+                ? `Updated past attendance for Session #${targetSessionNumber} (${sessionDate}). Audit trail & KPIs updated!`
+                : `Saved attendance for Session #${targetSessionNumber} (${sessionDate}). Statistics updated!`,
         );
     };
 
     const handleOpenLogsModal = (trainee: Trainee) => {
         const record = attendanceState.recordsByTraineeId[trainee.id];
-        setQuickEditValues({
-            excusedAbsent: record?.excusedAbsent ?? 0,
-            unexcusedAbsent: record?.unexcusedAbsent ?? 0,
-            lateCount: record?.lateCount ?? 0,
-        });
+        const validLogs = (record?.logs ?? []).filter((l) => !l.date || l.date <= todayIso);
+        const initialMarks: Record<number, SessionAttendanceMark> = {};
+        const initialNotes: Record<number, string> = {};
+        for (const log of validLogs) {
+            initialMarks[log.sessionNumber] = log.status;
+            initialNotes[log.sessionNumber] = log.note ?? "";
+        }
+        setLogDraftMarks(initialMarks);
+        setLogDraftNotes(initialNotes);
+        setLogEditReason("");
+        setLogModalError("");
         setActiveLogTrainee(trainee);
-    };
-
-    const handleSaveQuickEdit = () => {
-        if (!activeLogTrainee) return;
-        const maxSessions = attendanceState.conductedSessions;
-        const excused = Math.max(0, Math.min(maxSessions, Number(quickEditValues.excusedAbsent) || 0));
-        const unexcused = Math.max(
-            0,
-            Math.min(maxSessions - excused, Number(quickEditValues.unexcusedAbsent) || 0),
-        );
-        const late = Math.max(
-            0,
-            Math.min(maxSessions - excused - unexcused, Number(quickEditValues.lateCount) || 0),
-        );
-
-        updateAttendanceState((prev) => ({
-            ...prev,
-            recordsByTraineeId: {
-                ...prev.recordsByTraineeId,
-                [activeLogTrainee.id]: {
-                    traineeId: activeLogTrainee.id,
-                    excusedAbsent: excused,
-                    unexcusedAbsent: unexcused,
-                    lateCount: late,
-                    logs: buildInitialLogs(prev.conductedSessions, excused, unexcused, late),
-                },
-            },
-        }));
-
-        toast.success(`Updated attendance summary for ${activeLogTrainee.fullName}.`);
-        setActiveLogTrainee(null);
     };
 
     const activeLogRow = useMemo(() => {
@@ -509,225 +847,369 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
         return computedRows.find((r) => r.trainee.id === activeLogTrainee.id) ?? null;
     }, [activeLogTrainee, computedRows]);
 
-    return (
-        <div className="space-y-5" data-testid="attendance-tracker-view">
-            {/* Header & Navigation Bar */}
-            <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2.5">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={onBack}
-                            className="gap-1.5 font-medium"
-                        >
-                            <ArrowLeft className="size-4" aria-hidden />
-                            <span>Back to Trainee List</span>
-                        </Button>
-                        <Badge
-                            variant="secondary"
-                            className="bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300"
-                        >
-                            Attendance Tracker
-                        </Badge>
-                    </div>
-                    <h2 className="pt-1 text-lg font-semibold text-foreground">
-                        Attendance &amp; Absence Statistics — {classItem.code ?? classItem.name}
-                    </h2>
-                </div>
+    const validActiveLogs = useMemo(() => {
+        if (!activeLogRow) return [];
+        return activeLogRow.record.logs.filter((l) => !l.date || l.date <= todayIso);
+    }, [activeLogRow, todayIso]);
 
-                <div className="flex flex-wrap items-center gap-2.5">
+    const changedLogSessions = useMemo(() => {
+        return validActiveLogs.filter((log) => {
+            const draftMark = logDraftMarks[log.sessionNumber] ?? log.status;
+            return draftMark !== log.status;
+        });
+    }, [logDraftMarks, validActiveLogs]);
+
+    const liveDraftSummary = useMemo(() => {
+        if (!activeLogRow) return null;
+        let excused = 0;
+        let unexcused = 0;
+        let late = 0;
+        for (const log of validActiveLogs) {
+            const mark = logDraftMarks[log.sessionNumber] ?? log.status;
+            if (mark === "Excused") excused += 1;
+            else if (mark === "Unexcused") unexcused += 1;
+            else if (mark === "Late") late += 1;
+        }
+        const totalConducted = Math.max(1, validActiveLogs.length);
+        const totalAbsent = excused + unexcused;
+        const attended = Math.max(0, totalConducted - totalAbsent);
+        const absentRate = Math.round((totalAbsent / totalConducted) * 1000) / 10;
+        const meta = getAbsentRateMeta(absentRate);
+        return {
+            attended,
+            totalConducted,
+            excused,
+            unexcused,
+            late,
+            totalAbsent,
+            absentRate,
+            meta,
+        };
+    }, [activeLogRow, logDraftMarks, validActiveLogs]);
+
+    const handleSaveSessionLogsEdit = () => {
+        if (!activeLogTrainee || !activeLogRow) return;
+        setLogModalError("");
+
+        if (changedLogSessions.length > 0 && !logEditReason.trim()) {
+            const msg = "Reason for Edit is required when changing a past session's attendance status.";
+            setLogModalError(msg);
+            toast.error(msg);
+            return;
+        }
+
+        const updatedLogs: TraineeAttendanceLogItem[] = validActiveLogs.map((log) => {
+            const nextStatus = logDraftMarks[log.sessionNumber] ?? log.status;
+            const nextNoteRaw = (logDraftNotes[log.sessionNumber] ?? "").trim();
+            const statusChanged = nextStatus !== log.status;
+
+            const defaultNote =
+                nextStatus === "Present"
+                    ? "Attended on time"
+                    : nextStatus === "Excused"
+                      ? "Approved leave request (Excused)"
+                      : nextStatus === "Unexcused"
+                        ? "Absent without prior notice (Unexcused)"
+                        : "Arrived late";
+
+            const nextAuditTrail: AttendanceAuditEntry[] = [
+                ...(log.auditTrail ?? []),
+                ...(statusChanged
+                    ? [
+                          {
+                              previousStatus: log.status,
+                              newStatus: nextStatus,
+                              modifiedBy: "Admin",
+                              modifiedAt: todayIso,
+                              reason: logEditReason.trim(),
+                          },
+                      ]
+                    : []),
+            ];
+
+            return {
+                ...log,
+                status: nextStatus,
+                note:
+                    nextNoteRaw && (!statusChanged || nextNoteRaw !== log.note)
+                        ? nextNoteRaw
+                        : statusChanged
+                          ? `${defaultNote} (${logEditReason.trim()})`
+                          : (log.note ?? defaultNote),
+                ...(nextAuditTrail.length > 0 ? { auditTrail: nextAuditTrail } : {}),
+            };
+        });
+
+        updateAttendanceState((prev) => ({
+            ...prev,
+            recordsByTraineeId: {
+                ...prev.recordsByTraineeId,
+                [activeLogTrainee.id]: recalculateRecordFromLogs(
+                    activeLogTrainee.id,
+                    updatedLogs,
+                    todayIso,
+                ),
+            },
+        }));
+
+        toast.success(`Updated session attendance history for ${activeLogTrainee.fullName}.`);
+        setActiveLogTrainee(null);
+    };
+
+    return (
+        <div className="flex flex-1 min-h-0 flex-col gap-3" data-testid="attendance-tracker-view">
+            {/* Header & Action Bar */}
+            <div className="flex shrink-0 flex-col gap-2.5 rounded-lg border bg-muted/20 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-base font-semibold text-foreground sm:text-lg">
+                    Attendance &amp; Absence Statistics
+                </h2>
+
+                <div className="flex flex-wrap items-center gap-2">
                     <Button
                         type="button"
-                        onClick={handleOpenTakeAttendance}
-                        className="bg-[#283593] text-white hover:bg-[#1a237e] dark:bg-blue-600 dark:hover:bg-blue-500"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportReport}
+                        className="h-8"
                     >
-                        <ClipboardCheck className="size-4" aria-hidden />
+                        <Download className="size-3.5" aria-hidden />
+                        <span>Export Report</span>
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleOpenTakeAttendance}
+                        className="h-8 bg-[#283593] text-white hover:bg-[#1a237e] dark:bg-blue-600 dark:hover:bg-blue-500"
+                    >
+                        <ClipboardCheck className="size-3.5" aria-hidden />
                         <span>Take Attendance</span>
                     </Button>
                 </div>
             </div>
 
-            {/* 4 Top Summary Cards */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {/* 1. Sessions Conducted */}
-                <div className="rounded-lg border bg-card p-4 shadow-xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Sessions Conducted
-                        </span>
-                        <div className="rounded-md bg-blue-100 p-2 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
-                            <CalendarCheck className="size-4" aria-hidden />
+            {/* 3 Compact Interactive KPI Summary Cards */}
+            <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-3">
+                {/* 1. Class Attendance Rate (click filters Eligible) */}
+                <button
+                    type="button"
+                    aria-pressed={statusFilter === "Eligible"}
+                    onClick={() =>
+                        setStatusFilter((prev) => (prev === "Eligible" ? "" : "Eligible"))
+                    }
+                    className={cn(
+                        "w-full cursor-pointer rounded-lg border bg-card px-4 py-2.5 text-left shadow-xs transition-all hover:border-emerald-300 hover:shadow-sm",
+                        statusFilter === "Eligible" && "border-emerald-500 ring-2 ring-emerald-500/40",
+                    )}
+                >
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                            <span className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Class Attendance Rate
+                            </span>
+                            <div className="mt-0.5 flex flex-wrap items-baseline gap-2">
+                                <p
+                                    className="text-lg font-bold leading-tight text-emerald-600 dark:text-emerald-400"
+                                    data-testid="summary-attendance-rate"
+                                >
+                                    {summaryStats.classAttendanceRate}%
+                                </p>
+                                <p className="truncate text-[11px] text-muted-foreground">
+                                    Eligible (&lt; 10% Absent) across {trainees.length} trainees
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                            <CheckCircle2 className="size-3.5" aria-hidden />
                         </div>
                     </div>
-                    <p
-                        className="mt-2 text-2xl font-bold text-foreground"
-                        data-testid="summary-sessions-conducted"
-                    >
-                        {summaryStats.conductedSessions} / {summaryStats.plannedSessions} Sessions
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        {Math.round((summaryStats.conductedSessions / summaryStats.plannedSessions) * 100)}% of
-                        curriculum completed
-                    </p>
-                </div>
+                </button>
 
-                {/* 2. Class Attendance Rate */}
-                <div className="rounded-lg border bg-card p-4 shadow-xs">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Class Attendance Rate
-                        </span>
-                        <div className="rounded-md bg-emerald-100 p-2 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                            <CheckCircle2 className="size-4" aria-hidden />
+                {/* 2. At Risk (10% - 19% Absent) */}
+                <button
+                    type="button"
+                    aria-pressed={statusFilter === "At Risk"}
+                    onClick={() =>
+                        setStatusFilter((prev) => (prev === "At Risk" ? "" : "At Risk"))
+                    }
+                    className={cn(
+                        "w-full cursor-pointer rounded-lg border border-amber-200 bg-amber-50/40 px-4 py-2.5 text-left shadow-xs transition-all hover:border-amber-400 hover:shadow-sm dark:border-amber-900/60 dark:bg-amber-950/20",
+                        statusFilter === "At Risk" && "border-amber-500 ring-2 ring-amber-500/45",
+                    )}
+                >
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                            <span className="block text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-300">
+                                At Risk (10% - 19% Absent)
+                            </span>
+                            <div className="mt-0.5 flex flex-wrap items-baseline gap-2">
+                                <p
+                                    className="text-lg font-bold leading-tight text-amber-700 dark:text-amber-400"
+                                    data-testid="summary-at-risk"
+                                >
+                                    {summaryStats.atRiskCount}{" "}
+                                    {summaryStats.atRiskCount === 1 ? "Trainee" : "Trainees"}
+                                </p>
+                                <p className="truncate text-[11px] text-amber-700/80 dark:text-amber-300/80">
+                                    Approaching maximum absence threshold
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
+                            <AlertTriangle className="size-3.5" aria-hidden />
                         </div>
                     </div>
-                    <p
-                        className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-400"
-                        data-testid="summary-attendance-rate"
-                    >
-                        {summaryStats.classAttendanceRate}%
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        Average attendance across {trainees.length} trainees
-                    </p>
-                </div>
+                </button>
 
-                {/* 3. At Risk (10% - 19% Absent) */}
-                <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 shadow-xs dark:border-amber-900/60 dark:bg-amber-950/20">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-300">
-                            At Risk (10% - 19% Absent)
-                        </span>
-                        <div className="rounded-md bg-amber-100 p-2 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
-                            <AlertTriangle className="size-4" aria-hidden />
+                {/* 3. Critical / Disqualified (>= 20% Absent) */}
+                <button
+                    type="button"
+                    aria-pressed={statusFilter === "Disqualified"}
+                    onClick={() =>
+                        setStatusFilter((prev) => (prev === "Disqualified" ? "" : "Disqualified"))
+                    }
+                    className={cn(
+                        "w-full cursor-pointer rounded-lg border border-rose-200 bg-rose-50/50 px-4 py-2.5 text-left shadow-xs transition-all hover:border-rose-400 hover:shadow-sm dark:border-rose-900/60 dark:bg-rose-950/25",
+                        statusFilter === "Disqualified" && "border-rose-500 ring-2 ring-rose-500/45",
+                    )}
+                >
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                            <span className="block text-[11px] font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-300">
+                                Critical (&gt;= 20% Absent)
+                            </span>
+                            <div className="mt-0.5 flex flex-wrap items-baseline gap-2">
+                                <p
+                                    className="text-lg font-bold leading-tight text-rose-600 dark:text-rose-400"
+                                    data-testid="summary-critical"
+                                >
+                                    {summaryStats.criticalCount}{" "}
+                                    {summaryStats.criticalCount === 1 ? "Trainee" : "Trainees"}
+                                </p>
+                                <p className="truncate text-[11px] text-rose-700/80 dark:text-rose-300/80">
+                                    Disqualified — Exceeded allowed absence limit
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300">
+                            <ShieldAlert className="size-3.5" aria-hidden />
                         </div>
                     </div>
-                    <p
-                        className="mt-2 text-2xl font-bold text-amber-700 dark:text-amber-400"
-                        data-testid="summary-at-risk"
-                    >
-                        {summaryStats.atRiskCount} {summaryStats.atRiskCount === 1 ? "Trainee" : "Trainees"}
-                    </p>
-                    <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-300/80">
-                        Approaching maximum absence threshold
-                    </p>
-                </div>
-
-                {/* 4. Critical (>= 20% Absent) */}
-                <div className="rounded-lg border border-rose-200 bg-rose-50/50 p-4 shadow-xs dark:border-rose-900/60 dark:bg-rose-950/25">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-300">
-                            Critical (&gt;= 20% Absent)
-                        </span>
-                        <div className="rounded-md bg-rose-100 p-2 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300">
-                            <ShieldAlert className="size-4" aria-hidden />
-                        </div>
-                    </div>
-                    <p
-                        className="mt-2 text-2xl font-bold text-rose-600 dark:text-rose-400"
-                        data-testid="summary-critical"
-                    >
-                        {summaryStats.criticalCount} {summaryStats.criticalCount === 1 ? "Trainee" : "Trainees"}
-                    </p>
-                    <p className="mt-1 text-xs text-rose-700/80 dark:text-rose-300/80">
-                        Exceeded allowed absence limit (Disqualified)
-                    </p>
-                </div>
+                </button>
             </div>
 
             {/* Filter & Search Bar */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-wrap items-center gap-2.5">
-                    <div className="relative w-full sm:w-64">
-                        <Search
-                            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                            aria-hidden
-                        />
-                        <Input
-                            aria-label="Search attendance trainees"
-                            placeholder="Search by name or student ID..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="pl-9"
-                        />
-                    </div>
-
-                    <div className="w-full sm:w-48">
-                        <NativeSelect
-                            aria-label="Filter by Attendance Status"
-                            value={statusFilter}
-                            onChange={(e) =>
-                                setStatusFilter(
-                                    e.target.value as "" | "Eligible" | "Warning" | "Disqualified",
-                                )
-                            }
-                            className="h-9"
-                        >
-                            <option value="">All Attendance Statuses</option>
-                            <option value="Eligible">Eligible (&lt; 10% Absent)</option>
-                            <option value="Warning">Warning (10% - 19% Absent)</option>
-                            <option value="Disqualified">Disqualified (&gt;= 20% Absent)</option>
-                        </NativeSelect>
-                    </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+                <div className="relative w-full sm:w-64">
+                    <Search
+                        className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden
+                    />
+                    <Input
+                        aria-label="Search attendance trainees"
+                        placeholder="Search by name or student ID..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="h-8.5 pl-9 text-sm"
+                    />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5">
-                        <span className="size-2.5 rounded-full bg-emerald-500" />
-                        <span>&lt; 10%: Good (Eligible)</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                        <span className="size-2.5 rounded-full bg-amber-500" />
-                        <span>10% - 19%: Warning</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                        <span className="size-2.5 rounded-full bg-rose-600" />
-                        <span>&gt;= 20%: Critical (Disqualified)</span>
-                    </span>
+                <div className="w-full sm:w-56">
+                    <NativeSelect
+                        aria-label="Filter by Attendance Status"
+                        value={statusFilter}
+                        onChange={(e) =>
+                            setStatusFilter(
+                                e.target.value as "" | AttendanceStatusLabel,
+                            )
+                        }
+                        className="h-8.5 text-sm"
+                    >
+                        <option value="">All Attendance Statuses</option>
+                        <option value="Eligible">Eligible (&lt; 10% Absent)</option>
+                        <option value="At Risk">At Risk (10% - 19% Absent)</option>
+                        <option value="Disqualified">Disqualified (&gt;= 20% Absent)</option>
+                    </NativeSelect>
                 </div>
             </div>
 
-            {/* Attendance Table */}
-            <div className="max-h-[540px] overflow-auto rounded-md border">
-                <Table
+            {/* Expanded Single-Scroll Attendance Table */}
+            <div className="flex-1 min-h-0 max-h-[calc(100vh-300px)] w-full overflow-x-auto overflow-y-auto rounded-md border">
+                <table
                     aria-label="Trainee Attendance Table"
-                    className="min-w-[960px] border-collapse [&_td]:border-r [&_td:last-child]:border-r-0 [&_th]:border-r [&_th:last-child]:border-r-0"
+                    className="w-full caption-bottom border-separate border-spacing-0 text-sm [&_td]:border-r [&_td]:border-b [&_td:last-child]:border-r-0 [&_tbody_tr:last-child_td]:border-b-0 [&_th]:border-r [&_th:last-child]:border-r-0"
                 >
-                    <TableHeader className="sticky top-0 z-10 bg-muted/40">
+                    <TableHeader className="sticky top-0 z-20 bg-slate-50 dark:bg-slate-900">
                         <TableRow className="hover:bg-transparent">
-                            <TableHead className="w-12 px-3 text-center font-semibold text-foreground">
+                            <TableHead className={cn(ATTENDANCE_STICKY_HEADER_CLASS, "w-[5%] text-center")}>
                                 No.
                             </TableHead>
-                            <TableHead className="px-3 font-semibold text-foreground">
-                                Full Name &amp; FPT Student ID
+                            <TableHead className={cn(ATTENDANCE_STICKY_HEADER_CLASS, "w-[16%] text-left")}>
+                                Full Name
                             </TableHead>
-                            <TableHead className="px-3 text-center font-semibold text-foreground">
-                                Attended / Total
+                            <TableHead className={cn(ATTENDANCE_STICKY_HEADER_CLASS, "w-[10%] text-left")}>
+                                Student ID
                             </TableHead>
-                            <TableHead className="px-3 text-center font-semibold text-foreground">
-                                Absent (Excused / Unexcused)
+                            <TableHead className={cn(ATTENDANCE_STICKY_HEADER_CLASS, "w-[20%] text-left")}>
+                                Email
                             </TableHead>
-                            <TableHead className="px-3 text-center font-semibold text-foreground">
-                                Late
+                            <TableHead
+                                aria-sort={sortKey === "attended" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                                className={cn(ATTENDANCE_STICKY_HEADER_CLASS, "w-[11%] text-center")}
+                            >
+                                <SortableHeaderButton
+                                    label="Attended / Total"
+                                    columnKey="attended"
+                                    sortKey={sortKey}
+                                    sortDir={sortDir}
+                                    onSort={handleToggleSort}
+                                />
                             </TableHead>
-                            <TableHead className="w-52 px-3 font-semibold text-foreground">
-                                Absent Rate (%)
+                            <TableHead
+                                aria-sort={sortKey === "absent" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                                className={cn(ATTENDANCE_STICKY_HEADER_CLASS, "w-[15%] text-center")}
+                            >
+                                <SortableHeaderButton
+                                    label="Absent (Excused / Unexcused)"
+                                    columnKey="absent"
+                                    sortKey={sortKey}
+                                    sortDir={sortDir}
+                                    onSort={handleToggleSort}
+                                />
                             </TableHead>
-                            <TableHead className="px-3 text-center font-semibold text-foreground">
+                            <TableHead
+                                aria-sort={sortKey === "late" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                                className={cn(ATTENDANCE_STICKY_HEADER_CLASS, "w-[7%] text-center")}
+                            >
+                                <SortableHeaderButton
+                                    label="Late"
+                                    columnKey="late"
+                                    sortKey={sortKey}
+                                    sortDir={sortDir}
+                                    onSort={handleToggleSort}
+                                />
+                            </TableHead>
+                            <TableHead
+                                aria-sort={sortKey === "absentRate" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                                className={cn(ATTENDANCE_STICKY_HEADER_CLASS, "w-[10%] text-left")}
+                            >
+                                <SortableHeaderButton
+                                    label="Absent Rate (Max 20%)"
+                                    columnKey="absentRate"
+                                    sortKey={sortKey}
+                                    sortDir={sortDir}
+                                    onSort={handleToggleSort}
+                                />
+                            </TableHead>
+                            <TableHead className={cn(ATTENDANCE_STICKY_HEADER_CLASS, "w-[6%] text-center")}>
                                 Attendance Status
-                            </TableHead>
-                            <TableHead className="w-36 px-3 text-center font-semibold text-foreground">
-                                Action
                             </TableHead>
                         </TableRow>
                     </TableHeader>
 
                     <TableBody>
-                        {filteredRows.length === 0 ? (
+                        {sortedRows.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                                <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
                                     <div className="flex flex-col items-center gap-2">
                                         <Users className="size-7 text-muted-foreground/70" aria-hidden />
                                         <p className="text-sm">No trainees match your filter criteria.</p>
@@ -735,7 +1217,7 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredRows.map((row, index) => {
+                            sortedRows.map((row, index) => {
                                 const {
                                     trainee,
                                     studentId,
@@ -759,33 +1241,51 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                                                 "bg-amber-50/25 hover:bg-amber-50/50 dark:bg-amber-950/10",
                                         )}
                                     >
-                                        <TableCell className="px-3 py-3 text-center text-sm text-foreground">
+                                        <TableCell className="px-3 py-2 text-center text-sm text-foreground">
                                             {index + 1}
                                         </TableCell>
 
-                                        <TableCell className="px-3 py-3">
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-medium text-[#3b4cb8] dark:text-blue-300">
+                                        <TableCell className="px-3 py-2 text-left">
+                                            <TooltipWrapper
+                                                content="Click to view attendance logs"
+                                                side="bottom"
+                                                portal={false}
+                                                contentClassName="z-10"
+                                            >
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenLogsModal(trainee)}
+                                                    aria-label={`View Logs for ${trainee.fullName}`}
+                                                    title="Click to view attendance logs"
+                                                    className="w-fit cursor-pointer text-left text-sm font-medium whitespace-nowrap text-blue-600 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring dark:text-blue-400"
+                                                >
                                                     {trainee.fullName}
-                                                </span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {studentId} • {trainee.personalEmail || trainee.email || "—"}
-                                                </span>
-                                            </div>
+                                                </button>
+                                            </TooltipWrapper>
                                         </TableCell>
 
-                                        <TableCell className="px-3 py-3 text-center text-sm font-semibold text-foreground">
-                                            {attended} / {totalConducted}
+                                        <TableCell className="px-3 py-2 text-left text-sm font-normal whitespace-nowrap text-gray-900 dark:text-slate-100">
+                                            {studentId}
                                         </TableCell>
 
-                                        <TableCell className="px-3 py-3 text-center text-sm">
-                                            <span className="font-semibold text-foreground">{totalAbsent}</span>{" "}
-                                            <span className="text-xs text-muted-foreground">
-                                                ({record.excusedAbsent}P / {record.unexcusedAbsent}K)
+                                        <TableCell className="px-3 py-2 text-left text-sm font-normal text-gray-900 dark:text-slate-100">
+                                            <span className="block truncate">
+                                                {trainee.personalEmail || trainee.email || "—"}
                                             </span>
                                         </TableCell>
 
-                                        <TableCell className="px-3 py-3 text-center text-sm">
+                                        <TableCell className="px-3 py-2 text-center text-sm font-semibold text-foreground whitespace-nowrap">
+                                            {attended} / {totalConducted}
+                                        </TableCell>
+
+                                        <TableCell className="px-3 py-2 text-center text-sm whitespace-nowrap">
+                                            <span className="font-semibold text-foreground">{totalAbsent}</span>{" "}
+                                            <span className="text-xs text-muted-foreground">
+                                                ({record.excusedAbsent}E / {record.unexcusedAbsent}U)
+                                            </span>
+                                        </TableCell>
+
+                                        <TableCell className="px-3 py-2 text-center text-sm whitespace-nowrap">
                                             {record.lateCount > 0 ? (
                                                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
                                                     <Clock className="size-3" aria-hidden />
@@ -796,13 +1296,10 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                                             )}
                                         </TableCell>
 
-                                        <TableCell className="px-3 py-3">
-                                            <div className="space-y-1.5">
-                                                <div className="flex items-center justify-between text-xs">
+                                        <TableCell className="px-3 py-2">
+                                            <div className="space-y-1">
+                                                <div className="text-xs">
                                                     <span className={meta.textClassName}>{absentRate}%</span>
-                                                    <span className="text-[11px] text-muted-foreground">
-                                                        Max: 20%
-                                                    </span>
                                                 </div>
                                                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                                                     <div
@@ -816,55 +1313,119 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                                             </div>
                                         </TableCell>
 
-                                        <TableCell className="px-3 py-3 text-center">
+                                        <TableCell className="px-3 py-2 text-center">
                                             <Badge
                                                 variant="secondary"
                                                 className={cn(
-                                                    "rounded-full px-3 py-0.5 text-xs font-medium",
+                                                    "rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap",
                                                     meta.badgeClassName,
                                                 )}
                                             >
                                                 {meta.statusLabel}
                                             </Badge>
                                         </TableCell>
-
-                                        <TableCell className="px-3 py-3 text-center">
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                aria-label={`View Logs for ${trainee.fullName}`}
-                                                onClick={() => handleOpenLogsModal(trainee)}
-                                                className="h-8 gap-1.5 text-xs"
-                                            >
-                                                <History className="size-3.5" aria-hidden />
-                                                <span>View Logs</span>
-                                            </Button>
-                                        </TableCell>
                                     </TableRow>
                                 );
                             })
                         )}
                     </TableBody>
-                </Table>
+                </table>
+            </div>
+
+            {/* Bottom Navigation */}
+            <div className="flex shrink-0 justify-end pt-0.5">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onBack}
+                    className="gap-1.5 font-medium"
+                >
+                    <ArrowLeft className="size-4" aria-hidden />
+                    <span>Back to Trainee List</span>
+                </Button>
             </div>
 
             {/* Take Daily Attendance Modal */}
             <Dialog open={takeAttendanceOpen} onOpenChange={setTakeAttendanceOpen}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+                <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-4xl">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
+                        <DialogTitle className="flex flex-wrap items-center gap-2">
                             <ClipboardCheck className="size-5 text-blue-600" aria-hidden />
-                            Take Daily Attendance — Session #{attendanceState.conductedSessions + 1}
+                            <span>
+                                Take Daily Attendance — Session #{selectedSessionNumber}
+                            </span>
+                            {isFutureSession ? (
+                                <Badge
+                                    variant="secondary"
+                                    className="border border-rose-300 bg-rose-100 text-xs font-semibold text-rose-800 dark:border-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
+                                >
+                                    Upcoming - Locked
+                                </Badge>
+                            ) : isPastSession ? (
+                                <Badge
+                                    variant="secondary"
+                                    className="border border-amber-300 bg-amber-100 text-xs font-semibold text-amber-800 dark:border-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
+                                >
+                                    Editing Past Session
+                                </Badge>
+                            ) : (
+                                <Badge
+                                    variant="secondary"
+                                    className="border border-emerald-200 bg-emerald-100 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                >
+                                    Current Active Session
+                                </Badge>
+                            )}
                         </DialogTitle>
                         <DialogDescription>
-                            Select the session date and mark attendance status for each trainee in{" "}
-                            <strong>{classItem.code ?? classItem.name}</strong>.
+                            Select a session and mark attendance status for active trainees in{" "}
+                            <strong>{classItem.code ?? classItem.name}</strong>. Future sessions (date &gt;{" "}
+                            {todayIso}) are strictly locked.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-4 py-2">
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        {/* Session Selector, Date & Topic */}
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="attendance-session-select">
+                                    Attendance Session <span className="text-destructive">*</span>
+                                </Label>
+                                <NativeSelect
+                                    id="attendance-session-select"
+                                    aria-label="Select Attendance Session"
+                                    value={String(selectedSessionNumber)}
+                                    onChange={(e) => handleSessionSelectChange(Number(e.target.value))}
+                                >
+                                    {Array.from(
+                                        { length: attendanceState.plannedSessions },
+                                        (_, i) => i + 1,
+                                    ).map((sNum) => {
+                                        const padded = String(sNum).padStart(2, "0");
+                                        const schedDate = getScheduledDateForSession(sNum, attendanceState);
+                                        const isCompleted =
+                                            sNum <= attendanceState.conductedSessions && schedDate <= todayIso;
+                                        const isCurrent =
+                                            sNum === attendanceState.conductedSessions + 1 &&
+                                            schedDate <= todayIso;
+                                        const isFuture =
+                                            sNum > attendanceState.conductedSessions + 1 ||
+                                            schedDate > todayIso;
+                                        const label = isCompleted
+                                            ? `Session #${padded} (${schedDate}) — Completed (Past Session)`
+                                            : isCurrent
+                                              ? `Session #${padded} (${schedDate}) — Today (Current Session)`
+                                              : `Session #${padded} (${schedDate}) — Upcoming - Locked`;
+                                        return (
+                                            <option key={sNum} value={sNum} disabled={isFuture}>
+                                                {label}
+                                            </option>
+                                        );
+                                    })}
+                                </NativeSelect>
+                            </div>
+
                             <div className="space-y-1.5">
                                 <Label htmlFor="attendance-session-date">
                                     Session Date <span className="text-destructive">*</span>
@@ -873,10 +1434,15 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                                     id="attendance-session-date"
                                     aria-label="Session Date"
                                     type="date"
+                                    max={todayIso}
                                     value={sessionDate}
-                                    onChange={(e) => setSessionDate(e.target.value)}
+                                    onChange={(e) => {
+                                        setSessionDate(e.target.value);
+                                        if (attendanceFormError) setAttendanceFormError("");
+                                    }}
                                 />
                             </div>
+
                             <div className="space-y-1.5">
                                 <Label htmlFor="attendance-session-topic">Session Topic / Note</Label>
                                 <Input
@@ -889,16 +1455,74 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                             </div>
                         </div>
 
+                        {/* Future Date Warning Banner */}
+                        {isFutureSession && (
+                            <div
+                                role="alert"
+                                data-testid="future-session-warning"
+                                className="flex items-center gap-2 rounded-md border border-rose-300 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200"
+                            >
+                                <AlertTriangle className="size-4 shrink-0 text-rose-600" aria-hidden />
+                                <span>
+                                    Cannot take attendance for a future date (Session scheduled for{" "}
+                                    {sessionDate || "future date"}).
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Mandatory Audit Reason when editing a Past Session */}
+                        {isPastSession && (
+                            <div className="rounded-md border border-amber-300 bg-amber-50/60 p-3 dark:border-amber-800 dark:bg-amber-950/25">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <Label
+                                        htmlFor="attendance-audit-reason"
+                                        className="text-xs font-semibold text-amber-900 dark:text-amber-200"
+                                    >
+                                        Audit Reason for Modification{" "}
+                                        {modifiedPastTrainees.length > 0 && (
+                                            <span className="text-destructive">*</span>
+                                        )}
+                                    </Label>
+                                    <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                                        {modifiedPastTrainees.length === 0
+                                            ? "No status changes staged yet"
+                                            : `${modifiedPastTrainees.length} trainee status change(s) staged`}
+                                    </span>
+                                </div>
+                                <Input
+                                    id="attendance-audit-reason"
+                                    aria-label="Audit Reason for Modification"
+                                    placeholder="e.g. Late medical certificate submitted, Data entry correction..."
+                                    value={auditReason}
+                                    onChange={(e) => {
+                                        setAuditReason(e.target.value);
+                                        if (attendanceFormError) setAttendanceFormError("");
+                                    }}
+                                    className="mt-1.5 h-8 bg-background text-xs"
+                                />
+                            </div>
+                        )}
+
+                        {attendanceFormError && (
+                            <div
+                                role="alert"
+                                className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive"
+                            >
+                                {attendanceFormError}
+                            </div>
+                        )}
+
                         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2">
                             <span className="text-xs text-muted-foreground">
-                                Quick Action: Mark all {trainees.length} trainees as Present with one click.
+                                Quick Action: Reset all active trainees to Present with one click.
                             </span>
                             <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
+                                disabled={isFutureSession}
                                 onClick={handleMarkAllPresent}
-                                className="h-8 border-emerald-600 text-xs text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-300"
+                                className="h-8 border-emerald-600 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:border-emerald-500 dark:text-emerald-300"
                             >
                                 <CheckCircle2 className="mr-1.5 size-3.5" aria-hidden />
                                 Mark All Present
@@ -910,67 +1534,198 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                                 <TableHeader className="sticky top-0 z-10 bg-muted/50">
                                     <TableRow>
                                         <TableHead className="w-10 px-2.5 text-center">#</TableHead>
-                                        <TableHead className="px-2.5">Trainee</TableHead>
-                                        <TableHead className="w-52 px-2.5">Attendance Status</TableHead>
-                                        <TableHead className="px-2.5">Remark / Note</TableHead>
+                                        <TableHead className="w-48 px-2.5">Trainee</TableHead>
+                                        <TableHead className="w-80 px-2.5">Attendance Status</TableHead>
+                                        <TableHead className="px-2.5">Note / Reason</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {trainees.map((trainee, idx) => {
+                                        const enrollmentStatus = normalizeTraineeStatus(trainee.status);
+                                        const isInactiveOrDropped = enrollmentStatus !== "Active";
                                         const currentMark = dailyMarks[trainee.id] ?? "Present";
+                                        const currentNote = dailyNotes[trainee.id] ?? "";
+                                        const isExcusedMissingNote =
+                                            !isInactiveOrDropped &&
+                                            currentMark === "Excused" &&
+                                            !currentNote.trim();
                                         const studentId = formatFptStudentIdForSite(
                                             trainee.fptAccount || trainee.code,
                                             classSite,
                                             trainee.id,
                                         );
+
+                                        const segmentedOptions: Array<{
+                                            value: SessionAttendanceMark;
+                                            shortLabel: string;
+                                            activeClass: string;
+                                        }> = [
+                                            {
+                                                value: "Present",
+                                                shortLabel: "Present (P)",
+                                                activeClass:
+                                                    "bg-emerald-600 text-white border-emerald-600 shadow-xs",
+                                            },
+                                            {
+                                                value: "Late",
+                                                shortLabel: "Late (L)",
+                                                activeClass:
+                                                    "bg-amber-500 text-white border-amber-500 shadow-xs",
+                                            },
+                                            {
+                                                value: "Excused",
+                                                shortLabel: "Excused (E)",
+                                                activeClass:
+                                                    "bg-blue-600 text-white border-blue-600 shadow-xs",
+                                            },
+                                            {
+                                                value: "Unexcused",
+                                                shortLabel: "Unexcused (U)",
+                                                activeClass:
+                                                    "bg-rose-600 text-white border-rose-600 shadow-xs",
+                                            },
+                                        ];
+
                                         return (
-                                            <TableRow key={trainee.id}>
+                                            <TableRow
+                                                key={trainee.id}
+                                                data-testid={
+                                                    isInactiveOrDropped
+                                                        ? `attendance-row-disabled-${trainee.id}`
+                                                        : undefined
+                                                }
+                                                className={cn(
+                                                    (isInactiveOrDropped || isFutureSession) &&
+                                                        "bg-muted/35 opacity-60",
+                                                )}
+                                            >
                                                 <TableCell className="px-2.5 py-2 text-center text-xs">
                                                     {idx + 1}
                                                 </TableCell>
                                                 <TableCell className="px-2.5 py-2">
-                                                    <div className="text-xs font-medium text-foreground">
-                                                        {trainee.fullName}
+                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                        <span className="text-xs font-medium text-foreground">
+                                                            {trainee.fullName}
+                                                        </span>
+                                                        {isInactiveOrDropped && (
+                                                            <Badge
+                                                                variant="secondary"
+                                                                className="px-1.5 py-0 text-[10px]"
+                                                            >
+                                                                {enrollmentStatus === "Dropped"
+                                                                    ? "Dropped Out"
+                                                                    : "Inactive"}
+                                                            </Badge>
+                                                        )}
                                                     </div>
                                                     <div className="text-[11px] text-muted-foreground">
                                                         {studentId}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="px-2.5 py-2">
-                                                    <NativeSelect
-                                                        aria-label={`Attendance status for ${trainee.fullName}`}
-                                                        value={currentMark}
-                                                        onChange={(e) =>
-                                                            setDailyMarks((prev) => ({
-                                                                ...prev,
-                                                                [trainee.id]: e.target
-                                                                    .value as SessionAttendanceMark,
-                                                            }))
-                                                        }
-                                                        className="h-8 text-xs"
-                                                    >
-                                                        <option value="Present">Present (Có mặt)</option>
-                                                        <option value="Unexcused">
-                                                            Absent - Unexcused (Vắng K)
-                                                        </option>
-                                                        <option value="Excused">
-                                                            Excused (Vắng có phép P)
-                                                        </option>
-                                                        <option value="Late">Late (Đi muộn)</option>
-                                                    </NativeSelect>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {/* Segmented Status Selector */}
+                                                        <div
+                                                            role="group"
+                                                            aria-label={`Segmented status for ${trainee.fullName}`}
+                                                            className="grid grid-cols-4 gap-1"
+                                                        >
+                                                            {segmentedOptions.map((opt) => {
+                                                                const active = currentMark === opt.value;
+                                                                const lockOption =
+                                                                    isInactiveOrDropped ||
+                                                                    (isFutureSession &&
+                                                                        opt.value !== "Excused");
+                                                                return (
+                                                                    <button
+                                                                        key={opt.value}
+                                                                        type="button"
+                                                                        disabled={lockOption}
+                                                                        aria-pressed={active}
+                                                                        aria-label={`Mark ${trainee.fullName} as ${opt.value}`}
+                                                                        onClick={() => {
+                                                                            setDailyMarks((prev) => ({
+                                                                                ...prev,
+                                                                                [trainee.id]: opt.value,
+                                                                            }));
+                                                                            if (attendanceFormError) {
+                                                                                setAttendanceFormError("");
+                                                                            }
+                                                                        }}
+                                                                        className={cn(
+                                                                            "cursor-pointer rounded border px-1.5 py-1 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+                                                                            active
+                                                                                ? opt.activeClass
+                                                                                : "border-border bg-background text-muted-foreground hover:bg-muted",
+                                                                        )}
+                                                                    >
+                                                                        {opt.shortLabel}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+
+                                                        {/* Accessible Select fallback synced with segmented buttons */}
+                                                        <NativeSelect
+                                                            aria-label={`Attendance status for ${trainee.fullName}`}
+                                                            disabled={isInactiveOrDropped || isFutureSession}
+                                                            value={currentMark}
+                                                            onChange={(e) => {
+                                                                setDailyMarks((prev) => ({
+                                                                    ...prev,
+                                                                    [trainee.id]: e.target
+                                                                        .value as SessionAttendanceMark,
+                                                                }));
+                                                                if (attendanceFormError) {
+                                                                    setAttendanceFormError("");
+                                                                }
+                                                            }}
+                                                            className="sr-only"
+                                                        >
+                                                            <option value="Present" disabled={isFutureSession}>
+                                                                Present
+                                                            </option>
+                                                            <option value="Late" disabled={isFutureSession}>
+                                                                Late
+                                                            </option>
+                                                            <option value="Excused">
+                                                                Absent - Excused (E)
+                                                            </option>
+                                                            <option value="Unexcused" disabled={isFutureSession}>
+                                                                Absent - Unexcused (U)
+                                                            </option>
+                                                        </NativeSelect>
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="px-2.5 py-2">
                                                     <Input
                                                         aria-label={`Attendance note for ${trainee.fullName}`}
-                                                        placeholder="Optional note..."
-                                                        value={dailyNotes[trainee.id] ?? ""}
-                                                        onChange={(e) =>
+                                                        disabled={isInactiveOrDropped || isFutureSession}
+                                                        required={!isInactiveOrDropped && currentMark === "Excused"}
+                                                        placeholder={
+                                                            isInactiveOrDropped
+                                                                ? `Excluded (${enrollmentStatus})`
+                                                                : isFutureSession
+                                                                  ? "Future session locked"
+                                                                  : currentMark === "Excused"
+                                                                    ? "Required: Reason for excused leave..."
+                                                                    : "Optional note / reason..."
+                                                        }
+                                                        value={currentNote}
+                                                        onChange={(e) => {
                                                             setDailyNotes((prev) => ({
                                                                 ...prev,
                                                                 [trainee.id]: e.target.value,
-                                                            }))
-                                                        }
-                                                        className="h-8 text-xs"
+                                                            }));
+                                                            if (attendanceFormError) {
+                                                                setAttendanceFormError("");
+                                                            }
+                                                        }}
+                                                        className={cn(
+                                                            "h-8 text-xs",
+                                                            isExcusedMissingNote &&
+                                                                "border-amber-500 focus-visible:ring-amber-500",
+                                                        )}
                                                     />
                                                 </TableCell>
                                             </TableRow>
@@ -987,8 +1742,9 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                         </Button>
                         <Button
                             type="button"
+                            disabled={isFutureSession}
                             onClick={handleSaveDailyAttendance}
-                            className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
                         >
                             <Save className="mr-1.5 size-4" aria-hidden />
                             Save Changes
@@ -997,143 +1753,224 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                 </DialogContent>
             </Dialog>
 
-            {/* View Logs & Quick Edit Modal */}
+            {/* View Logs & Session-Level Edit Modal */}
             <Dialog open={Boolean(activeLogTrainee)} onOpenChange={(open) => !open && setActiveLogTrainee(null)}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <History className="size-5 text-blue-600" aria-hidden />
                             Attendance Logs — {activeLogTrainee?.fullName}
                         </DialogTitle>
                         <DialogDescription>
-                            Session attendance history and quick adjustment for{" "}
-                            <strong>{activeLogRow?.studentId}</strong> ({activeLogRow?.attended} /{" "}
-                            {activeLogRow?.totalConducted} sessions attended •{" "}
-                            <strong>{activeLogRow?.absentRate}%</strong> absent).
+                            Session-by-session attendance history for{" "}
+                            <strong>{activeLogRow?.studentId}</strong> (
+                            {liveDraftSummary?.attended ?? activeLogRow?.attended} /{" "}
+                            {liveDraftSummary?.totalConducted ?? activeLogRow?.totalConducted} sessions attended •{" "}
+                            <strong>{liveDraftSummary?.absentRate ?? activeLogRow?.absentRate}%</strong> absent).
+                            Totals are automatically calculated from completed sessions (&le; {todayIso}).
                         </DialogDescription>
                     </DialogHeader>
 
-                    {activeLogRow ? (
+                    {activeLogRow && liveDraftSummary ? (
                         <div className="space-y-4 py-2">
-                            {/* Quick Edit Summary Box */}
+                            {/* Read-Only Calculated Attendance Summary (Synchronized with Session History) */}
                             <div className="rounded-md border bg-muted/25 p-3">
-                                <div className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                    <Pencil className="size-3.5" aria-hidden />
-                                    <span>Quick Edit Attendance Counts</span>
+                                <div className="mb-2 flex items-center justify-between">
+                                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Calculated Attendance Summary (From Session History)
+                                    </span>
+                                    <Badge
+                                        variant="secondary"
+                                        className={cn(
+                                            "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                                            liveDraftSummary.meta.badgeClassName,
+                                        )}
+                                    >
+                                        {liveDraftSummary.meta.statusLabel} ({liveDraftSummary.absentRate}%)
+                                    </Badge>
                                 </div>
-                                <div className="grid gap-3 sm:grid-cols-3">
-                                    <div className="space-y-1">
-                                        <Label htmlFor="quick-edit-excused" className="text-xs">
-                                            Excused Absent (P)
-                                        </Label>
-                                        <Input
-                                            id="quick-edit-excused"
-                                            aria-label="Excused Absent (P)"
-                                            type="number"
-                                            min={0}
-                                            max={attendanceState.conductedSessions}
-                                            value={quickEditValues.excusedAbsent}
-                                            onChange={(e) =>
-                                                setQuickEditValues((prev) => ({
-                                                    ...prev,
-                                                    excusedAbsent: Number(e.target.value),
-                                                }))
-                                            }
-                                            className="h-8 text-xs"
-                                        />
+                                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                                    <div className="rounded border bg-background px-3 py-2">
+                                        <div className="text-[11px] text-muted-foreground">Attended / Total</div>
+                                        <div className="text-sm font-bold text-foreground">
+                                            {liveDraftSummary.attended} / {liveDraftSummary.totalConducted}
+                                        </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        <Label htmlFor="quick-edit-unexcused" className="text-xs">
-                                            Unexcused Absent (K)
-                                        </Label>
-                                        <Input
-                                            id="quick-edit-unexcused"
-                                            aria-label="Unexcused Absent (K)"
-                                            type="number"
-                                            min={0}
-                                            max={attendanceState.conductedSessions}
-                                            value={quickEditValues.unexcusedAbsent}
-                                            onChange={(e) =>
-                                                setQuickEditValues((prev) => ({
-                                                    ...prev,
-                                                    unexcusedAbsent: Number(e.target.value),
-                                                }))
-                                            }
-                                            className="h-8 text-xs"
-                                        />
+                                    <div className="rounded border bg-background px-3 py-2">
+                                        <div className="text-[11px] text-muted-foreground">Excused Absent (E)</div>
+                                        <div className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                                            {liveDraftSummary.excused}
+                                        </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        <Label htmlFor="quick-edit-late" className="text-xs">
-                                            Late Sessions
-                                        </Label>
-                                        <Input
-                                            id="quick-edit-late"
-                                            aria-label="Late Sessions"
-                                            type="number"
-                                            min={0}
-                                            max={attendanceState.conductedSessions}
-                                            value={quickEditValues.lateCount}
-                                            onChange={(e) =>
-                                                setQuickEditValues((prev) => ({
-                                                    ...prev,
-                                                    lateCount: Number(e.target.value),
-                                                }))
-                                            }
-                                            className="h-8 text-xs"
-                                        />
+                                    <div className="rounded border bg-background px-3 py-2">
+                                        <div className="text-[11px] text-muted-foreground">Unexcused Absent (U)</div>
+                                        <div className="text-sm font-bold text-rose-600 dark:text-rose-400">
+                                            {liveDraftSummary.unexcused}
+                                        </div>
+                                    </div>
+                                    <div className="rounded border bg-background px-3 py-2">
+                                        <div className="text-[11px] text-muted-foreground">Late Sessions (L)</div>
+                                        <div className="text-sm font-bold text-amber-600 dark:text-amber-400">
+                                            {liveDraftSummary.late}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
+                            {/* Reason for Edit input when modifying session status in logs */}
+                            <div
+                                className={cn(
+                                    "rounded-md border p-3 transition-colors",
+                                    changedLogSessions.length > 0
+                                        ? "border-amber-300 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/25"
+                                        : "bg-muted/15",
+                                )}
+                            >
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <Label
+                                        htmlFor="log-edit-reason"
+                                        className="text-xs font-semibold text-foreground"
+                                    >
+                                        Reason for Edit{" "}
+                                        {changedLogSessions.length > 0 && (
+                                            <span className="text-destructive">*</span>
+                                        )}
+                                    </Label>
+                                    <span className="text-[11px] text-muted-foreground">
+                                        {changedLogSessions.length === 0
+                                            ? "Change any session status below to stage an edit"
+                                            : `${changedLogSessions.length} session(s) modified`}
+                                    </span>
+                                </div>
+                                <Input
+                                    id="log-edit-reason"
+                                    aria-label="Reason for Edit"
+                                    placeholder="Required when changing a past session's status (e.g., Late medical certificate verified)..."
+                                    value={logEditReason}
+                                    onChange={(e) => {
+                                        setLogEditReason(e.target.value);
+                                        if (logModalError) setLogModalError("");
+                                    }}
+                                    className="mt-1.5 h-8 bg-background text-xs"
+                                />
+                            </div>
+
+                            {logModalError && (
+                                <div
+                                    role="alert"
+                                    className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive"
+                                >
+                                    {logModalError}
+                                </div>
+                            )}
+
                             {/* Session History Logs Table */}
                             <div className="space-y-1.5">
                                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                    Session History ({activeLogRow.record.logs.length} Sessions)
+                                    Session History ({validActiveLogs.length} Sessions)
                                 </Label>
-                                <div className="max-h-64 overflow-y-auto rounded-md border">
+                                <div className="max-h-72 overflow-y-auto rounded-md border">
                                     <Table>
-                                        <TableHeader className="sticky top-0 bg-muted/50">
+                                        <TableHeader className="sticky top-0 z-10 bg-muted/50">
                                             <TableRow>
+                                                <TableHead className="w-20 px-2.5 text-center text-xs">
+                                                    Session #
+                                                </TableHead>
                                                 <TableHead className="w-24 px-2.5 text-xs">Date</TableHead>
                                                 <TableHead className="px-2.5 text-xs">Session Topic</TableHead>
-                                                <TableHead className="w-28 px-2.5 text-center text-xs">
+                                                <TableHead className="w-40 px-2.5 text-center text-xs">
                                                     Status
                                                 </TableHead>
-                                                <TableHead className="px-2.5 text-xs">Note</TableHead>
+                                                <TableHead className="px-2.5 text-xs">Note &amp; Audit Trail</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {activeLogRow.record.logs.map((log) => (
-                                                <TableRow key={`${log.sessionNumber}-${log.date}`}>
-                                                    <TableCell className="px-2.5 py-2 text-xs whitespace-nowrap">
-                                                        {log.date}
-                                                    </TableCell>
-                                                    <TableCell className="px-2.5 py-2 text-xs font-medium">
-                                                        {log.topic}
-                                                    </TableCell>
-                                                    <TableCell className="px-2.5 py-2 text-center">
-                                                        <Badge
-                                                            variant="secondary"
-                                                            className={cn(
-                                                                "text-[11px]",
-                                                                log.status === "Present" &&
-                                                                    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
-                                                                log.status === "Excused" &&
-                                                                    "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300",
-                                                                log.status === "Unexcused" &&
-                                                                    "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300",
-                                                                log.status === "Late" &&
-                                                                    "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300",
-                                                            )}
-                                                        >
-                                                            {log.status}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="px-2.5 py-2 text-xs text-muted-foreground">
-                                                        {log.note}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
+                                            {validActiveLogs.map((log) => {
+                                                const draftStatus =
+                                                    logDraftMarks[log.sessionNumber] ?? log.status;
+                                                const draftNote =
+                                                    logDraftNotes[log.sessionNumber] ?? log.note ?? "";
+                                                const isRowFuture = Boolean(log.date && log.date > todayIso);
+
+                                                return (
+                                                    <TableRow key={`${log.sessionNumber}-${log.date}`}>
+                                                        <TableCell className="px-2.5 py-2 text-center text-xs font-semibold text-foreground">
+                                                            #{String(log.sessionNumber).padStart(2, "0")}
+                                                        </TableCell>
+                                                        <TableCell className="px-2.5 py-2 text-xs whitespace-nowrap">
+                                                            {log.date}
+                                                        </TableCell>
+                                                        <TableCell className="px-2.5 py-2 text-xs font-medium">
+                                                            {log.topic}
+                                                        </TableCell>
+                                                        <TableCell className="px-2.5 py-2 text-center">
+                                                            <NativeSelect
+                                                                aria-label={`Session #${log.sessionNumber} status`}
+                                                                disabled={isRowFuture}
+                                                                value={draftStatus}
+                                                                onChange={(e) => {
+                                                                    const nextVal = e.target
+                                                                        .value as SessionAttendanceMark;
+                                                                    setLogDraftMarks((prev) => ({
+                                                                        ...prev,
+                                                                        [log.sessionNumber]: nextVal,
+                                                                    }));
+                                                                    if (logModalError) setLogModalError("");
+                                                                }}
+                                                                className={cn(
+                                                                    "h-7 text-xs font-medium",
+                                                                    draftStatus === "Present" &&
+                                                                        "border-emerald-300 bg-emerald-50/70 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
+                                                                    draftStatus === "Excused" &&
+                                                                        "border-blue-300 bg-blue-50/70 text-blue-800 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300",
+                                                                    draftStatus === "Unexcused" &&
+                                                                        "border-rose-300 bg-rose-50/70 text-rose-800 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300",
+                                                                    draftStatus === "Late" &&
+                                                                        "border-amber-300 bg-amber-50/70 text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
+                                                                )}
+                                                            >
+                                                                <option value="Present" disabled={isRowFuture}>
+                                                                    Present
+                                                                </option>
+                                                                <option value="Late" disabled={isRowFuture}>
+                                                                    Late
+                                                                </option>
+                                                                <option value="Excused">Excused</option>
+                                                                <option value="Unexcused" disabled={isRowFuture}>
+                                                                    Unexcused
+                                                                </option>
+                                                            </NativeSelect>
+                                                        </TableCell>
+                                                        <TableCell className="px-2.5 py-2 text-xs text-muted-foreground">
+                                                            <Input
+                                                                aria-label={`Session #${log.sessionNumber} note`}
+                                                                disabled={isRowFuture}
+                                                                value={draftNote}
+                                                                onChange={(e) =>
+                                                                    setLogDraftNotes((prev) => ({
+                                                                        ...prev,
+                                                                        [log.sessionNumber]: e.target.value,
+                                                                    }))
+                                                                }
+                                                                className="h-7 text-xs"
+                                                            />
+                                                            {log.auditTrail?.map((audit, idx) => (
+                                                                <div
+                                                                    key={idx}
+                                                                    data-testid={`audit-trail-session-${log.sessionNumber}`}
+                                                                    className="mt-1 rounded border border-amber-200 bg-amber-50/80 px-2 py-1 text-[11px] font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                                                                >
+                                                                    Updated from{" "}
+                                                                    <strong>{audit.previousStatus}</strong> to{" "}
+                                                                    <strong>{audit.newStatus}</strong> by{" "}
+                                                                    {audit.modifiedBy} on {audit.modifiedAt} — Reason:{" "}
+                                                                    {audit.reason}
+                                                                </div>
+                                                            ))}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
                                         </TableBody>
                                     </Table>
                                 </div>
@@ -1147,11 +1984,11 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                         </Button>
                         <Button
                             type="button"
-                            onClick={handleSaveQuickEdit}
+                            onClick={handleSaveSessionLogsEdit}
                             className="bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500"
                         >
                             <Save className="mr-1.5 size-4" aria-hidden />
-                            Save Quick Edit
+                            Save Changes
                         </Button>
                     </DialogFooter>
                 </DialogContent>

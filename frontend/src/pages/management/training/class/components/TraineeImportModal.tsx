@@ -20,7 +20,6 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import {
-    Table,
     TableBody,
     TableCell,
     TableHead,
@@ -149,21 +148,21 @@ export function TraineeImportModal({
                 if (!pending.current) onOpenChange(value);
             }}
         >
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">
-                <DialogHeader>
+            <DialogContent className="max-h-[90vh] w-[92vw] max-w-[1150px] grid-cols-1 overflow-x-hidden overflow-y-auto p-6 sm:max-w-[1150px]">
+                <DialogHeader className="min-w-0 pr-8">
                     <DialogTitle>Import Trainees from Excel</DialogTitle>
-                    <DialogDescription>
+                    <DialogDescription className="whitespace-normal break-words text-sm leading-relaxed">
                         Upload an Excel (.xlsx) file to validate and batch-import trainees into this class.
-                        Supports flexible date formats (DD/MM/YYYY, YYYY-MM-DD, or Excel Date cells).
+                        Strict All-or-Nothing strategy: all rows must be 100% valid before any changes are committed.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4">
+                <div className="min-w-0 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
                         <div>
                             <h3 className="text-sm font-semibold">1. Download Template</h3>
                             <p className="text-xs text-muted-foreground">
-                                Columns: Student ID*, Full Name*, Personal Email, DOB, Gender.
+                                Columns: Student ID*, Full Name*, Personal Email, DOB, Gender, Status.
                             </p>
                         </div>
                         <Button
@@ -243,28 +242,48 @@ export function TraineeImportModal({
                                 </span>
                             </div>
 
+                            {(issues.length > 0 || (preview && !preview.canImport)) && (
+                                <div
+                                    role="alert"
+                                    className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300"
+                                >
+                                    <span className="font-semibold">All-or-Nothing Policy: </span>
+                                    Import cannot proceed because one or more rows contain errors. Please fix all errors in the Excel file and upload again.
+                                </div>
+                            )}
+
+                            {preview?.canImport && issues.length === 0 && (
+                                <div
+                                    role="status"
+                                    className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-300"
+                                >
+                                    <span className="font-semibold">Ready to Import: </span>
+                                    All {rows.length} rows passed validation and are ready to be committed atomically.
+                                </div>
+                            )}
+
                             {!preview && !issues.length && (
                                 <p className="text-sm text-muted-foreground">
                                     Server verification is required before import.
                                 </p>
                             )}
 
-                            <div className="max-h-80 overflow-auto rounded-md border">
-                                <Table aria-label="Trainee import preview">
-                                    <TableHeader>
-                                        <TableRow>
-                                            {[
-                                                "Row",
-                                                "Validation Status",
-                                                "Student ID",
-                                                "Full Name",
-                                                "Personal Email",
-                                                "DOB",
-                                                "Gender",
-                                                "Error Details",
-                                            ].map((header) => (
-                                                <TableHead key={header}>{header}</TableHead>
-                                            ))}
+                            <div className="max-h-[340px] w-full overflow-x-hidden overflow-y-auto rounded-md border">
+                                <table
+                                    aria-label="Trainee import preview"
+                                    className="w-full table-fixed caption-bottom border-collapse text-xs"
+                                >
+                                    <TableHeader className="sticky top-0 z-10 bg-muted/95 shadow-[inset_0_-1px_0_var(--border)] backdrop-blur-xs">
+                                        <TableRow className="hover:bg-transparent">
+                                            <TableHead className="h-auto w-[48px] px-2 py-2.5 text-center font-semibold whitespace-normal">Row</TableHead>
+                                            <TableHead className="h-auto w-[96px] px-2 py-2.5 font-semibold whitespace-normal leading-tight">Validation Status</TableHead>
+                                            <TableHead className="h-auto w-[96px] px-2 py-2.5 font-semibold whitespace-normal">Student ID</TableHead>
+                                            <TableHead className="h-auto w-[15%] px-2 py-2.5 font-semibold whitespace-normal">Full Name</TableHead>
+                                            <TableHead className="h-auto w-[21%] px-2 py-2.5 font-semibold whitespace-normal">Personal Email</TableHead>
+                                            <TableHead className="h-auto w-[92px] px-2 py-2.5 font-semibold whitespace-normal">DOB</TableHead>
+                                            <TableHead className="h-auto w-[68px] px-2 py-2.5 font-semibold whitespace-normal">Gender</TableHead>
+                                            <TableHead className="h-auto w-[78px] px-2 py-2.5 font-semibold whitespace-normal">Status</TableHead>
+                                            <TableHead className="h-auto px-2 py-2.5 font-semibold whitespace-normal">Error Details</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -288,33 +307,51 @@ export function TraineeImportModal({
                                                     key={row.rowNumber}
                                                     className={rowErrors.length ? "bg-destructive/5" : undefined}
                                                 >
-                                                    <TableCell className="font-medium">{row.rowNumber}</TableCell>
-                                                    <TableCell>
+                                                    <TableCell className="px-2 py-2 text-center font-medium whitespace-normal">
+                                                        {row.rowNumber}
+                                                    </TableCell>
+                                                    <TableCell className="px-2 py-2 whitespace-normal">
                                                         {rowErrors.length ? (
-                                                            <Badge variant="destructive">Invalid</Badge>
+                                                            <Badge variant="destructive" className="px-1.5 py-0.5 text-[11px]">Invalid</Badge>
                                                         ) : isRowValid ? (
-                                                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                                            <Badge className="bg-emerald-100 px-1.5 py-0.5 text-[11px] text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300">
                                                                 Valid
                                                             </Badge>
                                                         ) : (
-                                                            <Badge variant="secondary">Unverified</Badge>
+                                                            <Badge variant="secondary" className="px-1.5 py-0.5 text-[11px]">Unverified</Badge>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell className="font-mono text-xs font-semibold">
+                                                    <TableCell className="px-2 py-2 font-mono text-xs font-semibold whitespace-normal break-words">
                                                         {row.studentId || "—"}
                                                     </TableCell>
-                                                    <TableCell>{row.fullName || "—"}</TableCell>
-                                                    <TableCell>{row.personalEmail || "—"}</TableCell>
-                                                    <TableCell>{row.dob || "—"}</TableCell>
-                                                    <TableCell>{row.gender || "—"}</TableCell>
-                                                    <TableCell className="min-w-56 text-xs text-destructive">
+                                                    <TableCell className="px-2 py-2 whitespace-normal break-words [overflow-wrap:anywhere]">
+                                                        {row.fullName || "—"}
+                                                    </TableCell>
+                                                    <TableCell className="px-2 py-2 whitespace-normal break-words [overflow-wrap:anywhere]">
+                                                        {row.personalEmail || "—"}
+                                                    </TableCell>
+                                                    <TableCell className="px-2 py-2 whitespace-normal">
+                                                        {row.dob || "—"}
+                                                    </TableCell>
+                                                    <TableCell className="px-2 py-2 whitespace-normal">
+                                                        {row.gender || "—"}
+                                                    </TableCell>
+                                                    <TableCell className="px-2 py-2 whitespace-normal">
+                                                        <Badge
+                                                            variant={row.status === "Inactive" ? "secondary" : row.status === "Dropped" ? "destructive" : "outline"}
+                                                            className="px-1.5 py-0.5 text-[11px]"
+                                                        >
+                                                            {row.status || "Active"}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="px-2 py-2 text-xs text-destructive whitespace-normal break-words [overflow-wrap:anywhere]">
                                                         {rowErrors.join("; ")}
                                                     </TableCell>
                                                 </TableRow>
                                             );
                                         })}
                                     </TableBody>
-                                </Table>
+                                </table>
                             </div>
                         </>
                     )}

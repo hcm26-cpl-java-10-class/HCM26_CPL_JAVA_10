@@ -8,7 +8,11 @@ public final class TraineeImportContract {
     private TraineeImportContract() {}
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Row(Integer rowNumber, String studentId, String fullName, String personalEmail,
-                      String nationalId, String dob, String gender) {
+                      String nationalId, String dob, String gender, String status) {
+        public Row(Integer rowNumber, String studentId, String fullName, String personalEmail,
+                   String nationalId, String dob, String gender) {
+            this(rowNumber, studentId, fullName, personalEmail, nationalId, dob, gender, "Active");
+        }
         @Override public String toString() { return "TraineeImportRow[rowNumber=" + rowNumber + "]"; }
     }
     public record RowResult(int rowNumber, boolean valid, boolean duplicate, Map<String, List<String>> errors) {}
