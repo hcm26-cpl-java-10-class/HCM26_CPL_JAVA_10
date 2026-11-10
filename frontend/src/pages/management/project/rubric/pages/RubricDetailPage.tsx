@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { RubricCriterionCard } from "../components/RubricCriterionCard";
 import { RubricDetailSkeleton } from "../components/RubricDetailSkeleton";
 import { RubricStatusBadge } from "../components/RubricStatusBadge";
+import { RubricVersionSwitcher } from "../components/RubricVersionSwitcher";
 import { RubricWeightBar } from "../components/RubricWeightBar";
 import {
   canCreateDraftFromVersion,
@@ -203,43 +204,22 @@ export function RubricDetailPage() {
           <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">This rubric has no versions yet.</CardContent></Card>
         ) : (
           <>
-            {/* Version selector */}
-            {versions.length > 1 ? (
-              <div className="min-w-0 overflow-x-auto">
-                <div role="tablist" aria-label="Rubric versions" className="inline-flex gap-1 rounded-lg border bg-muted/40 p-1">
-                  {versions.map((item) => {
-                    const selected = item.id === version.id;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={selected}
-                        onClick={() => selectVersion(item.versionNumber)}
-                        className={`flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${selected ? "bg-background font-semibold shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                      >
-                        v{item.versionNumber}
-                        <span className={`size-1.5 rounded-full ${item.status === "PUBLISHED" ? "bg-emerald-500" : "bg-amber-500"}`} aria-hidden />
-                        <span className="sr-only">{item.status}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
+            {/* Version selector + status banner share one row on wide screens to save vertical space */}
+            <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-stretch">
+              <RubricVersionSwitcher versions={versions} selectedId={version.id} onSelect={selectVersion} />
 
-            {/* Status banner */}
-            <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-2.5 text-sm ${usable ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"}`}>
-              <span className="flex items-center gap-2 font-medium">
-                {usable ? <LockKeyhole className="size-4" /> : <FileEdit className="size-4" />}
-                Version {version.versionNumber}
-              </span>
-              <RubricStatusBadge status={version.status} />
-              <span>
-                {usable
-                  ? "Immutable and available to milestones. Create a new version to make changes."
-                  : "Editable draft. Publish it to make it available to milestones."}
-              </span>
+              <div className={`flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-2 text-sm ${usable ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"}`}>
+                <span className="flex items-center gap-2 font-medium">
+                  {usable ? <LockKeyhole className="size-4" /> : <FileEdit className="size-4" />}
+                  Version {version.versionNumber}
+                </span>
+                <RubricStatusBadge status={version.status} />
+                <span className="min-w-0">
+                  {usable
+                    ? "Immutable and available to milestones. Create a new version to make changes."
+                    : "Editable draft. Publish it to make it available to milestones."}
+                </span>
+              </div>
             </div>
 
             {/* Summary */}

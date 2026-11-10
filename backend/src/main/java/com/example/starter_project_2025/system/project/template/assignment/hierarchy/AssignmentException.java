@@ -21,4 +21,8 @@ public class AssignmentException extends ResponseStatusException {
         return new AssignmentException(HttpStatus.CONFLICT, "PROJECT_ASSIGNMENT_TEAM_BUSY",
                 "The selected team already has an unfinished project. Please review its assignment: " + teamName);
     }
+
+    public static AssignmentException moduleAlreadyAssigned(String message) {
+        return new AssignmentException(HttpStatus.CONFLICT, "PROJECT_ASSIGNMENT_MODULE_ALREADY_ASSIGNED", message);
+    }
 }

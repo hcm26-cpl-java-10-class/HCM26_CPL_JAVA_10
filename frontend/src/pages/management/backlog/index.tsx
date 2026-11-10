@@ -664,6 +664,9 @@ export function BacklogBoard({
     try {
       await sprintApi.create({
         ...values,
+        // A new sprint always starts as Planned (the status field is not part
+        // of the Create Sprint modal).
+        status: "PLANNED",
         projectId:
           scopedProjectId ?? (values.projectId as number | null | undefined) ?? null,
         // Keeps the new sprint inside the team workspace that created it.
@@ -1251,6 +1254,7 @@ export function BacklogBoard({
                   key={section.key}
                   title={section.title}
                   meta={section.meta}
+                  status={isSprintBox ? section.sprint?.status ?? null : null}
                   items={section.items}
                   itemKeyPrefix={section.prefix}
                   selectedIds={selectedIds}

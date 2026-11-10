@@ -51,17 +51,16 @@ public class HierarchyDemoTeams {
         return mentor;
     }
 
-    public Classroom classroom(Tenant tenant, User mentor, ProjectTemplate master, boolean ready) {
-        String prefix = ready ? "ready" : "view";
+    public Classroom classroom(Tenant tenant, User mentor, ProjectTemplate master, String code, String name,
+                               String prefix, List<String> labels) {
+        boolean ready = "ready".equals(prefix);
         TrainingClass trainingClass = classes.saveAndFlush(TrainingClass.builder()
-                .tenantId(tenant.getId()).code(ready ? "HIER-DEMO-READY" : "HIER-DEMO-VIEW")
-                .name(ready ? "Hierarchy Demo - Assignment Ready" : "Hierarchy Demo - Assigned Workspaces")
+                .tenantId(tenant.getId()).code(code).name(name)
                 .programId(tenant.getId()).programName("Project Hierarchy Demo")
                 .mentorId(mentor.getId()).status(TrainingClassStatus.ONGOING).build());
         staff.saveAndFlush(ClassStaffAssignment.builder().trainingClass(trainingClass).user(mentor).roleType(ClassStaffRoleType.MENTOR).build());
         TeamAllocationSession session = sessions.saveAndFlush(TeamAllocationSession.builder().trainingClass(trainingClass)
                 .projectTemplate(master).maxMembers(8).status(TeamAllocationSessionStatus.OPEN).build());
-        List<String> labels = ready ? List.of("Auth", "Payment", "Catalog", "Whole", "Busy") : List.of("Auth", "Payment", "Catalog", "Whole");
         String password = passwords.encode("Demo@123");
         List<ProjectTeam> roster = new java.util.ArrayList<>();
         for (int index = 0; index < labels.size(); index++) {

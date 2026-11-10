@@ -144,6 +144,16 @@ export const teamAllocationApi = {
     );
   },
 
+  async deleteDraftTeam(
+    classId: number,
+    sessionId: number,
+    teamId: number,
+  ): Promise<void> {
+    await axiosInstance.delete(
+      `${classPath(classId)}/allocation-sessions/${sessionId}/teams/${teamId}`,
+    );
+  },
+
   async updateTeamMentor(
     classId: number,
     sessionId: number,

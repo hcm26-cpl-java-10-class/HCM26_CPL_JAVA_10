@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { usePermissions } from "@/hooks/usePermissions";
+import { cn } from "@/lib/utils";
 import { MetricCard } from "./MetricCard";
 import type {
   AllocationApiError,
@@ -26,15 +27,24 @@ import {
   ArrowLeft,
   Ban,
   CalendarDays,
+  Check,
+  CheckCircle2,
   CircleAlert,
   ClipboardList,
+  GraduationCap,
+  Hash,
   Info,
+  Layers,
+  ListChecks,
   LoaderCircle,
+  Minus,
   Plus,
+  RefreshCw,
+  ShieldAlert,
   Users,
   UsersRound,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -51,6 +61,20 @@ const SESSION_STATUS_CLASS: Record<AllocationSessionStatus, string> = {
   OPEN: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   PUBLISHED: "border-primary/40 bg-primary/10 text-primary",
   CLOSED: "border-muted-foreground/30 bg-muted text-muted-foreground",
+  CANCELLED: "border-destructive/40 bg-destructive/10 text-destructive",
+};
+
+const CLASS_STATUS_LABEL: Record<TrainingClassDTO["status"], string> = {
+  PLANNING: "Đang lên kế hoạch",
+  ONGOING: "Đang diễn ra",
+  COMPLETED: "Đã hoàn thành",
+  CANCELLED: "Đã hủy",
+};
+
+const CLASS_STATUS_CLASS: Record<TrainingClassDTO["status"], string> = {
+  PLANNING: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  ONGOING: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  COMPLETED: "border-primary/40 bg-primary/10 text-primary",
   CANCELLED: "border-destructive/40 bg-destructive/10 text-destructive",
 };
 
@@ -95,6 +119,7 @@ export default function TeamAllocationSessionPage() {
   const [summaryDialog, setSummaryDialog] = useState<
     "unassigned" | "saved" | "publishable" | null
   >(null);
+  const capacityInputRef = useRef<HTMLInputElement>(null);
 
   const classQuery = useQuery({
     queryKey: ["training-class", "detail", classId],
@@ -157,12 +182,13 @@ export default function TeamAllocationSessionPage() {
             ? [openedSession, ...current.filter((item) => item.id !== openedSession.id)]
             : [openedSession],
       );
+      setSelectedSessionId(openedSession.id);
       setCapacityInput("");
       void queryClient.invalidateQueries({
         queryKey: ["team-allocation", "sessions", classId],
       });
       toast.success(
-        `Đã tạo phiên phân nhóm #${openedSession.sessionNumber}. Bấm “Allocate Teams” để bắt đầu.`,
+        `Đã tạo phiên phân nhóm #${openedSession.sessionNumber}. Bấm “Allocate Team” để bắt đầu.`,
       );
     },
     onError: (error) => toast.error(getApiFailure(error).message),
@@ -183,13 +209,31 @@ export default function TeamAllocationSessionPage() {
 
   const maxMembers = Number(capacityInput);
   const capacityValid = Number.isSafeInteger(maxMembers) && maxMembers > 0;
+  const capacityState = capacityInput.trim() === "" ? "empty" : capacityValid ? "valid" : "invalid";
+  const isRefreshing = sessionsQuery.isFetching || classQuery.isFetching;
 
   const handleCreateSession = () => {
     if (!capacityValid) {
       toast.error("Sức chứa phải là số nguyên dương.");
+      capacityInputRef.current?.focus();
       return;
     }
     openSessionMutation.mutate(maxMembers);
+  };
+
+  const stepCapacity = (delta: number) => {
+    const current = Number(capacityInput);
+    const base = Number.isSafeInteger(current) && current > 0 ? current : 1;
+    setCapacityInput(String(Math.max(1, Math.min(999, base + delta))));
+  };
+
+  const refreshPage = () => {
+    void classQuery.refetch();
+    void sessionsQuery.refetch();
+    if (selectedSession) {
+      void sessionTeamsQuery.refetch();
+      if (canAllocate) void unassignedQuery.refetch();
+    }
   };
 
   const openSetup = (session: AllocationSession) => {
@@ -197,59 +241,151 @@ export default function TeamAllocationSessionPage() {
     navigate(`/team-allocation/classes/${classId}/setup?sessionId=${session.id}`);
   };
 
+  const metaChip =
+    "inline-flex items-center gap-1.5 rounded-full border bg-background/70 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur";
+
   return (
     <MainLayout pathName={{ "team-allocation": "Project Team Allocation" }}>
-      <div className="mx-auto w-full max-w-5xl space-y-4">
-        <div className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
-              <UsersRound className="size-5" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                Team allocation
-              </p>
-              <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight">
-                {trainingClass?.name ?? `Lớp #${classId}`}
-              </h1>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                <span>
-                  {trainingClass
-                    ? `${trainingClass.code} · ${trainingClass.memberCount} học viên`
-                    : "Tạo phiên phân nhóm để bắt đầu chia nhóm dự án"}
-                </span>
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-5">
+        <section className="relative shrink-0 overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-primary/[0.03] to-transparent"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-16 -top-24 size-64 rounded-full bg-primary/10 blur-3xl"
+          />
+          <div className="relative flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-start gap-4">
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-sm">
+                <UsersRound className="size-6" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                  Team allocation
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2.5">
+                  <h1 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl">
+                    {trainingClass?.name ?? `Lớp #${classId}`}
+                  </h1>
+                  {trainingClass && (
+                    <Badge
+                      variant="outline"
+                      className={cn("shrink-0", CLASS_STATUS_CLASS[trainingClass.status])}
+                    >
+                      {CLASS_STATUS_LABEL[trainingClass.status]}
+                    </Badge>
+                  )}
+                </div>
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  {trainingClass ? (
+                    <>
+                      <span className={metaChip}>
+                        <Hash className="size-3.5" />
+                        {trainingClass.code}
+                      </span>
+                      <span className={metaChip}>
+                        <Users className="size-3.5" />
+                        {trainingClass.memberCount} học viên
+                      </span>
+                      {trainingClass.programName && (
+                        <span className={metaChip}>
+                          <GraduationCap className="size-3.5" />
+                          {trainingClass.programName}
+                        </span>
+                      )}
+                      {trainingClass.cohortName && (
+                        <span className={metaChip}>
+                          <Layers className="size-3.5" />
+                          {trainingClass.cohortName}
+                        </span>
+                      )}
+                    </>
+                  ) : classQuery.isLoading ? (
+                    <span className={metaChip}>
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                      Đang tải thông tin lớp…
+                    </span>
+                  ) : (
+                    <span className={metaChip}>
+                      <Info className="size-3.5" />
+                      Chưa tải được thông tin lớp
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row lg:shrink-0">
+              <Button
+                variant="outline"
+                onClick={refreshPage}
+                disabled={isRefreshing}
+                className="gap-2 bg-background/70"
+              >
+                {isRefreshing ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="size-4" />
+                )}
+                {isRefreshing ? "Đang làm mới…" : "Làm mới"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate("/team-allocation")}
+                className="gap-2 bg-background/70 transition-colors hover:border-primary/40"
+              >
+                <ArrowLeft className="size-4" />
+                Quay lại danh sách lớp
+              </Button>
+            </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => navigate("/team-allocation")}
-            className="w-full gap-2 transition-colors hover:border-primary/40 sm:w-auto"
-          >
-            <ArrowLeft className="size-4" />
-            Quay lại danh sách lớp
-          </Button>
-        </div>
+        </section>
 
         {!canAllocate && !hasPermission("PRJ_WORKSPACE_MANAGE") && (
           <div
             role="alert"
-            className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+            className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
           >
-            Tài khoản hiện tại không có quyền phân nhóm dự án.
+            <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+            <span>Tài khoản hiện tại không có quyền phân nhóm dự án.</span>
           </div>
         )}
 
         {selectedSession && (
-          <section className="space-y-2" aria-label="Tổng quan phiên phân nhóm">
-            <p className="text-xs text-muted-foreground">
-              Tổng quan phiên #{selectedSession.sessionNumber}
-              {sessionTeamsQuery.isFetching ? " · Đang đồng bộ…" : ""}
-            </p>
-            <div className="grid gap-2.5 sm:grid-cols-3">
+          <section className="shrink-0 space-y-2.5" aria-label="Tổng quan phiên phân nhóm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="size-1.5 rounded-full bg-primary" />
+                <p className="text-sm font-medium">
+                  Tổng quan phiên #{selectedSession.sessionNumber}
+                </p>
+                <Badge
+                  variant="outline"
+                  className={SESSION_STATUS_CLASS[selectedSession.status]}
+                >
+                  {SESSION_STATUS_LABEL[selectedSession.status]}
+                </Badge>
+                {sessionTeamsQuery.isFetching && (
+                  <span
+                    role="status"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                  >
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                    Đang đồng bộ…
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Nhấn vào thẻ để xem chi tiết
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
               <MetricCard
                 icon={<Users className="size-5" />}
                 label="Học viên chưa vào nhóm ACTIVE"
+                hint="Nhấn để xem ai chưa được xếp nhóm"
                 value={unassignedMembers.length}
                 tone={unassignedMembers.length > 0 ? "warning" : "success"}
                 onClick={() => setSummaryDialog("unassigned")}
@@ -257,6 +393,7 @@ export default function TeamAllocationSessionPage() {
               <MetricCard
                 icon={<ClipboardList className="size-5" />}
                 label="Nhóm đã lưu trong phiên"
+                hint="Nhấn để xem toàn bộ nhóm trong phiên"
                 value={sessionTeams.length}
                 tone="primary"
                 onClick={() => setSummaryDialog("saved")}
@@ -264,6 +401,7 @@ export default function TeamAllocationSessionPage() {
               <MetricCard
                 icon={<CircleAlert className="size-5" />}
                 label="Nhóm chờ publish"
+                hint="Nhấn để xem nhóm còn ở trạng thái DRAFT"
                 value={publishableTeams.length}
                 tone={publishableTeams.length > 0 ? "success" : "primary"}
                 onClick={() => setSummaryDialog("publishable")}
@@ -272,178 +410,351 @@ export default function TeamAllocationSessionPage() {
           </section>
         )}
 
-        <Card className="border-primary/15 shadow-sm">
-          <CardHeader>
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="space-y-1.5">
-                <CardTitle className="flex items-center gap-2">
-                  <CalendarDays className="size-5 text-primary" />
-                  Phiên phân nhóm
-                  <Badge variant="secondary" className="tabular-nums">
-                    {sessions.length}
-                  </Badge>
-                </CardTitle>
-                <CardDescription>
-                  Tạo phiên mới hoặc chọn một phiên bên dưới, rồi bấm “Allocate Team”
-                  để mở màn hình phân nhóm.
-                </CardDescription>
-              </div>
-              {sessionsQuery.isFetching && (
-                <span
-                  role="status"
-                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-                >
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                  Đang đồng bộ…
-                </span>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-3 sm:flex-row sm:items-end">
-              <label className="block w-full max-w-xs space-y-1.5 text-sm font-medium">
-                Sức chứa tối đa / nhóm
-                <Input
-                  inputMode="numeric"
-                  min={1}
-                  type="number"
-                  placeholder="VD: 5"
-                  aria-label="Sức chứa tối đa mỗi nhóm"
-                  value={capacityInput}
-                  onChange={(event) => setCapacityInput(event.target.value)}
-                  disabled={!canAllocate || openSessionMutation.isPending}
-                />
-              </label>
-              <Button
-                onClick={handleCreateSession}
-                disabled={!canAllocate || openSessionMutation.isPending || !capacityValid}
-                className="gap-1.5"
-              >
-                {openSessionMutation.isPending ? (
-                  <LoaderCircle className="size-4 animate-spin" />
-                ) : (
-                  <Plus className="size-4" />
-                )}
-                Tạo phiên phân nhóm
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Lớp và project template được xác định tự động; số phiên do hệ thống tạo.
-            </p>
-
-            <div className="space-y-3 border-t pt-4">
-              {sessionsQuery.isError ? (
-                <div
-                  role="alert"
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm"
-                >
-                  <span className="text-destructive">Không tải được danh sách phiên.</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void sessionsQuery.refetch()}
+        <div className="grid gap-5 xl:min-h-0 xl:flex-1 xl:grid-cols-2 xl:grid-rows-1">
+          <Card className="flex min-h-0 flex-col gap-0 overflow-hidden border-primary/15 py-0 shadow-sm">
+            <CardHeader className="shrink-0 border-b bg-muted/20 px-5 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1.5">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <CalendarDays className="size-5 text-primary" />
+                    Phiên phân nhóm
+                    <Badge variant="secondary" className="tabular-nums">
+                      {sessions.length}
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription>
+                    Tạo phiên mới hoặc chọn một phiên ở cột bên phải, rồi bấm
+                    “Allocate Team” để mở màn hình phân nhóm.
+                  </CardDescription>
+                </div>
+                {sessionsQuery.isFetching && (
+                  <span
+                    role="status"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
                   >
-                    Thử lại
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                    Đang đồng bộ…
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5 px-5 py-5 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  handleCreateSession();
+                }}
+                className="rounded-xl border bg-muted/25 p-4"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="w-full space-y-1.5 sm:max-w-xs">
+                    <label
+                      htmlFor="capacity-input"
+                      className="text-sm font-medium"
+                    >
+                      Sức chứa tối đa / nhóm
+                    </label>
+                    <div className="flex items-stretch">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        aria-label="Giảm sức chứa"
+                        disabled={!canAllocate || openSessionMutation.isPending}
+                        onClick={() => stepCapacity(-1)}
+                        className="rounded-r-none border-r-0"
+                      >
+                        <Minus />
+                      </Button>
+                      <Input
+                        ref={capacityInputRef}
+                        id="capacity-input"
+                        inputMode="numeric"
+                        min={1}
+                        max={999}
+                        type="number"
+                        placeholder="VD: 5"
+                        value={capacityInput}
+                        aria-label="Sức chứa tối đa mỗi nhóm"
+                        aria-invalid={capacityState === "invalid"}
+                        aria-describedby="capacity-help"
+                        disabled={!canAllocate || openSessionMutation.isPending}
+                        onChange={(event) => setCapacityInput(event.target.value)}
+                        className="h-9 rounded-none border-x-0 text-center text-base font-semibold tabular-nums [appearance:textfield] focus-visible:relative focus-visible:z-10 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        aria-label="Tăng sức chứa"
+                        disabled={!canAllocate || openSessionMutation.isPending}
+                        onClick={() => stepCapacity(1)}
+                        className="rounded-l-none border-l-0"
+                      >
+                        <Plus />
+                      </Button>
+                    </div>
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={!canAllocate || openSessionMutation.isPending || !capacityValid}
+                    className="h-9 w-full gap-2 sm:w-auto"
+                  >
+                    {openSessionMutation.isPending ? (
+                      <LoaderCircle className="size-4 animate-spin" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                    {openSessionMutation.isPending
+                      ? "Đang tạo phiên…"
+                      : "Tạo phiên phân nhóm"}
                   </Button>
                 </div>
-              ) : sessionsQuery.isLoading ? (
-                <div className="space-y-2" aria-busy="true">
-                  {[0, 1].map((row) => (
-                    <div
-                      key={row}
-                      className="h-16 animate-pulse rounded-xl border bg-muted/40"
-                    />
-                  ))}
-                </div>
-              ) : sessions.length === 0 ? (
-                <div className="rounded-xl border border-dashed px-5 py-10 text-center">
-                  <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-muted">
-                    <CalendarDays className="size-6 text-muted-foreground" />
-                  </span>
-                  <p className="mt-3 font-medium">Chưa có phiên phân nhóm</p>
-                  <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-                    Nhập sức chứa tối đa mỗi nhóm ở phía trên và tạo phiên đầu tiên cho
-                    lớp này.
-                  </p>
-                </div>
-              ) : (
-                <ul className="space-y-2.5">
-                  {sessions.map((item) => {
-                    const isSelected = selectedSession?.id === item.id;
-                    return (
-                    <li
-                      key={item.id}
-                      onClick={() => setSelectedSessionId(item.id)}
-                      className={`flex cursor-pointer flex-col gap-3 rounded-xl border p-3 transition-colors sm:flex-row sm:items-center sm:justify-between ${
-                        isSelected
-                          ? "border-primary bg-primary/5 shadow-sm"
-                          : "hover:border-primary/30"
-                      }`}
-                    >
-                      <div className="flex min-w-0 items-start gap-3">
-                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                          <CalendarDays className="size-4" />
-                        </span>
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-semibold">Phiên #{item.sessionNumber}</p>
-                            <Badge
-                              variant="outline"
-                              className={SESSION_STATUS_CLASS[item.status]}
-                            >
-                              {SESSION_STATUS_LABEL[item.status]}
-                            </Badge>
-                            {isSelected && (
-                              <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
-                                Đang xem
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Sức chứa {item.maxMembers}/nhóm · Phiên bản {item.version}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => openSetup(item)}
-                          className="gap-1.5"
-                          disabled={item.status === "CANCELLED"}
-                        >
-                          <UsersRound className="size-4" />
-                          Allocate Team
-                        </Button>
-                        {item.status === "OPEN" && canAllocate && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setCancelTarget(item)}
-                            disabled={cancelSessionMutation.isPending}
-                            className="gap-1.5 border-destructive/30 text-destructive transition-colors hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
-                          >
-                            <Ban className="size-4" />
-                            Hủy phiên
-                          </Button>
-                        )}
-                      </div>
-                    </li>
-                    );
-                  })}
-                </ul>
-              )}
-              {sessions.some((item) => item.status === "CANCELLED") && (
-                <p className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-                  <Info className="mt-0.5 size-3.5 shrink-0 text-primary" />
-                  <span>
-                    Phiên đã hủy chỉ được giữ lại để tra cứu lịch sử. Hãy tạo phiên mới
-                    nếu cần phân nhóm lại.
-                  </span>
+                <p
+                  id="capacity-help"
+                  aria-live="polite"
+                  className={cn(
+                    "mt-2 flex items-center gap-1.5 text-xs",
+                    capacityState === "invalid"
+                      ? "font-medium text-destructive"
+                      : capacityState === "valid"
+                        ? "font-medium text-emerald-600 dark:text-emerald-400"
+                        : "text-muted-foreground",
+                  )}
+                >
+                  {capacityState === "invalid" ? (
+                    <CircleAlert className="size-3.5 shrink-0" />
+                  ) : capacityState === "valid" ? (
+                    <CheckCircle2 className="size-3.5 shrink-0" />
+                  ) : (
+                    <Info className="size-3.5 shrink-0" />
+                  )}
+                  {capacityState === "invalid"
+                    ? "Sức chứa phải là số nguyên lớn hơn 0."
+                    : capacityState === "valid"
+                      ? `Mỗi nhóm sẽ có tối đa ${maxMembers} học viên.`
+                      : "Nhập số học viên tối đa cho mỗi nhóm."}
                 </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                <p className="mt-2 border-t pt-2 text-xs text-muted-foreground">
+                  Lớp và project template được xác định tự động; số phiên do hệ
+                  thống tạo.
+                </p>
+              </form>
+
+            </CardContent>
+          </Card>
+
+          <Card className="flex min-h-0 flex-col gap-0 overflow-hidden border-primary/15 py-0 shadow-sm">
+            <CardHeader className="shrink-0 border-b bg-muted/20 px-5 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1.5">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <ListChecks className="size-5 text-primary" />
+                    Các phiên đã tạo
+                    <Badge variant="secondary" className="tabular-nums">
+                      {sessions.length}
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription>
+                    Chọn một phiên để xem tổng quan, hoặc mở “Allocate Team” để
+                    phân nhóm học viên.
+                  </CardDescription>
+                </div>
+                {sessionsQuery.isFetching && (
+                  <span
+                    role="status"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                  >
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                    Đang đồng bộ…
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3 px-5 py-5 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+                {sessionsQuery.isError ? (
+                  <div
+                    role="alert"
+                    className="flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+                        <CircleAlert className="size-4" />
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-destructive">
+                          Không tải được danh sách phiên.
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          Kiểm tra kết nối hoặc quyền truy cập lớp rồi thử lại.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void sessionsQuery.refetch()}
+                      disabled={sessionsQuery.isFetching}
+                      className="gap-2"
+                    >
+                      {sessionsQuery.isFetching ? (
+                        <LoaderCircle className="size-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="size-4" />
+                      )}
+                      {sessionsQuery.isFetching ? "Đang thử lại…" : "Thử lại"}
+                    </Button>
+                  </div>
+                ) : sessionsQuery.isLoading ? (
+                  <div className="space-y-2.5" aria-busy="true">
+                    {[0, 1, 2].map((row) => (
+                      <div
+                        key={row}
+                        className="flex items-center gap-3 rounded-xl border p-3.5"
+                      >
+                        <div className="size-9 shrink-0 animate-pulse rounded-lg bg-muted" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 w-32 animate-pulse rounded bg-muted" />
+                          <div className="h-2.5 w-48 animate-pulse rounded bg-muted/70" />
+                        </div>
+                        <div className="h-8 w-24 animate-pulse rounded-lg bg-muted" />
+                      </div>
+                    ))}
+                  </div>
+                ) : sessions.length === 0 ? (
+                  <div className="rounded-xl border border-dashed bg-muted/10 px-5 py-10 text-center">
+                    <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <CalendarDays className="size-6" />
+                    </span>
+                    <p className="mt-3 font-medium">Chưa có phiên phân nhóm</p>
+                    <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+                      Nhập sức chứa tối đa mỗi nhóm ở phía trên và tạo phiên đầu
+                      tiên cho lớp này.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!canAllocate || openSessionMutation.isPending}
+                      onClick={() => {
+                        if (capacityValid) handleCreateSession();
+                        else capacityInputRef.current?.focus();
+                      }}
+                      className="mt-4 gap-2"
+                    >
+                      <Plus className="size-4" />
+                      {capacityValid
+                        ? "Tạo phiên đầu tiên"
+                        : "Nhập sức chứa để bắt đầu"}
+                    </Button>
+                  </div>
+                ) : (
+                  <ul className="space-y-2.5">
+                    {sessions.map((item) => {
+                      const isSelected = selectedSession?.id === item.id;
+                      return (
+                        <li
+                          key={item.id}
+                          className={cn(
+                            "group relative overflow-hidden rounded-xl border transition-all duration-200",
+                            isSelected
+                              ? "border-primary/60 bg-primary/[0.04] shadow-sm"
+                              : "bg-card hover:border-primary/30 hover:shadow-sm",
+                          )}
+                        >
+                          {isSelected && (
+                            <span
+                              aria-hidden
+                              className="absolute inset-y-0 left-0 w-1 bg-primary"
+                            />
+                          )}
+                          <div className="flex flex-col gap-3 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSessionId(item.id)}
+                              aria-pressed={isSelected}
+                              className="flex min-w-0 flex-1 items-start gap-3 rounded-lg text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                              <span
+                                className={cn(
+                                  "flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors",
+                                  isSelected
+                                    ? "border-primary/30 bg-primary/10 text-primary"
+                                    : "border-border bg-muted/50 text-muted-foreground group-hover:text-foreground",
+                                )}
+                              >
+                                {isSelected ? (
+                                  <Check className="size-4" />
+                                ) : (
+                                  <CalendarDays className="size-4" />
+                                )}
+                              </span>
+                              <div className="min-w-0 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-semibold">
+                                    Phiên #{item.sessionNumber}
+                                  </p>
+                                  <Badge
+                                    variant="outline"
+                                    className={SESSION_STATUS_CLASS[item.status]}
+                                  >
+                                    {SESSION_STATUS_LABEL[item.status]}
+                                  </Badge>
+                                  {isSelected && (
+                                    <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                                      Đang xem
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  Sức chứa {item.maxMembers}/nhóm · Phiên bản{" "}
+                                  {item.version}
+                                </p>
+                                <p
+                                  className={cn(
+                                    "text-[11px] transition-colors",
+                                    isSelected
+                                      ? "text-primary"
+                                      : "text-muted-foreground",
+                                  )}
+                                >
+                                  {isSelected
+                                    ? "Đang hiển thị tổng quan của phiên này"
+                                    : "Nhấn để xem tổng quan phiên"}
+                                </p>
+                              </div>
+                            </button>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => openSetup(item)}
+                                className="gap-1.5"
+                                disabled={item.status === "CANCELLED"}
+                              >
+                                <UsersRound className="size-4" />
+                                Allocate Team
+                              </Button>
+                              {item.status === "OPEN" && canAllocate && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setCancelTarget(item)}
+                                  disabled={cancelSessionMutation.isPending}
+                                  className="gap-1.5 border-destructive/30 text-destructive transition-colors hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+                                >
+                                  <Ban className="size-4" />
+                                  Hủy phiên
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Dialog
@@ -452,12 +763,16 @@ export default function TeamAllocationSessionPage() {
           if (!open && !cancelSessionMutation.isPending) setCancelTarget(null);
         }}
       >
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
+            <span className="mb-1 flex size-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+              <Ban className="size-5" />
+            </span>
             <DialogTitle>Hủy phiên phân nhóm?</DialogTitle>
             <DialogDescription>
-              Phiên #{cancelTarget?.sessionNumber} sẽ chuyển sang CANCELLED và các nhóm
-              DRAFT sẽ được lưu trữ (ARCHIVED). Hành động này không thể hoàn tác.
+              Phiên #{cancelTarget?.sessionNumber} sẽ chuyển sang CANCELLED và
+              các nhóm DRAFT sẽ được lưu trữ (ARCHIVED). Hành động này không thể
+              hoàn tác.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -495,6 +810,15 @@ export default function TeamAllocationSessionPage() {
       >
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
+            <span className="mb-1 flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              {summaryDialog === "unassigned" ? (
+                <Users className="size-5" />
+              ) : summaryDialog === "publishable" ? (
+                <CircleAlert className="size-5" />
+              ) : (
+                <ClipboardList className="size-5" />
+              )}
+            </span>
             <DialogTitle>
               {summaryDialog === "unassigned"
                 ? "Học viên chưa vào nhóm ACTIVE trong phiên"
@@ -520,7 +844,7 @@ export default function TeamAllocationSessionPage() {
                 {unassignedMembers.map((member) => (
                   <li
                     key={member.memberId}
-                    className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+                    className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-muted/40"
                   >
                     <span className="min-w-0 truncate">
                       {member.fullName}
@@ -546,7 +870,7 @@ export default function TeamAllocationSessionPage() {
                   {displayedTeams.map((team) => (
                     <li
                       key={team.teamId}
-                      className="flex items-center justify-between gap-3 px-3 py-3 text-sm"
+                      className="flex items-center justify-between gap-3 px-3 py-3 text-sm transition-colors hover:bg-muted/40"
                     >
                       <span className="min-w-0 truncate font-medium">
                         {team.teamName}

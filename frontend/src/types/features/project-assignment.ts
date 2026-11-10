@@ -6,16 +6,21 @@ export interface AssignmentMember { memberId: number; name: string; userCode: st
 export interface AssignmentTeam {
   id: number; name: string; memberCount: number; status: string; eligible: boolean; reason: string | null;
   version: number; members: AssignmentMember[]; leaderMemberId: number | null;
+  assignedProjectName: string | null;
 }
 export interface AssignmentModule {
   templateId: number; code: string; name: string; minMembers: number; maxMembers: number;
   milestoneCount: number; modules: AssignmentModule[];
   rolePolicy: AssignmentRolePolicy;
 }
+export interface AssignmentOwner {
+  templateId: number; teamId: number; teamName: string;
+}
 export interface AssignmentPreview {
   master: AssignmentTemplate; minMembers: number; maxMembers: number; masterMilestoneCount: number;
   modules: AssignmentModule[]; teams: AssignmentTeam[];
   rolePolicy: AssignmentRolePolicy;
+  owners: AssignmentOwner[];
 }
 export interface ProjectAssignmentRequest {
   masterTemplateId: number; versionId: number; mode: ProjectAssignmentMode;
@@ -24,7 +29,7 @@ export interface ProjectAssignmentRequest {
   teamRoles?: Array<{ teamId: number; expectedVersion: number; leaderMemberId: number | null; members: Array<{ memberId: number; roles: AssignmentRole[] }> }>;
 }
 export interface ProjectAssignmentResult {
-  assignmentId: number; mode: ProjectAssignmentMode; masterProjectId: number; assignedAt: string;
+  assignmentId: number; mode: ProjectAssignmentMode; masterProjectId: number | null; assignedAt: string;
   workspaces: Array<{ id: number; teamId: number; teamName: string; projectId: number; projectName: string }>;
 }
 export interface WorkspaceProjectNode {
@@ -36,11 +41,6 @@ export interface WorkspaceAssignmentContext {
   workspaceId: number; assignmentId: number | null; mode: ProjectAssignmentMode | null;
   assignedAt: string | null; readOnly: boolean; projects: WorkspaceProjectNode[];
   history: Array<{ workspaceId: number; name: string; status: string; createdAt: string; current: boolean }>;
-}
-export interface ProjectCompletionSummary {
-  projectId: number; teamId: number | null; completed: boolean; gradeLocked: boolean; finalScore: number | null;
-  canManage: boolean; childrenCompleted: boolean;
-  milestones: Array<{ id: string; title: string; mandatory: boolean; accepted: boolean; waived: boolean }>;
 }
 export interface MasterMilestoneContext {
   projectId: number; projectName: string; mode: ProjectAssignmentMode; teamId: number | null;

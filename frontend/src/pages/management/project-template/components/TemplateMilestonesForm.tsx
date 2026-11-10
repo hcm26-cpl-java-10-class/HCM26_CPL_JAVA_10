@@ -144,19 +144,19 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
         <AlertTitle>Unable to save milestones</AlertTitle>
         <AlertDescription>{submitError.message}</AlertDescription>
       </Alert>}
-      <Card>
-        <CardHeader>
+      <Card className="overflow-hidden pt-0">
+        <CardHeader className="border-b bg-indigo-50/50 pt-5 dark:bg-indigo-950/30">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle className="flex items-center gap-2"><Flag className="size-5" />{weighted ? "Master milestone configuration" : "Module milestone configuration"}</CardTitle>
+              <CardTitle className="flex items-center gap-2"><Flag className="size-5 text-indigo-600 dark:text-indigo-400" />{weighted ? "Master milestone configuration" : "Module milestone configuration"}</CardTitle>
               <CardDescription className="mt-2">{weighted
-                ? "Shared stages for the master project. In split assignments, all teams can view them and class mentors manage their assessment."
-                : "Stages for this module only. The assigned team works on these separately from the shared master milestones."}</CardDescription>
+                ? "Stages for the Master project. Class mentors manage them at class level in split assignments."
+                : "Stages for this module. The assigned team works on them in the module workspace."}</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               {editable && <Button type="button" size="sm" variant="outline" disabled={refreshingRubrics || mutation.isPending}
                 onClick={onRefreshRubrics}><RefreshCw className={refreshingRubrics ? "animate-spin" : undefined} />Refresh rubrics</Button>}
-              <Badge variant="outline">{milestones.length} milestones</Badge>
+              <Badge variant="outline">{milestones.length} {milestones.length === 1 ? "milestone" : "milestones"}</Badge>
             </div>
           </div>
         </CardHeader>
@@ -169,7 +169,9 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
             </span>
           </div>
           <Progress value={total === null ? 0 : Math.min(total / 100, 100)} aria-label="Total milestone weight"
-            className={errors.totalWeight ? "[&_[data-slot=progress-indicator]]:bg-destructive" : undefined} />
+            className={errors.totalWeight ? "[&_[data-slot=progress-indicator]]:bg-destructive"
+              : total === 10000 ? "[&_[data-slot=progress-indicator]]:bg-emerald-500"
+              : "[&_[data-slot=progress-indicator]]:bg-indigo-500"} />
           <div aria-live="polite"><FieldError errors={errors.totalWeight} /></div>
           <p className="text-xs text-muted-foreground">Milestone weights must total 100% when you save.</p>
           </>}
@@ -197,7 +199,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
                 const invalid = Object.keys(errors).some(field => field === path || field.startsWith(`${path}.`));
                 return <li key={milestone.key}>
                   <button type="button" aria-expanded={selected} aria-controls="template-milestone-editor"
-                    className={`flex w-full items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-primary bg-primary/5" : "hover:bg-muted/40"}`}
+                    className={`flex w-full items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/60" : "hover:bg-muted/40"}`}
                     onClick={() => selected ? collapseMilestone() : openMilestone(milestone.key)}>
                     <span className="shrink-0 font-medium text-muted-foreground">{index + 1}.</span>
                     <span className="min-w-0 flex-1">
