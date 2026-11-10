@@ -5,6 +5,7 @@ import type {
   TemplateLatePolicy,
   TemplateRubricCriterion,
 } from "@/types/features/project-template";
+import { maxDescriptionLength } from "./project-template.utils";
 
 export interface MilestoneChecklistValues {
   key: string;
@@ -82,21 +83,21 @@ export function toMilestoneValues(plan: TemplateMilestonePlan): MilestoneValues[
   }));
 }
 
-export function weightHundredths(value: string): number | null {
+function parseWeightHundredths(value: string): number | null {
   const trimmed = value.trim();
-  if (!/^\d+(?:\.\d{1,2})?$/.test(trimmed) || Number(trimmed) > 100) return null;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(trimmed)) return null;
   const [whole, fraction = ""] = trimmed.split(".");
-  return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  const hundredths = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  return Number.isSafeInteger(hundredths) ? hundredths : null;
 }
 
-export function totalWeightHundredths(milestones: MilestoneValues[]): number | null {
-  let total = 0;
-  for (const milestone of milestones) {
-    const weight = weightHundredths(milestone.weight);
-    if (weight === null) return null;
-    total += weight;
-  }
-  return total;
+export function weightHundredths(value: string): number | null {
+  const hundredths = parseWeightHundredths(value);
+  return hundredths !== null && hundredths <= 10000 ? hundredths : null;
+}
+
+export function totalWeightHundredths(milestones: MilestoneValues[]): number {
+  return milestones.reduce((total, milestone) => total + (parseWeightHundredths(milestone.weight) ?? 0), 0);
 }
 
 export function milestoneFieldId(path: string) {
@@ -115,8 +116,8 @@ export function validateMilestonePlan(milestones: MilestoneValues[], durationWee
     if (!milestone.title.trim() || milestone.title.trim().length > 120) {
       errors[`${path}.title`] = ["Milestone name must contain 1 to 120 characters"];
     }
-    if (milestone.description.trim().length > 1000) {
-      errors[`${path}.description`] = ["Description must not exceed 1000 characters"];
+    if (milestone.description.length > maxDescriptionLength) {
+      errors[`${path}.description`] = [`Description must not exceed ${maxDescriptionLength} characters`];
     }
     const dueAfter = milestone.dueAfter.trim();
     if (!/^\d+$/.test(dueAfter) || Number(dueAfter) <= 0 || Number(dueAfter) > 2147483647) {
@@ -151,7 +152,7 @@ export function validateMilestonePlan(milestones: MilestoneValues[], durationWee
     }
   });
   const total = totalWeightHundredths(milestones);
-  if (weighted && milestones.length && total !== null && total !== 10000) errors.totalWeight = ["Milestone weights must total 100%"];
+  if (weighted && milestones.length && total !== 10000) errors.totalWeight = ["Milestone weights must total 100%"];
   return errors;
 }
 

@@ -12,11 +12,12 @@ import { useTaskWorkflowMutation } from "@/pages/management/task/hooks/useTaskWo
 import { getTaskError, subtaskStatusOptions } from "@/pages/management/task/task-form.utils";
 import type { TaskDTO, TaskStatus, TaskWorkflowDTO } from "@/types/features/task";
 import { useQuery } from "@tanstack/react-query";
-import { History, ListTree, Loader2, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { History, ListTree, Loader2, Pencil, Plus, RefreshCw, Trash2, UserRound } from "lucide-react";
 import { useState } from "react";
 
-function SubtaskRow({ workflow, onEdit, readOnly }: {
+function SubtaskRow({ workflow, assignee, onEdit, readOnly }: {
   workflow: TaskWorkflowDTO;
+  assignee: string;
   onEdit: (task: TaskDTO) => void;
   readOnly: boolean;
 }) {
@@ -49,6 +50,7 @@ function SubtaskRow({ workflow, onEdit, readOnly }: {
         </SelectItem>)}</SelectContent>
       </Select>
       <TaskPriorityBadge priority={task.priority} />
+      <span className="flex items-center gap-1"><UserRound className="size-3.5" aria-hidden />{assignee}</span>
       {task.estimatedHours != null && <span>{task.estimatedHours} h</span>}
       <Button size="icon" variant="ghost" className="ml-auto size-7" aria-label={`Activity of subtask ${task.title}`}
         aria-expanded={history} onClick={() => setHistory(value => !value)}><History className="size-3.5" /></Button>
@@ -90,7 +92,9 @@ export function BacklogSubtasksPanel({ backlogId, readOnly = false }: { backlogI
       <Button size="sm" variant="outline" className="mt-2" onClick={() => void query.refetch()}><RefreshCw className="size-3" />Retry</Button>
     </AlertDescription></Alert>}
     {data && !error && (data.items.length ? data.items.map(workflow => <SubtaskRow key={workflow.task.id}
-      workflow={workflow} readOnly={readOnly} onEdit={task => setEditing({ task })} />)
+      workflow={workflow} assignee={workflow.task.assigneeProjectMemberId == null ? "Unassigned"
+        : data.assignees.find(assignee => assignee.id === workflow.task.assigneeProjectMemberId)?.displayName ?? "Previous assignee (unavailable)"}
+      readOnly={readOnly} onEdit={task => setEditing({ task })} />)
       : <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">No subtasks yet.</p>)}
     {editing && data && <Dialog open onOpenChange={open => { if (!open && !saving) setEditing(null); }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl" showCloseButton={!saving}
@@ -98,7 +102,7 @@ export function BacklogSubtasksPanel({ backlogId, readOnly = false }: { backlogI
         <DialogHeader><DialogTitle>{editing.task ? "Edit subtask" : "Create subtask"}</DialogTitle>
           <DialogDescription>This subtask belongs to the selected backlog item.</DialogDescription></DialogHeader>
         <TaskForm key={editing.task?.id ?? `new-${backlogId}`} projectId={data.projectId} backlogItemId={backlogId}
-          task={editing.task} onBusyChange={setSaving}
+          assignees={data.assignees} task={editing.task} onBusyChange={setSaving}
           onSaved={() => { setSaving(false); setEditing(null); }} onCancel={() => setEditing(null)} />
       </DialogContent>
     </Dialog>}

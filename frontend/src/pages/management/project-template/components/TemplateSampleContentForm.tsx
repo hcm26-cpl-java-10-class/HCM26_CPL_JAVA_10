@@ -8,9 +8,10 @@ import ConfirmDialog from "@/components/ui/confirmdialog";
 import type { TemplateSampleContent, TemplateSampleContentPayload, TemplateBacklogInput } from "@/types/features/project-template";
 import { useMutation } from "@tanstack/react-query";
 import { AlertCircle, ChevronRight, ClipboardList, Loader2, PanelLeftClose, Plus, Save } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { getTemplateError } from "../project-template.utils";
+import { useTemplateDraft } from "../hooks/useTemplateDraft";
 import { newBacklogItem, sampleFieldId, toSamplePayload, toSampleValues, validateSampleContent,
   type BacklogItemValues, type SampleContentErrors } from "../sample-content.utils";
 import { TemplateBacklogImportDialog } from "./TemplateBacklogImportDialog";
@@ -26,10 +27,13 @@ export function TemplateSampleContentForm({ content, editable, onSaved, save, pr
   previewImport?: (file: File) => Promise<TemplateBacklogInput[]>;
   downloadImportTemplate?: () => Promise<Blob>;
 }) {
-  const [values, setValues] = useState(() => toSampleValues(content));
+  const formId = useId();
+  const fieldId = useCallback((path: string) => `${formId}-${sampleFieldId(path)}`, [formId]);
+  const contentValues = useMemo(() => toSampleValues(content), [content]);
+  const { values, setValues, hasChanges, lockVersion, acceptSaved } = useTemplateDraft(
+    contentValues, content.lockVersion, values => JSON.stringify(toSamplePayload(values, 0).backlogItems),
+  );
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [savedBacklog, setSavedBacklog] = useState(() => JSON.stringify(toSamplePayload(values, 0).backlogItems));
-  const [lockVersion, setLockVersion] = useState(content.lockVersion);
   const [errors, setErrors] = useState<SampleContentErrors>({});
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTemplateError> | null>(null);
   const [removing, setRemoving] = useState<{ key: string; title: string } | null>(null);
@@ -52,18 +56,17 @@ export function TemplateSampleContentForm({ content, editable, onSaved, save, pr
   useEffect(() => {
     const path = focusError.current;
     if (!path) return;
-    const target = document.getElementById(sampleFieldId(path))
-      ?? (path.startsWith("backlogItems[") ? editor.current : document.getElementById(sampleFieldId("backlogItems")));
+    const target = document.getElementById(fieldId(path))
+      ?? (path.startsWith("backlogItems[") ? editor.current : document.getElementById(fieldId("backlogItems")));
     target?.focus();
     focusError.current = null;
-  }, [errors]);
+  }, [errors, fieldId]);
 
   const mutation = useMutation({ mutationFn: (payload: TemplateSampleContentPayload) => save ? save(payload) : projectTemplateApi.saveSampleContent(content.templateId, payload),
     onSuccess: (saved) => {
-      const savedValues = toSampleValues(saved);
-      setValues(savedValues); setSavedBacklog(JSON.stringify(toSamplePayload(savedValues, 0).backlogItems));
+      acceptSaved(toSampleValues(saved), saved.lockVersion);
       setActiveKey(null);
-      setLockVersion(saved.lockVersion); setErrors({}); setSubmitError(null);
+      setErrors({}); setSubmitError(null);
       onSaved(saved); toast.success("Sample backlog saved successfully.");
     },
     onError: (error) => {
@@ -74,7 +77,6 @@ export function TemplateSampleContentForm({ content, editable, onSaved, save, pr
     onSettled: () => { submitting.current = false; },
   });
   const canEdit = editable && content.editable;
-  const hasChanges = JSON.stringify(toSamplePayload(values, 0).backlogItems) !== savedBacklog;
   const disabled = !canEdit || mutation.isPending;
   const clearErrors = (prefix: string) => setErrors((current) => Object.fromEntries(Object.entries(current).filter(([field]) => !field.startsWith(prefix))));
   const changeBacklog = (index: number, patch: Partial<BacklogItemValues>) => {
@@ -87,7 +89,7 @@ export function TemplateSampleContentForm({ content, editable, onSaved, save, pr
   };
   const collapseItem = () => {
     setActiveKey(null);
-    document.getElementById(sampleFieldId("backlogItems"))?.focus();
+    document.getElementById(fieldId("backlogItems"))?.focus();
   };
   const appendItems = (items: BacklogItemValues[]) => {
     setValues((current) => ({ ...current, backlogItems: [...current.backlogItems, ...items] }));
@@ -119,18 +121,17 @@ export function TemplateSampleContentForm({ content, editable, onSaved, save, pr
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2"><ClipboardList className="size-5 text-indigo-600 dark:text-indigo-400" />Sample backlog</CardTitle>
-            <CardDescription className="mt-2">Prepare initial work and suggested roles for teams using this template.</CardDescription>
+            <CardDescription className="mt-2">Prepare initial work for teams using this template.</CardDescription>
           </div>
           <Badge variant="outline">{backlogItems.length} {backlogItems.length === 1 ? "item" : "items"}</Badge>
         </div>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-muted-foreground">Suggested roles describe who should handle the work. Teams assign individual members when planning their project.</p>
       </CardContent>
     </Card>
 
     <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[17rem_minmax(0,1fr)]">
-      <Card id={sampleFieldId("backlogItems")} tabIndex={-1} className="gap-3 xl:sticky xl:top-4">
+      <Card id={fieldId("backlogItems")} tabIndex={-1} className="gap-3 xl:sticky xl:top-4">
         <CardHeader className="px-4">
           <CardTitle className="text-base">Backlog list</CardTitle>
           <CardDescription>Select an item to open its details.</CardDescription>
@@ -145,13 +146,12 @@ export function TemplateSampleContentForm({ content, editable, onSaved, save, pr
               const path = `backlogItems[${index}]`;
               const invalid = Object.keys(errors).some((field) => field === path || field.startsWith(`${path}.`));
               return <li key={item.key}>
-                <button type="button" aria-expanded={selected} aria-controls="template-backlog-editor"
+                <button type="button" aria-expanded={selected} aria-controls={fieldId("editor")}
                   className={`flex w-full items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/60" : "hover:bg-muted/40"}`}
                   onClick={() => selected ? collapseItem() : openItem(item.key)}>
                   <span className="shrink-0 font-medium text-muted-foreground">{index + 1}.</span>
                   <span className="min-w-0 flex-1">
                     <span className="block break-words font-medium">{item.title.trim() || "New backlog item"}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">{item.suggestedRole || "No suggested role"}</span>
                     {invalid && <span className="mt-1 block text-xs text-destructive">Check details</span>}
                   </span>
                   <ChevronRight className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -173,10 +173,10 @@ export function TemplateSampleContentForm({ content, editable, onSaved, save, pr
           </>}
         </CardContent>
       </Card>
-      <div ref={editor} id="template-backlog-editor" tabIndex={-1} className="grid min-w-0 gap-3 scroll-mt-4">
+      <div ref={editor} id={fieldId("editor")} tabIndex={-1} className="grid min-w-0 gap-3 scroll-mt-4">
         {activeItem ? <>
           <TemplateBacklogEditor key={activeItem.key} item={activeItem} index={activeIndex} count={backlogItems.length}
-            roles={content.roles} disabled={disabled} editable={canEdit} errors={errors} onChange={(patch) => changeBacklog(activeIndex, patch)}
+            disabled={disabled} editable={canEdit} errors={errors} fieldId={fieldId} onChange={(patch) => changeBacklog(activeIndex, patch)}
             onMove={(direction) => {
               setValues((current) => ({ ...current, backlogItems: moved(current.backlogItems, activeIndex, direction) }));
               setErrors({});

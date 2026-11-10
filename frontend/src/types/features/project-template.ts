@@ -12,7 +12,7 @@ import type { MilestoneRubricOption } from "./milestone";
 export type ProjectTemplateStatus = "ACTIVE" | "DRAFT" | "ARCHIVED";
 
 /** Difficulty level used by the catalogue filter (AC01). */
-export type ProjectTemplateLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+export type ProjectTemplateLevel = string;
 
 /** Team roles the template reserves seats for (AC02). */
 export type ProjectRoleCode = "PM" | "BA" | "DEV" | "QA";
@@ -256,9 +256,9 @@ export interface TemplateVersionListResponse {
 }
 
 export interface ProjectTemplateFilter {
-  status?: ProjectTemplateStatus;
-  level?: ProjectTemplateLevel;
-  category?: string;
+  status?: ProjectTemplateStatus | ProjectTemplateStatus[];
+  level?: ProjectTemplateLevel | ProjectTemplateLevel[];
+  category?: string | string[];
   includeModules?: boolean;
 }
 
@@ -266,6 +266,7 @@ export interface ProjectTemplateOptions {
   tenantId: number;
   tenantName: string;
   categories: string[];
+  levels: { value: ProjectTemplateLevel; label: string }[];
   canCreate: boolean;
   canUpdate: boolean;
   canActivate: boolean;

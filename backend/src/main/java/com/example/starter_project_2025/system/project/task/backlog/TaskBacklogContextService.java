@@ -59,7 +59,7 @@ public class TaskBacklogContextService {
         var team = (project.getAssignmentId() != null && project.getTeamId() != null ? teams.findById(project.getTeamId())
                 : teams.findAllByProject_IdInOrderByIdDesc(List.of(projectId)).stream().findFirst())
                 .orElseThrow(() -> new TaskValidationException("backlogItemId", "This project has no active team"));
-        workspaceAccess.requirePair(actor, projectId, team.getId(), false);
+        team = workspaceAccess.requirePair(actor, projectId, team.getId(), lock);
         if (lock && !workspaceAccess.projectCanStart(project)) throw new AccessDeniedException("This project workspace is read-only");
         UUID alias = projectLinks.findByProjectId(projectId).map(TaskAlertData.ProjectLink::getId)
                 .orElseGet(() -> alias("subtask-project:", project.getId()));
@@ -79,7 +79,7 @@ public class TaskBacklogContextService {
             projectLinks.saveAndFlush(link);
         }
         for (ProjectMember member : roster(context)) {
-            UUID id = memberAlias(context, member);
+            UUID id = memberAlias(member);
             if (!memberLinks.existsById(id)) {
                 var link = new TaskAlertData.MemberLink();
                 link.setId(id);
@@ -100,7 +100,7 @@ public class TaskBacklogContextService {
     }
 
     public List<Assignee> assignees(Context context) {
-        return roster(context).stream().map(member -> new Assignee(memberAlias(context, member),
+        return roster(context).stream().map(member -> new Assignee(memberAlias(member),
                 member.getClassMember().getUser().getFullName())).toList();
     }
 
@@ -114,11 +114,9 @@ public class TaskBacklogContextService {
                 .toList();
     }
 
-    private UUID memberAlias(Context context, ProjectMember member) {
-        return memberLinks.findByProjectId(context.projectAlias()).stream()
-                .filter(link -> link.getSource() == TaskAlertData.MemberSource.PROJECT_MEMBER
-                        && Objects.equals(link.getSourceMemberId(), member.getId()))
-                .map(TaskAlertData.MemberLink::getId).findFirst()
+    private UUID memberAlias(ProjectMember member) {
+        return memberLinks.findBySourceAndSourceMemberId(TaskAlertData.MemberSource.PROJECT_MEMBER, member.getId())
+                .map(TaskAlertData.MemberLink::getId)
                 .orElseGet(() -> alias("subtask-member:", member.getId()));
     }
 

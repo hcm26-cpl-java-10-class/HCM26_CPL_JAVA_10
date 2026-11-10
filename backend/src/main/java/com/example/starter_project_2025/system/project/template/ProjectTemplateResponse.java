@@ -9,7 +9,7 @@ public record ProjectTemplateResponse(
         String name,
         String description,
         String category,
-        ProjectTemplateLevel level,
+        String level,
         Integer estimatedDurationWeeks,
         Integer templateVersion,
         ProjectTemplateStatus status,

@@ -96,7 +96,8 @@ public class TeamBacklogService {
         if (!selectedProjects.isEmpty()) backlogs.findAllByProjectIdInAndIsActiveTrueOrderByIdAsc(selectedProjects)
                 .forEach(item -> itemRows.put(item.getId(), item));
         List<SprintBacklog> items = new ArrayList<>(itemRows.values());
-        if (!selectedProjects.isEmpty()) {
+        // Legacy boards may contain duplicate sprint copies. Each hierarchy item has its own identity.
+        if (includeTeamOnly && !selectedProjects.isEmpty()) {
             Set<String> sprintItemKeys = items.stream()
                     .filter(item -> item.getSprint() != null)
                     .map(TeamBacklogService::workItemKey)
