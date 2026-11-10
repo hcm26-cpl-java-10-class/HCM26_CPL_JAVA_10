@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Flag, GitBranch, LoaderCircle, Search } from "lucide-react";
 import { projectAssignmentApi } from "@/api/features/project-assignment.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,8 @@ import { Label } from "@/components/ui/label";
 import type { AssignmentModule, AssignmentOwner, AssignmentRole, AssignmentRolePolicy, AssignmentTeam, AssignmentTemplate, ProjectAssignmentMode, ProjectAssignmentRequest } from "@/types/features/project-assignment";
 import { AssignmentTeamRoles, assignmentMemberRoles, assignmentRoleErrors, type MemberRoleChoices } from "./AssignmentTeamRoles";
 
-const selectClass = "h-10 w-full rounded-md border bg-background px-3 text-sm";
+const selectClass = "h-10 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50";
+const primaryActionClass = "bg-indigo-700 text-white hover:bg-indigo-800 dark:bg-indigo-600 dark:hover:bg-indigo-700";
 const modeOptions = [
   { id: "SPLIT", title: "Phân công theo module", description: "Mỗi module giao cho một Team. Một Team có thể nhận nhiều module." },
   { id: "WHOLE", title: "Giao trọn Master cho một Team", description: "Một Team phụ trách cả Master và toàn bộ module trong cùng Workspace." },
@@ -59,9 +60,14 @@ function OwnerNotice({ owners }: { owners: AssignmentOwner[] }) {
 
 function ModuleBranch({ module }: { module: AssignmentModule }) {
   return <li className="space-y-1">
-    <span className="font-medium">{module.name}</span>
-    <span className="ml-2 text-xs text-muted-foreground">{module.code} · {module.milestoneCount} milestone</span>
-    {module.modules.length > 0 && <ul className="space-y-1 border-l pl-4">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-indigo-500/15 bg-card px-2.5 py-1.5">
+      <GitBranch className="size-4 shrink-0 text-indigo-600 dark:text-indigo-400" aria-hidden />
+      <span className="min-w-0 break-words font-medium">{module.name}</span>
+      <Badge variant="outline" className="border-teal-500/25 bg-teal-500/10 text-teal-800 dark:text-teal-300">
+        <Flag aria-hidden />{module.milestoneCount} milestone
+      </Badge>
+    </div>
+    {module.modules.length > 0 && <ul className="space-y-1 border-l border-indigo-500/25 pl-4">
       {module.modules.map(child => <ModuleBranch key={child.templateId} module={child} />)}
     </ul>}
   </li>;
@@ -259,31 +265,35 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
     assignment.reset();
   }
 
-  if (assignment.isSuccess) return <Card role="status">
+  if (assignment.isSuccess) return <Card role="status" className="border-emerald-500/30 bg-emerald-500/5">
     <CardHeader>
       <CardTitle className="flex items-center gap-2"><CheckCircle2 className="size-5 text-emerald-600" /> Đã lưu phân công Master</CardTitle>
       <CardDescription>Về danh sách nhóm để chọn Mentor cho từng Team và kiểm tra điều kiện công bố. Workspace được tạo sau khi công bố thành công.</CardDescription>
     </CardHeader>
     <CardContent>
-      <Button asChild><Link to={backTo}>Về danh sách nhóm</Link></Button>
+      <Button asChild className={primaryActionClass}><Link to={backTo}>Về danh sách nhóm</Link></Button>
     </CardContent>
   </Card>;
 
+  const currentStepIndex = assignmentSteps.findIndex(item => item.id === step);
   return <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_19rem]">
     <ol ref={stepList} tabIndex={-1} aria-label="Các bước gán Master Project"
-      className="grid scroll-mt-4 grid-cols-3 gap-2 rounded-xl border bg-card p-2 xl:col-span-2">
-      {assignmentSteps.map(({ id, title }, index) => (
-        <li key={id} aria-current={step === id ? "step" : undefined}
+      className="grid scroll-mt-4 grid-cols-3 gap-2 rounded-xl border border-indigo-500/20 bg-card p-2 xl:col-span-2">
+      {assignmentSteps.map(({ id, title }, index) => {
+        const current = step === id;
+        const complete = index < currentStepIndex;
+        return <li key={id} aria-current={current ? "step" : undefined}
           className={"flex items-center gap-2 rounded-lg px-2 py-2 text-xs sm:px-3 sm:text-sm "
-            + (step === id ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground")}>
+            + (current ? "bg-indigo-500/10 font-semibold text-indigo-700 dark:text-indigo-300"
+              : complete ? "bg-emerald-500/5 text-emerald-700 dark:text-emerald-300" : "text-muted-foreground")}>
           <span className={"grid size-6 shrink-0 place-items-center rounded-full text-xs "
-            + (step === id ? "bg-primary text-primary-foreground" : "bg-muted")}>{index + 1}</span>
+            + (current ? "bg-indigo-700 text-white" : complete ? "bg-emerald-500/15" : "bg-muted")}>{index + 1}</span>
           <span>{title}</span>
-        </li>
-      ))}
+        </li>;
+      })}
     </ol>
     <div className="grid min-w-0 gap-5">
-      {step === "project" && <Card>
+      {step === "project" && <Card className="border-indigo-500/20 bg-gradient-to-br from-indigo-500/5 to-transparent">
         <CardHeader><CardTitle>Đề bài Master</CardTitle><CardDescription>Chọn phiên bản đã công bố trong thư viện.</CardDescription></CardHeader>
         <CardContent className="grid gap-3">
           <form className="flex flex-col gap-2 sm:flex-row" onSubmit={event => { event.preventDefault(); setKeyword(search.trim()); }}>
@@ -310,21 +320,21 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
       {preview.isError && <div role="alert" className="grid gap-2 rounded-lg border p-4 text-sm text-destructive">
         <p>{failure(preview.error)}</p><Button className="w-fit" variant="outline" size="sm" onClick={() => void reloadTemplates()}>Tải lại đề bài</Button>
       </div>}
-      {data && !preview.isError && step !== "roles" && <Card>
+      {data && !preview.isError && step !== "roles" && <Card className="border-indigo-500/20">
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2">{data.master.name} <Badge variant="outline">{data.master.version}</Badge></CardTitle>
           <CardDescription>{data.modules.length} module trực tiếp · {data.masterMilestoneCount} milestone cấp Master</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {!review && data.modules.length > 0 && <details className="rounded-lg border bg-muted/20 p-3 text-sm">
-            <summary className="cursor-pointer font-medium">Xem cây module</summary>
+          {!review && data.modules.length > 0 && <details className="rounded-lg border border-indigo-500/25 bg-indigo-500/5 p-3 text-sm">
+            <summary className="cursor-pointer font-medium text-indigo-700 dark:text-indigo-300">Xem cây module</summary>
             <ul className="mt-3 space-y-2">{data.modules.map(module => <ModuleBranch key={module.templateId} module={module} />)}</ul>
           </details>}
           {!review && !teamScoped && data.modules.length > 0 && <fieldset className="grid gap-3 sm:grid-cols-2">
             <legend className="mb-2 text-sm font-medium">Cách phân công Master</legend>
             {modeOptions.map(option => <label key={option.id} className={"flex gap-3 rounded-lg border p-3 "
-              + (mode === option.id ? "border-primary bg-primary/5" : "")}>
-              <input type="radio" name="master-distribution" value={option.id} checked={mode === option.id}
+              + (mode === option.id ? "border-indigo-500/60 bg-indigo-500/10" : "hover:border-indigo-500/40 hover:bg-indigo-500/5")}>
+              <input type="radio" name="master-distribution" value={option.id} checked={mode === option.id} className="accent-indigo-600"
                 onChange={() => { setPreferredMode(option.id); assignment.reset(); }} />
               <span><span className="block text-sm font-medium">{option.title}</span>
                 <span className="text-xs text-muted-foreground">{option.description}</span></span>
@@ -351,7 +361,7 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
                   </div>}
               </div>;
             })}
-            <p className="rounded-md bg-muted/40 p-3 text-sm text-muted-foreground">
+            <p className="rounded-md bg-indigo-500/5 p-3 text-sm text-indigo-800 dark:text-indigo-200">
               Mỗi Team thực hiện milestone của các module được giao. Mentor lớp quản lý milestone Master ở cấp lớp.
             </p>
           </> : <div className="grid gap-2">
@@ -375,7 +385,7 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
           </div>}
         </CardContent>
       </Card>}
-      {step !== "project" && roleTeam && <Card className="min-w-0">
+      {step !== "project" && roleTeam && <Card className="min-w-0 border-indigo-500/20">
         <CardHeader>
           <CardTitle>{review ? "Leader và vai trò đã chọn" : "Phân vai cho Team"}</CardTitle>
           <CardDescription>{roleTeams.length > 1
@@ -388,11 +398,11 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
               const selectedTeam = roleTeam.team.id === team.id;
               return <button key={team.id} type="button" aria-pressed={selectedTeam}
                 className={"grid min-w-40 flex-1 content-start gap-1 rounded-lg border p-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring "
-                  + (selectedTeam ? "border-primary bg-primary/5" : "hover:bg-muted/40")}
+                  + (selectedTeam ? "border-indigo-500/60 bg-indigo-500/10" : "bg-muted/20 hover:border-indigo-500/40 hover:bg-indigo-500/5")}
                 onClick={() => setRoleTeamId(team.id)}>
                 <span className="break-words font-medium">{team.name}</span>
                 <span className="break-words text-xs text-muted-foreground">{projectName}</span>
-                <span className={"text-xs " + (errors.length ? "text-destructive" : "text-emerald-700 dark:text-emerald-400")}>
+                <span className={"text-xs font-medium " + (errors.length ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300")}>
                   {errors.length ? "Cần phân vai" : "Sẵn sàng"}
                 </span>
               </button>;
@@ -412,7 +422,7 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
         </CardContent>
       </Card>}
     </div>
-    <Card className="xl:sticky xl:top-4">
+    <Card className="border-indigo-500/20 bg-gradient-to-br from-indigo-500/10 via-indigo-500/[0.03] to-transparent xl:sticky xl:top-4">
       <CardHeader>
         <CardTitle>{review ? "Kiểm tra trước khi gán" : "Tóm tắt phân công"}</CardTitle>
         <CardDescription>{selected ? selected.name + " · " + selected.version : "Chọn đề bài Master để bắt đầu."}</CardDescription>
@@ -423,11 +433,11 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
           <p className="text-muted-foreground">{mode === "SPLIT"
             ? mappedTeams.filter(item => item.valid).length + "/" + data.modules.length + " module đã chọn Team"
             : wholeTeam?.name ?? "Chưa chọn Team"}</p>
-          {step !== "project" && <p aria-live="polite" className={ready ? "text-muted-foreground" : "text-destructive"}>
+          {step !== "project" && <p aria-live="polite" className={ready ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}>
             {readyRoleCount}/{roleTeams.length} Team đã đủ Leader và vai trò.
           </p>}
         </>}
-        {review && <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+        {review && <p className="rounded-md bg-indigo-500/10 p-3 text-xs text-indigo-800 dark:text-indigo-200">
           Lưu đề bài và vai trò cho các nhóm nháp. Workspace và hạn milestone bắt đầu từ lúc công bố chính thức.
         </p>}
         {step !== "project" && ownershipReady && !canConfigureRoles && <p role="alert" className="text-destructive">
@@ -438,9 +448,9 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
           <Button variant="outline" size="sm" onClick={() => void reloadTemplates()}>Tải lại dữ liệu phân công</Button>
         </div>}
         {step === "project"
-          ? <Button disabled={!canConfigureRoles} onClick={() => goToStep("roles")}>Tiếp tục phân vai <ArrowRight /></Button>
+          ? <Button className={primaryActionClass} disabled={!canConfigureRoles} onClick={() => goToStep("roles")}>Tiếp tục phân vai <ArrowRight /></Button>
           : <>
-            <Button disabled={!ready || assignment.isPending} onClick={() => review ? submit() : goToStep("review")}>
+            <Button className={primaryActionClass} disabled={!ready || assignment.isPending} onClick={() => review ? submit() : goToStep("review")}>
               {assignment.isPending && <LoaderCircle className="size-4 animate-spin" />}
               {assignment.isPending ? "Đang lưu phân công…" : review ? "Lưu phân công" : "Xem lại phân công"}
             </Button>

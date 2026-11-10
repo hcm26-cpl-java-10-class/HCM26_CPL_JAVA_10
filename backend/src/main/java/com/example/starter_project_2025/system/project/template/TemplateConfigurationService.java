@@ -346,7 +346,7 @@ public class TemplateConfigurationService {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record Configuration(String description, String category, ProjectTemplateLevel level, Integer estimatedDurationWeeks,
+    private record Configuration(String description, String category, String level, Integer estimatedDurationWeeks,
                                  JsonNode constraints, List<MilestoneData> milestones, List<BacklogData> backlogItems) { }
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record MilestoneData(Long id, String title, String description, Integer dueAfter, TemplateMilestoneTimeUnit dueUnit,

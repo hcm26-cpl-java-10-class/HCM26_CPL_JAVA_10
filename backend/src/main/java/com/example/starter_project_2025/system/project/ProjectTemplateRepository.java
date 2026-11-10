@@ -66,4 +66,9 @@ public interface ProjectTemplateRepository
             + "where (t.tenantId = :tenantId or t.tenantId is null) "
             + "and t.isActive = true and t.category is not null order by t.category")
     List<String> findCategories(Long tenantId);
+
+    @Query("select distinct t.level from ProjectTemplate t "
+            + "where (t.tenantId = :tenantId or t.tenantId is null) "
+            + "and t.isActive = true and t.level is not null order by t.level")
+    List<String> findLevels(Long tenantId);
 }

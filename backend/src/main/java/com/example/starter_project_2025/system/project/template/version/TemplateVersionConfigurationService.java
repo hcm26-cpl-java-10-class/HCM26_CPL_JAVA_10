@@ -39,6 +39,7 @@ public class TemplateVersionConfigurationService {
     private final ProjectTemplateAccessService access;
     private final TemplateConfigurationService configurations;
     private final ProjectTemplateValidator overviewValidator;
+    private final ProjectTemplateCatalog catalog;
     private final TemplateTeamConstraintsMapper teams;
     private final TemplateMilestoneValidator milestoneValidator;
     private final TemplateMilestoneScheduleValidator scheduleValidator;
@@ -112,7 +113,7 @@ public class TemplateVersionConfigurationService {
         boolean module = context.owner().getParentTemplateId() != null;
         if (module) request = request.withCategory(hierarchy.masterCategory(context.owner()));
         overviewValidator.validate(request, true);
-        if (!module) requireCategory(request.category(), context.user().getTenantId());
+        catalog.validateSelection(context.user().getTenantId(), request, !module);
         if (context.owner().getParentTemplateId() == null ? templates.existsByTenantIdAndCodeScopeIdAndCodeAndTemplateVersionAndIdNot(
                 context.user().getTenantId(), context.owner().getCodeScopeId(), request.code().strip(),
                 context.owner().getTemplateVersion(), context.owner().getId())
@@ -124,7 +125,7 @@ public class TemplateVersionConfigurationService {
         content.put("description", request.description().strip());
         if (request.technologyStack() != null) content.put("technologyStack", request.technologyStack().strip());
         content.put("category", request.category().strip());
-        content.put("level", request.level().name());
+        content.put("level", request.level().strip());
         content.put("estimatedDurationWeeks", request.estimatedDurationWeeks().intValueExact());
         scheduleValidator.validate(plan(content, request.lockVersion()), request.estimatedDurationWeeks().intValueExact());
         return save(context, content);
@@ -337,7 +338,7 @@ public class TemplateVersionConfigurationService {
 
     private ProjectTemplateRequest overview(ObjectNode content, BigDecimal revision) {
         return new ProjectTemplateRequest(text(content, "code"), text(content, "name"), text(content, "description"),
-                text(content, "category"), convert(content.path("level"), ProjectTemplateLevel.class),
+                text(content, "category"), text(content, "level"),
                 content.path("estimatedDurationWeeks").isNumber() ? content.path("estimatedDurationWeeks").decimalValue() : null, revision);
     }
 
@@ -363,14 +364,6 @@ public class TemplateVersionConfigurationService {
 
     private Integer duration(ObjectNode content) {
         return content.path("estimatedDurationWeeks").canConvertToInt() ? content.path("estimatedDurationWeeks").intValue() : null;
-    }
-
-    private void requireCategory(String category, Long tenantId) {
-        var available = java.util.stream.Stream.concat(java.util.stream.Stream.of("Web Application", "Mobile Application", "Data Analytics", "Capstone", "Cross-functional"),
-                templates.findCategories(tenantId).stream()).toList();
-        if (!available.contains(category.strip())) {
-            throw new ProjectTemplateException(422, "Select a category from the list", Map.of("category", List.of("Select an available category")));
-        }
     }
 
     private String text(ObjectNode content, String key) { return content.hasNonNull(key) ? content.get(key).asText() : null; }

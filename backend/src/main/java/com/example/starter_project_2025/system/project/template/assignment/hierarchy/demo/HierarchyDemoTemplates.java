@@ -72,7 +72,7 @@ public class HierarchyDemoTemplates {
                 .code(code).name(name).parentTemplate(parent).technologyStack("Java Spring Boot, React, H2")
                 .description(parent == null ? "Original v1.0 brief: coordinate the Auth, Payment and Catalog modules for an E-Commerce platform."
                         : "Original v1.0 brief for " + name + ": design the API and database, implement the module and verify its integration contract.")
-                .category("Web Application").level(ProjectTemplateLevel.INTERMEDIATE).estimatedDurationWeeks(4)
+                .category("Web Application").level("INTERMEDIATE").estimatedDurationWeeks(4)
                 .constraintsJson("{\"min_members\":4,\"max_members\":" + max
                         + ",\"allow_multi_role\":false,\"role_quotas\":{\"PM\":1,\"BA\":1,\"DEV\":1,\"QA\":1}}")
                 .status(ProjectTemplateStatus.DRAFT).templateVersion(1).createdBy(admin.getId()).build());

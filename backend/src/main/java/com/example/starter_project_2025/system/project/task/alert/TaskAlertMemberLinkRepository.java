@@ -3,4 +3,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.*;
 public interface TaskAlertMemberLinkRepository extends JpaRepository<TaskAlertData.MemberLink, UUID> {
     List<TaskAlertData.MemberLink> findByProjectId(UUID projectId);
+    Optional<TaskAlertData.MemberLink> findBySourceAndSourceMemberId(TaskAlertData.MemberSource source, Long sourceMemberId);
 }

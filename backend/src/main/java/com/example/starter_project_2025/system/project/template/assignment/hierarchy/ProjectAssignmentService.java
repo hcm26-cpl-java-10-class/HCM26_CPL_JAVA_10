@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project.template.assignment.hierarchy;
 
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.*;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
@@ -152,6 +153,22 @@ public class ProjectAssignmentService {
         return !assignments.findAllBySessionIdAndMasterProjectIdIsNullAndIsActiveTrueOrderByIdAsc(sessionId).isEmpty();
     }
 
+    public Map<Long, String> pendingPublicationIssues(TeamAllocationSession session, Authentication authentication) {
+        Map<Long, String> issues = new LinkedHashMap<>();
+        for (var assignment : assignments.findAllBySessionIdAndMasterProjectIdIsNullAndIsActiveTrueOrderByIdAsc(session.getId())) {
+            var request = savedRequest(assignment);
+            if (!hasAssignedTeams(session.getId(), request)) continue;
+            try {
+                validatePendingPublication(session, assignment, request, authentication, false);
+            } catch (AssignmentException invalid) {
+                teamIds(request).forEach(teamId -> issues.putIfAbsent(teamId, invalid.getReason()));
+            } catch (BadRequestException invalid) {
+                teamIds(request).forEach(teamId -> issues.putIfAbsent(teamId, invalid.getMessage()));
+            }
+        }
+        return issues;
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishPending(TeamAllocationSession session, Authentication authentication) {
         var pending = assignments.findAllBySessionIdAndMasterProjectIdIsNullAndIsActiveTrueOrderByIdAsc(session.getId());
@@ -163,21 +180,9 @@ public class ProjectAssignmentService {
                 assignment.setIsActive(false);
                 continue;
             }
-            var request = new AssignmentDtos.Request(saved.masterTemplateId(), saved.versionId(), saved.mode(),
-                    saved.teamId(), saved.modules());
-            var root = reader.loadAssigned(request.masterTemplateId(), request.versionId(), assignment.getTenantId());
-            var selection = validation.validate(session, root, request, authentication);
-            requireMatchingOwners(session.getTrainingClass(), root, selection);
-            for (var brief : selection.briefs()) {
-                var team = brief.team();
-                var primary = brief.primary();
-                if (!primary.templateId().equals(team.getProjectTemplateId())
-                        || !primary.sourceVersionId().equals(team.getProjectTemplateVersionId()))
-                    throw AssignmentException.invalid("Phân công của " + team.getTeamName()
-                            + " đã thay đổi. Lưu lại toàn bộ phân công Master trước khi công bố.");
-            }
+            var publication = validatePendingPublication(session, assignment, saved, authentication, true);
             assignment.setAssignedAt(milestoneClock.instant());
-            var result = writer.createForPublication(assignment, root, selection);
+            var result = writer.createForPublication(assignment, publication.master(), publication.selection());
             assignment.setResponseJson(write(result));
             assignments.saveAndFlush(assignment);
             String correlation = CorrelationIdFilter.currentId();
@@ -185,6 +190,28 @@ public class ProjectAssignmentService {
                     .payload(assignment.getResponseJson()).correlationId(correlation).status("PENDING").build());
         }
     }
+
+    private PendingPublication validatePendingPublication(TeamAllocationSession session, ProjectAssignment assignment,
+                                                          AssignmentDtos.Request saved, Authentication authentication,
+                                                          boolean lockTeams) {
+        var request = new AssignmentDtos.Request(saved.masterTemplateId(), saved.versionId(), saved.mode(),
+                saved.teamId(), saved.modules());
+        var master = reader.loadAssigned(request.masterTemplateId(), request.versionId(), assignment.getTenantId());
+        var selection = validation.validate(session, master, request, authentication, lockTeams);
+        requireMatchingOwners(session.getTrainingClass(), master, selection);
+        for (var brief : selection.briefs()) {
+            var team = brief.team();
+            var primary = brief.primary();
+            if (!primary.templateId().equals(team.getProjectTemplateId())
+                    || !primary.sourceVersionId().equals(team.getProjectTemplateVersionId())) {
+                throw AssignmentException.invalid("Phân công của " + team.getTeamName()
+                        + " đã thay đổi. Lưu lại toàn bộ phân công Master trước khi công bố.");
+            }
+        }
+        return new PendingPublication(master, selection);
+    }
+
+    private record PendingPublication(AssignmentTemplateReader.Node master, AssignmentValidationService.Selection selection) { }
 
     private void replacePending(Long sessionId, AssignmentDtos.Request request) {
         Set<Long> selectedIds = teamIds(request);

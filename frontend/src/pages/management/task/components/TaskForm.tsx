@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { TaskDTO, TaskPayload, TaskPriority } from "@/types/features/task";
+import type { BacklogSubtasks, TaskDTO, TaskPayload, TaskPriority } from "@/types/features/task";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, FileText, Loader2, Save, SlidersHorizontal } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -33,6 +33,7 @@ import { TaskStatusBadge } from "./TaskBadges";
 interface TaskFormProps {
   projectId: string;
   backlogItemId: number;
+  assignees: BacklogSubtasks["assignees"];
   task?: TaskDTO;
   onSaved: (task: TaskDTO) => void;
   onCancel: () => void;
@@ -66,12 +67,14 @@ function TaskField({
   );
 }
 
-export function TaskForm({ projectId, backlogItemId, task, onSaved, onCancel, onBusyChange }: TaskFormProps) {
+export function TaskForm({ projectId, backlogItemId, assignees, task, onSaved, onCancel, onBusyChange }: TaskFormProps) {
   const queryClient = useQueryClient();
   const [values, setValues] = useState<TaskFormValues>(() => toTaskFormValues(task));
   const [errors, setErrors] = useState<TaskFieldErrors>({});
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTaskError> | null>(null);
-  const estimateRequired = Boolean(task?.assigneeProjectMemberId);
+  const estimateRequired = values.assigneeProjectMemberId != null;
+  const unavailableAssignee = values.assigneeProjectMemberId != null
+    && !assignees.some(assignee => assignee.id === values.assigneeProjectMemberId);
   const descriptionLength = values.description.length;
   const descriptionErrors = descriptionLength > maxTaskDescriptionLength
     ? ["Description must not exceed 1000 characters"] : errors.description;
@@ -108,7 +111,10 @@ export function TaskForm({ projectId, backlogItemId, task, onSaved, onCancel, on
     event.preventDefault();
     if (submittingRef.current) return;
     setSubmitError(null);
-    const fieldErrors = validateTaskForm(values, estimateRequired);
+    const fieldErrors = validateTaskForm(values);
+    if (unavailableAssignee) {
+      fieldErrors.assigneeProjectMemberId = ["Choose an active team member or clear the assignment"];
+    }
     setErrors(fieldErrors);
     if (Object.keys(fieldErrors).length > 0) {
       requestAnimationFrame(() =>
@@ -194,6 +200,19 @@ export function TaskForm({ projectId, backlogItemId, task, onSaved, onCancel, on
               <span className="text-muted-foreground">Status</span>
               <TaskStatusBadge status={task?.status ?? "TODO"} />
             </div>
+            <TaskField name="assigneeProjectMemberId" label="Assignee" errors={errors.assigneeProjectMemberId}>
+              <Select value={values.assigneeProjectMemberId ?? "unassigned"} disabled={saveMutation.isPending}
+                onValueChange={value => changeField("assigneeProjectMemberId", value === "unassigned" ? null : value)}>
+                <SelectTrigger id="task-assigneeProjectMemberId" className="w-full"
+                  aria-invalid={!!errors.assigneeProjectMemberId?.length}
+                  aria-describedby="task-assigneeProjectMemberId-error"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {unavailableAssignee && <SelectItem value={values.assigneeProjectMemberId!} disabled>Previous assignee (unavailable)</SelectItem>}
+                  {assignees.map(assignee => <SelectItem key={assignee.id} value={assignee.id}>{assignee.displayName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </TaskField>
             <TaskField name="deadline" label="Deadline (local time)" errors={errors.deadline}>
               <Input id="task-deadline" type="datetime-local" value={values.deadline}
                 aria-invalid={!!errors.deadline?.length}

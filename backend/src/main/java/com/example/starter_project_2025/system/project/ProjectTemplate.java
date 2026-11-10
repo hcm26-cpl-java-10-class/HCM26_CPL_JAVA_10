@@ -2,7 +2,6 @@ package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateLevel;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -65,9 +64,8 @@ public class ProjectTemplate extends BaseEntity {
     @Column(length = 255)
     String category;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "difficulty_level", length = 20)
-    ProjectTemplateLevel level;
+    String level;
 
     @Column(name = "estimated_duration_weeks")
     Integer estimatedDurationWeeks;

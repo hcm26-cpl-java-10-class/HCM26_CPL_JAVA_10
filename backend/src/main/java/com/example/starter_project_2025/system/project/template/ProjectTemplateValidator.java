@@ -10,12 +10,13 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class ProjectTemplateValidator {
+    public static final int MAX_CODE_NAME_LENGTH = 100;
     public static final int MAX_DESCRIPTION_LENGTH = 1000;
 
     public void validate(ProjectTemplateRequest request, boolean updating) {
         Map<String, List<String>> errors = new LinkedHashMap<>();
-        text(errors, "code", request.code(), 100);
-        text(errors, "name", request.name(), 255);
+        text(errors, "code", request.code(), MAX_CODE_NAME_LENGTH);
+        text(errors, "name", request.name(), MAX_CODE_NAME_LENGTH);
         text(errors, "description", request.description(), MAX_DESCRIPTION_LENGTH);
         text(errors, "category", request.category(), 255);
         if (request.technologyStack() != null && request.technologyStack().strip().length() > 2000) {
@@ -24,9 +25,7 @@ public class ProjectTemplateValidator {
         if (request.parentTemplateId() != null && request.parentTemplateId() <= 0) {
             errors.put("parentTemplateId", List.of("Select an existing parent template"));
         }
-        if (request.level() == null) {
-            errors.put("level", List.of("Select Beginner, Intermediate or Advanced"));
-        }
+        text(errors, "level", request.level(), 20);
         if (!positiveInteger(request.estimatedDurationWeeks())) {
             errors.put("estimatedDurationWeeks", List.of("Estimated duration must be a positive whole number of weeks"));
         }

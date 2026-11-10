@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -59,29 +60,27 @@ public class ProjectTemplateController {
     @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_READ')")
     public Page<ProjectTemplateResponse> getAvailable(
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) ProjectTemplateLevel level,
-            @RequestParam(required = false) String category,
+            @RequestParam MultiValueMap<String, String> parameters,
             @RequestParam(defaultValue = "0") String page,
             @RequestParam(defaultValue = "10") String size,
             Pageable pageable) {
         Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : Sort.by(Sort.Direction.DESC, "createdAt");
-        return service.getPage(search, ProjectTemplateStatus.ACTIVE, level, category,
-                PageRequest.of(number(page, "page", 0, Integer.MAX_VALUE), number(size, "size", 1, 100), sort));
+        return service.getPage(search, filters(List.of(ProjectTemplateStatus.ACTIVE), parameters),
+                PageRequest.of(number(page, "page", 0, Integer.MAX_VALUE), number(size, "size", 1, 100), sort), true);
     }
 
     @GetMapping
     @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_READ')")
     public Page<ProjectTemplateResponse> getPage(
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) ProjectTemplateStatus status,
-            @RequestParam(required = false) ProjectTemplateLevel level,
-            @RequestParam(required = false) String category,
+            @RequestParam(required = false) List<ProjectTemplateStatus> status,
+            @RequestParam MultiValueMap<String, String> parameters,
             @RequestParam(defaultValue = "true") boolean includeModules,
             @RequestParam(defaultValue = "0") String page,
             @RequestParam(defaultValue = "10") String size,
             Pageable pageable) {
         Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : Sort.by(Sort.Direction.DESC, "createdAt");
-        return service.getPage(search, status, level, category,
+        return service.getPage(search, filters(status, parameters),
                 PageRequest.of(number(page, "page", 0, Integer.MAX_VALUE), number(size, "size", 1, 100), sort), includeModules);
     }
 
@@ -95,16 +94,19 @@ public class ProjectTemplateController {
     @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_READ') and hasAuthority('PROJECT_TEMPLATE_VERSION_READ')")
     public Page<TemplateVersionListItem> getVersions(
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) ProjectTemplateStatus status,
-            @RequestParam(required = false) ProjectTemplateLevel level,
-            @RequestParam(required = false) String category,
+            @RequestParam(required = false) List<ProjectTemplateStatus> status,
+            @RequestParam MultiValueMap<String, String> parameters,
             @RequestParam(defaultValue = "true") boolean includeModules,
             @RequestParam(defaultValue = "0") String page,
             @RequestParam(defaultValue = "10") String size,
             Pageable pageable) {
         Sort sort = pageable.getSort().isSorted() ? pageable.getSort() : Sort.by(Sort.Direction.DESC, "createdAt");
-        return versionListService.getPage(search, status, level, category,
+        return versionListService.getPage(search, filters(status, parameters),
                 PageRequest.of(number(page, "page", 0, Integer.MAX_VALUE), number(size, "size", 1, 100), sort), includeModules);
+    }
+
+    private ProjectTemplateFilters filters(List<ProjectTemplateStatus> statuses, MultiValueMap<String, String> parameters) {
+        return new ProjectTemplateFilters(statuses, parameters.get("level"), parameters.get("category"));
     }
 
     @PostMapping

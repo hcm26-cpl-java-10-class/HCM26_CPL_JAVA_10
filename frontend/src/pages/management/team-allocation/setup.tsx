@@ -404,7 +404,6 @@ export default function TeamAllocationSetupPage() {
   const [editingSavedTeamId, setEditingSavedTeamId] = useState<number | null>(null);
   const [saveFailure, setSaveFailure] = useState<ApiFailure | null>(null);
   const [publishFailure, setPublishFailure] = useState<ApiFailure | null>(null);
-  const [publishSuccess, setPublishSuccess] = useState<string | null>(null);
   /** US-12: latest strict-mode readiness report (null until checked). */
   const [readiness, setReadiness] = useState<AllocationReadiness | null>(null);
   const [readinessError, setReadinessError] = useState<ApiFailure | null>(null);
@@ -417,6 +416,7 @@ export default function TeamAllocationSetupPage() {
   const restoredDraftKeyRef = useRef<string | null>(null);
 
   const sessionId = session?.id ?? null;
+  const publishToast = { id: `allocation-publish-${classId}-${sessionId}`, duration: 5000 };
   const draftStorageKey = classId > 0 && sessionId !== null
     ? draftStorageKeyFor(classId, sessionId)
     : null;
@@ -665,21 +665,11 @@ export default function TeamAllocationSetupPage() {
     onSuccess: (report) => {
       setReadiness(report);
       setReadinessError(null);
-      setPublishFailure(null);
-      if (report.readyToPublish) {
-        toast.success("Lớp đủ điều kiện công bố (Ready to Publish).");
-      } else {
-        toast.warning(
-          `Lớp chưa đủ điều kiện công bố: ${report.unassignedStudentCount} học viên tự do, `
-            + `${report.teamIssues.length} lỗi nhóm.`,
-        );
-      }
     },
     onError: (error) => {
       const failure = getApiFailure(error);
       setReadiness(null);
       setReadinessError(failure);
-      toast.error(failure.message);
     },
   });
 
@@ -700,34 +690,26 @@ export default function TeamAllocationSetupPage() {
     onSuccess: async (response) => {
       const succeededItems = response?.succeededItems ?? [];
       const failedItems = response?.failedItems ?? [];
+      const published = failedItems.length === 0 && succeededItems.length > 0;
+      const missingResult = succeededItems.length === 0 && failedItems.length === 0 ? {
+        status: 0, code: "ERR_PUBLISH_RESULT_MISSING", memberId: null,
+        message: "Chưa xác nhận được kết quả công bố. Kiểm tra lại trạng thái phiên trước khi thử lại.",
+      } : null;
       setPublishItemFailures(failedItems);
-      setPublishFailure(null);
+      setPublishFailure(missingResult);
+      setReadiness(null);
       setReadinessError(null);
-      if (succeededItems.length > 0) {
-        const successMessage = `Đã công bố chính thức ${succeededItems.length} nhóm.`;
-        setPublishSuccess(successMessage);
-        toast.success(successMessage);
-      } else {
-        setPublishSuccess(null);
-      }
-      if (failedItems.length > 0) {
-        setPublishSuccess(null);
-        toast.warning(
-          `${failedItems.length} nhóm chưa thể công bố. Xem toàn bộ lý do bên dưới.`,
-        );
-      }
-      if (failedItems.length === 0 && succeededItems.length > 0) {
-        setReadiness(null);
-        setReadinessDialogOpen(false);
+      setReadinessDialogOpen(false);
+      if (published) {
         setSession((current) => {
           if (!current) return current;
           const publishedSession = { ...current, status: "PUBLISHED" as const };
           localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(publishedSession));
           return publishedSession;
         });
+        toast.success(`Đã công bố chính thức ${succeededItems.length} nhóm và tạo Workspace.`, publishToast);
       } else {
-        // Re-run the strict check so the banner reflects the current state.
-        readinessMutation.mutate();
+        toast.error(missingResult?.message ?? `Công bố chưa hoàn tất. ${failedItems.length} nhóm cần xử lý.`, publishToast);
       }
       await Promise.all([
         queryClient.invalidateQueries({
@@ -745,19 +727,14 @@ export default function TeamAllocationSetupPage() {
         queryClient.invalidateQueries({
           queryKey: ["workspace-candidates"],
         }),
-        queryClient.invalidateQueries({
-          queryKey: ["class-master-projects", classId, sessionId],
-        }),
       ]);
     },
     onError: (error) => {
       const failure = getApiFailure(error);
-      setPublishSuccess(null);
       setPublishFailure(failure);
-      toast.error(failure.message);
-      if (failure.status === 422) {
-        readinessMutation.mutate();
-      }
+      setReadiness(null);
+      setReadinessDialogOpen(false);
+      toast.error(failure.message, publishToast);
     },
   });
 
@@ -784,6 +761,8 @@ export default function TeamAllocationSetupPage() {
     setReadinessDialogOpen(true);
     setReadiness(null);
     setReadinessError(null);
+    setPublishFailure(null);
+    setPublishItemFailures([]);
     readinessMutation.mutate();
   };
 
@@ -1291,8 +1270,6 @@ export default function TeamAllocationSetupPage() {
             <Info className="mt-0.5 size-3.5 shrink-0 text-primary" />
             <span>
               Phiên đã {session.status === "PUBLISHED" ? "công bố" : "đóng"} nên không thể thay đổi sức chứa.
-              Dùng <strong className="font-medium text-foreground">Master project assignment</strong> để phân
-              công dự án cho nhóm đủ điều kiện; nhóm phải hoàn tất hoặc hủy dự án cũ trước khi nhận dự án mới.
             </span>
           </p>
         )}
@@ -2036,14 +2013,6 @@ export default function TeamAllocationSetupPage() {
                       )}
                     </div>
                   )}
-                  {publishSuccess && (
-                    <div
-                      role="status"
-                      className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm font-medium text-emerald-700 dark:text-emerald-300"
-                    >
-                      {publishSuccess}
-                    </div>
-                  )}
                   {publishItemFailures.length > 0 && (
                     <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3">
                       <p className="text-sm font-semibold text-destructive">
@@ -2338,19 +2307,19 @@ export default function TeamAllocationSetupPage() {
       </Dialog>
       <Dialog
         open={readinessDialogOpen}
-        onOpenChange={setReadinessDialogOpen}
+        onOpenChange={open => { if (!publishSessionMutation.isPending) setReadinessDialogOpen(open); }}
       >
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl" showCloseButton={!publishSessionMutation.isPending}>
           <DialogHeader>
             <DialogTitle>Kiểm tra điều kiện công bố</DialogTitle>
             <DialogDescription>
               Kết quả kiểm tra toàn bộ học viên, nhóm, đề bài và định suất vai trò.
             </DialogDescription>
           </DialogHeader>
-          {readinessMutation.isPending ? (
+          {readinessMutation.isPending || publishSessionMutation.isPending ? (
             <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" />
-              Đang kiểm tra điều kiện công bố...
+              {publishSessionMutation.isPending ? "Đang công bố nhóm và tạo Workspace…" : "Đang kiểm tra điều kiện công bố…"}
             </div>
           ) : readinessError ? (
             <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
@@ -2363,21 +2332,13 @@ export default function TeamAllocationSetupPage() {
                 <DialogFooter>
                   <Button
                     disabled={
-                      publishSessionMutation.isPending ||
                       !hasPermission("PEO_TEAM_ALLOCATE") ||
                       session?.status !== "OPEN" ||
                       draftTeams.length > 0
                     }
-                    onClick={() => {
-                      setPublishItemFailures([]);
-                      setPublishFailure(null);
-                      setPublishSuccess(null);
-                      publishSessionMutation.mutate();
-                    }}
+                    onClick={() => publishSessionMutation.mutate()}
                   >
-                    {publishSessionMutation.isPending
-                      ? <LoaderCircle className="size-4 animate-spin" />
-                      : <Send className="size-4" />}
+                    <Send className="size-4" />
                     Công bố chính thức
                   </Button>
                 </DialogFooter>
@@ -3748,6 +3709,9 @@ function ReadinessReport({ report }: { report: AllocationReadiness }) {
             ))}
           </div>
         </div>
+      )}
+      {report.blockers.some(code => code === "ERR_NO_TEAMS" || code === "ERR_NO_DRAFT_TEAMS") && (
+        <p className="text-sm text-destructive">Phiên chưa có nhóm nháp để công bố.</p>
       )}
       {!ready && report.teamIssues.length > 0 && (
         <div className="rounded-lg border border-destructive/40 bg-background p-3">

@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { AssignmentMember, AssignmentRole, AssignmentRolePolicy, AssignmentTeam } from "@/types/features/project-assignment";
 import type { TeamMemberRole } from "@/types/features/team-allocation";
+import { useId } from "react";
 
 export type MemberRoleChoices = Record<number, AssignmentRole[]>;
 const roles: TeamMemberRole[] = ["PM", "BA", "DEV", "QA"];
@@ -30,18 +31,27 @@ export function assignmentRoleErrors(team: AssignmentTeam, policy: AssignmentRol
   return errors;
 }
 
-export function TeamMemberRoleInput({ label, selected, multiple, disabled, placeholder = "Select a role", onChange }: {
+export function TeamMemberRoleInput({ label, selected, multiple, showAllRoles = false, disabled, placeholder = "Select a role", onChange }: {
   label: string; selected: TeamMemberRole[]; multiple: boolean; disabled?: boolean;
-  placeholder?: string; onChange: (roles: TeamMemberRole[]) => void;
+  showAllRoles?: boolean; placeholder?: string; onChange: (roles: TeamMemberRole[]) => void;
 }) {
-  if (multiple) {
-    return <fieldset className="flex flex-wrap gap-3" disabled={disabled}>
+  const groupName = useId();
+  if (multiple || showAllRoles) {
+    const selectedStyle = multiple
+      ? "border-teal-500/40 bg-teal-500/10 text-teal-800 dark:text-teal-200"
+      : "border-indigo-500/40 bg-indigo-500/10 text-indigo-800 dark:text-indigo-200";
+    return <fieldset className="flex min-w-0 flex-wrap gap-1.5" disabled={disabled}>
       <legend className="sr-only">{label}</legend>
-      {roles.map(role => <label key={role} className="flex items-center gap-2 text-sm">
-        <Checkbox checked={selected.includes(role)} disabled={disabled}
-          aria-label={`${role} · ${label}`}
-          onCheckedChange={checked => onChange(checked === true ? [...selected, role] : selected.filter(value => value !== role))} />
-        {role}
+      {roles.map(role => <label key={role} className={"inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors "
+        + (selected.includes(role) && (multiple || selected.length === 1) ? selectedStyle
+          : "bg-background hover:border-indigo-500/40")}>
+        {multiple
+          ? <Checkbox checked={selected.includes(role)} disabled={disabled}
+              className="data-[state=checked]:border-teal-700 data-[state=checked]:bg-teal-700 data-[state=checked]:text-white"
+              onCheckedChange={checked => onChange(checked === true ? [...selected, role] : selected.filter(value => value !== role))} />
+          : <input type="radio" name={groupName} checked={selected.length === 1 && selected[0] === role}
+              className="size-3.5 accent-indigo-600" onChange={() => onChange([role])} />}
+        <span>{role}</span>
       </label>)}
     </fieldset>;
   }
@@ -62,11 +72,13 @@ export function AssignmentTeamRoles({ team, projectName, policy, choices, leader
   const leaderFieldId = "assignment-leader-" + team.id;
   const counts = new Map<AssignmentRole, number>();
   team.members.forEach(member => assignmentMemberRoles(member, choices).forEach(role => counts.set(role, (counts.get(role) ?? 0) + 1)));
-  return <section className="grid min-w-0 gap-3 rounded-lg border p-3 sm:p-4" aria-label={`Vai trò thành viên của ${team.name}`}>
+  return <section className="grid min-w-0 gap-3 rounded-lg border border-indigo-500/20 bg-indigo-500/[0.03] p-3 sm:p-4" aria-label={`Vai trò thành viên của ${team.name}`}>
     <div>
       <p className="break-words text-sm font-semibold">{team.name} · {projectName}</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        {team.memberCount} thành viên · {policy.allowMultiRole ? "Có thể chọn nhiều vai trò cho mỗi người." : "Mỗi người chọn một vai trò."}
+        {team.memberCount} thành viên · {policy.allowMultiRole
+          ? <span className="font-medium text-teal-700 dark:text-teal-300">Kiêm nhiệm · Chọn một hoặc nhiều vai trò cho mỗi người</span>
+          : "Mỗi người chọn một vai trò."}
       </p>
     </div>
     <div className="grid items-start gap-3 sm:grid-cols-2">
@@ -88,26 +100,27 @@ export function AssignmentTeamRoles({ team, projectName, policy, choices, leader
           const count = counts.get(quota.role) ?? 0;
           const limit = quota.max === quota.min ? `cần ${quota.min}`
             : quota.max >= 2147483647 ? `tối thiểu ${quota.min}` : `cần ${quota.min}–${quota.max}`;
-          return <Badge key={quota.role} variant={count < quota.min || count > quota.max ? "destructive" : "outline"}>
+          return <Badge key={quota.role} variant="outline" className={count < quota.min || count > quota.max
+            ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+            : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}>
             {quota.role} {count} · {limit}
           </Badge>;
         })}</div>
       </div>}
     </div>
-    <ul className="max-h-72 divide-y overflow-y-auto rounded-md border">
+    <ul className="max-h-72 divide-y overflow-y-auto rounded-md border bg-card">
       {team.members.map(member => {
         const selected = assignmentMemberRoles(member, choices);
-        return <li key={member.memberId} className={"grid items-center gap-2 px-3 py-2 "
-          + (policy.allowMultiRole ? "lg:grid-cols-[minmax(0,1fr)_auto]" : "sm:grid-cols-[minmax(0,1fr)_8rem]")}>
+        return <li key={member.memberId} className="grid items-center gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto]">
           <div className="min-w-0">
             <p className="flex flex-wrap items-center gap-1.5 break-words text-sm font-medium">
-              {member.name}{leaderId === member.memberId && <Badge variant="secondary">Leader</Badge>}
+              {member.name}{leaderId === member.memberId && <Badge variant="outline" className="border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">Leader</Badge>}
             </p>
             <p className="truncate text-xs text-muted-foreground">{member.userCode}</p>
           </div>
           {readOnly ? <p className="text-sm">{selected.join(", ") || "Chưa chọn vai trò"}</p>
             : <TeamMemberRoleInput label={`Vai trò của ${member.name}`} selected={selected} multiple={policy.allowMultiRole}
-                placeholder="Chọn vai trò" onChange={next => onChange(member.memberId, next)} />}
+                showAllRoles onChange={next => onChange(member.memberId, next)} />}
         </li>;
       })}
     </ul>

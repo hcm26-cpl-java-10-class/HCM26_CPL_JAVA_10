@@ -143,7 +143,7 @@ public class TemplateBriefSnapshotWriter {
         content.put("technologyStack", template.getTechnologyStack());
         content.put("parentTemplateId", template.getParentTemplateId());
         content.put("category", template.getCategory());
-        content.put("level", template.getLevel() == null ? null : template.getLevel().name());
+        content.put("level", template.getLevel());
         content.put("estimatedDurationWeeks", template.getEstimatedDurationWeeks());
         content.put("sourceSnapshotId", source == null ? null : source.getId());
         content.put("sourceVersion", source == null ? null : source.getVersion());
