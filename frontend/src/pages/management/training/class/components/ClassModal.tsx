@@ -308,8 +308,19 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                 type="number"
                                 min={1}
                                 max={50}
-                                value={plannedSize}
-                                onChange={(e) => setPlannedSize(parseInt(e.target.value, 10) || 0)}
+                                value={plannedSize === 0 || (plannedSize as any) === "" ? "" : plannedSize}
+                                placeholder="e.g. 25"
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === "") {
+                                        setPlannedSize("" as any);
+                                    } else {
+                                        const parsed = parseInt(val, 10);
+                                        if (!isNaN(parsed)) {
+                                            setPlannedSize(Math.max(0, parsed));
+                                        }
+                                    }
+                                }}
                             />
                         </div>
 

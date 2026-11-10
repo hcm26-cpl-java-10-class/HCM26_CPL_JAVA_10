@@ -1,5 +1,7 @@
 import type { TopicItem } from "@/types/features/content";
 
+export type SessionShift = "Morning" | "Afternoon";
+
 export interface TopicSession {
   session: number;
   content: string;
@@ -12,6 +14,7 @@ export interface TopicSession {
     | "Test/Quiz"
     | "Seminar/Workshop"
     | "Class Meeting";
+  sessionTime?: SessionShift;
   duration: string;
   durationHours: number;
   durationMins?: number;

@@ -1,76 +1,62 @@
+﻿,,,,,,,,
 ,,,,,,,,
-,,,,,,,,
-,Fresher,,,,,,,
-,JAVA SE ADVANCED PROGRAMMING SYLLABUS,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,ENTERPRISE JAVA & SPRING BOOT SYLLABUS,,,,,,,
 ,,,,,,,,
 ,,,,,Document Code,,,STANDARD-SYLLABUS-DOC
 ,,,,,Version,,,2.0
-,,,,,Effective Date,,,24/04/2020
-Java SE Advanced Programming Syllabus,,,,,
-1,Technical Group,Java,,,
-2,Topic Name,Java SE Advanced Programming,,,
-3,Topic Code,Java-201,,,
-4,Version,2,,,
-5,Training Audience,Trainees who are software developers (SD) with basic background and skills on programming language,,,
-6,Course Objectives,"This topic is to introduce about Java programming language knowledge; adapt trainees with skills, lessons and practices which is specifically used in enterprise projects.
-
-The topic cover following output standards",,,
-,,Name,Code,Description,
-,,Java Advanced Concepts,,,
-7,Topic Outline,"- Java Advanced Concepts
-- Theory Evaluation
-- Capstone Project Evaluation
-- Audit",,,
-8,Time Allocation,Concept/Lecture,0.23076923076923078,"Concepts, theory","9 Sessions"
-,,Assignment/Lab,0,"Assignment, Lab",
-,,Guides/Review,0,"Quiz, assignment review",
-,,Seminar/Workshop,0.15384615384615385,"Seminar, Workshop",
-,,Class Meeting,0,Daily class meeting,
-,,Test/Quiz,0.15384615384615385,Daily quiz,
-,,Exam,0.46153846153846156,"Pre-Test, Final Topic Test",
-9,Training Materials & Environments,Text book,N/A,,
-,,References,N/A,,
-,,Technical requirements,N/A,,
-10,Assessment Scheme,Quiz,2,20,"(2 quizzes, to do in 15-30 minutes for each)"
-,,Final Theory Test,1,30,
-,,Final Practice Test,1,50,
-,,Pass Criteria,6,"Total topic GPA >= 6/10; Completed 100% Online video, Quiz, Assignments, Labs, Final Test",
-11,Training Delivery Principles,Trainees,"Qualified entry test and passed interview of Fresher program; Less than or equals 20 students in the class",,
-,,Trainer,"- Trainer and mentor has a good knowledge of the Java programming language that has been evaluated by FA",,
-,,Training,"- Trainee actively self-learn at day 1 of each topic
-- Trainer/Mentor conducts the workshop at day 2 of each topic
-- Trainees have 1 final test at the end of the course",,
-,,Re-Test,2,"Only allow each student to retake the test up to 2 times; Re-exam the same structure as the Final Test",
-,,Marking,"- Trainer marks students on Assignments, Final Exam Theory, Final Exam Practice",,
-,,Waiver Criteria,"Students pass the quick test; Trainer Audit: rank B or up",,
-,,Others,N/A,,
+,,,,,Effective Date,,,15/10/2026
+Enterprise Java & Spring Boot Syllabus,,,,,,,,
+1,Technical Group,Java,,,,,,
+2,Topic Name,Enterprise Java & Spring Boot Core,,,,,,
+3,Topic Code,JAVA-SPRING-2026,,,,,,
+4,Version,2.0,,,,,,
+5,Training Audience,Trainees & Developers who already possess core Java OOP fundamentals and need enterprise-ready backend skills,,,,,,
+6,Course Objectives,"This course equips trainees with core enterprise Java architectural competencies: Spring Framework internals, IoC & Dependency Injection, Spring Data JPA with Hibernate, RESTful API design with Swagger, JWT security authentication, and a complete capstone practical defense.",,,,,,
+,,Name,Code,Description,,,,
+,,Spring Boot Fundamentals,SBF,Core understanding of auto-configuration and starter dependencies,,,,
+7,Topic Outline,"- Unit 1: Spring Core & Dependency Injection
+- Unit 2: Spring Data JPA & Hibernate ORM
+- Unit 3: RESTful Web Services & Spring Security JWT
+- Unit 4: Capstone Project & Comprehensive Defense",,,,,,
+8,Time Allocation,Concept/Lecture,0.25,"Concepts, theory, architecture overview",9 Sessions,,,
+,,Assignment/Lab,0.45,"Hands-on coding, exercises, practical labs",,,,
+,,Guides/Review,0.10,"Quiz review, Q&A, code walk-through",,,,
+,,Seminar/Workshop,0.10,Architecture design seminar & live debugging,,,,
+,,Exam,0.10,Practical capstone defense & final exam,,,,
+9,Training Materials & Environments,Text book,Official Spring Framework Documentation & Baeldung Enterprise Guide,,,,,
+,,References,https://spring.io/projects/spring-boot,,,,,
+,,Technical requirements,"JDK 21, IntelliJ IDEA / Eclipse, PostgreSQL / MySQL, Postman",,,,,
+10,Assessment Scheme,Daily Attendance & Participation,1,10,Attendance roll-call & seminar engagement (>= 80%),,,
+,,Hands-on Lab Assignments,3,40,"Evaluate code cleanliness, design patterns & Git commit history",,,
+,,Final Knowledge Quiz,1,15,Multiple-choice online quiz testing Spring internals,,,
+,,Final Practical Examination,1,35,Live coding capstone defense covering full REST & JPA stack,,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% of required labs and defense,,,
+11,Training Delivery Principles,Trainees,Completed entry test; Active engagement in daily labs and pair programming,,,,
+,,Trainer,Senior Java Architect / Technical Lead certified by FA Academy,,,,
+,,Training,"- Trainees self-study prerequisites at start of module
+- Trainer conducts architecture lectures in morning
+- Hands-on practical lab exercises in afternoon",,,,
+,,Re-Test,2,Allow maximum 2 re-takes with a different exam variant,,,
+,,Marking,Trainer grades according to the official FAMS rubric and test checklist,,,,
+,,Waiver Criteria,Students passing the technical fast-track exam with score >= 8.5/10,,,,
 ,,,,,,,,
 Java SE Advanced Programming - Training Schedule,,,,,,,,
-Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,"Training Materials / Logistics & General Notes"
-1,Java Advanced Concepts,1,"Functional Programming
-Stream API
-Optional API
-Time API",Understand functional theory and Stream pipelines,Concept/Lecture,180,Offline,https://docs.oracle.com/
-,,2,"Functional Programming
-Stream API
-Optional API
-Time API",Hands-on functional streams,Seminar/Workshop,120,Offline,Lab-Functional.pdf
-,,,Quiz 01,Quick check on stream fundamentals,Test/Quiz,30,Offline,Quiz-01.pdf
-,,3,"Java I/O, NIO API
-Concurrency API
-JUnit & Mockito",Master asynchronous and I/O streams,Concept/Lecture,180,Offline,https://docs.oracle.com/
-,,4,"Java I/O, NIO API
-Concurrency API
-JUnit & Mockito",Implement multithreaded I/O services,Seminar/Workshop,120,Offline,Lab-IO-Concurrency.pdf
-,,,Quiz 02,Check on concurrency and mock testing,Test/Quiz,30,Offline,Quiz-02.pdf
-2,Theory Evaluation,5,Interviewing-based Quiz (Open-end questions),Comprehensive theoretical interview,Test/Quiz,180,Offline,Theory-Quiz-Rubric.pdf
-3,Capstone Project Evaluation,6,Capstone Project Evaluation,Evaluate practical architecture and business solutions,Exam,180,Offline,Capstone-Project-Guidelines.pdf
-,,7,Capstone Project Evaluation,Complete practical defense and code review,Exam,180,Offline,Capstone-Project-Rubric.pdf
-4,Audit,8,Audit,Technical quality audit and compliance check,Exam,180,Offline,Audit-Checklist.pdf
-,,9,Audit,Final score compilation and grade submission,Exam,180,Offline,Final-Grade-Report.pdf
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,Spring Core & Dependency Injection,1,Spring Boot Framework Overview & Environment Setup,"Understand Spring architecture, auto-configuration and project structure",Concept/Lecture,180,Offline - Sáng (Morning),"Slide-Spring-Intro.pdf, https://spring.io"
+,,2,Inversion of Control (IoC) & Dependency Injection Lab,"Configure beans, @Autowired, @Component and dependency injection",Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-01-Spring-IoC.zip
+,,3,Spring Bean Lifecycle & Configuration Properties,"Master Bean scopes (@Scope, @PostConstruct) and application.yml configuration",Seminar/Workshop,180,Offline - Sáng (Morning),Slide-Bean-Lifecycle.pdf
+2,Spring Data JPA & Hibernate ORM,4,ORM Architecture & Entity Mapping,"Map relational tables with JPA annotations (@Entity, @Table, @OneToMany)",Concept/Lecture,180,Offline - Chiều (Afternoon),Slide-JPA-Entities.pdf
+,,5,Repository Layer & Custom Queries Lab,"Implement JpaRepository, Derived Queries, @Query JPQL and pagination",Assignment/Lab,240,Offline - Sáng (Morning),Lab-02-SpringDataJPA.zip
+,,6,Database Transactions & Isolation Levels,Manage database transactions with @Transactional and concurrency locks,Guides/Review,120,Offline - Chiều (Afternoon),Transaction-Guide.pdf
+3,RESTful Web Services & Security,7,Building Production-grade RESTful APIs,"Design standard REST APIs with @RestController, DTOs, and ResponseEntity",Concept/Lecture,180,Offline - Sáng (Morning),Slide-REST-Architecture.pdf
+,,8,Spring Security Architecture & JWT Authentication,Implement stateless JWT authentication filter and UserDetailsService,Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-03-Security-JWT.zip
+,,9,"Validation, Global Exception Handling & Swagger OpenAPI","Use Bean Validation (@Valid), @ControllerAdvice, and Swagger API docs",Assignment/Lab,180,Offline - Sáng (Morning),Swagger-Best-Practices.pdf
+4,Capstone Project & Evaluation,10,Mid-term Assessment Quiz & Code Quality Audit,Evaluate theoretical grasp and perform automated code quality check (SonarQube),Test/Quiz,120,Offline - Chiều (Afternoon),Quiz-Spring-Midterm.pdf
+,,11,Capstone Practical Project Defense,"Live coding defense, practical database operations & API integration defense",Exam,240,Offline - Sáng (Morning),Capstone-Project-Rubric.pdf
+,,12,Final Evaluation & Grade Review,"Final grade compilation, project sign-off, and feedback retrospective",Exam,180,Offline - Chiều (Afternoon),Final-Score-Report.pdf
 ,,,,,,,,
-AUTHORSHIP,,,,,
-,Role,Name,Account,Unit,Notes
-,Creator,Course Lead,Lead01,TrainingUnit,
-,Reviewer,Curriculum Reviewer,Reviewer01,TrainingUnit,
-
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10 Lead,,,
+,Curriculum Reviewer,Academic QA Board,qa_board,FPT Software Academy,Approved for OJT Course,,,

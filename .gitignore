@@ -61,3 +61,12 @@ frontend-dev.err
 
 # === Runtime uploaded files (khong commit) ===
 uploads/
+
+# === Local test tools & docx scratch files ===
+*.docx
+/swagger_*.png
+/swagger_rendered.png
+/swagger_test.png
+/extracted_images/
+/extracted_minh_hoang/
+/tools/

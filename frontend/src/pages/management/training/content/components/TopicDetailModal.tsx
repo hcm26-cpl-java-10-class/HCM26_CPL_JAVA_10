@@ -23,6 +23,36 @@ interface TopicDetailModalProps {
 
 const PIE_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444"];
 
+const RADIAN = Math.PI / 180;
+const renderCustomizedPieLabel = ({
+  cx,
+  cy,
+  midAngle,
+  innerRadius,
+  outerRadius,
+  percent,
+}: any) => {
+  if (percent == null || percent < 0.05) return null;
+  const radius = (innerRadius || 0) + (outerRadius - (innerRadius || 0)) * 0.58;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#ffffff"
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={10}
+      fontWeight={700}
+      style={{ pointerEvents: "none", filter: "drop-shadow(0px 1px 2px rgba(0,0,0,0.45))" }}
+    >
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
 export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDetailModalProps) {
   const [activeTab, setActiveTab] = useState<"syllabus" | "schedule">("syllabus");
   const [isOutlineEditorOpen, setIsOutlineEditorOpen] = useState(false);
@@ -157,9 +187,8 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
                               innerRadius={35}
                               outerRadius={75}
                               dataKey="value"
-                              label={({ percent }) => percent != null && percent > 0.05 ? `${(percent * 100).toFixed(1)}%` : ""}
+                              label={renderCustomizedPieLabel}
                               labelLine={false}
-                              fontSize={11}
                             >
                               {pieData.map((_, i) => (
                                 <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />

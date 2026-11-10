@@ -30,6 +30,36 @@ const COLORS = [
   "#06b6d4", "#64748b", "#d946ef", "#0ea5e9",
 ];
 
+const RADIAN = Math.PI / 180;
+const renderCustomizedPieLabel = ({
+  cx,
+  cy,
+  midAngle,
+  innerRadius,
+  outerRadius,
+  percent,
+}: any) => {
+  if (percent == null || percent < 0.05) return null;
+  const radius = (innerRadius || 0) + (outerRadius - (innerRadius || 0)) * 0.58;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#ffffff"
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={10}
+      fontWeight={700}
+      style={{ pointerEvents: "none", filter: "drop-shadow(0px 1px 2px rgba(0,0,0,0.45))" }}
+    >
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
 export function ProgramDetailModal({
   program,
   open,
@@ -185,11 +215,8 @@ export function ProgramDetailModal({
                           innerRadius={40}
                           outerRadius={85}
                           dataKey="value"
-                          label={({ percent }) =>
-                            percent != null && percent > 0.04 ? `${(percent * 100).toFixed(1)}%` : ""
-                          }
+                          label={renderCustomizedPieLabel}
                           labelLine={false}
-                          fontSize={10}
                         >
                           {pieData.map((_, i) => (
                             <Cell key={i} fill={COLORS[i % COLORS.length]} />
