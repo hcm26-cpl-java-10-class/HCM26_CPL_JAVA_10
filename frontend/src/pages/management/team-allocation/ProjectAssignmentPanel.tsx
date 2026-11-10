@@ -25,13 +25,13 @@ export function ProjectAssignmentPanel({ classId, sessionId, canAssign, publishe
     retry: false,
   });
 
-  return <Card>
-    <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  return <Card className="overflow-hidden border-indigo-200/80 shadow-sm dark:border-indigo-900/60">
+    <CardHeader className="flex flex-col gap-3 bg-gradient-to-r from-indigo-500/[0.09] via-sky-500/[0.04] to-transparent sm:flex-row sm:items-center sm:justify-between">
       <div className="space-y-2">
-        <CardTitle className="flex items-center gap-2"><FolderTree className="size-5 text-primary" />Đề bài dự án</CardTitle>
+        <CardTitle className="flex items-center gap-2"><FolderTree className="size-5 text-indigo-600 dark:text-indigo-400" />Đề bài dự án</CardTitle>
         <CardDescription>Giao trọn Master hoặc phân công các module cho những Team nháp của lớp.</CardDescription>
       </div>
-      {canAssign && <Button className="w-fit gap-2" asChild>
+      {canAssign && <Button className="w-fit gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm shadow-indigo-500/25" asChild>
         <Link to={classUrl + "/assign" + sessionQuery}><Plus className="size-4" />Gán đề bài cho lớp</Link>
       </Button>}
       {published && (hasPermission("WORKSPACE_READ") || hasPermission("VIEW_PROJECT_WORKSPACE")) &&
@@ -46,8 +46,8 @@ export function ProjectAssignmentPanel({ classId, sessionId, canAssign, publishe
     {!!masters.data?.length && <CardContent className="space-y-3">
       <p className="text-sm font-medium">Master của lớp</p>
       <p className="text-xs text-muted-foreground">Mentor quản lý milestone chung. Các Team thực hiện phần việc của module được giao.</p>
-      {masters.data.map(master => <div key={master.projectId} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
-        <div className="space-y-1"><p className="text-sm font-medium">{master.name}</p><Badge variant="outline">{master.status}</Badge></div>
+      {masters.data.map(master => <div key={master.projectId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-indigo-200/60 bg-indigo-500/[0.04] p-3 dark:border-indigo-900/50">
+        <div className="space-y-1"><p className="text-sm font-medium">{master.name}</p><Badge variant="outline" className="border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">{master.status}</Badge></div>
         <Button size="sm" variant="outline" onClick={() => setManagedMaster(master.projectId)}>Quản lý milestone Master</Button>
       </div>)}
     </CardContent>}
