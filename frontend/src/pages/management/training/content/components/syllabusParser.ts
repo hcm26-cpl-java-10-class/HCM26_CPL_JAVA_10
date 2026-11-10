@@ -98,12 +98,12 @@ function normalizeDeliveryType(raw: string): TopicSession["deliveryType"] {
 }
 
 /**
- * Comprehensive Parser for the official FSOFT / FPT Syllabus CSV structure.
+ * Comprehensive Parser for the official Syllabus CSV structure.
  */
-export function parseFsoftSyllabusCsv(csvText: string): ParsedSyllabus {
+export function parseStandardSyllabusCsv(csvText: string): ParsedSyllabus {
   const rows = parseCsvRows(csvText);
 
-  let documentCode = "26e-BM/HR/HDCV/FSOFT";
+  let documentCode = "STANDARD-SYLLABUS-DOC";
   let version = "1.0";
   let effectiveDate = "";
   let technicalGroup = "Java";
@@ -341,11 +341,11 @@ export function parseFsoftSyllabusCsv(csvText: string): ParsedSyllabus {
 }
 
 /**
- * Exports a Topic and its Syllabus Schedule Detail to the exact official FSOFT CSV template.
+ * Exports a Topic and its Syllabus Schedule Detail to the exact official CSV template.
  */
-export function exportFsoftSyllabusCsv(topic: TopicItem, pkg: TopicSyllabusPackage): string {
+export function exportStandardSyllabusCsv(topic: TopicItem, pkg: TopicSyllabusPackage): string {
   const meta: SyllabusDocumentMeta = pkg.meta || {};
-  const docCode = meta.documentCode || "26e-BM/HR/HDCV/FSOFT";
+  const docCode = meta.documentCode || "STANDARD-SYLLABUS-DOC";
   const ver = topic.version || meta.version || "1.0";
   const effDate = meta.effectiveDate || "24/04/2020";
   const name = topic.name || "Topic";
@@ -433,7 +433,7 @@ export function exportFsoftSyllabusCsv(topic: TopicItem, pkg: TopicSyllabusPacka
   lines.push(`,,,,,,,,`);
   lines.push(`AUTHORSHIP,,,,,`);
   lines.push(`,Role,Name,Account,Unit,Notes`);
-  lines.push(`,Creator,Course Lead,Lead01,FSA.NLS,`);
+  lines.push(`,Creator,Course Lead,Lead01,TrainingUnit,`);
 
   return lines.join("\r\n");
 }

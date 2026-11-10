@@ -316,7 +316,8 @@ export function ProgramList({ onOpenCreate, onEditProgram, onViewDetail }: Progr
                     <td className="px-4 py-3 text-gray-500 text-xs">{page * 10 + idx + 1}</td>
                     <td className="px-4 py-3">
                       <button
-                        className="font-mono text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline text-left"
+                        type="button"
+                        className="font-mono text-xs font-semibold text-gray-800 hover:text-[#5b52e0] text-left cursor-pointer transition-colors"
                         onClick={() => handleOpenDetail(p)}
                       >
                         {p.code}

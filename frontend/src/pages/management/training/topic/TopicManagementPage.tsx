@@ -30,8 +30,8 @@ export default function TopicManagementPage() {
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
                 {selectedTopic
-                  ? `Đề cương giáo trình FSOFT, kế hoạch giảng dạy chi tiết và tiêu chí đánh giá môn ${selectedTopic.code}`
-                  : "Quản lý danh mục môn học, đề cương giáo trình chuẩn FSOFT, phân bổ thời gian và chi tiết lịch trình đào tạo"}
+                  ? `Đề cương giáo trình, kế hoạch giảng dạy chi tiết và tiêu chí đánh giá môn ${selectedTopic.code}`
+                  : "Quản lý danh mục môn học, đề cương giáo trình chuẩn, phân bổ thời gian và chi tiết lịch trình đào tạo"}
               </p>
             </div>
           </div>

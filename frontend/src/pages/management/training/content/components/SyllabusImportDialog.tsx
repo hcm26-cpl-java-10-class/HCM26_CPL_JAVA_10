@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { topicApi } from "@/api/features/topic.api";
 import type { TopicItem } from "@/types/features/content";
 import {
-  parseFsoftSyllabusCsv,
+  parseStandardSyllabusCsv,
   type ParsedSyllabus,
 } from "./syllabusParser";
 import {
@@ -76,7 +76,7 @@ export function SyllabusImportDialog({
 
     try {
       const text = await selectedFile.text();
-      const result = parseFsoftSyllabusCsv(text);
+      const result = parseStandardSyllabusCsv(text);
 
       if (!result.chapters || result.chapters.length === 0) {
         setErrorMsg("Could not detect any Schedule Detail or Units in the uploaded file. Please check file formatting.");
@@ -111,8 +111,8 @@ export function SyllabusImportDialog({
 
   const handleDownloadTemplate = () => {
     const link = document.createElement("a");
-    link.href = "/templates/fsoft_syllabus_template.csv";
-    link.download = "FSOFT_Syllabus_ScheduleDetail_Template.csv";
+    link.href = "/templates/syllabus_template.csv";
+    link.download = "Syllabus_ScheduleDetail_Template.csv";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -237,10 +237,10 @@ export function SyllabusImportDialog({
                 <DialogTitle className="text-base font-bold text-gray-900">
                   {targetTopic
                     ? `Import Schedule Detail for "${targetTopic.name}"`
-                    : "Import Syllabus & Schedule Detail (FSOFT Official Format)"}
+                    : "Import Syllabus & Schedule Detail (Standard Format)"}
                 </DialogTitle>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Upload an official FSOFT Syllabus CSV file containing Topic Metadata, Delivery Principles, and Schedule Breakdown.
+                  Upload an official Syllabus CSV file containing Topic Metadata, Delivery Principles, and Schedule Breakdown.
                 </p>
               </div>
             </div>
@@ -288,7 +288,7 @@ export function SyllabusImportDialog({
                 Click to browse or drag & drop Syllabus CSV file
               </h4>
               <p className="text-xs text-gray-500 max-w-sm mx-auto mt-1">
-                Supports FSOFT Syllabus Matrix with Units, Sessions, Delivery Types, Duration (mins), and Assessment Scheme.
+                Supports standard Syllabus Matrix with Units, Sessions, Delivery Types, Duration (mins), and Assessment Scheme.
               </p>
             </div>
           ) : (
@@ -515,7 +515,7 @@ export function SyllabusImportDialog({
         <DialogFooter className="pt-3 border-t border-gray-100 flex items-center justify-between">
           <div className="text-xs text-gray-500 flex items-center gap-1.5">
             <HelpCircle className="size-3.5" />
-            <span>Parsed directly following FSOFT Fresher Syllabus 26e-BM/HR/HDCV/FSOFT standard.</span>
+            <span>Parsed directly following standard syllabus structure.</span>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleClose} disabled={isProcessing}>

@@ -4,7 +4,6 @@ import {
   getTopicSyllabusPackage,
   saveTopicSyllabusPackage,
   resetTopicSyllabusPackage,
-  generateTemplateChapters,
 } from "./topicSyllabusData";
 import type {
   TopicChapter,
@@ -28,7 +27,6 @@ import {
 import {
   Plus,
   Trash2,
-  Sparkles,
   RotateCcw,
   AlertTriangle,
   CheckCircle2,
@@ -268,20 +266,12 @@ export function TopicSyllabusEditorDialog({
     });
   };
 
-  // Auto-generate Template matching topic duration
-  const handleAutoGenerate = () => {
-    const template = generateTemplateChapters(topic);
-    setChapters(renumberSessions(template));
-    toast.success(`Generated balanced template matching target ${targetHours} hours!`);
-  };
-
-  // Reset to original curated default (or empty if none)
-  const handleResetToDefault = () => {
-    if (confirm("Reset schedule outline for this topic?")) {
+  // Reset / Clear all chapters for this topic
+  const handleClearAll = () => {
+    if (confirm("Reset schedule outline for this topic? All custom chapters will be cleared.")) {
       resetTopicSyllabusPackage(topic.id, topic.code);
-      const defPkg = getTopicSyllabusPackage(topic);
-      setChapters(renumberSessions(JSON.parse(JSON.stringify(defPkg.chapters || []))));
-      toast.info("Schedule outline reset.");
+      setChapters([]);
+      toast.info("Schedule outline cleared.");
     }
   };
 
@@ -398,17 +388,18 @@ export function TopicSyllabusEditorDialog({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleAutoGenerate}
+                onClick={handleAddChapter}
                 className="h-7 text-xs gap-1 text-[#5b52e0] border-[#5b52e0]/30 hover:bg-purple-50"
               >
-                <Sparkles className="size-3" />
-                Auto-generate Template
+                <Plus className="size-3" />
+                Add Chapter
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleResetToDefault}
-                className="h-7 text-xs gap-1 text-gray-500 hover:text-gray-700"
+                onClick={handleClearAll}
+                className="h-7 text-xs gap-1 text-gray-500 hover:text-rose-600 hover:bg-rose-50"
+                title="Clear all chapters and start empty"
               >
                 <RotateCcw className="size-3" />
                 Reset
@@ -422,11 +413,11 @@ export function TopicSyllabusEditorDialog({
           {chapters.length === 0 ? (
             <div className="text-center py-16 px-6 bg-white border border-dashed border-gray-300 rounded-xl my-4">
               <div className="size-14 rounded-full bg-purple-50 text-[#5b52e0] flex items-center justify-center mx-auto mb-3">
-                <Sparkles className="size-6" />
+                <Plus className="size-6" />
               </div>
               <h3 className="text-sm font-bold text-gray-800">No Chapters or Sessions Added Yet</h3>
               <p className="text-xs text-gray-500 max-w-md mx-auto mt-1.5 mb-6">
-                This topic currently has no schedule outline. You can start creating chapters manually, or auto-generate a balanced template matching your target duration ({targetHours}h).
+                This topic currently has no schedule outline. You can add chapters manually using the button below, or import from an official Syllabus file (Excel / CSV).
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Button
@@ -435,14 +426,6 @@ export function TopicSyllabusEditorDialog({
                 >
                   <Plus className="size-3.5" />
                   Add First Chapter
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleAutoGenerate}
-                  className="text-[#5b52e0] border-[#5b52e0]/40 hover:bg-purple-50 gap-1.5 text-xs"
-                >
-                  <Sparkles className="size-3.5" />
-                  Auto-generate Template ({targetHours}h)
                 </Button>
               </div>
             </div>
