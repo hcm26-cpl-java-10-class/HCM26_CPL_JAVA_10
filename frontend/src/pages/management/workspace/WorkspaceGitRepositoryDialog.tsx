@@ -88,7 +88,7 @@ export function WorkspaceGitRepositoryDialog({ workspaceId, configured, value, o
             {renderError("defaultBranch")}
             <p className="text-xs text-muted-foreground">Enter the branch name. Branches are not fetched from Git.</p>
           </div>
-          {error && <div role="alert" className="space-y-2 rounded-lg border border-destructive/30 p-3 text-sm text-destructive">
+          {error && (error.conflict || !["repositoryUrl", "defaultBranch"].some(name => error.fields[name])) && <div role="alert" className="space-y-2 rounded-lg border border-destructive/30 p-3 text-sm text-destructive">
             <p>{error.message}</p>
             {error.conflict && <Button type="button" size="sm" variant="outline" disabled={busy || reloading} onClick={onReload}>
               {reloading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} Reload latest
