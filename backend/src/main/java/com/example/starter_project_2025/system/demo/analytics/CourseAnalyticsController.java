@@ -65,4 +65,38 @@ public class CourseAnalyticsController {
     public CourseExamAnalyticsResponse examAnalytics(@PathVariable Long courseId) {
         return analyticsService.getExamAnalytics(courseId);
     }
+
+    // =====================================================================
+    // 6. Department analytics
+    // =====================================================================
+
+    /**
+     * Phân tích hiệu quả đào tạo theo phòng ban. Bỏ trống {@code courseId} để xem
+     * trên toàn hệ thống (admin: tất cả, giảng viên: khóa của mình).
+     */
+    @GetMapping("/department-analytics")
+    public DepartmentAnalyticsResponse departmentAnalytics(
+            @RequestParam(required = false) Long courseId) {
+        return analyticsService.getDepartmentAnalytics(courseId);
+    }
+
+    // =====================================================================
+    // 7. Course ranking
+    // =====================================================================
+
+    /** Xếp hạng khóa học theo học viên / tỉ lệ hoàn thành / rating / tỉ lệ bỏ học. */
+    @GetMapping("/course-ranking")
+    public CourseRankingResponse courseRanking() {
+        return analyticsService.getCourseRanking();
+    }
+
+    // =====================================================================
+    // 8. Content quality + Q&A
+    // =====================================================================
+
+    /** Bài học bị báo lỗi, phân loại lý do, câu hỏi chưa trả lời và thời gian phản hồi. */
+    @GetMapping("/courses/{courseId}/content-quality")
+    public ContentQualityResponse contentQuality(@PathVariable Long courseId) {
+        return analyticsService.getContentQuality(courseId);
+    }
 }

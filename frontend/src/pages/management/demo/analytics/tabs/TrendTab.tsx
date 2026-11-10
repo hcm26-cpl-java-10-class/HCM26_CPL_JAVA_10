@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 import { AnalyticsEmptyState } from "@/pages/management/demo/analytics/components/AnalyticsEmptyState";
 import { AnalyticsPanel } from "@/pages/management/demo/analytics/components/AnalyticsPanel";
+import { ExportExcelButton } from "@/pages/management/demo/analytics/components/ExportExcelButton";
 import { MetricCard } from "@/pages/management/demo/analytics/components/MetricCard";
 import {
   AXIS_COLOR,
@@ -144,6 +145,13 @@ export function TrendTab({ courseId }: Props) {
           >
             1 năm
           </Button>
+          <ExportExcelButton
+            label="Export Excel"
+            successMessage="Đã export dữ liệu xu hướng."
+            onExport={() =>
+              courseAnalyticsApi.exportTrend(courseId, { from, to, granularity })
+            }
+          />
         </div>
       </div>
 

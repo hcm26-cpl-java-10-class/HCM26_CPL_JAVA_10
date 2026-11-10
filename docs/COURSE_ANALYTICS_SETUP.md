@@ -60,12 +60,13 @@ Backend mặc định chạy ở <http://localhost:8080>.
 * Database là **H2 file mode**, đường dẫn `./data/fams_lms_after_merge` (tương đối so với thư mục `backend/`).
 * Lần chạy đầu tiên, H2 tự tạo file `.mv.db` và Hibernate tự tạo bảng (`ddl-auto=update`).
 * Toàn bộ dữ liệu mẫu được **seed tự động** bởi các `CommandLineRunner`:
-  users/vai trò, khóa học + giáo trình, 50 học viên, và dữ liệu **Course Analytics**
-  (enrollment, lesson progress, certificate, review, exam attempt).
+  users/vai trò, khóa học + giáo trình, 50 học viên (chia vào 5 phòng ban), và dữ liệu
+  **Course Analytics** (enrollment, lesson progress, certificate, review, lesson report, Q&A).
 
   Bạn sẽ thấy trong log:
   ```
-  c.e.s.i.CourseAnalyticsDataInitializer - Seeded course analytics demo data: course=Java Fundamentals, learners=50, lessons=10.
+  c.e.s.i.CourseAnalyticsDataInitializer - Assigned 50 learners across 5 departments.
+  c.e.s.i.CourseAnalyticsDataInitializer - Seeded course analytics demo data: courses=4, learnersPerCourse=50.
   ```
 
 ### 2.2. (Tùy chọn) Cấu hình Gemini API cho tính năng AI
@@ -116,13 +117,24 @@ Frontend mặc định chạy ở <http://localhost:5173>.
 | Học viên | `student01@example.com` … `student50@example.com` | `Student123!` |
 
 Đăng nhập bằng **giảng viên** (`teacher@example.com`), vào menu **Analytics → Course Analytics**
-(URL: `/course-analytics`), chọn khóa học **Java Fundamentals** và kiểm tra 5 tab:
+(URL: `/course-analytics`), chọn khóa học **Java Fundamentals** và kiểm tra 8 tab:
 
 1. **Phễu học tập** – tỉ lệ hoàn thành từng bài + bài tụt nhiều nhất.
 2. **Xu hướng** – đăng ký / bài hoàn thành / chứng chỉ theo ngày–tuần–tháng.
 3. **Hoạt động** – Active / Inactive / chưa bắt đầu + danh sách nguy cơ bỏ học.
 4. **Đánh giá** – điểm TB, phân bố 1–5 sao + bảng xếp hạng giữa các khóa học.
-5. **Bài thi** – điểm TB, tỉ lệ đạt, phân bố điểm theo từng bài thi.
+5. **Phòng ban** – số học viên / tỷ lệ hoàn thành / điểm thi TB theo phòng ban + so sánh hiệu quả đào tạo.
+6. **Xếp hạng** – top khóa học nhiều học viên / hoàn thành cao / rating cao / bỏ học nhiều.
+7. **Chất lượng & Q&A** – bài học bị báo lỗi, phân loại lý do, câu hỏi chưa trả lời, thời gian phản hồi TB.
+8. **Bài thi** – điểm TB, tỉ lệ đạt, phân bố điểm theo từng bài thi.
+   *(Phần này do nhóm khác phụ trách nên chưa seed dữ liệu mẫu, tab vẫn hoạt động và vẫn export Excel được.)*
+
+### 4.1. Export Excel
+
+- Mỗi tab có nút **Export Excel** ở góc trên bên phải → tải file `.xlsx` riêng cho phần đó.
+- Góc trên trang có nút **Export tất cả (Excel)** → tải **1 file `.xlsx` gồm 12 sheet**:
+  `Tong quan`, `Phieu hoc tap`, `Xu huong`, `Hoat dong`, `Danh gia`, `Phong ban`,
+  `Xep hang khoa hoc`, `Bai hoc bi bao loi`, `Ly do bao cao`, `Cau hoi chua tra loi`, `Bai thi`.
 
 ---
 
@@ -148,7 +160,27 @@ Các endpoint:
 | `GET /api/reports/courses/{id}/activity?inactiveDays=&limit=` | Hoạt động / nguy cơ bỏ học |
 | `GET /api/reports/courses/{id}/review-analytics` | Đánh giá 1 khóa học |
 | `GET /api/reports/course-ratings` | Xếp hạng rating các khóa học |
+| `GET /api/reports/department-analytics?courseId=` | Phân tích phòng ban (bỏ `courseId` = toàn hệ thống) |
+| `GET /api/reports/course-ranking` | Xếp hạng khóa học (học viên / hoàn thành / rating / bỏ học) |
+| `GET /api/reports/courses/{id}/content-quality` | Chất lượng nội dung + Q&A |
 | `GET /api/reports/courses/{id}/exam-analytics` | Kết quả bài thi |
+
+### 5.1. Endpoint export Excel
+
+| Endpoint | Nội dung file |
+|---|---|
+| `GET /api/reports/export/all?courseId=` | **Export tổng** – 12 sheet, gom mọi analytics của khóa học |
+| `GET /api/reports/export/lesson-funnel?courseId=` | Phễu học tập |
+| `GET /api/reports/export/trend?courseId=&from=&to=&granularity=` | Xu hướng |
+| `GET /api/reports/export/activity?courseId=` | Hoạt động + học viên nguy cơ |
+| `GET /api/reports/export/reviews?courseId=` | Đánh giá |
+| `GET /api/reports/export/departments?courseId=` | Phòng ban |
+| `GET /api/reports/export/course-ranking` | Xếp hạng khóa học |
+| `GET /api/reports/export/content-quality?courseId=` | Chất lượng nội dung + Q&A (3 sheet) |
+| `GET /api/reports/export/exams?courseId=` | Kết quả bài thi |
+
+Tất cả trả về file `.xlsx` (Apache POI) với header
+`Content-Disposition: attachment; filename="..."`.
 
 ---
 

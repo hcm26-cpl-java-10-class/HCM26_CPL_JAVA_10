@@ -1,19 +1,36 @@
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, ClipboardList, GraduationCap, LineChart, Star } from "lucide-react";
+import {
+  BarChart3,
+  Building2,
+  ClipboardList,
+  GraduationCap,
+  LineChart,
+  MessageSquareWarning,
+  Star,
+  Trophy,
+} from "lucide-react";
 import { AnalyticsCourseSelect } from "@/pages/management/demo/analytics/components/AnalyticsCourseSelect";
+import { ExportExcelButton } from "@/pages/management/demo/analytics/components/ExportExcelButton";
 import { ActivityTab } from "@/pages/management/demo/analytics/tabs/ActivityTab";
+import { ContentQualityQnATab } from "@/pages/management/demo/analytics/tabs/ContentQualityQnATab";
+import { CourseRankingTab } from "@/pages/management/demo/analytics/tabs/CourseRankingTab";
+import { DepartmentAnalyticsTab } from "@/pages/management/demo/analytics/tabs/DepartmentAnalyticsTab";
 import { ExamAnalyticsTab } from "@/pages/management/demo/analytics/tabs/ExamAnalyticsTab";
 import { LessonFunnelTab } from "@/pages/management/demo/analytics/tabs/LessonFunnelTab";
 import { ReviewAnalyticsTab } from "@/pages/management/demo/analytics/tabs/ReviewAnalyticsTab";
 import { TrendTab } from "@/pages/management/demo/analytics/tabs/TrendTab";
+import { courseAnalyticsApi } from "@/api/features/demo/course-analytics.api";
 
 const TABS = [
   { value: "funnel", label: "Phễu học tập", icon: LineChart },
   { value: "trend", label: "Xu hướng", icon: BarChart3 },
   { value: "activity", label: "Hoạt động", icon: ClipboardList },
   { value: "reviews", label: "Đánh giá", icon: Star },
+  { value: "departments", label: "Phòng ban", icon: Building2 },
+  { value: "ranking", label: "Xếp hạng", icon: Trophy },
+  { value: "content", label: "Chất lượng & Q&A", icon: MessageSquareWarning },
   { value: "exams", label: "Bài thi", icon: GraduationCap },
 ] as const;
 
@@ -29,11 +46,21 @@ export default function CourseAnalyticsPage() {
             <p className="text-sm font-medium text-blue-600">COURSE ANALYTICS</p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight">Phân tích khóa học</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Phễu học tập, xu hướng theo thời gian, mức độ hoạt động, đánh giá và kết quả bài thi
-              của khóa học bạn được xem.
+              Phễu học tập, xu hướng theo thời gian, mức độ hoạt động, đánh giá, hiệu quả
+              theo phòng ban, xếp hạng khóa học, chất lượng nội dung và kết quả bài thi.
             </p>
           </div>
-          <AnalyticsCourseSelect value={courseId} onChange={setCourseId} />
+          <div className="flex flex-wrap items-end gap-3">
+            <AnalyticsCourseSelect value={courseId} onChange={setCourseId} />
+            {courseId ? (
+              <ExportExcelButton
+                label="Export tất cả (Excel)"
+                successMessage="Đã export toàn bộ analytics ra file Excel nhiều sheet."
+                size="default"
+                onExport={() => courseAnalyticsApi.exportAll(courseId)}
+              />
+            ) : null}
+          </div>
         </header>
 
         {!courseId ? (
@@ -70,6 +97,15 @@ export default function CourseAnalyticsPage() {
             </TabsContent>
             <TabsContent value="reviews">
               <ReviewAnalyticsTab courseId={courseId} />
+            </TabsContent>
+            <TabsContent value="departments">
+              <DepartmentAnalyticsTab courseId={courseId} />
+            </TabsContent>
+            <TabsContent value="ranking">
+              <CourseRankingTab courseId={courseId} />
+            </TabsContent>
+            <TabsContent value="content">
+              <ContentQualityQnATab courseId={courseId} />
             </TabsContent>
             <TabsContent value="exams">
               <ExamAnalyticsTab courseId={courseId} />

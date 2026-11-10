@@ -23,6 +23,7 @@ import {
 } from "recharts";
 import { AnalyticsEmptyState } from "@/pages/management/demo/analytics/components/AnalyticsEmptyState";
 import { AnalyticsPanel } from "@/pages/management/demo/analytics/components/AnalyticsPanel";
+import { ExportExcelButton } from "@/pages/management/demo/analytics/components/ExportExcelButton";
 import { MetricCard } from "@/pages/management/demo/analytics/components/MetricCard";
 import {
   AXIS_COLOR,
@@ -113,6 +114,13 @@ export function ActivityTab({ courseId }: Props) {
             }
           />
         </label>
+        <div className="ml-auto">
+          <ExportExcelButton
+            label="Export Excel"
+            successMessage="Đã export dữ liệu hoạt động."
+            onExport={() => courseAnalyticsApi.exportActivity(courseId)}
+          />
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
