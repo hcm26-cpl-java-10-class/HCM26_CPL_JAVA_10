@@ -11,6 +11,7 @@ export interface LessonDTO extends BaseDTO {
   contentType?: LessonContentType;
   contentUrl?: string;
   textContent?: string;
+  outlineEditable?: boolean;
   duration?: number;
   orderIndex?: number;
   courseId?: number | string;

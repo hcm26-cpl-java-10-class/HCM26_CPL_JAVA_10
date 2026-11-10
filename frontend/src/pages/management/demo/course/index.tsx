@@ -1,4 +1,10 @@
 import { categoryApi, courseApi, userApi } from "@/api";
+import { syllabusApi } from "@/api/features/demo/syllabus.api";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import type { CourseDTO } from "@/types/features/demo/course";
 import { usePermissions } from "@/hooks/usePermissions";
 import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
 import {
@@ -22,6 +28,18 @@ const courseSchema: EntitySchema = {
   entityName: "course",
   idField: "id",
   fields: [
+    {
+      name: "courseType",
+      label: "Course type",
+      type: "select",
+      editable: false,
+      sortable: true,
+      filterable: true,
+      options: [
+        { label: "Standard course", value: "STANDARD" },
+        { label: "From Syllabus", value: "FROM_SYLLABUS" },
+      ],
+    },
     {
       name: "name",
       label: "Course Name",
@@ -133,11 +151,92 @@ export const entityConfig: EntityConfig = {
 };
 
 export default function CourseManagementPage() {
-  const { activeRole } = usePermissions();
+  const { activeRole, hasPermission } = usePermissions();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const canCreateFromSyllabus = [
+    "SYLLABUS_READ", "COURSE_CREATE", "SECTION_CREATE", "LESSON_CREATE",
+  ].every(hasPermission);
+  const requested = params.has("fromSyllabus");
+  const syllabusId = Number(params.get("fromSyllabus"));
+  const validId = requested && Number.isSafeInteger(syllabusId) && syllabusId > 0;
+  const student = activeRole?.toUpperCase() === "STUDENT";
 
-  if (activeRole?.toUpperCase() !== "STUDENT") {
-    return <AutoCrudPage entity={entityConfig} />;
+  const syllabusQuery = useQuery({
+    queryKey: ["course-create-from-syllabus", syllabusId],
+    queryFn: () => syllabusApi.get(syllabusId),
+    enabled: validId && !student && canCreateFromSyllabus,
+  });
+  const syllabus = syllabusQuery.data;
+  const selectable = syllabus?.status === "PUBLISHED" && syllabus.isActive;
+
+  const prefilledEntity = useMemo<EntityConfig>(() => {
+    if (!selectable || !syllabus) return entityConfig;
+    const name = `${syllabus.name} - Class 01`.slice(0, 150);
+    const description = (syllabus.description ?? "").slice(0, 500);
+
+    return {
+      ...entityConfig,
+      api: {
+        ...courseApi,
+        create: async (data: CourseDTO) => {
+          const created = await courseApi.createFromSyllabus({
+            ...data, syllabusId: syllabus.id, status: "DRAFT",
+          });
+          navigate(`/curriculum?courseId=${created.id}`);
+          return created;
+        },
+      },
+      schema: {
+        ...courseSchema,
+        fields: courseSchema.fields.map((field) => {
+          if (field.name === "name") return { ...field, defaultValue: name };
+          if (field.name === "description") return { ...field, defaultValue: description };
+          if (field.name === "status") {
+            return {
+              ...field,
+              defaultValue: "DRAFT",
+              createOptions: [
+                { label: "Draft (hidden from students)", value: "DRAFT" },
+              ],
+            };
+          }
+          return field;
+        }),
+      },
+    };
+  }, [selectable, syllabus, navigate]);
+
+  if (student) return <CourseCatalogPage />;
+  if (!requested) return <AutoCrudPage entity={entityConfig} />;
+
+  let message = "";
+  if (!validId) message = "Invalid Syllabus ID.";
+  else if (!canCreateFromSyllabus)
+    message = "Creating a course from Syllabus requires Syllabus read and Course, Section, Lesson create permissions.";
+  else if (syllabusQuery.isPending) message = "Loading Syllabus...";
+  else if (syllabusQuery.isError || !syllabus)
+    message = "Cannot load this Syllabus.";
+  else if (!selectable)
+    message = "Publish and activate this Syllabus before creating a Course.";
+
+  if (message) {
+    return (
+      <MainLayout pathName={{ courses: "Courses" }}>
+        <div className="space-y-4 rounded-xl border bg-card p-6">
+          <p>{message}</p>
+          <Link className="text-sm underline" to="/courses">Back to Courses</Link>
+        </div>
+      </MainLayout>
+    );
   }
 
-  return <CourseCatalogPage />;
+  return (
+    <AutoCrudPage
+      key={syllabusId}
+      entity={prefilledEntity}
+      openCreateOnMount
+      createNotice={`Create a Draft Course from ${syllabus?.code} - ${syllabus?.name}. Sections and Topics become editable Sections and Lessons. Add lesson content in Curriculum before publishing.`}
+    />
+  );
 }

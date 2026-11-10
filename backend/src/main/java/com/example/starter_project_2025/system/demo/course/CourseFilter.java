@@ -21,6 +21,9 @@ public class CourseFilter extends BaseFilter {
     @FilterField(entityField = "status")
     private CourseStatus status;
 
+    @FilterField(entityField = "courseType")
+    private CourseType courseType;
+
     @FilterField(entityField = "level")
     private CourseLevel level;
 }

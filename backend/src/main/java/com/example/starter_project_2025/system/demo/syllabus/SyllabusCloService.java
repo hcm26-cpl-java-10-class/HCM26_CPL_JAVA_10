@@ -31,6 +31,9 @@ public class SyllabusCloService {
     ) {
     }
 
+    public record BulkCloInput(List<String> details) {
+    }
+
     public record CloView(
             Long id,
             String code,
@@ -213,6 +216,64 @@ public class SyllabusCloService {
         clo.setDetails(details);
 
         return view(clos.saveAndFlush(clo));
+    }
+
+    // =========================
+    // BULK CREATE CLOs (atomic)
+    // Only allowed in DRAFT
+    // =========================
+
+    public List<CloView> createBulk(Long syllabusId, BulkCloInput input) {
+        workflow.requireDraft(syllabusId);
+        Syllabus syllabus = requireSyllabus(syllabusId);
+        if (input == null || input.details() == null || input.details().isEmpty()
+                || input.details().size() > 20) {
+            fail("details", "Please enter between 1 and 20 CLOs");
+        }
+
+        List<SyllabusClo> existing = clos.findBySyllabus_IdOrderByOrderIndexAsc(syllabusId);
+        java.util.Set<String> used = new java.util.HashSet<>();
+        for (SyllabusClo clo : existing) {
+            used.add(clo.getDetails().toLowerCase(Locale.ROOT));
+        }
+
+        List<String> validated = new java.util.ArrayList<>();
+        for (int index = 0; index < input.details().size(); index++) {
+            String details = validateDetails(input.details().get(index));
+            if (!used.add(details.toLowerCase(Locale.ROOT))) {
+                fail("details", "Duplicate CLO details at row " + (index + 1));
+            }
+            validated.add(details);
+        }
+
+        int highestNumber = 0;
+        int highestOrder = 0;
+        for (SyllabusClo clo : existing) {
+            highestOrder = Math.max(highestOrder, clo.getOrderIndex());
+            String code = clo.getCode();
+            if (code != null && code.toUpperCase(Locale.ROOT).matches("CLO[0-9]+")) {
+                try {
+                    highestNumber = Math.max(highestNumber, Integer.parseInt(code.substring(3)));
+                } catch (NumberFormatException ignored) {
+                    // Legacy non-numeric CLO codes are ignored for numbering.
+                }
+            }
+        }
+        if (highestNumber > Integer.MAX_VALUE - validated.size()
+                || highestOrder > Integer.MAX_VALUE - validated.size()) {
+            fail("code", "CLO numbering limit exceeded");
+        }
+
+        List<SyllabusClo> created = new java.util.ArrayList<>();
+        for (String details : validated) {
+            SyllabusClo clo = new SyllabusClo();
+            clo.setSyllabus(syllabus);
+            clo.setCode("CLO" + (++highestNumber));
+            clo.setOrderIndex(++highestOrder);
+            clo.setDetails(details);
+            created.add(clo);
+        }
+        return clos.saveAllAndFlush(created).stream().map(SyllabusCloService::view).toList();
     }
 
     // =========================

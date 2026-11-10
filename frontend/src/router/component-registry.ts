@@ -68,6 +68,8 @@ import { Navigate } from "react-router-dom";
 
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
+import CreateCourseFromSyllabusPage from "@/pages/management/demo/syllabus/CreateCourseFromSyllabusPage";
+import SyllabusCourseWorkspacePage from "@/pages/management/demo/syllabus/SyllabusCourseWorkspacePage";
 import CourseUsagePage from "@/pages/management/demo/syllabus/CourseUsagePage";
 import SyllabusTemplatesPage from "@/pages/management/demo/syllabus/SyllabusTemplatesPage";
 
@@ -268,6 +270,19 @@ export const routes: RouteConfig[] = [
     component: SyllabusesPage,
     requiredPermission: "SYLLABUS_READ",
     isModuleDriven: true,
+  },
+  {
+    path: "/syllabuses/:id/workspace",
+    component: SyllabusCourseWorkspacePage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
+  },
+  {
+    path: "/syllabuses/:id/create-course",
+    component: CreateCourseFromSyllabusPage,
+    // The page and Backend also require all four authorities, not any single authority.
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
   },
   {
     path: "/syllabuses/:id",

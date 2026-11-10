@@ -162,6 +162,12 @@ export function CourseDetailContent({
           )}
         </div>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{course.name}</h1>
+        {enrollmentManagement && (
+          <p className="text-sm text-muted-foreground">
+            Course type: {course.courseType === "FROM_SYLLABUS" ? "From Syllabus" : "Standard course"}
+            {course.syllabus && ` · Linked syllabus: ${course.syllabus.code} - ${course.syllabus.name}`}
+          </p>
+        )}
         <p className="text-sm text-muted-foreground">
           Instructor: <span className="font-medium text-foreground">{course.instructor || "—"}</span>
         </p>

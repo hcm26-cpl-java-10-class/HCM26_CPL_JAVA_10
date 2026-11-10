@@ -73,8 +73,7 @@ class LessonServiceImplNotificationTest {
     }
 
     private CourseEnrollment enrollment(long enrollmentId, long userId) {
-        User user = mock(User.class);
-        when(user.getId()).thenReturn(userId);
+        User user = User.builder().id(userId).build();
         return CourseEnrollment.builder().id(enrollmentId).user(user).course(course).build();
     }
 
@@ -95,7 +94,7 @@ class LessonServiceImplNotificationTest {
         service.update(30L, textUpdate("New text"));
 
         verify(notificationService).createOnce(
-                eq(1L), anyString(), eq("Lesson updated"), anyString(), eq("/enroll/100/learn"));
+                eq(1L), anyString(), eq("Lesson updated"), anyString(), eq("/enrollments/100/learn"));
         verify(notificationService, never()).createOnce(
                 eq(2L), anyString(), anyString(), anyString(), anyString());
     }
@@ -132,7 +131,7 @@ class LessonServiceImplNotificationTest {
         service.delete(30L);
 
         verify(notificationService).createOnce(
-                eq(1L), anyString(), eq("Lesson removed"), anyString(), eq("/enroll/100/learn"));
+                eq(1L), anyString(), eq("Lesson removed"), anyString(), eq("/enrollments/100/learn"));
         verify(notificationService, never()).createOnce(
                 eq(2L), anyString(), anyString(), anyString(), anyString());
     }
