@@ -34,7 +34,7 @@ import type { TopicSyllabusPackage, AssessmentItem } from "./topicSyllabusData";
 import { TopicSyllabusEditorDialog } from "./TopicSyllabusEditorDialog";
 import { SyllabusImportDialog } from "./SyllabusImportDialog";
 import { AssessmentSchemeDialog } from "./AssessmentSchemeDialog";
-import { exportFsoftSyllabusCsv } from "./syllabusParser";
+import { exportStandardSyllabusCsv } from "./syllabusParser";
 
 interface TopicDetailViewProps {
   topic: TopicItem;
@@ -92,7 +92,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
     resetCustomAssessmentScheme(topic.id, topic.code);
     setCustomPassScore(">= 6.0 / 10");
     reloadSyllabus();
-    toast.success("Restored FSOFT standard assessment scheme");
+    toast.success("Restored standard assessment scheme");
   };
 
   const { chapters, timeAllocation, assessmentScheme, meta } = syllabusPackage;
@@ -130,19 +130,19 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
     { name: "Exam", value: examHours, color: PIE_COLORS.exam },
   ].filter(d => d.value > 0), [labHours, lectureHours, examHours]);
 
-  const handleExportFsoftCsv = () => {
+  const handleExportCsv = () => {
     try {
-      const csvContent = exportFsoftSyllabusCsv(topic, syllabusPackage);
+      const csvContent = exportStandardSyllabusCsv(topic, syllabusPackage);
       const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${topic.code}_FSOFT_Syllabus_v${topic.version || "1.0"}.csv`;
+      a.download = `${topic.code}_Syllabus_v${topic.version || "1.0"}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      toast.success("Exported official FSOFT Syllabus CSV successfully!");
+      toast.success("Exported official Syllabus CSV successfully!");
     } catch (err: any) {
       console.error("Export CSV failed", err);
       toast.error("Failed to export syllabus CSV");
@@ -165,14 +165,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
     }
   };
 
-  const deliveryPrinciples = meta?.deliveryPrinciples || {
-    Trainees: "Qualified entry test and passed interview of Fresher program; Less than or equals 20 students in the class",
-    Trainer: "Trainer and mentor has a good knowledge of the programming language that has been evaluated by FA",
-    Training: "Trainee actively self-learn at day 1 of each topic; Trainer conducts the workshop at day 2; Final test at end of course",
-    "Re-Test": "Only allow each student to retake the test up to 2 times; Re-exam follows the same structure as Final Test",
-    Marking: "Trainer marks students on Assignments, Final Exam Theory, Final Exam Practice (score >=6 capped at 6 for re-take)",
-    "Waiver Criteria": "Students pass the quick test; Trainer Audit: rank B or up",
-  };
+  const deliveryPrinciples = meta?.deliveryPrinciples || null;
 
   return (
     <div className="space-y-6">
@@ -201,11 +194,11 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExportFsoftCsv}
+            onClick={handleExportCsv}
             className="text-gray-700 hover:text-indigo-600 hover:border-indigo-300 gap-1.5 text-xs h-8"
           >
             <Download className="size-3.5 text-indigo-600" />
-            Export FSOFT CSV
+            Export Syllabus CSV
           </Button>
 
           <Button
@@ -254,15 +247,15 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
               </span>
             </div>
             <p className="text-xs text-gray-500 mt-1 flex items-center gap-3">
-              <span>Doc Code: <b>{meta?.documentCode || "26e-BM/HR/HDCV/FSOFT"}</b></span>
+              <span>Doc Code: <b>{meta?.documentCode || `${topic.code}-SYL`}</b></span>
               <span>&bull;</span>
-              <span>Effective Date: {meta?.effectiveDate || "24/04/2020"}</span>
+              <span>Effective Date: {meta?.effectiveDate || (topic.createdAt ? new Date(topic.createdAt).toLocaleDateString() : "—")}</span>
             </p>
           </div>
 
           <div className="flex items-center gap-3 text-xs">
             <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-200 text-[11px]">
-              {topic.technicalGroup || "Java"}
+              {topic.technicalGroup || "—"}
             </span>
             <span className="text-gray-500">
               Allocated: <b className="text-gray-800">{totalH}h</b> ({chapters.reduce((acc, c) => acc + c.sessions.length, 0)} sessions)
@@ -335,7 +328,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                       Technical Group
                     </div>
                     <div className="px-4 py-2.5 text-gray-800 flex-1">
-                      {topic.technicalGroup || "JAVA"}
+                      {topic.technicalGroup || "—"}
                     </div>
                   </div>
 
@@ -344,7 +337,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                       Training Audience
                     </div>
                     <div className="px-4 py-2.5 text-gray-800 flex-1 leading-relaxed">
-                      {meta?.trainingAudience || "Trainees who are software developers (SD) with basic background and skills on programming language"}
+                      {meta?.trainingAudience || "Chưa thiết lập đối tượng đào tạo"}
                     </div>
                   </div>
 
@@ -362,7 +355,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                       Pass Criteria
                     </div>
                     <div className="px-4 py-2.5 text-gray-800 flex-1">
-                      Total topic GPA &gt;= 6/10 (100% video, quiz, labs, and final test completed)
+                      {customPassScore ? `Total topic GPA ${customPassScore}` : "Total topic GPA >= 6.0 / 10"}
                     </div>
                   </div>
                 </div>
@@ -478,7 +471,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
               <p className="text-xs text-gray-600 whitespace-pre-line leading-relaxed">
                 {topic.description ||
                   meta?.courseObjectives ||
-                  "This topic is to introduce about programming language knowledge; adapt trainees with skills, lessons and practices which is specifically used in the Fsoft projects."}
+                  "Chưa có mô tả mục tiêu môn học."}
               </p>
             </div>
 
@@ -496,7 +489,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="text-[10px] bg-gray-50 text-gray-600 border-gray-200">
-                      FSOFT Standard
+                      Standard Scheme
                     </Badge>
                   )}
                 </div>
@@ -601,18 +594,24 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                 <ShieldCheck className="size-4 text-indigo-600" />
                 4. Training Delivery Principles
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
-                {Object.entries(deliveryPrinciples as Record<string, string>).map(([k, v]) => (
-                  <div key={k} className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-lg space-y-1">
-                    <span className="font-semibold text-gray-800 block text-[11px] uppercase tracking-wide">
-                      {k}
-                    </span>
-                    <p className="text-gray-600 leading-relaxed whitespace-pre-line text-[11px]">
-                      {v}
-                    </p>
-                  </div>
-                ))}
-              </div>
+              {deliveryPrinciples && Object.keys(deliveryPrinciples).length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                  {Object.entries(deliveryPrinciples as Record<string, string>).map(([k, v]) => (
+                    <div key={k} className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-lg space-y-1">
+                      <span className="font-semibold text-gray-800 block text-[11px] uppercase tracking-wide">
+                        {k}
+                      </span>
+                      <p className="text-gray-600 leading-relaxed whitespace-pre-line text-[11px]">
+                        {v}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-gray-400 text-xs border border-dashed border-gray-200 rounded-lg">
+                  Chưa có nguyên tắc giảng dạy được cấu hình. Hãy import file Syllabus chuẩn để đồng bộ.
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -628,7 +627,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                 <div>
                   <h3 className="text-base font-bold text-gray-800">No Schedule Detail Matrix Configured</h3>
                   <p className="text-xs text-gray-500 max-w-md mx-auto mt-1">
-                    Upload an official FSOFT Syllabus CSV file or manually create chapters, sessions, and duration minutes.
+                    Upload an official Syllabus CSV file or manually create chapters, sessions, and duration minutes.
                   </p>
                 </div>
                 <div className="flex items-center justify-center gap-3 pt-2">

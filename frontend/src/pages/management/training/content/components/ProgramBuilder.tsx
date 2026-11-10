@@ -453,7 +453,7 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
                       : "hover:bg-gray-50 text-gray-700"
                   }`}
                 >
-                  <div className="font-mono text-xs text-blue-600">{t.code} - v{t.version}</div>
+                  <div className="font-mono text-xs font-semibold text-gray-800">{t.code} - v{t.version}</div>
                   <div className="text-gray-700 text-xs mt-0.5 line-clamp-1">{t.name}</div>
                 </div>
               ))

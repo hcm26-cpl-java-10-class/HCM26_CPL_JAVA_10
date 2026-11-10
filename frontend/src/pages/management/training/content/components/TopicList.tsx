@@ -104,6 +104,7 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [outlineEditorTopic, setOutlineEditorTopic] = useState<TopicItem | null>(null);
   const [isOutlineEditorOpen, setIsOutlineEditorOpen] = useState(false);
+  const [syllabusTargetTopic, setSyllabusTargetTopic] = useState<TopicItem | null>(null);
 
   const handleOpenDetail = (t: TopicItem) => {
     if (onViewDetail) {
@@ -117,6 +118,11 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
   const handleOpenOutlineEditor = (t: TopicItem) => {
     setOutlineEditorTopic(t);
     setIsOutlineEditorOpen(true);
+  };
+
+  const handleOpenSyllabusImport = (t: TopicItem) => {
+    setSyllabusTargetTopic(t);
+    setIsSyllabusImportOpen(true);
   };
 
   const [formData, setFormData] = useState({
@@ -313,16 +319,6 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
             )}
           </Button>
 
-          {/* Import Syllabus (FSOFT Format) */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 text-indigo-700 border-indigo-200 hover:bg-indigo-50 font-medium"
-            onClick={() => setIsSyllabusImportOpen(true)}
-          >
-            <Upload className="size-4 text-indigo-600" /> Import Syllabus
-          </Button>
-
           {/* Import Button */}
           <Button
             variant="outline"
@@ -438,8 +434,9 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
                     <td className="px-4 py-3 text-gray-500 text-xs">{page * 10 + idx + 1}</td>
                     <td className="px-4 py-3">
                       <button
+                        type="button"
                         onClick={() => handleOpenDetail(t)}
-                        className="font-mono text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline text-left cursor-pointer"
+                        className="font-mono text-xs font-semibold text-gray-800 hover:text-[#5b52e0] text-left cursor-pointer transition-colors"
                       >
                         {t.code}
                       </button>
@@ -489,12 +486,15 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
                             <MoreVertical className="size-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuItem onClick={() => handleOpenDetail(t)} className="gap-2 text-xs">
                             <Eye className="size-3.5 text-gray-500" /> View Schedule
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleOpenOutlineEditor(t)} className="gap-2 text-xs">
                             <BookOpen className="size-3.5 text-[#5b52e0]" /> Edit Schedule Outline
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenSyllabusImport(t)} className="gap-2 text-xs">
+                            <Upload className="size-3.5 text-indigo-600" /> Import Syllabus
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleOpenEdit(t)} className="gap-2 text-xs">
                             <Edit2 className="size-3.5 text-blue-500" /> Edit Topic
@@ -765,10 +765,14 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
         onSuccess={loadTopics}
       />
 
-      {/* Syllabus Import Dialog (FSOFT Format) */}
+      {/* Syllabus Import Dialog (Standard Format) */}
       <SyllabusImportDialog
+        targetTopic={syllabusTargetTopic}
         open={isSyllabusImportOpen}
-        onOpenChange={setIsSyllabusImportOpen}
+        onOpenChange={(v) => {
+          setIsSyllabusImportOpen(v);
+          if (!v) setSyllabusTargetTopic(null);
+        }}
         onSuccess={loadTopics}
       />
 

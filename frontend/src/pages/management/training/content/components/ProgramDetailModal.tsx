@@ -71,7 +71,7 @@ export function ProgramDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[900px] max-h-[88vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="w-[95vw] sm:max-w-4xl md:max-w-5xl max-h-[88vh] flex flex-col p-0 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
           <DialogHeader>
@@ -147,7 +147,7 @@ export function ProgramDetailModal({
                         <tr key={s.subjectId} className="hover:bg-gray-50">
                           <td className="px-3 py-2 text-gray-500 text-xs">{idx + 1}</td>
                           <td className="px-3 py-2">
-                            <span className="text-blue-600 text-xs font-mono font-semibold hover:underline cursor-pointer">
+                            <span className="text-gray-800 hover:text-[#5b52e0] text-xs font-mono font-semibold cursor-pointer transition-colors">
                               {s.code} - {s.version}
                             </span>
                           </td>

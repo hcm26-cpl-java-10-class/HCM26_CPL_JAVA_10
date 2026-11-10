@@ -34,7 +34,7 @@ export interface TraineeBatchResponse {
     trainees: Trainee[];
 }
 
-const useMockFallback = () => !import.meta.env.VITEST;
+const useMockFallback = () => false;
 
 async function withFallback<T>(request: () => Promise<T>, fallback: () => T): Promise<T> {
     try {

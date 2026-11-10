@@ -37,7 +37,7 @@ export interface AssessmentItem {
   notes?: string;
 }
 
-export const DEFAULT_FSOFT_ASSESSMENT_SCHEME: AssessmentItem[] = [
+export const DEFAULT_ASSESSMENT_SCHEME: AssessmentItem[] = [
   {
     category: "Class Participation & Attendance",
     count: 1,
@@ -105,12 +105,79 @@ const STORAGE_PREFIX = "fams_custom_syllabus_";
 const STORAGE_ASSESSMENT_PREFIX = "fams_custom_assessment_";
 const STORAGE_PASS_SCORE_PREFIX = "fams_custom_pass_score_";
 
+// Helper to identify and purge obsolete/stale hardcoded mock templates from previous prototypes
+function isLegacyMockSyllabus(chapters: TopicChapter[]): boolean {
+  if (!Array.isArray(chapters)) return false;
+  return chapters.some((ch) => {
+    const title = ch.title || "";
+    if (
+      title.includes("Core Syntax, Memory & Object-Oriented Fundamentals") ||
+      title.includes("Collections Framework, Generics & Exception Handling") ||
+      title.includes("Modern Java Features & Functional Programming") ||
+      title.includes("Core Foundations & Environment Setup") ||
+      title.includes("Deep Dive & Core Implementation")
+    ) {
+      return true;
+    }
+    return (ch.sessions || []).some((s) => {
+      const c = s.content || "";
+      const m = s.materials || "";
+      return (
+        c.includes("Java Virtual Machine (JVM)") ||
+        c.includes("Stack & Heap") ||
+        c.includes("Encapsulation, Inheritance, Polymorphism") ||
+        m.includes("BankingSystem") ||
+        m.includes("baeldung.com") ||
+        m.includes("Lab-Collections-FileIO")
+      );
+    });
+  });
+}
+
+// Automatically scan and purge legacy mock outlines from localStorage
+export function purgeLegacyMockStorage(): void {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(STORAGE_PREFIX)) {
+        const val = localStorage.getItem(key);
+        if (
+          val &&
+          (val.includes("Core Syntax, Memory & Object-Oriented Fundamentals") ||
+            val.includes("Collections Framework, Generics & Exception Handling") ||
+            val.includes("BankingSystem") ||
+            val.includes("baeldung.com") ||
+            val.includes("Java Virtual Machine (JVM)") ||
+            val.includes("Core Foundations & Environment Setup"))
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+    }
+    keysToRemove.forEach((k) => {
+      localStorage.removeItem(k);
+    });
+  } catch (e) {
+    // Ignore if localStorage is unavailable
+  }
+}
+
+// Execute purge immediately on bundle load
+purgeLegacyMockStorage();
+
 export function getCustomTopicSyllabus(topicId: number | string): TopicChapter[] | null {
   try {
-    const raw = localStorage.getItem(`${STORAGE_PREFIX}${topicId}`);
+    const key = `${STORAGE_PREFIX}${topicId}`;
+    const raw = localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
+        if (isLegacyMockSyllabus(parsed)) {
+          localStorage.removeItem(key);
+          return null;
+        }
         return parsed;
       }
     }
@@ -232,7 +299,7 @@ export function calculateSyllabusPackage(
         exam: 0,
         total: 0,
       },
-      assessmentScheme: savedScheme && savedScheme.length > 0 ? savedScheme : DEFAULT_FSOFT_ASSESSMENT_SCHEME,
+      assessmentScheme: savedScheme && savedScheme.length > 0 ? savedScheme : DEFAULT_ASSESSMENT_SCHEME,
     };
   }
 
@@ -333,100 +400,9 @@ export function calculateSyllabusPackage(
   };
 }
 
-// 2. Blueprint generator used ONLY when user clicks "Auto-generate Template" in outline editor
-export function generateTemplateChapters(topic: TopicItem): TopicChapter[] {
-  const targetH = topic.durationHours && topic.durationHours > 0 ? topic.durationHours : 32;
-  const name = topic.name || "Topic";
-  const code = topic.code || "TOPIC";
-  const group = topic.technicalGroup || "Engineering";
-
-  const numChapters = targetH >= 30 ? 4 : targetH >= 16 ? 3 : 2;
-  const sessionsPerChapter = 2;
-  const totalSessions = numChapters * sessionsPerChapter;
-  const baseSessionH = Math.max(1, Math.floor(targetH / totalSessions));
-  const remainder = targetH - baseSessionH * totalSessions;
-
-  const chapters: TopicChapter[] = [];
-  let currentSessionNumber = 1;
-  let remainingHoursToAdd = remainder;
-
-  const chapterThemes = [
-    { title: "1. Core Foundations & Environment Setup", topic: "Fundamentals & Architecture" },
-    { title: "2. Deep Dive & Core Implementation", topic: "Advanced Implementation & Clean Code" },
-    { title: "3. Applied Scenarios & Best Practices", topic: "Enterprise Patterns & Optimization" },
-    { title: "4. Practical Review & Comprehensive Assessment", topic: "Comprehensive Evaluation" },
-  ];
-
-  for (let chIdx = 0; chIdx < numChapters; chIdx++) {
-    const theme = chapterThemes[chIdx] || {
-      title: `${chIdx + 1}. Advanced Module & Practical Lab`,
-      topic: "Modular Practices",
-    };
-
-    const isLastChapter = chIdx === numChapters - 1;
-    const chSessions: TopicSession[] = [];
-
-    let sess1Hours = baseSessionH;
-    if (remainingHoursToAdd > 0) {
-      sess1Hours += 1;
-      remainingHoursToAdd -= 1;
-    }
-
-    const sess1Delivery: TopicSession["deliveryType"] = isLastChapter
-      ? "Guides/Review"
-      : "Concept/Lecture";
-
-    chSessions.push({
-      session: currentSessionNumber++,
-      content: isLastChapter
-        ? `${name} - Comprehensive Review & Q&A Workshop`
-        : `${name} - ${theme.topic} Theory & Concepts`,
-      objectives: `Understand foundational concepts, workflow architecture, and engineering principles in ${group}`,
-      deliveryType: sess1Delivery,
-      duration: `${sess1Hours}h (${sess1Hours * 60}m)`,
-      durationHours: sess1Hours,
-      durationMins: sess1Hours * 60,
-      trainingFormat: "Online",
-      materials: `https://docs.oracle.com/en/java/`,
-    });
-
-    let sess2Hours = baseSessionH;
-    if (remainingHoursToAdd > 0) {
-      sess2Hours += 1;
-      remainingHoursToAdd -= 1;
-    }
-
-    const sess2Delivery: TopicSession["deliveryType"] = isLastChapter
-      ? "Exam"
-      : "Assignment/Lab";
-
-    chSessions.push({
-      session: currentSessionNumber++,
-      content: isLastChapter
-        ? `Theoretical Final Test (60m) & Practical Capstone Exam (180m)`
-        : `Hands-on Lab Exercise: ${theme.topic} Assignment`,
-      objectives: isLastChapter
-        ? `Evaluate comprehensive competencies, problem solving, and applied skills in ${name}`
-        : `Implement practical exercises, unit tests, and code reviews under mentor guidance`,
-      deliveryType: sess2Delivery,
-      duration: `${sess2Hours}h (${sess2Hours * 60}m)`,
-      durationHours: sess2Hours,
-      durationMins: sess2Hours * 60,
-      trainingFormat: "Offline",
-      materials: isLastChapter
-        ? `Exam-Rubric-${code}.pdf`
-        : `Lab-Assignment-${code}-Ch${chIdx + 1}.pdf`,
-    });
-
-    chapters.push({
-      id: chIdx + 1,
-      unitNumber: chIdx + 1,
-      title: theme.title,
-      sessions: chSessions,
-    });
-  }
-
-  return chapters;
+// 2. Blueprint generator: deprecated, returns empty list so no synthetic mock data is created automatically
+export function generateTemplateChapters(_topic: TopicItem): TopicChapter[] {
+  return [];
 }
 
 // 3. Main Resolver: returns custom syllabus if configured by user; otherwise returns completely empty state.
@@ -452,6 +428,6 @@ export function getTopicSyllabusPackage(topic: TopicItem): TopicSyllabusPackage 
     },
     assessmentScheme: customAssessment && customAssessment.length > 0
       ? customAssessment
-      : DEFAULT_FSOFT_ASSESSMENT_SCHEME,
+      : DEFAULT_ASSESSMENT_SCHEME,
   };
 }

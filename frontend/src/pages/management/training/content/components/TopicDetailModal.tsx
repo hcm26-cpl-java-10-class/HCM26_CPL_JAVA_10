@@ -8,10 +8,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { Calendar, Clock, BookOpen } from "lucide-react";
-import { getTopicSyllabusPackage } from "./topicSyllabusData";
+import { Calendar, Clock, BookOpen, Upload } from "lucide-react";
+import { getTopicSyllabusPackage, getCustomPassScore } from "./topicSyllabusData";
 import type { TopicSyllabusPackage } from "./topicSyllabusData";
 import { TopicSyllabusEditorDialog } from "./TopicSyllabusEditorDialog";
+import { SyllabusImportDialog } from "./SyllabusImportDialog";
 
 interface TopicDetailModalProps {
   topic: TopicItem | null;
@@ -25,6 +26,7 @@ const PIE_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444"];
 export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDetailModalProps) {
   const [activeTab, setActiveTab] = useState<"syllabus" | "schedule">("syllabus");
   const [isOutlineEditorOpen, setIsOutlineEditorOpen] = useState(false);
+  const [isSyllabusImportOpen, setIsSyllabusImportOpen] = useState(false);
 
   // Dynamic syllabus data
   const [pkg, setPkg] = useState<TopicSyllabusPackage | null>(null);
@@ -65,7 +67,7 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[880px] max-h-[88vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="w-[95vw] sm:max-w-4xl md:max-w-5xl max-h-[88vh] flex flex-col p-0 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
           <DialogHeader>
@@ -122,8 +124,8 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
                       ["Technical Group", topic.technicalGroup || "—"],
                       ["Total Duration", `${totalH} hours (${totalMins.toLocaleString()} mins)`],
                       ["Total Sessions", totalSessions > 0 ? `${totalSessions} sessions` : "Not scheduled yet"],
-                      ["Pass Criteria", ">= 60% on theory & practical tests"],
-                      ["Re-Test Allowed", "1 re-test attempt"],
+                      ["Pass Criteria", getCustomPassScore(topic.id) || ">= 6.0 / 10"],
+                      ["Re-Test Allowed", "Up to 2 attempts"],
                       ["Status", topic.isActive ? "🟢 Active" : "⚪ Inactive"],
                     ].map(([label, value], i) => (
                       <div key={i} className="flex border-b border-gray-100 last:border-0">
@@ -199,27 +201,23 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      <tr className="hover:bg-gray-50">
-                        <td className="px-4 py-2.5 text-gray-500 text-xs">1</td>
-                        <td className="px-4 py-2.5 text-gray-800 text-sm font-medium">Lab & Practical Assignments</td>
-                        <td className="px-4 py-2.5 text-center text-gray-700 text-sm">3</td>
-                        <td className="px-4 py-2.5 text-center text-gray-700 text-sm font-semibold">20%</td>
-                        <td className="px-4 py-2.5 text-gray-500 text-xs">All 3 assignments submitted and graded &ge; 5.0</td>
-                      </tr>
-                      <tr className="hover:bg-gray-50">
-                        <td className="px-4 py-2.5 text-gray-500 text-xs">2</td>
-                        <td className="px-4 py-2.5 text-purple-700 text-sm font-medium cursor-pointer hover:underline">Final Theory Examination</td>
-                        <td className="px-4 py-2.5 text-center text-gray-700 text-sm">1</td>
-                        <td className="px-4 py-2.5 text-center text-gray-700 text-sm font-semibold">30%</td>
-                        <td className="px-4 py-2.5 text-gray-500 text-xs">Multiple-choice & scenario test (60 mins) &ge; 6.0</td>
-                      </tr>
-                      <tr className="hover:bg-gray-50">
-                        <td className="px-4 py-2.5 text-gray-500 text-xs">3</td>
-                        <td className="px-4 py-2.5 text-purple-700 text-sm font-medium cursor-pointer hover:underline">Final Practical Project / Exam</td>
-                        <td className="px-4 py-2.5 text-center text-gray-700 text-sm">1</td>
-                        <td className="px-4 py-2.5 text-center text-gray-700 text-sm font-semibold">50%</td>
-                        <td className="px-4 py-2.5 text-gray-500 text-xs">Hands-on implementation & defense (120 mins) &ge; 6.0</td>
-                      </tr>
+                      {currentPkg.assessmentScheme && currentPkg.assessmentScheme.length > 0 ? (
+                        currentPkg.assessmentScheme.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-gray-50">
+                            <td className="px-4 py-2.5 text-gray-500 text-xs">{idx + 1}</td>
+                            <td className="px-4 py-2.5 text-gray-800 text-sm font-medium">{item.category}</td>
+                            <td className="px-4 py-2.5 text-center text-gray-700 text-sm">{item.count ?? 1}</td>
+                            <td className="px-4 py-2.5 text-center text-gray-700 text-sm font-semibold">{item.weight}</td>
+                            <td className="px-4 py-2.5 text-gray-500 text-xs">{item.passingScore || item.method || item.notes || "—"}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="text-center py-6 text-gray-400 text-xs">
+                            Chưa cấu hình tiêu chí đánh giá
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -247,30 +245,52 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
                     <span className="flex items-center gap-1"><Clock className="size-3.5 text-purple-600" /> Total: {totalH}h</span>
                     <span className="flex items-center gap-1 ml-2"><Calendar className="size-3.5 text-purple-600" /> {totalSessions} Sessions</span>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => setIsOutlineEditorOpen(true)}
-                    className="bg-[#5b52e0] hover:bg-[#4a41d0] text-white text-xs gap-1.5 shadow-sm"
-                  >
-                    <BookOpen className="size-3.5" />
-                    Edit Outline
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsSyllabusImportOpen(true)}
+                      className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs gap-1.5"
+                    >
+                      <Upload className="size-3.5" />
+                      Import Syllabus
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setIsOutlineEditorOpen(true)}
+                      className="bg-[#5b52e0] hover:bg-[#4a41d0] text-white text-xs gap-1.5 shadow-sm"
+                    >
+                      <BookOpen className="size-3.5" />
+                      Edit Outline
+                    </Button>
+                  </div>
                 </div>
               </div>
 
               {chapters.length === 0 ? (
                 <div className="text-center py-12 px-4 bg-white border border-dashed border-gray-200 rounded-lg">
                   <BookOpen className="size-8 text-gray-300 mx-auto mb-2" />
-                  <p className="font-semibold text-xs text-gray-700">No schedule outline defined yet</p>
-                  <p className="text-[11px] text-gray-400 mt-1 mb-4">You can define chapters and sessions for this topic.</p>
-                  <Button
-                    size="sm"
-                    onClick={() => setIsOutlineEditorOpen(true)}
-                    className="bg-[#5b52e0] hover:bg-[#4a41d0] text-white text-xs gap-1.5"
-                  >
-                    <BookOpen className="size-3.5" />
-                    Configure Schedule Outline
-                  </Button>
+                  <p className="font-semibold text-xs text-gray-700">Chưa có lịch trình môn học</p>
+                  <p className="text-[11px] text-gray-400 mt-1 mb-4">Bạn có thể tự cấu hình các chương và bài học hoặc import file Syllabus chuẩn.</p>
+                  <div className="flex items-center justify-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => setIsOutlineEditorOpen(true)}
+                      className="bg-[#5b52e0] hover:bg-[#4a41d0] text-white text-xs gap-1.5"
+                    >
+                      <BookOpen className="size-3.5" />
+                      Tự cấu hình lịch trình
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsSyllabusImportOpen(true)}
+                      className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs gap-1.5"
+                    >
+                      <Upload className="size-3.5" />
+                      Import Syllabus
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -334,6 +354,18 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
         onOpenChange={setIsOutlineEditorOpen}
         onSaved={(newPkg) => setPkg(newPkg)}
       />
+
+      {/* Syllabus Import Dialog for this topic */}
+      {topic && (
+        <SyllabusImportDialog
+          targetTopic={topic}
+          open={isSyllabusImportOpen}
+          onOpenChange={setIsSyllabusImportOpen}
+          onSuccess={() => {
+            setPkg(getTopicSyllabusPackage(topic));
+          }}
+        />
+      )}
     </Dialog>
   );
 }
