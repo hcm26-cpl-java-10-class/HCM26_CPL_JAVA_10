@@ -18,10 +18,15 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
     const withoutSessions = items.filter(
         (item) => item.url !== "/sessions" && item.title.toLowerCase() !== "sessions"
     );
-    const classItems = CLASS_SECTION_URLS.flatMap((url) => withoutSessions.filter((item) => item.url === url));
+    const hasClassAccess = withoutSessions.some((item) => item.url === "/classes");
     const remaining = withoutSessions.filter((item) => !CLASS_SECTION_URLS.includes(item.url));
-    const sections = [
-        { title: "Class", url: "", icon: iconMap["graduation-cap"], children: classItems },
+    const sections: NavItem[] = [
+        {
+            title: "Class",
+            url: "/classes",
+            icon: iconMap["graduation-cap"],
+            disabled: !hasClassAccess,
+        },
         { title: "Audit", url: "/training/audit", icon: iconMap["clipboard-check"] },
         { title: "Trainee", url: "/training/trainee", icon: iconMap.users },
         { title: "Log Work", url: "/training/log-work", icon: iconMap.briefcase },
@@ -34,9 +39,15 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
         if (existing) return existing;
         return {
             ...section,
-            disabled: !section.url && !section.children?.length,
-            isActive: section.children?.some((child) => child.isActive) ||
-                (!!section.url && (pathname === section.url || pathname.startsWith(`${section.url}/`))),
+            disabled: section.disabled ?? (!section.url && !section.children?.length),
+            isActive:
+                section.children?.some((child) => child.isActive) ||
+                (!!section.url &&
+                    (pathname === section.url ||
+                        pathname.startsWith(`${section.url}/`) ||
+                        (section.url === "/classes" &&
+                            (pathname.startsWith("/training-operations/class-details/") ||
+                                pathname.startsWith("/class-details/"))))),
         };
     });
 

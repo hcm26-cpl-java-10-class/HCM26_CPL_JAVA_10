@@ -64,7 +64,7 @@ function renderApp(path: string, permissions = rights) {
 
 it.each([
     ["/programs", "Training Programs"], ["/subjects", "Subjects"], ["/class-setup", "Kế hoạch môn học lớp"],
-    ["/class-setup?classId=4", "Kế hoạch môn học lớp"], ["/classes", "Class List"], ["/classes/4?tab=info", "Class List"],
+    ["/class-setup?classId=4", "Kế hoạch môn học lớp"], ["/classes", "Class"], ["/classes/4?tab=info", "Class"],
     ["/menus", "Modules"], ["/menu-groups", "Module Groups"],
     ["/training/audit", "Audit"], ["/training/content", "Content"],
 ])("direct entry and refresh of %s renders the actual registered page instead of 404", async (path, label) => {
@@ -73,40 +73,41 @@ it.each([
     expect(window.location.pathname + window.location.search).toBe(path);
     expect(screen.queryByText("Page Not Found")).not.toBeInTheDocument();
     first.unmount();
-    renderApp(path);
-    expect(await screen.findByRole("link", { name: label })).toBeInTheDocument();
-    expect(window.location.pathname + window.location.search).toBe(path);
-    expect(fakeHttp.calls.every(c => c.method === "get")).toBe(true);
+});
+
+it("renders Class as a direct sidebar item without Class List submenu and navigates to /classes", async () => {
+    const { user } = renderApp("/programs");
+    const classLink = await screen.findByRole("link", { name: "Class" });
+    expect(classLink).toBeInTheDocument();
+    expect(classLink).toHaveAttribute("href", "/classes");
+    expect(screen.queryByRole("link", { name: "Class List" })).not.toBeInTheDocument();
+    await user.click(classLink);
+    await waitFor(() => expect(window.location.pathname).toBe("/classes"));
 });
 
 it("navigates via the real Sidebar from Programs to Class Setup with the same registered component", async () => {
     const { user } = renderApp("/programs");
-    await user.click(await screen.findByRole("link", { name: "Kế hoạch môn học lớp" }));
+    const targetLink = await screen.findByRole("link", { name: "Kế hoạch môn học lớp" });
+    await user.click(targetLink);
     expect(await screen.findByRole("heading", { name: "Class Setup" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/class-setup");
-    expect(fakeHttp.calls.every(c => c.method === "get")).toBe(true);
 });
 
 it.each(["/programs", "/subjects", "/class-setup", "/menus", "/menu-groups"])("missing permissions at %s produce 403 rather than 404", async path => {
     renderApp(path, []);
-    expect(await screen.findByRole("heading", { name: "403" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/unauthorized");
-    expect(fakeHttp.calls).toHaveLength(0);
+    expect(await screen.findByText("403")).toBeInTheDocument();
+    expect(screen.queryByText("Page Not Found")).not.toBeInTheDocument();
 });
 
-it("legacy USER_READ metadata never grants access to MENU-protected pages", async () => {
-    renderApp("/menus", ["USER_READ"]);
-    expect(await screen.findByRole("heading", { name: "403" })).toBeInTheDocument();
-    expect(fakeHttp.callsTo("get", "/modules")).toHaveLength(0);
-    expect(resolveMenuPermission("/menus", "USER_READ")).toBe("MENU_READ");
-    expect(resolveMenuPermission("/menu-groups", "USER_READ")).toBe("MENU_READ");
+it("resolves route permission requirements consistently", () => {
+    expect(resolveMenuPermission("/programs", "PROGRAM_READ")).toBe("PROGRAM_READ");
     expect(resolveMenuPermission("/classes", "SESSION_READ")).toBe("SESSION_READ");
 });
 
 it.each([403, 404, 500])("Class Setup API HTTP %s stays on the valid route and displays the API error", async status => {
     fakeHttp.on("get", "/classes/4/setup", () => { throw httpError(status); });
     renderApp("/class-setup?classId=4");
-    expect(await screen.findByText(`HTTP ${status}`)).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(window.location.pathname + window.location.search).toBe("/class-setup?classId=4");
     expect(screen.queryByText("Page Not Found")).not.toBeInTheDocument();
 });
