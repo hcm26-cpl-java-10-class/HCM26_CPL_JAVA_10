@@ -26,12 +26,8 @@ function PreviewLink({ label, url }: { label: string; url: string }) {
       <a href={url} target="_blank" rel="noopener noreferrer" title={url} className="flex min-w-0 items-start gap-2 rounded-lg border bg-muted/25 px-3 py-2.5 text-sm text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-blue-300 dark:hover:bg-blue-950/30">
         <span className="line-clamp-2 min-w-0 flex-1 break-all">{url}</span><ExternalLink className="mt-0.5 size-3.5 shrink-0" /><span className="sr-only">Open {label.toLowerCase()} in a new tab</span>
       </a>
-      <details className="group text-xs text-muted-foreground">
-        <summary className="w-fit cursor-pointer rounded py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">View full URL</summary>
-        <p tabIndex={0} className="mt-1 max-h-28 overflow-y-auto overscroll-contain break-all rounded-lg border bg-muted/20 p-2.5 text-foreground">{url}</p>
-      </details>
     </> : <p className="rounded-lg bg-muted/25 px-3 py-2.5 text-sm text-muted-foreground">Not provided</p>}
-    {copyError && <p role="alert" className="text-xs text-destructive">Could not copy. Open “View full URL” to select and copy the link.</p>}
+    {copyError && <p role="alert" className="text-xs text-destructive">Could not copy. Return to the form to select and copy the link.</p>}
   </div>;
 }
 
@@ -77,14 +73,14 @@ export function ArtifactSubmissionPreviewDialog({ open, onOpenChange, onConfirm,
 
       <div className="min-h-0 min-w-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6" aria-label="Submission summary" tabIndex={0}>
         <section className="flex flex-col items-start justify-between gap-3 rounded-lg border bg-muted/25 p-3.5 sm:flex-row sm:items-center">
-          <div className="min-w-0 space-y-1"><p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Milestone</p><h3 className="break-words text-sm font-semibold [overflow-wrap:anywhere]">{milestoneTitle}</h3></div>
+          <div className="min-w-0 space-y-1"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Milestone</p><h3 className="break-words text-sm font-semibold [overflow-wrap:anywhere]">{milestoneTitle}</h3></div>
           <p className="flex shrink-0 items-center gap-1.5 rounded-md border bg-background px-2 py-1.5 text-xs text-muted-foreground"><Clock className="size-3.5 text-amber-600" />Due: {deadline}</p>
         </section>
 
         <section className="min-w-0 space-y-2.5">
           <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Acceptance criteria</h3><Badge variant="secondary">{checklist.length} {checklist.length === 1 ? "criterion" : "criteria"}</Badge></div>
           <p className="text-xs leading-relaxed text-muted-foreground">Read-only. Your reviewer will assess these criteria after submission.</p>
-          {checklist.length ? <ul className="space-y-2">{checklist.map((item) => <li key={item.id} className="flex min-w-0 items-start gap-2 rounded-lg border bg-muted/20 px-3 py-2.5"><span aria-hidden="true" className="mt-1.5 size-1.5 shrink-0 rounded-full bg-blue-600" /><p className="min-w-0 flex-1 break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{item.content}</p>{item.mandatory && <Badge variant="outline" className="shrink-0 border-amber-200 bg-amber-50 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">Required</Badge>}</li>)}</ul> : <p className="text-sm text-muted-foreground">No acceptance criteria configured.</p>}
+          {checklist.length ? <ul className="space-y-2">{checklist.map((item) => <li key={item.id} className="flex min-w-0 items-start gap-2 rounded-lg border bg-muted/20 px-3 py-2.5"><span aria-hidden="true" className="mt-1.5 size-1.5 shrink-0 rounded-full bg-blue-600" /><p className="min-w-0 flex-1 break-words text-sm leading-relaxed [overflow-wrap:anywhere]">{item.content}</p>{item.mandatory && <Badge variant="outline" className="shrink-0 border-amber-200 bg-amber-50 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">Required</Badge>}</li>)}</ul> : <p className="text-sm text-muted-foreground">No acceptance criteria configured.</p>}
         </section>
 
         <section className="min-w-0 space-y-3 border-t pt-4">

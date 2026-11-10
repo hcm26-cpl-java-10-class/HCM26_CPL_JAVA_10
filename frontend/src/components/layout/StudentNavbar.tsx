@@ -33,7 +33,7 @@ const normalizePath = (path?: string) => {
  * The student persona works with a single backlog entry point: the `Sprints`
  * and `Sprint Backlogs` menus collapse into `Backlogs` -> `/backlogs`.
  */
-const STUDENT_HIDDEN_URLS = new Set(["/sprint-backlogs"]);
+const STUDENT_HIDDEN_URLS = new Set(["/sprint-backlogs", "/project-board"]);
 
 const STUDENT_MENU_OVERRIDES: Record<string, { title: string; url: string }> = {
   "/sprints": { title: "Backlogs", url: "/backlogs" },
