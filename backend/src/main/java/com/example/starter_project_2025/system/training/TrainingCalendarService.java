@@ -39,15 +39,6 @@ public class TrainingCalendarService {
             node.put("lastModifiedDate", latest == null ? "" : latest.toString());
             node.put("lastModifiedBy", "");
             var topics = node.putArray("overviewItems");
-            if (live.isEmpty()) {
-                var topic = topics.addObject();
-                String label = cls.getProgram() == null || cls.getProgram().isBlank() ? cls.getCode() : cls.getProgram();
-                topic.put("id", "class-" + classId).put("label", label).put("name", cls.getName())
-                    .put("startDate", cls.getStartDate().toString()).put("endDate", cls.getEndDate().toString());
-                topic.putArray("lessons").addObject().put("id", "class-range-" + classId).put("name", cls.getName())
-                    .put("from", cls.getStartDate().toString()).put("to", cls.getEndDate().toString())
-                    .put("trainer", cls.getMasterTrainer()).put("venue", cls.getLocation());
-            }
             for (var s : live) {
                 var topic = topics.addObject();
                 topic.put("id", "session-" + s.getId()).put("label", s.getTitle()).put("name", s.getTitle())
