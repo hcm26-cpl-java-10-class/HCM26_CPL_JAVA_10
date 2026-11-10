@@ -131,3 +131,103 @@ export interface CourseExamAnalyticsResponse {
   overallPassRate?: number | null;
   exams: ExamAnalyticsItem[];
 }
+
+// ===== 6. Department analytics =====
+
+export interface DepartmentAnalyticsItem {
+  departmentId: number;
+  departmentCode?: string | null;
+  departmentName: string;
+  learnerCount: number;
+  completedLearners: number;
+  completionRate: number;
+  averageProgress: number;
+  averageExamScore?: number | null;
+  examGradedAttempts: number;
+  activeLearners: number;
+  atRiskLearners: number;
+  dropOffRate: number;
+}
+
+export interface DepartmentAnalyticsResponse {
+  courseId?: number | null;
+  courseName: string;
+  totalLearners: number;
+  departmentCount: number;
+  bestDepartment?: DepartmentAnalyticsItem | null;
+  worstDepartment?: DepartmentAnalyticsItem | null;
+  departments: DepartmentAnalyticsItem[];
+}
+
+// ===== 7. Course ranking =====
+
+export interface CourseRankingItem {
+  rank: number;
+  courseId: number;
+  courseName: string;
+  instructor?: string | null;
+  learnerCount: number;
+  completedLearners: number;
+  completionRate: number;
+  averageRating: number;
+  totalReviews: number;
+  activeLearners: number;
+  inactiveLearners: number;
+  dropOffRate: number;
+}
+
+export interface CourseRankingResponse {
+  totalCourses: number;
+  topByLearners: CourseRankingItem[];
+  topByCompletionRate: CourseRankingItem[];
+  topByRating: CourseRankingItem[];
+  highestDropOff: CourseRankingItem[];
+  allCourses: CourseRankingItem[];
+}
+
+// ===== 8. Content quality + Q&A =====
+
+export interface ReportedLessonItem {
+  rank: number;
+  lessonId: number;
+  lessonTitle: string;
+  courseId: number;
+  courseName: string;
+  reportCount: number;
+  openReports: number;
+  resolvedReports: number;
+  topReason?: string | null;
+}
+
+export interface ReportReasonBucket {
+  reason: string;
+  count: number;
+  percentage: number;
+}
+
+export interface UnansweredQuestionItem {
+  questionId: number;
+  lessonId: number;
+  lessonTitle?: string | null;
+  courseName: string;
+  studentName?: string | null;
+  content: string;
+  createdAt?: string | null;
+  waitingHours: number;
+}
+
+export interface ContentQualityResponse {
+  courseId: number;
+  courseName: string;
+  totalReports: number;
+  openReports: number;
+  resolvedReports: number;
+  totalQuestions: number;
+  answeredQuestions: number;
+  unansweredCount: number;
+  answerRate: number;
+  averageResponseHours?: number | null;
+  mostReportedLessons: ReportedLessonItem[];
+  reportReasons: ReportReasonBucket[];
+  unansweredQuestions: UnansweredQuestionItem[];
+}

@@ -23,6 +23,7 @@ import {
 } from "recharts";
 import { AnalyticsEmptyState } from "@/pages/management/demo/analytics/components/AnalyticsEmptyState";
 import { AnalyticsPanel } from "@/pages/management/demo/analytics/components/AnalyticsPanel";
+import { ExportExcelButton } from "@/pages/management/demo/analytics/components/ExportExcelButton";
 import { MetricCard } from "@/pages/management/demo/analytics/components/MetricCard";
 import {
   AXIS_COLOR,
@@ -91,6 +92,14 @@ export function LessonFunnelTab({ courseId }: Props) {
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap justify-end">
+        <ExportExcelButton
+          label="Export Excel"
+          successMessage="Đã export phễu học tập."
+          onExport={() => courseAnalyticsApi.exportLessonFunnel(courseId)}
+        />
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Học viên đang học" value={formatNumber(data.totalLearners)} />
         <MetricCard label="Số bài học" value={formatNumber(data.totalLessons)} />

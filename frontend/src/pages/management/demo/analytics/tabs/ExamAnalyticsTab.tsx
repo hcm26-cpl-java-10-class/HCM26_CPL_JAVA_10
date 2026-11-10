@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { AnalyticsEmptyState } from "@/pages/management/demo/analytics/components/AnalyticsEmptyState";
 import { AnalyticsPanel } from "@/pages/management/demo/analytics/components/AnalyticsPanel";
+import { ExportExcelButton } from "@/pages/management/demo/analytics/components/ExportExcelButton";
 import { MetricCard } from "@/pages/management/demo/analytics/components/MetricCard";
 import {
   AXIS_COLOR,
@@ -48,12 +49,29 @@ export function ExamAnalyticsTab({ courseId }: Props) {
 
   if (!data.exams.length) {
     return (
-      <AnalyticsEmptyState message="Khóa học chưa có bài thi nào đang hoạt động (exam) được liên kết." />
+      <div className="space-y-4">
+        <div className="flex flex-wrap justify-end">
+          <ExportExcelButton
+            label="Export Excel"
+            successMessage="Đã export dữ liệu bài thi."
+            onExport={() => courseAnalyticsApi.exportExams(courseId)}
+          />
+        </div>
+        <AnalyticsEmptyState message="Khóa học chưa có bài thi nào đang hoạt động (exam) được liên kết." />
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap justify-end">
+        <ExportExcelButton
+          label="Export Excel"
+          successMessage="Đã export dữ liệu bài thi."
+          onExport={() => courseAnalyticsApi.exportExams(courseId)}
+        />
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Số bài thi" value={formatNumber(data.totalExams)} />
         <MetricCard

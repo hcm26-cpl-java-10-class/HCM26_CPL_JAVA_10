@@ -180,4 +180,127 @@ public final class CourseAnalyticsDTO {
             List<ExamAnalyticsItem> exams
     ) {
     }
+
+    // ===== 6. Department analytics =====
+
+    /**
+     * Số liệu hiệu quả đào tạo của một phòng ban.
+     *
+     * @param learnerCount      số lượt đăng ký (học viên) của phòng ban
+     * @param completedLearners số học viên đã hoàn thành khóa học
+     * @param completionRate    tỉ lệ hoàn thành (0-100)
+     * @param averageProgress   điểm tiến độ trung bình (0-100)
+     * @param averageExamScore  điểm thi trung bình (% điểm tối đa), null khi chưa có lượt thi nào
+     */
+    public record DepartmentAnalyticsItem(
+            Long departmentId,
+            String departmentCode,
+            String departmentName,
+            long learnerCount,
+            long completedLearners,
+            double completionRate,
+            double averageProgress,
+            Double averageExamScore,
+            long examGradedAttempts,
+            long activeLearners,
+            long atRiskLearners,
+            /** Tỉ lệ bỏ học (0-100) = 100 - completionRate. */
+            double dropOffRate
+    ) {
+    }
+
+    public record DepartmentAnalyticsResponse(
+            /** null khi xem toàn hệ thống. */
+            Long courseId,
+            String courseName,
+            long totalLearners,
+            int departmentCount,
+            /** Phòng ban có hiệu quả đào tạo tốt nhất. */
+            DepartmentAnalyticsItem bestDepartment,
+            /** Phòng ban có hiệu quả đào tạo kém nhất. */
+            DepartmentAnalyticsItem worstDepartment,
+            List<DepartmentAnalyticsItem> departments
+    ) {
+    }
+
+    // ===== 7. Course ranking =====
+
+    public record CourseRankingItem(
+            int rank,
+            Long courseId,
+            String courseName,
+            String instructor,
+            long learnerCount,
+            long completedLearners,
+            double completionRate,
+            double averageRating,
+            long totalReviews,
+            long activeLearners,
+            long inactiveLearners,
+            /** Tỉ lệ bỏ học (0-100) = học viên chưa hoàn thành / tổng học viên. */
+            double dropOffRate
+    ) {
+    }
+
+    public record CourseRankingResponse(
+            int totalCourses,
+            List<CourseRankingItem> topByLearners,
+            List<CourseRankingItem> topByCompletionRate,
+            List<CourseRankingItem> topByRating,
+            List<CourseRankingItem> highestDropOff,
+            List<CourseRankingItem> allCourses
+    ) {
+    }
+
+    // ===== 8. Content quality + Q&A =====
+
+    public record ReportedLessonItem(
+            int rank,
+            Long lessonId,
+            String lessonTitle,
+            Long courseId,
+            String courseName,
+            long reportCount,
+            long openReports,
+            long resolvedReports,
+            /** Lý do báo cáo phổ biến nhất của bài học này. */
+            String topReason
+    ) {
+    }
+
+    public record ReportReasonBucket(String reason, long count, double percentage) {
+    }
+
+    public record UnansweredQuestionItem(
+            Long questionId,
+            Long lessonId,
+            String lessonTitle,
+            String courseName,
+            String studentName,
+            String content,
+            LocalDateTime createdAt,
+            /** Số giờ đã chờ kể từ khi hỏi. */
+            long waitingHours
+    ) {
+    }
+
+    public record ContentQualityResponse(
+            Long courseId,
+            String courseName,
+            long totalReports,
+            long openReports,
+            long resolvedReports,
+            long totalQuestions,
+            long answeredQuestions,
+            /** Số câu hỏi chưa được trả lời. */
+            long unansweredCount,
+            /** Tỉ lệ đã trả lời (0-100). */
+            double answerRate,
+            /** Thời gian phản hồi trung bình (giờ), null khi chưa có câu nào được trả lời. */
+            Double averageResponseHours,
+            List<ReportedLessonItem> mostReportedLessons,
+            List<ReportReasonBucket> reportReasons,
+            List<UnansweredQuestionItem> unansweredQuestions
+    ) {
+    }
 }
