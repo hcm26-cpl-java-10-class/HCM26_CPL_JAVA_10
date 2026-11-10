@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { BriefErrorBoundary } from "./BriefErrorBoundary";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight, CheckCircle2, ChevronDown, Clock, ClipboardList, Flag, Layers, ListChecks, LoaderCircle, Lock, Users,
@@ -54,8 +55,8 @@ export function MasterBriefDialog({ classId, sessionId, template, selectedId, on
     queryFn: ({ signal }) => projectAssignmentApi.brief(classId, sessionId, template!, signal),
     enabled: template !== null,
     retry: false,
-    // A published version never changes; a newer version gets another versionId and therefore another key.
-    staleTime: Infinity,
+    // Cached content shows instantly on reopen, then refreshes: linked data such as rubrics can change server side.
+    staleTime: 0,
   });
   const data = brief.data;
   const selected = template !== null && template.id === selectedId;
@@ -91,7 +92,9 @@ export function MasterBriefDialog({ classId, sessionId, template, selectedId, on
             <Button className="w-fit" variant="outline" size="sm" onClick={() => void brief.refetch()}>Thử lại</Button>
           </>}
         </div>
-      </div> : data && <BriefBody key={data.versionId} brief={data} />}
+      </div> : data && <BriefErrorBoundary key={data.versionId} onRetry={() => void brief.refetch()}>
+        <BriefBody brief={data} />
+      </BriefErrorBoundary>}
 
       <footer className="flex flex-col-reverse gap-2 border-t bg-muted/30 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -131,7 +134,7 @@ function HeaderStats({ brief }: { brief: AssignmentBrief }) {
 function BriefBody({ brief }: { brief: AssignmentBrief }) {
   const nodes = flatten(brief.master);
   const entries = entriesOf(nodes);
-  const rubricEntries = entries.filter(entry => entry.milestone.rubric !== null);
+  const rubricEntries = entries.filter(entry => entry.milestone.rubric != null);
   const [tab, setTab] = useState<BriefTab>("overview");
   const [rubricKey, setRubricKey] = useState<string | null>(null);
   const activeRubric = rubricEntries.find(entry => entry.key === rubricKey) ?? rubricEntries[0];
@@ -204,19 +207,18 @@ function Overview({ brief, nodes }: { brief: AssignmentBrief; nodes: AssignmentB
       <p className="mt-2 text-xs text-muted-foreground">{master.rolePolicy.allowMultiRole
         ? "Một thành viên có thể đảm nhận nhiều vai trò." : "Mỗi thành viên đảm nhận đúng một vai trò."}</p>
     </section>}
-    <section>
-      <SectionTitle aside={<span className="text-xs text-muted-foreground">{master.modules.length > 0
-        ? `${master.modules.length} module trực tiếp` : "Một Team nhận toàn bộ"}</span>}>Cấu trúc đề bài</SectionTitle>
-      {master.modules.length === 0
-        ? <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">Đề bài không chia module. Một Team thực hiện toàn bộ milestone.</p>
-        : <div className="grid gap-2 sm:grid-cols-2">{master.modules.map(module => <ModuleCard key={module.templateId} module={module} />)}</div>}
-    </section>
+    {master.modules.length > 0 && <section>
+      <SectionTitle aside={<span className="text-xs text-muted-foreground">{master.modules.length} module trực tiếp</span>}>
+        Cấu trúc đề bài</SectionTitle>
+      <div className="grid gap-2 sm:grid-cols-2">{master.modules.map(module => <ModuleCard key={module.templateId} module={module} />)}</div>
+    </section>}
     {backlogCount > 0 && <details className="group rounded-xl border">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-semibold">
         <span className="flex items-center gap-2"><ListChecks className="size-4 text-muted-foreground" /> Backlog gợi ý <Count value={backlogCount} /></span>
         <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
       </summary>
       <div className="grid gap-4 border-t px-4 py-3">
+        <p className="text-xs text-muted-foreground">Các hạng mục này được tạo sẵn trong Product Backlog của Team khi phân công được công bố.</p>
         {backlog.map(node => <div key={node.templateId} className="grid gap-2">
           {backlog.length > 1 && <p className="text-xs font-medium text-muted-foreground">{nodeLabel(node, master)}</p>}
           <ul className="grid gap-1.5">
@@ -317,7 +319,8 @@ function rubricTitle(rubric: AssignmentBriefRubric) {
 function Rubrics({ entries, active, master, onChange }: {
   entries: MilestoneEntry[]; active: MilestoneEntry; master: AssignmentBriefNode; onChange: (key: string) => void;
 }) {
-  const rubric = active.milestone.rubric!;
+  const rubric = active.milestone.rubric;
+  if (!rubric) return null;
   return <div className="grid gap-4 md:grid-cols-[14rem_minmax(0,1fr)]">
     <nav aria-label="Milestone có rubric" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:mx-0 md:flex-col md:overflow-visible md:px-0">
       {entries.map(entry => {

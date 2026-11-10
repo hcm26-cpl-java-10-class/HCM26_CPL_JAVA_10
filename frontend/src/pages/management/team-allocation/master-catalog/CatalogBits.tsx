@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { levelStyle } from "./catalog-styles";
 import { levelLabel } from "./master-catalog.utils";
 
@@ -5,7 +6,7 @@ export function LevelPill({ level, className = "" }: { level: string | null | un
   const label = levelLabel(level);
   if (!label) return null;
   const style = levelStyle(level);
-  return <span className={"inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium " + style.pill + " " + className}>
+  return <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium", style.pill, className)}>
     <span aria-hidden="true" className={"size-1.5 rounded-full " + style.dot} />{label}
   </span>;
 }

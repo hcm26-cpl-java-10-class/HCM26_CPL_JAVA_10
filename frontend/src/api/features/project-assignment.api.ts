@@ -1,6 +1,6 @@
 import axiosInstance from "@/api/axios";
 import type {
-  AssignmentBrief, AssignmentCatalog, AssignmentCatalogFilter, AssignmentPreview, AssignmentTemplate, ProjectAssignmentRequest, ProjectAssignmentResult,
+  AssignmentBrief, AssignmentBriefNode, AssignmentBriefRubric, AssignmentCatalog, AssignmentCatalogFilter, AssignmentPreview, AssignmentTemplate, ProjectAssignmentRequest, ProjectAssignmentResult,
   WorkspaceAssignmentContext, MasterMilestoneContext,
 } from "@/types/features/project-assignment";
 
@@ -22,7 +22,31 @@ function isCatalog(value: unknown): value is AssignmentCatalog {
 
 function isBrief(value: unknown): value is AssignmentBrief {
   const brief = value as Partial<AssignmentBrief> | null;
-  return !!brief && !!brief.master && Array.isArray(brief.master.milestones) && Array.isArray(brief.master.modules);
+  return !!brief && typeof brief.master === "object" && brief.master !== null;
+}
+
+const array = <T,>(value: T[] | null | undefined): T[] => Array.isArray(value) ? value : [];
+
+function normalizeRubric(rubric: AssignmentBriefRubric | null | undefined): AssignmentBriefRubric | null {
+  if (!rubric || typeof rubric !== "object") return null;
+  return {
+    ...rubric, name: rubric.name ?? null, version: rubric.version ?? null, description: rubric.description ?? null,
+    totalMaxScore: rubric.totalMaxScore ?? null, legacy: !!rubric.legacy,
+    criteria: array(rubric.criteria).map(criterion => ({ ...criterion, ratings: array(criterion.ratings) })),
+  };
+}
+
+/** Fills fields an older or partial response may omit, so the brief views can rely on the declared shape. */
+function normalizeNode(node: AssignmentBriefNode): AssignmentBriefNode {
+  return {
+    ...node,
+    rolePolicy: { allowMultiRole: !!node.rolePolicy?.allowMultiRole, quotas: array(node.rolePolicy?.quotas) },
+    milestones: array(node.milestones).map(milestone => ({
+      ...milestone, checklist: array(milestone.checklist), rubric: normalizeRubric(milestone.rubric),
+    })),
+    backlogItems: array(node.backlogItems),
+    modules: array(node.modules).map(normalizeNode),
+  };
 }
 export const projectAssignmentApi = {
   async classMasters(classId: number, sessionId: number, signal?: AbortSignal) {
@@ -51,7 +75,7 @@ export const projectAssignmentApi = {
     const data: unknown = (await axiosInstance.get(`${base(classId, sessionId)}/templates/${template.id}/brief`,
       { params: { versionId: template.versionId }, signal })).data;
     if (!isBrief(data)) throw new UnsupportedApiResponseError();
-    return data;
+    return { ...data, master: normalizeNode(data.master) };
   },
   async preview(classId: number, sessionId: number, template: AssignmentTemplate, signal?: AbortSignal) {
     return (await axiosInstance.get<AssignmentPreview>(`${base(classId, sessionId)}/templates/${template.id}`,

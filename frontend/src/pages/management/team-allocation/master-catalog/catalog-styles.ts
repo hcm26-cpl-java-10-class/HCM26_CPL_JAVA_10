@@ -5,12 +5,13 @@ import type { AssignmentRubricLevel, AssignmentTemplateLevel } from "@/types/fea
  * (50 background / 200 border / 700 text, with dark variants), never saturated fills except the selected state.
  * Tailwind needs literal class names, so every variant is spelled out here.
  */
-interface LevelStyle { pill: string; dot: string; strip: string; tint: string }
+interface LevelStyle { pill: string; dot: string; strip: string; edge: string; tint: string }
 
 const neutralLevel: LevelStyle = {
   pill: "border-border bg-muted text-muted-foreground",
   dot: "bg-muted-foreground/50",
   strip: "bg-border",
+  edge: "border-l-border",
   tint: "from-muted/60",
 };
 
@@ -19,18 +20,21 @@ const levels: Record<AssignmentTemplateLevel, LevelStyle> = {
     pill: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300",
     dot: "bg-emerald-500",
     strip: "bg-emerald-500/80",
+    edge: "border-l-emerald-500/80",
     tint: "from-emerald-50 dark:from-emerald-950/30",
   },
   INTERMEDIATE: {
     pill: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300",
     dot: "bg-sky-500",
     strip: "bg-sky-500/80",
+    edge: "border-l-sky-500/80",
     tint: "from-sky-50 dark:from-sky-950/30",
   },
   ADVANCED: {
     pill: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300",
     dot: "bg-violet-500",
     strip: "bg-violet-500/80",
+    edge: "border-l-violet-500/80",
     tint: "from-violet-50 dark:from-violet-950/30",
   },
 };
