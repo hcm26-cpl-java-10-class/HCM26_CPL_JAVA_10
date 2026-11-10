@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -45,4 +46,52 @@ public interface CourseReportRepository extends JpaRepository<CourseEnrollment, 
             @Param("fullName") String fullName,
             @Param("email") String email
     );
+
+    // =================================================================
+    // Learning hours analytics
+    // =================================================================
+
+    /**
+     * [userId, departmentId, departmentName] cho mọi quan hệ user - phòng ban.
+     *
+     * <p>Một học viên có thể thuộc nhiều phòng ban nên có thể xuất hiện nhiều dòng.
+     */
+    @Query("""
+        select u.id, d.id, d.name
+        from User u
+          join u.departments d
+        where u.id in :userIds
+        """)
+    List<Object[]> findUserDepartments(@Param("userIds") Collection<Long> userIds);
+
+    /**
+     * [enrollmentId, userId, studentName, studentEmail,
+     *  courseId, courseName, enrolledAt, lastAccessedAt,
+     *  completedLessons, totalLessons, studySeconds]
+     *
+     * <p>{@code studySeconds} là tổng thời gian học của học viên trong riêng
+     * lượt đăng ký này. Người học chưa mở bài nào vẫn xuất hiện (studySeconds = 0).
+     *
+     * <p>Phòng ban được gắn ở tầng service (một học viên có thể thuộc nhiều phòng ban,
+     * chọn phòng ban chính để tránh đếm trùng giờ học).
+     */
+    @Query("""
+        select e.id, u.id,
+               concat(coalesce(u.firstName, ''), ' ', coalesce(u.lastName, '')),
+               u.email,
+               c.id, c.name, e.createdAt, e.lastAccessedAt,
+               (select count(p) from LessonProgress p
+                 where p.enrollment = e and p.completed = true),
+               (select count(l) from Lesson l
+                 join l.section sec
+                 where sec.course = c and l.isActive = true and sec.isActive = true),
+               (select coalesce(sum(coalesce(p.studySeconds, 0)), 0) from LessonProgress p
+                 where p.enrollment = e)
+        from CourseEnrollment e
+          join e.user u
+          join e.course c
+        where e.isActive = true
+        order by e.createdAt desc
+    """)
+    List<Object[]> findLearningHoursRows();
 }

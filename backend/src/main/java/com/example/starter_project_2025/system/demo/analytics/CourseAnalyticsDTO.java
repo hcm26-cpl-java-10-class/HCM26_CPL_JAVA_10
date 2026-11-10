@@ -80,11 +80,31 @@ public final class CourseAnalyticsDTO {
     public record ProgressBucket(String label, long learners) {
     }
 
+    /** Một yếu tố làm tăng điểm rủi ro bỏ học. */
+    public record RiskFactor(
+            /** Mã yếu tố: INACTIVITY | LOW_PROGRESS | NEVER_STARTED | LOW_EXAM_SCORE | LOW_STUDY_TIME. */
+            String code,
+            /** Nhãn tiếng Anh để hiển thị. */
+            String label,
+            /** Số điểm yếu tố này góp vào tổng điểm rủi ro. */
+            int points,
+            /** Mô tả chi tiết (tiếng Anh). */
+            String detail
+    ) {
+    }
+
+    /**
+     * Học viên có nguy cơ bỏ học.
+     *
+     * <p>Học viên đã hoàn thành khóa học không bao giờ nằm trong nhóm nguy cơ.
+     */
     public record AtRiskLearner(
             Long enrollmentId,
             Long userId,
             String studentName,
             String studentEmail,
+            /** Phòng ban của học viên (null nếu chưa được gán). */
+            String departmentName,
             int progressPercentage,
             LocalDateTime enrolledAt,
             /** Lần truy cập gần nhất; null nếu chưa từng vào học. */
@@ -94,7 +114,17 @@ public final class CourseAnalyticsDTO {
             /** NEVER_STARTED | INACTIVE */
             String reason,
             /** HIGH | MEDIUM | LOW */
-            String riskLevel
+            String riskLevel,
+            /** Điểm rủi ro 0-100. */
+            int riskScore,
+            /** Các yếu tố đã góp điểm, sắp xếp theo điểm giảm dần. */
+            List<RiskFactor> riskFactors,
+            /** Yếu tố chính (mã yếu tố điểm cao nhất). */
+            String primaryRiskReason,
+            /** Tổng giây đã học trong khóa học. */
+            long studySeconds,
+            /** Điểm thi trung bình (% điểm tối đa), null nếu chưa thi. */
+            Double examScorePercent
     ) {
     }
 
@@ -110,9 +140,27 @@ public final class CourseAnalyticsDTO {
             long inactiveLearners,
             /** Chưa từng vào học / chưa hoàn thành bài nào. */
             long neverStartedLearners,
+            /** Số học viên chưa hoàn thành (không tính vào nhóm nguy cơ). */
+            long notCompletedLearners,
+            /** Số học viên có nguy cơ bỏ học (HIGH + MEDIUM). */
+            long atRiskCount,
+            /** Số học viên rủi ro cao. */
+            long highRiskCount,
+            /** Số học viên rủi ro trung bình. */
+            long mediumRiskCount,
+            /** Số học viên rủi ro thấp. */
+            long lowRiskCount,
+            /** Điểm rủi ro trung bình (0-100) trong nhóm nguy cơ. */
+            double averageRiskScore,
             List<ProgressBucket> progressDistribution,
+            /** Phân bố mức rủi ro (HIGH / MEDIUM / LOW). */
+            List<RiskLevelBucket> riskDistribution,
             List<AtRiskLearner> atRiskLearners
     ) {
+    }
+
+    /** Nhóm học viên theo mức rủi ro. */
+    public record RiskLevelBucket(String level, long learners) {
     }
 
     // ===== 4. Reviews =====
@@ -186,11 +234,16 @@ public final class CourseAnalyticsDTO {
     /**
      * Số liệu hiệu quả đào tạo của một phòng ban.
      *
-     * @param learnerCount      số lượt đăng ký (học viên) của phòng ban
-     * @param completedLearners số học viên đã hoàn thành khóa học
-     * @param completionRate    tỉ lệ hoàn thành (0-100)
-     * @param averageProgress   điểm tiến độ trung bình (0-100)
-     * @param averageExamScore  điểm thi trung bình (% điểm tối đa), null khi chưa có lượt thi nào
+     * @param learnerCount       số lượt đăng ký (học viên) của phòng ban
+     * @param completedLearners  số học viên đã hoàn thành khóa học
+     * @param completionRate     tỉ lệ hoàn thành (0-100)
+     * @param averageProgress    điểm tiến độ trung bình (0-100)
+     * @param averageExamScore   điểm thi trung bình (% điểm tối đa), null khi chưa có lượt thi nào
+     * @param activeLearners     học viên còn hoạt động (chưa hoàn thành + truy cập gần đây)
+     * @param neverStartedLearners học viên chưa từng mở bài học nào
+     * @param atRiskLearners     học viên có nguy cơ bỏ học (chưa hoàn thành + rủi ro HIGH/MEDIUM)
+     * @param notCompletedRate   tỉ lệ chưa hoàn thành (0-100) = 100 - completionRate
+     * @param dropOffRate        tỉ lệ bỏ học thực sự (0-100): chưa hoàn thành VÀ không hoạt động
      */
     public record DepartmentAnalyticsItem(
             Long departmentId,
@@ -203,9 +256,18 @@ public final class CourseAnalyticsDTO {
             Double averageExamScore,
             long examGradedAttempts,
             long activeLearners,
+            long neverStartedLearners,
             long atRiskLearners,
-            /** Tỉ lệ bỏ học (0-100) = 100 - completionRate. */
-            double dropOffRate
+            /** Tỉ lệ chưa hoàn thành (0-100) = 100 - completionRate. */
+            double notCompletedRate,
+            /** Tỉ lệ bỏ học thực sự (0-100). */
+            double dropOffRate,
+            /** Tổng số giây học của phòng ban. */
+            long totalStudySeconds,
+            /** Tổng số giờ học của phòng ban. */
+            double totalStudyHours,
+            /** Số giờ học trung bình mỗi học viên của phòng ban. */
+            double averageStudyHoursPerLearner
     ) {
     }
 
@@ -215,6 +277,8 @@ public final class CourseAnalyticsDTO {
             String courseName,
             long totalLearners,
             int departmentCount,
+            /** Tổng số giờ học của toàn bộ phòng ban trong phạm vi. */
+            double totalStudyHours,
             /** Phòng ban có hiệu quả đào tạo tốt nhất. */
             DepartmentAnalyticsItem bestDepartment,
             /** Phòng ban có hiệu quả đào tạo kém nhất. */
@@ -235,9 +299,20 @@ public final class CourseAnalyticsDTO {
             double completionRate,
             double averageRating,
             long totalReviews,
+            /** Học viên đã truy cập khóa học trong vòng ngưỡng không hoạt động. */
             long activeLearners,
+            /** Học viên đã từng học nhưng đã lâu không truy cập. */
             long inactiveLearners,
-            /** Tỉ lệ bỏ học (0-100) = học viên chưa hoàn thành / tổng học viên. */
+            /** Học viên chưa từng mở bài học nào. */
+            long neverStartedLearners,
+            /** Số học viên chưa hoàn thành khóa học. */
+            long notCompletedLearners,
+            /** Tỉ lệ chưa hoàn thành (0-100) = học viên chưa hoàn thành / tổng học viên. */
+            double notCompletedRate,
+            /**
+             * Tỉ lệ bỏ học thực sự (0-100): số học viên đã bỏ học (inactive + never started,
+             * chưa hoàn thành) chia cho tổng số học viên.
+             */
             double dropOffRate
     ) {
     }
@@ -301,6 +376,50 @@ public final class CourseAnalyticsDTO {
             List<ReportedLessonItem> mostReportedLessons,
             List<ReportReasonBucket> reportReasons,
             List<UnansweredQuestionItem> unansweredQuestions
+    ) {
+    }
+
+    // ===== 9. Thời gian học (study time) =====
+
+    /**
+     * Thời gian học của một học viên trong một khóa học.
+     *
+     * @param studySeconds     tổng số giây học viên đã dành cho các bài của khóa học
+     * @param studyHours       {@code studySeconds / 3600} (làm tròn 2 chữ số)
+     * @param completedLessons số bài đã hoàn thành
+     * @param totalLessons     tổng số bài của khóa học
+     * @param completionRate   tỉ lệ hoàn thành (0-100)
+     */
+    public record StudentStudyTimeItem(
+            Long enrollmentId,
+            Long userId,
+            String studentName,
+            String studentEmail,
+            /** Phòng ban chính của học viên (null nếu chưa được gán). */
+            String departmentName,
+            long studySeconds,
+            double studyHours,
+            int completedLessons,
+            int totalLessons,
+            double completionRate,
+            LocalDateTime lastAccessedAt
+    ) {
+    }
+
+    public record StudyTimeResponse(
+            Long courseId,
+            String courseName,
+            /** Tổng số giây học của cả khóa học. */
+            long totalStudySeconds,
+            /** Tổng số giờ học của cả khóa học. */
+            double totalStudyHours,
+            int totalLearners,
+            /** Số giờ học trung bình mỗi học viên. */
+            double averageStudyHoursPerLearner,
+            /** Học viên học nhiều nhất trong khóa học. */
+            StudentStudyTimeItem topLearner,
+            /** Danh sách học viên, sắp xếp giảm dần theo số giờ học. */
+            List<StudentStudyTimeItem> learners
     ) {
     }
 }

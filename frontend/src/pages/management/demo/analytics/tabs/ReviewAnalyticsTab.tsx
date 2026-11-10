@@ -31,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
   courseId: number;
@@ -48,14 +49,14 @@ export function ReviewAnalyticsTab({ courseId }: Props) {
   });
 
   if (reviewQuery.isLoading) {
-    return <p className="text-sm text-muted-foreground">Đang tải đánh giá khóa học...</p>;
+    return <AnalyticsLoading label="Loading course reviews..." />;
   }
 
   if (reviewQuery.isError || !reviewQuery.data) {
     return (
       <AnalyticsEmptyState
         variant="error"
-        message="Không tải được dữ liệu đánh giá khóa học."
+        message="Could not load the course review data."
       />
     );
   }
@@ -64,37 +65,37 @@ export function ReviewAnalyticsTab({ courseId }: Props) {
   const ranking = rankingQuery.data ?? [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap justify-end">
         <ExportExcelButton
           label="Export Excel"
-          successMessage="Đã export dữ liệu đánh giá."
+          successMessage="Exported the review data."
           onExport={() => courseAnalyticsApi.exportReviews(courseId)}
         />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Điểm trung bình"
+          label="Average rating"
           value={data.totalReviews ? `${data.averageRating.toFixed(2)} ★` : "—"}
           hint={data.courseName}
         />
-        <MetricCard label="Số review" value={formatNumber(data.totalReviews)} />
+        <MetricCard label="Reviews" value={formatNumber(data.totalReviews)} />
         <MetricCard
-          label="Tỉ lệ học viên đã đánh giá"
+          label="Review coverage"
           value={formatPercent(data.reviewCoverage)}
-          hint={`${formatNumber(data.totalLearners)} học viên đang học`}
+          hint={`${formatNumber(data.totalLearners)} active learners`}
         />
-        <MetricCard label="Số khóa học xếp hạng" value={formatNumber(ranking.length)} />
+        <MetricCard label="Courses ranked" value={formatNumber(ranking.length)} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         <AnalyticsPanel
-          title="Phân bố điểm đánh giá"
-          description="Số review theo từng mức sao từ 5 xuống 1."
+          title="Rating distribution"
+          description="Number of reviews per star rating, from 5 down to 1."
         >
           {!data.distribution.length ? (
-            <AnalyticsEmptyState message="Chưa có review nào cho khóa học này." />
+            <AnalyticsEmptyState message="No reviews for this course yet." />
           ) : (
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -109,11 +110,11 @@ export function ReviewAnalyticsTab({ courseId }: Props) {
                     width={40}
                     allowDecimals={false}
                   />
-                  <Tooltip
-                    formatter={(value) => tooltipNumber(value, "Review")}
-                    labelFormatter={(label) => `${label} sao`}
+                  <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }}
+                    formatter={(value) => tooltipNumber(value, "Reviews")}
+                    labelFormatter={(label) => `${label} stars`}
                   />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  <Bar isAnimationActive={true} animationDuration={850} animationEasing="ease-out" dataKey="count" radius={[4, 4, 0, 0]}>
                     {data.distribution.map((bucket) => (
                       <Cell
                         key={bucket.stars}
@@ -128,18 +129,18 @@ export function ReviewAnalyticsTab({ courseId }: Props) {
         </AnalyticsPanel>
 
         <AnalyticsPanel
-          title="Tỉ lệ theo mức sao"
-          description="Phần trăm review của mỗi mức sao trong tổng số review."
+          title="Share per star rating"
+          description="Percentage of reviews for each star rating out of all reviews."
         >
           {!data.distribution.length ? (
-            <AnalyticsEmptyState message="Chưa có review nào cho khóa học này." />
+            <AnalyticsEmptyState message="No reviews for this course yet." />
           ) : (
             <div className="space-y-3">
               {data.distribution.map((bucket) => (
                 <div key={bucket.stars} className="grid grid-cols-[4.5rem_1fr_5rem] items-center gap-3 text-sm">
                   <span className="inline-flex items-center gap-1 font-medium">
                     <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                    {bucket.stars} sao
+                    {bucket.stars} stars
                   </span>
                   <div className="h-3 rounded bg-muted">
                     <div
@@ -158,23 +159,23 @@ export function ReviewAnalyticsTab({ courseId }: Props) {
       </div>
 
       <AnalyticsPanel
-        title="Xếp hạng đánh giá giữa các khóa học"
-        description="So sánh điểm trung bình của các khóa học bạn được xem (admin: tất cả, giảng viên: khóa của mình)."
+        title="Review ranking across courses"
+        description="Compares the average rating of the courses you can view (admin: all courses, instructor: own courses)."
       >
         {rankingQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">Đang tải bảng xếp hạng...</p>
+          <p className="text-sm text-muted-foreground">Loading the ranking table...</p>
         ) : !ranking.length ? (
-          <AnalyticsEmptyState message="Chưa có khóa học nào để xếp hạng." />
+          <AnalyticsEmptyState message="No courses available to rank." />
         ) : (
           <div className="max-h-[520px] overflow-auto rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-14">Hạng</TableHead>
-                  <TableHead>Khóa học</TableHead>
-                  <TableHead>Giảng viên</TableHead>
-                  <TableHead className="text-right">Điểm TB</TableHead>
-                  <TableHead className="text-right">Số review</TableHead>
+                  <TableHead className="w-14">Rank</TableHead>
+                  <TableHead>Course</TableHead>
+                  <TableHead>Instructor</TableHead>
+                  <TableHead className="text-right">Avg rating</TableHead>
+                  <TableHead className="text-right">Reviews</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

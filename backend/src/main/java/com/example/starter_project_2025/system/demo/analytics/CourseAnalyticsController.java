@@ -99,4 +99,14 @@ public class CourseAnalyticsController {
     public ContentQualityResponse contentQuality(@PathVariable Long courseId) {
         return analyticsService.getContentQuality(courseId);
     }
+
+    // =====================================================================
+    // 9. Study time (số giờ học)
+    // =====================================================================
+
+    /** Số giờ học của từng học viên trong khóa học. */
+    @GetMapping("/courses/{courseId}/study-time")
+    public StudyTimeResponse studyTime(@PathVariable Long courseId) {
+        return analyticsService.getStudyTime(courseId);
+    }
 }

@@ -9,7 +9,7 @@ type Props = {
   className?: string;
 };
 
-/** Khung panel dùng chung cho các khối biểu đồ. */
+/** Shared panel frame for the analytics chart blocks. */
 export function AnalyticsPanel({ title, description, action, children, className }: Props) {
   return (
     <Card className={className}>

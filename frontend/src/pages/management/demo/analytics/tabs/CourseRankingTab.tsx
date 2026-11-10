@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { CourseRankingItem } from "@/types";
+import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
   courseId: number;
@@ -30,23 +31,21 @@ export function CourseRankingTab({ courseId }: Props) {
   });
 
   if (isLoading) {
-    return (
-      <p className="text-sm text-muted-foreground">Đang tải bảng xếp hạng...</p>
-    );
+    return <AnalyticsLoading label="Loading the ranking table..." />;
   }
 
   if (isError || !data) {
     return (
       <AnalyticsEmptyState
         variant="error"
-        message="Không tải được bảng xếp hạng khóa học."
+        message="Could not load the course ranking."
       />
     );
   }
 
   if (!data.allCourses.length) {
     return (
-      <AnalyticsEmptyState message="Chưa có khóa học nào để xếp hạng." />
+      <AnalyticsEmptyState message="No courses available to rank." />
     );
   }
 
@@ -56,33 +55,33 @@ export function CourseRankingTab({ courseId }: Props) {
   const topRating = data.topByRating[0];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap justify-end">
         <ExportExcelButton
           label="Export Excel"
-          successMessage="Đã export bảng xếp hạng khóa học."
+          successMessage="Exported the course ranking."
           onExport={() => courseAnalyticsApi.exportCourseRanking()}
         />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Số khóa học"
+          label="Courses"
           value={formatNumber(data.totalCourses)}
-          hint="Xếp hạng trên các khóa học bạn được xem"
+          hint="Ranked across the courses you can view"
         />
         <MetricCard
-          label="Nhiều học viên nhất"
+          label="Most learners"
           value={topLearners ? formatNumber(topLearners.learnerCount) : "—"}
           hint={topLearners?.courseName}
         />
         <MetricCard
-          label="Hoàn thành cao nhất"
+          label="Highest completion"
           value={topCompletion ? formatPercent(topCompletion.completionRate) : "—"}
           hint={topCompletion?.courseName}
         />
         <MetricCard
-          label="Rating cao nhất"
+          label="Highest rating"
           value={topRating ? `${topRating.averageRating.toFixed(2)} ★` : "—"}
           hint={topRating?.courseName}
         />
@@ -90,125 +89,143 @@ export function CourseRankingTab({ courseId }: Props) {
 
       {current ? (
         <AnalyticsPanel
-          title="Vị trí của khóa học đang chọn"
-          description="So sánh khóa học này với các khóa học khác trên cùng bảng xếp hạng."
+          title="Position of the selected course"
+          description="Compares this course with the others on the same ranking tables."
         >
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <RankTile
               icon={Trophy}
-              label="Hạng theo học viên"
+              label="Rank by learners"
               value={`#${rankOf(data.topByLearners, current.courseId)}`}
-              hint={`${formatNumber(current.learnerCount)} học viên`}
+              hint={`${formatNumber(current.learnerCount)} learners`}
             />
             <RankTile
               icon={Trophy}
-              label="Hạng hoàn thành"
+              label="Rank by completion"
               value={`#${rankOf(data.topByCompletionRate, current.courseId)}`}
-              hint={`${formatPercent(current.completionRate)} hoàn thành`}
+              hint={`${formatPercent(current.completionRate)} completed`}
             />
             <RankTile
               icon={Star}
-              label="Hạng rating"
+              label="Rank by rating"
               value={`#${rankOf(data.topByRating, current.courseId)}`}
-              hint={`${current.averageRating.toFixed(2)} ★ / ${formatNumber(current.totalReviews)} review`}
+              hint={`${current.averageRating.toFixed(2)} ★ / ${formatNumber(current.totalReviews)} reviews`}
             />
             <RankTile
               icon={Trophy}
-              label="Hạng bỏ học"
+              label="Rank by drop-off"
               value={`#${rankOf(data.highestDropOff, current.courseId)}`}
-              hint={`${formatPercent(current.dropOffRate)} bỏ học`}
+              hint={`${formatPercent(current.dropOffRate)} dropped out`}
             />
           </div>
         </AnalyticsPanel>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         <AnalyticsPanel
-          title="Top khóa học nhiều học viên nhất"
-          description="Xếp theo số lượt đăng ký."
+          title="Top courses by learner count"
+          description="Ranked by number of enrollments."
         >
           <RankingTable items={data.topByLearners.slice(0, 5)} />
         </AnalyticsPanel>
 
         <AnalyticsPanel
-          title="Top khóa học hoàn thành tốt nhất"
-          description="Xếp theo tỷ lệ hoàn thành khóa học."
+          title="Top courses by completion rate"
+          description="Ranked by course completion rate."
         >
           <RankingTable items={data.topByCompletionRate.slice(0, 5)} />
         </AnalyticsPanel>
 
         <AnalyticsPanel
-          title="Top khóa học rating cao nhất"
-          description="Xếp theo điểm đánh giá trung bình."
+          title="Top courses by rating"
+          description="Ranked by average review score."
         >
           <RankingTable items={data.topByRating.slice(0, 5)} />
         </AnalyticsPanel>
 
         <AnalyticsPanel
-          title="Khóa học có tỷ lệ bỏ học cao"
-          description="Xếp theo tỷ lệ học viên chưa hoàn thành khóa học."
+          title="Courses with the highest drop-off rate"
+          description="Ranked by the share of learners who stopped learning without completing the course (inactive or never started)."
         >
           <RankingTable items={data.highestDropOff.slice(0, 5)} highlightDropOff />
         </AnalyticsPanel>
       </div>
 
       <AnalyticsPanel
-        title="Bảng xếp hạng đầy đủ"
-        description="Toàn bộ khóa học bạn được xem, kèm các chỉ số chính."
+        title="Full ranking table"
+        description="Every course you can view, with the main indicators."
       >
-        <div className="max-h-[560px] overflow-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-14">Hạng</TableHead>
-                <TableHead>Khóa học</TableHead>
-                <TableHead>Giảng viên</TableHead>
-                <TableHead className="text-right">Học viên</TableHead>
-                <TableHead className="text-right">Hoàn thành</TableHead>
-                <TableHead className="text-right">Tỷ lệ hoàn thành</TableHead>
-                <TableHead className="text-right">Rating</TableHead>
-                <TableHead className="text-right">Bỏ học</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.allCourses.map((item) => (
-                <TableRow
-                  key={item.courseId}
-                  className={
-                    item.courseId === courseId
-                      ? "bg-blue-50/60 dark:bg-blue-950/20"
-                      : undefined
-                  }
-                >
-                  <TableCell className="font-medium text-muted-foreground">
-                    {item.rank}
-                  </TableCell>
-                  <TableCell className="font-medium">{item.courseName}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {item.instructor || "—"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatNumber(item.learnerCount)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatNumber(item.completedLearners)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatPercent(item.completionRate)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className="inline-flex items-center gap-1">
-                      <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                      {item.averageRating.toFixed(2)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatPercent(item.dropOffRate)}
-                  </TableCell>
+        <div className="overflow-hidden rounded-lg border">
+          <div className="max-h-[560px] overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-14">Rank</TableHead>
+                  <TableHead>Course</TableHead>
+                  <TableHead>Instructor</TableHead>
+                  <TableHead className="text-right">Learners</TableHead>
+                  <TableHead className="text-right">Completed</TableHead>
+                  <TableHead className="text-right">Completion rate</TableHead>
+                  <TableHead className="text-right">Rating</TableHead>
+                  <TableHead className="text-right">Active</TableHead>
+                  <TableHead className="text-right">Inactive</TableHead>
+                  <TableHead className="text-right">Never started</TableHead>
+                  <TableHead className="text-right">Drop-off</TableHead>
+                  <TableHead className="text-right">Non-completion</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {data.allCourses.map((item) => (
+                  <TableRow
+                    key={item.courseId}
+                    className={
+                      item.courseId === courseId
+                        ? "bg-blue-50/60 dark:bg-blue-950/20"
+                        : undefined
+                    }
+                  >
+                    <TableCell className="font-medium text-muted-foreground">
+                      {item.rank}
+                    </TableCell>
+                    <TableCell className="font-medium">{item.courseName}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {item.instructor || "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatNumber(item.learnerCount)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatNumber(item.completedLearners)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatPercent(item.completionRate)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="inline-flex items-center gap-1">
+                        <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                        {item.averageRating.toFixed(2)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatNumber(item.activeLearners)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatNumber(item.inactiveLearners)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatNumber(item.neverStartedLearners)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {formatPercent(item.dropOffRate)}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">
+                      {formatPercent(item.notCompletedRate)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </AnalyticsPanel>
     </div>
@@ -254,7 +271,7 @@ function RankingTable({
   highlightDropOff?: boolean;
 }) {
   if (!items.length) {
-    return <AnalyticsEmptyState message="Chưa có dữ liệu xếp hạng." />;
+    return <AnalyticsEmptyState message="No ranking data available." />;
   }
 
   return (
@@ -262,10 +279,10 @@ function RankingTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-14">Hạng</TableHead>
-            <TableHead>Khóa học</TableHead>
+            <TableHead className="w-14">Rank</TableHead>
+            <TableHead>Course</TableHead>
             <TableHead className="text-right">
-              {highlightDropOff ? "Tỷ lệ bỏ học" : "Học viên"}
+              {highlightDropOff ? "Drop-off rate" : "Learners"}
             </TableHead>
           </TableRow>
         </TableHeader>

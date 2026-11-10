@@ -126,15 +126,17 @@ Frontend mặc định chạy ở <http://localhost:5173>.
 5. **Phòng ban** – số học viên / tỷ lệ hoàn thành / điểm thi TB theo phòng ban + so sánh hiệu quả đào tạo.
 6. **Xếp hạng** – top khóa học nhiều học viên / hoàn thành cao / rating cao / bỏ học nhiều.
 7. **Chất lượng & Q&A** – bài học bị báo lỗi, phân loại lý do, câu hỏi chưa trả lời, thời gian phản hồi TB.
-8. **Bài thi** – điểm TB, tỉ lệ đạt, phân bố điểm theo từng bài thi.
+8. **Thời gian học** – số giờ học của từng học viên trong khóa học (top 10 + bảng chi tiết).
+9. **Bài thi** – điểm TB, tỉ lệ đạt, phân bố điểm theo từng bài thi.
    *(Phần này do nhóm khác phụ trách nên chưa seed dữ liệu mẫu, tab vẫn hoạt động và vẫn export Excel được.)*
 
 ### 4.1. Export Excel
 
 - Mỗi tab có nút **Export Excel** ở góc trên bên phải → tải file `.xlsx` riêng cho phần đó.
-- Góc trên trang có nút **Export tất cả (Excel)** → tải **1 file `.xlsx` gồm 12 sheet**:
+- Góc trên trang có nút **Export tất cả (Excel)** → tải **1 file `.xlsx` gồm 13 sheet**:
   `Tong quan`, `Phieu hoc tap`, `Xu huong`, `Hoat dong`, `Danh gia`, `Phong ban`,
-  `Xep hang khoa hoc`, `Bai hoc bi bao loi`, `Ly do bao cao`, `Cau hoi chua tra loi`, `Bai thi`.
+  `Xep hang khoa hoc`, `Bai hoc bi bao loi`, `Ly do bao cao`, `Cau hoi chua tra loi`,
+  `Bai thi`, `Thoi gian hoc`.
 
 ---
 
@@ -163,21 +165,23 @@ Các endpoint:
 | `GET /api/reports/department-analytics?courseId=` | Phân tích phòng ban (bỏ `courseId` = toàn hệ thống) |
 | `GET /api/reports/course-ranking` | Xếp hạng khóa học (học viên / hoàn thành / rating / bỏ học) |
 | `GET /api/reports/courses/{id}/content-quality` | Chất lượng nội dung + Q&A |
+| `GET /api/reports/courses/{id}/study-time` | Số giờ học của từng học viên trong khóa học |
 | `GET /api/reports/courses/{id}/exam-analytics` | Kết quả bài thi |
 
 ### 5.1. Endpoint export Excel
 
 | Endpoint | Nội dung file |
 |---|---|
-| `GET /api/reports/export/all?courseId=` | **Export tổng** – 12 sheet, gom mọi analytics của khóa học |
+| `GET /api/reports/export/all?courseId=` | **Export tổng** – 13 sheet, gom mọi analytics của khóa học |
 | `GET /api/reports/export/lesson-funnel?courseId=` | Phễu học tập |
 | `GET /api/reports/export/trend?courseId=&from=&to=&granularity=` | Xu hướng |
 | `GET /api/reports/export/activity?courseId=` | Hoạt động + học viên nguy cơ |
 | `GET /api/reports/export/reviews?courseId=` | Đánh giá |
-| `GET /api/reports/export/departments?courseId=` | Phòng ban |
+| `GET /api/reports/export/departments?courseId=` | Phòng ban (kèm cột tổng giờ học) |
 | `GET /api/reports/export/course-ranking` | Xếp hạng khóa học |
 | `GET /api/reports/export/content-quality?courseId=` | Chất lượng nội dung + Q&A (3 sheet) |
 | `GET /api/reports/export/exams?courseId=` | Kết quả bài thi |
+| `GET /api/reports/export/study-time?courseId=` | Số giờ học của học viên |
 
 Tất cả trả về file `.xlsx` (Apache POI) với header
 `Content-Disposition: attachment; filename="..."`.

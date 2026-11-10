@@ -49,17 +49,44 @@ export interface ProgressBucket {
   learners: number;
 }
 
+/** Một yếu tố làm tăng điểm rủi ro bỏ học. */
+export interface RiskFactor {
+  /** INACTIVITY | LOW_PROGRESS | NEVER_STARTED | LOW_EXAM_SCORE | LOW_STUDY_TIME */
+  code: string;
+  label: string;
+  /** Số điểm yếu tố này góp vào tổng điểm rủi ro. */
+  points: number;
+  detail: string;
+}
+
 export interface AtRiskLearner {
   enrollmentId: number;
   userId: number;
   studentName: string;
   studentEmail: string;
+  departmentName?: string | null;
   progressPercentage: number;
   enrolledAt: string;
   lastAccessedAt?: string | null;
   inactiveDays: number;
   reason: "NEVER_STARTED" | "INACTIVE" | string;
   riskLevel: "HIGH" | "MEDIUM" | "LOW" | string;
+  /** Điểm rủi ro 0-100. */
+  riskScore: number;
+  /** Các yếu tố đã góp điểm, sắp xếp theo điểm giảm dần. */
+  riskFactors: RiskFactor[];
+  /** Yếu tố chính (mã yếu tố điểm cao nhất). */
+  primaryRiskReason: string;
+  /** Tổng giây đã học trong khóa học. */
+  studySeconds: number;
+  /** Điểm thi trung bình (% điểm tối đa), null nếu chưa thi. */
+  examScorePercent?: number | null;
+}
+
+/** Nhóm học viên theo mức rủi ro. */
+export interface RiskLevelBucket {
+  level: "HIGH" | "MEDIUM" | "LOW" | string;
+  learners: number;
 }
 
 export interface ActivityResponse {
@@ -71,7 +98,17 @@ export interface ActivityResponse {
   activeLearners: number;
   inactiveLearners: number;
   neverStartedLearners: number;
+  /** Số học viên chưa hoàn thành (không tính vào nhóm nguy cơ). */
+  notCompletedLearners: number;
+  /** Số học viên có nguy cơ bỏ học (HIGH + MEDIUM). */
+  atRiskCount: number;
+  highRiskCount: number;
+  mediumRiskCount: number;
+  lowRiskCount: number;
+  /** Điểm rủi ro trung bình (0-100) trong nhóm nguy cơ. */
+  averageRiskScore: number;
   progressDistribution: ProgressBucket[];
+  riskDistribution: RiskLevelBucket[];
   atRiskLearners: AtRiskLearner[];
 }
 
@@ -135,6 +172,7 @@ export interface CourseExamAnalyticsResponse {
 // ===== 6. Department analytics =====
 
 export interface DepartmentAnalyticsItem {
+  /** -1 (code "UNASSIGNED") là nhóm học viên chưa thuộc phòng ban nào. */
   departmentId: number;
   departmentCode?: string | null;
   departmentName: string;
@@ -145,8 +183,18 @@ export interface DepartmentAnalyticsItem {
   averageExamScore?: number | null;
   examGradedAttempts: number;
   activeLearners: number;
+  /** Học viên chưa từng mở bài học nào. */
+  neverStartedLearners: number;
   atRiskLearners: number;
+  /** Tỉ lệ chưa hoàn thành (0-100) = 100 - completionRate. */
+  notCompletedRate: number;
   dropOffRate: number;
+  /** Tổng số giây học của phòng ban. */
+  totalStudySeconds: number;
+  /** Tổng số giờ học của phòng ban. */
+  totalStudyHours: number;
+  /** Số giờ học trung bình mỗi học viên. */
+  averageStudyHoursPerLearner: number;
 }
 
 export interface DepartmentAnalyticsResponse {
@@ -154,6 +202,8 @@ export interface DepartmentAnalyticsResponse {
   courseName: string;
   totalLearners: number;
   departmentCount: number;
+  /** Tổng số giờ học của toàn bộ phòng ban trong phạm vi. */
+  totalStudyHours: number;
   bestDepartment?: DepartmentAnalyticsItem | null;
   worstDepartment?: DepartmentAnalyticsItem | null;
   departments: DepartmentAnalyticsItem[];
@@ -171,8 +221,17 @@ export interface CourseRankingItem {
   completionRate: number;
   averageRating: number;
   totalReviews: number;
+  /** Học viên đã truy cập khóa học trong vòng ngưỡng không hoạt động. */
   activeLearners: number;
+  /** Học viên đã từng học nhưng đã lâu không truy cập. */
   inactiveLearners: number;
+  /** Học viên chưa từng mở bài học nào. */
+  neverStartedLearners: number;
+  /** Số học viên chưa hoàn thành khóa học. */
+  notCompletedLearners: number;
+  /** Tỉ lệ chưa hoàn thành (%). */
+  notCompletedRate: number;
+  /** Tỉ lệ bỏ học thực sự (%): inactive + never started / tổng học viên. */
   dropOffRate: number;
 }
 
@@ -230,4 +289,33 @@ export interface ContentQualityResponse {
   mostReportedLessons: ReportedLessonItem[];
   reportReasons: ReportReasonBucket[];
   unansweredQuestions: UnansweredQuestionItem[];
+}
+
+// ===== 9. Study time (số giờ học) =====
+
+export interface StudentStudyTimeItem {
+  enrollmentId: number;
+  userId: number;
+  studentName: string;
+  studentEmail: string;
+  departmentName?: string | null;
+  /** Tổng số giây học. */
+  studySeconds: number;
+  /** Tổng số giờ học. */
+  studyHours: number;
+  completedLessons: number;
+  totalLessons: number;
+  completionRate: number;
+  lastAccessedAt?: string | null;
+}
+
+export interface StudyTimeResponse {
+  courseId: number;
+  courseName: string;
+  totalStudySeconds: number;
+  totalStudyHours: number;
+  totalLearners: number;
+  averageStudyHoursPerLearner: number;
+  topLearner?: StudentStudyTimeItem | null;
+  learners: StudentStudyTimeItem[];
 }

@@ -51,19 +51,20 @@ public class CourseAnalyticsExportService {
 
     /** Gom toàn bộ analytics của một khóa học vào 1 file .xlsx nhiều sheet. */
     @Transactional(readOnly = true)
-    public byte[] exportAll(Long courseId, LocalDate from, LocalDate to, Granularity granularity)
-            throws IOException {
+    public byte[] exportAll(Long courseId, LocalDate from, LocalDate to, Granularity granularity,
+                            Integer inactiveDays) throws IOException {
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {
 
             LessonFunnelResponse funnel = analyticsService.getLessonFunnel(courseId);
             TrendResponse trend = analyticsService.getTrend(courseId, from, to, granularity);
-            ActivityResponse activity = analyticsService.getActivity(courseId, null, null);
+            ActivityResponse activity = analyticsService.getActivity(courseId, inactiveDays, null);
             CourseReviewAnalyticsResponse reviews = analyticsService.getReviewAnalytics(courseId);
             DepartmentAnalyticsResponse departments = analyticsService.getDepartmentAnalytics(courseId);
             CourseRankingResponse ranking = analyticsService.getCourseRanking();
             ContentQualityResponse quality = analyticsService.getContentQuality(courseId);
             CourseExamAnalyticsResponse exams = analyticsService.getExamAnalytics(courseId);
+            StudyTimeResponse studyTime = analyticsService.getStudyTime(courseId);
 
             writeSummary(workbook, funnel, trend, activity, reviews, departments, quality);
 
@@ -75,6 +76,7 @@ public class CourseAnalyticsExportService {
             writeRankingSheet(workbook, ranking);
             writeContentQualitySheet(workbook, quality);
             writeExamSheet(workbook, exams);
+            writeStudyTimeSheet(workbook, studyTime);
 
             workbook.write(output);
             return output.toByteArray();
@@ -130,6 +132,8 @@ public class CourseAnalyticsExportService {
         rowNum = addRow(sheet, rowNum, labelStyle, valueStyle,
                 "Số phòng ban", departments.departmentCount());
         rowNum = addRow(sheet, rowNum, labelStyle, valueStyle,
+                "Tổng giờ học (phòng ban)", departments.totalStudyHours());
+        rowNum = addRow(sheet, rowNum, labelStyle, valueStyle,
                 "Phòng ban tốt nhất",
                 departments.bestDepartment() == null ? null : departments.bestDepartment().departmentName());
         rowNum = addRow(sheet, rowNum, labelStyle, valueStyle,
@@ -173,10 +177,12 @@ public class CourseAnalyticsExportService {
     }
 
     @Transactional(readOnly = true)
-    public byte[] exportActivity(Long courseId) throws IOException {
+    public byte[] exportActivity(Long courseId, Integer inactiveDays) throws IOException {
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            writeActivitySheet(workbook, analyticsService.getActivity(courseId, null, null));
+            // Dùng đúng ngưỡng không hoạt động mà FE đang chọn để dữ liệu export
+            // khớp với dữ liệu hiển thị trên màn hình.
+            writeActivitySheet(workbook, analyticsService.getActivity(courseId, inactiveDays, null));
             workbook.write(output);
             return output.toByteArray();
         }
@@ -227,6 +233,16 @@ public class CourseAnalyticsExportService {
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             writeExamSheet(workbook, analyticsService.getExamAnalytics(courseId));
+            workbook.write(output);
+            return output.toByteArray();
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] exportStudyTime(Long courseId) throws IOException {
+        try (Workbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            writeStudyTimeSheet(workbook, analyticsService.getStudyTime(courseId));
             workbook.write(output);
             return output.toByteArray();
         }
@@ -289,10 +305,30 @@ public class CourseAnalyticsExportService {
         }
         autosize(sheet, 2);
 
-        // Phần 2: học viên nguy cơ bỏ học.
+        // Phần 2: tổng hợp trạng thái.
+        Sheet summarySheet = workbook.createSheet("Tong hop hoat dong");
+        writeHeader(workbook, summarySheet, List.of("Chi so", "Gia tri"));
+        CellStyle labelStyle = labelStyle(workbook);
+        CellStyle valueStyle = valueStyle(workbook);
+        int summaryRow = 1;
+        summaryRow = addRow(summarySheet, summaryRow, labelStyle, valueStyle, "Tong hoc vien", data.totalLearners());
+        summaryRow = addRow(summarySheet, summaryRow, labelStyle, valueStyle, "Da hoan thanh", data.completedLearners());
+        summaryRow = addRow(summarySheet, summaryRow, labelStyle, valueStyle, "Dang hoc (active)", data.activeLearners());
+        summaryRow = addRow(summarySheet, summaryRow, labelStyle, valueStyle, "Inactive", data.inactiveLearners());
+        summaryRow = addRow(summarySheet, summaryRow, labelStyle, valueStyle, "Chua bat dau", data.neverStartedLearners());
+        summaryRow = addRow(summarySheet, summaryRow, labelStyle, valueStyle, "Nguy co bo hoc", data.atRiskCount());
+        summaryRow = addRow(summarySheet, summaryRow, labelStyle, valueStyle, "Rui ro cao", data.highRiskCount());
+        summaryRow = addRow(summarySheet, summaryRow, labelStyle, valueStyle, "Rui ro trung binh", data.mediumRiskCount());
+        summaryRow = addRow(summarySheet, summaryRow, labelStyle, valueStyle, "Diem rui ro TB", data.averageRiskScore());
+        summaryRow = addRow(summarySheet, summaryRow, labelStyle, valueStyle, "Nguong khong hoat dong (ngay)",
+                data.inactiveThresholdDays());
+        autosize(summarySheet, 2);
+
+        // Phần 3: học viên nguy cơ bỏ học.
         Sheet riskSheet = workbook.createSheet("Hoc vien nguy co");
         List<String> headers = List.of(
-                "Hoc vien", "Email", "Tien do (%)", "Ngay khong hoat dong", "Ly do", "Muc do rui ro");
+                "Hoc vien", "Email", "Tien do (%)", "Ngay khong hoat dong", "Ly do",
+                "Diem rui ro", "Muc do rui ro", "Yeu to rui ro");
         writeHeader(workbook, riskSheet, headers);
 
         rowNum = 1;
@@ -303,7 +339,9 @@ public class CourseAnalyticsExportService {
             setNumber(row, 2, learner.progressPercentage());
             setNumber(row, 3, learner.inactiveDays());
             setText(row, 4, learner.reason());
-            setText(row, 5, learner.riskLevel());
+            setNumber(row, 5, learner.riskScore());
+            setText(row, 6, learner.riskLevel());
+            setText(row, 7, learner.primaryRiskReason());
         }
         autosize(riskSheet, headers.size());
     }
@@ -327,7 +365,8 @@ public class CourseAnalyticsExportService {
         Sheet sheet = workbook.createSheet("Phong ban");
         List<String> headers = List.of(
                 "Ma phong ban", "Ten phong ban", "So hoc vien", "Hoan thanh", "Ty le hoan thanh (%)",
-                "Tien do TB (%)", "Diem thi TB (%)", "Luot thi da cham", "Hoc vien active", "Hoc vien nguy co", "Ty le bo hoc (%)");
+                "Tien do TB (%)", "Diem thi TB (%)", "Luot thi da cham", "Hoc vien active", "Hoc vien nguy co",
+                "Ty le bo hoc (%)", "Tong gio hoc", "Gio hoc TB / hoc vien");
         writeHeader(workbook, sheet, headers);
 
         int rowNum = 1;
@@ -348,6 +387,31 @@ public class CourseAnalyticsExportService {
             setNumber(row, 8, item.activeLearners());
             setNumber(row, 9, item.atRiskLearners());
             setNumber(row, 10, item.dropOffRate());
+            setNumber(row, 11, item.totalStudyHours());
+            setNumber(row, 12, item.averageStudyHoursPerLearner());
+        }
+        autosize(sheet, headers.size());
+    }
+
+    private void writeStudyTimeSheet(Workbook workbook, StudyTimeResponse data) {
+        Sheet sheet = workbook.createSheet("Thoi gian hoc");
+        List<String> headers = List.of(
+                "Hoc vien", "Email", "Phong ban", "Tong gio hoc", "Tong giay hoc",
+                "Bai hoan thanh", "Tong bai", "Ty le hoan thanh (%)", "Truy cap gan nhat");
+        writeHeader(workbook, sheet, headers);
+
+        int rowNum = 1;
+        for (StudentStudyTimeItem item : data.learners()) {
+            Row row = sheet.createRow(rowNum++);
+            setText(row, 0, item.studentName());
+            setText(row, 1, item.studentEmail());
+            setText(row, 2, item.departmentName());
+            setNumber(row, 3, item.studyHours());
+            setNumber(row, 4, item.studySeconds());
+            setNumber(row, 5, item.completedLessons());
+            setNumber(row, 6, item.totalLessons());
+            setNumber(row, 7, item.completionRate());
+            setText(row, 8, item.lastAccessedAt() == null ? null : item.lastAccessedAt().toString());
         }
         autosize(sheet, headers.size());
     }
@@ -356,7 +420,8 @@ public class CourseAnalyticsExportService {
         Sheet sheet = workbook.createSheet("Xep hang khoa hoc");
         List<String> headers = List.of(
                 "Hang", "Khoa hoc", "Giang vien", "So hoc vien", "Hoan thanh", "Ty le hoan thanh (%)",
-                "Diem danh gia TB", "So review", "Active", "Inactive", "Ty le bo hoc (%)");
+                "Diem danh gia TB", "So review", "Active", "Inactive", "Chua bat dau",
+                "Chua hoan thanh", "Ty le chua hoan thanh (%)", "Ty le bo hoc (%)");
         writeHeader(workbook, sheet, headers);
 
         int rowNum = 1;
@@ -372,7 +437,10 @@ public class CourseAnalyticsExportService {
             setNumber(row, 7, item.totalReviews());
             setNumber(row, 8, item.activeLearners());
             setNumber(row, 9, item.inactiveLearners());
-            setNumber(row, 10, item.dropOffRate());
+            setNumber(row, 10, item.neverStartedLearners());
+            setNumber(row, 11, item.notCompletedLearners());
+            setNumber(row, 12, item.notCompletedRate());
+            setNumber(row, 13, item.dropOffRate());
         }
         autosize(sheet, headers.size());
     }

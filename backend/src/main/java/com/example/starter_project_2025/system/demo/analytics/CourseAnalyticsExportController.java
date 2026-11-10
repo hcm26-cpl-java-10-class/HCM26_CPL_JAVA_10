@@ -46,8 +46,9 @@ public class CourseAnalyticsExportController {
             @RequestParam Long courseId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) Granularity granularity) throws IOException {
-        byte[] file = exportService.exportAll(courseId, from, to, granularity);
+            @RequestParam(required = false) Granularity granularity,
+            @RequestParam(required = false) Integer inactiveDays) throws IOException {
+        byte[] file = exportService.exportAll(courseId, from, to, granularity, inactiveDays);
         return attachment(file, "course-analytics-all-" + courseId + ".xlsx");
     }
 
@@ -75,8 +76,10 @@ public class CourseAnalyticsExportController {
 
     @GetMapping("/activity")
     @Operation(summary = "Export mức độ hoạt động + học viên nguy cơ bỏ học ra Excel")
-    public ResponseEntity<byte[]> exportActivity(@RequestParam Long courseId) throws IOException {
-        return attachment(exportService.exportActivity(courseId),
+    public ResponseEntity<byte[]> exportActivity(
+            @RequestParam Long courseId,
+            @RequestParam(required = false) Integer inactiveDays) throws IOException {
+        return attachment(exportService.exportActivity(courseId, inactiveDays),
                 "course-analytics-activity-" + courseId + ".xlsx");
     }
 
@@ -114,6 +117,13 @@ public class CourseAnalyticsExportController {
     public ResponseEntity<byte[]> exportExams(@RequestParam Long courseId) throws IOException {
         return attachment(exportService.exportExams(courseId),
                 "course-analytics-exams-" + courseId + ".xlsx");
+    }
+
+    @GetMapping("/study-time")
+    @Operation(summary = "Export số giờ học của học viên ra Excel")
+    public ResponseEntity<byte[]> exportStudyTime(@RequestParam Long courseId) throws IOException {
+        return attachment(exportService.exportStudyTime(courseId),
+                "course-analytics-study-time-" + courseId + ".xlsx");
     }
 
     // =====================================================================

@@ -1,4 +1,4 @@
-/** Bảng màu + helper dùng chung cho các biểu đồ Course Analytics. */
+/** Shared palette and helpers for the Course Analytics charts. */
 
 export const CHART_COLORS = [
   "#2563eb",
@@ -16,7 +16,7 @@ export const GRID_COLOR = "#e2e8f0";
 
 export const formatNumber = (value?: number | null): string =>
   typeof value === "number" && Number.isFinite(value)
-    ? value.toLocaleString("vi-VN")
+    ? value.toLocaleString("en-US")
     : "—";
 
 export const formatPercent = (value?: number | null, digits = 1): string =>
@@ -28,10 +28,10 @@ export const formatDateTime = (value?: string | null): string => {
   if (!value) return "—";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "—";
-  return parsed.toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
+  return parsed.toLocaleString("en-US", {
     year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -41,20 +41,20 @@ export const formatDate = (value?: string | null): string => {
   if (!value) return "—";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
+  return parsed.toLocaleDateString("en-US", {
     year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   });
 };
 
-/** Rút gọn nhãn bài để trục X không bị chồng chữ. */
+/** Shortens lesson labels so the X axis does not overlap. */
 export const truncateLabel = (value: string, max = 18): string =>
   value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
 /**
- * Formatter cho recharts `Tooltip`. recharts 3 truyền `value` có thể là
- * `undefined`, nên ép về number trước khi format.
+ * Formatter for the recharts `Tooltip`. In recharts 3 the `value` can be
+ * `undefined`, so it is coerced to a number before formatting.
  */
 export const tooltipNumber = (
   value: unknown,
@@ -65,4 +65,3 @@ export const tooltipPercent = (
   value: unknown,
   label: string,
 ): [string, string] => [formatPercent(Number(value)), label];
-

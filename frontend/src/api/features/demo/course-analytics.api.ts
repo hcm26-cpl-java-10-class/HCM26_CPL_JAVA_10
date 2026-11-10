@@ -10,6 +10,7 @@ import type {
   CourseReviewAnalyticsResponse,
   DepartmentAnalyticsResponse,
   LessonFunnelResponse,
+  StudyTimeResponse,
   TrendResponse,
 } from "@/types";
 
@@ -131,6 +132,14 @@ export const courseAnalyticsApi = {
     return response.data;
   },
 
+  /** 9. Số giờ học của từng học viên trong khóa học. */
+  getStudyTime: async (courseId: number): Promise<StudyTimeResponse> => {
+    const response = await axiosInstance.get<StudyTimeResponse>(
+      `${path}/courses/${courseId}/study-time`,
+    );
+    return response.data;
+  },
+
   // =====================================================================
   // Export Excel
   // =====================================================================
@@ -142,6 +151,7 @@ export const courseAnalyticsApi = {
       from?: string;
       to?: string;
       granularity?: CourseAnalyticsGranularity;
+      inactiveDays?: number;
     } = {},
   ) =>
     downloadExcel(
@@ -173,11 +183,14 @@ export const courseAnalyticsApi = {
       `course-analytics-trend-${courseId}.xlsx`,
     ),
 
-  /** Export riêng mức độ hoạt động. */
-  exportActivity: async (courseId: number) =>
+  /** Export riêng mức độ hoạt động (theo đúng ngưỡng không hoạt động đang chọn). */
+  exportActivity: async (
+    courseId: number,
+    params: { inactiveDays?: number } = {},
+  ) =>
     downloadExcel(
       `${path}/export/activity`,
-      { courseId },
+      { courseId, ...params },
       `course-analytics-activity-${courseId}.xlsx`,
     ),
 
@@ -219,5 +232,13 @@ export const courseAnalyticsApi = {
       `${path}/export/exams`,
       { courseId },
       `course-analytics-exams-${courseId}.xlsx`,
+    ),
+
+  /** Export riêng số giờ học của học viên. */
+  exportStudyTime: async (courseId: number) =>
+    downloadExcel(
+      `${path}/export/study-time`,
+      { courseId },
+      `course-analytics-study-time-${courseId}.xlsx`,
     ),
 };

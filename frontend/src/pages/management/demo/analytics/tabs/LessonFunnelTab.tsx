@@ -36,6 +36,7 @@ import {
   truncateLabel,
 } from "@/pages/management/demo/analytics/lib/chart-helpers";
 import type { LessonFunnelItem } from "@/types";
+import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
   courseId: number;
@@ -58,21 +59,21 @@ export function LessonFunnelTab({ courseId }: Props) {
   });
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground">Đang tải phễu học tập...</p>;
+    return <AnalyticsLoading label="Loading the learning funnel..." />;
   }
 
   if (isError || !data) {
     return (
       <AnalyticsEmptyState
         variant="error"
-        message="Không tải được dữ liệu phễu học tập. Kiểm tra quyền truy cập khóa học."
+        message="Could not load the learning funnel data. Check your access to this course."
       />
     );
   }
 
   if (!data.lessons.length) {
     return (
-      <AnalyticsEmptyState message="Khóa học chưa có bài học (lesson) nào đang hoạt động nên chưa có dữ liệu phễu."
+      <AnalyticsEmptyState message="This course has no active lessons yet, so there is no funnel data."
       />
     );
   }
@@ -91,35 +92,35 @@ export function LessonFunnelTab({ courseId }: Props) {
   const lowest = data.lowestCompletion;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap justify-end">
         <ExportExcelButton
           label="Export Excel"
-          successMessage="Đã export phễu học tập."
+          successMessage="Exported the learning funnel."
           onExport={() => courseAnalyticsApi.exportLessonFunnel(courseId)}
         />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Học viên đang học" value={formatNumber(data.totalLearners)} />
-        <MetricCard label="Số bài học" value={formatNumber(data.totalLessons)} />
+        <MetricCard label="Active learners" value={formatNumber(data.totalLearners)} />
+        <MetricCard label="Lessons" value={formatNumber(data.totalLessons)} />
         <MetricCard
-          label="Bài tụt mạnh nhất"
+          label="Biggest drop-off"
           value={worst ? formatPercent(worst.dropOffFromPrevious) : "—"}
-          hint={worst ? worst.lessonTitle : "Không có dữ liệu tụt"}
+          hint={worst ? worst.lessonTitle : "No drop-off data"}
           tone={worst && worst.dropOffFromPrevious > 0 ? "danger" : "default"}
         />
         <MetricCard
-          label="Bài hoàn thành thấp nhất"
+          label="Lowest completion"
           value={lowest ? formatPercent(lowest.completionRate) : "—"}
-          hint={lowest ? lowest.lessonTitle : "Không có dữ liệu"}
+          hint={lowest ? lowest.lessonTitle : "No data"}
           tone={lowest && lowest.completionRate < 50 ? "warning" : "default"}
         />
       </div>
 
       <AnalyticsPanel
-        title="Tỉ lệ hoàn thành theo thứ tự bài"
-        description="Đường thể hiện % học viên hoàn thành từng bài. Bài nào đường rơi mạnh là bài học viên bỏ dở nhiều nhất."
+        title="Completion rate by lesson order"
+        description="The line shows the % of learners who completed each lesson. A steep drop means many learners abandoned that lesson."
       >
         <div className="h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -139,10 +140,10 @@ export function LessonFunnelTab({ courseId }: Props) {
                 domain={[0, 100]}
                 width={45}
               />
-              <Tooltip
+              <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }}
                 formatter={(value, name) =>
                   name === "completionRate"
-                    ? tooltipPercent(value, "Hoàn thành")
+                    ? tooltipPercent(value, "Completion")
                     : tooltipNumber(value, String(name))
                 }
                 labelFormatter={(_, payload) => {
@@ -150,7 +151,7 @@ export function LessonFunnelTab({ courseId }: Props) {
                   return row ? `${row.position}. ${row.sectionTitle}` : "";
                 }}
               />
-              <Line
+              <Line isAnimationActive={true} animationDuration={850} animationEasing="ease-out"
                 type="monotone"
                 dataKey="completionRate"
                 stroke={CHART_COLORS[0]}
@@ -164,8 +165,8 @@ export function LessonFunnelTab({ courseId }: Props) {
       </AnalyticsPanel>
 
       <AnalyticsPanel
-        title="Mức tụt giữa các bài (drop-off)"
-        description="Cột đỏ = điểm % tụt so với bài liền trước. Cột càng cao càng nên xem lại nội dung."
+        title="Drop-off between lessons"
+        description="Red bars show the % drop compared with the previous lesson. The taller the bar, the more the lesson content should be reviewed."
       >
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -180,14 +181,14 @@ export function LessonFunnelTab({ courseId }: Props) {
                 height={60}
               />
               <YAxis tick={{ fill: AXIS_COLOR, fontSize: 11 }} unit="%" width={45} />
-              <Tooltip
-                formatter={(value) => tooltipPercent(value, "Tụt")}
+              <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }}
+                formatter={(value) => tooltipPercent(value, "Drop-off")}
                 labelFormatter={(_, payload) => {
                   const row = payload?.[0]?.payload as ChartRow | undefined;
                   return row ? `${row.position}. ${row.sectionTitle}` : "";
                 }}
               />
-              <Bar dataKey="dropOffFromPrevious" radius={[4, 4, 0, 0]}>
+              <Bar isAnimationActive={true} animationDuration={850} animationEasing="ease-out" dataKey="dropOffFromPrevious" radius={[4, 4, 0, 0]}>
                 {chartData.map((row) => (
                   <Cell
                     key={row.position}
@@ -201,20 +202,20 @@ export function LessonFunnelTab({ courseId }: Props) {
       </AnalyticsPanel>
 
       <AnalyticsPanel
-        title="Chi tiết từng bài"
-        description="Số học viên đã bắt đầu / đã hoàn thành và mức tụt của từng bài trong khóa."
+        title="Lesson details"
+        description="Number of learners who started / completed each lesson and the drop-off for every lesson in the course."
       >
         <div className="max-h-[520px] overflow-auto rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12">#</TableHead>
-                <TableHead>Bài học</TableHead>
+                <TableHead>Lesson</TableHead>
                 <TableHead>Section</TableHead>
-                <TableHead className="text-right">Đã bắt đầu</TableHead>
-                <TableHead className="text-right">Đã hoàn thành</TableHead>
-                <TableHead className="text-right">Tỉ lệ</TableHead>
-                <TableHead className="text-right">Tụt</TableHead>
+                <TableHead className="text-right">Started</TableHead>
+                <TableHead className="text-right">Completed</TableHead>
+                <TableHead className="text-right">Rate</TableHead>
+                <TableHead className="text-right">Drop-off</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

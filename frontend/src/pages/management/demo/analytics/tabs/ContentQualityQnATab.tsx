@@ -31,18 +31,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
   courseId: number;
 };
 
-/** Nhãn tiếng Việt cho mã lý do báo cáo. */
+/** English labels for the report reason codes. */
 const REASON_LABELS: Record<string, string> = {
-  BROKEN_CONTENT: "Nội dung hỏng",
-  INCORRECT_CONTENT: "Nội dung sai",
-  OUTDATED_CONTENT: "Nội dung lỗi thời",
-  INAPPROPRIATE_CONTENT: "Nội dung không phù hợp",
-  OTHER: "Lý do khác",
+  BROKEN_CONTENT: "Broken content",
+  INCORRECT_CONTENT: "Incorrect content",
+  OUTDATED_CONTENT: "Outdated content",
+  INAPPROPRIATE_CONTENT: "Inappropriate content",
+  OTHER: "Other reason",
 };
 
 const reasonLabel = (reason?: string | null) =>
@@ -55,18 +56,14 @@ export function ContentQualityQnATab({ courseId }: Props) {
   });
 
   if (isLoading) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Đang tải dữ liệu chất lượng nội dung...
-      </p>
-    );
+    return <AnalyticsLoading label="Loading content quality data..." />;
   }
 
   if (isError || !data) {
     return (
       <AnalyticsEmptyState
         variant="error"
-        message="Không tải được dữ liệu chất lượng nội dung."
+        message="Could not load the content quality data."
       />
     );
   }
@@ -78,15 +75,15 @@ export function ContentQualityQnATab({ courseId }: Props) {
 
   if (!hasData) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex flex-wrap justify-end">
           <ExportExcelButton
             label="Export Excel"
-            successMessage="Đã export dữ liệu chất lượng nội dung."
+            successMessage="Exported the content quality data."
             onExport={() => courseAnalyticsApi.exportContentQuality(courseId)}
           />
         </div>
-        <AnalyticsEmptyState message="Khóa học chưa có báo lỗi bài học hay câu hỏi nào." />
+        <AnalyticsEmptyState message="This course has no lesson reports or questions yet." />
       </div>
     );
   }
@@ -97,61 +94,61 @@ export function ContentQualityQnATab({ courseId }: Props) {
   }));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap justify-end">
         <ExportExcelButton
           label="Export Excel"
-          successMessage="Đã export dữ liệu chất lượng nội dung."
+          successMessage="Exported the content quality data."
           onExport={() => courseAnalyticsApi.exportContentQuality(courseId)}
         />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Bài học bị báo lỗi"
+          label="Reported lessons"
           value={formatNumber(data.totalReports)}
-          hint={`${formatNumber(data.openReports)} đang mở · ${formatNumber(data.resolvedReports)} đã xử lý`}
+          hint={`${formatNumber(data.openReports)} open · ${formatNumber(data.resolvedReports)} resolved`}
           tone={data.openReports > 0 ? "warning" : "default"}
         />
         <MetricCard
-          label="Câu hỏi chưa trả lời"
+          label="Unanswered questions"
           value={formatNumber(data.unansweredCount)}
-          hint={`${formatNumber(data.totalQuestions)} câu hỏi trong tổng số`}
+          hint={`${formatNumber(data.totalQuestions)} questions in total`}
           tone={data.unansweredCount > 0 ? "danger" : "default"}
         />
         <MetricCard
-          label="Tỷ lệ đã trả lời"
+          label="Answer rate"
           value={formatPercent(data.answerRate)}
-          hint={`${formatNumber(data.answeredQuestions)} câu đã có câu trả lời`}
+          hint={`${formatNumber(data.answeredQuestions)} questions answered`}
         />
         <MetricCard
-          label="Thời gian phản hồi TB"
+          label="Average response time"
           value={
             data.averageResponseHours == null
               ? "—"
-              : `${formatNumber(data.averageResponseHours)} giờ`
+              : `${formatNumber(data.averageResponseHours)} h`
           }
-          hint="Tính từ lúc hỏi đến câu trả lời đầu tiên"
+          hint="Measured from the question to the first answer"
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         <AnalyticsPanel
-          title="Bài học bị báo lỗi nhiều nhất"
-          description="Top bài học có nhiều lượt báo cáo nhất trong khóa học."
+          title="Most reported lessons"
+          description="Top lessons with the highest number of reports in this course."
         >
           {!data.mostReportedLessons.length ? (
-            <AnalyticsEmptyState message="Chưa có báo cáo nào cho khóa học này." />
+            <AnalyticsEmptyState message="No reports for this course yet." />
           ) : (
             <div className="max-h-[360px] overflow-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-14">#</TableHead>
-                    <TableHead>Bài học</TableHead>
-                    <TableHead>Lý do chính</TableHead>
-                    <TableHead className="text-right">Báo cáo</TableHead>
-                    <TableHead className="text-right">Đang mở</TableHead>
+                    <TableHead>Lesson</TableHead>
+                    <TableHead>Top reason</TableHead>
+                    <TableHead className="text-right">Reports</TableHead>
+                    <TableHead className="text-right">Open</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -181,11 +178,11 @@ export function ContentQualityQnATab({ courseId }: Props) {
         </AnalyticsPanel>
 
         <AnalyticsPanel
-          title="Phân loại báo cáo theo lý do"
-          description="Số lượt báo cáo được nhóm theo lý do học viên gửi."
+          title="Reports by reason"
+          description="Number of reports grouped by the reason learners gave."
         >
           {!reasonChart.length ? (
-            <AnalyticsEmptyState message="Chưa có báo cáo nào cho khóa học này." />
+            <AnalyticsEmptyState message="No reports for this course yet." />
           ) : (
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
@@ -202,8 +199,8 @@ export function ContentQualityQnATab({ courseId }: Props) {
                     height={60}
                   />
                   <YAxis tick={{ fill: AXIS_COLOR, fontSize: 11 }} width={40} allowDecimals={false} />
-                  <Tooltip formatter={(value) => tooltipNumber(value, "Báo cáo")} />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }} formatter={(value) => tooltipNumber(value, "Reports")} />
+                  <Bar isAnimationActive={true} animationDuration={850} animationEasing="ease-out" dataKey="count" radius={[4, 4, 0, 0]}>
                     {reasonChart.map((item, index) => (
                       <Cell
                         key={item.reason}
@@ -219,21 +216,21 @@ export function ContentQualityQnATab({ courseId }: Props) {
       </div>
 
       <AnalyticsPanel
-        title="Câu hỏi chưa được trả lời"
-        description="Câu hỏi của học viên đang chờ giảng viên phản hồi, sắp xếp mới nhất trước."
+        title="Unanswered questions"
+        description="Questions from learners still waiting for a response, newest first."
       >
         {!data.unansweredQuestions.length ? (
-          <AnalyticsEmptyState message="Tất cả câu hỏi đều đã được trả lời." />
+          <AnalyticsEmptyState message="All questions have been answered." />
         ) : (
           <div className="max-h-[480px] overflow-auto rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Bài học</TableHead>
-                  <TableHead>Học viên</TableHead>
-                  <TableHead>Nội dung câu hỏi</TableHead>
-                  <TableHead>Ngày hỏi</TableHead>
-                  <TableHead className="text-right">Đã chờ</TableHead>
+                  <TableHead>Lesson</TableHead>
+                  <TableHead>Learner</TableHead>
+                  <TableHead>Question</TableHead>
+                  <TableHead>Asked</TableHead>
+                  <TableHead className="text-right">Waiting</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -259,7 +256,7 @@ export function ContentQualityQnATab({ courseId }: Props) {
                             : "font-medium"
                         }
                       >
-                        {formatNumber(item.waitingHours)} giờ
+                        {formatNumber(item.waitingHours)} h
                       </span>
                     </TableCell>
                   </TableRow>

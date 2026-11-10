@@ -131,29 +131,29 @@ public interface CourseAnalyticsRepository extends JpaRepository<CourseEnrollmen
 
     /**
      * [departmentId, departmentCode, departmentName, enrollmentId, courseId,
-     *  số bài đã hoàn thành, lastAccessedAt]
+     *  số bài đã hoàn thành, lastAccessedAt, userId, createdAt]
      * theo phòng ban của học viên (bảng user_departments).
      */
     @Query("""
-            select d.id, d.code, d.name, e.id, e.course.id, count(p), e.lastAccessedAt
+            select d.id, d.code, d.name, e.id, e.course.id, count(p), e.lastAccessedAt, e.user.id, e.createdAt
             from CourseEnrollment e
               join e.user u
-              join u.departments d
+              left join u.departments d
               left join LessonProgress p on p.enrollment = e and p.completed = true
             where e.isActive = true
-            group by d.id, d.code, d.name, e.id, e.course.id, e.lastAccessedAt
+            group by d.id, d.code, d.name, e.id, e.course.id, e.lastAccessedAt, e.user.id, e.createdAt
             """)
     List<Object[]> findDepartmentEnrollmentsWithProgress();
 
     /** Như trên nhưng giới hạn theo một khóa học. */
     @Query("""
-            select d.id, d.code, d.name, e.id, e.course.id, count(p), e.lastAccessedAt
+            select d.id, d.code, d.name, e.id, e.course.id, count(p), e.lastAccessedAt, e.user.id, e.createdAt
             from CourseEnrollment e
               join e.user u
-              join u.departments d
+              left join u.departments d
               left join LessonProgress p on p.enrollment = e and p.completed = true
             where e.isActive = true and e.course.id = :courseId
-            group by d.id, d.code, d.name, e.id, e.course.id, e.lastAccessedAt
+            group by d.id, d.code, d.name, e.id, e.course.id, e.lastAccessedAt, e.user.id, e.createdAt
             """)
     List<Object[]> findDepartmentEnrollmentsWithProgressByCourse(@Param("courseId") Long courseId);
 
@@ -173,7 +173,7 @@ public interface CourseAnalyticsRepository extends JpaRepository<CourseEnrollmen
             select d.id, avg(a.finalScore * 100.0 / a.maxScore), count(a)
             from ExamAttempt a
               join a.student u
-              join u.departments d
+              left join u.departments d
             where a.finalScore is not null
               and a.maxScore is not null and a.maxScore > 0
               and a.status in (com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.SUBMITTED,
@@ -200,13 +200,142 @@ public interface CourseAnalyticsRepository extends JpaRepository<CourseEnrollmen
             """)
     List<Object[]> findEnrollmentsWithCompletedLessons();
 
-    /** [courseId, enrollmentId, lastAccessedAt] để tính nhóm active / inactive. */
+    /**
+     * [courseId, enrollmentId, lastAccessedAt, createdAt, số bài đã hoàn thành]
+     * để phân loại active / inactive / never started.
+     *
+     * <p>Số bài đã hoàn thành dùng để phân biệt "chưa từng học" (0 bài) với
+     * "đã học nhưng bỏ dở" (> 0 bài).
+     */
     @Query("""
-            select e.course.id, e.id, e.lastAccessedAt
+            select e.course.id, e.id, e.lastAccessedAt, e.createdAt,
+                   (select count(p) from LessonProgress p
+                     where p.enrollment = e and p.completed = true)
             from CourseEnrollment e
             where e.isActive = true
             """)
-    List<Object[]> findEnrollmentActivity();
+    List<Object[]> findEnrollmentActivityDetail();
+
+    /**
+     * [enrollmentId, tổng studySeconds, số bài đã hoàn thành] cho các enrollment
+     * thuộc một khóa học (dùng để tính điểm rủi ro).
+     */
+    @Query("""
+            select p.enrollment.id, sum(coalesce(p.studySeconds, 0)),
+                   sum(case when p.completed = true then 1L else 0L end)
+            from LessonProgress p
+            where p.enrollment.course.id = :courseId and p.enrollment.isActive = true
+            group by p.enrollment.id
+            """)
+    List<Object[]> aggregateStudyAndProgressByEnrollment(@Param("courseId") Long courseId);
+
+    /** Như trên nhưng cho toàn bộ enrollment đang hoạt động (courseId null = toàn hệ thống). */
+    @Query("""
+            select p.enrollment.id, sum(coalesce(p.studySeconds, 0)),
+                   sum(case when p.completed = true then 1L else 0L end)
+            from LessonProgress p
+            where p.enrollment.isActive = true
+              and (:courseId is null or p.enrollment.course.id = :courseId)
+            group by p.enrollment.id
+            """)
+    List<Object[]> aggregateStudyAndProgressAllEnrollments(@Param("courseId") Long courseId);
+
+    /**
+     * [userId, điểm thi trung bình (% điểm tối đa)] cho các học viên của một khóa học.
+     * Chỉ tính các lượt thi đã chấm (SUBMITTED / EXPIRED).
+     */
+    @Query("""
+            select a.student.id, avg(a.finalScore * 100.0 / a.maxScore)
+            from ExamAttempt a
+            where a.finalScore is not null
+              and a.maxScore is not null and a.maxScore > 0
+              and a.status in (com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.SUBMITTED,
+                               com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.EXPIRED)
+              and (:courseId is null or a.exam.course.id = :courseId)
+            group by a.student.id
+            """)
+    List<Object[]> aggregateExamScoresByStudent(@Param("courseId") Long courseId);
+
+    /** Tổng thời lượng (giây) của các bài học active trong một khóa học. */
+    @Query("""
+            select sum(coalesce(l.duration, 0)) from Lesson l
+            join l.section s
+            where s.course.id = :courseId and l.isActive = true and s.isActive = true
+            """)
+    Long sumActiveLessonDurations(@Param("courseId") Long courseId);
+
+    /** Toàn bộ enrollment đang hoạt động kèm user (dùng cho xếp hạng khóa học). */
+    @Query("""
+            select e from CourseEnrollment e
+            join fetch e.user
+            where e.isActive = true
+            """)
+    List<CourseEnrollment> findAllActiveEnrollmentsWithUser();
+
+    /**
+     * Enrollment của một phạm vi khóa học (courseId null = toàn hệ thống) kèm user.
+     */
+    @Query("""
+            select e from CourseEnrollment e
+            join fetch e.user
+            where e.isActive = true
+              and (:courseId is null or e.course.id = :courseId)
+            """)
+    List<CourseEnrollment> findActiveEnrollmentsWithUserScope(@Param("courseId") Long courseId);
+
+    /**
+     * [enrollmentId, số bài đã mở, số bài đã hoàn thành, tổng studySeconds]
+     * cho các enrollment trong phạm vi (courseId null = toàn hệ thống).
+     */
+    @Query("""
+            select p.enrollment.id, count(p),
+                   sum(case when p.completed = true then 1L else 0L end),
+                   coalesce(sum(coalesce(p.studySeconds, 0)), 0)
+            from LessonProgress p
+            where p.enrollment.isActive = true
+              and (:courseId is null or p.enrollment.course.id = :courseId)
+            group by p.enrollment.id
+            """)
+    List<Object[]> aggregateLessonProgressByEnrollment(@Param("courseId") Long courseId);
+
+    /**
+     * [enrollmentId, số bài đã hoàn thành] cho toàn bộ enrollment đang hoạt động.
+     */
+    @Query("""
+            select p.enrollment.id,
+                   sum(case when p.completed = true then 1L else 0L end)
+            from LessonProgress p
+            where p.enrollment.isActive = true
+            group by p.enrollment.id
+            """)
+    List<Object[]> aggregateCompletedLessonsAllEnrollments();
+
+    /**
+     * [enrollmentId, departmentId, departmentCode, departmentName]
+     * Một học viên có thể thuộc nhiều phòng ban nên có thể có nhiều dòng.
+     */
+    @Query("""
+            select e.id, d.id, d.code, d.name
+            from CourseEnrollment e
+              join e.user u
+              join u.departments d
+            where e.isActive = true
+              and (:courseId is null or e.course.id = :courseId)
+            """)
+    List<Object[]> findEnrollmentDepartments(@Param("courseId") Long courseId);
+
+    /**
+     * [departmentId, enrollmentId, userId] cho các enrollment thuộc phòng ban,
+     * dùng để thống kê dự đoán rủi ro theo phòng ban.
+     */
+    @Query("""
+            select d.id, e.id, e.user.id
+            from CourseEnrollment e
+              join e.user u
+              join u.departments d
+            where e.isActive = true and e.course.id = :courseId
+            """)
+    List<Object[]> findEnrollmentDepartmentMap(@Param("courseId") Long courseId);
 
     // =================================================================
     // 8. Content quality + Q&A
@@ -266,4 +395,45 @@ public interface CourseAnalyticsRepository extends JpaRepository<CourseEnrollmen
             order by q.createdAt desc
             """)
     List<LessonQuestion> findUnansweredQuestions(@Param("courseId") Long courseId);
+
+    // =================================================================
+    // 9. Study time (số giờ học)
+    // =================================================================
+
+    /**
+     * [enrollmentId, userId, fullName, email, tổng studySeconds, số bài đã hoàn thành,
+     *  lastAccessedAt] cho từng học viên đang học một khóa học (kể cả người chưa có bản ghi progress).
+     *
+     * <p>{@code fullName} được ghép từ {@code firstName} + {@code lastName} vì User
+     * không có field tên hiển thị trực tiếp.
+     */
+    @Query("""
+            select e.id, e.user.id,
+                   trim(concat(coalesce(e.user.firstName, ''), ' ', coalesce(e.user.lastName, ''))),
+                   e.user.email,
+                   coalesce(sum(coalesce(p.studySeconds, 0L)), 0L),
+                   coalesce(sum(case when p.completed = true then 1L else 0L end), 0L),
+                   coalesce(max(p.lastAccessedAt), e.lastAccessedAt)
+            from CourseEnrollment e
+              left join LessonProgress p on p.enrollment = e
+            where e.course.id = :courseId and e.isActive = true
+            group by e.id, e.user.id, e.user.firstName, e.user.lastName, e.user.email, e.lastAccessedAt
+            """)
+    List<Object[]> findStudyTimeByLearner(@Param("courseId") Long courseId);
+
+    /**
+     * [departmentId, tổng studySeconds] theo phòng ban, giới hạn theo khóa học
+     * (courseId null = toàn hệ thống).
+     */
+    @Query("""
+            select d.id, sum(coalesce(p.studySeconds, 0))
+            from LessonProgress p
+              join p.enrollment e
+              join e.user u
+              left join u.departments d
+            where e.isActive = true
+              and (:courseId is null or e.course.id = :courseId)
+            group by d.id
+            """)
+    List<Object[]> aggregateStudySecondsByDepartment(@Param("courseId") Long courseId);
 }

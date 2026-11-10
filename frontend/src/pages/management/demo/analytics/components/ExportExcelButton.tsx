@@ -4,11 +4,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
 type Props = {
-  /** Hàm gọi API export; trả về tên file đã tải về. */
+  /** API call that performs the export; returns the downloaded file name. */
   onExport: () => Promise<string>;
-  /** Nhãn hiển thị trên nút. */
+  /** Label displayed on the button. */
   label?: string;
-  /** Nội dung mô tả trong toast khi thành công. */
+  /** Toast message shown on success. */
   successMessage?: string;
   variant?: "default" | "outline" | "secondary" | "ghost";
   size?: "sm" | "default" | "lg" | "icon";
@@ -16,13 +16,13 @@ type Props = {
 };
 
 /**
- * Nút tải file Excel cho một phần analytics.
- * Dùng chung để mọi tab đều có nút "Export Excel" với hành vi giống nhau.
+ * Excel download button for a single analytics section.
+ * Shared so every tab gets the same "Export Excel" behaviour.
  */
 export function ExportExcelButton({
   onExport,
   label = "Export Excel",
-  successMessage = "Đã tải file Excel.",
+  successMessage = "Excel file downloaded.",
   variant = "outline",
   size = "sm",
   className,
@@ -40,7 +40,7 @@ export function ExportExcelButton({
       const message =
         error instanceof Error
           ? error.message
-          : "Không export được. Vui lòng thử lại.";
+          : "Export failed. Please try again.";
       toast.error(message);
     } finally {
       setIsExporting(false);
@@ -61,7 +61,7 @@ export function ExportExcelButton({
       ) : (
         <Download />
       )}
-      {isExporting ? "Đang export..." : label}
+      {isExporting ? "Exporting..." : label}
     </Button>
   );
 }

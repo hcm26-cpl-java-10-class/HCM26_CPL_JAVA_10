@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
   courseId: number;
@@ -42,25 +43,21 @@ export function DepartmentAnalyticsTab({ courseId }: Props) {
   });
 
   if (isLoading) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Đang tải số liệu theo phòng ban...
-      </p>
-    );
+    return <AnalyticsLoading label="Loading department metrics..." />;
   }
 
   if (isError || !data) {
     return (
       <AnalyticsEmptyState
         variant="error"
-        message="Không tải được dữ liệu phòng ban."
+        message="Could not load the department data."
       />
     );
   }
 
   if (!data.departments.length) {
     return (
-      <AnalyticsEmptyState message="Chưa có dữ liệu phòng ban cho khóa học này." />
+      <AnalyticsEmptyState message="No department data available for this course." />
     );
   }
 
@@ -72,44 +69,49 @@ export function DepartmentAnalyticsTab({ courseId }: Props) {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap justify-end">
         <ExportExcelButton
           label="Export Excel"
-          successMessage="Đã export dữ liệu phòng ban."
+          successMessage="Exported the department data."
           onExport={() => courseAnalyticsApi.exportDepartments(courseId)}
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard
-          label="Tổng học viên"
+          label="Total learners"
           value={formatNumber(data.totalLearners)}
           hint={data.courseName}
         />
         <MetricCard
-          label="Số phòng ban"
+          label="Departments"
           value={formatNumber(data.departmentCount)}
-          hint={`${formatNumber(totalCompleted)} học viên hoàn thành`}
+          hint={`${formatNumber(totalCompleted)} completed learners`}
         />
         <MetricCard
-          label="Phòng ban tốt nhất"
+          label="Total study time"
+          value={`${formatNumber(Math.round(data.totalStudyHours * 10) / 10)} h`}
+          hint="Combined study time across all departments"
+        />
+        <MetricCard
+          label="Best department"
           value={best ? formatPercent(best.completionRate) : "—"}
           hint={best?.departmentName}
           tone="default"
         />
         <MetricCard
-          label="Phòng ban kém nhất"
+          label="Worst department"
           value={worst ? formatPercent(worst.completionRate) : "—"}
           hint={worst?.departmentName}
           tone={worst && worst.completionRate < 50 ? "warning" : "default"}
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         <AnalyticsPanel
-          title="Số học viên theo phòng ban"
-          description="Số lượt đăng ký học của học viên thuộc từng phòng ban."
+          title="Learners by department"
+          description="Number of enrollments by the learner's department."
         >
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -123,14 +125,14 @@ export function DepartmentAnalyticsTab({ courseId }: Props) {
                   tick={{ fill: AXIS_COLOR, fontSize: 11 }}
                 />
                 <YAxis tick={{ fill: AXIS_COLOR, fontSize: 11 }} width={40} allowDecimals={false} />
-                <Tooltip
-                  formatter={(value) => tooltipNumber(value, "Học viên")}
+                <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }}
+                  formatter={(value) => tooltipNumber(value, "Learners")}
                   labelFormatter={(label) => {
                     const item = data.departments.find((d) => d.departmentCode === label);
                     return item ? `${item.departmentName}` : String(label);
                   }}
                 />
-                <Bar dataKey="learnerCount" radius={[4, 4, 0, 0]}>
+                <Bar isAnimationActive={true} animationDuration={850} animationEasing="ease-out" dataKey="learnerCount" radius={[4, 4, 0, 0]}>
                   {data.departments.map((item, index) => (
                     <Cell
                       key={item.departmentId}
@@ -144,8 +146,8 @@ export function DepartmentAnalyticsTab({ courseId }: Props) {
         </AnalyticsPanel>
 
         <AnalyticsPanel
-          title="Tỷ lệ hoàn thành theo phòng ban"
-          description="So sánh hiệu quả đào tạo giữa các phòng ban."
+          title="Completion rate by department"
+          description="Compares training effectiveness between departments."
         >
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -164,17 +166,61 @@ export function DepartmentAnalyticsTab({ courseId }: Props) {
                   unit="%"
                   domain={[0, 100]}
                 />
-                <Tooltip
+                <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }}
                   formatter={(value) => [
                     formatPercent(Number(value)),
-                    "Tỷ lệ hoàn thành",
+                    "Completion rate",
                   ]}
                   labelFormatter={(label) => {
                     const item = data.departments.find((d) => d.departmentCode === label);
                     return item ? `${item.departmentName}` : String(label);
                   }}
                 />
-                <Bar dataKey="completionRate" radius={[4, 4, 0, 0]}>
+                <Bar isAnimationActive={true} animationDuration={850} animationEasing="ease-out" dataKey="completionRate" radius={[4, 4, 0, 0]}>
+                  {data.departments.map((item, index) => (
+                    <Cell
+                      key={item.departmentId}
+                      fill={CHART_COLORS[index % CHART_COLORS.length]}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </AnalyticsPanel>
+        <AnalyticsPanel
+          title="Total study time by department"
+          description="Total study time (hours) of each department in this course."
+        >
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={data.departments}
+                margin={{ top: 10, right: 20, bottom: 10, left: 0 }}
+              >
+                <CartesianGrid stroke={GRID_COLOR} strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="departmentCode"
+                  tick={{ fill: AXIS_COLOR, fontSize: 11 }}
+                />
+                <YAxis
+                  tick={{ fill: AXIS_COLOR, fontSize: 11 }}
+                  width={48}
+                  unit="h"
+                />
+                <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }}
+                  formatter={(value) => [
+                    `${Number(value).toLocaleString("en-US", {
+                      maximumFractionDigits: 1,
+                    })} h`,
+                    "Total study time",
+                  ]}
+                  labelFormatter={(label) => {
+                    const item = data.departments.find((d) => d.departmentCode === label);
+                    return item ? `${item.departmentName}` : String(label);
+                  }}
+                />
+                <Bar isAnimationActive={true} animationDuration={850} animationEasing="ease-out" dataKey="totalStudyHours" radius={[4, 4, 0, 0]}>
                   {data.departments.map((item, index) => (
                     <Cell
                       key={item.departmentId}
@@ -189,21 +235,23 @@ export function DepartmentAnalyticsTab({ courseId }: Props) {
       </div>
 
       <AnalyticsPanel
-        title="So sánh hiệu quả đào tạo giữa các phòng ban"
-        description="Số học viên, tỷ lệ hoàn thành, tiến độ trung bình, điểm thi trung bình và tỷ lệ bỏ học."
+        title="Training effectiveness by department"
+        description="Learner count, completion rate, average progress, average exam score, total study time and drop-off rate."
       >
         <div className="max-h-[560px] overflow-auto rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Phòng ban</TableHead>
-                <TableHead className="text-right">Học viên</TableHead>
-                <TableHead className="text-right">Hoàn thành</TableHead>
-                <TableHead className="text-right">Tỷ lệ hoàn thành</TableHead>
-                <TableHead className="text-right">Tiến độ TB</TableHead>
-                <TableHead className="text-right">Điểm thi TB</TableHead>
-                <TableHead className="text-right">Tỷ lệ bỏ học</TableHead>
-                <TableHead className="text-right">Nguy cơ</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead className="text-right">Learners</TableHead>
+                <TableHead className="text-right">Completed</TableHead>
+                <TableHead className="text-right">Completion rate</TableHead>
+                <TableHead className="text-right">Avg progress</TableHead>
+                <TableHead className="text-right">Avg exam score</TableHead>
+                <TableHead className="text-right">Total study time</TableHead>
+                <TableHead className="text-right">Avg h/learner</TableHead>
+                <TableHead className="text-right">Drop-off rate</TableHead>
+                <TableHead className="text-right">At risk</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -231,6 +279,15 @@ export function DepartmentAnalyticsTab({ courseId }: Props) {
                     {item.averageExamScore == null
                       ? "—"
                       : formatPercent(item.averageExamScore)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatNumber(Math.round(item.totalStudyHours * 10) / 10)} h
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatNumber(
+                      Math.round(item.averageStudyHoursPerLearner * 10) / 10,
+                    )}{" "}
+                    h
                   </TableCell>
                   <TableCell className="text-right">
                     {formatPercent(item.dropOffRate)}

@@ -8,7 +8,7 @@ type Props = {
   disabled?: boolean;
 };
 
-/** Danh sách khóa học mà user hiện tại được xem (admin: tất cả, giảng viên: khóa của mình). */
+/** Courses the current user is allowed to view (admin: all, instructor: own courses). */
 export function AnalyticsCourseSelect({ value, onChange, disabled }: Props) {
   const { data = [], isLoading } = useQuery({
     queryKey: ["course-report"],
@@ -19,7 +19,7 @@ export function AnalyticsCourseSelect({ value, onChange, disabled }: Props) {
 
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="font-medium text-muted-foreground">Khóa học</span>
+      <span className="font-medium text-muted-foreground">Course</span>
       <Select
         value={value == null ? undefined : String(value)}
         onValueChange={(next) => onChange(Number(next))}
@@ -28,7 +28,7 @@ export function AnalyticsCourseSelect({ value, onChange, disabled }: Props) {
         <SelectTrigger className="w-full min-w-64">
           <SelectValue
             placeholder={
-              isLoading ? "Đang tải khóa học..." : "Chọn khóa học để phân tích"
+              isLoading ? "Loading courses..." : "Select a course to analyse"
             }
           />
         </SelectTrigger>

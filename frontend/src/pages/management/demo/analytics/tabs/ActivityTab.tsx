@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { courseAnalyticsApi } from "@/api/features/demo/course-analytics.api";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -25,6 +25,8 @@ import { AnalyticsEmptyState } from "@/pages/management/demo/analytics/component
 import { AnalyticsPanel } from "@/pages/management/demo/analytics/components/AnalyticsPanel";
 import { ExportExcelButton } from "@/pages/management/demo/analytics/components/ExportExcelButton";
 import { MetricCard } from "@/pages/management/demo/analytics/components/MetricCard";
+import { TablePagination } from "@/pages/management/demo/analytics/components/TablePagination";
+import { TableSearchBox } from "@/pages/management/demo/analytics/components/TableSearchBox";
 import {
   AXIS_COLOR,
   CHART_COLORS,
@@ -35,7 +37,8 @@ import {
   tooltipNumber,
 } from "@/pages/management/demo/analytics/lib/chart-helpers";
 import type { AtRiskLearner } from "@/types";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
   courseId: number;
@@ -44,45 +47,73 @@ type Props = {
 const INACTIVE_PRESETS = [7, 14, 30];
 
 const REASON_LABEL: Record<string, string> = {
-  NEVER_STARTED: "Chưa từng vào học",
-  INACTIVE: "Không hoạt động",
+  NEVER_STARTED: "Never started",
+  INACTIVE: "Inactive",
 };
 
 export function ActivityTab({ courseId }: Props) {
   const [inactiveDays, setInactiveDays] = useState(14);
-  const [limit, setLimit] = useState(50);
+  // Luôn lấy tối đa để phân trang phía client có đủ dữ liệu.
+  const [limit] = useState(500);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["course-analytics", "activity", courseId, inactiveDays, limit],
+    // Giữ dữ liệu cũ khi đổi ngưỡng không hoạt động để bảng không nháy trắng.
+    placeholderData: keepPreviousData,
     queryFn: () => courseAnalyticsApi.getActivity(courseId, { inactiveDays, limit }),
   });
 
+  const filteredAtRisk = useMemo(() => {
+    const list = data?.atRiskLearners ?? [];
+    const term = search.trim().toLowerCase();
+    if (!term) return list;
+    return list.filter((learner) =>
+      [learner.studentName, learner.studentEmail, learner.departmentName]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    );
+  }, [data?.atRiskLearners, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAtRisk.length / pageSize));
+  const currentPage = Math.min(page, totalPages - 1);
+  const pagedAtRisk = useMemo(
+    () =>
+      filteredAtRisk.slice(
+        currentPage * pageSize,
+        currentPage * pageSize + pageSize,
+      ),
+    [filteredAtRisk, currentPage, pageSize],
+  );
+
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground">Đang tải mức độ hoạt động...</p>;
+    return <AnalyticsLoading label="Loading learner activity..." />;
   }
 
   if (isError || !data) {
     return (
       <AnalyticsEmptyState
         variant="error"
-        message="Không tải được dữ liệu hoạt động của học viên."
+        message="Could not load the learner activity data."
       />
     );
   }
 
   const pieData = [
-    { name: "Hoàn thành", value: data.completedLearners, color: CHART_COLORS[1] },
-    { name: "Đang hoạt động", value: data.activeLearners, color: CHART_COLORS[0] },
-    { name: "Không hoạt động", value: data.inactiveLearners, color: CHART_COLORS[2] },
-    { name: "Chưa bắt đầu", value: data.neverStartedLearners, color: CHART_COLORS[3] },
+    { name: "Completed", value: data.completedLearners, color: CHART_COLORS[1] },
+    { name: "Active", value: data.activeLearners, color: CHART_COLORS[0] },
+    { name: "Inactive", value: data.inactiveLearners, color: CHART_COLORS[2] },
+    { name: "Never started", value: data.neverStartedLearners, color: CHART_COLORS[3] },
   ].filter((item) => item.value > 0);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         <div className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-muted-foreground">
-            Ngưỡng không hoạt động
+            Inactivity threshold
           </span>
           <div className="flex gap-2">
             {INACTIVE_PRESETS.map((days) => (
@@ -96,63 +127,52 @@ export function ActivityTab({ courseId }: Props) {
                     : "bg-background hover:bg-muted"
                 }`}
               >
-                {days} ngày
+                {days} days
               </button>
             ))}
           </div>
         </div>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium text-muted-foreground">Số học viên hiển thị</span>
-          <input
-            className="w-28 rounded-md border bg-background px-3 py-2 text-sm"
-            type="number"
-            min={1}
-            max={500}
-            value={limit}
-            onChange={(event) =>
-              setLimit(Math.max(1, Math.min(500, Number(event.target.value) || 1)))
-            }
-          />
-        </label>
         <div className="ml-auto">
-          <ExportExcelButton
-            label="Export Excel"
-            successMessage="Đã export dữ liệu hoạt động."
-            onExport={() => courseAnalyticsApi.exportActivity(courseId)}
-          />
+        <ExportExcelButton
+          label="Export Excel"
+          successMessage="Exported the activity data."
+          onExport={() =>
+            courseAnalyticsApi.exportActivity(courseId, { inactiveDays })
+          }
+        />
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Tổng học viên" value={formatNumber(data.totalLearners)} />
+        <MetricCard label="Total learners" value={formatNumber(data.totalLearners)} />
         <MetricCard
-          label="Đã hoàn thành"
+          label="Completed"
           value={formatNumber(data.completedLearners)}
           tone="default"
         />
         <MetricCard
-          label="Đang hoạt động"
+          label="Active"
           value={formatNumber(data.activeLearners)}
-          hint={`Truy cập trong ${data.inactiveThresholdDays} ngày gần nhất`}
+          hint={`Visited in the last ${data.inactiveThresholdDays} days`}
         />
         <MetricCard
-          label="Nguy cơ bỏ học"
-          value={formatNumber(data.inactiveLearners + data.neverStartedLearners)}
-          hint={`Không hoạt động >= ${data.inactiveThresholdDays} ngày`}
-          tone={data.inactiveLearners + data.neverStartedLearners > 0 ? "warning" : "default"}
+          label="At risk of dropping out"
+          value={formatNumber(data.atRiskCount)}
+          hint={`${data.highRiskCount} high risk / ${data.mediumRiskCount} medium risk`}
+          tone={data.atRiskCount > 0 ? "warning" : "default"}
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         <AnalyticsPanel
-          title="Phân bố trạng thái học viên"
-          description="Dựa trên tiến độ bài học và lần truy cập gần nhất."
+          title="Learner status distribution"
+          description="Based on lesson progress and the most recent visit."
         >
           {pieData.length ? (
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
+                  <Pie isAnimationActive={true} animationDuration={850} animationEasing="ease-out"
                     data={pieData}
                     dataKey="value"
                     nameKey="name"
@@ -167,18 +187,18 @@ export function ActivityTab({ courseId }: Props) {
                       <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value, name) => tooltipNumber(value, String(name))} />
+                  <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }} formatter={(value, name) => tooltipNumber(value, String(name))} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <AnalyticsEmptyState message="Chưa có học viên nào trong khóa học." />
+            <AnalyticsEmptyState message="No learners enrolled in this course yet." />
           )}
         </AnalyticsPanel>
 
         <AnalyticsPanel
-          title="Phân bố tiến độ học tập"
-          description="Số học viên theo tỉ lệ đã hoàn thành bài học."
+          title="Learning progress distribution"
+          description="Number of learners by the percentage of lessons completed."
         >
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -193,8 +213,8 @@ export function ActivityTab({ courseId }: Props) {
                   interval={0}
                 />
                 <YAxis tick={{ fill: AXIS_COLOR, fontSize: 11 }} width={40} allowDecimals={false} />
-                <Tooltip formatter={(value) => tooltipNumber(value, "Học viên")} />
-                <Bar dataKey="learners" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
+                <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }} formatter={(value) => tooltipNumber(value, "Learners")} />
+                <Bar isAnimationActive={true} animationDuration={850} animationEasing="ease-out" dataKey="learners" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -202,31 +222,75 @@ export function ActivityTab({ courseId }: Props) {
       </div>
 
       <AnalyticsPanel
-        title="Học viên có nguy cơ bỏ học"
-        description="Xếp theo mức rủi ro rồi số ngày không truy cập. Rủi ro cao = lâu không vào học kèm tiến độ thấp."
+        title="Learners at risk of dropping out"
+        description="Sorted by risk score, then by the number of days without access. High risk = long absence combined with low progress."
       >
         {!data.atRiskLearners.length ? (
-          <AnalyticsEmptyState message="Không có học viên nào rơi vào nhóm nguy cơ. Tốt!" />
+          <AnalyticsEmptyState message="No learners fall into the at-risk group. Great work!" />
         ) : (
-          <div className="max-h-[520px] overflow-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Học viên</TableHead>
-                  <TableHead className="text-right">Tiến độ</TableHead>
-                  <TableHead className="text-right">Ngày không vào học</TableHead>
-                  <TableHead>Lần truy cập gần nhất</TableHead>
-                  <TableHead>Lý do</TableHead>
-                  <TableHead>Mức rủi ro</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.atRiskLearners.map((learner) => (
-                  <AtRiskRow key={learner.enrollmentId} learner={learner} />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <>
+            <div className="flex flex-wrap items-center gap-2 pb-3">
+              <TableSearchBox
+                value={search}
+                onSearch={(term) => {
+                  setSearch(term);
+                  setPage(0);
+                }}
+                placeholder="Search learner or department..."
+              />
+              <span className="ml-auto text-xs text-muted-foreground">
+                {formatNumber(filteredAtRisk.length)} of{" "}
+                {formatNumber(data.atRiskLearners.length)} at-risk learners
+              </span>
+            </div>
+
+            <div className="overflow-hidden rounded-lg border">
+              <div className="max-h-[520px] overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Learner</TableHead>
+                      <TableHead className="text-right">Progress</TableHead>
+                      <TableHead className="text-right">Days inactive</TableHead>
+                      <TableHead>Last accessed</TableHead>
+                      <TableHead>Reason</TableHead>
+                      <TableHead className="text-right">Risk score</TableHead>
+                      <TableHead>Risk level</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pagedAtRisk.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={7}
+                          className="py-6 text-center text-muted-foreground"
+                        >
+                          No learner matches the current search.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      pagedAtRisk.map((learner) => (
+                        <AtRiskRow key={learner.enrollmentId} learner={learner} />
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <TablePagination
+                totalItems={filteredAtRisk.length}
+                page={page}
+                pageSize={pageSize}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setPage(0);
+                }}
+                unit="learners"
+              />
+            </div>
+          </>
         )}
       </AnalyticsPanel>
     </div>
@@ -248,12 +312,15 @@ function AtRiskRow({ learner }: { learner: AtRiskLearner }) {
         <div className="text-xs text-muted-foreground">{learner.studentEmail}</div>
       </TableCell>
       <TableCell className="text-right">{formatPercent(learner.progressPercentage, 0)}</TableCell>
-      <TableCell className="text-right font-medium">{learner.inactiveDays} ngày</TableCell>
+      <TableCell className="text-right font-medium">{learner.inactiveDays} days</TableCell>
       <TableCell className="text-muted-foreground">
         {formatDateTime(learner.lastAccessedAt)}
       </TableCell>
       <TableCell className="text-muted-foreground">
         {REASON_LABEL[learner.reason] ?? learner.reason}
+      </TableCell>
+      <TableCell className="text-right font-medium">
+        {learner.riskScore ?? 0}
       </TableCell>
       <TableCell>
         <Badge variant={badgeVariant}>{learner.riskLevel}</Badge>

@@ -23,6 +23,7 @@ import {
   tooltipNumber,
 } from "@/pages/management/demo/analytics/lib/chart-helpers";
 import type { ExamAnalyticsItem } from "@/types";
+import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
   courseId: number;
@@ -35,81 +36,81 @@ export function ExamAnalyticsTab({ courseId }: Props) {
   });
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground">Đang tải kết quả bài thi...</p>;
+    return <AnalyticsLoading label="Loading exam results..." />;
   }
 
   if (isError || !data) {
     return (
       <AnalyticsEmptyState
         variant="error"
-        message="Không tải được dữ liệu kết quả bài thi của khóa học."
+        message="Could not load the exam results data for this course."
       />
     );
   }
 
   if (!data.exams.length) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex flex-wrap justify-end">
           <ExportExcelButton
             label="Export Excel"
-            successMessage="Đã export dữ liệu bài thi."
+            successMessage="Exported the exam data."
             onExport={() => courseAnalyticsApi.exportExams(courseId)}
           />
         </div>
-        <AnalyticsEmptyState message="Khóa học chưa có bài thi nào đang hoạt động (exam) được liên kết." />
+        <AnalyticsEmptyState message="This course has no active exams linked to it yet." />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap justify-end">
         <ExportExcelButton
           label="Export Excel"
-          successMessage="Đã export dữ liệu bài thi."
+          successMessage="Exported the exam data."
           onExport={() => courseAnalyticsApi.exportExams(courseId)}
         />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Số bài thi" value={formatNumber(data.totalExams)} />
+        <MetricCard label="Exams" value={formatNumber(data.totalExams)} />
         <MetricCard
-          label="Lượt đã chấm"
+          label="Graded attempts"
           value={formatNumber(data.totalGradedAttempts)}
-          hint="Lượt có điểm và đã nộp/hết hạn"
+          hint="Attempts with a score that were submitted or expired"
         />
         <MetricCard
-          label="Điểm trung bình"
+          label="Average score"
           value={
             data.overallAverageScorePercent == null
               ? "—"
               : formatPercent(data.overallAverageScorePercent)
           }
-          hint="Theo % điểm tối đa"
+          hint="As a % of the maximum score"
         />
         <MetricCard
-          label="Tỉ lệ đạt"
+          label="Pass rate"
           value={
             data.overallPassRate == null ? "—" : formatPercent(data.overallPassRate)
           }
-          hint="Đạt ngưỡng điểm của từng bài thi"
+          hint="Meeting the pass threshold of each exam"
           tone={data.overallPassRate != null && data.overallPassRate < 50 ? "warning" : "default"}
         />
       </div>
 
       <AnalyticsPanel
-        title="Phân bố điểm toàn khóa"
-        description="Tổng số lượt thi đã chấm theo khoảng % điểm tối đa (0-20, 20-40, ...)."
+        title="Score distribution across the course"
+        description="Total graded attempts grouped by % of the maximum score (0-20, 20-40, ...)."
       >
         <OverallDistribution exams={data.exams} />
       </AnalyticsPanel>
 
       <AnalyticsPanel
-        title="Chi tiết từng bài thi"
-        description="Điểm trung bình, tỉ lệ đạt và phân bố điểm của mỗi bài thi thuộc khóa."
+        title="Exam details"
+        description="Average score, pass rate and score distribution for each exam in the course."
       >
-        <div className="space-y-4">
+        <div className="space-y-3">
           {data.exams.map((exam) => (
             <ExamRow key={exam.examId} exam={exam} />
           ))}
@@ -137,8 +138,8 @@ function OverallDistribution({ exams }: { exams: ExamAnalyticsItem[] }) {
           <CartesianGrid stroke={GRID_COLOR} strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="label" tick={{ fill: AXIS_COLOR, fontSize: 11 }} interval={0} />
           <YAxis tick={{ fill: AXIS_COLOR, fontSize: 11 }} width={40} allowDecimals={false} />
-          <Tooltip formatter={(value) => tooltipNumber(value, "Lượt thi")} />
-          <Bar dataKey="attempts" radius={[4, 4, 0, 0]}>
+          <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }} formatter={(value) => tooltipNumber(value, "Attempts")} />
+          <Bar isAnimationActive={true} animationDuration={850} animationEasing="ease-out" dataKey="attempts" radius={[4, 4, 0, 0]}>
             {merged.map((item, index) => (
               <Cell key={item.label} fill={CHART_COLORS[index % CHART_COLORS.length]} />
             ))}
@@ -156,28 +157,28 @@ function ExamRow({ exam }: { exam: ExamAnalyticsItem }) {
         <div>
           <div className="font-semibold">{exam.title}</div>
           <div className="text-xs text-muted-foreground">
-            {exam.category ? `${exam.category} · ` : ""}Điểm tối đa {formatNumber(exam.maxScore)} ·
-            Đạt từ {formatNumber(exam.passScore)}
+            {exam.category ? `${exam.category} · ` : ""}Max score {formatNumber(exam.maxScore)} ·
+            Pass from {formatNumber(exam.passScore)}
           </div>
         </div>
         <div className="flex flex-wrap gap-4 text-sm">
-          <Stat label="Lượt thi" value={formatNumber(exam.totalAttempts)} />
-          <Stat label="Đã chấm" value={formatNumber(exam.gradedAttempts)} />
-          <Stat label="Người thi" value={formatNumber(exam.participants)} />
+          <Stat label="Attempts" value={formatNumber(exam.totalAttempts)} />
+          <Stat label="Graded" value={formatNumber(exam.gradedAttempts)} />
+          <Stat label="Participants" value={formatNumber(exam.participants)} />
           <Stat
-            label="Điểm TB"
+            label="Avg score"
             value={exam.averageScore == null ? "—" : formatNumber(exam.averageScore)}
           />
           <Stat
-            label="Cao nhất"
+            label="Highest"
             value={exam.highestScore == null ? "—" : formatNumber(exam.highestScore)}
           />
           <Stat
-            label="Thấp nhất"
+            label="Lowest"
             value={exam.lowestScore == null ? "—" : formatNumber(exam.lowestScore)}
           />
           <Stat
-            label="Tỉ lệ đạt"
+            label="Pass rate"
             value={exam.passRate == null ? "—" : formatPercent(exam.passRate)}
           />
         </div>
@@ -196,8 +197,8 @@ function ExamRow({ exam }: { exam: ExamAnalyticsItem }) {
               width={36}
               allowDecimals={false}
             />
-            <Tooltip formatter={(value) => tooltipNumber(value, "Lượt thi")} />
-            <Bar dataKey="attempts" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
+            <Tooltip shared={false} cursor={false} wrapperStyle={{ pointerEvents: "none", zIndex: 50 }} formatter={(value) => tooltipNumber(value, "Attempts")} />
+            <Bar isAnimationActive={true} animationDuration={850} animationEasing="ease-out" dataKey="attempts" fill={CHART_COLORS[0]} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

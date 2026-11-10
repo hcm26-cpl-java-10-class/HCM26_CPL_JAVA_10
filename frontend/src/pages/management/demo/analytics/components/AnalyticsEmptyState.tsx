@@ -5,7 +5,7 @@ type Props = {
   variant?: "empty" | "error";
 };
 
-/** Thông báo khi không có dữ liệu / gặp lỗi tải dữ liệu. */
+/** Message shown when there is no data / when loading data failed. */
 export function AnalyticsEmptyState({ message, variant = "empty" }: Props) {
   const isError = variant === "error";
 

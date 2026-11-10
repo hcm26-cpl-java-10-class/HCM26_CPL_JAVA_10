@@ -39,7 +39,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+import java.util.Random;
 
 @Slf4j
 @Order(30)
@@ -50,56 +53,93 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
     /** Số học viên seed cho mỗi khóa học (ghi đè bằng APP_SEED_ANALYTICS_LEARNERS_PER_COURSE). */
     public static final int DEFAULT_LEARNERS_PER_COURSE = 50;
 
-    private static final int LEARNER_COUNT = 50;
+    /** Tổng số học viên mẫu được load (student01 ... student100). */
+    private static final int LEARNER_COUNT = 100;
     private static final String LEARNER_EMAIL_TEMPLATE = "student%02d@example.com";
-
-    /** Số bài học viên tương ứng với index trong danh sách (dùng để dựng funnel). */
-    private static final int[] COMPLETED_LESSON_PATTERN = {
-            10, 10, 10, 10, 9, 9, 9, 8, 8, 8, 7, 7, 7, 6, 6, 6,
-            5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1,
-            0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 10,
-            10, 10, 2, 0
-    };
-
-    /** Ngày không truy cập gần nhất (null = chưa từng vào học). */
-    private static final Integer[] IDLE_DAYS_PATTERN = {
-            0, 1, 2, 3, 5, 8, 12, 16, 20, 26,
-            33, 40, 47, 55, 62, 70, 80, 90, 100, 120,
-            150, 180, 210, 240, 270, 300, 330, 360, 20, 45,
-            null, null, null, null, 5, 11, 17, 23, 29, 36,
-            50, 65, 75, 95, 110, 130, 150, 170, 200, 240
-    };
-
-    /** Rating theo thứ tự học viên để tạo phân bố đầy đủ 1..5 sao. */
-    private static final int[] RATING_PATTERN = {
-            5, 5, 5, 5, 5, 4, 4, 4, 4, 3, 3, 3, 2, 2, 1,
-            5, 4, 3, 2, 1, 5, 5, 4, 4, 3, 3, 2, 1, 1, 5,
-            4, 4, 3, 3, 2, 5, 5, 5, 4, 4, 3, 2, 1, 5, 4
-    };
 
     /**
      * Profile dữ liệu riêng cho từng khóa học (xoay vòng theo index) để mỗi khóa học có
      * hình dạng dữ liệu khác nhau:
      * <ul>
-     *   <li>{@code completionBias} – cộng thêm/số bài hoàn thành (funnel dốc hay thoải)</li>
+     *   <li>{@code segments} – tỉ lệ học viên thuộc mỗi nhóm hành vi (xem {@link LearnerSegment})</li>
      *   <li>{@code idleScale} – nhân tỉ lệ ngày không truy cập (nhóm active/inactive khác nhau)</li>
      *   <li>{@code ratingShift} – dịch phân bố sao (bảng xếp hạng có thứ hạng khác nhau)</li>
+     *   <li>{@code studyFactor} – nhân thời lượng học (giờ học khác nhau giữa các khóa)</li>
+     *   <li>{@code learnerScale} – nhân số học viên của khóa học</li>
      * </ul>
      */
     private record CourseProfile(
             String label,
-            int completionBias,
+            LearnerSegment[] segments,
             double idleScale,
             int ratingShift,
-            int enrollmentSpreadDays
+            int enrollmentSpreadDays,
+            double studyFactor,
+            double learnerScale
     ) {
     }
 
+    /**
+     * Nhóm hành vi của một học viên, quyết định mức độ "ở lại" với khóa học.
+     *
+     * <p>Mỗi khóa học có tỉ lệ khác nhau cho từng nhóm -> tỉ lệ hoàn thành, tỉ lệ
+     * hoạt động và tỉ lệ bỏ học khác nhau rõ rệt giữa các khóa.
+     */
+    private enum LearnerSegment {
+        /** Hoàn thành 100% khóa học (và được cấp chứng chỉ). */
+        COMPLETER,
+        /** Học gần hết nhưng chưa xong, vẫn truy cập gần đây. */
+        ENGAGED,
+        /** Học được một phần, truy cập gần đây. */
+        CASUAL,
+        /** Học được một phần rồi bỏ (không truy cập >= 14 ngày). */
+        DROPOUT,
+        /** Chưa từng mở bài học nào. */
+        NEVER_STARTED
+    }
+
+    /**
+     * Mỗi khóa học có hình dạng dữ liệu khác nhau để so sánh trong tab "Course ranking":
+     * <ul>
+     *   <li>{@code balanced} – mọi chỉ số ở mức trung bình</li>
+     *   <li>{@code high-retention} – giữ chân tốt, tỉ lệ hoàn thành cao</li>
+     *   <li>{@code high-dropout} – khóa học khó, phần lớn bỏ học</li>
+     *   <li>{@code new-course} – mới ra mắt, nhiều người chưa bắt đầu</li>
+     *   <li>{@code popular} – đông học viên nhất, học đều</li>
+     *   <li>{@code gentle} – hoàn thành cao, đánh giá tốt, giờ học cao</li>
+     * </ul>
+     */
     private static final CourseProfile[] PROFILES = {
-            new CourseProfile("balanced", 0, 1.0, 0, 360),
-            new CourseProfile("steep-drop", -2, 0.7, -1, 300),
-            new CourseProfile("gentle", 1, 1.3, 1, 420),
-            new CourseProfile("new-course", -1, 1.6, 0, 150)
+            //                  COMPLETER ENGAGED CASUAL DROPOUT NEVER_STARTED
+            new CourseProfile("balanced",
+                    new LearnerSegment[]{LearnerSegment.COMPLETER, LearnerSegment.ENGAGED, LearnerSegment.CASUAL,
+                            LearnerSegment.DROPOUT, LearnerSegment.NEVER_STARTED},
+                    1.0, 0, 360, 1.0, 1.0),
+            new CourseProfile("high-retention",
+                    new LearnerSegment[]{LearnerSegment.COMPLETER, LearnerSegment.COMPLETER, LearnerSegment.ENGAGED,
+                            LearnerSegment.ENGAGED, LearnerSegment.CASUAL, LearnerSegment.CASUAL,
+                            LearnerSegment.DROPOUT, LearnerSegment.NEVER_STARTED},
+                    0.7, 1, 300, 1.1, 0.85),
+            new CourseProfile("high-dropout",
+                    new LearnerSegment[]{LearnerSegment.COMPLETER, LearnerSegment.CASUAL, LearnerSegment.CASUAL,
+                            LearnerSegment.DROPOUT, LearnerSegment.DROPOUT, LearnerSegment.DROPOUT,
+                            LearnerSegment.DROPOUT, LearnerSegment.NEVER_STARTED},
+                    1.9, -1, 500, 0.5, 0.95),
+            new CourseProfile("new-course",
+                    new LearnerSegment[]{LearnerSegment.COMPLETER, LearnerSegment.CASUAL, LearnerSegment.CASUAL,
+                            LearnerSegment.CASUAL, LearnerSegment.DROPOUT, LearnerSegment.DROPOUT,
+                            LearnerSegment.NEVER_STARTED, LearnerSegment.NEVER_STARTED},
+                    1.5, 0, 150, 0.65, 0.7),
+            new CourseProfile("popular",
+                    new LearnerSegment[]{LearnerSegment.COMPLETER, LearnerSegment.ENGAGED, LearnerSegment.ENGAGED,
+                            LearnerSegment.CASUAL, LearnerSegment.CASUAL, LearnerSegment.DROPOUT,
+                            LearnerSegment.NEVER_STARTED},
+                    0.9, 0, 380, 1.05, 1.6),
+            new CourseProfile("gentle",
+                    new LearnerSegment[]{LearnerSegment.COMPLETER, LearnerSegment.COMPLETER, LearnerSegment.COMPLETER,
+                            LearnerSegment.ENGAGED, LearnerSegment.ENGAGED, LearnerSegment.CASUAL,
+                            LearnerSegment.DROPOUT, LearnerSegment.NEVER_STARTED},
+                    1.2, 1, 420, 1.25, 1.1)
     };
 
     /**
@@ -171,7 +211,11 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
             }
 
             CourseProfile profile = PROFILES[c % PROFILES.length];
-            List<User> courseLearners = pickLearners(learners, perCourse, c);
+
+            // Mỗi khóa học có lượng học viên khác nhau để bảng "Course ranking" có sự phân hóa.
+            int courseLearnerCount = Math.max(1, Math.min(
+                    (int) Math.round(perCourse * profile.learnerScale()), learners.size()));
+            List<User> courseLearners = pickLearners(learners, courseLearnerCount, c);
 
             seedEnrollments(course, courseLearners, lessons, c, profile);
             seedReviews(course, courseLearners, c, profile);
@@ -180,8 +224,8 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
 
         seedLessonReportsAndQuestions(courses);
 
-        log.info("Seeded course analytics demo data: courses={}, learnersPerCourse={}.",
-                seededCourses, perCourse);
+        log.info("Seeded course analytics demo data: courses={}, learnersPerCourse<={}, totalLearners={}.",
+                seededCourses, perCourse, learners.size());
     }
 
     /** Lấy các khóa học đang active (bỏ qua bản nháp / bị vô hiệu hoá). */
@@ -202,15 +246,23 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
     }
 
     /**
-     * Chọn {@code count} học viên cho khóa học. Các khóa học khác nhau dùng tập học viên
-     * xô-lệch nhau (xoay vòng) để bảng xếp hạng / thống kê không bị trùng lặp hoàn toàn.
+     * Chọn {@code count} học viên cho khóa học.
+     *
+     * <p>Dùng {@link Random} với seed cố định theo từng khóa học để:
+     * <ul>
+     *   <li>tập học viên của các khóa học khác nhau (không trùng hoàn toàn)</li>
+     *   <li>kết quả seed ổn định giữa các lần chạy (dễ test lại)</li>
+     * </ul>
      */
     private List<User> pickLearners(List<User> learners, int count, int courseIndex) {
-        List<User> picked = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            picked.add(learners.get((i + courseIndex * 7) % learners.size()));
+        if (learners.isEmpty()) {
+            return List.of();
         }
-        return picked;
+        Random random = new Random(1000L + courseIndex * 7919L);
+        List<User> pool = new ArrayList<>(learners);
+        // Xáo trộn toàn bộ danh sách rồi lấy đầu N -> mỗi khóa học có tập học viên khác nhau.
+        Collections.shuffle(pool, random);
+        return new ArrayList<>(pool.subList(0, Math.min(count, pool.size())));
     }
 
     // =====================================================================
@@ -226,26 +278,27 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
     ) {
         LocalDateTime now = LocalDateTime.now();
         int lessonCount = lessons.size();
+        Random random = new Random(42L + courseIndex * 104729L);
 
-        for (int i = 0; i < learners.size(); i++) {
-            User learner = learners.get(i);
-            int completedLessons = Math.max(0, Math.min(lessonCount,
-                    COMPLETED_LESSON_PATTERN[(i + courseIndex * 3) % COMPLETED_LESSON_PATTERN.length]
-                            + profile.completionBias()
-                            + departmentBias(learner)));
+        // Xáo trộn danh sách học viên để hành vi được phân bố ngẫu nhiên.
+        List<User> shuffled = new ArrayList<>(learners);
+        Collections.shuffle(shuffled, random);
 
-            // Luôn chừa một nhóm học viên hoàn thành 100% khóa học để có dữ liệu
-            // "chứng chỉ cấp" và nhóm phân bố tiến độ 100% trong tab Hoạt động.
-            // Phòng ban "yếu" hơn thì ít người hoàn thành tuyệt đối hơn để dữ liệu
-            // so sánh giữa các phòng ban có sự khác biệt rõ ràng.
-            int completionStride = departmentCompletionStride(learner);
-            if (completionStride > 0 && i % completionStride == 0) {
-                completedLessons = lessonCount;
-            }
+        for (int i = 0; i < shuffled.size(); i++) {
+            User learner = shuffled.get(i);
+            LearnerSegment segment = pickSegment(profile, i);
 
-            Integer idleDays = IDLE_DAYS_PATTERN[(i + courseIndex * 5) % IDLE_DAYS_PATTERN.length];
-            if (idleDays != null) {
-                idleDays = (int) Math.round(idleDays * profile.idleScale());
+            int completedLessons = completedLessonsFor(segment, lessonCount, random);
+            Integer idleDays = idleDaysFor(segment, profile, random);
+
+            // Phong ban manh thi ti le hoan thanh 100% cao hon.
+            int deptStride = departmentCompletionStride(learner);
+            if (deptStride > 0) {
+                boolean strong = segment == LearnerSegment.COMPLETER || segment == LearnerSegment.ENGAGED;
+                int stride = strong ? deptStride : deptStride * 3;
+                if (i % stride == 0) {
+                    completedLessons = lessonCount;
+                }
             }
 
             CourseEnrollment enrollment = enrollmentRepository
@@ -257,19 +310,63 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
             enrollment.setLastAccessedAt(idleDays == null ? null : now.minusDays(idleDays));
             enrollment = enrollmentRepository.save(enrollment);
 
-            // createdAt dùng @CreationTimestamp nên phải backdate bằng SQL sau khi insert.
-            // Rải đăng ký trong N tháng gần nhất để biểu đồ "Xu hướng" có dữ liệu.
+            // createdAt dung @CreationTimestamp nen phai backdate bang SQL sau khi insert.
+            // Rai dang ky ngau nhien trong N thang gan day de bieu do "Xu huong" co du lieu.
             int spread = profile.enrollmentSpreadDays();
-            LocalDateTime enrolledAt = now.minusDays(spread - (i * 7L) % Math.max(1, spread))
-                    .minusHours(i % 12)
+            long ageDays = 1 + random.nextInt(Math.max(1, spread));
+            LocalDateTime enrolledAt = now.minusDays(ageDays)
+                    .minusHours(random.nextInt(24))
                     .withSecond(0)
                     .withNano(0);
             jdbc.update("UPDATE course_enrollments SET created_at = ?, updated_at = ? WHERE id = ?",
                     enrolledAt, enrolledAt, enrollment.getId());
 
-            seedProgress(enrollment, lessons, completedLessons, enrolledAt, now);
+            seedProgress(enrollment, lessons, completedLessons, enrolledAt, now, profile, random);
             seedCertificate(course, learner, completedLessons, lessonCount);
         }
+    }
+
+    /**
+     * Chon nhom hanh vi cho hoc vien thu {@code index} cua khoa hoc.
+     *
+     * <p>Tinh theo chu ky co dinh de ty le moi nhom chinh xac va o dinh giua cac lan chay.
+     */
+    private LearnerSegment pickSegment(CourseProfile profile, int index) {
+        LearnerSegment[] segments = profile.segments();
+        int slot = index % segments.length;
+        return segments[slot];
+    }
+
+    /** So bai hoc hoan thanh theo nhom hanh vi. */
+    private int completedLessonsFor(LearnerSegment segment, int lessonCount, Random random) {
+        if (lessonCount <= 0) {
+            return 0;
+        }
+        return switch (segment) {
+            case COMPLETER -> lessonCount;
+            case ENGAGED -> Math.max(1, (int) Math.round(lessonCount * (0.65 + random.nextDouble() * 0.25)));
+            case CASUAL -> Math.max(0, (int) Math.round(lessonCount * (0.15 + random.nextDouble() * 0.35)));
+            case DROPOUT -> (int) Math.round(lessonCount * (random.nextDouble() * 0.3));
+            case NEVER_STARTED -> 0;
+        };
+    }
+
+    /**
+     * So ngay khong truy cap gan nhat.
+     *
+     * <p>Tra ve {@code null} nghia la hoc vien chua tung truy cap khoa hoc.
+     */
+    private Integer idleDaysFor(LearnerSegment segment, CourseProfile profile, Random random) {
+        if (segment == LearnerSegment.NEVER_STARTED) {
+            return null;
+        }
+        double scale = profile.idleScale();
+        return switch (segment) {
+            case ENGAGED -> (int) Math.round(random.nextDouble() * 12);
+            case CASUAL -> (int) Math.round(14 + random.nextDouble() * 30 * scale);
+            case DROPOUT -> (int) Math.round(20 + random.nextDouble() * 60 * scale);
+            default -> (int) Math.round(random.nextDouble() * 365 * scale);
+        };
     }
 
     /**
@@ -320,7 +417,9 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
             List<Lesson> lessons,
             int completedLessons,
             LocalDateTime enrolledAt,
-            LocalDateTime now
+            LocalDateTime now,
+            CourseProfile profile,
+            Random random
     ) {
         for (int index = 0; index < lessons.size(); index++) {
             Lesson lesson = lessons.get(index);
@@ -349,13 +448,53 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
                 }
                 progress.setCompletedAt(completedAt);
                 progress.setLastAccessedAt(completedAt);
+                // Học viên đã học xong bài này -> thời lượng học ~= thời lượng bài.
+                progress.setStudySeconds(
+                        studySecondsFor(lesson, enrollment, index, true, profile, random));
             } else {
                 progress.setCompletedAt(null);
                 progress.setLastAccessedAt(enrolledAt.plusDays(index % 3));
+                // Bài chưa hoàn thành -> mới xem một phần (30%-70% thời lượng bài).
+                progress.setStudySeconds(
+                        studySecondsFor(lesson, enrollment, index, false, profile, random));
             }
 
             lessonProgressRepository.save(progress);
         }
+    }
+
+    /**
+     * Tính số giây học cho một bài của một học viên.
+     *
+     * <p>Cơ sở là {@code Lesson.duration} (đơn vị giây). Học viên đã hoàn thành bài thì
+     * dành gần hết thời lượng bài (dao động 80%-115%); bài chưa hoàn thành thì mới xem
+     * một phần (30%-70%). Dao động được tính theo hash ổn định của
+     * (enrollment, lesson) để dữ liệu seed luôn giống nhau giữa các lần chạy.
+     *
+     * <p>{@code profile.studyFactor} nhân thêm vào để mỗi khóa học có tổng giờ học
+     * khác nhau (khóa "dễ" học lâu hơn, khóa "khó" học ít hơn).
+     */
+    private long studySecondsFor(
+            Lesson lesson,
+            CourseEnrollment enrollment,
+            int index,
+            boolean completed,
+            CourseProfile profile,
+            Random random
+    ) {
+        int duration = lesson.getDuration() == null ? 0 : Math.max(0, lesson.getDuration());
+        if (duration == 0) {
+            return 0L;
+        }
+        // 0..99
+        int variation = Math.floorMod(
+                Objects.hash(enrollment.getId(), lesson.getId(), index), 100);
+        double ratio = completed
+                ? 0.80 + variation / 100.0 * 0.35
+                : 0.30 + variation / 100.0 * 0.40;
+        // Dao động ngẫu nhiên nhỏ cho từng học viên để giờ học không bị trùng lặp.
+        double jitter = 0.85 + random.nextDouble() * 0.30;
+        return Math.round(duration * ratio * profile.studyFactor() * jitter);
     }
 
     private void seedCertificate(
@@ -382,14 +521,18 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
     // =====================================================================
 
     private void seedReviews(Course course, List<User> learners, int courseIndex, CourseProfile profile) {
+        Random random = new Random(7L + courseIndex * 15485863L);
+
         for (int i = 0; i < learners.size(); i++) {
             User learner = learners.get(i);
             if (courseReviewRepository.existsByCourseIdAndUserId(course.getId(), learner.getId())) {
                 continue;
             }
 
-            int rating = clampRating(
-                    RATING_PATTERN[(i + courseIndex * 3) % RATING_PATTERN.length] + profile.ratingShift());
+            // Điểm ngẫu nhiên lệch về phía 4-5 sao, rồi dịch theo profile của khóa học.
+            int rating = 3 + (int) Math.round(Math.pow(random.nextDouble(), 1.4) * 2);
+            rating = clampRating(rating + profile.ratingShift());
+
             CourseReview review = new CourseReview();
             review.setCourse(course);
             review.setUser(learner);
@@ -646,7 +789,7 @@ public class CourseAnalyticsDataInitializer implements CommandLineRunner {
         log.info("Assigned {} learners across {} departments.", learners.size(), departments.size());
     }
 
-    /** Lấy danh sách học viên mẫu (student01@example.com ... student50@example.com). */
+    /** Lấy danh sách học viên mẫu (student01@example.com ... student100@example.com). */
     private List<User> loadLearners() {
         Role studentRole = roleRepository.findByName("STUDENT").orElse(null);
 

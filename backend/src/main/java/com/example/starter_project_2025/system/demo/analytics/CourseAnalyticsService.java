@@ -6,6 +6,7 @@ import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.demo.analytics.CourseAnalyticsDTO.*;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course_review.CourseReviewRepository;
+import com.example.starter_project_2025.system.demo.department.Department;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
@@ -39,6 +40,10 @@ public class CourseAnalyticsService {
 
     private static final int MAX_TREND_BUCKETS = 400;
     private static final int DEFAULT_INACTIVE_DAYS = 14;
+    /** Id giả cho nhóm học viên chưa thuộc phòng ban nào. */
+    private static final long UNASSIGNED_DEPARTMENT_ID = -1L;
+    private static final String UNASSIGNED_DEPARTMENT_CODE = "UNASSIGNED";
+    private static final String UNASSIGNED_DEPARTMENT_NAME = "Chưa phân phòng ban";
 
     private final CourseAnalyticsRepository analyticsRepository;
     private final CourseReportRepository courseReportRepository;
@@ -173,7 +178,7 @@ public class CourseAnalyticsService {
     }
 
     // =====================================================================
-    // 3. Mức độ hoạt động + học viên nguy cơ bỏ học
+    // 3. Mức độ hoạt động + dự đoán rủi ro bỏ học
     // =====================================================================
 
     public ActivityResponse getActivity(Long courseId, Integer inactiveDays, Integer limit) {
@@ -185,61 +190,90 @@ public class CourseAnalyticsService {
         }
         int maxRows = limit == null ? 50 : Math.max(1, Math.min(limit, 500));
 
-        int lessonCount = lessonRepository.findActiveByCourseIdOrdered(courseId).size();
-        List<CourseEnrollment> enrollments = analyticsRepository.findActiveEnrollmentsWithUser(courseId);
+        ActivityComputation computation = computeActivity(courseId, threshold);
+        List<AtRiskLearner> atRisk = computation.atRisk;
 
-        Map<Long, Long> completedByEnrollment = new HashMap<>();
-        for (Object[] row : analyticsRepository.countCompletedLessonsPerEnrollment(courseId)) {
-            completedByEnrollment.put((Long) row[0], ((Number) row[1]).longValue());
-        }
+        atRisk.sort(Comparator
+                .comparingInt((AtRiskLearner a) -> a.riskScore()).reversed()
+                .thenComparing(Comparator.comparingLong(AtRiskLearner::inactiveDays).reversed()));
+        List<AtRiskLearner> top = atRisk.size() > maxRows ? atRisk.subList(0, maxRows) : atRisk;
 
-        LocalDateTime now = LocalDateTime.now();
-        long completed = 0, active = 0, inactive = 0, neverStarted = 0;
+        long high = computation.highRisk;
+        long medium = computation.mediumRisk;
+        long low = computation.lowRisk;
+
+        List<RiskLevelBucket> riskDistribution = List.of(
+                new RiskLevelBucket("HIGH", high),
+                new RiskLevelBucket("MEDIUM", medium),
+                new RiskLevelBucket("LOW", low));
+
+        double avgScore = atRisk.isEmpty() ? 0
+                : round1(atRisk.stream().mapToInt(AtRiskLearner::riskScore).average().orElse(0));
+
+        return new ActivityResponse(courseId, course.getName(), threshold, computation.totalLearners,
+                computation.completed, computation.active, computation.inactive, computation.neverStarted,
+                computation.notCompleted, atRisk.size(), high, medium, low, avgScore,
+                computation.progressDistribution, riskDistribution, top);
+    }
+
+    /**
+     * Tính toàn bộ chỉ số hoạt động + rủi ro cho một khóa học.
+     *
+     * <p>Quy tắc quan trọng:
+     * <ul>
+     *   <li>Học viên đã hoàn thành khóa học KHÔNG bao giờ nằm trong nhóm nguy cơ.</li>
+     *   <li>Học viên chưa từng mở bài học nào (lastAccessedAt = null, 0 bài hoàn thành)
+     *       được tính riêng là {@code neverStarted}, không tính là active.</li>
+     *   <li>Học viên đang học bình thường (truy cập gần đây, chưa hoàn thành) là active,
+     *       dù điểm rủi ro có thể khác 0 do tiến độ thấp / điểm thi thấp.</li>
+     * </ul>
+     */
+    private ActivityComputation computeActivity(Long courseId, int threshold) {
+        List<LearnerRisk> risks = computeLearnerRisks(courseId, threshold);
+
+        long completed = 0, active = 0, inactive = 0, neverStarted = 0, notCompleted = 0;
+        long high = 0, medium = 0, low = 0;
         long[] dist = new long[6];
         List<AtRiskLearner> atRisk = new ArrayList<>();
 
-        for (CourseEnrollment e : enrollments) {
-            long done = completedByEnrollment.getOrDefault(e.getId(), 0L);
-            int pct = lessonCount == 0 ? 0 : (int) Math.round(done * 100.0 / lessonCount);
-            dist[distributionIndex(pct)]++;
+        for (LearnerRisk r : risks) {
+            dist[distributionIndex(r.progressPercentage())]++;
 
-            if (pct == 100) {
+            if (r.completed()) {
                 completed++;
                 continue;
             }
+            notCompleted++;
 
-            boolean never = e.getLastAccessedAt() == null && done == 0;
-            LocalDateTime reference = e.getLastAccessedAt() != null ? e.getLastAccessedAt() : e.getCreatedAt();
-            long idleDays = Math.max(0, ChronoUnit.DAYS.between(reference, now));
-
-            String reason = null;
-            if (never) {
+            if (r.neverStarted()) {
                 neverStarted++;
-                if (idleDays >= threshold) {
-                    reason = "NEVER_STARTED";
-                }
-            } else if (idleDays >= threshold) {
+            } else if (r.idleDays() >= threshold) {
                 inactive++;
-                reason = "INACTIVE";
             } else {
                 active++;
             }
 
-            if (reason != null) {
-                User u = e.getUser();
+            if ("HIGH".equals(r.riskLevel())) {
+                high++;
+            } else if ("MEDIUM".equals(r.riskLevel())) {
+                medium++;
+            } else {
+                low++;
+            }
+
+            // Chỉ đưa vào nhóm nguy cơ khi điểm rủi ro >= MEDIUM.
+            if ("HIGH".equals(r.riskLevel()) || "MEDIUM".equals(r.riskLevel())) {
                 atRisk.add(new AtRiskLearner(
-                        e.getId(), u.getId(), u.getFullName(), u.getEmail(), pct,
-                        e.getCreatedAt(), e.getLastAccessedAt(), idleDays, reason,
-                        riskLevel(idleDays, threshold, pct)));
+                        r.enrollmentId(), r.userId(), r.studentName(), r.studentEmail(),
+                        r.departmentName(), r.progressPercentage(),
+                        r.enrolledAt(), r.lastAccessedAt(), r.idleDays(),
+                        r.neverStarted() ? "NEVER_STARTED" : "INACTIVE",
+                        r.riskLevel(), r.riskScore(), r.factors(), r.primaryReason(),
+                        r.studySeconds(), r.examScorePercent()));
             }
         }
 
-        atRisk.sort(Comparator
-                .comparingInt((AtRiskLearner a) -> riskOrder(a.riskLevel())).reversed()
-                .thenComparing(Comparator.comparingLong(AtRiskLearner::inactiveDays).reversed()));
-        List<AtRiskLearner> top = atRisk.size() > maxRows ? atRisk.subList(0, maxRows) : atRisk;
-
-        List<ProgressBucket> distribution = List.of(
+        List<ProgressBucket> progressDistribution = List.of(
                 new ProgressBucket("0%", dist[0]),
                 new ProgressBucket("1-25%", dist[1]),
                 new ProgressBucket("26-50%", dist[2]),
@@ -247,8 +281,126 @@ public class CourseAnalyticsService {
                 new ProgressBucket("76-99%", dist[4]),
                 new ProgressBucket("100%", dist[5]));
 
-        return new ActivityResponse(courseId, course.getName(), threshold, enrollments.size(),
-                completed, active, inactive, neverStarted, distribution, top);
+        return new ActivityComputation(
+                risks.size(), completed, active, inactive, neverStarted, notCompleted,
+                high, medium, low, progressDistribution, atRisk);
+    }
+
+    /**
+     * Chấm điểm rủi ro cho toàn bộ học viên trong phạm vi.
+     *
+     * @param courseId null = toàn hệ thống, ngược lại chỉ một khóa học
+     * @param threshold ngưỡng không hoạt động (ngày)
+     */
+    private List<LearnerRisk> computeLearnerRisks(Long courseId, int threshold) {
+        List<CourseEnrollment> enrollments = courseId == null
+                ? analyticsRepository.findActiveEnrollmentsWithUserScope(null)
+                : analyticsRepository.findActiveEnrollmentsWithUser(courseId);
+
+        // Số bài học + tổng thời lượng của từng khóa (tiến độ tính theo khóa của học viên).
+        Map<Long, Long> lessonCountByCourse = new HashMap<>();
+        Map<Long, Long> durationByCourse = new HashMap<>();
+        for (CourseEnrollment e : enrollments) {
+            Long cid = e.getCourse().getId();
+            if (!lessonCountByCourse.containsKey(cid)) {
+                lessonCountByCourse.put(cid, analyticsRepository.countActiveLessons(cid));
+                Long dur = analyticsRepository.sumActiveLessonDurations(cid);
+                durationByCourse.put(cid, dur == null ? 0L : dur);
+            }
+        }
+
+        Map<Long, long[]> studyByEnrollment = new HashMap<>();
+        for (Object[] row : analyticsRepository.aggregateLessonProgressByEnrollment(courseId)) {
+            studyByEnrollment.put((Long) row[0], new long[]{
+                    row[2] == null ? 0L : ((Number) row[2]).longValue(),
+                    ((Number) row[3]).longValue()
+            });
+        }
+
+        Map<Long, Double> examByUser = new HashMap<>();
+        for (Object[] row : analyticsRepository.aggregateExamScoresByStudent(courseId)) {
+            examByUser.put((Long) row[0], ((Number) row[1]).doubleValue());
+        }
+
+        Map<Long, String> departmentByEnrollment = departmentNamesByEnrollmentScope(courseId);
+
+        LocalDateTime now = LocalDateTime.now();
+        List<LearnerRisk> result = new ArrayList<>();
+
+        for (CourseEnrollment e : enrollments) {
+            Long cid = e.getCourse().getId();
+            long lessonCount = lessonCountByCourse.getOrDefault(cid, 0L);
+            long[] study = studyByEnrollment.getOrDefault(e.getId(), new long[]{0L, 0L});
+            long done = study[0];
+            long studySeconds = study[1];
+
+            int pct = lessonCount == 0 ? 0 : (int) Math.round(done * 100.0 / lessonCount);
+            boolean completed = lessonCount > 0 && pct >= 100;
+
+            boolean never = e.getLastAccessedAt() == null && done == 0;
+            LocalDateTime reference = e.getLastAccessedAt() != null
+                    ? e.getLastAccessedAt()
+                    : (e.getCreatedAt() != null ? e.getCreatedAt() : now);
+            long idleDays = Math.max(0, ChronoUnit.DAYS.between(reference, now));
+
+            User u = e.getUser();
+            Double examScore = u == null ? null : examByUser.get(u.getId());
+            long expectedStudy = DropoutRiskScorer.expectedStudySeconds(
+                    pct, durationByCourse.getOrDefault(cid, 0L));
+
+            DropoutRiskScorer.Result risk = DropoutRiskScorer.score(new DropoutRiskScorer.Input(
+                    pct, idleDays, threshold, examScore, studySeconds, expectedStudy,
+                    completed, never));
+
+            result.add(new LearnerRisk(
+                    e.getId(),
+                    u == null ? null : u.getId(),
+                    u == null ? null : u.getFullName(),
+                    u == null ? null : u.getEmail(),
+                    departmentByEnrollment.get(e.getId()),
+                    pct, idleDays, studySeconds, examScore, never, completed,
+                    e.getCreatedAt(), e.getLastAccessedAt(),
+                    risk.score(), risk.level(), risk.factors(), risk.primaryReason()));
+        }
+        return result;
+    }
+
+    /** Kết quả trung gian của việc tính hoạt động + rủi ro. */
+    private record ActivityComputation(
+            long totalLearners,
+            long completed,
+            long active,
+            long inactive,
+            long neverStarted,
+            long notCompleted,
+            long highRisk,
+            long mediumRisk,
+            long lowRisk,
+            List<ProgressBucket> progressDistribution,
+            List<AtRiskLearner> atRisk
+    ) {
+    }
+
+    /** Hồ sơ rủi ro của một học viên (dùng nội bộ). */
+    private record LearnerRisk(
+            Long enrollmentId,
+            Long userId,
+            String studentName,
+            String studentEmail,
+            String departmentName,
+            int progressPercentage,
+            long idleDays,
+            long studySeconds,
+            Double examScorePercent,
+            boolean neverStarted,
+            boolean completed,
+            LocalDateTime enrolledAt,
+            LocalDateTime lastAccessedAt,
+            int riskScore,
+            String riskLevel,
+            List<RiskFactor> factors,
+            String primaryReason
+    ) {
     }
 
     private static int distributionIndex(int pct) {
@@ -258,22 +410,6 @@ public class CourseAnalyticsService {
         if (pct <= 75) return 3;
         if (pct < 100) return 4;
         return 5;
-    }
-
-    private static String riskLevel(long idleDays, int threshold, int pct) {
-        int score = idleDays >= 3L * threshold ? 2 : idleDays >= 2L * threshold ? 1 : 0;
-        if (pct < 25) {
-            score = Math.min(2, score + 1);
-        }
-        return score == 2 ? "HIGH" : score == 1 ? "MEDIUM" : "LOW";
-    }
-
-    private static int riskOrder(String level) {
-        return switch (level) {
-            case "HIGH" -> 2;
-            case "MEDIUM" -> 1;
-            default -> 0;
-        };
     }
 
     // =====================================================================
@@ -421,46 +557,76 @@ public class CourseAnalyticsService {
     // =====================================================================
 
     /**
-     * Phân tích hiệu quả đào tạo theo phòng ban. Khi {@code courseId} null thì tính trên
-     * toàn bộ khóa học mà user được xem; ngược lại chỉ tính khóa học đó.
+     * Phân tích hiệu quả đào tạo theo phòng ban.
+     *
+     * <p>Phạm vi:
+     * <ul>
+     *   <li>Admin xem được toàn hệ thống (bỏ {@code courseId}).</li>
+     *   <li>Giảng viên chỉ xem được phòng ban của các khóa học mình có quyền truy cập
+     *       — buộc phải truyền {@code courseId} thuộc khóa của mình.</li>
+     * </ul>
      */
     public DepartmentAnalyticsResponse getDepartmentAnalytics(Long courseId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean admin = isAdmin(auth);
+
+        // Không phải admin thì bắt buộc phải có courseId (và phải truy cập được khóa đó).
+        if (!admin && courseId == null) {
+            throw new AccessDeniedException(
+                    "Only administrators can view department analytics across all courses");
+        }
+
         String scopeName;
         List<Object[]> rows;
         Map<Long, Long> examGraded = new HashMap<>();
         Map<Long, Double> examAvg = new HashMap<>();
+        Map<Long, Long> studySecondsByDept = new HashMap<>();
 
         if (courseId != null) {
             Course course = requireAccessibleCourse(courseId);
             scopeName = course.getName();
             rows = analyticsRepository.findDepartmentEnrollmentsWithProgressByCourse(courseId);
             for (Object[] row : analyticsRepository.aggregateExamScoresByDepartment(courseId)) {
-                examGraded.put((Long) row[0], ((Number) row[2]).longValue());
-                examAvg.put((Long) row[0], ((Number) row[1]).doubleValue());
+                examGraded.put(departmentKey(row[0]), ((Number) row[2]).longValue());
+                examAvg.put(departmentKey(row[0]), ((Number) row[1]).doubleValue());
+            }
+            for (Object[] row : analyticsRepository.aggregateStudySecondsByDepartment(courseId)) {
+                studySecondsByDept.put(departmentKey(row[0]), ((Number) row[1]).longValue());
             }
         } else {
             scopeName = "Toàn hệ thống";
             rows = analyticsRepository.findDepartmentEnrollmentsWithProgress();
             for (Object[] row : analyticsRepository.aggregateExamScoresByDepartment(null)) {
-                examGraded.put((Long) row[0], ((Number) row[2]).longValue());
-                examAvg.put((Long) row[0], ((Number) row[1]).doubleValue());
+                examGraded.put(departmentKey(row[0]), ((Number) row[2]).longValue());
+                examAvg.put(departmentKey(row[0]), ((Number) row[1]).doubleValue());
+            }
+            for (Object[] row : analyticsRepository.aggregateStudySecondsByDepartment(null)) {
+                studySecondsByDept.put(departmentKey(row[0]), ((Number) row[1]).longValue());
             }
         }
 
         // Gom enrollment theo phòng ban.
         Map<Long, DepartmentAccumulator> acc = new LinkedHashMap<>();
+        // Một học viên thuộc nhiều phòng ban xuất hiện ở nhiều dòng -> đếm distinct cho tổng.
+        Set<Long> distinctEnrollmentIds = new HashSet<>();
         for (Object[] row : rows) {
-            Long deptId = (Long) row[0];
+            boolean unassigned = row[0] == null;
+            Long deptId = departmentKey(row[0]);
+            String deptCode = unassigned ? UNASSIGNED_DEPARTMENT_CODE : (String) row[1];
+            String deptName = unassigned ? UNASSIGNED_DEPARTMENT_NAME : (String) row[2];
             DepartmentAccumulator item = acc.computeIfAbsent(deptId,
-                    id -> new DepartmentAccumulator(id, (String) row[1], (String) row[2]));
+                    id -> new DepartmentAccumulator(id, deptCode, deptName));
+            distinctEnrollmentIds.add((Long) row[3]);
 
             Long courseOfEnrollment = (Long) row[4];
             long completedLessons = ((Number) row[5]).longValue();
             LocalDateTime lastAccessed = (LocalDateTime) row[6];
+            Long userId = (Long) row[7];
+            LocalDateTime createdAt = (LocalDateTime) row[8];
 
             item.learnerCount++;
             item.enrollments.add(new DepartmentEnrollment(
-                    (Long) row[3], courseOfEnrollment, completedLessons, lastAccessed));
+                    (Long) row[3], courseOfEnrollment, completedLessons, lastAccessed, userId, createdAt));
         }
 
         // Số bài học của từng khóa để tính % hoàn thành chính xác.
@@ -472,60 +638,129 @@ public class CourseAnalyticsService {
             }
         }
 
+        // Thời gian học và điểm thi để chấm điểm rủi ro cho từng enrollment.
+        Map<Long, long[]> studyByEnrollment = new HashMap<>();
+        for (Object[] row : analyticsRepository.aggregateStudyAndProgressAllEnrollments(courseId)) {
+            studyByEnrollment.put((Long) row[0], new long[]{
+                    ((Number) row[1]).longValue(),
+                    row[2] == null ? 0L : ((Number) row[2]).longValue()
+            });
+        }
+        Map<Long, Double> examByUser = new HashMap<>();
+        for (Object[] row : analyticsRepository.aggregateExamScoresByStudent(courseId)) {
+            examByUser.put((Long) row[0], ((Number) row[1]).doubleValue());
+        }
+        Map<Long, Long> courseDurationByCourse = new HashMap<>();
+        for (Long cid : lessonCountByCourse.keySet()) {
+            Long dur = analyticsRepository.sumActiveLessonDurations(cid);
+            courseDurationByCourse.put(cid, dur == null ? 0L : dur);
+        }
+
         LocalDateTime now = LocalDateTime.now();
         List<DepartmentAnalyticsItem> items = new ArrayList<>();
-        long totalLearners = 0;
+        long totalLearners = distinctEnrollmentIds.size();
 
         for (DepartmentAccumulator item : acc.values()) {
             long learnerCount = item.learnerCount;
-            totalLearners += learnerCount;
 
             long completed = 0;
             long active = 0;
+            long neverStarted = 0;
+            long atRisk = 0;
+            long dropped = 0;
             double progressSum = 0;
 
             for (DepartmentEnrollment enrollment : item.enrollments) {
                 long lessonCount = lessonCountByCourse.getOrDefault(enrollment.courseId(), 0L);
+                long done = enrollment.completedLessons();
                 double progress = lessonCount == 0 ? 0
-                        : Math.min(100, enrollment.completedLessons() * 100.0 / lessonCount);
+                        : Math.min(100, done * 100.0 / lessonCount);
                 progressSum += progress;
 
-                if (lessonCount > 0 && enrollment.completedLessons() >= lessonCount) {
+                // Đã hoàn thành khóa học -> không tính vào active / nguy cơ / bỏ học.
+                if (lessonCount > 0 && done >= lessonCount) {
                     completed++;
+                    continue;
                 }
 
+                long[] study = studyByEnrollment.getOrDefault(enrollment.enrollmentId(), new long[]{0L, 0L});
+                long studySeconds = study[0];
+
+                boolean never = enrollment.lastAccessedAt() == null && done == 0;
                 LocalDateTime reference = enrollment.lastAccessedAt() != null
-                        ? enrollment.lastAccessedAt() : now;
+                        ? enrollment.lastAccessedAt()
+                        : (enrollment.createdAt() != null ? enrollment.createdAt() : now);
                 long idleDays = Math.max(0, ChronoUnit.DAYS.between(reference, now));
-                if (idleDays < DEFAULT_INACTIVE_DAYS) {
+
+                if (never) {
+                    neverStarted++;
+                } else if (idleDays < DEFAULT_INACTIVE_DAYS) {
                     active++;
+                }
+
+                // Bỏ học thực sự: chưa hoàn thành VÀ không hoạt động >= ngưỡng.
+                if (idleDays >= DEFAULT_INACTIVE_DAYS) {
+                    dropped++;
+                }
+
+                Long userId = enrollment.userId();
+                Double examScore = userId == null ? null : examByUser.get(userId);
+                long totalCourseSeconds = courseDurationByCourse.getOrDefault(enrollment.courseId(), 0L);
+                long expectedStudy = DropoutRiskScorer.expectedStudySeconds(progress, totalCourseSeconds);
+
+                DropoutRiskScorer.Result risk = DropoutRiskScorer.score(new DropoutRiskScorer.Input(
+                        progress, idleDays, DEFAULT_INACTIVE_DAYS, examScore, studySeconds, expectedStudy,
+                        false, never));
+
+                if ("HIGH".equals(risk.level()) || "MEDIUM".equals(risk.level())) {
+                    atRisk++;
                 }
             }
 
             double completionRate = learnerCount == 0 ? 0 : round1(completed * 100.0 / learnerCount);
             double avgProgress = learnerCount == 0 ? 0 : round1(progressSum / learnerCount);
             Long graded = examGraded.get(item.id);
+            long studySeconds = studySecondsByDept.getOrDefault(item.id, 0L);
 
             items.add(new DepartmentAnalyticsItem(
                     item.id, item.code, item.name,
                     learnerCount, completed, completionRate, avgProgress,
                     graded == null ? null : round2(examAvg.get(item.id)),
                     graded == null ? 0 : graded,
-                    active, learnerCount - active,
-                    round1(100 - completionRate)));
+                    active, neverStarted, atRisk,
+                    round1(100 - completionRate),
+                    learnerCount == 0 ? 0 : round1(dropped * 100.0 / learnerCount),
+                    studySeconds,
+                    round2(studySeconds / 3600.0),
+                    learnerCount == 0 ? 0 : round2(studySeconds / 3600.0 / learnerCount)));
         }
 
         items.sort(Comparator.comparingDouble(DepartmentAnalyticsItem::completionRate).reversed()
                 .thenComparing(Comparator.comparingLong(DepartmentAnalyticsItem::learnerCount).reversed())
                 .thenComparing(d -> d.departmentName(), Comparator.nullsLast(String::compareToIgnoreCase)));
 
-        DepartmentAnalyticsItem best = items.isEmpty() ? null : items.get(0);
-        DepartmentAnalyticsItem worst = items.size() < 2 ? null
-                : items.stream().min(Comparator.comparingDouble(DepartmentAnalyticsItem::completionRate)
+        // Nhóm "chưa phân phòng ban" không tham gia so sánh tốt nhất / kém nhất.
+        List<DepartmentAnalyticsItem> comparable = items.stream()
+                .filter(i -> !Objects.equals(i.departmentId(), UNASSIGNED_DEPARTMENT_ID))
+                .toList();
+        DepartmentAnalyticsItem best = comparable.isEmpty() ? null : comparable.get(0);
+        DepartmentAnalyticsItem worst = comparable.size() < 2 ? null
+                : comparable.stream().min(Comparator.comparingDouble(DepartmentAnalyticsItem::completionRate)
                 .thenComparing(Comparator.comparingLong(DepartmentAnalyticsItem::learnerCount).reversed())).orElse(null);
 
+        // Tính từ enrollment distinct để không cộng trùng giờ học của người thuộc nhiều phòng ban.
+        long totalStudySeconds = distinctEnrollmentIds.stream()
+                .mapToLong(id -> studyByEnrollment.getOrDefault(id, new long[]{0L, 0L})[0])
+                .sum();
+        double totalStudyHours = totalStudySeconds / 3600.0;
+
         return new DepartmentAnalyticsResponse(courseId, scopeName, totalLearners,
-                items.size(), best, worst, items);
+                items.size(), round2(totalStudyHours), best, worst, items);
+    }
+
+    /** Id phòng ban dùng làm key; null (học viên chưa có phòng ban) -> nhóm "Chưa phân phòng ban". */
+    private static Long departmentKey(Object rawId) {
+        return rawId == null ? UNASSIGNED_DEPARTMENT_ID : (Long) rawId;
     }
 
     /** Enrollment của một học viên trong phòng ban (dùng để tính tiến độ). */
@@ -533,7 +768,9 @@ public class CourseAnalyticsService {
             Long enrollmentId,
             Long courseId,
             long completedLessons,
-            LocalDateTime lastAccessedAt
+            LocalDateTime lastAccessedAt,
+            Long userId,
+            LocalDateTime createdAt
     ) {
     }
 
@@ -567,21 +804,20 @@ public class CourseAnalyticsService {
             lessonCountByCourse.put(course.getId(), analyticsRepository.countActiveLessons(course.getId()));
         }
 
-        // Gom số liệu theo khóa học.
+        // Gom so lieu theo khoa hoc.
         Map<Long, Long> learnersByCourse = new HashMap<>();
         Map<Long, Long> completedByCourse = new HashMap<>();
         Map<Long, Long> inactiveByCourse = new HashMap<>();
         Map<Long, Long> activeByCourse = new HashMap<>();
+        Map<Long, Long> neverStartedByCourse = new HashMap<>();
+        /** So hoc vien thuc su bo hoc: chua hoan thanh VA khong hoat dong >= nguong (ke ca nguoi chua tung hoc). */
+        Map<Long, Long> droppedByCourse = new HashMap<>();
 
         List<Object[]> progressRows = analyticsRepository.findEnrollmentsWithCompletedLessons();
-        Map<Long, Long> completedLessonsByEnrollment = new HashMap<>();
-        Map<Long, Long> courseOfEnrollment = new HashMap<>();
         for (Object[] row : progressRows) {
             Long courseId = (Long) row[0];
             Long enrollmentId = (Long) row[1];
             long done = ((Number) row[2]).longValue();
-            completedLessonsByEnrollment.put(enrollmentId, done);
-            courseOfEnrollment.put(enrollmentId, courseId);
             learnersByCourse.merge(courseId, 1L, Long::sum);
 
             long threshold = lessonCountByCourse.getOrDefault(courseId, 0L);
@@ -591,13 +827,43 @@ public class CourseAnalyticsService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        for (Object[] row : analyticsRepository.findEnrollmentActivity()) {
+        for (Object[] row : analyticsRepository.findEnrollmentActivityDetail()) {
             Long courseId = (Long) row[0];
+            Long enrollmentId = (Long) row[1];
             LocalDateTime lastAccessed = (LocalDateTime) row[2];
-            LocalDateTime reference = lastAccessed != null ? lastAccessed : now;
+            LocalDateTime createdAt = (LocalDateTime) row[3];
+            long done = ((Number) row[4]).longValue();
+
+            // Da hoan thanh khoa hoc -> khong tinh vao active/inactive/bo hoc.
+            long threshold = lessonCountByCourse.getOrDefault(courseId, 0L);
+            boolean completed = threshold > 0 && done >= threshold;
+            if (completed) {
+                continue;
+            }
+
+            // Phan biet ro 3 nhom:
+            // - never started: chua tung mo bai hoc nao (khong co progress va khong truy cap).
+            // - active: da hoc va truy cap gan day.
+            // - inactive: da hoc nhung lau khong truy cap.
+            boolean neverStarted = lastAccessed == null && done == 0;
+            LocalDateTime reference = lastAccessed != null
+                    ? lastAccessed
+                    : (createdAt != null ? createdAt : now);
             long idleDays = Math.max(0, ChronoUnit.DAYS.between(reference, now));
+
+            if (neverStarted) {
+                neverStartedByCourse.merge(courseId, 1L, Long::sum);
+                // Học viên mới đăng ký chưa kịp học KHÔNG bị tính là bỏ học:
+                // chỉ tính khi đã qua ngưỡng không hoạt động (cùng quy tắc với Activity / Department).
+                if (idleDays >= DEFAULT_INACTIVE_DAYS) {
+                    droppedByCourse.merge(courseId, 1L, Long::sum);
+                }
+                continue;
+            }
+
             if (idleDays >= DEFAULT_INACTIVE_DAYS) {
                 inactiveByCourse.merge(courseId, 1L, Long::sum);
+                droppedByCourse.merge(courseId, 1L, Long::sum);
             } else {
                 activeByCourse.merge(courseId, 1L, Long::sum);
             }
@@ -619,51 +885,58 @@ public class CourseAnalyticsService {
             long completed = completedByCourse.getOrDefault(courseId, 0L);
             long active = activeByCourse.getOrDefault(courseId, 0L);
             long inactive = inactiveByCourse.getOrDefault(courseId, 0L);
+            long neverStarted = neverStartedByCourse.getOrDefault(courseId, 0L);
+            long dropped = droppedByCourse.getOrDefault(courseId, 0L);
             double[] rating = ratingStats.get(courseId);
 
             double completionRate = learners == 0 ? 0 : round1(completed * 100.0 / learners);
-            double dropOffRate = learners == 0 ? 0 : round1((learners - completed) * 100.0 / learners);
+            long notCompleted = Math.max(0, learners - completed);
+            double notCompletedRate = learners == 0 ? 0 : round1(notCompleted * 100.0 / learners);
+            // Ty le bo hoc thuc su: da bo hoc (inactive + never started) / tong hoc vien.
+            double dropOffRate = learners == 0 ? 0 : round1(dropped * 100.0 / learners);
 
             all.add(new CourseRankingItem(
                     0, courseId, course.getName(), course.getInstructor(),
                     learners, completed, completionRate,
                     rating == null ? 0 : round2(rating[0]),
                     rating == null ? 0 : (long) rating[1],
-                    active, inactive, dropOffRate));
+                    active, inactive, neverStarted, notCompleted, notCompletedRate, dropOffRate));
         }
 
         all.sort(Comparator.comparingLong(CourseRankingItem::learnerCount).reversed()
                 .thenComparing(c -> c.courseName(), Comparator.nullsLast(String::compareToIgnoreCase)));
 
-        List<CourseRankingItem> topByLearners = ranked(all, null);
+        List<CourseRankingItem> topByLearners = ranked(all);
 
         List<CourseRankingItem> byCompletion = new ArrayList<>(all);
         byCompletion.sort(Comparator.comparingDouble(CourseRankingItem::completionRate).reversed()
                 .thenComparing(Comparator.comparingLong(CourseRankingItem::learnerCount).reversed()));
-        List<CourseRankingItem> topByCompletion = ranked(byCompletion, null);
+        List<CourseRankingItem> topByCompletion = ranked(byCompletion);
 
         List<CourseRankingItem> byRating = new ArrayList<>(all);
         byRating.sort(Comparator.comparingDouble(CourseRankingItem::averageRating).reversed()
                 .thenComparing(Comparator.comparingLong(CourseRankingItem::totalReviews).reversed()));
-        List<CourseRankingItem> topByRating = ranked(byRating, null);
+        List<CourseRankingItem> topByRating = ranked(byRating);
 
         List<CourseRankingItem> byDropOff = new ArrayList<>(all);
         byDropOff.sort(Comparator.comparingDouble(CourseRankingItem::dropOffRate).reversed()
                 .thenComparing(Comparator.comparingLong(CourseRankingItem::learnerCount).reversed()));
-        List<CourseRankingItem> highestDropOff = ranked(byDropOff, null);
+        List<CourseRankingItem> highestDropOff = ranked(byDropOff);
 
         return new CourseRankingResponse(courses.size(), topByLearners, topByCompletion,
-                topByRating, highestDropOff, ranked(all, null));
+                topByRating, highestDropOff, ranked(all));
     }
 
-    /** Gán lại thứ hạng 1..n cho danh sách đã sắp xếp sẵn. */
-    private static List<CourseRankingItem> ranked(List<CourseRankingItem> items, Comparator<CourseRankingItem> extra) {        List<CourseRankingItem> result = new ArrayList<>();
+    /** Gan lai thu hang 1..n cho danh sach da sap xep san. */
+    private static List<CourseRankingItem> ranked(List<CourseRankingItem> items) {
+        List<CourseRankingItem> result = new ArrayList<>();
         int rank = 1;
         for (CourseRankingItem item : items) {
             result.add(new CourseRankingItem(rank++, item.courseId(), item.courseName(), item.instructor(),
                     item.learnerCount(), item.completedLearners(), item.completionRate(),
                     item.averageRating(), item.totalReviews(), item.activeLearners(),
-                    item.inactiveLearners(), item.dropOffRate()));
+                    item.inactiveLearners(), item.neverStartedLearners(), item.notCompletedLearners(),
+                    item.notCompletedRate(), item.dropOffRate()));
         }
         return result;
     }
@@ -785,6 +1058,98 @@ public class CourseAnalyticsService {
                 totalQuestions == 0 ? 0 : round1(answered * 100.0 / totalQuestions),
                 avgResponseHours,
                 reportedLessons, reasonBuckets, unansweredItems);    }
+
+    // =====================================================================
+    // 9. Thời gian học (study time)
+    // =====================================================================
+
+    /**
+     * Thời gian học của từng học viên trong một khóa học.
+     *
+     * <p>Thời gian học được tích luỹ theo từng bài học (xem
+     * {@code LessonProgress.studySeconds}), nên đây là tổng thời gian học viên
+     * thực sự dành cho nội dung của khóa học.
+     */
+    public StudyTimeResponse getStudyTime(Long courseId) {
+        Course course = requireAccessibleCourse(courseId);
+
+        int totalLessons = lessonRepository.findActiveByCourseIdOrdered(courseId).size();
+
+        // Phòng ban chính của từng học viên (để hiển thị trong bảng).
+        Map<Long, String> departmentByEnrollment = departmentNamesByEnrollment(courseId);
+
+        List<StudentStudyTimeItem> items = new ArrayList<>();
+        long totalStudySeconds = 0;
+
+        for (Object[] row : analyticsRepository.findStudyTimeByLearner(courseId)) {
+            Long enrollmentId = (Long) row[0];
+            Long userId = (Long) row[1];
+            String fullName = (String) row[2];
+            String email = (String) row[3];
+            long studySeconds = ((Number) row[4]).longValue();
+            long completedLessons = ((Number) row[5]).longValue();
+            LocalDateTime lastAccessed = (LocalDateTime) row[6];
+
+            totalStudySeconds += studySeconds;
+
+            items.add(new StudentStudyTimeItem(
+                    enrollmentId,
+                    userId,
+                    fullName,
+                    email,
+                    departmentByEnrollment.get(enrollmentId),
+                    studySeconds,
+                    round2(studySeconds / 3600.0),
+                    (int) completedLessons,
+                    totalLessons,
+                    totalLessons == 0 ? 0 : round1(completedLessons * 100.0 / totalLessons),
+                    lastAccessed));
+        }
+
+        items.sort(Comparator.comparingLong(StudentStudyTimeItem::studySeconds).reversed()
+                .thenComparing(i -> i.studentName() == null ? "" : i.studentName(),
+                        Comparator.nullsLast(String::compareToIgnoreCase)));
+
+        StudentStudyTimeItem top = items.isEmpty() ? null : items.get(0);
+        double average = items.isEmpty() ? 0 : round2(totalStudySeconds / 3600.0 / items.size());
+
+        return new StudyTimeResponse(
+                courseId,
+                course.getName(),
+                totalStudySeconds,
+                round2(totalStudySeconds / 3600.0),
+                items.size(),
+                average,
+                top,
+                items);
+    }
+
+    /**
+     * Map enrollmentId -> tên phòng ban chính, dùng để gắn phòng ban cho từng học viên.
+     */
+    private Map<Long, String> departmentNamesByEnrollment(Long courseId) {
+        return departmentNamesByEnrollmentScope(courseId);
+    }
+
+    /** Như trên nhưng hỗ trợ cả phạm vi toàn hệ thống (courseId null). */
+    private Map<Long, String> departmentNamesByEnrollmentScope(Long courseId) {
+        Map<Long, String> result = new HashMap<>();
+        for (CourseEnrollment enrollment : analyticsRepository.findActiveEnrollmentsWithUserScope(courseId)) {
+            User user = enrollment.getUser();
+            if (user == null) {
+                continue;
+            }
+            String name = user.getDepartments().stream()
+                    .filter(java.util.Objects::nonNull)
+                    .map(Department::getName)
+                    .filter(java.util.Objects::nonNull)
+                    .sorted()
+                    .findFirst()
+                    .orElse(null);
+            result.put(enrollment.getId(), name);
+        }
+        return result;
+    }
 
     // =====================================================================
     // Phân quyền: admin xem tất cả, giảng viên chỉ xem khóa của mình
