@@ -39,7 +39,7 @@ public class ProjectTeamQueryService {
                 authentication, session.getTrainingClass());
 
         List<ProjectTeam> teams =
-                teamRepository.findAllByAllocationSession_IdOrderByIdAsc(sessionId);
+                teamRepository.findAllByAllocationSession_IdAndIsActiveTrueOrderByIdAsc(sessionId);
         Map<Long, List<ProjectMember>> assignmentsByTeam = new HashMap<>();
         for (ProjectTeam team : teams) {
             assignmentsByTeam.put(
@@ -83,7 +83,8 @@ public class ProjectTeamQueryService {
                         memberIds.size(),
                         policy.allowMultiRole(),
                         policy.quotas(),
-                        ProjectTeamLeaderService.activeLeaderId(team, assignments)
+                        ProjectTeamLeaderService.activeLeaderId(team, assignments),
+                        team.getProjectId()
                     );
                 })
                 .toList();

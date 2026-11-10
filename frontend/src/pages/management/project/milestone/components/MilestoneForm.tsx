@@ -13,6 +13,9 @@ import type { MilestoneApiError, MilestoneCreateOptions } from "@/types";
 import { AlertCircle, AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, Check, CheckCircle2, ExternalLink, RefreshCw, Save } from "lucide-react";
 import { MilestoneChecklistEditor } from "./MilestoneChecklistEditor";
 import { MilestoneErrorSummary } from "./MilestoneErrorSummary";
+import { DeadlinePicker, StartDatePicker } from "./MilestoneDatePicker";
+import { deviceToday } from "../milestone-date.utils";
+import { MilestoneScheduleInsights } from "./MilestoneScheduleInsights";
 import { MilestoneRubricSelector } from "./MilestoneRubricSelector";
 import { MILESTONE_FORM_LIMITS, milestoneFormSchemaForTenant, milestoneStepSchemaForTenant, tenantStartOfDay, tenantToday, type MilestoneFormValues } from "../milestone-form.schema";
 import { formatTenantDateTime, toFormFieldPath } from "../milestone.utils";
@@ -204,8 +207,8 @@ export function MilestoneForm({
   const minimumDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
     .toISOString()
     .slice(0, 16);
-  const tenantTomorrow = new Date(Date.parse(`${tenantToday(options.tenantTimeZone)}T00:00:00Z`) + 86400_000)
-    .toISOString().slice(0, 10);
+  const tenantTodayDate = tenantToday(options.tenantTimeZone);
+  const localToday = deviceToday();
   const scheduledStart = tenantStartOfDay(values.startDate ?? "", options.tenantTimeZone);
   const deadlineInstant = values.deadline ? new Date(values.deadline) : null;
   const validDeadline = deadlineInstant && !Number.isNaN(deadlineInstant.getTime()) ? deadlineInstant : null;
@@ -330,23 +333,32 @@ export function MilestoneForm({
             <CardContent className="grid gap-5 md:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="milestone-start-date">Start date <span className="text-destructive">*</span></Label>
-                <Input id="milestone-start-date" type="date" required min={tenantTomorrow}
-                  aria-invalid={!!errors.startDate} aria-describedby={`milestone-start-help${errors.startDate ? " milestone-start-error" : ""}`}
-                  {...register("startDate")} />
-                <p id="milestone-start-help" className="text-xs text-muted-foreground">Choose a future date in {options.tenantTimeZone}.</p>
+                <Controller control={control} name="startDate" render={({ field }) => (
+                  <StartDatePicker id="milestone-start-date" value={field.value} min={tenantTodayDate} today={tenantTodayDate}
+                    deadlineDate={values.deadline?.slice(0, 10) || undefined} disabled={submitting}
+                    invalid={!!errors.startDate} describedBy={`milestone-start-help${errors.startDate ? " milestone-start-error" : ""}`}
+                    onChange={(next) => { field.onChange(next); void trigger(values.deadline ? ["startDate", "deadline"] : ["startDate"]); }}
+                    onBlur={field.onBlur} />
+                )} />
+                <p id="milestone-start-help" className="text-xs text-muted-foreground">Choose today or a later date in {options.tenantTimeZone}.</p>
                 <FieldMessage id="milestone-start-error" message={errors.startDate?.message} />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="milestone-deadline">Deadline <span className="text-destructive">*</span></Label>
-                <Input id="milestone-deadline" type="datetime-local" required min={minimumDateTime}
-                  aria-invalid={!!errors.deadline} aria-describedby={`milestone-deadline-help${errors.deadline ? " milestone-deadline-error" : ""}`}
-                  {...register("deadline", { onBlur: () => void trigger(["startDate", "latePolicy.lateUntil"]) })} />
+                <Controller control={control} name="deadline" render={({ field }) => (
+                  <DeadlinePicker id="milestone-deadline" value={field.value} today={localToday}
+                    min={values.startDate && values.startDate > localToday ? values.startDate : localToday}
+                    startDate={values.startDate || undefined} disabled={submitting}
+                    invalid={!!errors.deadline} describedBy={`milestone-deadline-help${errors.deadline ? " milestone-deadline-error" : ""}`}
+                    onChange={field.onChange}
+                    onBlur={() => { field.onBlur(); void trigger(values.startDate ? ["deadline", "startDate", "latePolicy.lateUntil"] : ["deadline", "latePolicy.lateUntil"]); }} />
+                )} />
                 <p id="milestone-deadline-help" className="text-xs text-muted-foreground">Enter in your device time zone; review the tenant time below.</p>
                 <FieldMessage id="milestone-deadline-error" message={errors.deadline?.message} />
               </div>
-              {scheduledStart && validDeadline ? (
-                <p className="text-xs text-muted-foreground md:col-span-2">Tenant schedule: {formatTenantDateTime(scheduledStart.toISOString(), options.tenantTimeZone)} → {formatTenantDateTime(validDeadline.toISOString(), options.tenantTimeZone)}</p>
-              ) : null}
+              <MilestoneScheduleInsights startDate={values.startDate} deadlineValue={values.deadline}
+                scheduledStart={scheduledStart} deadline={validDeadline}
+                tenantTimeZone={options.tenantTimeZone} tenantToday={tenantTodayDate} />
             </CardContent>
           </Card>
       </div>

@@ -23,7 +23,6 @@ import { WorkspaceTeamBoardPanel } from "./WorkspaceTeamBoardPanel";
 import { WorkspaceBacklogPanel } from "./WorkspaceBacklogPanel";
 import { WorkspaceProjectLogsPanel } from "./WorkspaceProjectLogsPanel";
 import { WorkspaceProjectHierarchy, flattenWorkspaceProjects } from "./WorkspaceProjectHierarchy";
-import { ProjectCompletionPanel } from "./ProjectCompletionPanel";
 import { WorkspaceResourcesPanel } from "./WorkspaceResourcesPanel";
 import { WorkspaceAlertsPanel } from "@/pages/management/alerts/WorkspaceAlertsPanel";
 
@@ -105,7 +104,8 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
       </div>
       {invalidProject ? <p role="alert" className="rounded-lg border p-5 text-destructive">The selected project is outside this workspace.</p>
         : !validId || navigation.isError || navigation.isPending || hierarchy.isError || hierarchy.isPending || !validContext
-        ? <WorkspaceSectionState loading={validId && (navigation.isPending || hierarchy.isPending)} denied={sectionForbidden(navigation.error ?? hierarchy.error)}
+        ? <WorkspaceSectionState loading={validId && !navigation.isError && !hierarchy.isError
+              && (navigation.isPending || (navigation.isSuccess && hierarchy.isPending))} denied={sectionForbidden(navigation.error ?? hierarchy.error)}
             error={navigation.error ?? hierarchy.error} retry={() => void refresh()} />
         : <>
           <section aria-label="Workspace heading" className="flex flex-wrap items-start justify-between gap-3 pt-1">
@@ -119,9 +119,6 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
             {context.projectStatus && <div className="pt-1 sm:pt-6"><WorkspaceStatusBadge status={context.projectStatus} colored /></div>}
           </section>
           {hierarchy.data && <WorkspaceProjectHierarchy data={hierarchy.data} selectedId={projectId} onSelect={selectProject} />}
-          {tab !== "activity" && isMaster && projectId && !sharedMasterSelected && <ProjectCompletionPanel key={`${projectId}:${context.teamId}`} workspaceId={workspaceId}
-            projectId={projectId} teamId={context.teamId} readOnly={projectReadOnly} onChanged={() => void refresh()}
-            title={`Master completion — ${project?.name ?? context.projectName}`} />}
           <Tabs value={tab} onValueChange={changeTab} className="min-w-0 gap-5">
             <div className="min-w-0 overflow-x-auto overflow-y-hidden border-b"><TabsList aria-label="Workspace sections"
               className="h-10 w-max min-w-full justify-start gap-1 rounded-none bg-transparent p-0 align-top group-data-[orientation=horizontal]/tabs:h-10">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) =>

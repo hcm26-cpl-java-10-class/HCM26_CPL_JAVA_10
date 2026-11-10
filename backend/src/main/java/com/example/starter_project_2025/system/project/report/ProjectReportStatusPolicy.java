@@ -1,20 +1,19 @@
 package com.example.starter_project_2025.system.project.report;
 
 import com.example.starter_project_2025.system.project.domain.ProjectStatus;
-import com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus;
 import org.springframework.stereotype.Component;
-import java.util.Collection;
 import static com.example.starter_project_2025.system.project.report.ProjectReportDtos.Status;
 
-/** Reporting override agreed for US-RPT-001; never changes the Project completion workflow. */
+/** Project lifecycle with a publication gate for shared Masters; never derived from milestone review. */
 @Component
 public class ProjectReportStatusPolicy {
-    public Status evaluate(ProjectStatus project, Collection<MilestoneLifecycleStatus> milestones) {
-        if (project == ProjectStatus.CANCELLED) return Status.CANCELLED;
-        if (project == ProjectStatus.COMPLETED || !milestones.isEmpty()
-                && milestones.stream().allMatch(state -> state == MilestoneLifecycleStatus.ACCEPTED)) return Status.DONE;
-        if (milestones.contains(MilestoneLifecycleStatus.SUBMITTED)) return Status.SUBMITTED;
-        if (project == ProjectStatus.DRAFT || project == ProjectStatus.PLANNING) return Status.NOT_STARTED;
-        return Status.IN_PROGRESS;
+    public Status evaluate(ProjectStatus project) {
+        return evaluate(project, false);
+    }
+    public Status evaluate(ProjectStatus project, boolean awaitingPublication) {
+        if (project == null) throw new IllegalStateException("Project lifecycle status is missing");
+        // SPLIT provisioning creates an ACTIVE shared root even while all its teams are DRAFT.
+        if (project == ProjectStatus.ACTIVE && awaitingPublication) return Status.PLANNING;
+        return Status.valueOf(project.name());
     }
 }

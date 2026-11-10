@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.audit;
 
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
+import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -35,5 +36,13 @@ public class MilestoneAuditWriter {
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Unable to serialize milestone audit", ex);
         }
+    }
+
+    public void writeStartedOnCreate(Milestone milestone, UUID actorId, Instant now) {
+        repository.save(MilestoneAuditLog.statusEvent(
+                milestone.getId(), milestone.getProjectId(), milestone.getTenantId(), actorId,
+                "MILESTONE_AUTO_STARTED", CorrelationIdFilter.currentId(),
+                "{\"from\":\"PLANNED\",\"to\":\"IN_PROGRESS\",\"trigger\":\"CREATE\"}", now
+        ));
     }
 }

@@ -59,6 +59,7 @@ export interface DraftWarning {
 
 export interface AllocationTeam {
   teamId: number;
+  projectId?: number | null;
   leaderMemberId?: number | null;
   teamName: string;
   status: ProjectTeamStatus;

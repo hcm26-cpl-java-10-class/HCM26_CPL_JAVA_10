@@ -73,6 +73,7 @@ export function SidebarMenu() {
                         return (
                             !!module.url &&
                             !module.hiddenInMenu &&
+                            url !== "/project-board" &&
                             url !== "/project-template-versions" &&
                             url !== "/enrollments"
                         );
