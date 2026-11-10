@@ -15,6 +15,9 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +80,9 @@ export function TopicSyllabusEditorDialog({
 
   // Expanded state for chapter cards
   const [expandedChapters, setExpandedChapters] = useState<Record<number, boolean>>({});
+
+  // Reset confirmation modal
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
 
   const targetHours = topic.durationHours || 40;
 
@@ -292,11 +298,14 @@ export function TopicSyllabusEditorDialog({
 
   // Reset / Clear all chapters for this topic
   const handleClearAll = () => {
-    if (confirm("Reset schedule outline for this topic? All custom chapters will be cleared.")) {
-      resetTopicSyllabusPackage(topic.id, topic.code);
-      setChapters([]);
-      toast.info("Schedule outline cleared.");
-    }
+    setIsResetConfirmOpen(true);
+  };
+
+  const handleConfirmReset = () => {
+    resetTopicSyllabusPackage(topic.id, topic.code);
+    setChapters([]);
+    setIsResetConfirmOpen(false);
+    toast.info("Schedule outline cleared.");
   };
 
   // Save Schedule Outline
@@ -819,6 +828,55 @@ export function TopicSyllabusEditorDialog({
             </Button>
           </div>
         </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Reset Confirmation Dialog */}
+    <Dialog open={isResetConfirmOpen} onOpenChange={setIsResetConfirmOpen}>
+      <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+        <div className="border-l-4 border-red-500 p-6">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="size-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="size-5 text-red-600" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-semibold text-gray-900">
+                  Reset Schedule Outline
+                </DialogTitle>
+                <DialogDescription className="text-xs text-gray-500 mt-0.5">
+                  This action cannot be undone.
+                </DialogDescription>
+              </div>
+            </div>
+            <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-sm text-red-700 font-medium">
+                ⚠ All custom chapters and sessions for <strong>{topic.code}</strong> will be permanently cleared.
+              </p>
+              <p className="text-xs text-red-500 mt-1">
+                The schedule outline will be reset to empty. This cannot be undone.
+              </p>
+            </div>
+          </DialogHeader>
+        </div>
+        <DialogFooter className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex flex-row items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsResetConfirmOpen(false)}
+            className="text-gray-700"
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleConfirmReset}
+            className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+          >
+            <RotateCcw className="size-3.5" />
+            Yes, Reset Outline
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

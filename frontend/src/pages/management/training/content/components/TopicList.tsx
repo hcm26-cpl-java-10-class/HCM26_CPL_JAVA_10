@@ -40,6 +40,7 @@ import {
   AlertTriangle,
   ShieldAlert,
   Loader2,
+  X,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -329,8 +330,17 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
               placeholder="Enter keyword..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-              className="pl-9 w-64 bg-white border-gray-300 text-sm"
+              className="pl-9 pr-8 w-64 bg-white border-gray-300 text-sm"
             />
+            {search && (
+              <button
+                onClick={() => { setSearch(""); setPage(0); }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded"
+                title="Clear search"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
           </div>
           <Button
             variant="outline"

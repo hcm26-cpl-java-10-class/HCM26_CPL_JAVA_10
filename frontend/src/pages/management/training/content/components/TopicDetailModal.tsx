@@ -8,11 +8,18 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { Calendar, Clock, BookOpen, Upload } from "lucide-react";
-import { getTopicSyllabusPackage, getCustomPassScore } from "./topicSyllabusData";
-import type { TopicSyllabusPackage } from "./topicSyllabusData";
+import { Calendar, Clock, BookOpen, Upload, RotateCcw, SlidersHorizontal } from "lucide-react";
+import {
+  getTopicSyllabusPackage,
+  getCustomPassScore,
+  getCustomAssessmentScheme,
+  saveCustomAssessmentScheme,
+  resetCustomAssessmentScheme,
+} from "./topicSyllabusData";
+import type { TopicSyllabusPackage, AssessmentItem } from "./topicSyllabusData";
 import { TopicSyllabusEditorDialog } from "./TopicSyllabusEditorDialog";
 import { SyllabusImportDialog } from "./SyllabusImportDialog";
+import { AssessmentSchemeDialog } from "./AssessmentSchemeDialog";
 
 interface TopicDetailModalProps {
   topic: TopicItem | null;
@@ -21,7 +28,13 @@ interface TopicDetailModalProps {
   onEdit?: (t: TopicItem) => void;
 }
 
-const PIE_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444"];
+// Fixed colors matching TopicDetailView standard categories
+const PIE_COLORS: Record<string, string> = {
+  "Assignment/Lab": "#6366f1",
+  "Concept/Lecture": "#10b981",
+  "Exam & Quiz": "#f59e0b",
+};
+const PIE_COLOR_LIST = ["#6366f1", "#10b981", "#f59e0b"];
 
 const RADIAN = Math.PI / 180;
 const renderCustomizedPieLabel = ({
@@ -57,13 +70,16 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
   const [activeTab, setActiveTab] = useState<"syllabus" | "schedule">("syllabus");
   const [isOutlineEditorOpen, setIsOutlineEditorOpen] = useState(false);
   const [isSyllabusImportOpen, setIsSyllabusImportOpen] = useState(false);
+  const [isAssessmentSchemeDialogOpen, setIsAssessmentSchemeDialogOpen] = useState(false);
 
   // Dynamic syllabus data
   const [pkg, setPkg] = useState<TopicSyllabusPackage | null>(null);
+  const [customPassScore, setCustomPassScore] = useState<string>(">= 6.0 / 10");
 
   useEffect(() => {
     if (topic) {
       setPkg(getTopicSyllabusPackage(topic));
+      setCustomPassScore(getCustomPassScore(topic.id) || ">= 6.0 / 10");
     }
   }, [topic]);
 
@@ -74,11 +90,28 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
   const totalH = timeAllocation.total || topic.durationHours || 0;
   const totalMins = totalH * 60;
 
-  // Breakdown for pie chart from actual package
+  const hasCustomScheme = !!(
+    (topic.id && getCustomAssessmentScheme(topic.id)) ||
+    (topic.code && getCustomAssessmentScheme(topic.code))
+  );
+
+  const handleSaveAssessmentScheme = (newScheme: AssessmentItem[], passScore: string) => {
+    saveCustomAssessmentScheme(topic.id, newScheme, passScore, topic.code);
+    setCustomPassScore(passScore);
+    setPkg((prev) => prev ? { ...prev, assessmentScheme: newScheme } : prev);
+  };
+
+  const handleResetAssessmentScheme = () => {
+    resetCustomAssessmentScheme(topic.id, topic.code);
+    setCustomPassScore(">= 6.0 / 10");
+    setPkg(getTopicSyllabusPackage(topic));
+  };
+
+  // Breakdown for pie chart from actual package — standardized categories matching TopicDetailView
   const pieData = [
     { name: "Assignment/Lab", value: timeAllocation.lab },
     { name: "Concept/Lecture", value: timeAllocation.lecture },
-    { name: "Exam / Quiz", value: timeAllocation.exam },
+    { name: "Exam & Quiz", value: timeAllocation.exam },
   ].filter((d) => d.value > 0);
 
   const CustomTooltip = ({ active, payload }: any) => {
@@ -190,8 +223,8 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
                               label={renderCustomizedPieLabel}
                               labelLine={false}
                             >
-                              {pieData.map((_, i) => (
-                                <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                              {pieData.map((d, i) => (
+                                <Cell key={i} fill={PIE_COLORS[d.name] ?? PIE_COLOR_LIST[i % PIE_COLOR_LIST.length]} />
                               ))}
                             </Pie>
                             <Tooltip content={<CustomTooltip />} />
@@ -200,7 +233,7 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
                         <div className="mt-2 space-y-1.5">
                           {pieData.map((d, i) => (
                             <div key={i} className="flex items-center gap-2 text-xs">
-                              <span className="size-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                              <span className="size-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: PIE_COLORS[d.name] ?? PIE_COLOR_LIST[i % PIE_COLOR_LIST.length] }} />
                               <span className="text-gray-600 truncate flex-1">{d.name}: {d.value}h</span>
                             </div>
                           ))}
@@ -217,7 +250,33 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
 
               {/* Section 3: Assessment Scheme */}
               <section>
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">3. Assessment Scheme</h2>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-gray-700">3. Assessment Scheme</h2>
+                  <div className="flex items-center gap-2">
+                    {hasCustomScheme && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleResetAssessmentScheme}
+                        className="h-7 text-xs text-gray-500 hover:text-gray-700 gap-1.5"
+                      >
+                        <RotateCcw className="size-3" />
+                        Reset to Standard
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsAssessmentSchemeDialogOpen(true)}
+                      className="h-7 text-xs text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100/60 border-indigo-200 gap-1.5 font-medium shadow-sm"
+                    >
+                      <SlidersHorizontal className="size-3.5" />
+                      Adjust Scheme
+                    </Button>
+                  </div>
+                </div>
                 <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b border-gray-200">
@@ -395,6 +454,16 @@ export function TopicDetailModal({ topic, open, onOpenChange, onEdit }: TopicDet
           }}
         />
       )}
+
+      {/* Assessment Scheme Dialog */}
+      <AssessmentSchemeDialog
+        open={isAssessmentSchemeDialogOpen}
+        onOpenChange={setIsAssessmentSchemeDialogOpen}
+        topicName={topic.name}
+        initialScheme={currentPkg.assessmentScheme}
+        initialPassScore={customPassScore}
+        onSave={handleSaveAssessmentScheme}
+      />
     </Dialog>
   );
 }
