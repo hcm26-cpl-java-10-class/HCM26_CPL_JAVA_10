@@ -38,15 +38,20 @@ export function MultiRelationSelect({
   const [search, setSearch] = useState("");
   const selectedValues: any[] = Array.isArray(value) ? value : [];
 
-  const selectedItems = useMemo(
-    () =>
-      items.filter((item) =>
+  const selectedItems = useMemo(() => {
+    if (items.length === 0 && selectedValues.length > 0) {
+      return selectedValues.map((v) => ({
+        [rel.valueField]: v,
+        [rel.labelField]: v,
+      }));
+    }
+
+    return items.filter((item) =>
         selectedValues.some(
-          (v) => v?.toString() === item[rel.valueField]?.toString()
+            (v) => v?.toString() === item[rel.valueField]?.toString()
         )
-      ),
-    [items, selectedValues, rel.valueField]
-  );
+    );
+  }, [items, selectedValues, rel.valueField, rel.labelField]);
 
   const filteredItems = useMemo(
     () =>
@@ -109,22 +114,18 @@ export function MultiRelationSelect({
             <div className="flex flex-wrap gap-1 flex-1 overflow-hidden">
               {selectedItems.length > 0 ? (
                 <>
-                  {selectedItems.slice(0, MAX_VISIBLE_BADGES).map((item) => (
-                    <Badge
-                      key={item[rel.valueField]}
-                      variant="secondary"
-                      className="text-xs gap-1"
-                    >
-                      {item[rel.labelField]}
-                      <X
-                        size={12}
-                        className="cursor-pointer hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleItem(item[rel.valueField]);
-                        }}
-                      />
-                    </Badge>
+                  {selectedItems.map((item) => (
+                      <Badge key={item[rel.valueField]} variant="secondary" className="text-xs gap-1">
+                        {item[rel.labelField]}
+                        <X
+                            size={12}
+                            className="cursor-pointer hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleItem(item[rel.valueField]);
+                            }}
+                        />
+                      </Badge>
                   ))}
                   {selectedItems.length > MAX_VISIBLE_BADGES && (
                     <Badge variant="outline" className="text-xs">
@@ -148,7 +149,6 @@ export function MultiRelationSelect({
           className="w-[--radix-popover-trigger-width] p-0"
           align="start"
         >
-          {/* Search */}
           <div className="p-2 border-b">
             <div className="relative">
               <Search
@@ -164,7 +164,6 @@ export function MultiRelationSelect({
             </div>
           </div>
 
-          {/* Select all / Clear */}
           {filteredItems.length > 0 && (
             <div className="px-2 py-1.5 border-b flex items-center justify-between">
               <span className="text-xs text-muted-foreground">
@@ -197,7 +196,6 @@ export function MultiRelationSelect({
             </div>
           )}
 
-          {/* Options */}
           <ScrollArea className="h-[220px]">
             <div className="p-1">
               {filteredItems.map((item) => {

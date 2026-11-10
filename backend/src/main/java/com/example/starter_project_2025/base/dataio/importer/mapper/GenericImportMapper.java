@@ -55,7 +55,6 @@ public class GenericImportMapper {
                         converter.convert(field.getType(), raw));
             }
 
-            // ⭐ NEW: run PostImport lifecycle
             runPostImportHooks(entity);
 
             return entity;
@@ -65,9 +64,6 @@ public class GenericImportMapper {
         }
     }
 
-    /**
-     * Enterprise lifecycle hook runner
-     */
     private void runPostImportHooks(Object entity) {
 
         for (var method : entity.getClass().getDeclaredMethods()) {

@@ -7,17 +7,17 @@ import { RoleSwitchProvider } from "./contexts/RoleSwitchContext";
 import { usePermissions } from "./hooks/usePermissions";
 import { useActiveModuleGroups } from "./hooks/useSidebarMenus";
 import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
-import { routes } from "./router/component-registry";
+import { ROLE_HOME_PATHS, routes } from "./router/component-registry";
 import type { RootState } from "./store/store";
 import { getHomePathByRole } from "./utils/rbac.utils";
 import { resolveMenuPermission } from "./router/menu-permission.utils";
 
 function AppRoutes() {
     const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-    const { activeRole } = usePermissions();
+    const { activeRole, effectivePermissions } = usePermissions();
     const { data: moduleGroups = [] } = useActiveModuleGroups(isAuthenticated);
 
-    const homePath = isAuthenticated ? getHomePathByRole(activeRole) : "/login";
+    const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions) : "/login";
 
     // Backend menus may point to either explicit or generated routes. Prefer explicit implementations.
     const componentRegistry = Object.fromEntries(
@@ -31,7 +31,6 @@ function AppRoutes() {
 
     return (
         <Routes>
-            {/* Root redirect */}
             <Route path="/" element={<Navigate to={homePath} replace />} />
 
             {/* Dynamic routes from backend Module table */}
@@ -42,7 +41,9 @@ function AppRoutes() {
                     const Component = registered?.component;
 
                     if (!Component) {
-                        return <Route key={`missing-${m.id ?? m.url}`} path={m.url} element={<Navigate to="/not-found-page" replace />} />;
+                        // Frontend-controlled pages can still be exposed in the sidebar.
+                        // Their static route below is responsible for rendering them.
+                        return null;
                     }
 
                     return (
@@ -73,7 +74,10 @@ function AppRoutes() {
                         key={index}
                         path={route.path}
                         element={
-                            <ProtectedRoute requiredPermission={route.requiredPermission}>
+                            <ProtectedRoute
+                                requiredPermission={route.requiredPermission}
+                                requiredPermissions={route.requiredPermissions}
+                            >
                                 <Component />
                             </ProtectedRoute>
                         }
@@ -81,7 +85,6 @@ function AppRoutes() {
                 );
             })}
 
-            {/* Catch all */}
             <Route path="*" element={<NotFoundRedirect />} />
         </Routes>
     );

@@ -9,7 +9,7 @@ import {
 } from "@/pages/management/training/class/mocks/classTrainee.mock";
 
 export type TraineeGender = "Male" | "Female" | "Other";
-export type TraineeStatus = "Active" | "Inactive" | "Dropped Out";
+export type TraineeStatus = "Active" | "Inactive" | "Dropped";
 
 export interface TraineeFormInput {
     fullName: string;
@@ -34,7 +34,7 @@ export interface TraineeBatchResponse {
     trainees: Trainee[];
 }
 
-const useMockFallback = () => !import.meta.env.VITEST;
+const useMockFallback = () => false;
 
 async function withFallback<T>(request: () => Promise<T>, fallback: () => T): Promise<T> {
     try {

@@ -1,0 +1,49 @@
+package com.example.starter_project_2025.system.question.dto;
+
+import lombok.Getter;
+import lombok.Setter;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Mo ta bai lap trinh kieu Coderbyte: giao vien khai bao ham (ten, tham so, kieu tra ve) va 10 test case
+ * (so test tuy y, moi test chon hien thi cho sinh vien). Duoc luu dang JSON trong Question.codeSpec.
+ */
+@Getter @Setter
+public class CodeSpecDTO {
+
+    private String functionName;
+    private String returnType;
+    private List<Param> params = new ArrayList<>();
+    private List<TestCase> tests = new ArrayList<>();
+
+    /** Gioi han thoi gian chay moi test (giay, 1-10). null = mac dinh (5 giay). Luu chung trong JSON cua codeSpec. */
+    private Integer timeLimitSeconds;
+
+    /** true = giao vien tu viet lop Main (mainCode); false = he thong tu sinh. */
+    private boolean customMain;
+
+    /** Lop Main. Khi luu chi dung neu customMain; khi doc luon co gia tri (tu viet hoac ban tu sinh) de hien thi. */
+    private String mainCode;
+
+    /** Chi de tra ve (sinh tu dong tu khai bao ham). */
+    private String starterCode;
+
+    /** Code demo (loi giai mau) do giao vien viet de kiem tra test case. Chi giao vien xem, khong gui cho thi sinh. */
+    private String referenceCode;
+
+    @Getter @Setter
+    public static class Param {
+        private String name;
+        private String type;
+    }
+
+    @Getter @Setter
+    public static class TestCase {
+        /** Moi phan tu la gia tri cua 1 tham so, theo dung thu tu tham so. */
+        private List<String> inputs = new ArrayList<>();
+        private String expected;
+        private boolean visible;
+    }
+}

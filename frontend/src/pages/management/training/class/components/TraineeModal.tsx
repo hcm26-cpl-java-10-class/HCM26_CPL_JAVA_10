@@ -50,7 +50,7 @@ const HCM_STUDENT_ID_RULE: FptStudentIdSiteRule = {
     placeholder: "e.g. SE180101 (SE/SS/AI/IA + 6 digits)",
     formatHint: "HCM: SE / SS / AI / IA + 6 digits",
     errorMessage:
-        "FPT Student ID for HCM site must be SE, SS, AI, or IA followed by 6 digits (e.g. SE180101).",
+        "Student ID for HCM site must be SE, SS, AI, or IA followed by 6 digits (e.g. SE180101).",
 };
 
 const HN_STUDENT_ID_RULE: FptStudentIdSiteRule = {
@@ -61,7 +61,7 @@ const HN_STUDENT_ID_RULE: FptStudentIdSiteRule = {
     placeholder: "e.g. HE180101 (HE/HS/AI/IA + 6 digits)",
     formatHint: "HN: HE / HS / AI / IA + 6 digits",
     errorMessage:
-        "FPT Student ID for HN site must be HE, HS, AI, or IA followed by 6 digits (e.g. HE180101).",
+        "Student ID for HN site must be HE, HS, AI, or IA followed by 6 digits (e.g. HE180101).",
 };
 
 const OTHER_SITE_STUDENT_ID_RULE: FptStudentIdSiteRule = {
@@ -71,7 +71,7 @@ const OTHER_SITE_STUDENT_ID_RULE: FptStudentIdSiteRule = {
     pattern: /^DE\d{6}$/i,
     placeholder: "e.g. DE180101 (DE + 6 digits)",
     formatHint: "DE + 6 digits",
-    errorMessage: "FPT Student ID for this site must be DE followed by 6 digits (e.g. DE180101).",
+    errorMessage: "Student ID for this site must be DE followed by 6 digits (e.g. DE180101).",
 };
 
 export function getFptStudentIdRuleBySite(site?: string): FptStudentIdSiteRule {
@@ -132,13 +132,12 @@ export function formatFptStudentIdForSite(rawValue?: string, site?: string, trai
 }
 
 const GENDER_OPTIONS: TraineeGender[] = ["Male", "Female", "Other"];
-const STATUS_OPTIONS: TraineeStatus[] = ["Active", "Inactive", "Dropped Out"];
+const STATUS_OPTIONS: TraineeStatus[] = ["Active", "Inactive", "Dropped"];
 
 export const MAX_TRAINEE_NAME_LENGTH = 100;
 export const MIN_TRAINEE_AGE_YEARS = 17;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const NATIONAL_ID_PATTERN = /^\d{9,12}$/;
 
 export function getMaxAllowedDobDateString(referenceDate: Date = new Date()): string {
     const cutoffYear = referenceDate.getFullYear() - MIN_TRAINEE_AGE_YEARS;
@@ -193,9 +192,16 @@ export function normalizeTraineeGender(gender?: string): TraineeGender {
 
 export function normalizeTraineeStatus(status?: string): TraineeStatus {
     const normalized = (status ?? "").trim().toLowerCase();
-    if (normalized === "inactive") return "Inactive";
+    if (
+        normalized === "inactive" ||
+        normalized === "suspended" ||
+        normalized === "graduated" ||
+        normalized === "completed"
+    ) {
+        return "Inactive";
+    }
     if (normalized === "dropped" || normalized === "drop-out" || normalized === "dropped out") {
-        return "Dropped Out";
+        return "Dropped";
     }
     return "Active";
 }
@@ -203,31 +209,28 @@ export function normalizeTraineeStatus(status?: string): TraineeStatus {
 export function resolveTraineeStatusBadge(status?: string) {
     const normalized = (status ?? "Active").trim().toLowerCase();
 
-    if (!normalized || normalized === "active" || normalized === "studying") {
-        return {
-            label: "Active",
-            className: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300",
-        };
-    }
-
-    if (normalized === "inactive") {
+    if (
+        normalized === "inactive" ||
+        normalized === "suspended" ||
+        normalized === "graduated" ||
+        normalized === "completed"
+    ) {
         return {
             label: "Inactive",
-            className: "bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300",
+            className: "bg-gray-100 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300",
         };
     }
 
     if (normalized === "dropped" || normalized === "drop-out" || normalized === "dropped out") {
         return {
-            label: "Dropped Out",
+            label: "Dropped",
             className: "bg-rose-100 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300",
         };
     }
 
-    const raw = (status ?? "").trim();
     return {
-        label: raw.charAt(0).toUpperCase() + raw.slice(1),
-        className: "bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300",
+        label: "Active",
+        className: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:text-emerald-300",
     };
 }
 
@@ -281,7 +284,7 @@ function validateTraineeForm(
 
     const studentId = values.fptAccount.trim().toUpperCase();
     if (!studentId) {
-        errors.fptAccount = "FPT Student ID is required.";
+        errors.fptAccount = "Student ID is required.";
     } else if (!studentIdRule.pattern.test(studentId)) {
         errors.fptAccount = studentIdRule.errorMessage;
     } else if (
@@ -291,7 +294,7 @@ function validateTraineeForm(
                 studentId,
         )
     ) {
-        errors.fptAccount = "FPT Student ID already exists in this class.";
+        errors.fptAccount = "Student ID already exists in this class.";
     }
 
     const email = values.personalEmail.trim();
@@ -303,15 +306,6 @@ function validateTraineeForm(
         peers.some((item) => (item.personalEmail ?? item.email ?? "").trim().toLowerCase() === email.toLowerCase())
     ) {
         errors.personalEmail = "Personal Email already exists in this class.";
-    }
-
-    const nationalId = values.nationalId.trim();
-    if (!nationalId) {
-        errors.nationalId = "National ID is required.";
-    } else if (!NATIONAL_ID_PATTERN.test(nationalId)) {
-        errors.nationalId = "National ID must be 9 to 12 digits.";
-    } else if (peers.some((item) => (item.nationalId ?? "").trim() === nationalId)) {
-        errors.nationalId = "National ID already exists in this class.";
     }
 
     const dob = (values.dob ?? "").trim();
@@ -341,9 +335,8 @@ function TraineeProfileBody({
     const studentId = membershipOnly ? trainee.fptAccount || trainee.code || "" : formatFptStudentIdForSite(trainee.fptAccount || trainee.code, site, trainee.id);
     const fields: Array<{ label: string; value: string }> = [
         { label: "Full Name", value: trainee.fullName || "—" },
-        { label: "FPT Student ID", value: studentId || "—" },
+        { label: "Student ID", value: studentId || "—" },
         { label: "Personal Email", value: trainee.personalEmail || trainee.email || "—" },
-        { label: "National ID", value: trainee.nationalId || "—" },
         { label: "DOB", value: trainee.dob ? formatDate(trainee.dob) : "—" },
         { label: "Gender", value: trainee.gender || "—" },
     ];
@@ -354,7 +347,7 @@ function TraineeProfileBody({
                 <div>
                     <p className="text-base font-semibold text-foreground">{trainee.fullName || "—"}</p>
                     <p className="text-xs text-muted-foreground">
-                        FPT Student ID: {studentId || "—"}
+                        Student ID: {studentId || "—"}
                     </p>
                 </div>
                 <Badge variant="secondary" className={cn("rounded-full px-3 py-0.5 text-xs font-medium", badge.className)}>
@@ -444,34 +437,11 @@ function TraineeFormBody({
     return (
         <form noValidate onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {/* 1. Full Name */}
-                <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                        <Label htmlFor="trainee-full-name">
-                            Full Name <span className="text-destructive">*</span>
-                        </Label>
-                        <span className="text-[11px] font-medium text-muted-foreground">
-                            {values.fullName.length}/{MAX_TRAINEE_NAME_LENGTH}
-                        </span>
-                    </div>
-                    <Input
-                        id="trainee-full-name"
-                        placeholder="e.g. Hoàng Phương Bình"
-                        maxLength={MAX_TRAINEE_NAME_LENGTH}
-                        value={values.fullName}
-                        aria-invalid={Boolean(errors.fullName)}
-                        onChange={(e) =>
-                            updateField("fullName", e.target.value.slice(0, MAX_TRAINEE_NAME_LENGTH))
-                        }
-                    />
-                    {errors.fullName ? <p className="text-xs text-destructive">{errors.fullName}</p> : null}
-                </div>
-
-                {/* 2. FPT Student ID */}
+                {/* 1. Student ID */}
                 <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                         <Label htmlFor="trainee-fpt-account">
-                            FPT Student ID <span className="text-destructive">*</span>
+                            Student ID <span className="text-destructive">*</span>
                         </Label>
                         <span className="text-[11px] font-medium text-muted-foreground">
                             {studentIdRule.formatHint}
@@ -487,6 +457,29 @@ function TraineeFormBody({
                     {errors.fptAccount ? <p className="text-xs text-destructive">{errors.fptAccount}</p> : null}
                 </div>
 
+                {/* 2. Full Name */}
+                <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="trainee-full-name">
+                            Full Name <span className="text-destructive">*</span>
+                        </Label>
+                        <span className="text-[11px] font-medium text-muted-foreground">
+                            {values.fullName.length}/{MAX_TRAINEE_NAME_LENGTH}
+                        </span>
+                    </div>
+                    <Input
+                        id="trainee-full-name"
+                        placeholder="e.g. John Doe"
+                        maxLength={MAX_TRAINEE_NAME_LENGTH}
+                        value={values.fullName}
+                        aria-invalid={Boolean(errors.fullName)}
+                        onChange={(e) =>
+                            updateField("fullName", e.target.value.slice(0, MAX_TRAINEE_NAME_LENGTH))
+                        }
+                    />
+                    {errors.fullName ? <p className="text-xs text-destructive">{errors.fullName}</p> : null}
+                </div>
+
                 {/* 3. Personal Email */}
                 <div className="space-y-1.5">
                     <Label htmlFor="trainee-personal-email">
@@ -495,7 +488,7 @@ function TraineeFormBody({
                     <Input
                         id="trainee-personal-email"
                         type="email"
-                        placeholder="e.g. phuongbinh.conan@gmail.com"
+                        placeholder="e.g. john.doe@example.com"
                         value={values.personalEmail}
                         aria-invalid={Boolean(errors.personalEmail)}
                         onChange={(e) => updateField("personalEmail", e.target.value)}
@@ -503,22 +496,7 @@ function TraineeFormBody({
                     {errors.personalEmail ? <p className="text-xs text-destructive">{errors.personalEmail}</p> : null}
                 </div>
 
-                {/* 4. National ID */}
-                <div className="space-y-1.5">
-                    <Label htmlFor="trainee-national-id">
-                        National ID <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                        id="trainee-national-id"
-                        placeholder="e.g. 075204005839"
-                        value={values.nationalId}
-                        aria-invalid={Boolean(errors.nationalId)}
-                        onChange={(e) => updateField("nationalId", e.target.value)}
-                    />
-                    {errors.nationalId ? <p className="text-xs text-destructive">{errors.nationalId}</p> : null}
-                </div>
-
-                {/* 5. DOB */}
+                {/* 4. DOB */}
                 <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                         <Label htmlFor="trainee-dob">
@@ -539,7 +517,7 @@ function TraineeFormBody({
                     {errors.dob ? <p className="text-xs text-destructive">{errors.dob}</p> : null}
                 </div>
 
-                {/* 6. Gender */}
+                {/* 5. Gender */}
                 <div className="space-y-1.5">
                     <Label htmlFor="trainee-gender">Gender</Label>
                     <NativeSelect
@@ -555,8 +533,8 @@ function TraineeFormBody({
                     </NativeSelect>
                 </div>
 
-                {/* 7. Status */}
-                <div className="space-y-1.5 sm:col-span-2">
+                {/* 6. Status */}
+                <div className="space-y-1.5">
                     <Label htmlFor="trainee-status">Status</Label>
                     <NativeSelect
                         id="trainee-status"
@@ -592,8 +570,12 @@ function MembershipFormBody({ trainee, existingTrainees, onSubmit, onClose }: {
 }) {
     const [studentId, setStudentId] = useState(trainee?.fptAccount ?? trainee?.code ?? "");
     const [fullName, setFullName] = useState(trainee?.fullName ?? "");
+    const [personalEmail, setPersonalEmail] = useState(trainee?.personalEmail ?? trainee?.email ?? "");
+    const [dob, setDob] = useState(trainee?.dob ? splitLocalDateTime(trainee.dob).date : "");
+    const [gender, setGender] = useState<TraineeGender>(normalizeTraineeGender(trainee?.gender));
     const [status, setStatus] = useState<TraineeStatus>(normalizeTraineeStatus(trainee?.status));
     const [error, setError] = useState("");
+    const maxAllowedDob = getMaxAllowedDobDateString();
     const submit = (event: FormEvent) => {
         event.preventDefault();
         const code = studentId.trim().toUpperCase();
@@ -603,23 +585,51 @@ function MembershipFormBody({ trainee, existingTrainees, onSubmit, onClose }: {
         if (!trainee && existingTrainees.some(row => (row.fptAccount ?? row.code ?? "").toUpperCase() === code)) {
             setError("Student is already enrolled in this class."); return;
         }
-        onSubmit({ fptAccount: code, fullName: fullName.trim(), personalEmail: trainee?.personalEmail ?? trainee?.email ?? "",
-            nationalId: trainee?.nationalId ?? "", dob: trainee?.dob ?? "", gender: normalizeTraineeGender(trainee?.gender),
-            status: trainee ? status : "Active" });
+        onSubmit({
+            fptAccount: code,
+            fullName: fullName.trim(),
+            personalEmail: personalEmail.trim(),
+            nationalId: "",
+            dob,
+            gender,
+            status,
+        });
     };
     return <form onSubmit={submit} className="space-y-4">
         <p className="text-sm text-muted-foreground">Only an existing active master student can be enrolled. Personal profiles are read-only; Save Changes verifies the identity with the backend.</p>
-        <div className="space-y-2"><Label htmlFor="enrollment-student-id">FPT Student ID *</Label>
-            <Input id="enrollment-student-id" value={studentId} readOnly={!!trainee} maxLength={64} onChange={event => setStudentId(event.target.value)} /></div>
-        <div className="space-y-2"><Label htmlFor="enrollment-full-name">Full Name *</Label>
-            <Input id="enrollment-full-name" value={fullName} readOnly={!!trainee} maxLength={100} onChange={event => setFullName(event.target.value)} /></div>
-        {trainee && <div className="space-y-2"><Label htmlFor="enrollment-status">Enrollment Status</Label>
-            <NativeSelect id="enrollment-status" value={status} onChange={event => setStatus(event.target.value as TraineeStatus)}>
-                {STATUS_OPTIONS.map(value => <option key={value}>{value}</option>)}
-            </NativeSelect></div>}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+                <Label htmlFor="enrollment-student-id">Student ID <span className="text-destructive">*</span></Label>
+                <Input id="enrollment-student-id" placeholder="e.g. SE180101" value={studentId} readOnly={!!trainee} maxLength={64} onChange={event => setStudentId(event.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+                <Label htmlFor="enrollment-full-name">Full Name <span className="text-destructive">*</span></Label>
+                <Input id="enrollment-full-name" placeholder="e.g. John Doe" value={fullName} readOnly={!!trainee} maxLength={100} onChange={event => setFullName(event.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+                <Label htmlFor="enrollment-personal-email">Personal Email</Label>
+                <Input id="enrollment-personal-email" type="email" placeholder="e.g. john.doe@example.com" value={personalEmail} onChange={event => setPersonalEmail(event.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+                <Label htmlFor="enrollment-dob">DOB</Label>
+                <Input id="enrollment-dob" type="date" max={maxAllowedDob} value={dob} onChange={event => setDob(event.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+                <Label htmlFor="enrollment-gender">Gender</Label>
+                <NativeSelect id="enrollment-gender" value={gender} onChange={event => setGender(event.target.value as TraineeGender)}>
+                    {GENDER_OPTIONS.map(value => <option key={value} value={value}>{value}</option>)}
+                </NativeSelect>
+            </div>
+            <div className="space-y-1.5">
+                <Label htmlFor="enrollment-status">Status</Label>
+                <NativeSelect id="enrollment-status" value={status} onChange={event => setStatus(event.target.value as TraineeStatus)}>
+                    {STATUS_OPTIONS.map(value => <option key={value} value={value}>{value}</option>)}
+                </NativeSelect>
+            </div>
+        </div>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit">{trainee ? "Update Trainee" : "Add Trainee"}</Button></DialogFooter>
+            <Button type="submit" className="bg-[#283593] text-white hover:bg-[#1a237e] dark:bg-blue-600 dark:hover:bg-blue-500">{trainee ? "Update Trainee" : "Add Trainee"}</Button></DialogFooter>
     </form>;
 }
 

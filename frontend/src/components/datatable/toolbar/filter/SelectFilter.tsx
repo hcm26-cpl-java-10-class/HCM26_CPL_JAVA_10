@@ -15,7 +15,7 @@ import type { FieldSchema } from "@/types";
 
 interface SelectFilterProps {
   field: FieldSchema;
-  /** Mảng giá trị đã chọn (hỗ trợ multi-select) */
+  /** Selected value or values, depending on the field schema. */
   value: any;
   onChange: (value: any) => void;
 }
@@ -26,8 +26,8 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
   const [search, setSearch] = useState("");
   const options = field.filterOptions || field.options || [];
   const isIconField = field.type === "icon" || field.name === "icon";
+  const isMultiple = field.filterMultiple !== false;
 
-  // Normalize value to always be an array for multi-select
   const selectedValues: string[] = useMemo(() => {
     if (value === undefined || value === null || value === "") return [];
     if (Array.isArray(value)) return value.map((v: any) => v?.toString());
@@ -52,11 +52,19 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
 
   const toggleValue = (optValue: any) => {
     const strVal = optValue?.toString();
+    if (field.filterMultiple === false) {
+      onChange(selectedValues.includes(strVal) ? undefined : strVal);
+      return;
+    }
     if (selectedValues.includes(strVal)) {
+      if (!isMultiple) {
+        onChange(undefined);
+        return;
+      }
       const next = selectedValues.filter((v) => v !== strVal);
       onChange(next.length > 0 ? next : undefined);
     } else {
-      onChange([...selectedValues, strVal]);
+      onChange(isMultiple ? [...selectedValues, strVal] : strVal);
     }
   };
 
@@ -70,6 +78,10 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
   };
 
   const clearAll = () => {
+    if (!isMultiple) {
+      onChange(undefined);
+      return;
+    }
     if (search.trim()) {
       const filteredIds = new Set(
         filteredOptions.map((o) => o.value?.toString())
@@ -113,7 +125,6 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-0 overflow-hidden" align="start">
-        {/* Search */}
         {options.length > 5 && (
           <div className="p-2 border-b">
             <div className="relative">
@@ -131,14 +142,13 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
           </div>
         )}
 
-        {/* Select all / Clear */}
         {filteredOptions.length > 0 && (
           <div className="px-2 py-1 border-b flex items-center justify-between">
             <span className="text-[10px] text-muted-foreground">
               {selectedValues.length}/{options.length}
             </span>
             <div className="flex gap-0.5">
-              {!allFilteredSelected && (
+              {isMultiple && !allFilteredSelected && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -162,7 +172,6 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
           </div>
         )}
 
-        {/* Options */}
         <ScrollArea className="h-[200px]">
           <div className="p-1">
             {filteredOptions.map((option) => {
@@ -197,7 +206,6 @@ export function SelectFilter({ field, value, onChange }: SelectFilterProps) {
           </div>
         </ScrollArea>
 
-        {/* Selected preview */}
         {selectedValues.length > 0 && (
           <div className="p-1.5 border-t flex flex-wrap gap-1">
             {selectedLabels.slice(0, 3).map((label, i) => (

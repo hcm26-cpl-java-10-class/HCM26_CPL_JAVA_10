@@ -282,7 +282,7 @@ export default function AuditPage() {
     };
 
     return (
-        <MainLayout pathName={{ training: "Training Operations", audit: "Audit" }}>
+        <MainLayout pathName={{ training: "Training Management", audit: "Audit" }}>
             <div className="space-y-5">
                 {/* Header */}
                 <div className="flex flex-wrap items-center justify-between gap-3">

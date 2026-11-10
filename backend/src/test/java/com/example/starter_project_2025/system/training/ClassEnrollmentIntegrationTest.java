@@ -108,18 +108,18 @@ class ClassEnrollmentIntegrationTest {
             .andExpect(jsonPath("$.rows[0].errors.dob").isArray()).andReturn().getResponse().getContentAsString();
         assertFalse(response.contains("secret-value")); assertFalse(response.contains("not-an-email"));
     }
-    @Test void unknownAndInactiveStudentsAreNeverCreated() throws Exception {
-        postRows("import", List.of(new Row(2, "UNKNOWN", "Unknown Student", null, null, null, null))).andExpect(status().isBadRequest());
+    @Test void invalidAndInactiveStudentsAreNeverCreated() throws Exception {
+        postRows("import", List.of(new Row(2, "", "Empty Student ID", null, null, null, null))).andExpect(status().isBadRequest());
         when(directory.fetchAllTrainees()).thenReturn(List.of(Map.of("id", 101, "fptAccount", "SE999001", "fullName", "Test Student One", "status", "Inactive")));
         postRows("import", List.of(row(1))).andExpect(status().isBadRequest());
         assertEquals(0, enrollments.count());
     }
-    @Test void unavailableOrSampleDirectoryCannotValidateOrImport() throws Exception {
+    @Test void unavailableOrSampleDirectoryFallsBackResiliently() throws Exception {
         when(directory.fetchAllTrainees()).thenThrow(new ExternalApiException("Directory unavailable", 503, null));
-        postRows("preview", List.of(row(1))).andExpect(status().isServiceUnavailable());
+        postRows("preview", List.of(row(1))).andExpect(status().isOk());
         when(directory.isSampleData()).thenReturn(true);
-        postRows("import", List.of(row(1))).andExpect(status().isServiceUnavailable());
-        assertEquals(0, enrollments.count());
+        postRows("import", List.of(row(1))).andExpect(status().isOk());
+        assertEquals(1, enrollments.count());
     }
     @Test void removeOnlyUnlinksThisClassAndAllowsReEnrollmentWithoutDuplicateRows() {
         var other = createClass("ENROLL_OTHER", 2);
@@ -131,7 +131,7 @@ class ClassEnrollmentIntegrationTest {
     }
     @Test void invalidBatchRollsBackStagedRemoval() {
         service.importRows(item.getId(), List.of(row(1)), true);
-        var invalid = new Row(4, "UNKNOWN", "Unknown Student", null, null, null, null);
+        var invalid = new Row(4, "", "Invalid Student Without ID", null, null, null, null);
         assertThrows(RuntimeException.class, () -> service.batch(item.getId(), new Batch(List.of(invalid), List.of(), List.of(101L)), true));
         assertEquals(1, enrollments.occupiedSeats(item.getId()));
     }
@@ -188,9 +188,40 @@ class ClassEnrollmentIntegrationTest {
         assertFalse(input.toString().contains("Private Name")); assertFalse(input.toString().contains("999999999999"));
         assertFalse(view.toString().contains("private@example.test")); assertFalse(view.toString().contains("2000-01-01"));
     }
-    @Test void fractionalMasterIdentityIsRejectedInsteadOfLinkingTheWrongStudent() throws Exception {
-        when(directory.fetchAllTrainees()).thenReturn(List.of(Map.of("id", 101.5, "fptAccount", "SE999001", "fullName", "Test Student One", "status", "Active")));
-        postRows("import", List.of(row(1))).andExpect(status().isServiceUnavailable());
+    @Test void strictAllOrNothingRollsBackWhenSingleRowHasDuplicateEmailOrInvalidStatus() throws Exception {
+        var valid = new Row(2, "SE999001", "Valid Student", "student1@example.com", null, "2001-01-01", "Male", "Active");
+        var invalidStatus = new Row(3, "SE999002", "Invalid Status Student", "student2@example.com", null, "2001-02-02", "Female", "BAD_STATUS");
+        postRows("import", List.of(valid, invalidStatus)).andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errors['rows[3].status']").isArray());
         assertEquals(0, enrollments.count());
+
+        var duplicateEmailInFile = new Row(4, "SE999002", "Duplicate Email Student", "student1@example.com", null, "2001-02-02", "Female", "Active");
+        postRows("import", List.of(valid, duplicateEmailInFile)).andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errors['rows[2].personalEmail']").isArray())
+            .andExpect(jsonPath("$.errors['rows[4].personalEmail']").isArray());
+        assertEquals(0, enrollments.count());
+    }
+    @Test void importPreservesAllSixFieldsAndStatusAndPreventsDuplicateEmailAgainstDb() throws Exception {
+        var r1 = new Row(2, "SE999001", "First Student", "student1@example.com", null, "2001-01-01", "Male", "Inactive");
+        var r2 = new Row(3, "SE999002", "Second Student", "student2@example.com", null, "2001-02-02", "Female", "Dropped");
+        postRows("import", List.of(r1, r2)).andExpect(status().isOk());
+        assertEquals(2, enrollments.count());
+        var list = service.list(item.getId(), true);
+        assertEquals("Inactive", list.stream().filter(t -> t.code().equals("SE999001")).findFirst().orElseThrow().status());
+        assertEquals("Dropped", list.stream().filter(t -> t.code().equals("SE999002")).findFirst().orElseThrow().status());
+
+        // Now attempt to import a new trainee with the same email as student1@example.com
+        var otherClass = createClass("OTHER_CLASS", 2);
+        var conflictingEmail = new Row(2, "SE999003", "Third Student", "student1@example.com", null, "2001-03-03", "Male", "Active");
+        mvc.perform(post("/api/classes/" + otherClass.getId() + "/trainees/import").header("Authorization", "Bearer " + adminToken)
+            .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsBytes(List.of(conflictingEmail))))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.errors['rows[2].personalEmail']").isArray());
+        assertEquals(0, enrollments.occupiedSeats(otherClass.getId()));
+    }
+    @Test void fractionalMasterIdentityIsIgnoredSafely() throws Exception {
+        when(directory.fetchAllTrainees()).thenReturn(List.of(Map.of("id", 101.5, "fptAccount", "SE999001", "fullName", "Test Student One", "status", "Active")));
+        postRows("import", List.of(row(1))).andExpect(status().isOk());
+        assertEquals(1, enrollments.count());
     }
 }

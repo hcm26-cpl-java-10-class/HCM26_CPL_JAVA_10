@@ -30,6 +30,36 @@ const COLORS = [
   "#06b6d4", "#64748b", "#d946ef", "#0ea5e9",
 ];
 
+const RADIAN = Math.PI / 180;
+const renderCustomizedPieLabel = ({
+  cx,
+  cy,
+  midAngle,
+  innerRadius,
+  outerRadius,
+  percent,
+}: any) => {
+  if (percent == null || percent < 0.05) return null;
+  const radius = (innerRadius || 0) + (outerRadius - (innerRadius || 0)) * 0.58;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#ffffff"
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={10}
+      fontWeight={700}
+      style={{ pointerEvents: "none", filter: "drop-shadow(0px 1px 2px rgba(0,0,0,0.45))" }}
+    >
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
 export function ProgramDetailModal({
   program,
   open,
@@ -71,7 +101,7 @@ export function ProgramDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[900px] max-h-[88vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="w-[95vw] sm:max-w-4xl md:max-w-5xl max-h-[88vh] flex flex-col p-0 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white">
           <DialogHeader>
@@ -147,7 +177,7 @@ export function ProgramDetailModal({
                         <tr key={s.subjectId} className="hover:bg-gray-50">
                           <td className="px-3 py-2 text-gray-500 text-xs">{idx + 1}</td>
                           <td className="px-3 py-2">
-                            <span className="text-blue-600 text-xs font-mono font-semibold hover:underline cursor-pointer">
+                            <span className="text-gray-800 hover:text-[#5b52e0] text-xs font-mono font-semibold cursor-pointer transition-colors">
                               {s.code} - {s.version}
                             </span>
                           </td>
@@ -185,11 +215,8 @@ export function ProgramDetailModal({
                           innerRadius={40}
                           outerRadius={85}
                           dataKey="value"
-                          label={({ percent }) =>
-                            percent != null && percent > 0.04 ? `${(percent * 100).toFixed(1)}%` : ""
-                          }
+                          label={renderCustomizedPieLabel}
                           labelLine={false}
-                          fontSize={10}
                         >
                           {pieData.map((_, i) => (
                             <Cell key={i} fill={COLORS[i % COLORS.length]} />

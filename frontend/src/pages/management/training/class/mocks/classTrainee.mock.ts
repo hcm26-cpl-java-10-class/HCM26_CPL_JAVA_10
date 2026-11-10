@@ -57,7 +57,7 @@ export const MOCK_TRAINING_CLASSES: ExternalClass[] = [
         startDate: "2026-01-23",
         endDate: "2026-07-23",
         plannedSize: 23,
-        enrolledTrainees: 7,
+        enrolledTrainees: 9,
         subjectType: "IT Technical",
         plannedRevenue: "0 VND",
         scope: "Unit",
@@ -243,7 +243,7 @@ export const MOCK_TRAINEES_POOL: Trainee[] = [
 ];
 
 const MOCK_CLASS_TRAINEE_IDS: Record<number, number[]> = {
-    1: [101, 102, 103, 104, 105, 106, 107],
+    1: [101, 102, 103, 104, 105, 106, 107, 108, 109],
     2: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
     3: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110],
 };
@@ -263,6 +263,9 @@ function syncMockEnrolledCount(classId: number) {
 export function findMockClass(idOrCode: string | number): ExternalClass | undefined {
     const raw = String(idOrCode).trim();
     const normalized = raw.toLowerCase();
+    if (normalized === "hcm26_fr_java_01") {
+        return MOCK_TRAINING_CLASSES.find((item) => item.id === 1);
+    }
     return MOCK_TRAINING_CLASSES.find(
         (item) =>
             String(item.id) === raw ||

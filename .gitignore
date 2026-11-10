@@ -1,5 +1,6 @@
- === IDE ===
+# === IDE ===
 .idea/
+.run/*.saved
 *.iml
 .vscode/
 
@@ -11,21 +12,61 @@ Thumbs.db
 backend/target/
 backend/*.jar
 backend/*.war
+backend/data/
+
+# === Local databases and demo logs ===
+/data/
+*.mv.db
+*.trace.db
+*.lock.db
+backend/demo-start.log
 
 # === Backend .env (secrets) ===
 backend/.env
+backend/.env.local
+backend/.env.*.local
+!backend/.env.example
 
 # === Frontend (Node) ===
 frontend/node_modules/
 frontend/dist/
 frontend/.env
 
+# === Frontend .env (secrets/local config) ===
+# .env.example được commit để người mới biết cần đặt biến nào.
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
 # === Docker .env (secrets) ===
 docker/.env
 
+# === Logs ===
+*.log
 
 /backend.zip
-
 # Ignore vscode AI rules & Codacy
 .github/
 .codacy/
+
+/backend/compile.log
+/backend/compile_error.txt
+/test.txt
+/docs/UFR-PRJ-004-*.md
+/.playwright-mcp/
+
+# === Nested clone / local workspace folder ===
+HCM26_CPL_JAVA_10/
+frontend-dev.err
+
+# === Runtime uploaded files (khong commit) ===
+uploads/
+
+# === Local test tools & docx scratch files ===
+*.docx
+/swagger_*.png
+/swagger_rendered.png
+/swagger_test.png
+/extracted_images/
+/extracted_minh_hoang/
+/tools/

@@ -18,8 +18,8 @@ import java.util.List;
 @Getter @Setter @SuperBuilder @NoArgsConstructor @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("PROGRAM")
-@ResourceMenu(title = "Training Programs", group = "Training Management", icon = "graduation-cap",
-        url = "/programs", order = 2, permission = "PROGRAM_READ")
+@ResourceMenu(title = "Training Programs", group = "Training Management", icon = "layers",
+        url = "/programs", order = 4, permission = "PROGRAM_READ")
 public class TrainingProgram extends BaseEntity {
     @Column(nullable = false, length = 50)
     String code;

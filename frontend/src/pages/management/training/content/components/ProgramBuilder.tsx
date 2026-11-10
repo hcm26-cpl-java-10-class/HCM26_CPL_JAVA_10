@@ -306,7 +306,7 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-gray-700">Technical Group</Label>
             <Select value={technicalGroup} onValueChange={setTechnicalGroup}>
-              <SelectTrigger className="text-sm">
+              <SelectTrigger className="w-full text-sm">
                 <SelectValue placeholder="Select group" />
               </SelectTrigger>
               <SelectContent>
@@ -348,7 +348,7 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-gray-700">Region</Label>
             <Select value={region} onValueChange={setRegion}>
-              <SelectTrigger className="text-sm">
+              <SelectTrigger className="w-full text-sm">
                 <SelectValue placeholder="Select region" />
               </SelectTrigger>
               <SelectContent>
@@ -453,7 +453,7 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
                       : "hover:bg-gray-50 text-gray-700"
                   }`}
                 >
-                  <div className="font-mono text-xs text-blue-600">{t.code} - v{t.version}</div>
+                  <div className="font-mono text-xs font-semibold text-gray-800">{t.code} - v{t.version}</div>
                   <div className="text-gray-700 text-xs mt-0.5 line-clamp-1">{t.name}</div>
                 </div>
               ))

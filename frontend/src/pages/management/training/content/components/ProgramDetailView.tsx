@@ -19,28 +19,6 @@ interface ProgramDetailViewProps {
   onSelectTopic?: (topicId: number, topicCode: string) => void;
 }
 
-// Exact duration metadata from FAMS reference video (frame_006.jpg & frame_009.jpg)
-const VIDEO_DURATIONS: Record<string, { table: string; legend: string; sessions: number }> = {
-  L1_AL_CCGM: { table: "2h", legend: "2h", sessions: 1 },
-  L1_AL_GC: { table: "4h", legend: "4h", sessions: 1 },
-  L1_AL_TME: { table: "2h 36m", legend: "2h 36m", sessions: 1 },
-  L1_AL_PSE: { table: "2h 30m", legend: "2h 30m", sessions: 1 },
-  L1_AL_CFFI: { table: "16h 10m", legend: "16h 10m", sessions: 4 },
-  L1_AL_ECWL: { table: "6h", legend: "6h", sessions: 2 },
-  L1_AL_TESO: { table: "55m", legend: "0h 55m", sessions: 1 },
-  L1_AL_DF: { table: "16h", legend: "16h", sessions: 6 },
-  L1_AL_DSAA: { table: "16h", legend: "16h", sessions: 6 },
-  L1_AL_FF: { table: "8h 42m", legend: "8h 42m", sessions: 3 },
-  L1_AL_AAE: { table: "19h 57m", legend: "19h 57m", sessions: 24 },
-  L1_AL_APWS: { table: "6h", legend: "6h", sessions: 2 },
-  L1_AL_VCG: { table: "6h", legend: "6h", sessions: 2 },
-  L2_JA_JS: { table: "63h 30m", legend: "63h 30m", sessions: 16 },
-  L2_AN_AE: { table: "54h", legend: "54h", sessions: 14 },
-  L2_JA_ORM: { table: "21h", legend: "21h", sessions: 10 },
-  L3_JSFW: { table: "38h 35m", legend: "38h 35m", sessions: 12 },
-  L4_MOCK_PROJECT: { table: "164h", legend: "164h", sessions: 40 },
-};
-
 // Slices colors matching frame_009.jpg
 const SLICE_COLORS = [
   "#d946ef", // L4_MOCK_PROJECT: 36.6% (magenta)
@@ -72,6 +50,36 @@ export function formatDuration(hours?: number | null, isLegend = false): string 
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
 }
+
+const RADIAN = Math.PI / 180;
+const renderCustomizedPieLabel = ({
+  cx,
+  cy,
+  midAngle,
+  innerRadius,
+  outerRadius,
+  percent,
+}: any) => {
+  if (percent == null || percent < 0.04) return null;
+  const radius = (innerRadius || 0) + (outerRadius - (innerRadius || 0)) * 0.62;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#ffffff"
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={11}
+      fontWeight={700}
+      style={{ pointerEvents: "none", filter: "drop-shadow(0px 1px 2px rgba(0,0,0,0.5))" }}
+    >
+      {`${(percent * 100).toFixed(1)}%`}
+    </text>
+  );
+};
 
 export function ProgramDetailView({
   program,
@@ -226,7 +234,7 @@ export function ProgramDetailView({
                 Description
               </div>
               <div className="px-4 py-3 text-gray-800 flex items-center">
-                {program.description || "Use LMS to learn"}
+                {program.description || "—"}
               </div>
             </div>
           </div>
@@ -259,9 +267,8 @@ export function ProgramDetailView({
                       </tr>
                     ) : (
                       subjects.map((s, idx) => {
-                        const videoMeta = VIDEO_DURATIONS[s.code];
-                        const sessions = videoMeta?.sessions ?? Math.max(1, Math.round((s.durationHours || 4) / 4));
-                        const durationStr = videoMeta?.table ?? formatDuration(s.durationHours);
+                        const sessions = Math.max(1, Math.round((s.durationHours || 4) / 4));
+                        const durationStr = formatDuration(s.durationHours);
 
                         return (
                           <tr key={s.subjectId} className="hover:bg-gray-50/80 transition-colors">
@@ -333,15 +340,8 @@ export function ProgramDetailView({
                           outerRadius={105}
                           innerRadius={0}
                           dataKey="value"
-                          label={({ percent }) =>
-                            percent != null && percent >= 0.03
-                              ? `${(percent * 100).toFixed(1)}%`
-                              : ""
-                          }
+                          label={renderCustomizedPieLabel}
                           labelLine={false}
-                          fontSize={11}
-                          fontWeight={700}
-                          fill="#1f2937"
                         >
                           {pieData.map((d, i) => (
                             <Cell
@@ -360,8 +360,7 @@ export function ProgramDetailView({
                   {/* Right: Scrollable Legend list matching frame_009.jpg */}
                   <div className="w-full flex-1 max-h-[280px] overflow-y-auto pr-2 space-y-2 text-xs border-t md:border-t-0 md:border-l border-gray-100 pt-3 md:pt-0 md:pl-3">
                     {subjects.map((s, idx) => {
-                      const videoMeta = VIDEO_DURATIONS[s.code];
-                      const legendDuration = videoMeta?.legend ?? formatDuration(s.durationHours, true);
+                      const legendDuration = formatDuration(s.durationHours, true);
                       const color = SLICE_COLORS[idx % SLICE_COLORS.length];
 
                       return (

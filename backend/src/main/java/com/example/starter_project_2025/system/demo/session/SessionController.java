@@ -1,5 +1,8 @@
 package com.example.starter_project_2025.system.demo.session;
 
+import java.util.List;
+import org.springframework.web.bind.annotation.DeleteMapping;
+
 import com.example.starter_project_2025.base.crud.controller.BaseCrudDataIoController;
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
@@ -26,7 +29,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-
 
 @RestController
 @RequiredArgsConstructor
@@ -104,5 +106,23 @@ public class SessionController
     public ImportResult importFile(@RequestParam("file") MultipartFile file) {
         // Same importer as every other entity, but each row is validated like a created session (see SessionImportGuard)
         return importService.importFile(file, Session.class, sessionImportGuard.guard(sessionRepository));
+    }
+
+    @PostMapping("/batch")
+    @PreAuthorize("hasAuthority('SESSION_CREATE')")
+    @Operation(summary = "Batch create scheduled sessions for a class schedule version")
+    public ResponseEntity<List<SessionDTO>> createBatch(@Valid @RequestBody List<SessionDTO> dtos) {
+        return ResponseEntity.ok(sessionService.createValidatedBatch(dtos));
+    }
+
+    @DeleteMapping("/class/{classId}")
+    @PreAuthorize("hasAuthority('SESSION_DELETE')")
+    @Operation(summary = "Clear all sessions of a class to allow rescheduling")
+    public ResponseEntity<Void> deleteByClassId(@PathVariable Long classId) {
+        List<Session> sessions = sessionRepository.findByClassId(classId);
+        if (!sessions.isEmpty()) {
+            sessionRepository.deleteAll(sessions);
+        }
+        return ResponseEntity.noContent().build();
     }
 }

@@ -1,16 +1,16 @@
 import type {
     AttendanceRecord,
-        AuditRecord,
-        ClassActivity,
-        ClassBudget,
-        ClassOperationData,
-        ClassSession,
-        ExternalClass,
-        ExternalRoom,
-        ExternalTrainer,
-        StatusTransitionInfo,
-        TopicAssessment,
-        Trainee,
+    AuditRecord,
+    ClassActivity,
+    ClassBudget,
+    ClassOperationData,
+    ClassSession,
+    ExternalClass,
+    ExternalRoom,
+    ExternalTrainer,
+    StatusTransitionInfo,
+    TopicAssessment,
+    Trainee,
 } from "@/types";
 import axiosInstance from "../axios";
 import { traineeService } from "./trainee.api";
@@ -25,7 +25,7 @@ import {
 /** Asks the backend for records of every status instead of its default ("active"). */
 export const ALL_STATUSES = "all";
 
-const useMockFallback = () => !import.meta.env.VITEST;
+const useMockFallback = () => false;
 
 async function withFallback<T>(request: () => Promise<T>, fallback: () => T): Promise<T> {
     try {
