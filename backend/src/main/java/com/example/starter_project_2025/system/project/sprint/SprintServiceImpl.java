@@ -44,7 +44,8 @@ import java.util.stream.Collectors;
  *     <li>an existing Planned sprint can only move to Active or Cancelled; an
  *     Active sprint can only move to Completed or Cancelled (422 otherwise)</li>
  *     <li>a sprint can only be started (Active) when it holds at least one
- *     Sprint Backlog item (422 otherwise)</li>
+ *     Sprint Backlog item, and only one sprint of a project may be Active at a
+ *     time (422 otherwise)</li>
  *     <li>a sprint can only move to Completed once every Sprint Backlog item of
  *     that sprint is Done and every subtask of those items is Done too
  *     (422 otherwise)</li>
@@ -79,6 +80,8 @@ public class SprintServiceImpl
     static final String BACKLOG_IDS_FIELD = "taskIds";
     static final String SCOPE_LOCKED_MESSAGE =
             "Không thể thay đổi phạm vi công việc do Sprint đã hoàn thành/đã đóng";
+    static final String ACTIVE_SPRINT_CONFLICT_MESSAGE =
+            "Dự án đã có Sprint đang Active. Hãy hoàn thành hoặc hủy Sprint đó trước khi bắt đầu Sprint khác";
 
     /** How many unfinished backlog titles are quoted in the completion error. */
     static final int MAX_UNFINISHED_TITLES_IN_MESSAGE = 5;
@@ -184,7 +187,8 @@ public class SprintServiceImpl
         validateGoal(goal, errors);
         validateDates(startDate, endDate, errors);
         validateStatusTransition(currentStatus, targetStatus, errors);
-        validateActivation(sprint.getId(), currentStatus, targetStatus, errors);
+        validateActivation(sprint.getId(), destinationProject, destinationTeam,
+                currentStatus, targetStatus, errors);
         validateCompletion(sprint.getId(), currentStatus, targetStatus, errors);
 
         throwIfInvalid(errors);
@@ -642,9 +646,12 @@ public class SprintServiceImpl
     /**
      * A sprint can only be started once it holds at least one Sprint Backlog
      * item; an empty sprint stays Planned so the team plans work before the
-     * sprint begins.
+     * sprint begins. Only one sprint of a project (or, for team-only
+     * workspaces, of a team) may be Active at a time.
      */
     private void validateActivation(Long sprintId,
+                                    Long projectId,
+                                    Long teamId,
                                     SprintStatus currentStatus,
                                     SprintStatus targetStatus,
                                     Map<String, List<String>> errors) {
@@ -654,12 +661,21 @@ public class SprintServiceImpl
             return;
         }
 
-        if (sprintBacklogRepository.countBySprintId(sprintId) > 0) {
+        if (sprintBacklogRepository.countBySprintId(sprintId) == 0) {
+            addError(errors, STATUS_FIELD,
+                    "Không thể bắt đầu Sprint vì Sprint Backlog chưa có Backlog item nào");
             return;
         }
 
-        addError(errors, STATUS_FIELD,
-                "Không thể bắt đầu Sprint vì Sprint Backlog chưa có Backlog item nào");
+        boolean anotherActiveSprint = projectId != null
+                ? sprintRepository.existsByProjectIdAndStatusAndIdNot(
+                        projectId, SprintStatus.ACTIVE, sprintId)
+                : teamId != null && sprintRepository.existsByTeamIdAndStatusAndIdNot(
+                        teamId, SprintStatus.ACTIVE, sprintId);
+
+        if (anotherActiveSprint) {
+            addError(errors, STATUS_FIELD, ACTIVE_SPRINT_CONFLICT_MESSAGE);
+        }
     }
 
     private String statusLabel(SprintStatus status) {

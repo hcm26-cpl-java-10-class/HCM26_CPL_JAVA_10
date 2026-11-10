@@ -31,16 +31,26 @@ export function assignmentRoleErrors(team: AssignmentTeam, policy: AssignmentRol
   return errors;
 }
 
-export function TeamMemberRoleInput({ label, selected, multiple, disabled, onChange }: {
+export function TeamMemberRoleInput({ label, selected, multiple, showAllRoles = false, disabled, placeholder = "Select a role", onChange }: {
   label: string; selected: TeamMemberRole[]; multiple: boolean; disabled?: boolean;
-  onChange: (roles: TeamMemberRole[]) => void;
+  showAllRoles?: boolean; placeholder?: string; onChange: (roles: TeamMemberRole[]) => void;
 }) {
   const radioGroupId = useId();
+  const selectedRole = selected.length === 1 ? selected[0] : "";
+  if (!multiple && !showAllRoles) {
+    return <select className="h-9 rounded-md border bg-background px-2 text-sm" aria-label={label}
+      aria-invalid={!selectedRole} disabled={disabled} value={selectedRole}
+      onChange={event => onChange(event.target.value ? [event.target.value as TeamMemberRole] : [])}>
+      <option value="">{placeholder}</option>
+      {roles.map(role => <option key={role} value={role}>{role}</option>)}
+    </select>;
+  }
+
   return <fieldset className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-4" disabled={disabled}
-    aria-label={label} aria-invalid={multiple ? undefined : selected.length !== 1}>
+    aria-label={label} aria-invalid={multiple ? undefined : !selectedRole}>
     <legend className="sr-only">{label}</legend>
     {roles.map(role => {
-      const checked = selected.includes(role);
+      const checked = multiple ? selected.includes(role) : selectedRole === role;
       return <label key={role}
         className={"flex min-h-9 min-w-0 cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors "
           + (checked
@@ -71,11 +81,13 @@ export function AssignmentTeamRoles({ team, projectName, policy, choices, leader
   const leaderFieldId = "assignment-leader-" + team.id;
   const counts = new Map<AssignmentRole, number>();
   team.members.forEach(member => assignmentMemberRoles(member, choices).forEach(role => counts.set(role, (counts.get(role) ?? 0) + 1)));
-  return <section className="grid min-w-0 gap-3 rounded-lg border p-3 sm:p-4" aria-label={`Vai trò thành viên của ${team.name}`}>
+  return <section className="grid min-w-0 gap-3 rounded-lg border border-indigo-500/20 bg-indigo-500/[0.03] p-3 sm:p-4" aria-label={`Vai trò thành viên của ${team.name}`}>
     <div>
       <p className="break-words text-sm font-semibold">{team.name} · {projectName}</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        {team.memberCount} thành viên · {policy.allowMultiRole ? "Có thể chọn nhiều vai trò cho mỗi người." : "Mỗi người chọn một vai trò."}
+        {team.memberCount} thành viên · {policy.allowMultiRole
+          ? <span className="font-medium text-teal-700 dark:text-teal-300">Kiêm nhiệm · Chọn một hoặc nhiều vai trò cho mỗi người</span>
+          : "Mỗi người chọn một vai trò."}
       </p>
     </div>
     <div className="grid items-start gap-3 sm:grid-cols-2">
@@ -97,26 +109,27 @@ export function AssignmentTeamRoles({ team, projectName, policy, choices, leader
           const count = counts.get(quota.role) ?? 0;
           const limit = quota.max === quota.min ? `cần ${quota.min}`
             : quota.max >= 2147483647 ? `tối thiểu ${quota.min}` : `cần ${quota.min}–${quota.max}`;
-          return <Badge key={quota.role} variant={count < quota.min || count > quota.max ? "destructive" : "outline"}>
+          return <Badge key={quota.role} variant="outline" className={count < quota.min || count > quota.max
+            ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+            : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}>
             {quota.role} {count} · {limit}
           </Badge>;
         })}</div>
       </div>}
     </div>
-    <ul className="max-h-72 divide-y overflow-y-auto rounded-md border">
+    <ul className="max-h-72 divide-y overflow-y-auto rounded-md border bg-card">
       {team.members.map(member => {
         const selected = assignmentMemberRoles(member, choices);
-        return <li key={member.memberId} className={"grid items-center gap-2 px-3 py-2 "
-          + (policy.allowMultiRole ? "lg:grid-cols-[minmax(0,1fr)_auto]" : "sm:grid-cols-[minmax(0,1fr)_8rem]")}>
+        return <li key={member.memberId} className="grid items-center gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto]">
           <div className="min-w-0">
             <p className="flex flex-wrap items-center gap-1.5 break-words text-sm font-medium">
-              {member.name}{leaderId === member.memberId && <Badge variant="secondary">Leader</Badge>}
+              {member.name}{leaderId === member.memberId && <Badge variant="outline" className="border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">Leader</Badge>}
             </p>
             <p className="truncate text-xs text-muted-foreground">{member.userCode}</p>
           </div>
           {readOnly ? <p className="text-sm">{selected.join(", ") || "Chưa chọn vai trò"}</p>
             : <TeamMemberRoleInput label={`Vai trò của ${member.name}`} selected={selected} multiple={policy.allowMultiRole}
-                onChange={next => onChange(member.memberId, next)} />}
+                showAllRoles onChange={next => onChange(member.memberId, next)} />}
         </li>;
       })}
     </ul>

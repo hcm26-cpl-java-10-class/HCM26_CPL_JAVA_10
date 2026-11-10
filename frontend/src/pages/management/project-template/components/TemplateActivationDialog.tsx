@@ -112,12 +112,18 @@ export function TemplateActivationDialog({ template, onActivated, onOpenSection,
           <AlertTitle>Unable to check activation requirements</AlertTitle>
           <AlertDescription>{getTemplateError(checklist.error).message}</AlertDescription>
         </Alert> : checklist.data && !checking && <div className="grid gap-3" aria-label="Activation checklist">
-          {checklist.data.items.map((item) => <section key={item.section} className="min-w-0 rounded-lg border p-3">
+          {checklist.data.items.map((item) => <section key={item.section} className={`min-w-0 rounded-lg border p-3 ${item.passed
+            ? "border-emerald-500/30 bg-emerald-500/5"
+            : "border-amber-500/35 bg-amber-500/5"}`}>
             <div className="flex items-start gap-2">
               {item.passed ? <CircleCheck className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                : <CircleX className="mt-0.5 size-4 shrink-0 text-destructive" />}
+                : <CircleX className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400" />}
               <h2 className="min-w-0 flex-1 text-sm font-medium">{item.label}</h2>
-              <Badge variant={item.passed ? "secondary" : "outline"} className="shrink-0">{item.passed ? "Ready" : "Incomplete"}</Badge>
+              <Badge variant="outline" className={`shrink-0 ${item.passed
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                : "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"}`}>
+                {item.passed ? "Ready" : "Incomplete"}
+              </Badge>
             </div>
             {!item.passed && <>
               <ActivationIssues errors={item.errors} />
@@ -125,7 +131,9 @@ export function TemplateActivationDialog({ template, onActivated, onOpenSection,
                 onClick={() => openSection(item.section)}>Open {sectionLabels[item.section]}</Button>
             </>}
           </section>)}
-          <p className="text-sm text-muted-foreground" aria-live="polite">
+          <p className={`text-sm ${checklist.data.status === "DRAFT" && checklist.data.canActivate
+            ? checklist.data.ready ? "text-emerald-700 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"
+            : "text-muted-foreground"}`} aria-live="polite">
             {checklist.data.status !== "DRAFT" ? "This template is no longer a draft. It cannot be activated again."
               : !checklist.data.canActivate ? "You do not have permission to activate this template."
               : checklist.data.ready ? "All required configuration is complete. This template is ready to activate."

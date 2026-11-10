@@ -28,7 +28,9 @@ function listParams(pagination: Pagination, search?: string, filter?: ProjectTem
   (Array.isArray(sort) ? sort : [sort]).forEach(value => params.append("sort", value));
   if (search?.trim()) params.set("search", search.trim());
   Object.entries(filter ?? {}).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item !== undefined && item !== null && item !== "") params.append(key, String(item));
+    }
   });
   return params;
 }

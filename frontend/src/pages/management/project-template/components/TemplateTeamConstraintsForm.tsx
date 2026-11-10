@@ -14,9 +14,10 @@ import type {
 } from "@/types/features/project-template";
 import { useMutation } from "@tanstack/react-query";
 import { AlertCircle, Loader2, Save, Users } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { getTemplateError } from "../project-template.utils";
+import { useTemplateDraft } from "../hooks/useTemplateDraft";
 import {
   teamRoleTotal,
   templateTeamRoles,
@@ -33,9 +34,11 @@ interface TemplateTeamConstraintsFormProps {
 }
 
 export function TemplateTeamConstraintsForm({ template, editable, onSaved, save }: TemplateTeamConstraintsFormProps) {
-  const [values, setValues] = useState(() => toTeamConstraintsValues(template.teamConstraints));
-  const [savedValues, setSavedValues] = useState(values);
-  const [lockVersion, setLockVersion] = useState(template.lockVersion);
+  const formId = useId();
+  const fieldId = (field: string) => `${formId}-team-${field.replaceAll(".", "-")}`;
+  const { values, setValues, hasChanges, lockVersion, acceptSaved } = useTemplateDraft(
+    toTeamConstraintsValues(template.teamConstraints), template.lockVersion,
+  );
   const [errors, setErrors] = useState<TeamConstraintsErrors>({});
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTemplateError> | null>(null);
   const submitting = useRef(false);
@@ -43,10 +46,7 @@ export function TemplateTeamConstraintsForm({ template, editable, onSaved, save 
     mutationFn: (payload: TemplateTeamConstraintsPayload) =>
       save ? save(payload) : projectTemplateApi.updateTeamConstraints(template.id, payload),
     onSuccess: (saved) => {
-      const savedRules = toTeamConstraintsValues(saved.teamConstraints);
-      setValues(savedRules);
-      setSavedValues(savedRules);
-      setLockVersion(saved.lockVersion);
+      acceptSaved(toTeamConstraintsValues(saved.teamConstraints), saved.lockVersion);
       setErrors({});
       setSubmitError(null);
       onSaved(saved);
@@ -60,7 +60,6 @@ export function TemplateTeamConstraintsForm({ template, editable, onSaved, save 
     onSettled: () => { submitting.current = false; },
   });
   const canEdit = editable && template.status === "DRAFT" && !template.readOnly;
-  const hasChanges = JSON.stringify(values) !== JSON.stringify(savedValues);
   const disabled = mutation.isPending || !canEdit;
   const total = teamRoleTotal(values);
 
@@ -80,7 +79,7 @@ export function TemplateTeamConstraintsForm({ template, editable, onSaved, save 
     setErrors(nextErrors);
     const firstError = Object.keys(nextErrors)[0];
     if (firstError) {
-      requestAnimationFrame(() => document.getElementById(`team-${firstError.replaceAll(".", "-")}`)?.focus());
+      requestAnimationFrame(() => document.getElementById(fieldId(firstError))?.focus());
       return;
     }
     submitting.current = true;
@@ -128,16 +127,16 @@ export function TemplateTeamConstraintsForm({ template, editable, onSaved, save 
                   ["maxMembers", "Maximum members"],
                 ] as const).map(([field, label]) => (
                   <div key={field} className="grid content-start gap-2">
-                    <Label htmlFor={`team-${field}`}>{label} <span className="text-destructive">*</span></Label>
-                    <Input id={`team-${field}`} inputMode="numeric" value={values[field]}
+                    <Label htmlFor={fieldId(field)}>{label} <span className="text-destructive">*</span></Label>
+                    <Input id={fieldId(field)} inputMode="numeric" value={values[field]}
                       onChange={(event) => changeSize(field, event.target.value)}
-                      aria-invalid={!!errors[field]?.length} aria-describedby={`team-${field}-error`} />
-                    <div id={`team-${field}-error`} aria-live="polite"><FieldError errors={errors[field]} /></div>
+                      aria-invalid={!!errors[field]?.length} aria-describedby={`${fieldId(field)}-error`} />
+                    <div id={`${fieldId(field)}-error`} aria-live="polite"><FieldError errors={errors[field]} /></div>
                   </div>
                 ))}
               </div>
 
-              <div id="team-roleQuotas" tabIndex={-1} className="grid gap-4 rounded-lg border p-4">
+              <div id={fieldId("roleQuotas")} tabIndex={-1} className="grid gap-4 rounded-lg border p-4">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <h2 className="font-medium">Minimum role quotas</h2>
@@ -150,7 +149,7 @@ export function TemplateTeamConstraintsForm({ template, editable, onSaved, save 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {templateTeamRoles.map(({ key, label, name }) => {
                     const field = `roleQuotas.${key}`;
-                    const inputId = `team-roleQuotas-${key}`;
+                    const inputId = fieldId(field);
                     return (
                       <div key={key} className="grid content-start gap-2">
                         <Label htmlFor={inputId}>{label} <span className="text-destructive">*</span></Label>
@@ -158,25 +157,25 @@ export function TemplateTeamConstraintsForm({ template, editable, onSaved, save 
                         <Input id={inputId} inputMode="numeric" value={values.roleQuotas[key]}
                           onChange={(event) => changeRole(key, event.target.value)}
                           aria-invalid={!!errors[field]?.length || !!errors.roleQuotas?.length}
-                          aria-describedby={`${inputId}-error team-roleQuotas-error`} />
+                          aria-describedby={`${inputId}-error ${fieldId("roleQuotas")}-error`} />
                         <div id={`${inputId}-error`} aria-live="polite"><FieldError errors={errors[field]} /></div>
                       </div>
                     );
                   })}
                 </div>
-                <div id="team-roleQuotas-error" aria-live="polite"><FieldError errors={errors.roleQuotas} /></div>
+                <div id={`${fieldId("roleQuotas")}-error`} aria-live="polite"><FieldError errors={errors.roleQuotas} /></div>
                 <p className="text-xs text-muted-foreground">Total minimum quotas must not exceed maximum members, including when multiple roles are allowed.</p>
               </div>
 
               <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="team-allowMultiRole">Allow multiple roles per member</Label>
+                  <Label htmlFor={fieldId("allowMultiRole")}>Allow multiple roles per member</Label>
                   <p className="text-sm text-muted-foreground">A member can hold more than one role in the team.</p>
-                  <div id="team-allowMultiRole-error" aria-live="polite"><FieldError errors={errors.allowMultiRole} /></div>
+                  <div id={`${fieldId("allowMultiRole")}-error`} aria-live="polite"><FieldError errors={errors.allowMultiRole} /></div>
                 </div>
-                <Switch id="team-allowMultiRole" checked={values.allowMultiRole} disabled={disabled}
+                <Switch id={fieldId("allowMultiRole")} checked={values.allowMultiRole} disabled={disabled}
                   onCheckedChange={(checked) => setValues((current) => ({ ...current, allowMultiRole: checked }))}
-                  aria-describedby="team-allowMultiRole-error" aria-invalid={!!errors.allowMultiRole?.length} />
+                  aria-describedby={`${fieldId("allowMultiRole")}-error`} aria-invalid={!!errors.allowMultiRole?.length} />
               </div>
             </fieldset>
           )}

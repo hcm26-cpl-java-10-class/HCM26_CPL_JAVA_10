@@ -40,6 +40,7 @@ public class ProjectTemplateService {
     private final ProjectTemplateAuditRepository audits;
     private final ProjectTemplateAccessService access;
     private final ProjectTemplateValidator validator;
+    private final ProjectTemplateCatalog catalog;
     private final TemplateMilestoneRepository milestones;
     private final TemplateMilestoneScheduleValidator scheduleValidator;
     private final TemplateTeamConstraintsMapper teamConstraintsMapper;
@@ -54,17 +55,13 @@ public class ProjectTemplateService {
     public ProjectTemplateOptions getOptions() {
         User user = access.requireUser("READ");
         return new ProjectTemplateOptions(user.getTenantId(), user.getTenant().getName(),
-                categories(user.getTenantId()), access.can(user, "CREATE"), access.can(user, "UPDATE"),
+                catalog.domains(user.getTenantId()), catalog.levels(user.getTenantId()),
+                access.can(user, "CREATE"), access.can(user, "UPDATE"),
                 access.can(user, "ACTIVATE"), access.can(user, "ARCHIVE"));
     }
 
-    public Page<ProjectTemplateResponse> getPage(String search, ProjectTemplateStatus status,
-            ProjectTemplateLevel level, String category, Pageable pageable) {
-        return getPage(search, status, level, category, pageable, true);
-    }
-
-    public Page<ProjectTemplateResponse> getPage(String search, ProjectTemplateStatus status,
-            ProjectTemplateLevel level, String category, Pageable pageable, boolean includeModules) {
+    public Page<ProjectTemplateResponse> getPage(String search, ProjectTemplateFilters filters,
+            Pageable pageable, boolean includeModules) {
         User user = access.requireUser("READ");
         if (pageable.getSort().stream().anyMatch(order -> !SORT_FIELDS.contains(order.getProperty()))) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid sort field");
@@ -79,11 +76,9 @@ public class ProjectTemplateService {
             conditions.add(builder.isTrue(root.get("isActive")));
             if (!includeModules) conditions.add(builder.isNull(root.get("parentTemplate")));
             conditions.add(builder.or(builder.isNull(root.get("code")), builder.notEqual(root.get("code"), "MANUAL-GROUPING-DEFAULT")));
-            if (status != null) conditions.add(builder.equal(root.get("status"), status));
-            if (level != null) conditions.add(builder.equal(root.get("level"), level));
-            if (category != null && !category.isBlank()) {
-                conditions.add(builder.equal(root.get("category"), category.strip()));
-            }
+            if (!filters.statuses().isEmpty()) conditions.add(root.get("status").in(filters.statuses()));
+            if (!filters.levels().isEmpty()) conditions.add(root.get("level").in(filters.levels()));
+            if (!filters.categories().isEmpty()) conditions.add(root.get("category").in(filters.categories()));
             if (search != null && !search.isBlank()) {
                 String keyword = "%" + escapeSearch(search.strip().toLowerCase(Locale.ROOT)) + "%";
                 conditions.add(builder.or(builder.like(builder.lower(root.get("code")), keyword, '\\'),
@@ -106,7 +101,7 @@ public class ProjectTemplateService {
         ProjectTemplate parent = parent(request.parentTemplateId(), user);
         if (parent != null) request = request.withCategory(hierarchy.masterCategory(parent));
         validator.validate(request, false);
-        if (parent == null) requireCategory(request.category(), user.getTenantId());
+        catalog.validateSelection(user.getTenantId(), request, parent == null);
         String code = request.code().strip();
         Long scope = parent == null ? 0L : parent.getId();
         if (parent == null ? templates.existsByTenantIdAndCodeScopeIdAndCodeAndTemplateVersion(user.getTenantId(), scope, code, 1)
@@ -132,7 +127,7 @@ public class ProjectTemplateService {
         boolean module = template.getParentTemplateId() != null;
         if (module) request = request.withCategory(hierarchy.masterCategory(template));
         validator.validate(request, true);
-        if (!module) requireCategory(request.category(), user.getTenantId());
+        catalog.validateSelection(user.getTenantId(), request, !module);
         if (!template.getLockVersion().equals(request.lockVersion().longValueExact())) {
             throw ProjectTemplateException.conflict("This template has changed. Reload it before saving your changes");
         }
@@ -233,24 +228,12 @@ public class ProjectTemplateService {
         return template.getTenantId() != null ? template.getTenantId() : user.getTenantId();
     }
 
-    private List<String> categories(Long tenantId) {
-        return java.util.stream.Stream.concat(java.util.stream.Stream.of("Web Application", "Mobile Application", "Data Analytics", "Capstone", "Cross-functional"),
-                templates.findCategories(tenantId).stream()).filter(value -> value != null && !value.isBlank())
-                .distinct().sorted().toList();
-    }
-
-    private void requireCategory(String category, Long tenantId) {
-        if (!categories(tenantId).contains(category.strip())) {
-            throw new ProjectTemplateException(422, "Select a category from the list", Map.of("category", List.of("Select an available category")));
-        }
-    }
-
     private void apply(ProjectTemplate template, ProjectTemplateRequest request) {
         template.setCode(request.code().strip());
         template.setName(request.name().strip());
         template.setDescription(request.description().strip());
         template.setCategory(request.category().strip());
-        template.setLevel(request.level());
+        template.setLevel(request.level().strip());
         template.setEstimatedDurationWeeks(request.estimatedDurationWeeks().intValueExact());
         if (request.technologyStack() != null) template.setTechnologyStack(request.technologyStack().strip());
     }

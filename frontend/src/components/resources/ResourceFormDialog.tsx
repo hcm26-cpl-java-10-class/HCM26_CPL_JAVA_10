@@ -218,6 +218,9 @@ function ResourceForm({
   const titleCount = values.title.length;
   const descriptionCount = values.description.length;
   const urlValid = linkLooksValid(values.url);
+  // The resource type is chosen when the resource is created: switching it later
+  // would leave one box holding both a link and a file.
+  const kindLocked = resource != null;
   const savingLabel = resource
     ? file
       ? "Saving and uploading…"
@@ -256,11 +259,18 @@ function ResourceForm({
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const changeKind = (kind: ResourceDialogKind) => {
+    if (saving || kindLocked || kind === values.kind) return;
+    set({ kind, url: kind === "LINK" ? values.url : "" });
+    if (kind === "LINK") clearFile();
+    setErrors((current) => ({ ...current, url: undefined, file: undefined }));
+  };
+
   const validate = () => {
     const next: Errors = {};
     if (!values.title.trim()) next.title = "Title is required";
     if (values.kind === "LINK" && !values.url.trim()) next.url = "URL is required for a link resource";
-    if (file) {
+    if (values.kind === "FILE" && file) {
       const problem = fileProblem(file);
       if (problem) next.file = problem;
     }
@@ -277,7 +287,7 @@ function ResourceForm({
       kind: values.kind,
       url: values.kind === "LINK" ? values.url.trim() : null,
       orderIndex: resource?.orderIndex ?? null,
-    }, file);
+    }, values.kind === "FILE" ? file : null);
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -391,7 +401,9 @@ function ResourceForm({
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     Resource type
                   </p>
-                  <span className="text-[11px] text-muted-foreground">Choose one</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {kindLocked ? "Fixed after creation" : "Choose one"}
+                  </span>
                 </div>
                 <div className="grid gap-2.5 sm:grid-cols-2" role="group" aria-label="Resource type">
                   {KIND_OPTIONS.map((option) => {
@@ -402,9 +414,9 @@ function ResourceForm({
                       <button
                         key={option.kind}
                         type="button"
-                        disabled={saving}
+                        disabled={saving || kindLocked}
                         aria-pressed={selected}
-                        onClick={() => set({ kind: option.kind })}
+                        onClick={() => changeKind(option.kind)}
                         className={cn(
                           "group relative flex items-start gap-3 rounded-xl border p-3 text-left outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60",
                           selected
@@ -445,6 +457,11 @@ function ResourceForm({
                     );
                   })}
                 </div>
+                {kindLocked && (
+                  <p className="text-[11px] text-muted-foreground">
+                    The resource type can&apos;t be changed after the resource is created.
+                  </p>
+                )}
               </div>
 
               <div aria-hidden className="h-px bg-border/70" />
@@ -566,10 +583,11 @@ function ResourceForm({
                 />
               </div>
 
+              {values.kind === "FILE" && (
               <div className="grid gap-2">
                 <div className="flex items-center justify-between gap-2">
                   <Label htmlFor={fileId}>
-                    {values.kind === "FILE" ? "Document" : "Supporting file"}{" "}
+                    Document{" "}
                     <span className="text-xs font-normal text-muted-foreground">(optional)</span>
                   </Label>
                   {file && !errors.file && (
@@ -687,6 +705,7 @@ function ResourceForm({
                   {file ? `${file.name} selected.${errors.file ? ` ${errors.file}` : ""}` : ""}
                 </p>
               </div>
+              )}
             </div>
           </div>
 

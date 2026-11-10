@@ -4,6 +4,7 @@ import axios from "axios";
 export interface TaskFormValues {
   title: string;
   description: string;
+  assigneeProjectMemberId: string | null;
   estimatedHours: string;
   deadline: string;
   priority: TaskPriority;
@@ -39,6 +40,7 @@ export function toTaskFormValues(task?: TaskDTO): TaskFormValues {
   return {
     title: task?.title ?? "",
     description: task?.description ?? "",
+    assigneeProjectMemberId: task?.assigneeProjectMemberId ?? null,
     estimatedHours: task?.estimatedHours == null ? "" : String(task.estimatedHours),
     deadline: task?.deadline ? new Date(new Date(task.deadline).getTime()
       - new Date(task.deadline).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
@@ -46,7 +48,7 @@ export function toTaskFormValues(task?: TaskDTO): TaskFormValues {
   };
 }
 
-export function validateTaskForm(values: TaskFormValues, estimateRequired = false): TaskFieldErrors {
+export function validateTaskForm(values: TaskFormValues): TaskFieldErrors {
   const errors: TaskFieldErrors = {};
   const title = values.title.trim();
   if (!title || title.length > 250) {
@@ -60,7 +62,7 @@ export function validateTaskForm(values: TaskFormValues, estimateRequired = fals
     errors.deadline = ["Please enter a valid deadline"];
   }
   if (
-    (estimateRequired && !hours) ||
+    (values.assigneeProjectMemberId != null && !hours) ||
     (hours &&
       (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(hours) ||
         !Number.isFinite(Number(hours)) ||
@@ -83,7 +85,7 @@ export function toTaskPayload(
     projectId,
     sprintId: task?.sprintId ?? null,
     milestoneId: task?.milestoneId ?? null,
-    assigneeProjectMemberId: task?.assigneeProjectMemberId ?? null,
+    assigneeProjectMemberId: values.assigneeProjectMemberId,
     title: values.title.trim(),
     description: values.description.trim() || null,
     estimatedHours: values.estimatedHours.trim() ? Number(values.estimatedHours) : null,

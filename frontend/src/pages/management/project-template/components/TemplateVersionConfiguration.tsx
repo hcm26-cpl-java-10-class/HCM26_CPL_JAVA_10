@@ -12,7 +12,7 @@ import { History, Loader2, LockKeyhole, Pen, Rocket } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useProjectTemplateOptions } from "../hooks/useProjectTemplateOptions";
-import { minimumTemplateDurationWeeks, getTemplateError, templateLevelLabel } from "../project-template.utils";
+import { minimumTemplateDurationWeeks, getTemplateError, templateDescriptionCount, templateLevelLabel } from "../project-template.utils";
 import { ProjectTemplateForm } from "./ProjectTemplateForm";
 import { ProjectTemplateError, ProjectTemplateLoading } from "./ProjectTemplateState";
 import { TemplateMilestonesForm } from "./TemplateMilestonesForm";
@@ -21,6 +21,7 @@ import { TemplateSampleContentForm } from "./TemplateSampleContentForm";
 import { TemplateTeamConstraintsForm } from "./TemplateTeamConstraintsForm";
 import { ProjectTemplateStatusBadge } from "./ProjectTemplateStatusBadge";
 import { TemplateModulesPanel } from "./TemplateModulesPanel";
+import { TemplateDraftTab } from "./TemplateDraftTab";
 
 export function TemplateVersionConfiguration({ versionId, editOverview = false, onChanged }: { versionId: number; editOverview?: boolean; onChanged: () => void }) {
   const { user, activeRole, hasPermission } = usePermissions();
@@ -72,7 +73,6 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
   if (query.isError) return <ProjectTemplateError error={query.error} onRetry={() => void query.refetch()} />;
   if (!configuration) return null;
   const { template, version, milestones, sampleContent } = configuration;
-  const formKey = `${versionId}-${template.lockVersion}`;
   return <section className="grid min-w-0 gap-4" aria-label={`Configuration of ${version.version}`}>
     <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-card p-4">
       <div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{version.version} · {template.name}</h3>
@@ -86,36 +86,37 @@ export function TemplateVersionConfiguration({ versionId, editOverview = false, 
     {configuration.legacyContent && <Alert><LockKeyhole /><AlertDescription>
       This version uses a legacy configuration format. Its original content is preserved. Duplicate it to prepare a complete editable template.
     </AlertDescription></Alert>}
-    <Tabs value={tab} onValueChange={value => { setTab(value); setEditingOverview(false); }}>
+    <Tabs value={tab} onValueChange={setTab}>
       <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7" aria-label="Version configuration">
         <TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="team-constraints">Team constraints</TabsTrigger>
         <TabsTrigger value="milestones">Milestones</TabsTrigger><TabsTrigger value="backlog">Backlog</TabsTrigger>
         <TabsTrigger value="modules">Modules</TabsTrigger><TabsTrigger value="resources">Resources</TabsTrigger>
         <TabsTrigger value="activity"><History />Activity</TabsTrigger>
       </TabsList>
-      <TabsContent value="overview">
-        {editable && editingOverview && options.data ? <ProjectTemplateForm key={formKey} template={template} options={options.data}
+      <TemplateDraftTab value="overview" activeTab={tab}>
+        {editable && editingOverview && options.data ? <ProjectTemplateForm template={template} options={options.data}
           minimumDurationWeeks={minimumTemplateDurationWeeks(milestones.milestones)} onCancel={() => setEditingOverview(false)}
           save={async payload => remember(await projectTemplateVersionApi.saveOverview(versionId, payload)).template}
           onSaved={() => setEditingOverview(false)} />
           : <Card className="min-w-0"><CardHeader><div className="flex items-center justify-between gap-3"><CardTitle className="break-words">{template.name}</CardTitle>
             {editable && <Button variant="outline" disabled={!options.data} onClick={() => setEditingOverview(true)}><Pen />Edit version overview</Button>}</div></CardHeader>
             <CardContent className="grid min-w-0 gap-5"><p className="whitespace-pre-wrap text-sm leading-7 [overflow-wrap:anywhere]">{template.description || "No description"}</p>
-              <dl className="grid gap-4 text-sm sm:grid-cols-3">{[["Code", template.code], ["Category", template.category], ["Level", templateLevelLabel(template.level)],
+              <p className="text-xs tabular-nums text-muted-foreground">{templateDescriptionCount(template.description ?? "")}</p>
+              <dl className="grid gap-4 text-sm sm:grid-cols-3">{[["Code", template.code], ["Category", template.category], ["Level", templateLevelLabel(template.level, options.data?.levels)],
                 ["Duration", template.estimatedDurationWeeks == null ? "—" : `${template.estimatedDurationWeeks} weeks`]].map(([label, value]) =>
                   <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="mt-1 break-words font-medium">{value || "—"}</dd></div>)}</dl>
             </CardContent></Card>}
-      </TabsContent>
-      <TabsContent value="team-constraints"><TemplateTeamConstraintsForm key={formKey} template={template} editable={editable}
-        save={async payload => remember(await projectTemplateVersionApi.saveTeam(versionId, payload)).template} onSaved={() => undefined} /></TabsContent>
-      <TabsContent value="milestones">{editable && rubricQuery.isError ? <ProjectTemplateError error={rubricQuery.error} onRetry={() => void rubricQuery.refetch()} />
-        : editable && rubricQuery.isLoading ? <ProjectTemplateLoading /> : <TemplateMilestonesForm key={formKey} plan={milestones} editable={editable}
+      </TemplateDraftTab>
+      <TemplateDraftTab value="team-constraints" activeTab={tab}><TemplateTeamConstraintsForm template={template} editable={editable}
+        save={async payload => remember(await projectTemplateVersionApi.saveTeam(versionId, payload)).template} onSaved={() => undefined} /></TemplateDraftTab>
+      <TemplateDraftTab value="milestones" activeTab={tab}>{editable && rubricQuery.isError ? <ProjectTemplateError error={rubricQuery.error} onRetry={() => void rubricQuery.refetch()} />
+        : editable && rubricQuery.isLoading ? <ProjectTemplateLoading /> : <TemplateMilestonesForm plan={milestones} editable={editable}
           rubrics={rubricQuery.data?.rubrics ?? []} refreshingRubrics={rubricQuery.isFetching} onRefreshRubrics={() => void rubricQuery.refetch()}
-          save={async payload => remember(await projectTemplateVersionApi.saveMilestones(versionId, payload)).milestones} onSaved={() => undefined} />}</TabsContent>
-      <TabsContent value="backlog"><TemplateSampleContentForm key={formKey} content={sampleContent} editable={editable}
+          save={async payload => remember(await projectTemplateVersionApi.saveMilestones(versionId, payload)).milestones} onSaved={() => undefined} />}</TemplateDraftTab>
+      <TemplateDraftTab value="backlog" activeTab={tab}><TemplateSampleContentForm content={sampleContent} editable={editable}
         previewImport={file => projectTemplateVersionApi.previewBacklogImport(versionId, file)}
         downloadImportTemplate={() => projectTemplateVersionApi.getBacklogImportTemplate(versionId)}
-        save={async payload => remember(await projectTemplateVersionApi.saveBacklog(versionId, payload)).sampleContent} onSaved={() => undefined} /></TabsContent>
+        save={async payload => remember(await projectTemplateVersionApi.saveBacklog(versionId, payload)).sampleContent} onSaved={() => undefined} /></TemplateDraftTab>
       <TabsContent value="resources">
         {hasPermission("PROJECT_TEMPLATE_VERSION_READ") && <TemplateResourcesPanel versionId={versionId} editable={editable} />}
       </TabsContent>

@@ -56,12 +56,19 @@ public class AssignmentValidationService {
 
     public Selection validate(TeamAllocationSession session, AssignmentTemplateReader.Node master, AssignmentDtos.Request request,
                               Authentication authentication) {
+        return validate(session, master, request, authentication, true);
+    }
+
+    Selection validate(TeamAllocationSession session, AssignmentTemplateReader.Node master, AssignmentDtos.Request request,
+                       Authentication authentication, boolean lockTeams) {
         Map<Long, Long> selected = selectedTeams(master, request);
         Set<Long> templateIds = master.templateIds();
         List<Long> ids = selected.values().stream().distinct().sorted().toList();
         List<ProjectTeam> locked = new ArrayList<>();
         for (Long id : ids) {
-            ProjectTeam team = teams.findForWorkspaceCreation(id)
+            var lookup = lockTeams ? teams.findForWorkspaceCreation(id)
+                    : teams.findByIdAndAllocationSession_Id(id, session.getId());
+            ProjectTeam team = lookup
                     .filter(value -> value.getAllocationSession().getId().equals(session.getId())
                             && value.getTrainingClass().getId().equals(session.getTrainingClass().getId()))
                     .orElseThrow(() -> AssignmentException.invalid("Every selected team must belong to this class and allocation session"));
