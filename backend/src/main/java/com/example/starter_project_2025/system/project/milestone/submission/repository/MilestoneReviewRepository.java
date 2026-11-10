@@ -16,4 +16,9 @@ public interface MilestoneReviewRepository extends JpaRepository<MilestoneReview
 
     @EntityGraph(attributePaths = {"submissionVersion", "evaluations"})
     List<MilestoneReview> findAllBySubmissionVersionSubmissionIdOrderByReviewedAtDesc(UUID submissionId);
+
+    /** Reviews of team milestones, oldest first, so replaying them leaves each milestone with its latest assessment. */
+    @org.springframework.data.jpa.repository.Query("select r from MilestoneReview r join fetch r.submissionVersion v "
+            + "join fetch v.submission s join fetch s.milestone m where m.teamId is not null order by r.reviewedAt asc")
+    List<MilestoneReview> findAllOfTeamMilestonesOldestFirst();
 }

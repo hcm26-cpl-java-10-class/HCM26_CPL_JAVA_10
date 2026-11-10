@@ -20,12 +20,15 @@ export function MainLayout({
                                mainClassName,
                                pathLinks,
                                contentClassName,
+                               ignorePaths,
                            }: {
     children: ReactNode;
     pathName?: Record<string, string>;
     mainClassName?: string;
     contentClassName?: string;
     pathLinks?: Record<string, string>;
+    /** URL segments to leave out of the breadcrumb, typically ones that have no page of their own. */
+    ignorePaths?: string[];
 }) {
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
@@ -36,7 +39,7 @@ export function MainLayout({
                 <StudentNavbar />
 
                 <header className="flex min-h-14 shrink-0 items-center border-b px-6 py-2">
-                    <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} variant="student" />
+                    <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} variant="student" />
                 </header>
 
                 <main className={cn("flex-1 px-6 pb-6 pt-4", mainClassName, contentClassName)}>
@@ -54,7 +57,7 @@ export function MainLayout({
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                             <SidebarTrigger aria-label="Toggle navigation sidebar" />
-                            <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} />
+                            <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} ignorePaths={ignorePaths} />
                         </div>
                         <div className="shrink-0"><HeaderRight /></div>
                     </div>

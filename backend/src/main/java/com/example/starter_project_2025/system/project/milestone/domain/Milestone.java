@@ -210,6 +210,19 @@ public class Milestone {
         return true;
     }
 
+    /**
+     * Records the reviewer's acceptance-checklist assessment on this team milestone; the latest review wins.
+     * Keys are the milestone checklist item ids the submission snapshot was taken from. Shared (master) milestones
+     * have no single team, so their checklist only defines the criteria and is left untouched.
+     */
+    public void applyChecklistAssessment(java.util.Map<UUID, Boolean> completedByItemId) {
+        if (teamId == null) return;
+        for (MilestoneChecklistItem item : checklistItems) {
+            Boolean completed = completedByItemId.get(item.getId());
+            if (completed != null) item.markAssessed(completed);
+        }
+    }
+
     public void addChecklistItem(String content, boolean mandatory, int orderIndex) {
         checklistItems.add(MilestoneChecklistItem.create(this, content, mandatory, orderIndex));
     }
