@@ -82,6 +82,9 @@ export function CloPanel({
     const [deleting, setDeleting] = useState<SyllabusClo | null>(null);
     const [busy, setBusy] = useState(false);
     const [mappingOpen, setMappingOpen] = useState(false);
+    const [bulkOpen, setBulkOpen] = useState(false);
+    const [bulkDetails, setBulkDetails] = useState<string[]>(["", "", ""]);
+    const [bulkError, setBulkError] = useState("");
 
     const query = useQuery({
         queryKey: ["syllabus-clos", syllabusId],
@@ -175,6 +178,42 @@ export function CloPanel({
         }
     }
 
+    async function saveBulk(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (busy || !canCreate) return;
+        if (bulkDetails.length < 1 || bulkDetails.length > 20) {
+            setBulkError("Enter between 1 and 20 CLOs.");
+            return;
+        }
+        const normalized = bulkDetails.map(clean);
+        for (let index = 0; index < normalized.length; index++) {
+            const value = normalized[index];
+            if (value.length < 10 || value.length > 2000 || !/\p{L}/u.test(value)) {
+                setBulkError(`CLO ${index + 1}: use 10–2000 characters including letters.`);
+                return;
+            }
+        }
+        const used = new Set(clos.map((clo) => clean(clo.details).toLocaleLowerCase("vi")));
+        for (let index = 0; index < normalized.length; index++) {
+            const key = normalized[index].toLocaleLowerCase("vi");
+            if (used.has(key)) {
+                setBulkError(`CLO ${index + 1}: duplicate details, either existing or in this form.`);
+                return;
+            }
+            used.add(key);
+        }
+        setBusy(true);
+        try {
+            await syllabusApi.bulkCreateClos(syllabusId, normalized);
+            await refresh();
+            setBulkDetails(["", "", ""]);
+            setBulkError("");
+            setBulkOpen(false);
+            toast.success(`${normalized.length} CLOs created successfully.`);
+        } catch (error) { setBulkError(errorMessage(error)); }
+        finally { setBusy(false); }
+    }
+
     async function remove() {
         if (!deleting || busy || readOnly) return;
 
@@ -203,13 +242,43 @@ export function CloPanel({
                     </p>
                 </div>
 
-                {canCreate && (
-                    <Button onClick={openCreate} disabled={busy}>
-                        <Plus className="size-4" />
-                        Add CLO
+                {canCreate && <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" type="button" disabled={busy} onClick={() => { setBulkOpen((v) => !v); setBulkError(""); }}>
+                        Add Multiple CLOs
                     </Button>
-                )}
+                    <Button onClick={openCreate} disabled={busy} size="sm"><Plus className="size-4" /> Add CLO</Button>
+                </div>}
             </div>
+
+            {bulkOpen && canCreate && <form onSubmit={(event) => void saveBulk(event)} className="space-y-3 rounded-lg border bg-muted/20 p-3">
+                <div>
+                    <p className="text-sm font-medium">Create Multiple CLOs</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Enter one learning outcome per row (1–20). CLO codes and order are generated automatically. All entries are saved together or none are saved.</p>
+                </div>
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                    {bulkDetails.map((value, index) => <div key={index} className="flex items-start gap-2">
+                        <label className="w-12 shrink-0 pt-2 text-xs text-muted-foreground" htmlFor={`bulk-clo-${syllabusId}-${index}`}>#{index + 1}</label>
+                        <textarea id={`bulk-clo-${syllabusId}-${index}`} value={value} rows={2} maxLength={2000}
+                            className="min-h-16 w-full min-w-0 rounded-md border bg-background px-3 py-2 text-sm"
+                            disabled={busy} aria-invalid={!!bulkError}
+                            placeholder="Describe the learning outcome (10–2000 characters)"
+                            onChange={(event) => { setBulkDetails((rows) => rows.map((row, i) => i === index ? event.target.value : row)); setBulkError(""); }}/>
+                        <Button type="button" variant="ghost" size="icon-sm" title="Remove row" aria-label={`Remove CLO row ${index + 1}`}
+                            disabled={busy || bulkDetails.length === 1} onClick={() => { setBulkDetails((rows) => rows.filter((_, i) => i !== index)); setBulkError(""); }}>
+                            <Trash2 className="size-3.5"/>
+                        </Button>
+                    </div>)}
+                </div>
+                {bulkError && <p role="alert" className="text-xs text-destructive">{bulkError}</p>}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Button type="button" variant="outline" size="sm" disabled={busy || bulkDetails.length >= 20}
+                        onClick={() => setBulkDetails((rows) => [...rows, ""])}><Plus className="size-3.5"/> Add row</Button>
+                    <div className="flex gap-2">
+                        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setBulkOpen(false)}>Cancel</Button>
+                        <Button type="submit" size="sm" disabled={busy}>{busy ? "Creating..." : `Create ${bulkDetails.length} CLOs`}</Button>
+                    </div>
+                </div>
+            </form>}
 
             {coverage && (
                 <div className="space-y-3">

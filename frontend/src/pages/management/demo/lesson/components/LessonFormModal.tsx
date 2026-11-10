@@ -81,7 +81,7 @@ function isHttpUrl(value: string): boolean {
 }
 
 /** Validate phía client, khớp với rule ở LessonDTO / LessonServiceImpl. */
-function validate(form: FormState): FieldErrors {
+function validate(form: FormState, outlineEditable: boolean): FieldErrors {
   const errors: FieldErrors = {};
 
   const title = form.title.trim();
@@ -93,7 +93,7 @@ function validate(form: FormState): FieldErrors {
     if (!url) errors.contentUrl = `Content URL is required for ${form.contentType} lessons`;
     else if (url.length > 500) errors.contentUrl = "Content URL must not exceed 500 characters";
     else if (!isHttpUrl(url)) errors.contentUrl = "Content URL must start with http:// or https://";
-  } else if (!form.textContent.trim()) {
+  } else if (!form.textContent.trim() && !outlineEditable) {
     errors.textContent = "Text content is required for TEXT lessons";
   }
 
@@ -229,7 +229,7 @@ export function LessonFormModal({
   };
 
   const handleSubmit = () => {
-    const found = validate(form);
+    const found = validate(form, lesson?.outlineEditable === true);
     setErrors(found);
     if (Object.keys(found).length > 0) return;
 
@@ -557,7 +557,11 @@ export function LessonFormModal({
                 onChange={(e) => setField("textContent", e.target.value)}
                 placeholder="Write the lesson content here..."
               />
-              <p className="text-xs text-muted-foreground">Required for Text lessons</p>
+              <p className="text-xs text-muted-foreground">
+                {lesson?.outlineEditable
+                  ? "You can save this outline while the course is Draft. Add content before publishing."
+                  : "Required for Text lessons"}
+              </p>
               <FieldMessage message={errors.textContent} />
             </div>
           )}

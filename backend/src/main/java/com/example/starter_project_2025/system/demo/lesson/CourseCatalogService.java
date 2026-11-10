@@ -243,7 +243,8 @@ public class CourseCatalogService {
                 lessonCount,
                 totalDuration,
                 sectionItems,
-                syllabusInfo(course)
+                syllabusInfo(course),
+                course.getCourseType()
         );
     }
 

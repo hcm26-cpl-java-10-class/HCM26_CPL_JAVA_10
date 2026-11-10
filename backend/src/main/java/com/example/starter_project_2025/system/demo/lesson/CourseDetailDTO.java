@@ -24,7 +24,8 @@ public record CourseDetailDTO(
         int lessonCount,
         long totalDuration,
         List<SectionItem> sections,
-        SyllabusInfo syllabus
+        SyllabusInfo syllabus,
+        com.example.starter_project_2025.system.demo.course.CourseType courseType
 ) {
     public record SyllabusInfo(Long id, String code, String name) {}
 
