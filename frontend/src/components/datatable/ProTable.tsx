@@ -4,7 +4,7 @@ import type { EntityCardRendererProps } from "@/types";
 import { ChevronRight } from "lucide-react";
 import { EntityHistoryDialog } from "@/components/audit/EntityHistoryDialog";
 import { usePermissions } from "@/hooks/usePermissions";
-import { ADMIN_ROLE, normalizeRole } from "@/utils/rbac.utils";
+import { isAuditAdmin } from "@/components/audit/auditAccess";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "./common/Loading";
 import NoResult from "./common/NoResult";
@@ -124,7 +124,7 @@ export function ProTable<TData = any>({
     expandable,
 }: ProTableProps<TData>) {
     const { schema } = table;
-    const { activeRole } = usePermissions();
+    const { user } = usePermissions();
     const isBrowseMode = mode === "browse";
 
     // Auto-detect expandable from schema — true when any field is marked expandable: true
@@ -242,7 +242,7 @@ export function ProTable<TData = any>({
     const showActionsColumn = !hideActions && hasRowActions;
     // Audit history is only available to ADMIN (the audit API is admin-only)
     const canViewHistory =
-        normalizeRole(activeRole) === ADMIN_ROLE && !!table.permission?.resource;
+        isAuditAdmin(user.roles) && !!table.permission?.resource;
     const ACTION_COLUMN_WIDTH = canViewHistory ? 180 : 140;
 
     // Default row actions renderer (uses internal modal system or custom overrides)
