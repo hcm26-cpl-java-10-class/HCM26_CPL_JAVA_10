@@ -67,6 +67,9 @@ export interface TraineeAttendanceRecord {
 export interface ClassAttendanceState {
     conductedSessions: number;
     plannedSessions: number;
+    expectedStartDate: string;
+    expectedEndDate: string;
+    scheduleDates: string[];
     recordsByTraineeId: Record<number, TraineeAttendanceRecord>;
 }
 
@@ -93,29 +96,6 @@ const SESSION_TOPICS: string[] = [
     "Session 20: Midterm Project Review & Code Assessment",
 ];
 
-const SESSION_DATES: string[] = [
-    "2026-05-25",
-    "2026-05-27",
-    "2026-05-29",
-    "2026-06-01",
-    "2026-06-03",
-    "2026-06-05",
-    "2026-06-08",
-    "2026-06-10",
-    "2026-06-12",
-    "2026-06-15",
-    "2026-06-17",
-    "2026-06-19",
-    "2026-06-22",
-    "2026-06-24",
-    "2026-06-26",
-    "2026-06-29",
-    "2026-07-01",
-    "2026-07-03",
-    "2026-07-06",
-    "2026-07-08",
-];
-
 /**
  * Preset distribution across trainee indices (based on 20 conducted sessions):
  * - Eligible (< 10% absent): 0% (0/20), 5% (1/20)
@@ -139,11 +119,134 @@ const PRESET_ABSENCE_PROFILES: Array<{
     { excused: 0, unexcused: 0, late: 1 }, // #10: 0/20 absent (0%) -> Eligible
 ];
 
+export function getTodayLocalIsoDate(now: Date = new Date()): string {
+    const yyyy = String(now.getFullYear()).padStart(4, "0");
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+export function addDaysToIsoDate(isoDate: string, daysToAdd: number): string {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
+    const base = match
+        ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+        : new Date();
+    base.setDate(base.getDate() + daysToAdd);
+    return getTodayLocalIsoDate(base);
+}
+
+export function parseClassIsoDate(raw?: string, fallback = "2026-10-01"): string {
+    if (!raw || !raw.trim()) return fallback;
+    const trimmed = raw.trim();
+    const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+    if (isoMatch) {
+        return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    }
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+        return getTodayLocalIsoDate(parsed);
+    }
+    return fallback;
+}
+
+export function resolveClassExpectedDates(
+    classItem: ExternalClass,
+    todayIso: string = getTodayLocalIsoDate(),
+): {
+    expectedStartDate: string;
+    expectedEndDate: string;
+    maxSelectableDate: string;
+} {
+    const rawStart =
+        (classItem as { expectedStartDate?: string }).expectedStartDate ?? classItem.startDate;
+    const rawEnd =
+        (classItem as { expectedEndDate?: string }).expectedEndDate ?? classItem.endDate;
+    const startIso = parseClassIsoDate(rawStart, "2026-10-01");
+    const endIso = parseClassIsoDate(rawEnd, "2027-01-31");
+    const expectedStartDate = startIso <= endIso ? startIso : endIso;
+    const expectedEndDate = startIso <= endIso ? endIso : startIso;
+    const maxSelectableDate = expectedEndDate < todayIso ? expectedEndDate : todayIso;
+    return {
+        expectedStartDate,
+        expectedEndDate,
+        maxSelectableDate,
+    };
+}
+
+function diffDaysBetweenIso(startIso: string, endIso: string): number {
+    const sMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startIso.trim());
+    const eMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(endIso.trim());
+    if (!sMatch || !eMatch) return 0;
+    const startUtc = Date.UTC(Number(sMatch[1]), Number(sMatch[2]) - 1, Number(sMatch[3]));
+    const endUtc = Date.UTC(Number(eMatch[1]), Number(eMatch[2]) - 1, Number(eMatch[3]));
+    return Math.round((endUtc - startUtc) / 86_400_000);
+}
+
+function distributeDatesChronologically(
+    rangeStartIso: string,
+    rangeEndIso: string,
+    count: number,
+): string[] {
+    if (count <= 0) return [];
+    if (count === 1) return [rangeStartIso];
+    const totalDays = Math.max(0, diffDaysBetweenIso(rangeStartIso, rangeEndIso));
+    const dates: string[] = [];
+    for (let i = 0; i < count; i++) {
+        const offset = Math.round((i * totalDays) / (count - 1));
+        dates.push(addDaysToIsoDate(rangeStartIso, offset));
+    }
+    return dates;
+}
+
+/**
+ * Generates chronological session dates strictly bounded within [expectedStartDate, expectedEndDate]:
+ * - Past sessions (#1..#20): expectedStartDate <= sessionDate < today
+ * - Current / Today session (#21): sessionDate === today (or latest active session <= today)
+ * - Future sessions (#22..#40): today < sessionDate <= expectedEndDate
+ */
+export function buildClassSessionSchedule(
+    expectedStartDate: string,
+    expectedEndDate: string,
+    todayIso: string = getTodayLocalIsoDate(),
+    plannedSessions = 40,
+    basePastSessions = 20,
+): string[] {
+    if (expectedStartDate < todayIso && todayIso <= expectedEndDate) {
+        const rawYesterday = addDaysToIsoDate(todayIso, -1);
+        const pastEndIso = rawYesterday >= expectedStartDate ? rawYesterday : expectedStartDate;
+        const pastDates = distributeDatesChronologically(
+            expectedStartDate,
+            pastEndIso,
+            basePastSessions,
+        );
+
+        const futureCount = Math.max(0, plannedSessions - basePastSessions - 1);
+        const twoDaysAhead = addDaysToIsoDate(todayIso, 2);
+        const oneDayAhead = addDaysToIsoDate(todayIso, 1);
+        const futureStartIso =
+            twoDaysAhead <= expectedEndDate
+                ? twoDaysAhead
+                : oneDayAhead <= expectedEndDate
+                  ? oneDayAhead
+                  : expectedEndDate;
+        const futureDates = distributeDatesChronologically(
+            futureStartIso,
+            expectedEndDate,
+            futureCount,
+        );
+
+        return [...pastDates, todayIso, ...futureDates];
+    }
+
+    return distributeDatesChronologically(expectedStartDate, expectedEndDate, plannedSessions);
+}
+
 function buildInitialLogs(
     totalSessions: number,
     excused: number,
     unexcused: number,
     late: number,
+    scheduleDates: string[],
 ): TraineeAttendanceLogItem[] {
     const logs: TraineeAttendanceLogItem[] = [];
     let remExcused = excused;
@@ -152,7 +255,7 @@ function buildInitialLogs(
 
     for (let i = 0; i < totalSessions; i++) {
         const sessionNumber = i + 1;
-        const date = SESSION_DATES[i] ?? `2026-07-${String(10 + i).padStart(2, "0")}`;
+        const date = scheduleDates[i] ?? scheduleDates[scheduleDates.length - 1] ?? "2026-10-01";
         const topic = SESSION_TOPICS[i] ?? `Session ${String(sessionNumber).padStart(2, "0")}: Training Session`;
 
         let status: SessionAttendanceMark = "Present";
@@ -202,22 +305,6 @@ const AUTO_DEFAULT_NOTES = new Set([
     "Arrived late",
 ]);
 
-export function getTodayLocalIsoDate(now: Date = new Date()): string {
-    const yyyy = String(now.getFullYear()).padStart(4, "0");
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-}
-
-export function addDaysToIsoDate(isoDate: string, daysToAdd: number): string {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
-    const base = match
-        ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-        : new Date();
-    base.setDate(base.getDate() + daysToAdd);
-    return getTodayLocalIsoDate(base);
-}
-
 function recalculateRecordFromLogs(
     traineeId: number,
     logs: TraineeAttendanceLogItem[],
@@ -252,10 +339,27 @@ export function resetClassAttendanceStoreForTest() {
     classAttendanceStore.clear();
 }
 
-function getOrInitClassAttendanceState(classId: string, trainees: Trainee[]): ClassAttendanceState {
+function getOrInitClassAttendanceState(
+    classId: string,
+    trainees: Trainee[],
+    expectedStartDate = "2026-10-01",
+    expectedEndDate = "2027-01-31",
+): ClassAttendanceState {
     const todayIso = getTodayLocalIsoDate();
     const existing = classAttendanceStore.get(classId);
     const plannedSessions = existing?.plannedSessions ?? 40;
+    const scheduleDates = buildClassSessionSchedule(
+        expectedStartDate,
+        expectedEndDate,
+        todayIso,
+        plannedSessions,
+        20,
+    );
+    const datesChanged =
+        existing !== undefined &&
+        (existing.expectedStartDate !== expectedStartDate ||
+            existing.expectedEndDate !== expectedEndDate);
+
     const recordsByTraineeId: Record<number, TraineeAttendanceRecord> = {};
 
     let maxValidConducted = 20;
@@ -263,7 +367,19 @@ function getOrInitClassAttendanceState(classId: string, trainees: Trainee[]): Cl
     trainees.forEach((trainee, index) => {
         const existingRecord = existing?.recordsByTraineeId?.[trainee.id];
         if (existingRecord) {
-            const sanitized = recalculateRecordFromLogs(trainee.id, existingRecord.logs, todayIso);
+            const alignedLogs = existingRecord.logs.map((log) => {
+                const scheduledDate = scheduleDates[log.sessionNumber - 1];
+                const outOfBounds =
+                    !log.date ||
+                    log.date < expectedStartDate ||
+                    log.date > expectedEndDate ||
+                    datesChanged;
+                return {
+                    ...log,
+                    date: outOfBounds && scheduledDate ? scheduledDate : log.date,
+                };
+            });
+            const sanitized = recalculateRecordFromLogs(trainee.id, alignedLogs, todayIso);
             recordsByTraineeId[trainee.id] = sanitized;
             if (sanitized.logs.length > 0) {
                 const maxSessionInLogs = sanitized.logs.reduce(
@@ -274,7 +390,13 @@ function getOrInitClassAttendanceState(classId: string, trainees: Trainee[]): Cl
             }
         } else {
             const preset = PRESET_ABSENCE_PROFILES[index % PRESET_ABSENCE_PROFILES.length];
-            const initialLogs = buildInitialLogs(20, preset.excused, preset.unexcused, preset.late);
+            const initialLogs = buildInitialLogs(
+                20,
+                preset.excused,
+                preset.unexcused,
+                preset.late,
+                scheduleDates,
+            );
             recordsByTraineeId[trainee.id] = recalculateRecordFromLogs(
                 trainee.id,
                 initialLogs,
@@ -284,15 +406,20 @@ function getOrInitClassAttendanceState(classId: string, trainees: Trainee[]): Cl
     });
 
     // Ensure conductedSessions only reflects sessions with date <= todayIso
+    const pastScheduleCount = scheduleDates.filter((d) => d < todayIso).length;
+    const baseConducted = pastScheduleCount > 0 ? pastScheduleCount : 0;
     const sampleTraineeId = trainees[0]?.id;
     const sampleLogsCount = sampleTraineeId
-        ? (recordsByTraineeId[sampleTraineeId]?.logs.length ?? 20)
-        : Math.min(existing?.conductedSessions ?? 20, maxValidConducted);
-    const conductedSessions = Math.max(20, sampleLogsCount);
+        ? (recordsByTraineeId[sampleTraineeId]?.logs.length ?? baseConducted)
+        : Math.min(existing?.conductedSessions ?? baseConducted, maxValidConducted);
+    const conductedSessions = Math.max(baseConducted, sampleLogsCount);
 
     const nextState: ClassAttendanceState = {
         conductedSessions,
         plannedSessions,
+        expectedStartDate,
+        expectedEndDate,
+        scheduleDates,
         recordsByTraineeId,
     };
     classAttendanceStore.set(classId, nextState);
@@ -380,9 +507,14 @@ export interface TraineeAttendanceViewProps {
 export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAttendanceViewProps) {
     const classId = String(classItem.id);
     const classSite = classItem.site;
+    const todayIso = getTodayLocalIsoDate();
+    const { expectedStartDate, expectedEndDate, maxSelectableDate } = useMemo(
+        () => resolveClassExpectedDates(classItem, todayIso),
+        [classItem, todayIso],
+    );
 
     const [attendanceState, setAttendanceState] = useState<ClassAttendanceState>(() =>
-        getOrInitClassAttendanceState(classId, trainees),
+        getOrInitClassAttendanceState(classId, trainees, expectedStartDate, expectedEndDate),
     );
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState<"" | AttendanceStatusLabel>("");
@@ -390,12 +522,11 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
     // Take Daily Attendance modal state
-    const todayIso = getTodayLocalIsoDate();
     const [takeAttendanceOpen, setTakeAttendanceOpen] = useState(false);
     const [selectedSessionNumber, setSelectedSessionNumber] = useState(
         () => attendanceState.conductedSessions + 1,
     );
-    const [sessionDate, setSessionDate] = useState(() => getTodayLocalIsoDate());
+    const [sessionDate, setSessionDate] = useState(() => maxSelectableDate);
     const [sessionTopic, setSessionTopic] = useState("");
     const [dailyMarks, setDailyMarks] = useState<Record<number, SessionAttendanceMark>>({});
     const [dailyNotes, setDailyNotes] = useState<Record<number, string>>({});
@@ -410,9 +541,14 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
     const [logModalError, setLogModalError] = useState("");
 
     useEffect(() => {
-        const synced = getOrInitClassAttendanceState(classId, trainees);
+        const synced = getOrInitClassAttendanceState(
+            classId,
+            trainees,
+            expectedStartDate,
+            expectedEndDate,
+        );
         setAttendanceState(synced);
-    }, [classId, trainees]);
+    }, [classId, expectedEndDate, expectedStartDate, trainees]);
 
     const updateAttendanceState = (updater: (prev: ClassAttendanceState) => ClassAttendanceState) => {
         setAttendanceState((prev) => {
@@ -565,20 +701,40 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
     };
 
     const getScheduledDateForSession = (sessionNum: number, state: ClassAttendanceState): string => {
+        const scheduledFromRange = state.scheduleDates[sessionNum - 1];
         const sampleLog = trainees
             .map((t) => state.recordsByTraineeId[t.id]?.logs.find((l) => l.sessionNumber === sessionNum))
             .find(Boolean);
-        if (sampleLog?.date && sampleLog.date <= todayIso) {
+        if (
+            sampleLog?.date &&
+            sampleLog.date >= state.expectedStartDate &&
+            sampleLog.date <= state.expectedEndDate &&
+            sampleLog.date <= todayIso
+        ) {
             return sampleLog.date;
         }
-        if (sessionNum <= SESSION_DATES.length) {
-            return SESSION_DATES[sessionNum - 1];
+        if (scheduledFromRange) {
+            return scheduledFromRange;
         }
-        if (sessionNum === state.conductedSessions + 1) {
-            return todayIso;
+        return state.expectedEndDate;
+    };
+
+    const resolveDefaultActiveSessionNumber = (state: ClassAttendanceState): number => {
+        const nextUnconducted = state.conductedSessions + 1;
+        if (nextUnconducted <= state.plannedSessions) {
+            const nextDate = getScheduledDateForSession(nextUnconducted, state);
+            if (nextDate <= todayIso) {
+                return nextUnconducted;
+            }
         }
-        const daysAhead = Math.max(1, sessionNum - (state.conductedSessions + 1)) * 2;
-        return addDaysToIsoDate(todayIso, daysAhead);
+        let latestActive = 1;
+        for (let sNum = 1; sNum <= state.plannedSessions; sNum++) {
+            const d = getScheduledDateForSession(sNum, state);
+            if (d <= todayIso) {
+                latestActive = sNum;
+            }
+        }
+        return latestActive;
     };
 
     const loadSessionIntoModal = (sessionNum: number, state: ClassAttendanceState) => {
@@ -601,7 +757,13 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                     (l) => l.sessionNumber === sessionNum && (!l.date || l.date <= todayIso),
                 );
                 if (existingLog) {
-                    detectedDate = existingLog.date || detectedDate;
+                    if (
+                        existingLog.date &&
+                        existingLog.date >= state.expectedStartDate &&
+                        existingLog.date <= state.expectedEndDate
+                    ) {
+                        detectedDate = existingLog.date;
+                    }
                     detectedTopic = existingLog.topic || detectedTopic;
                     initialMarks[trainee.id] = existingLog.status;
                     initialNotes[trainee.id] =
@@ -625,8 +787,8 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
     };
 
     const handleOpenTakeAttendance = () => {
-        const nextSessionNum = attendanceState.conductedSessions + 1;
-        loadSessionIntoModal(nextSessionNum, attendanceState);
+        const defaultSessionNum = resolveDefaultActiveSessionNumber(attendanceState);
+        loadSessionIntoModal(defaultSessionNum, attendanceState);
         setTakeAttendanceOpen(true);
     };
 
@@ -688,9 +850,16 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
             return;
         }
 
-        // Strict Date-Based Future Locking (session.date > today)
+        // Strict Date-Based Future Locking (session.date > today or outside class bounds)
         if (sessionDate > todayIso || selectedSessionNumber > attendanceState.conductedSessions + 1) {
             const msg = `Cannot take attendance for a future date (Session scheduled for ${sessionDate}).`;
+            setAttendanceFormError(msg);
+            toast.error(msg);
+            return;
+        }
+
+        if (sessionDate < expectedStartDate || sessionDate > expectedEndDate) {
+            const msg = `Session date must be within the class schedule (${expectedStartDate} to ${expectedEndDate}).`;
             setAttendanceFormError(msg);
             toast.error(msg);
             return;
@@ -1380,7 +1549,8 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                         </DialogTitle>
                         <DialogDescription>
                             Select a session and mark attendance status for active trainees in{" "}
-                            <strong>{classItem.code ?? classItem.name}</strong>. Future sessions (date &gt;{" "}
+                            <strong>{classItem.code ?? classItem.name}</strong> (Schedule:{" "}
+                            {expectedStartDate} to {expectedEndDate}). Future sessions (date &gt;{" "}
                             {todayIso}) are strictly locked.
                         </DialogDescription>
                     </DialogHeader>
@@ -1404,16 +1574,16 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                                     ).map((sNum) => {
                                         const padded = String(sNum).padStart(2, "0");
                                         const schedDate = getScheduledDateForSession(sNum, attendanceState);
-                                        const isCompleted =
-                                            sNum <= attendanceState.conductedSessions && schedDate <= todayIso;
-                                        const isCurrent =
-                                            sNum === attendanceState.conductedSessions + 1 &&
-                                            schedDate <= todayIso;
                                         const isFuture =
                                             sNum > attendanceState.conductedSessions + 1 ||
                                             schedDate > todayIso;
+                                        const isCurrent =
+                                            !isFuture &&
+                                            (schedDate === todayIso ||
+                                                sNum === attendanceState.conductedSessions + 1);
+                                        const isCompleted = !isFuture && !isCurrent;
                                         const label = isCompleted
-                                            ? `Session #${padded} (${schedDate}) — Completed (Past Session)`
+                                            ? `Session #${padded} (${schedDate}) — Completed (Editable with Audit Reason)`
                                             : isCurrent
                                               ? `Session #${padded} (${schedDate}) — Today (Current Session)`
                                               : `Session #${padded} (${schedDate}) — Upcoming - Locked`;
@@ -1434,7 +1604,8 @@ export function TraineeAttendanceView({ classItem, trainees, onBack }: TraineeAt
                                     id="attendance-session-date"
                                     aria-label="Session Date"
                                     type="date"
-                                    max={todayIso}
+                                    min={expectedStartDate}
+                                    max={maxSelectableDate}
                                     value={sessionDate}
                                     onChange={(e) => {
                                         setSessionDate(e.target.value);

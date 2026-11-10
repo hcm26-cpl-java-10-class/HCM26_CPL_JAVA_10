@@ -169,6 +169,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
             }
 
             await queryClient.invalidateQueries({ queryKey: ["classes"] });
+            await queryClient.invalidateQueries({ queryKey: ["session", "class-calendars"] });
             onSuccess?.();
             onOpenChange(false);
         } catch (err: any) {

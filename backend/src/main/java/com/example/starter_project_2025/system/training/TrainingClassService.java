@@ -128,10 +128,36 @@ public class TrainingClassService {
             throw new ConflictException("Invalid class status transition");
         if (Set.of("active", "completed", "closed").contains(entity.getStatus()) && !entity.getCode().equals(input.getCode()))
             throw new ConflictException("Cannot change the code of a class that has started");
-        for (var session : sessions.findByClassId(id).stream().filter(s -> Boolean.TRUE.equals(s.getIsActive())).toList()) {
-            if (session.getStartTime().toLocalDate().isBefore(input.getStartDate()) ||
-                    session.getEndTime().toLocalDate().isAfter(input.getEndDate()))
-                throw new ConflictException("Class dates must contain its existing sessions");
+        var activeSessions = sessions.findByClassId(id).stream()
+                .filter(s -> Boolean.TRUE.equals(s.getIsActive()))
+                .sorted(Comparator.comparing(s -> s.getStartTime()))
+                .toList();
+        boolean datesChanged = !Objects.equals(entity.getStartDate(), input.getStartDate())
+                || !Objects.equals(entity.getEndDate(), input.getEndDate());
+        boolean hasOutOfBounds = activeSessions.stream().anyMatch(
+                s -> s.getStartTime().toLocalDate().isBefore(input.getStartDate())
+                        || s.getEndTime().toLocalDate().isAfter(input.getEndDate()));
+        if (datesChanged || hasOutOfBounds) {
+            long totalSpanDays = Math.max(0L, java.time.temporal.ChronoUnit.DAYS.between(input.getStartDate(), input.getEndDate()));
+            int totalCount = activeSessions.size();
+            for (int i = 0; i < totalCount; i++) {
+                var session = activeSessions.get(i);
+                long offsetDays = totalCount <= 1 ? 0L : Math.round((i * (double) totalSpanDays) / (totalCount - 1));
+                LocalDate newDate = input.getStartDate().plusDays(offsetDays);
+                if (newDate.isAfter(input.getEndDate())) {
+                    newDate = input.getEndDate();
+                }
+                long durationMinutes = Math.max(30L, java.time.Duration.between(session.getStartTime(), session.getEndTime()).toMinutes());
+                var startLocalTime = session.getStartTime().toLocalTime();
+                var newStart = newDate.atTime(startLocalTime);
+                var newEnd = newStart.plusMinutes(durationMinutes);
+                if (newEnd.toLocalDate().isAfter(input.getEndDate())) {
+                    newEnd = input.getEndDate().atTime(23, 59);
+                }
+                session.setStartTime(newStart);
+                session.setEndTime(newEnd);
+                sessions.save(session);
+            }
         }
         BeanUtils.copyProperties(input, entity, "id");
         return save(entity);

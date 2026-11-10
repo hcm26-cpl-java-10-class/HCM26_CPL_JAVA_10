@@ -9,8 +9,13 @@ import type { Trainee } from "@/types";
 import ClassDetailPage from "../ClassDetailPage";
 import ClassListPage from "../ClassListPage";
 import { getMockTraineesByClass, MOCK_TRAINING_CLASSES } from "../mocks/classTrainee.mock";
-import { resetClassAttendanceStoreForTest } from "./TraineeAttendanceView";
+import {
+    buildClassSessionSchedule,
+    resetClassAttendanceStoreForTest,
+    resolveClassExpectedDates,
+} from "./TraineeAttendanceView";
 import { formatFptStudentIdForSite, getFptStudentIdRuleBySite } from "./TraineeModal";
+import { resetClassTopicMarkStoreForTest, resolveTraineeAccount } from "./TraineeTopicMarkView";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 
 vi.mock("@/api/axios", () => import("@/test/mocks").then((m) => m.axiosModule()));
@@ -38,6 +43,7 @@ let serverTraineesState: Trainee[] = [];
 beforeEach(() => {
     fakeHttp.reset();
     resetClassAttendanceStoreForTest();
+    resetClassTopicMarkStoreForTest();
     grant("SESSION_READ", "STUDENT_SCORE_READ");
     serverTraineesState = getMockTraineesByClass(2);
     fakeHttp.on("get", "/external/classes", MOCK_TRAINING_CLASSES);
@@ -200,24 +206,14 @@ describe("ClassDetailView & TraineeListTab", () => {
         expect(within(menu).getByRole("menuitem", { name: /^edit$/i })).toBeInTheDocument();
         expect(within(menu).getByRole("menuitem", { name: /^delete$/i })).toBeInTheDocument();
 
-        // Topic Mark navigation passes classId and classCode, displays Back to Class Detail, and returns
+        // Topic Mark view opens in-place with dynamic class code and returns via Back to Trainee List
         await user.click(screen.getByRole("button", { name: "Topic Mark" }));
-        expect(await screen.findByRole("heading", { name: "Topic Marks : HCM26_FR_JAVA_03" })).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: "Topic Mark HCM26_FR_JAVA_03" })).toBeInTheDocument();
 
-        // Verify gradebook search received classId and classCode
-        await waitFor(() => {
-            const calls = fakeHttp.callsTo("get", "/topic-marks/gradebook/search");
-            expect(calls.length).toBeGreaterThanOrEqual(1);
-            const params = calls[calls.length - 1].params as Record<string, string>;
-            expect(params.classId).toBe("2");
-            expect(params.classCode).toBe("HCM26_FR_JAVA_03");
-        });
-
-        // Click "Back to Class Detail" navigates back to Class Details
-        const backLink = screen.getByRole("link", { name: /back to class detail/i });
-        expect(backLink).toBeInTheDocument();
-        await user.click(backLink);
-        expect(await screen.findByRole("heading", { name: "Class Details : HCM26_FR_JAVA_03" })).toBeInTheDocument();
+        const backButton = screen.getByRole("button", { name: /back to trainee list/i });
+        expect(backButton).toBeInTheDocument();
+        await user.click(backButton);
+        expect(await screen.findByRole("table", { name: "Trainee List" })).toBeInTheDocument();
     });
 
     it("enforces site-specific FPT Student ID rules (HCM: SE/SS/AI/IA, HN: HE/HS/AI/IA, Other: DE + 6 digits)", () => {
@@ -564,16 +560,41 @@ describe("ClassDetailView & TraineeListTab", () => {
             name: /Take Daily Attendance — Session #21/i,
         });
 
-        // 4a. Current Session (#21) selected by default; Future Sessions (#22..#40) are locked/disabled
+        // 4a. Current Session (#21) selected by default; Future Sessions (#22..#40) are locked/disabled; Past Sessions (#01..#20) are Completed (Editable with Audit Reason)
+        const octToJanSchedule = buildClassSessionSchedule("2026-10-01", "2027-01-31", "2026-11-11");
+        expect(octToJanSchedule).toHaveLength(40);
+        expect(octToJanSchedule[0]).toBe("2026-10-01");
+        expect(octToJanSchedule[19]).toBe("2026-11-10");
+        expect(octToJanSchedule[20]).toBe("2026-11-11");
+        expect(octToJanSchedule[21]).toBe("2026-11-13");
+        expect(octToJanSchedule[39]).toBe("2027-01-31");
+        expect(octToJanSchedule.every((d) => d >= "2026-10-01" && d <= "2027-01-31")).toBe(true);
+        expect(
+            resolveClassExpectedDates(
+                { id: 1, code: "LOCAL_JAVA_01", name: "Java", startDate: "01-Oct-2026", endDate: "31-Jan-2027" } as any,
+                "2026-11-11",
+            ),
+        ).toEqual({
+            expectedStartDate: "2026-10-01",
+            expectedEndDate: "2027-01-31",
+            maxSelectableDate: "2026-11-11",
+        });
+
         const sessionSelect = within(takeDialog).getByLabelText("Select Attendance Session") as HTMLSelectElement;
         expect(sessionSelect.value).toBe("21");
+        const pastOption01 = within(sessionSelect).getByRole("option", {
+            name: /Session #01.*Completed \(Editable with Audit Reason\)/i,
+        }) as HTMLOptionElement;
+        expect(pastOption01.disabled).toBe(false);
         const futureOption22 = within(sessionSelect).getByRole("option", {
             name: /Session #22.*Upcoming - Locked/i,
         }) as HTMLOptionElement;
         expect(futureOption22.disabled).toBe(true);
 
-        // 4a-2. Selecting a future date (> today) strictly locks attendance and shows warning banner
+        // 4a-2. Selecting a future date (> today) strictly locks attendance and shows warning banner; min/max attributes match class dates
         const dateInput = within(takeDialog).getByLabelText("Session Date") as HTMLInputElement;
+        expect(dateInput.min).toBe("2026-05-23");
+        expect(dateInput.max).toBe(dateInput.value);
         const defaultTodayDate = dateInput.value;
         fireEvent.change(dateInput, { target: { value: "2099-11-26" } });
         expect(
@@ -613,7 +634,7 @@ describe("ClassDetailView & TraineeListTab", () => {
         // 4c. Open Take Attendance again -> Select Past Session #4 -> Edit status -> Require Audit Reason -> Verify Audit Trail in Logs
         await user.click(screen.getByRole("button", { name: /take attendance/i }));
         const pastDialog = await screen.findByRole("dialog", {
-            name: /Take Daily Attendance — Session #22/i,
+            name: /Take Daily Attendance — Session #21/i,
         });
         await user.selectOptions(
             within(pastDialog).getByLabelText("Select Attendance Session"),
@@ -676,4 +697,95 @@ describe("ClassDetailView & TraineeListTab", () => {
         await user.click(screen.getByRole("button", { name: /back to trainee list/i }));
         expect(await screen.findByRole("table", { name: "Trainee List" })).toBeInTheDocument();
     }, 30000);
+
+    it("switches to Topic Mark view with 7 columns, Account handle generation, Topic GPA Failure highlighting, inline Detail & Edit mode, Excel export, and live Trainee List sync", async () => {
+        expect(
+            resolveTraineeAccount(
+                { id: 1, fullName: "Vũ Mai Trang", fptAccount: "AI237193" } as Trainee,
+                0,
+            ),
+        ).toBe("trangvm1");
+        expect(
+            resolveTraineeAccount(
+                { id: 2, fullName: "Phan Phú Dũng", fptAccount: "IA506908" } as Trainee,
+                1,
+            ),
+        ).toBe("dungpp2");
+
+        const { user } = renderClassFlow("/classes/2");
+        await screen.findByText("Hoàng Phương Bình");
+
+        // 1. Live sync test: change Hoàng Phương Bình status to Inactive in Trainee List first
+        await user.click(screen.getByRole("checkbox", { name: "Select Hoàng Phương Bình" }));
+        await user.click(screen.getByRole("button", { name: /change status/i }));
+        await user.click(await screen.findByRole("menuitem", { name: /inactive/i }));
+
+        // 2. Open Topic Mark view
+        await user.click(screen.getByRole("button", { name: "Topic Mark" }));
+        const view = await screen.findByTestId("topic-mark-view");
+        expect(within(view).getByRole("heading", { name: "Topic Mark HCM26_FR_JAVA_03" })).toBeInTheDocument();
+
+        // 3. Only 3 action buttons on top right; CoderByte Mark strictly removed
+        expect(within(view).getByRole("button", { name: /download template/i })).toBeInTheDocument();
+        expect(within(view).getByRole("button", { name: /import mark/i })).toBeInTheDocument();
+        expect(within(view).getByRole("button", { name: /export mark/i })).toBeInTheDocument();
+        expect(within(view).queryByText(/coderbyte mark/i)).not.toBeInTheDocument();
+
+        // 4. Topic Code selector & Topic GPA Failure legend
+        const topicSelect = within(view).getByLabelText("Topic Code") as HTMLSelectElement;
+        expect(topicSelect.value).toBe("L1_AL_PSE");
+        expect(within(view).getByText("Topic GPA Failure")).toBeInTheDocument();
+
+        // 5. Exact 7 columns with "Account" (renamed from "FPT Account")
+        const topicTable = within(view).getByRole("table", { name: "Topic Mark Table" });
+        const headers = within(topicTable).getAllByRole("columnheader").map((h) => h.textContent?.trim());
+        expect(headers).toEqual([
+            "No",
+            "Full Name",
+            "Personal Email",
+            "Account",
+            "Status",
+            "Total Topic GPA",
+            "Action",
+        ]);
+        expect(within(topicTable).queryByRole("columnheader", { name: "FPT Account" })).not.toBeInTheDocument();
+
+        // 6. Verify live Trainee List sync & Account generation in row 1 & row 2
+        const rows = within(topicTable).getAllByRole("row").slice(1);
+        expect(rows).toHaveLength(10);
+        const row1Cells = within(rows[0]).getAllByRole("cell");
+        expect(row1Cells[0]).toHaveTextContent("1");
+        expect(row1Cells[1]).toHaveTextContent("Hoàng Phương Bình");
+        expect(row1Cells[2]).toHaveTextContent("phuongbinh.conan@gmail.com");
+        expect(row1Cells[3]).toHaveTextContent("binhhp1");
+        expect(row1Cells[4]).toHaveTextContent("Inactive"); // Synced from Trainee List!
+        expect(row1Cells[5]).toHaveTextContent("8.2");
+
+        const row2Cells = within(rows[1]).getAllByRole("cell");
+        expect(row2Cells[1]).toHaveTextContent("Trần Việt Anh");
+        expect(row2Cells[3]).toHaveTextContent("anhtv2");
+        expect(row2Cells[5]).toHaveTextContent("5.2");
+        expect(row2Cells[5]).toHaveClass("bg-red-50", "text-red-700", "font-semibold");
+
+        // 7. Expand Detail row -> strictly read-only (no Edit/Save/Cancel buttons or number inputs in table)
+        expect(within(view).queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+        expect(within(view).queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+        expect(within(view).queryByRole("button", { name: /^cancel$/i })).not.toBeInTheDocument();
+
+        await user.click(within(topicTable).getByRole("button", { name: "Detail for Trần Việt Anh" }));
+        const detailRow = await within(topicTable).findByTestId("detail-row-102");
+        expect(detailRow).toBeInTheDocument();
+        expect(within(detailRow).getByText("Quiz (20%):")).toBeInTheDocument();
+        expect(within(detailRow).getByText("Assignment (30%):")).toBeInTheDocument();
+        expect(within(detailRow).getByText("Practice / Final (50%):")).toBeInTheDocument();
+        expect(within(topicTable).queryAllByRole("spinbutton")).toHaveLength(0);
+
+        // 8. Export Mark & Download Template auto-fit columns
+        await user.click(within(view).getByRole("button", { name: /export mark/i }));
+        expect(XLSX.writeFile).toHaveBeenCalled();
+
+        // 9. Return to Trainee List
+        await user.click(within(view).getByRole("button", { name: /back to trainee list/i }));
+        expect(await screen.findByRole("table", { name: "Trainee List" })).toBeInTheDocument();
+    }, 20000);
 });
