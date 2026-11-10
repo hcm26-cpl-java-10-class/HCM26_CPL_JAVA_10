@@ -300,7 +300,7 @@ export default function TeamArtifactSubmissionPage() {
           {draft && artifactFormSource(draft, latestSubmission) === draft && (
             <div role="status" className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
               <Save className="mt-0.5 size-4 shrink-0 text-blue-600" />
-              <div className="min-w-0 text-sm"><p className="font-medium">Saved draft loaded <span className="font-normal text-blue-700 dark:text-blue-300">- Draft v{draft.version}</span></p><p className="mt-1 text-xs leading-relaxed text-blue-800 dark:text-blue-200">Saved {new Date(draft.updatedAt).toLocaleString()}. Continue editing below.</p></div>
+              <div className="min-w-0 text-sm"><p className="font-medium">Saved draft loaded <span className="font-normal text-blue-700 dark:text-blue-300">- Draft v{(latestSubmission?.version ?? 0) + 1}</span></p><p className="mt-1 text-xs leading-relaxed text-blue-800 dark:text-blue-200">Saved {new Date(draft.updatedAt).toLocaleString()}. Not officially submitted. Continue editing below.</p></div>
             </div>
           )}
           {latestSubmission && (

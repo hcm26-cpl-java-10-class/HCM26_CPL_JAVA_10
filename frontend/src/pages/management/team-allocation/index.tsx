@@ -78,6 +78,39 @@ const CLASS_STATUS_CLASS: Record<TrainingClassDTO["status"], string> = {
   CANCELLED: "border-destructive/40 bg-destructive/10 text-destructive",
 };
 
+/** Per-status colour accents for the session list rows. */
+const SESSION_ROW_TONE: Record<
+  AllocationSessionStatus,
+  { bar: string; tile: string; selected: string; idle: string }
+> = {
+  OPEN: {
+    bar: "bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-500",
+    tile: "border-emerald-400/40 bg-gradient-to-br from-emerald-500/20 to-teal-500/15 text-emerald-600 dark:border-emerald-400/30 dark:text-emerald-300",
+    selected:
+      "border-emerald-500/50 bg-gradient-to-r from-emerald-500/[0.10] via-teal-500/[0.05] to-transparent shadow-sm",
+    idle: "hover:border-emerald-400/60 hover:shadow-sm",
+  },
+  PUBLISHED: {
+    bar: "bg-gradient-to-b from-indigo-500 via-violet-500 to-fuchsia-500",
+    tile: "border-indigo-400/40 bg-gradient-to-br from-indigo-500/20 to-violet-500/15 text-indigo-600 dark:border-indigo-400/30 dark:text-indigo-300",
+    selected:
+      "border-indigo-500/50 bg-gradient-to-r from-indigo-500/[0.10] via-violet-500/[0.05] to-transparent shadow-sm",
+    idle: "hover:border-indigo-400/60 hover:shadow-sm",
+  },
+  CLOSED: {
+    bar: "bg-gradient-to-b from-slate-400 via-slate-500 to-slate-600",
+    tile: "border-slate-400/40 bg-muted/60 text-muted-foreground",
+    selected: "border-slate-400/60 bg-muted/40 shadow-sm",
+    idle: "hover:border-slate-400/60 hover:shadow-sm",
+  },
+  CANCELLED: {
+    bar: "bg-gradient-to-b from-rose-400 via-rose-500 to-red-500",
+    tile: "border-rose-400/40 bg-gradient-to-br from-rose-500/15 to-red-500/10 text-rose-600 dark:border-rose-400/30 dark:text-rose-300",
+    selected: "border-rose-400/60 bg-rose-500/[0.07] shadow-sm",
+    idle: "hover:border-rose-400/60 hover:shadow-sm",
+  },
+};
+
 function getApiFailure(error: unknown) {
   if (axios.isAxiosError<AllocationApiError>(error)) {
     const data = error.response?.data;
@@ -242,27 +275,35 @@ export default function TeamAllocationSessionPage() {
   };
 
   const metaChip =
-    "inline-flex items-center gap-1.5 rounded-full border bg-background/70 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur";
+    "inline-flex items-center gap-1.5 rounded-full border border-indigo-200/70 bg-background/70 px-2.5 py-1 text-xs text-muted-foreground backdrop-blur dark:border-indigo-900/60";
 
   return (
-    <MainLayout pathName={{ "team-allocation": "Project Team Allocation" }}>
+    <MainLayout
+      pathName={{ "team-allocation": "Project Team Allocation" }}
+      // `classes` has no route of its own; send the crumb to the class list.
+      pathLinks={{ classes: "/team-allocation" }}
+    >
       <div className="mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-5">
-        <section className="relative shrink-0 overflow-hidden rounded-2xl border bg-card shadow-sm">
+        <section className="relative shrink-0 overflow-hidden rounded-2xl border border-indigo-200/70 bg-card shadow-sm dark:border-indigo-900/60">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-primary/[0.03] to-transparent"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-br from-sky-500/[0.12] via-indigo-500/[0.06] to-violet-500/[0.12]"
           />
           <div
             aria-hidden
-            className="pointer-events-none absolute -right-16 -top-24 size-64 rounded-full bg-primary/10 blur-3xl"
+            className="pointer-events-none absolute -right-16 -top-24 size-64 rounded-full bg-violet-400/25 blur-3xl"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-24 left-1/3 size-56 rounded-full bg-sky-400/20 blur-3xl"
           />
           <div className="relative flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-start gap-4">
-              <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-sm">
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 via-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/25">
                 <UsersRound className="size-6" />
               </span>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-300">
                   Team allocation
                 </p>
                 <div className="mt-1 flex flex-wrap items-center gap-2.5">
@@ -282,22 +323,22 @@ export default function TeamAllocationSessionPage() {
                   {trainingClass ? (
                     <>
                       <span className={metaChip}>
-                        <Hash className="size-3.5" />
+                        <Hash className="size-3.5 text-sky-500" />
                         {trainingClass.code}
                       </span>
                       <span className={metaChip}>
-                        <Users className="size-3.5" />
+                        <Users className="size-3.5 text-indigo-500" />
                         {trainingClass.memberCount} học viên
                       </span>
                       {trainingClass.programName && (
                         <span className={metaChip}>
-                          <GraduationCap className="size-3.5" />
+                          <GraduationCap className="size-3.5 text-violet-500" />
                           {trainingClass.programName}
                         </span>
                       )}
                       {trainingClass.cohortName && (
                         <span className={metaChip}>
-                          <Layers className="size-3.5" />
+                          <Layers className="size-3.5 text-emerald-500" />
                           {trainingClass.cohortName}
                         </span>
                       )}
@@ -334,7 +375,7 @@ export default function TeamAllocationSessionPage() {
               <Button
                 variant="outline"
                 onClick={() => navigate("/team-allocation")}
-                className="gap-2 bg-background/70 transition-colors hover:border-primary/40"
+                className="gap-2 bg-background/70 transition-colors hover:border-sky-400/60 hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-300"
               >
                 <ArrowLeft className="size-4" />
                 Quay lại danh sách lớp
@@ -357,7 +398,7 @@ export default function TeamAllocationSessionPage() {
           <section className="shrink-0 space-y-2.5" aria-label="Tổng quan phiên phân nhóm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="size-1.5 rounded-full bg-primary" />
+                <span className="size-2 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 shadow-sm shadow-indigo-500/40" />
                 <p className="text-sm font-medium">
                   Tổng quan phiên #{selectedSession.sessionNumber}
                 </p>
@@ -411,14 +452,17 @@ export default function TeamAllocationSessionPage() {
         )}
 
         <div className="grid gap-5 xl:min-h-0 xl:flex-1 xl:grid-cols-2 xl:grid-rows-1">
-          <Card className="flex min-h-0 flex-col gap-0 overflow-hidden border-primary/15 py-0 shadow-sm">
-            <CardHeader className="shrink-0 border-b bg-muted/20 px-5 py-4">
+          <Card className="relative flex min-h-0 flex-col gap-0 overflow-hidden border-sky-200/80 py-0 shadow-sm dark:border-sky-900/60">
+            <CardHeader className="shrink-0 border-b border-sky-200/70 bg-gradient-to-r from-sky-500/[0.12] via-indigo-500/[0.07] to-transparent px-5 py-4 dark:border-sky-900/50">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1.5">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <CalendarDays className="size-5 text-primary" />
+                    <CalendarDays className="size-5 text-sky-600 dark:text-sky-400" />
                     Phiên phân nhóm
-                    <Badge variant="secondary" className="tabular-nums">
+                    <Badge
+                      variant="outline"
+                      className="border-sky-500/30 bg-sky-500/10 tabular-nums text-sky-700 dark:text-sky-300"
+                    >
                       {sessions.length}
                     </Badge>
                   </CardTitle>
@@ -444,7 +488,7 @@ export default function TeamAllocationSessionPage() {
                   event.preventDefault();
                   handleCreateSession();
                 }}
-                className="rounded-xl border bg-muted/25 p-4"
+                className="rounded-xl border border-indigo-200/70 bg-gradient-to-br from-indigo-500/[0.07] via-sky-500/[0.04] to-transparent p-4 dark:border-indigo-900/60"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                   <div className="w-full space-y-1.5 sm:max-w-xs">
@@ -498,7 +542,7 @@ export default function TeamAllocationSessionPage() {
                   <Button
                     type="submit"
                     disabled={!canAllocate || openSessionMutation.isPending || !capacityValid}
-                    className="h-9 w-full gap-2 sm:w-auto"
+                    className="h-9 w-full gap-2 bg-gradient-to-r from-sky-600 via-indigo-600 to-violet-600 text-white shadow-sm shadow-indigo-500/30 transition-shadow hover:shadow-md disabled:opacity-50 sm:w-auto"
                   >
                     {openSessionMutation.isPending ? (
                       <LoaderCircle className="size-4 animate-spin" />
@@ -544,14 +588,17 @@ export default function TeamAllocationSessionPage() {
             </CardContent>
           </Card>
 
-          <Card className="flex min-h-0 flex-col gap-0 overflow-hidden border-primary/15 py-0 shadow-sm">
-            <CardHeader className="shrink-0 border-b bg-muted/20 px-5 py-4">
+          <Card className="relative flex min-h-0 flex-col gap-0 overflow-hidden border-violet-200/80 py-0 shadow-sm dark:border-violet-900/60">
+            <CardHeader className="shrink-0 border-b border-violet-200/70 bg-gradient-to-r from-violet-500/[0.12] via-fuchsia-500/[0.07] to-transparent px-5 py-4 dark:border-violet-900/50">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1.5">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <ListChecks className="size-5 text-primary" />
+                    <ListChecks className="size-5 text-violet-600 dark:text-violet-400" />
                     Các phiên đã tạo
-                    <Badge variant="secondary" className="tabular-nums">
+                    <Badge
+                      variant="outline"
+                      className="border-violet-500/30 bg-violet-500/10 tabular-nums text-violet-700 dark:text-violet-300"
+                    >
                       {sessions.length}
                     </Badge>
                   </CardTitle>
@@ -622,8 +669,8 @@ export default function TeamAllocationSessionPage() {
                     ))}
                   </div>
                 ) : sessions.length === 0 ? (
-                  <div className="rounded-xl border border-dashed bg-muted/10 px-5 py-10 text-center">
-                    <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <div className="rounded-xl border border-dashed border-violet-300/70 bg-gradient-to-br from-violet-500/[0.07] via-fuchsia-500/[0.04] to-transparent px-5 py-10 text-center dark:border-violet-800/60">
+                    <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25">
                       <CalendarDays className="size-6" />
                     </span>
                     <p className="mt-3 font-medium">Chưa có phiên phân nhóm</p>
@@ -651,22 +698,23 @@ export default function TeamAllocationSessionPage() {
                   <ul className="space-y-2.5">
                     {sessions.map((item) => {
                       const isSelected = selectedSession?.id === item.id;
+                      const tone = SESSION_ROW_TONE[item.status];
                       return (
                         <li
                           key={item.id}
                           className={cn(
                             "group relative overflow-hidden rounded-xl border transition-all duration-200",
-                            isSelected
-                              ? "border-primary/60 bg-primary/[0.04] shadow-sm"
-                              : "bg-card hover:border-primary/30 hover:shadow-sm",
+                            isSelected ? tone.selected : cn("bg-card", tone.idle),
                           )}
                         >
-                          {isSelected && (
-                            <span
-                              aria-hidden
-                              className="absolute inset-y-0 left-0 w-1 bg-primary"
-                            />
-                          )}
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "absolute inset-y-0 left-0 w-1 transition-opacity",
+                              tone.bar,
+                              isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-60",
+                            )}
+                          />
                           <div className="flex flex-col gap-3 p-3.5 sm:flex-row sm:items-center sm:justify-between">
                             <button
                               type="button"
@@ -676,10 +724,8 @@ export default function TeamAllocationSessionPage() {
                             >
                               <span
                                 className={cn(
-                                  "flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors",
-                                  isSelected
-                                    ? "border-primary/30 bg-primary/10 text-primary"
-                                    : "border-border bg-muted/50 text-muted-foreground group-hover:text-foreground",
+                                  "flex size-9 shrink-0 items-center justify-center rounded-lg border shadow-sm transition-transform duration-200 group-hover:scale-105",
+                                  tone.tile,
                                 )}
                               >
                                 {isSelected ? (
@@ -700,7 +746,7 @@ export default function TeamAllocationSessionPage() {
                                     {SESSION_STATUS_LABEL[item.status]}
                                   </Badge>
                                   {isSelected && (
-                                    <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                                    <span className="rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm shadow-indigo-500/30">
                                       Đang xem
                                     </span>
                                   )}
@@ -713,7 +759,7 @@ export default function TeamAllocationSessionPage() {
                                   className={cn(
                                     "text-[11px] transition-colors",
                                     isSelected
-                                      ? "text-primary"
+                                      ? "font-medium text-indigo-600 dark:text-indigo-300"
                                       : "text-muted-foreground",
                                   )}
                                 >
@@ -727,7 +773,7 @@ export default function TeamAllocationSessionPage() {
                               <Button
                                 size="sm"
                                 onClick={() => openSetup(item)}
-                                className="gap-1.5"
+                                className="gap-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm shadow-indigo-500/30 transition-shadow hover:from-indigo-500 hover:to-violet-500 hover:shadow-md"
                                 disabled={item.status === "CANCELLED"}
                               >
                                 <UsersRound className="size-4" />
@@ -765,7 +811,7 @@ export default function TeamAllocationSessionPage() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <span className="mb-1 flex size-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+            <span className="mb-1 flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-sm shadow-rose-500/30">
               <Ban className="size-5" />
             </span>
             <DialogTitle>Hủy phiên phân nhóm?</DialogTitle>
@@ -810,7 +856,16 @@ export default function TeamAllocationSessionPage() {
       >
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <span className="mb-1 flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <span
+              className={cn(
+                "mb-1 flex size-10 items-center justify-center rounded-xl text-white shadow-sm",
+                summaryDialog === "unassigned"
+                  ? "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/30"
+                  : summaryDialog === "publishable"
+                    ? "bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-violet-500/30"
+                    : "bg-gradient-to-br from-sky-500 to-indigo-600 shadow-sky-500/30",
+              )}
+            >
               {summaryDialog === "unassigned" ? (
                 <Users className="size-5" />
               ) : summaryDialog === "publishable" ? (

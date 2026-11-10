@@ -144,6 +144,18 @@ public class TeamAllocationSessionController {
                 classId, sessionId, teamId, request, authentication);
     }
 
+    @DeleteMapping("/{sessionId}/teams/{teamId}")
+    @PreAuthorize("hasAuthority('PEO_TEAM_ALLOCATE')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteDraftTeam(
+            @PathVariable Long classId,
+            @PathVariable Long sessionId,
+            @PathVariable Long teamId,
+            Authentication authentication
+    ) {
+        draftService.deleteDraftTeam(classId, sessionId, teamId, authentication);
+    }
+
     @PutMapping("/{sessionId}/teams/{teamId}/mentor")
     @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
     @ResponseStatus(HttpStatus.NO_CONTENT)

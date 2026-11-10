@@ -56,8 +56,8 @@ public class MilestoneValidator {
             add(errors, "startDate", "Start date is required");
             return;
         }
-        if (!startDate.isAfter(LocalDate.ofInstant(now, zone)))
-            add(errors, "startDate", "Start date must be after today in the tenant time zone");
+        if (startDate.isBefore(LocalDate.ofInstant(now, zone)))
+            add(errors, "startDate", "Start date must be today or later in the tenant time zone");
         if (deadline != null && !startDate.atStartOfDay(zone).toInstant().isBefore(deadline))
             add(errors, "startDate", "Start date must be before the deadline");
     }

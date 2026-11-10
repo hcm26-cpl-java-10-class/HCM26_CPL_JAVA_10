@@ -62,6 +62,9 @@ public class TeamPublishItemService {
                         "ProjectTeam", "id", teamId));
 
         if (team.getStatus() == ProjectTeamStatus.ACTIVE) {
+            if (team.getProject() != null && team.getProject().getStatus() == ProjectStatus.PLANNING) {
+                activateProjectAndWorkspace(team);
+            }
             return;
         }
         if (session.getStatus() != TeamAllocationSessionStatus.OPEN) {
