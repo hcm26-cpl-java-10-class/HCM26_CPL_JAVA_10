@@ -120,6 +120,8 @@ public class SubmissionReviewService {
         }
         reviews.save(review);
         version.applyChecklistReview(checklist);
+        // Keep the milestone's acceptance checklist in step with the reviewer's assessment of this version.
+        submission.getMilestone().applyChecklistAssessment(version.checklistAssessmentBySourceItem());
         version.applyDecision(request.decision());
         submission.reviewed(request.decision(), now);
         if (submission.getMilestone().lifecycleStatus()

@@ -12,6 +12,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ArtifactSubmission, ArtifactSubmissionAttachment } from "@/types";
 import { ArtifactReviewStatusBadge } from "./components/ArtifactReviewStatusBadge";
 
+/** "/teams" and "/teams/:id/milestones" have no page; keep them out of the breadcrumb to avoid 404 links. */
+const TEAM_ROUTE_GAPS = ["teams", "milestones"];
+
 type HistoryItem = Awaited<ReturnType<typeof milestoneApi.getMyTeamArtifactSubmissions>>[number];
 
 function displayTime(value?: string | null) {
@@ -116,7 +119,7 @@ export default function StudentTeamMilestoneSubmissionsPage() {
   const showDraft = draft && (!latestSubmission || new Date(draft.updatedAt).getTime() >= new Date(latestSubmission.submission.submittedAt).getTime());
   const openSubmissionForm = () => navigate(`/teams/${teamId}/milestones/${milestoneId}/submit?workspaceId=${encodeURIComponent(workspaceId ?? "")}`);
 
-  return <MainLayout contentClassName="bg-slate-50/80 dark:bg-background" pathName={{ student: "Student", management: "Management", workspaces: "Workspace", milestones: "Milestone", submissions: "My submissions" }}>
+  return <MainLayout ignorePaths={TEAM_ROUTE_GAPS} contentClassName="bg-slate-50/80 dark:bg-background" pathName={{ student: "Student", management: "Management", workspaces: "Workspace", milestones: "Milestone", submissions: "My submissions" }}>
     <main className="mx-auto w-full max-w-[1200px] space-y-5 pb-8">
       <Button variant="ghost" size="sm" className="-ml-3 w-fit text-muted-foreground" onClick={backToWorkspace}><ArrowLeft className="size-4" />Back to workspace</Button>
       {failed ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Could not load submission history</AlertTitle><AlertDescription className="grid justify-items-start gap-3"><span>Check your connection and access, then try again.</span><Button variant="outline" size="sm" onClick={() => { void workspaceQuery.refetch(); void submissionsQuery.refetch(); }}><RotateCw className="size-4" />Try again</Button></AlertDescription></Alert>

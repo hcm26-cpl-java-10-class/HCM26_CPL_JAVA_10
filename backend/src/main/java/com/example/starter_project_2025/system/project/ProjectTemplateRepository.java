@@ -62,6 +62,10 @@ public interface ProjectTemplateRepository
 
     boolean existsByParentTemplate_IdAndIsActiveTrue(Long parentTemplateId);
 
+    /** Master templates of one tenant that the class assignment catalogue may offer. */
+    List<ProjectTemplate> findAllByTenantIdAndParentTemplateIsNullAndStatusAndIsActiveTrue(
+            Long tenantId, com.example.starter_project_2025.system.project.template.ProjectTemplateStatus status);
+
     @Query("select distinct t.category from ProjectTemplate t "
             + "where (t.tenantId = :tenantId or t.tenantId is null) "
             + "and t.isActive = true and t.category is not null order by t.category")

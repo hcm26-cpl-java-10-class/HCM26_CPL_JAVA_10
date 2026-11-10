@@ -418,6 +418,32 @@ class MilestoneSubmissionIntegrationTest {
     }
 
     @Test
+    void reviewedAcceptanceChecklistIsReflectedOnTheTeamMilestone() throws Exception {
+        JsonNode detail = submittedDetail();
+        UUID id = UUID.fromString(detail.get("id").asText());
+        var milestone = submissions.findById(id).orElseThrow().getMilestone();
+        assertEquals(true, milestone.getTeamId() != null, "seeded submission must belong to a team milestone");
+        var version = versions.findBySubmissionIdAndVersionNumber(id, detail.get("currentVersionNumber").asInt()).orElseThrow();
+        Set<UUID> sourced = new HashSet<>();
+        version.getChecklist().forEach(item -> { if (item.getSourceChecklistItemId() != null) sourced.add(item.getSourceChecklistItemId()); });
+        assertEquals(false, sourced.isEmpty(), "the submission checklist must be copied from the milestone checklist");
+        assertEquals(0, milestone.getChecklistItems().stream().filter(item -> sourced.contains(item.getId()) && item.isCompleted()).count());
+
+        mockMvc.perform(post("/api/milestone-submissions/{id}/review", id)
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "accept-syncs-checklist")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(reviewRequest(detail, "ACCEPT", ""))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACCEPTED"));
+
+        var reviewed = milestones.findById(milestone.getId()).orElseThrow();
+        assertEquals(sourced.size(), reviewed.getChecklistItems().stream()
+                .filter(item -> sourced.contains(item.getId()) && item.isCompleted()).count(),
+                "every item the reviewer checked is completed on the milestone");
+    }
+
+    @Test
     void returnsNotFoundForDeletedOrUnknownSubmission() throws Exception {
         mockMvc.perform(post("/api/milestone-submissions/{id}/review", UUID.randomUUID())
                         .header("Authorization", bearer())
