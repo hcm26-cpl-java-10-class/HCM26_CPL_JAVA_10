@@ -7,7 +7,7 @@ import { RoleSwitchProvider } from "./contexts/RoleSwitchContext";
 import { usePermissions } from "./hooks/usePermissions";
 import { useActiveModuleGroups } from "./hooks/useSidebarMenus";
 import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
-import { ROLE_HOME_PATHS, routes } from "./router/component-registry";
+import { routes } from "./router/component-registry";
 import type { RootState } from "./store/store";
 import { getHomePathByRole } from "./utils/rbac.utils";
 import { resolveMenuPermission } from "./router/menu-permission.utils";

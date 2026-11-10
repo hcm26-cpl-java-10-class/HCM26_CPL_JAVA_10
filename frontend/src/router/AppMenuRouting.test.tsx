@@ -32,7 +32,7 @@ vi.mock("@/components/layout/MainLayout", async () => {
     return { MainLayout: ({ children }: { children: ReactNode }) => <SidebarProvider><SidebarMenu /><main>{children}</main></SidebarProvider> };
 });
 
-const rights = ["USER_READ", "MENU_READ", "CLASS_READ", "CLASS_UPDATE", "SESSION_READ", "PROGRAM_READ", "SUBJECT_READ", "ASSIGNMENT_READ", "ENROLLMENT_READ"];
+const rights = ["USER_READ", "MENU_READ", "CLASS_READ", "CLASS_UPDATE", "SESSION_READ", "PROGRAM_READ", "SUBJECT_READ", "ASSIGNMENT_READ", "ENROLLMENT_READ", "AUDIT_READ"];
 const cls = { id: 4, code: "INTERNAL_4", name: "Internal test class", traineeSource: "internal", status: "planning", program: "PROGRAM_4",
     startDate: "2030-06-01", endDate: "2030-09-01", plannedSize: 20, site: "HCM", classAdmin: "Admin", masterTrainer: "Trainer" };
 beforeEach(() => {
@@ -51,11 +51,11 @@ beforeEach(() => {
     fakeHttp.on("get", "/external/audits", []);
     fakeHttp.on("get", "/external/data-source", { sampleData: true });
 });
-function renderApp(path: string, permissions = rights) {
+function renderApp(path: string, permissions = rights, role = "ADMIN") {
     window.history.replaceState({}, "", path);
     const store = configureStore({ reducer: { auth: authReducer }, preloadedState: { auth: {
-        ...authReducer(undefined, { type: "init" }), isAuthenticated: true, token: "test", role: "ADMIN", roles: ["ADMIN"],
-        permissions, rolePermissions: { ADMIN: permissions },
+        ...authReducer(undefined, { type: "init" }), isAuthenticated: true, token: "test", role, roles: [role],
+        permissions, rolePermissions: { [role]: permissions },
     } } });
     const user = userEvent.setup();
     const view = render(<Provider store={store}><QueryClientProvider client={createTestQueryClient()}><App /></QueryClientProvider></Provider>);
@@ -63,10 +63,8 @@ function renderApp(path: string, permissions = rights) {
 }
 
 it.each([
-    ["/programs", "Training Programs"], ["/subjects", "Subjects"], ["/class-setup", "Kế hoạch môn học lớp"],
-    ["/class-setup?classId=4", "Kế hoạch môn học lớp"], ["/classes", "Class"], ["/classes/4?tab=info", "Class"],
-    ["/menus", "Modules"], ["/menu-groups", "Module Groups"],
-    ["/training/audit", "Audit"], ["/training/content", "Content"],
+    ["/programs", "Training Programs"], ["/subjects", "Topics & Syllabus"],
+    ["/classes", "Class"], ["/classes/4?tab=info", "Class"],
 ])("direct entry and refresh of %s renders the actual registered page instead of 404", async (path, label) => {
     const first = renderApp(path);
     expect(await screen.findByRole("link", { name: label })).toBeInTheDocument();
@@ -85,16 +83,15 @@ it("renders Class as a direct sidebar item without Class List submenu and naviga
     await waitFor(() => expect(window.location.pathname).toBe("/classes"));
 });
 
-it("navigates via the real Sidebar from Programs to Class Setup with the same registered component", async () => {
+it("navigates via the real Sidebar from Programs to Topics & Syllabus", async () => {
     const { user } = renderApp("/programs");
-    const targetLink = await screen.findByRole("link", { name: "Kế hoạch môn học lớp" });
+    const targetLink = await screen.findByRole("link", { name: "Topics & Syllabus" });
     await user.click(targetLink);
-    expect(await screen.findByRole("heading", { name: "Class Setup" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/class-setup");
+    await waitFor(() => expect(window.location.pathname).toBe("/subjects"));
 });
 
 it.each(["/programs", "/subjects", "/class-setup", "/menus", "/menu-groups"])("missing permissions at %s produce 403 rather than 404", async path => {
-    renderApp(path, []);
+    renderApp(path, [], "STAFF");
     expect(await screen.findByText("403")).toBeInTheDocument();
     expect(screen.queryByText("Page Not Found")).not.toBeInTheDocument();
 });

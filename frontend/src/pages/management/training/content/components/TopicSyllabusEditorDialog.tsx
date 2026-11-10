@@ -351,7 +351,8 @@ export function TopicSyllabusEditorDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:max-w-5xl md:max-w-5xl lg:max-w-6xl max-h-[92vh] flex flex-col p-0 overflow-hidden bg-gray-50/50">
         {/* Header */}
         <div className="px-6 py-4 bg-white border-b border-gray-200">
@@ -671,7 +672,7 @@ export function TopicSyllabusEditorDialog({
                                             max={4}
                                             step={0.5}
                                             value={
-                                              sess.durationHours === "" ||
+                                              (sess.durationHours as any) === "" ||
                                               sess.durationHours === undefined ||
                                               sess.durationHours === null
                                                 ? ""
@@ -879,5 +880,6 @@ export function TopicSyllabusEditorDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

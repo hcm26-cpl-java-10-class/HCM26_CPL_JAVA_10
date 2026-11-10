@@ -4,7 +4,6 @@ import ScheduleVersionListPage from "@/pages/management/demo/schedule_version";
 import AuditPage from "@/pages/management/training/audit";
 import TraineePage from "@/pages/management/training/trainee";
 import LogWorkPage from "@/pages/management/training/log-work";
-import ContentPage from "@/pages/management/training/content";
 import TopicManagementPage from "@/pages/management/training/topic/TopicManagementPage";
 import ProgramManagementPage from "@/pages/management/training/program/ProgramManagementPage";
 import ReportsPage from "@/pages/management/training/reports";
