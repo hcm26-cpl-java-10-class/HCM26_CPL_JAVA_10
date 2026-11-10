@@ -15,6 +15,7 @@ import java.util.List;
 @PreAuthorize("hasAnyAuthority('PEO_TEAM_ALLOCATE', 'PRJ_WORKSPACE_MANAGE')")
 public class ProjectAssignmentController {
     private final ProjectAssignmentService service;
+    private final AssignmentCatalogService catalog;
 
     @GetMapping
     public List<AssignmentDtos.ClassMaster> classMasters(@PathVariable Long classId, @PathVariable Long sessionId,
@@ -23,9 +24,24 @@ public class ProjectAssignmentController {
     }
 
     @GetMapping("/templates")
-    public List<AssignmentDtos.Template> templates(@PathVariable Long classId, @PathVariable Long sessionId,
-            @RequestParam(required = false) String search, Authentication authentication) {
-        return service.templates(classId, sessionId, search, authentication);
+    public AssignmentDtos.Catalog templates(@PathVariable Long classId, @PathVariable Long sessionId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String level,
+            @RequestParam(defaultValue = "false") boolean fit,
+            @RequestParam(required = false) Long teamId,
+            @RequestParam(defaultValue = "NAME") AssignmentCatalogService.Sort sort,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "" + AssignmentCatalogService.DEFAULT_PAGE_SIZE) int size,
+            Authentication authentication) {
+        return catalog.catalog(classId, sessionId,
+                new AssignmentCatalogService.Filter(search, category, level, fit, teamId, sort, page, size), authentication);
+    }
+
+    @GetMapping("/templates/{templateId}/brief")
+    public AssignmentDtos.Brief brief(@PathVariable Long classId, @PathVariable Long sessionId,
+            @PathVariable Long templateId, @RequestParam(required = false) Long versionId, Authentication authentication) {
+        return catalog.brief(classId, sessionId, templateId, versionId, authentication);
     }
 
     @GetMapping("/templates/{templateId}")

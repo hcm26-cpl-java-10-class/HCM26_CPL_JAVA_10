@@ -1,17 +1,19 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
-import { ArrowLeft, ArrowRight, CheckCircle2, LoaderCircle, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Eye, LoaderCircle, Replace } from "lucide-react";
 import { projectAssignmentApi } from "@/api/features/project-assignment.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AssignmentModule, AssignmentOwner, AssignmentRole, AssignmentRolePolicy, AssignmentTeam, AssignmentTemplate, ProjectAssignmentMode, ProjectAssignmentRequest } from "@/types/features/project-assignment";
 import { AssignmentTeamRoles, assignmentMemberRoles, assignmentRoleErrors, type MemberRoleChoices } from "./AssignmentTeamRoles";
+import { MasterBriefDialog } from "./master-catalog/MasterBriefDialog";
+import { LevelPill } from "./master-catalog/CatalogBits";
+import { MasterTemplateCatalog } from "./master-catalog/MasterTemplateCatalog";
+import { assignmentFailure } from "./master-catalog/master-catalog.utils";
 
 const selectClass = "h-10 w-full rounded-md border bg-background px-3 text-sm";
 const modeOptions = [
@@ -25,13 +27,7 @@ const assignmentSteps = [
 ] as const;
 type AssignmentStep = (typeof assignmentSteps)[number]["id"];
 
-function failure(error: unknown) {
-  if (axios.isAxiosError<{ message?: string }>(error)) {
-    if (error.response?.status === 403) return "Bạn không có quyền gán đề bài cho phiên này.";
-    return error.response?.data?.message ?? "Không thể gán đề bài. Vui lòng thử lại.";
-  }
-  return "Không thể gán đề bài. Vui lòng thử lại.";
-}
+const failure = (error: unknown) => assignmentFailure(error);
 
 function fits(team: AssignmentTeam, min: number, max: number) {
   return team.eligible && team.memberCount >= min && team.memberCount <= max;
@@ -115,9 +111,9 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
   const { user, activeRole } = usePermissions();
   const teamScoped = initialTeamId != null;
   const client = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [keyword, setKeyword] = useState("");
   const [selected, setSelected] = useState<AssignmentTemplate | null>(null);
+  const [browsing, setBrowsing] = useState(false);
+  const [briefTemplate, setBriefTemplate] = useState<AssignmentTemplate | null>(null);
   const [preferredMode, setPreferredMode] = useState<ProjectAssignmentMode>(initialTeamId == null ? "SPLIT" : "WHOLE");
   const [teamId, setTeamId] = useState(initialTeamId?.toString() ?? "");
   const [mapping, setMapping] = useState<Record<number, string>>({});
@@ -129,11 +125,6 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
   const sending = useRef(false);
   const requestKey = useRef<{ fingerprint: string; key: string } | null>(null);
 
-  const catalog = useQuery({
-    queryKey: ["master-assignment-templates", classId, sessionId, user.email, activeRole, keyword],
-    queryFn: ({ signal }) => projectAssignmentApi.templates(classId, sessionId, keyword, signal),
-    retry: false,
-  });
   const preview = useQuery({
     queryKey: ["master-assignment-preview", classId, sessionId, user.email, activeRole, selected?.id, selected?.versionId],
     queryFn: ({ signal }) => projectAssignmentApi.preview(classId, sessionId, selected!, signal),
@@ -249,14 +240,34 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
     assignment.mutate({ request, key: requestKey.current.key });
   }
 
+  function chooseTemplate(template: AssignmentTemplate) {
+    if (template.id !== selected?.id || template.versionId !== selected?.versionId) selectTemplate(template);
+    setBrowsing(false);
+    setBriefTemplate(null);
+  }
+
+  /** Re-resolves the selected master's published version; switches to a newer one if it was republished. */
   async function reloadTemplates() {
-    const refreshed = await catalog.refetch();
-    if (refreshed.isError) return;
-    const current = refreshed.data?.find(item => item.id === selected?.id);
-    if (current?.versionId !== selected?.versionId) selectTemplate(current ?? null);
-    else if (current) await preview.refetch();
+    void client.invalidateQueries({ queryKey: ["master-assignment-templates", classId, sessionId] });
+    if (selected) {
+      try {
+        const found = await projectAssignmentApi.templates(classId, sessionId, { search: selected.code || selected.name, size: 50 });
+        const current = found.items.find(item => item.id === selected.id) ?? null;
+        if (current?.versionId !== selected.versionId) {
+          selectTemplate(current);
+          setBrowsing(current === null);
+        } else await preview.refetch();
+      } catch {
+        await preview.refetch();
+      }
+    }
     goToStep("project");
     assignment.reset();
+  }
+
+  function closeStaleBrief() {
+    setBriefTemplate(null);
+    void reloadTemplates();
   }
 
   if (assignment.isSuccess) return <Card role="status">
@@ -283,37 +294,28 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
       ))}
     </ol>
     <div className="grid min-w-0 gap-5">
-      {step === "project" && <Card>
-        <CardHeader><CardTitle>Đề bài Master</CardTitle><CardDescription>Chọn phiên bản đã công bố trong thư viện.</CardDescription></CardHeader>
-        <CardContent className="grid gap-3">
-          <form className="flex flex-col gap-2 sm:flex-row" onSubmit={event => { event.preventDefault(); setKeyword(search.trim()); }}>
-            <Input aria-label="Tìm đề bài Master" placeholder="Mã hoặc tên đề bài" value={search} onChange={event => setSearch(event.target.value)} />
-            <Button type="submit" variant="outline"><Search className="size-4" /> Tìm kiếm</Button>
-          </form>
-          {catalog.isPending ? <p role="status" className="text-sm text-muted-foreground">Đang tải thư viện…</p>
-            : catalog.isError ? <div role="alert" className="flex flex-wrap gap-2 text-sm text-destructive">
-              {failure(catalog.error)} <Button variant="outline" size="sm" onClick={() => void catalog.refetch()}>Thử lại</Button>
-            </div> : <>
-              <Label htmlFor="master-template">Master Project</Label>
-              <select id="master-template" className={selectClass} value={selected?.id ?? ""}
-                onChange={event => selectTemplate(catalog.data.find(item => item.id === Number(event.target.value)) ?? null)}>
-                <option value="">Chọn đề bài Master</option>
-                {selected && !catalog.data.some(item => item.id === selected.id) &&
-                  <option value={selected.id}>{selected.code} · {selected.name} · {selected.version}</option>}
-                {catalog.data.map(template => <option key={template.id} value={template.id}>{template.code} · {template.name} · {template.version}</option>)}
-              </select>
-              {catalog.data.length === 0 && <p className="text-sm text-muted-foreground">Không tìm thấy đề bài phù hợp.</p>}
-            </>}
-        </CardContent>
-      </Card>}
+      {step === "project" && (selected === null || browsing) && <MasterTemplateCatalog classId={classId} sessionId={sessionId}
+        teamId={initialTeamId} selectedId={selected?.id ?? null} onSelect={chooseTemplate} onPreview={setBriefTemplate}
+        onCancel={selected && browsing ? () => setBrowsing(false) : undefined} />}
       {selected && preview.isPending && <p role="status" className="text-sm text-muted-foreground">Đang tải cây dự án…</p>}
       {preview.isError && <div role="alert" className="grid gap-2 rounded-lg border p-4 text-sm text-destructive">
         <p>{failure(preview.error)}</p><Button className="w-fit" variant="outline" size="sm" onClick={() => void reloadTemplates()}>Tải lại đề bài</Button>
       </div>}
-      {data && !preview.isError && step !== "roles" && <Card>
-        <CardHeader>
-          <CardTitle className="flex flex-wrap items-center gap-2">{data.master.name} <Badge variant="outline">{data.master.version}</Badge></CardTitle>
-          <CardDescription>{data.modules.length} module trực tiếp · {data.masterMilestoneCount} milestone cấp Master</CardDescription>
+      {data && !preview.isError && step !== "roles" && !(step === "project" && browsing) && <Card className="border-l-4 border-l-blue-500 dark:border-l-blue-400">
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1.5">
+            <CardTitle className="flex flex-wrap items-center gap-2">{data.master.name} <Badge variant="outline">{data.master.version}</Badge>
+              <LevelPill level={selected && "level" in selected ? selected.level as string | null : null} /></CardTitle>
+            <CardDescription>{data.modules.length} module trực tiếp · {data.masterMilestoneCount} milestone cấp Master</CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setBriefTemplate(data.master)}>
+              <Eye className="size-4" /> Xem đề bài
+            </Button>
+            {!review && <Button type="button" variant="ghost" size="sm" onClick={() => setBrowsing(true)}>
+              <Replace className="size-4" /> Đổi đề bài
+            </Button>}
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4">
           {!review && data.modules.length > 0 && <details className="rounded-lg border bg-muted/20 p-3 text-sm">
@@ -425,6 +427,8 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
         <CardDescription>{selected ? selected.name + " · " + selected.version : "Chọn đề bài Master để bắt đầu."}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 text-sm">
+        {selected && step !== "project" && <Button type="button" variant="link" size="sm" className="h-auto w-fit p-0"
+          onClick={() => setBriefTemplate(selected)}><Eye className="size-4" /> Xem đề bài</Button>}
         {data && <>
           <p className="font-medium">{modeOptions.find(option => option.id === mode)?.title}</p>
           <p className="text-muted-foreground">{mode === "SPLIT"
@@ -457,5 +461,8 @@ export function MasterProjectAssignmentForm({ classId, sessionId, initialTeamId,
           </>}
       </CardContent>
     </Card>
+    <MasterBriefDialog classId={classId} sessionId={sessionId} template={briefTemplate} selectedId={selected?.id ?? null}
+      onClose={() => setBriefTemplate(null)} onVersionChanged={closeStaleBrief}
+      onSelect={step === "project" && !assignment.isPending ? chooseTemplate : undefined} />
   </div>;
 }

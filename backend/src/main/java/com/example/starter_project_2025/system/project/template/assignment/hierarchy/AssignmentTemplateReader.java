@@ -82,7 +82,12 @@ public class AssignmentTemplateReader {
     }
 
     public ProjectTemplateConstraints.Capacity capacity(Node node) {
-        return ProjectTemplateConstraints.parse(json, constraintsTemplate(node), null);
+        return capacity(node.content());
+    }
+
+    /** Team size declared by a published snapshot's content, without resolving its module hierarchy. */
+    public ProjectTemplateConstraints.Capacity capacity(ObjectNode content) {
+        return ProjectTemplateConstraints.parse(json, constraintsTemplate(content), null);
     }
 
     public Node loadAssigned(Long templateId, Long versionId, Long tenantId) {
@@ -99,12 +104,12 @@ public class AssignmentTemplateReader {
     }
 
     public ProjectTemplateConstraints.RolePolicy roles(Node node) {
-        return ProjectTemplateConstraints.parseRolePolicy(json, constraintsTemplate(node));
+        return ProjectTemplateConstraints.parseRolePolicy(json, constraintsTemplate(node.content()));
     }
 
-    private ProjectTemplate constraintsTemplate(Node node) {
+    private ProjectTemplate constraintsTemplate(ObjectNode content) {
         ProjectTemplate template = new ProjectTemplate();
-        template.setConstraintsJson(node.content().path("constraints").toString());
+        template.setConstraintsJson(content.path("constraints").toString());
         return template;
     }
 }

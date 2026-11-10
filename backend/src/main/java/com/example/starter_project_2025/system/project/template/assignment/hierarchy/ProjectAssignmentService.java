@@ -2,8 +2,6 @@ package com.example.starter_project_2025.system.project.template.assignment.hier
 
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.*;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
-import com.example.starter_project_2025.system.project.project_template_version.*;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
@@ -20,7 +18,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
-import java.util.Comparator;
 import java.util.Collections;
 import java.util.HexFormat;
 import java.util.HashSet;
@@ -36,7 +33,6 @@ import java.util.Set;
 public class ProjectAssignmentService {
     private final ProjectAssignmentRepository assignments;
     private final ProjectTemplateRepository templates;
-    private final ProjectTemplateSnapshotRepository versions;
     private final ProjectTeamRepository teams;
     private final TrainingClassRepository classes;
     private final com.example.starter_project_2025.system.project.ProjectRepository projects;
@@ -58,22 +54,6 @@ public class ProjectAssignmentService {
                         .filter(project -> tenantId.equals(project.getTenantId()) && Boolean.TRUE.equals(project.getIsActive()))
                         .map(project -> new AssignmentDtos.ClassMaster(project.getId(), project.getName(),
                                 project.getStatus().name(), value.getAssignedAt())).stream()).toList();
-    }
-
-    public List<AssignmentDtos.Template> templates(Long classId, Long sessionId, String search, Authentication authentication) {
-        var session = validation.session(classId, sessionId, authentication, false);
-        Long tenantId = session.getTrainingClass().getTenantId();
-        String keyword = search == null ? "" : search.strip().toLowerCase(java.util.Locale.ROOT);
-        return templates.findAll().stream()
-                .filter(template -> tenantId.equals(template.getTenantId()) && Boolean.TRUE.equals(template.getIsActive())
-                        && template.getParentTemplateId() == null && template.getStatus() == ProjectTemplateStatus.ACTIVE)
-                .filter(template -> keyword.isEmpty() || (template.getCode() + " " + template.getName()).toLowerCase(java.util.Locale.ROOT).contains(keyword))
-                .sorted(Comparator.comparing(ProjectTemplate::getName)).limit(100)
-                .flatMap(template -> versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
-                        template.getId(), ProjectTemplateVersionStatus.PUBLISHED).stream()
-                        .filter(version -> version.getProjectId() == null)
-                        .map(version -> new AssignmentDtos.Template(template.getId(), version.getId(), version.getVersion(), template.getCode(), template.getName())))
-                .toList();
     }
 
     public AssignmentDtos.Preview preview(Long classId, Long sessionId, Long templateId, Long versionId, Authentication authentication) {
@@ -307,6 +287,11 @@ public class ProjectAssignmentService {
                     : owner.teamId().equals(proposed.getId());
             if (!matches) throw AssignmentException.moduleAlreadyAssigned(ownerConflictMessage(owner));
         }
+    }
+
+    /** Teams of the class that already own (draft or published) any of {@code ids} below {@code masterId}. */
+    List<AssignmentDtos.Owner> ownersOf(TrainingClass trainingClass, Long masterId, Set<Long> ids) {
+        return currentOwners(trainingClass, masterId, ids);
     }
 
     private List<AssignmentDtos.Owner> currentOwners(TrainingClass trainingClass, Long masterId, Set<Long> ids) {
