@@ -1,4 +1,6 @@
 import { aiCourseBuilderApi } from "@/api/features/demo/ai-course-builder.api";
+import ActionButton from "@/components/datatable/common/ActionButton";
+import { PermissionGate } from "@/components/PermissionGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,13 +13,15 @@ import {
 } from "@/components/ui/sheet";
 import { usePermissions } from "@/hooks/usePermissions";
 import type {
+  AiApplyResult,
   AiChatMessage,
   AiCourseLevel,
-  AiLanguage,
   AiCourseOption,
   AiCourseOutline,
+  AiLanguage,
+  AiOptionsResponse,
 } from "@/types/features/demo/ai-course-builder";
-import { ArrowLeft, Loader2, Send, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Send, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -76,11 +80,96 @@ function OptionCard({ option, onChoose }: { option: AiCourseOption; onChoose: ()
   );
 }
 
+// Same limits as the backend (AiCourseBuilderService / Course, Section, Lesson DTOs).
+const LIMITS = {
+  name: 150,
+  description: 500,
+  sectionTitle: 150,
+  lessonTitle: 200,
+  sections: 20,
+  lessonsPerSection: 15,
+  totalLessons: 150,
+};
+
+type SectionErrors = { title?: string; general?: string; lessons: (string | undefined)[] };
+type OutlineErrors = {
+  name?: string;
+  description?: string;
+  general?: string;
+  sections: SectionErrors[];
+  hasError: boolean;
+};
+
+function validateOutline(draft: AiCourseOutline): OutlineErrors {
+  const errors: OutlineErrors = { sections: [], hasError: false };
+
+  const name = draft.name.trim();
+  if (name.length < 3) errors.name = "Course name must be at least 3 characters";
+  else if (name.length > LIMITS.name) errors.name = `Course name must be at most ${LIMITS.name} characters`;
+
+  if (draft.description.length > LIMITS.description) {
+    errors.description = `Description must be at most ${LIMITS.description} characters`;
+  }
+
+  if (draft.sections.length === 0) errors.general = "Add at least one section";
+  else if (draft.sections.length > LIMITS.sections) {
+    errors.general = `A course can have at most ${LIMITS.sections} sections`;
+  }
+
+  const seen = new Set<string>();
+  let totalLessons = 0;
+  for (const section of draft.sections) {
+    const se: SectionErrors = { lessons: [] };
+    const title = section.title.trim();
+    if (title.length < 3) se.title = "Section title must be at least 3 characters";
+    else if (title.length > LIMITS.sectionTitle) se.title = `Section title must be at most ${LIMITS.sectionTitle} characters`;
+    else if (seen.has(title.toLowerCase())) se.title = "Duplicate section title";
+    else seen.add(title.toLowerCase());
+
+    if (section.lessons.length === 0) se.general = "Each section needs at least one lesson";
+    else if (section.lessons.length > LIMITS.lessonsPerSection) {
+      se.general = `At most ${LIMITS.lessonsPerSection} lessons per section`;
+    }
+
+    for (const lesson of section.lessons) {
+      totalLessons++;
+      const lt = lesson.title.trim();
+      se.lessons.push(
+        lt.length === 0
+          ? "Lesson title is required"
+          : lt.length > LIMITS.lessonTitle
+            ? `Lesson title must be at most ${LIMITS.lessonTitle} characters`
+            : undefined,
+      );
+    }
+    errors.sections.push(se);
+  }
+  if (!errors.general && totalLessons > LIMITS.totalLessons) {
+    errors.general = `A course can have at most ${LIMITS.totalLessons} lessons in total`;
+  }
+
+  errors.hasError = Boolean(
+    errors.name ||
+      errors.description ||
+      errors.general ||
+      errors.sections.some((se) => se.title || se.general || se.lessons.some(Boolean)),
+  );
+  return errors;
+}
+
+function FieldError({ message }: { message?: string }) {
+  return message ? <p className="mt-1 text-xs text-destructive">{message}</p> : null;
+}
+
+const errorBorder = (message?: string) => (message ? "border-destructive focus-visible:ring-destructive" : "");
+
 function OutlineEditor({
   draft,
+  errors,
   onChange,
 }: {
   draft: AiCourseOutline;
+  errors: OutlineErrors;
   onChange: (next: AiCourseOutline) => void;
 }) {
   const updateSection = (si: number, title: string) =>
@@ -90,6 +179,14 @@ function OutlineEditor({
     });
   const removeSection = (si: number) =>
     onChange({ ...draft, sections: draft.sections.filter((_, i) => i !== si) });
+  const addSection = () =>
+    onChange({
+      ...draft,
+      sections: [
+        ...draft.sections,
+        { title: "", lessons: [{ title: "", summary: "", durationMinutes: 10 }] },
+      ],
+    });
   const updateLesson = (si: number, li: number, title: string) =>
     onChange({
       ...draft,
@@ -104,24 +201,48 @@ function OutlineEditor({
         i === si ? { ...s, lessons: s.lessons.filter((_, j) => j !== li) } : s,
       ),
     });
+  const addLesson = (si: number) =>
+    onChange({
+      ...draft,
+      sections: draft.sections.map((s, i) =>
+        i === si
+          ? { ...s, lessons: [...s.lessons, { title: "", summary: "", durationMinutes: 10 }] }
+          : s,
+      ),
+    });
 
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <label className="text-sm font-medium">Course name</label>
+        <label className="text-sm font-medium">
+          Course name <span className="text-destructive">*</span>
+        </label>
         <Input
           value={draft.name}
-          maxLength={150}
+          maxLength={LIMITS.name}
+          className={errorBorder(errors.name)}
           onChange={(e) => onChange({ ...draft, name: e.target.value })}
         />
+        <FieldError message={errors.name} />
+
         <label className="text-sm font-medium">Description</label>
         <textarea
           value={draft.description}
-          maxLength={500}
+          maxLength={LIMITS.description}
           rows={3}
           onChange={(e) => onChange({ ...draft, description: e.target.value })}
-          className="w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={
+            "w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+            errorBorder(errors.description)
+          }
         />
+        <div className="flex justify-between">
+          <FieldError message={errors.description} />
+          <span className="ml-auto text-xs text-muted-foreground">
+            {draft.description.length}/{LIMITS.description}
+          </span>
+        </div>
+
         <label className="text-sm font-medium">Level</label>
         <select
           value={draft.level}
@@ -134,49 +255,96 @@ function OutlineEditor({
         </select>
       </div>
 
-      {draft.sections.map((section, si) => (
-        <div key={si} className="rounded-xl border p-3">
-          <div className="flex items-center gap-2">
-            <span className="w-6 text-sm text-muted-foreground">{si + 1}.</span>
-            <Input
-              value={section.title}
-              maxLength={150}
-              className="font-medium"
-              onChange={(e) => updateSection(si, e.target.value)}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Remove section"
-              onClick={() => removeSection(si)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="mt-2 space-y-2 pl-8">
-            {section.lessons.map((lesson, li) => (
-              <div key={li} className="flex items-center gap-2">
+      {errors.general && (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{errors.general}</p>
+      )}
+
+      {draft.sections.map((section, si) => {
+        const se = errors.sections[si];
+        return (
+          <div key={si} className="rounded-xl border p-3">
+            <div className="flex items-start gap-2">
+              <span className="w-6 pt-2 text-sm text-muted-foreground">{si + 1}.</span>
+              <div className="flex-1">
                 <Input
-                  value={lesson.title}
-                  maxLength={200}
-                  onChange={(e) => updateLesson(si, li, e.target.value)}
+                  value={section.title}
+                  maxLength={LIMITS.sectionTitle}
+                  placeholder="Section title"
+                  className={"font-medium " + errorBorder(se?.title)}
+                  onChange={(e) => updateSection(si, e.target.value)}
                 />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Remove lesson"
-                  onClick={() => removeLesson(si, li)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <FieldError message={se?.title} />
               </div>
-            ))}
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Remove section"
+                onClick={() => removeSection(si)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="mt-2 space-y-2 pl-8">
+              {section.lessons.map((lesson, li) => (
+                <div key={li}>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={lesson.title}
+                      maxLength={LIMITS.lessonTitle}
+                      placeholder="Lesson title"
+                      className={errorBorder(se?.lessons[li])}
+                      onChange={(e) => updateLesson(si, li, e.target.value)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Remove lesson"
+                      onClick={() => removeLesson(si, li)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <FieldError message={se?.lessons[li]} />
+                </div>
+              ))}
+              <FieldError message={se?.general} />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-2"
+                disabled={section.lessons.length >= LIMITS.lessonsPerSection}
+                onClick={() => addLesson(si)}
+              >
+                <Plus className="mr-1 h-4 w-4" /> Add lesson
+              </Button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
+
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={draft.sections.length >= LIMITS.sections}
+        onClick={addSection}
+      >
+        <Plus className="mr-1 h-4 w-4" /> Add section
+      </Button>
     </div>
   );
 }
+
+type GenState = {
+  courseId: number;
+  courseName: string;
+  total: number;
+  done: number;
+  failed: number;
+  current: string;
+  running: boolean;
+  stoppedReason?: string;
+};
 
 function AiCourseBuilderSheet({
   open,
@@ -192,11 +360,49 @@ function AiCourseBuilderSheet({
   const [draft, setDraft] = useState<AiCourseOutline | null>(null);
   const [creating, setCreating] = useState(false);
   const [language, setLanguage] = useState<AiLanguage>("en");
+  const [pickers, setPickers] = useState<AiOptionsResponse | null>(null);
+  const [instructorId, setInstructorId] = useState<number | null>(null);
+  const [categoryIds, setCategoryIds] = useState<number[]>([]);
+  const [writeContent, setWriteContent] = useState(true);
+  const [gen, setGen] = useState<GenState | null>(null);
+  const cancelRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [items, loading, draft]);
+
+  // Teachers and categories for the pickers (optional: the window still works if this fails).
+  useEffect(() => {
+    if (!open || pickers) return;
+    aiCourseBuilderApi
+      .options()
+      .then(setPickers)
+      .catch(() => undefined);
+  }, [open, pickers]);
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next && gen?.running) {
+      toast.info("Lessons are still being written. Press Stop first, or wait until it finishes.");
+      return;
+    }
+    onOpenChange(next);
+  };
+
+  const resetAll = () => {
+    setItems([]);
+    setInput("");
+    setDraft(null);
+    setGen(null);
+    setCategoryIds([]);
+    setInstructorId(null);
+  };
+
+  const openCourse = (courseId: number) => {
+    resetAll();
+    onOpenChange(false);
+    navigate(`/courses/${courseId}`);
+  };
 
   const send = async (text: string) => {
     const content = text.trim();
@@ -224,16 +430,72 @@ function AiCourseBuilderSheet({
     }
   };
 
+  const chooseOption = (option: AiCourseOption) => {
+    setDraft(structuredClone(option.course));
+    setCategoryIds(option.categoryIds ?? []);
+    setInstructorId(
+      pickers?.currentTeacherId ?? (pickers?.teachers.length === 1 ? pickers.teachers[0].id : null),
+    );
+  };
+
+  const toggleCategory = (id: number) =>
+    setCategoryIds((current) =>
+      current.includes(id) ? current.filter((c) => c !== id) : [...current, id],
+    );
+
+  /** Writes the full text of every new lesson, one after another, with progress. A failed lesson does not stop the rest. */
+  const runGeneration = async (result: AiApplyResult) => {
+    cancelRef.current = false;
+    const total = result.lessonRefs.length;
+    let done = 0;
+    let failed = 0;
+    let stoppedReason: string | undefined;
+
+    setGen({
+      courseId: result.courseId,
+      courseName: result.courseName,
+      total,
+      done,
+      failed,
+      current: result.lessonRefs[0]?.title ?? "",
+      running: true,
+    });
+
+    for (const ref of result.lessonRefs) {
+      if (cancelRef.current) {
+        stoppedReason = "Stopped. The remaining lessons keep the short AI summary.";
+        break;
+      }
+      setGen((g) => (g ? { ...g, current: ref.title } : g));
+      try {
+        await aiCourseBuilderApi.generateLessonContent(ref.id, { save: true, overwrite: true, language });
+        done++;
+      } catch (error: any) {
+        failed++;
+        const message: string = error?.response?.data?.message ?? "";
+        if (/rate limit|quota/i.test(message)) {
+          stoppedReason = message;
+          break;
+        }
+      }
+      setGen((g) => (g ? { ...g, done, failed } : g));
+    }
+    setGen((g) => (g ? { ...g, done, failed, running: false, stoppedReason } : g));
+  };
+
   const create = async () => {
     if (!draft || creating) return;
     setCreating(true);
     try {
-      const result = await aiCourseBuilderApi.apply(draft);
-      toast.success(
-        `Created "${result.courseName}" as a draft (${result.sections} sections, ${result.lessons} lessons)`,
-      );
-      onOpenChange(false);
-      navigate(`/courses/${result.courseId}`);
+      const result = await aiCourseBuilderApi.apply(draft, categoryIds, instructorId);
+      if (writeContent && result.lessonRefs.length > 0) {
+        void runGeneration(result);
+      } else {
+        toast.success(
+          `Created "${result.courseName}" as a draft (${result.sections} sections, ${result.lessons} lessons)`,
+        );
+        openCourse(result.courseId);
+      }
     } catch (error: any) {
       toast.error(error?.response?.data?.message ?? "Could not create the course.");
     } finally {
@@ -241,14 +503,13 @@ function AiCourseBuilderSheet({
     }
   };
 
-  const canCreate =
-    !!draft &&
-    draft.name.trim().length >= 3 &&
-    draft.sections.length > 0 &&
-    draft.sections.every((s) => s.title.trim().length >= 3 && s.lessons.length > 0);
+  const errors = draft ? validateOutline(draft) : null;
+  const canCreate = !!draft && !!errors && !errors.hasError;
+  const lessonTotal = draft ? countLessons(draft) : 0;
+  const teacherSelf = pickers?.teachers.find((t) => t.id === pickers?.currentTeacherId);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b p-4">
           <SheetTitle className="flex items-center gap-2">
@@ -259,22 +520,141 @@ function AiCourseBuilderSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {draft ? (
+        {gen ? (
+          <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+            <div>
+              <p className="font-medium">
+                {gen.running ? "Writing lesson content..." : "Your course is ready"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                &quot;{gen.courseName}&quot; was created as a Draft.
+              </p>
+            </div>
+
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${Math.round(((gen.done + gen.failed) / gen.total) * 100)}%` }}
+              />
+            </div>
+            <p className="text-sm">
+              {gen.done + gen.failed}/{gen.total} lessons
+              {gen.running && gen.current ? ` · now writing: ${gen.current}` : ""}
+            </p>
+
+            {gen.failed > 0 && (
+              <p className="text-sm text-destructive">
+                {gen.failed} lesson(s) could not be written. They keep the short AI summary; open the lesson and use
+                &quot;Generate with AI&quot; to try again.
+              </p>
+            )}
+            {gen.stoppedReason && <p className="text-sm text-muted-foreground">{gen.stoppedReason}</p>}
+
+            {gen.running ? (
+              <Button variant="outline" onClick={() => (cancelRef.current = true)}>
+                Stop
+              </Button>
+            ) : (
+              <Button onClick={() => openCourse(gen.courseId)}>Open course</Button>
+            )}
+          </div>
+        ) : draft ? (
           <>
             <div className="flex-1 overflow-y-auto p-4">
               <Button variant="ghost" size="sm" className="mb-3 -ml-2" onClick={() => setDraft(null)}>
                 <ArrowLeft className="mr-1 h-4 w-4" /> Back to options
               </Button>
-              <OutlineEditor draft={draft} onChange={setDraft} />
+
+              <div className="mb-4 space-y-3 rounded-xl border p-3">
+                <p className="text-sm font-medium">Course settings</p>
+
+                {pickers?.currentTeacherId != null ? (
+                  <p className="text-sm">
+                    Instructor: <span className="font-medium">{teacherSelf?.name ?? "You"}</span> (you)
+                  </p>
+                ) : pickers ? (
+                  <div>
+                    <label className="text-sm font-medium">Instructor</label>
+                    <select
+                      value={instructorId ?? ""}
+                      onChange={(e) => setInstructorId(e.target.value ? Number(e.target.value) : null)}
+                      className="mt-1 h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+                    >
+                      <option value="">No instructor yet (assign later)</option>
+                      {pickers.teachers.map((teacher) => (
+                        <option key={teacher.id} value={teacher.id}>
+                          {teacher.name} ({teacher.email})
+                        </option>
+                      ))}
+                    </select>
+                    {pickers.teachers.length === 0 && (
+                      <p className="mt-1 text-xs text-muted-foreground">No active teacher accounts found.</p>
+                    )}
+                  </div>
+                ) : null}
+
+                {pickers && (
+                  <div>
+                    <label className="text-sm font-medium">Categories</label>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {pickers.categories.map((category) => {
+                        const selected = categoryIds.includes(category.id);
+                        return (
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={() => toggleCategory(category.id)}
+                            className={
+                              "rounded-full border px-3 py-1 text-xs " +
+                              (selected ? "bg-primary text-primary-foreground" : "hover:bg-muted")
+                            }
+                          >
+                            {category.name}
+                          </button>
+                        );
+                      })}
+                      {pickers.categories.length === 0 && (
+                        <p className="text-xs text-muted-foreground">No active categories found.</p>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      The AI pre-selected the best match. A course needs at least one category to be published.
+                    </p>
+                  </div>
+                )}
+
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={writeContent}
+                    onChange={(e) => setWriteContent(e.target.checked)}
+                  />
+                  <span>
+                    Write the full lesson content with AI after creating
+                    <span className="block text-xs text-muted-foreground">
+                      About 10 seconds per lesson (around {Math.max(1, Math.ceil((lessonTotal * 10) / 60))} min for
+                      this course). Otherwise each lesson keeps a short summary.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              <OutlineEditor draft={draft} errors={errors!} onChange={setDraft} />
             </div>
             <div className="border-t p-4">
               <p className="mb-2 text-xs text-muted-foreground">
-                The course is created as a Draft. Each lesson gets the AI summary as draft text; you can replace it
-                with your own content, then assign categories and publish.
+                The course is created as a Draft, so students cannot see it until you publish it.
               </p>
+              {errors?.hasError && (
+                <p className="mb-2 text-xs font-medium text-destructive">
+                  Fix the highlighted fields to create the course.
+                </p>
+              )}
               <Button className="w-full" disabled={!canCreate || creating} onClick={create}>
                 {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create course ({draft.sections.length} sections · {countLessons(draft)} lessons)
+                {writeContent ? "Create course & write content" : "Create course"} ({draft.sections.length} sections ·{" "}
+                {lessonTotal} lessons)
               </Button>
             </div>
           </>
@@ -309,11 +689,7 @@ function AiCourseBuilderSheet({
                         <div className="max-w-[90%] rounded-2xl bg-muted px-3 py-2 text-sm">{item.text}</div>
                       )}
                       {item.options?.map((option, i) => (
-                        <OptionCard
-                          key={i}
-                          option={option}
-                          onChoose={() => setDraft(structuredClone(option.course))}
-                        />
+                        <OptionCard key={i} option={option} onChoose={() => chooseOption(option)} />
                       ))}
                     </>
                   )}
@@ -356,7 +732,9 @@ function AiCourseBuilderSheet({
                 value={input}
                 maxLength={4000}
                 disabled={loading}
-                placeholder={items.length ? "Ask for changes, e.g. add a hands-on project" : "What course do you want to create?"}
+                placeholder={
+                  items.length ? "Ask for changes, e.g. add a hands-on project" : "What course do you want to create?"
+                }
                 onChange={(e) => setInput(e.target.value)}
               />
               <Button type="submit" size="icon" disabled={loading || !input.trim()} aria-label="Send">
@@ -370,18 +748,34 @@ function AiCourseBuilderSheet({
   );
 }
 
-/** Header button for the Courses page. Only shown to users who can create courses. */
-export function AiCourseBuilderButton() {
+/**
+ * Header actions for the Courses page: "Create with AI" + the normal manual "Create" button.
+ * Because the course entity has no separate create page, AutoCrudPage would otherwise hide the default Create button.
+ */
+export function CourseHeaderActions({ table }: { table: any }) {
   const { hasPermission } = usePermissions();
   const [open, setOpen] = useState(false);
 
-  if (!hasPermission("COURSE_CREATE")) return null;
-
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
-        <Sparkles className="mr-2 h-4 w-4 text-amber-500" /> Create with AI
-      </Button>
+      {table?.permission?.canCreate && (
+        <PermissionGate permission={table.permission?.keys?.create}>
+          <ActionButton
+            onClick={() => table.openCreate()}
+            tooltip="Create course manually"
+            title="Create"
+            variant="default"
+            icon={<Plus size={16} />}
+          />
+        </PermissionGate>
+      )}
+
+      {hasPermission("COURSE_CREATE") && (
+        <Button variant="outline" onClick={() => setOpen(true)}>
+          <Sparkles className="mr-2 h-4 w-4 text-amber-500" /> Create with AI
+        </Button>
+      )}
+
       <AiCourseBuilderSheet open={open} onOpenChange={setOpen} />
     </>
   );
