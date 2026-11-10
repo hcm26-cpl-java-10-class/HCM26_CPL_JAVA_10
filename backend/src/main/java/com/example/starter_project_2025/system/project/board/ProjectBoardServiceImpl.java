@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.project.board;
 
+import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.domain.Project;
@@ -17,6 +18,7 @@ import com.example.starter_project_2025.system.project.activity.ProjectActivityL
 import com.example.starter_project_2025.system.project.activity.ProjectActivityRepository;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.project.sprint.SprintRepository;
+import com.example.starter_project_2025.system.project.sprint.SprintStatus;
 import com.example.starter_project_2025.system.project.sprint.Task;
 import com.example.starter_project_2025.system.project.sprint.TaskRepository;
 import com.example.starter_project_2025.system.project.sprint.TaskStatus;
@@ -218,7 +220,10 @@ public class ProjectBoardServiceImpl implements ProjectBoardService {
     @Transactional
     public ProjectBoardSprintOption createTeamSprint(Long teamId, TeamSprintCreateRequest request) {
         User actor = requireAuthenticatedActor();
-        verifyTeamScope(actor, teamId);
+        ProjectTeam team = verifyTeamScope(actor, teamId);
+        if (request.status() == SprintStatus.ACTIVE) {
+            requireNoActiveSprint(team);
+        }
         Sprint sprint = Sprint.builder()
                 .teamId(teamId)
                 .name(request.name().trim())
@@ -234,7 +239,25 @@ public class ProjectBoardServiceImpl implements ProjectBoardService {
                 sprint.getStartDate(), sprint.getEndDate());
     }
 
-    private void verifyTeamScope(User actor, Long teamId) {
+    /**
+     * Only one sprint of a project (or team-only workspace) may be Active, so a
+     * board-created sprint cannot be started while another one is still open.
+     */
+    private void requireNoActiveSprint(ProjectTeam team) {
+        Long projectId = team.getProjectId();
+        boolean anotherActiveSprint = projectId != null
+                ? sprintRepository.existsByProjectIdAndStatus(projectId, SprintStatus.ACTIVE)
+                : false;
+        if (!anotherActiveSprint) {
+            anotherActiveSprint = sprintRepository.existsByTeamIdAndStatus(team.getId(), SprintStatus.ACTIVE);
+        }
+        if (anotherActiveSprint) {
+            throw new BusinessValidationException(Map.of("status", List.of(
+                    "Dự án đã có Sprint đang Active. Hãy hoàn thành hoặc hủy Sprint đó trước khi bắt đầu Sprint khác")));
+        }
+    }
+
+    private ProjectTeam verifyTeamScope(User actor, Long teamId) {
         ProjectTeam team = projectTeamRepository.findById(teamId)
                 .orElseThrow(() -> new ResourceNotFoundException("Team", "id", teamId));
         Long tenantId = actor.getTenantId();
@@ -251,6 +274,7 @@ public class ProjectBoardServiceImpl implements ProjectBoardService {
                 teamId, actor.getId(), ClassMemberStatus.ACTIVE))) {
             throw new AccessDeniedException("User is not an active member of this team");
         }
+        return team;
     }
 
     private Map<Long, TaskCardResponse.AssigneeResponse> resolveTeamAssignees(
