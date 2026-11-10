@@ -194,14 +194,19 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
-  const sprints = useMemo(() => query.data?.sprints ?? [], [query.data?.sprints]);
+  const sprints = useMemo(
+    () => (query.data?.sprints ?? []).filter((sprint) => sprint.status === "ACTIVE"),
+    [query.data?.sprints],
+  );
   const sprintId = sprints.some((sprint) => sprint.id === requestedSprintId)
     ? requestedSprintId : preferredSprint(sprints)?.id;
 
   const selectedSprint = sprints.find((sprint) => sprint.id === sprintId);
   const allItems = useMemo(() => query.data?.items ?? [], [query.data?.items]);
+  // Only the active sprint and its own backlog are shown: the workspace board is
+  // not a product backlog view, and completed sprints disappear from it.
   const boardItems = useMemo(() => allItems.filter((item) =>
-    item.sprintId === sprintId || item.sprintId == null,
+    item.sprintId != null && item.sprintId === sprintId,
   ), [allItems, sprintId]);
   const allSprintItems = allItems.filter((item) => item.sprintId === sprintId);
   const memberIds = useMemo(() => [...new Set([
@@ -375,7 +380,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
           </div>
           <select aria-label="Select sprint" className="h-8 min-w-0 max-w-52 rounded-md border bg-background px-2 text-xs" value={sprintId ?? ""}
             onChange={(event) => setSprintId(Number(event.target.value))} disabled={query.isPending || !sprints.length}>
-            {!sprints.length ? <option value="">No sprints available</option> : null}
+            {!sprints.length ? <option value="">No active sprint</option> : null}
             {sprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} · {sprint.status}</option>)}
           </select>
           <Button variant="outline" size="icon-sm" aria-label="Refresh board" onClick={() => void query.refetch()} disabled={query.isFetching}>
@@ -394,7 +399,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
 
     {query.isPending ? <div className="grid grid-cols-1 gap-3 md:grid-cols-3 2xl:grid-cols-5">{visibleColumns.map((column) => <Skeleton key={column.key} className="h-72" />)}</div>
       : query.isError ? <div role="alert" className="flex items-center justify-between rounded-xl border border-destructive/30 p-4 text-sm text-destructive"><span>Could not load the team's sprints and work items.</span><Button variant="outline" size="sm" onClick={() => void query.refetch()}>Try again</Button></div>
-      : !sprints.length ? <Card><div className="p-12 text-center text-sm text-muted-foreground">This team has no sprints yet. Create a sprint and add work items in the Backlog tab.</div></Card>
+      : !sprints.length ? <Card><div className="p-12 text-center text-sm text-muted-foreground">This team has no active sprint right now. Start a sprint in the Backlog tab — completed sprints stay hidden until another sprint is active.</div></Card>
       : <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2 shadow-sm">
             <div className="flex flex-wrap items-center gap-2">
@@ -430,7 +435,6 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
               </> : null}
             </div>
           </div>
-          {selectedSprint?.status !== "ACTIVE" ? <p className="px-1 text-xs text-muted-foreground">This sprint has not started. Start it in the Backlog tab to make it active.</p> : null}
         <div className="grid items-stretch gap-4 2xl:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="min-w-0">
           {viewMode === "board" ? <div className="overflow-x-auto overscroll-x-contain pb-2" role="region" aria-label="Kanban columns" tabIndex={0}>
