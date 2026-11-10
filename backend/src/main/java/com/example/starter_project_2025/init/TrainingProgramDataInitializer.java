@@ -28,7 +28,19 @@ public class TrainingProgramDataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        log.info("TrainingProgramDataInitializer: clean state initialized (no hardcoded programs). Ready for dynamic data.");
+        ensureProgram("FULLSTACK_JAVA", "Fullstack Java Enterprise Developer", "1.0", "HCM",
+                "Java", "https://levelup.akajob.io/", "Fullstack Java & Enterprise Architecture training track",
+                ProgramStatus.ACTIVE, List.of("DATABASE_SQL", "JAVA_CORE", "SPRING_BOOT", "REACT_FRONTEND", "DEVOPS_BASIC"));
+
+        ensureProgram("BACKEND_JAVA", "Enterprise Java Backend Specialist", "1.0", "HN",
+                "Java", "", "Backend specialist track focusing on core architecture and Spring Boot APIs",
+                ProgramStatus.ACTIVE, List.of("DATABASE_SQL", "JAVA_CORE", "SPRING_BOOT", "TESTING_QA"));
+
+        ensureProgram("FOUNDATION_JAVA", "Java Fundamentals & Database Foundation", "1.0", "DN",
+                "Java", "", "Foundation training program for new freshers",
+                ProgramStatus.ACTIVE, List.of("DATABASE_SQL", "JAVA_CORE"));
+
+        log.info("TrainingProgramDataInitializer: ensured standard baseline programs in H2 database.");
     }
 
     private void ensureProgram(String code, String name, String version, String region,
