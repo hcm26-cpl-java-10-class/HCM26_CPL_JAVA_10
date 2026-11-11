@@ -11,6 +11,7 @@ import ClassListPage from "@/pages/management/training/class/ClassListPage";
 import ClassDetailPage from "@/pages/management/training/class/ClassDetailPage";
 import ClassSetupPage from "@/pages/management/training/class/ClassSetupPage";
 import SessionDetailPage from "@/pages/management/demo/session/SessionDetailPage";
+import SessionManagementPage from "@/pages/management/demo/session/SessionManagementPage";
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -290,7 +291,7 @@ export const routes: RouteConfig[] = [
   },
   {
     path: "/topic-marks",
-    component: TopicMarkRouteRedirect,
+    component: TopicMarkGradebookDemoPage,
     requiredPermission: "SESSION_READ",
     isModuleDriven: false,
   },
