@@ -30,7 +30,7 @@ import java.time.LocalDate;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("ASSIGNMENT")
 public class TeachingAssignment extends BaseEntity {
-    /** ID of the class in the shared system; class profile data stays there. */
+    /** Internal TrainingClass ID; never resolve this through the shared class directory. */
     @Column(name = "class_id", nullable = false)
     Long classId;
 

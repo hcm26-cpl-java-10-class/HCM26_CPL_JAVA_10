@@ -185,6 +185,10 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
 
     return (
         <div className="flex min-h-[480px] min-w-0 flex-col gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">Calendar for internal class {classItem.id}. The class date overview and draft versions do not create teaching sessions.</p>
+                <Button variant="outline" asChild><Link to={`/sessions?classId=${classItem.id}`}>Manage Sessions</Link></Button>
+            </div>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="h-10 w-full justify-between font-normal sm:w-64" aria-label="Filter calendar status">

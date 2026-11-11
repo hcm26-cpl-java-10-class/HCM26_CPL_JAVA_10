@@ -283,11 +283,20 @@ export function parseStandardSyllabusCsv(csvText: string): ParsedSyllabus {
         const durationMins = isNaN(colDurationMins) ? 120 : colDurationMins;
         const durationHours = Math.round((durationMins / 60) * 10) / 10;
 
+        const rawTime = ((row[9] || row[7] || "") + " " + colContent).toLowerCase();
+        let sessionTime: "Morning" | "Afternoon" = (sessNum % 2 === 1) ? "Morning" : "Afternoon";
+        if (rawTime.includes("afternoon") || rawTime.includes("chiều") || rawTime.includes("pm")) {
+          sessionTime = "Afternoon";
+        } else if (rawTime.includes("morning") || rawTime.includes("sáng") || rawTime.includes("am")) {
+          sessionTime = "Morning";
+        }
+
         const sessionItem: TopicSession = {
           session: sessNum,
           content: colContent,
           objectives: colObjectives || `Master ${colContent.split("\n")[0] || "core concept"} and practice effectively`,
           deliveryType: normalizeDeliveryType(colDeliveryType),
+          sessionTime,
           duration: `${durationHours}h (${durationMins}m)`,
           durationHours,
           durationMins,

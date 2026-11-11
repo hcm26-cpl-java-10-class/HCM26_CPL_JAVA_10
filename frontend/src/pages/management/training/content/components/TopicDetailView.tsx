@@ -48,6 +48,36 @@ const PIE_COLORS = {
   exam: "#ff9f1c",    // Amber / orange
 };
 
+const RADIAN = Math.PI / 180;
+const renderCustomizedPieLabel = ({
+  cx,
+  cy,
+  midAngle,
+  innerRadius,
+  outerRadius,
+  percent,
+}: any) => {
+  if (percent == null || percent < 0.05) return null;
+  const radius = (innerRadius || 0) + (outerRadius - (innerRadius || 0)) * 0.58;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#ffffff"
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={11}
+      fontWeight={700}
+      style={{ pointerEvents: "none", filter: "drop-shadow(0px 1px 2px rgba(0,0,0,0.45))" }}
+    >
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  );
+};
+
 export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps) {
   const [activeTab, setActiveTab] = useState<"syllabus" | "schedule">("syllabus");
   const [isOutlineEditorOpen, setIsOutlineEditorOpen] = useState(false);
@@ -406,14 +436,8 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                               cy="50%"
                               outerRadius={75}
                               dataKey="value"
-                              label={({ percent }) =>
-                                percent != null && percent > 0.05
-                                  ? `${(percent * 100).toFixed(0)}%`
-                                  : ""
-                              }
+                              label={renderCustomizedPieLabel}
                               labelLine={false}
-                              fontSize={11}
-                              fontWeight={600}
                             >
                               {pieData.map((d, i) => (
                                 <Cell key={i} fill={d.color} stroke="#ffffff" strokeWidth={1.5} />
@@ -714,6 +738,7 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                             <thead className="bg-gray-50/50 border-b border-gray-200 text-gray-600 font-semibold text-[11px]">
                               <tr>
                                 <th className="text-center px-3 py-2.5 w-14">Session</th>
+                                <th className="text-center px-3 py-2.5 w-24">Shift / Ca</th>
                                 <th className="text-left px-3 py-2.5 w-56">Content</th>
                                 <th className="text-left px-3 py-2.5">Learning Objectives</th>
                                 <th className="text-left px-3 py-2.5 w-36">Delivery Type</th>
@@ -727,6 +752,17 @@ export function TopicDetailView({ topic, onBack, onEdit }: TopicDetailViewProps)
                                 <tr key={idx} className="hover:bg-indigo-50/20">
                                   <td className="px-3 py-3 text-center font-bold text-gray-800">
                                     {sess.session}
+                                  </td>
+                                  <td className="px-3 py-3 text-center whitespace-nowrap">
+                                    {sess.sessionTime === "Afternoon" ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                        🌤️ Chiều
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                        ☀️ Sáng
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="px-3 py-3 font-medium whitespace-pre-line text-gray-900 leading-relaxed">
                                     {sess.content}

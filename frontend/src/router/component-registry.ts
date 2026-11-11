@@ -4,7 +4,6 @@ import ScheduleVersionListPage from "@/pages/management/demo/schedule_version";
 import AuditPage from "@/pages/management/training/audit";
 import TraineePage from "@/pages/management/training/trainee";
 import LogWorkPage from "@/pages/management/training/log-work";
-import ContentPage from "@/pages/management/training/content";
 import TopicManagementPage from "@/pages/management/training/topic/TopicManagementPage";
 import ProgramManagementPage from "@/pages/management/training/program/ProgramManagementPage";
 import ReportsPage from "@/pages/management/training/reports";
@@ -76,26 +75,7 @@ import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
-import { Navigate, useSearchParams } from "react-router-dom";
-
-function TopicMarkRouteRedirect() {
-  const [params] = useSearchParams();
-  const classId = params.get("classId")?.trim();
-  const classCode = params.get("classCode")?.trim();
-  if (classId) {
-    return createElement(Navigate, {
-      to: `/classes/${encodeURIComponent(classId)}?tab=trainees&view=topic-mark`,
-      replace: true,
-    });
-  }
-  if (classCode) {
-    return createElement(Navigate, {
-      to: `/training-operations/class-details/${encodeURIComponent(classCode)}?tab=trainees&view=topic-mark`,
-      replace: true,
-    });
-  }
-  return createElement(TopicMarkGradebookDemoPage);
-}
+import { Navigate } from "react-router-dom";
 
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
@@ -142,13 +122,14 @@ export const routes: RouteConfig[] = [
   { path: "/training/topics", component: TopicManagementPage, requiredPermission: "SUBJECT_READ" },
   { path: "/programs", component: ProgramManagementPage, requiredPermission: "PROGRAM_READ", isModuleDriven: true },
   { path: "/training/programs", component: ProgramManagementPage, requiredPermission: "PROGRAM_READ" },
-  { path: "/class-setup", component: ContentPage, requiredPermission: "CLASS_READ", isModuleDriven: true },
+  { path: "/class-setup", component: ClassSetupPage, requiredPermission: "CLASS_READ", isModuleDriven: true },
   { path: "/training/reports", component: ReportsPage, isModuleDriven: true },
   { path: "/classes", component: ClassListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/classes/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/training-operations/class-details/:classCode", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/class-details/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
   { path: "/sessions/:sessionId", component: SessionDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/sessions", component: SessionManagementPage, requiredPermission: "SESSION_READ" },
   { path: "/calendar/preview", component: WeeklyCalendarPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/schedule-versions", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/calendar/adjust", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },

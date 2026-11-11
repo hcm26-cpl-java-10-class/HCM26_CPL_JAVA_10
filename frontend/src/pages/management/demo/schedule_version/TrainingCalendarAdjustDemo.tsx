@@ -2444,13 +2444,19 @@ export default function TrainingCalendarAdjustDemo({
                     }
                   }}
                   onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    if (isNaN(val) || val <= 0) {
+                    const raw = e.target.value;
+                    if (raw === "") {
+                      setTopicTotalHours("" as any);
+                      return;
+                    }
+                    const val = parseInt(raw, 10);
+                    if (!isNaN(val)) {
+                      setTopicTotalHours(Math.max(0, Math.min(300, val)));
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!topicTotalHours || Number(topicTotalHours) <= 0) {
                       setTopicTotalHours(1);
-                    } else if (val > 300) {
-                      setTopicTotalHours(300);
-                    } else {
-                      setTopicTotalHours(val);
                     }
                   }}
                 />
@@ -2557,13 +2563,19 @@ export default function TrainingCalendarAdjustDemo({
                     }
                   }}
                   onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    if (isNaN(val) || val <= 0) {
+                    const raw = e.target.value;
+                    if (raw === "") {
+                      setSplitTotalHours("" as any);
+                      return;
+                    }
+                    const val = parseInt(raw, 10);
+                    if (!isNaN(val)) {
+                      setSplitTotalHours(Math.max(0, Math.min(300, val)));
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!splitTotalHours || Number(splitTotalHours) <= 0) {
                       setSplitTotalHours(1);
-                    } else if (val > 300) {
-                      setSplitTotalHours(300);
-                    } else {
-                      setSplitTotalHours(val);
                     }
                   }}
                 />

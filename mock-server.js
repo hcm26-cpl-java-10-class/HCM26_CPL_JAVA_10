@@ -261,7 +261,7 @@ function readBody(req) {
 }
 
 function json(res, statusCode, data) {
-  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+  res.writeHead(statusCode, { 'Content-Type': 'application/json', 'X-Data-Source': 'sample' });
   res.end(JSON.stringify(data));
 }
 

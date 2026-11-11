@@ -1,4 +1,5 @@
 import { useState, useRef, type ChangeEvent, type DragEvent } from "react";
+import * as XLSX from "xlsx";
 import {
   Upload,
   FileSpreadsheet,
@@ -67,15 +68,29 @@ export function SyllabusImportDialog({
   };
 
   const handleFile = async (selectedFile: File) => {
-    if (!selectedFile.name.toLowerCase().endsWith(".csv")) {
-      setErrorMsg("Please upload an official Syllabus CSV file (.csv)");
+    const fileName = selectedFile.name.toLowerCase();
+    const isCsv = fileName.endsWith(".csv");
+    const isExcel = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
+
+    if (!isCsv && !isExcel) {
+      setErrorMsg("Please upload an official Syllabus file (.csv or .xlsx)");
       return;
     }
 
     setErrorMsg(null);
 
     try {
-      const text = await selectedFile.text();
+      let text = "";
+      if (isCsv) {
+        text = await selectedFile.text();
+      } else {
+        const buffer = await selectedFile.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const firstSheet = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[firstSheet];
+        text = XLSX.utils.sheet_to_csv(sheet);
+      }
+
       const result = parseStandardSyllabusCsv(text);
 
       if (!result.chapters || result.chapters.length === 0) {
@@ -86,8 +101,8 @@ export function SyllabusImportDialog({
       setParsed(result);
       toast.success(`Parsed syllabus successfully: ${result.totalSessions} sessions across ${result.chapters.length} units.`);
     } catch (e: any) {
-      console.error("Failed to parse syllabus CSV", e);
-      setErrorMsg(e.message || "Failed to parse syllabus CSV file");
+      console.error("Failed to parse syllabus file", e);
+      setErrorMsg(e.message || "Failed to parse syllabus file");
     }
   };
 
@@ -273,7 +288,7 @@ export function SyllabusImportDialog({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 className="hidden"
                 onChange={(e: ChangeEvent<HTMLInputElement>) => {
                   if (e.target.files && e.target.files[0]) {
@@ -285,10 +300,10 @@ export function SyllabusImportDialog({
                 <Upload className="size-6" />
               </div>
               <h4 className="text-sm font-semibold text-gray-800">
-                Click to browse or drag & drop Syllabus CSV file
+                Click to browse or drag & drop Syllabus CSV / Excel file
               </h4>
               <p className="text-xs text-gray-500 max-w-sm mx-auto mt-1">
-                Supports standard Syllabus Matrix with Units, Sessions, Delivery Types, Duration (mins), and Assessment Scheme.
+                Supports official .csv and .xlsx syllabus templates with Units, Sessions, Delivery Types, Duration, and Shift options.
               </p>
             </div>
           ) : (
@@ -376,6 +391,7 @@ export function SyllabusImportDialog({
                         <tr>
                           <th className="px-3 py-2.5 w-12 text-center">Unit</th>
                           <th className="px-3 py-2.5 w-12 text-center">#</th>
+                          <th className="px-3 py-2.5 w-24 text-center">Shift / Ca</th>
                           <th className="px-3 py-2.5 w-64">Content</th>
                           <th className="px-3 py-2.5">Learning Objectives</th>
                           <th className="px-3 py-2.5 w-32">Delivery Type</th>
@@ -388,7 +404,7 @@ export function SyllabusImportDialog({
                         {parsed.chapters.map((ch, chIdx) => (
                           <div key={`group-${ch.id}`} style={{ display: "contents" }}>
                             <tr key={`ch-${ch.id}`} className="bg-slate-50/80 font-bold text-gray-900 border-t border-gray-200">
-                              <td colSpan={8} className="px-3 py-2 text-xs">
+                              <td colSpan={9} className="px-3 py-2 text-xs">
                                 <span className="inline-flex items-center gap-2">
                                   <span className="size-5 rounded-full bg-indigo-100 text-indigo-700 text-[11px] flex items-center justify-center font-bold">
                                     {ch.unitNumber || chIdx + 1}
@@ -407,6 +423,17 @@ export function SyllabusImportDialog({
                                 </td>
                                 <td className="px-3 py-2 text-center font-bold text-gray-700">
                                   {sess.session}
+                                </td>
+                                <td className="px-3 py-2 text-center whitespace-nowrap">
+                                  {sess.sessionTime === "Afternoon" ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                      🌤️ Chiều
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                      ☀️ Sáng
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-3 py-2 text-gray-900 font-medium whitespace-pre-line leading-relaxed">
                                   {sess.content}

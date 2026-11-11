@@ -446,6 +446,20 @@ describe("ClassDetailView & TraineeListTab", () => {
         }
     });
 
+    it("renders General section above Class Readiness section inside Class Info tab (Yêu cầu 2)", async () => {
+        const { user } = renderClassFlow("/classes/2");
+
+        await screen.findByRole("heading", { name: "Class Details : HCM26_FR_JAVA_03" });
+        await user.click(screen.getByRole("tab", { name: "Class Info" }));
+
+        const generalSection = screen.getByText("General");
+        const readinessSection = screen.getByText(/Class Readiness/i);
+        expect(generalSection).toBeInTheDocument();
+        expect(readinessSection).toBeInTheDocument();
+
+        expect(Boolean(generalSection.compareDocumentPosition(readinessSection) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    });
+
     it("supports extended Bulk Actions: selection count badge and Change Status", async () => {
         const { user } = renderClassFlow("/classes/2");
         await screen.findByText("Hoàng Phương Bình");

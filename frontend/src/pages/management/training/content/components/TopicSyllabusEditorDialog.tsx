@@ -9,11 +9,15 @@ import type {
   TopicChapter,
   TopicSession,
   TopicSyllabusPackage,
+  SessionShift,
 } from "./topicSyllabusData";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +80,9 @@ export function TopicSyllabusEditorDialog({
 
   // Expanded state for chapter cards
   const [expandedChapters, setExpandedChapters] = useState<Record<number, boolean>>({});
+
+  // Reset confirmation modal
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
 
   const targetHours = topic.durationHours || 40;
 
@@ -150,6 +157,7 @@ export function TopicSyllabusEditorDialog({
           content: "",
           objectives: "",
           deliveryType: "Concept/Lecture",
+          sessionTime: "Morning",
           duration: "4h",
           durationHours: 4,
           trainingFormat: "Online",
@@ -190,11 +198,16 @@ export function TopicSyllabusEditorDialog({
     setChapters((prev) => {
       const updated = prev.map((ch) => {
         if (ch.id !== chId) return ch;
+        const lastSession = ch.sessions[ch.sessions.length - 1];
+        const nextTime: SessionShift =
+          lastSession?.sessionTime === "Morning" ? "Afternoon" : "Morning";
+
         const newSession: TopicSession = {
           session: 0,
           content: "",
           objectives: "",
           deliveryType: "Assignment/Lab",
+          sessionTime: nextTime,
           duration: "4h",
           durationHours: 4,
           trainingFormat: "Offline",
@@ -252,9 +265,26 @@ export function TopicSyllabusEditorDialog({
         const cur = { ...nextSessions[sessIdx] };
 
         if (field === "durationHours") {
-          const num = Math.max(0.5, parseFloat(value) || 1);
-          cur.durationHours = num;
-          cur.duration = `${num}h`;
+          const val = value;
+          if (val === "" || val === null || val === undefined) {
+            cur.durationHours = "" as any;
+            cur.duration = "";
+          } else {
+            let num = parseFloat(val);
+            if (isNaN(num)) {
+              cur.durationHours = "" as any;
+              cur.duration = "";
+            } else {
+              if (num < 0) {
+                num = 0;
+              } else if (num > 4) {
+                toast.error("Thời lượng 1 buổi học không được vượt quá 4 tiếng (Quy định tối đa 4h/buổi)!");
+                num = 4;
+              }
+              cur.durationHours = num;
+              cur.duration = `${num}h`;
+            }
+          }
         } else {
           (cur as any)[field] = value;
         }
@@ -268,28 +298,36 @@ export function TopicSyllabusEditorDialog({
 
   // Reset / Clear all chapters for this topic
   const handleClearAll = () => {
-    if (confirm("Reset schedule outline for this topic? All custom chapters will be cleared.")) {
-      resetTopicSyllabusPackage(topic.id, topic.code);
-      setChapters([]);
-      toast.info("Schedule outline cleared.");
-    }
+    setIsResetConfirmOpen(true);
+  };
+
+  const handleConfirmReset = () => {
+    resetTopicSyllabusPackage(topic.id, topic.code);
+    setChapters([]);
+    setIsResetConfirmOpen(false);
+    toast.info("Schedule outline cleared.");
   };
 
   // Save Schedule Outline
   const handleSave = () => {
     if (chapters.length > 0) {
-      let hasEmpty = false;
-      chapters.forEach((ch) => {
-        ch.sessions.forEach((s) => {
+      for (const ch of chapters) {
+        for (const s of ch.sessions) {
           if (!s.content || !s.content.trim()) {
-            hasEmpty = true;
+            toast.error(`Vui lòng nhập nội dung cho buổi học #${s.session} (${ch.title})!`);
+            return;
           }
-        });
-      });
-
-      if (hasEmpty) {
-        toast.error("Please fill in content/title for all sessions.");
-        return;
+          if (s.durationHours === undefined || s.durationHours === null || s.durationHours <= 0) {
+            toast.error(`Thời lượng buổi học #${s.session} phải lớn hơn 0 giờ!`);
+            return;
+          }
+          if (s.durationHours > 4) {
+            toast.error(
+              `Buổi học #${s.session} (${s.content.substring(0, 25)}...) có thời lượng ${s.durationHours}h vượt quá quy định tối đa 4 tiếng/buổi!`
+            );
+            return;
+          }
+        }
       }
     }
 
@@ -301,8 +339,7 @@ export function TopicSyllabusEditorDialog({
       toast.info("Schedule outline cleared.");
     } else if (hoursDiff !== 0) {
       toast.warning(
-        `Schedule outline saved! Note: Total allocated (${totalAllocatedHours}h) ${
-          hoursDiff > 0 ? `exceeds target by ${hoursDiff}h` : `is under target by ${Math.abs(hoursDiff)}h`
+        `Schedule outline saved! Note: Total allocated (${totalAllocatedHours}h) ${hoursDiff > 0 ? `exceeds target by ${hoursDiff}h` : `is under target by ${Math.abs(hoursDiff)}h`
         }.`
       );
     } else {
@@ -314,7 +351,8 @@ export function TopicSyllabusEditorDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:max-w-5xl md:max-w-5xl lg:max-w-6xl max-h-[92vh] flex flex-col p-0 overflow-hidden bg-gray-50/50">
         {/* Header */}
         <div className="px-6 py-4 bg-white border-b border-gray-200">
@@ -339,13 +377,12 @@ export function TopicSyllabusEditorDialog({
             {/* Target vs Allocated Metric Badge */}
             <div className="flex items-center gap-2">
               <div
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${
-                  hoursDiff === 0
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${hoursDiff === 0
                     ? "bg-emerald-50 text-emerald-700 border-emerald-300"
                     : hoursDiff < 0
-                    ? "bg-amber-50 text-amber-700 border-amber-300"
-                    : "bg-rose-50 text-rose-700 border-rose-300"
-                }`}
+                      ? "bg-amber-50 text-amber-700 border-amber-300"
+                      : "bg-rose-50 text-rose-700 border-rose-300"
+                  }`}
               >
                 {hoursDiff === 0 ? (
                   <CheckCircle2 className="size-4 text-emerald-600" />
@@ -527,16 +564,17 @@ export function TopicSyllabusEditorDialog({
                         </div>
                       ) : (
                         <div className="overflow-x-auto">
-                          <table className="w-full min-w-[850px] text-xs">
+                          <table className="w-full min-w-[1050px] text-xs">
                             <thead>
                               <tr className="text-gray-500 font-semibold border-b border-gray-200">
-                                <th className="w-12 text-center py-2 px-1">#</th>
-                                <th className="text-left py-2 px-2 min-w-[200px]">Content / Topic</th>
-                                <th className="text-left py-2 px-2 min-w-[180px]">Learning Objectives</th>
+                                <th className="w-10 text-center py-2 px-1">#</th>
+                                <th className="text-left py-2 px-2 min-w-[190px]">Content / Topic</th>
+                                <th className="text-left py-2 px-2 min-w-[170px]">Learning Objectives</th>
                                 <th className="text-left py-2 px-2 w-36">Delivery Type</th>
-                                <th className="text-center py-2 px-2 w-20">Hours</th>
+                                <th className="text-center py-2 px-2 w-36">Shift / Ca học</th>
+                                <th className="text-center py-2 px-2 w-36 min-w-[140px]">Hours (Max 4h)</th>
                                 <th className="text-center py-2 px-2 w-24">Format</th>
-                                <th className="text-left py-2 px-2 min-w-[160px]">Materials / Notes</th>
+                                <th className="text-left py-2 px-2 min-w-[150px]">Materials / Notes</th>
                                 <th className="w-20 text-center py-2 px-1">Actions</th>
                               </tr>
                             </thead>
@@ -575,8 +613,8 @@ export function TopicSyllabusEditorDialog({
                                         handleUpdateSession(ch.id, sessIdx, "deliveryType", val)
                                       }
                                     >
-                                      <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue />
+                                      <SelectTrigger className="w-full h-8 text-xs">
+                                        <SelectValue placeholder="Delivery..." />
                                       </SelectTrigger>
                                       <SelectContent>
                                         {DELIVERY_TYPES.map((dt) => (
@@ -588,16 +626,95 @@ export function TopicSyllabusEditorDialog({
                                     </Select>
                                   </td>
                                   <td className="py-2 px-2 text-center">
-                                    <Input
-                                      type="number"
-                                      min={0.5}
-                                      step={0.5}
-                                      value={sess.durationHours}
-                                      onChange={(e) =>
-                                        handleUpdateSession(ch.id, sessIdx, "durationHours", e.target.value)
+                                    <Select
+                                      value={sess.sessionTime || "Morning"}
+                                      onValueChange={(val: SessionShift) =>
+                                        handleUpdateSession(ch.id, sessIdx, "sessionTime", val)
                                       }
-                                      className="h-8 text-xs text-center font-mono font-semibold"
-                                    />
+                                    >
+                                      <SelectTrigger className="w-full h-8 text-xs bg-white">
+                                        <SelectValue placeholder="Ca..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="Morning" className="text-xs">
+                                          <span className="flex items-center gap-1.5 font-medium text-amber-700">
+                                            ☀️ Sáng (Morning)
+                                          </span>
+                                        </SelectItem>
+                                        <SelectItem value="Afternoon" className="text-xs">
+                                          <span className="flex items-center gap-1.5 font-medium text-indigo-700">
+                                            🌤️ Chiều (Afternoon)
+                                          </span>
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </td>
+                                  <td className="py-2 px-2 text-center w-36 min-w-[140px]">
+                                    <div className="flex flex-col items-center justify-center">
+                                      <div className="flex items-center justify-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const curVal = Number(sess.durationHours) || 0;
+                                            const nextVal = Math.max(0.5, Math.round((curVal - 0.5) * 10) / 10);
+                                            handleUpdateSession(ch.id, sessIdx, "durationHours", nextVal);
+                                          }}
+                                          disabled={(sess.durationHours || 0) <= 0.5}
+                                          className="size-7 rounded bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-bold text-sm flex items-center justify-center border border-gray-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                          title="Giảm 0.5 giờ"
+                                        >
+                                          -
+                                        </button>
+                                        <div className="relative">
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            max={4}
+                                            step={0.5}
+                                            value={
+                                              (sess.durationHours as any) === "" ||
+                                              sess.durationHours === undefined ||
+                                              sess.durationHours === null
+                                                ? ""
+                                                : sess.durationHours
+                                            }
+                                            placeholder="0"
+                                            onChange={(e) =>
+                                              handleUpdateSession(ch.id, sessIdx, "durationHours", e.target.value)
+                                            }
+                                            className={`w-14 h-7 text-xs text-center font-mono font-bold px-1 py-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                                              Number(sess.durationHours) > 4
+                                                ? "border-rose-500 bg-rose-50 text-rose-700 focus:ring-rose-500"
+                                                : Number(sess.durationHours) <= 0
+                                                ? "border-amber-500 bg-amber-50"
+                                                : "bg-white"
+                                            }`}
+                                          />
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const curVal = Number(sess.durationHours) || 0;
+                                            if (curVal >= 4) {
+                                              toast.warning("Mỗi buổi học tối đa 4 tiếng!");
+                                              return;
+                                            }
+                                            const nextVal = Math.min(4, Math.round((curVal + 0.5) * 10) / 10);
+                                            handleUpdateSession(ch.id, sessIdx, "durationHours", nextVal);
+                                          }}
+                                          disabled={(sess.durationHours || 0) >= 4}
+                                          className="size-7 rounded bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 font-bold text-sm flex items-center justify-center border border-gray-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                                          title="Tăng 0.5 giờ"
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+                                      {(sess.durationHours || 0) > 4 && (
+                                        <span className="text-[10px] text-rose-600 font-semibold block mt-0.5 whitespace-nowrap">
+                                          Tối đa 4h
+                                        </span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="py-2 px-2 text-center">
                                     <Select
@@ -606,8 +723,8 @@ export function TopicSyllabusEditorDialog({
                                         handleUpdateSession(ch.id, sessIdx, "trainingFormat", val)
                                       }
                                     >
-                                      <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue />
+                                      <SelectTrigger className="w-full h-8 text-xs">
+                                        <SelectValue placeholder="Format..." />
                                       </SelectTrigger>
                                       <SelectContent>
                                         <SelectItem value="Online" className="text-xs">
@@ -693,8 +810,7 @@ export function TopicSyllabusEditorDialog({
         {/* Footer */}
         <div className="px-6 py-4 bg-white border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
-            * Changes saved here will instantly recalculate the Time Allocation chart and update the
-            Schedule Detail accordion view.
+            * <strong>Quy định:</strong> Thời lượng mỗi buổi học tối đa <strong>4 tiếng</strong> (tùy chọn Ca Sáng / Ca Chiều). Khi lưu hệ thống sẽ tự động đồng bộ sang Time Allocation và Schedule Detail.
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -715,5 +831,55 @@ export function TopicSyllabusEditorDialog({
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Reset Confirmation Dialog */}
+    <Dialog open={isResetConfirmOpen} onOpenChange={setIsResetConfirmOpen}>
+      <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+        <div className="border-l-4 border-red-500 p-6">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="size-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="size-5 text-red-600" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-semibold text-gray-900">
+                  Reset Schedule Outline
+                </DialogTitle>
+                <DialogDescription className="text-xs text-gray-500 mt-0.5">
+                  This action cannot be undone.
+                </DialogDescription>
+              </div>
+            </div>
+            <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-sm text-red-700 font-medium">
+                ⚠ All custom chapters and sessions for <strong>{topic.code}</strong> will be permanently cleared.
+              </p>
+              <p className="text-xs text-red-500 mt-1">
+                The schedule outline will be reset to empty. This cannot be undone.
+              </p>
+            </div>
+          </DialogHeader>
+        </div>
+        <DialogFooter className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex flex-row items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsResetConfirmOpen(false)}
+            className="text-gray-700"
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleConfirmReset}
+            className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+          >
+            <RotateCcw className="size-3.5" />
+            Yes, Reset Outline
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

@@ -51,6 +51,36 @@ export function formatDuration(hours?: number | null, isLegend = false): string 
   return `${h}h ${m}m`;
 }
 
+const RADIAN = Math.PI / 180;
+const renderCustomizedPieLabel = ({
+  cx,
+  cy,
+  midAngle,
+  innerRadius,
+  outerRadius,
+  percent,
+}: any) => {
+  if (percent == null || percent < 0.04) return null;
+  const radius = (innerRadius || 0) + (outerRadius - (innerRadius || 0)) * 0.62;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#ffffff"
+      textAnchor="middle"
+      dominantBaseline="central"
+      fontSize={11}
+      fontWeight={700}
+      style={{ pointerEvents: "none", filter: "drop-shadow(0px 1px 2px rgba(0,0,0,0.5))" }}
+    >
+      {`${(percent * 100).toFixed(1)}%`}
+    </text>
+  );
+};
+
 export function ProgramDetailView({
   program,
   onBack,
@@ -310,15 +340,8 @@ export function ProgramDetailView({
                           outerRadius={105}
                           innerRadius={0}
                           dataKey="value"
-                          label={({ percent }) =>
-                            percent != null && percent >= 0.03
-                              ? `${(percent * 100).toFixed(1)}%`
-                              : ""
-                          }
+                          label={renderCustomizedPieLabel}
                           labelLine={false}
-                          fontSize={11}
-                          fontWeight={700}
-                          fill="#1f2937"
                         >
                           {pieData.map((d, i) => (
                             <Cell

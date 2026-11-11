@@ -306,7 +306,7 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-gray-700">Technical Group</Label>
             <Select value={technicalGroup} onValueChange={setTechnicalGroup}>
-              <SelectTrigger className="text-sm">
+              <SelectTrigger className="w-full text-sm">
                 <SelectValue placeholder="Select group" />
               </SelectTrigger>
               <SelectContent>
@@ -348,7 +348,7 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-gray-700">Region</Label>
             <Select value={region} onValueChange={setRegion}>
-              <SelectTrigger className="text-sm">
+              <SelectTrigger className="w-full text-sm">
                 <SelectValue placeholder="Select region" />
               </SelectTrigger>
               <SelectContent>

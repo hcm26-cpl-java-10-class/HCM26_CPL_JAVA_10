@@ -2,6 +2,7 @@ import { AutoCrudPage } from "@/pages/management/AutoCrudPage";
 import type { EntityConfig } from "@/types";
 import { createElement, type ComponentType } from "react";
 import { normalizeEntityActionPath } from "./entity-action.utils";
+import { resolveMenuPermission } from "./menu-permission.utils";
 
 type EntityModule = {
     entityConfig?: EntityConfig;
@@ -98,6 +99,7 @@ export function buildEntityRoutes(): EntityRoute[] {
                 ? entityModule.default
                 : () => createElement(AutoCrudPage, { entity }),
             isModuleDriven: true,
+            requiredPermission: resolveMenuPermission(entity.path, undefined),
         });
 
         for (const actionRoute of buildEntityActionRoutes(entity)) {

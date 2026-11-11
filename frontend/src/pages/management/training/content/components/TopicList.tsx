@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -36,6 +37,10 @@ import {
   Power,
   Clock,
   BookOpen,
+  AlertTriangle,
+  ShieldAlert,
+  Loader2,
+  X,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -105,6 +110,8 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
   const [outlineEditorTopic, setOutlineEditorTopic] = useState<TopicItem | null>(null);
   const [isOutlineEditorOpen, setIsOutlineEditorOpen] = useState(false);
   const [syllabusTargetTopic, setSyllabusTargetTopic] = useState<TopicItem | null>(null);
+  const [deleteTargetTopic, setDeleteTargetTopic] = useState<TopicItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleOpenDetail = (t: TopicItem) => {
     if (onViewDetail) {
@@ -125,7 +132,15 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
     setIsSyllabusImportOpen(true);
   };
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    code: string;
+    name: string;
+    version: string;
+    technicalGroup: string;
+    durationHours: number | "";
+    description: string;
+    isActive: boolean;
+  }>({
     code: "",
     name: "",
     version: "1.0",
@@ -193,13 +208,18 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
       toast.error("Please fill in Code and Name");
       return;
     }
+    const finalHours = Number(formData.durationHours);
+    if (!formData.durationHours || isNaN(finalHours) || finalHours <= 0) {
+      toast.error("Thời lượng môn học (Duration Hours) phải lớn hơn 0!");
+      return;
+    }
     try {
       if (editingTopic) {
         await topicApi.update(editingTopic.id, {
           name: formData.name,
           version: formData.version,
           technicalGroup: formData.technicalGroup,
-          durationHours: formData.durationHours,
+          durationHours: finalHours,
           description: formData.description,
           isActive: formData.isActive,
         });
@@ -210,7 +230,7 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
           name: formData.name,
           version: formData.version,
           technicalGroup: formData.technicalGroup,
-          durationHours: formData.durationHours,
+          durationHours: finalHours,
           description: formData.description,
           isActive: formData.isActive,
         });
@@ -266,19 +286,28 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
     }
   };
 
-  const handleDeleteTopic = async (t: TopicItem) => {
+  const handleDeleteTopic = (t: TopicItem) => {
+    setDeleteTargetTopic(t);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTargetTopic) return;
     try {
-      const isRef = await topicApi.isReferenced(t.id);
+      setIsDeleting(true);
+      const isRef = await topicApi.isReferenced(deleteTargetTopic.id);
       if (isRef) {
-        toast.error(`Topic ${t.code} is referenced in programs. Deactivate instead.`);
+        toast.error(`Cannot delete topic ${deleteTargetTopic.code}. It is referenced in training programs. Please deactivate instead.`);
+        setDeleteTargetTopic(null);
         return;
       }
-      if (!confirm(`Delete topic ${t.code} - ${t.name}?`)) return;
-      await topicApi.delete(t.id);
-      toast.success("Topic deleted");
+      await topicApi.delete(deleteTargetTopic.id);
+      toast.success(`Topic ${deleteTargetTopic.code} deleted successfully`);
+      setDeleteTargetTopic(null);
       loadTopics();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Delete failed");
+      toast.error(err.response?.data?.message || "Failed to delete topic");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -301,8 +330,17 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
               placeholder="Enter keyword..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-              className="pl-9 w-64 bg-white border-gray-300 text-sm"
+              className="pl-9 pr-8 w-64 bg-white border-gray-300 text-sm"
             />
+            {search && (
+              <button
+                onClick={() => { setSearch(""); setPage(0); }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 rounded"
+                title="Clear search"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
           </div>
           <Button
             variant="outline"
@@ -356,8 +394,8 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-600">Technical Group</label>
             <Select value={technicalGroup} onValueChange={(v) => { setTechnicalGroup(v); setPage(0); }}>
-              <SelectTrigger className="w-[160px] h-8 text-sm">
-                <SelectValue />
+              <SelectTrigger className="w-[180px] h-8 text-xs">
+                <SelectValue placeholder="All Groups" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Groups</SelectItem>
@@ -368,6 +406,11 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
                 <SelectItem value="Database">Database</SelectItem>
                 <SelectItem value="DevOps">DevOps</SelectItem>
                 <SelectItem value="Testing">Testing</SelectItem>
+                <SelectItem value="Cloud">Cloud</SelectItem>
+                <SelectItem value="Security">Security</SelectItem>
+                <SelectItem value="Mobile">Mobile</SelectItem>
+                <SelectItem value="Data_Engineering">Data Engineering</SelectItem>
+                <SelectItem value="AI_ML">AI / Machine Learning</SelectItem>
                 <SelectItem value="Soft Skills">Soft Skills</SelectItem>
               </SelectContent>
             </Select>
@@ -375,8 +418,8 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-600">Status</label>
             <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
-              <SelectTrigger className="w-[140px] h-8 text-sm">
-                <SelectValue />
+              <SelectTrigger className="w-[140px] h-8 text-xs">
+                <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Status</SelectItem>
@@ -488,10 +531,10 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuItem onClick={() => handleOpenDetail(t)} className="gap-2 text-xs">
-                            <Eye className="size-3.5 text-gray-500" /> View Schedule
+                            <Eye className="size-3.5 text-gray-500" /> View Details
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleOpenOutlineEditor(t)} className="gap-2 text-xs">
-                            <BookOpen className="size-3.5 text-[#5b52e0]" /> Edit Schedule Outline
+                            <BookOpen className="size-3.5 text-[#5b52e0]" /> Edit Syllabus
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleOpenSyllabusImport(t)} className="gap-2 text-xs">
                             <Upload className="size-3.5 text-indigo-600" /> Import Syllabus
@@ -516,7 +559,7 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleDeleteTopic(t)} className="gap-2 text-xs text-red-600">
-                            <Trash2 className="size-3.5" /> Delete
+                            <Trash2 className="size-3.5" /> Delete Topic
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -644,8 +687,8 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
                     value={formData.technicalGroup}
                     onValueChange={(v) => setFormData({ ...formData, technicalGroup: v })}
                   >
-                    <SelectTrigger className="h-9 text-xs">
-                      <SelectValue />
+                    <SelectTrigger className="w-full h-9 text-xs">
+                      <SelectValue placeholder="Select group..." />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Java">Java</SelectItem>
@@ -655,7 +698,19 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
                       <SelectItem value="Database">Database</SelectItem>
                       <SelectItem value="DevOps">DevOps</SelectItem>
                       <SelectItem value="Testing">Testing</SelectItem>
+                      <SelectItem value="Cloud">Cloud</SelectItem>
+                      <SelectItem value="Security">Security</SelectItem>
+                      <SelectItem value="Mobile">Mobile</SelectItem>
+                      <SelectItem value="Data_Engineering">Data Engineering</SelectItem>
+                      <SelectItem value="AI_ML">AI / Machine Learning</SelectItem>
                       <SelectItem value="Soft Skills">Soft Skills</SelectItem>
+                      {formData.technicalGroup && ![
+                        "Java", "React", "Frontend", "Backend", "Database", "DevOps",
+                        "Testing", "Cloud", "Security", "Mobile", "Data_Engineering",
+                        "AI_ML", "Soft Skills"
+                      ].includes(formData.technicalGroup) && (
+                        <SelectItem value={formData.technicalGroup}>{formData.technicalGroup}</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -666,9 +721,21 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
                   <Input
                     type="number"
                     min="1"
-                    value={formData.durationHours}
-                    onChange={(e) => setFormData({ ...formData, durationHours: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-                    className="text-xs font-mono"
+                    placeholder="e.g. 40"
+                    value={formData.durationHours === "" ? "" : formData.durationHours}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "") {
+                        setFormData({ ...formData, durationHours: "" });
+                      } else {
+                        const parsed = parseInt(val, 10);
+                        if (!isNaN(parsed)) {
+                          // Không cho nhập số âm
+                          setFormData({ ...formData, durationHours: Math.max(0, parsed) });
+                        }
+                      }
+                    }}
+                    className="text-xs font-mono h-9"
                     required
                   />
                 </div>
@@ -678,8 +745,8 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
                     value={formData.isActive ? "ACTIVE" : "INACTIVE"}
                     onValueChange={(v) => setFormData({ ...formData, isActive: v === "ACTIVE" })}
                   >
-                    <SelectTrigger className="h-9 text-xs">
-                      <SelectValue />
+                    <SelectTrigger className="w-full h-9 text-xs">
+                      <SelectValue placeholder="Select status..." />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ACTIVE">Active</SelectItem>
@@ -796,6 +863,91 @@ export function TopicList({ onViewDetail }: TopicListProps = {}) {
           }}
         />
       )}
+
+      {/* Modern Safe Delete Confirmation Dialog */}
+      <Dialog
+        open={!!deleteTargetTopic}
+        onOpenChange={(open) => {
+          if (!open && !isDeleting) setDeleteTargetTopic(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[460px] p-0 overflow-hidden border border-red-100 shadow-xl">
+          <div className="p-6 pb-4">
+            <div className="flex items-start gap-3.5">
+              <div className="size-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="size-5" />
+              </div>
+              <div className="space-y-1">
+                <DialogTitle className="text-base font-semibold text-gray-900">
+                  Delete Topic Confirmation
+                </DialogTitle>
+                <DialogDescription className="text-xs text-gray-500">
+                  Are you sure you want to delete this topic? This action cannot be undone.
+                </DialogDescription>
+              </div>
+            </div>
+
+            {deleteTargetTopic && (
+              <div className="mt-4 space-y-3">
+                <div className="bg-gray-50 border border-gray-200/80 rounded-lg p-3 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded">
+                      {deleteTargetTopic.code}
+                    </span>
+                    <span className="text-[11px] text-gray-500 font-medium">v{deleteTargetTopic.version}</span>
+                    <span className="text-[11px] text-gray-400">&bull;</span>
+                    <span className="text-[11px] text-gray-500">{deleteTargetTopic.technicalGroup || "General"}</span>
+                  </div>
+                  <p className="text-xs font-semibold text-gray-800 line-clamp-2">
+                    {deleteTargetTopic.name}
+                  </p>
+                  <p className="text-[11px] text-gray-500">
+                    Duration: <span className="font-mono font-medium text-gray-700">{deleteTargetTopic.durationHours} hours</span>
+                  </p>
+                </div>
+
+                <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-2.5 flex items-start gap-2 text-xs text-amber-800">
+                  <ShieldAlert className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] leading-relaxed">
+                    <strong>Integrity Guard:</strong> If this topic is currently referenced in any training program, deletion will be blocked and you will be advised to deactivate it instead.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="bg-gray-50/80 px-6 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isDeleting}
+              onClick={() => setDeleteTargetTopic(null)}
+              className="text-xs h-8"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isDeleting}
+              onClick={handleConfirmDelete}
+              className="bg-red-600 hover:bg-red-700 text-white gap-1.5 text-xs h-8 font-medium shadow-sm"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" /> Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="size-3.5" /> Delete Topic
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

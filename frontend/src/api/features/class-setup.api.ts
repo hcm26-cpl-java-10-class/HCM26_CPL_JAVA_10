@@ -1,6 +1,31 @@
 import axiosInstance from "../axios";
+import { externalApi } from "./external.api";
+import { programApi } from "./program.api";
+import type { ExternalTrainer } from "@/types";
+import type { TrainingProgramItem } from "@/types/features/content";
 import type { FileFormat, ImportResult } from "@/types";
 import { downloadBlob, getFilenameFromHeader } from "@/components/datatable/util/dataio.utils";
+
+export interface ProgramLink {
+    id: number; programId: number; code: string; name: string; version: string;
+    status: "ACTIVE" | "INACTIVE"; active: boolean; matchesClassProgram: boolean;
+}
+export interface MainAssignment {
+    id: number; classId: number; classCode: string; programSubjectId: number; subjectId: number;
+    subjectCode: string; subjectName: string; trainerId: number; trainerName: string | null;
+    role: "MAIN" | "ASSISTANT"; effectiveFrom: string; effectiveTo: string | null;
+}
+export interface ClassSetup {
+    classId: number; classCode: string; savedProgram: string; masterTrainer: string;
+    startDate: string; endDate: string; programLink: ProgramLink | null;
+    subjects: Array<{ id: number; subjectId: number; code: string; name: string; eligible: boolean }>;
+    assignments: MainAssignment[];
+}
+export interface AssignmentInput {
+    classId: number; programSubjectId: number; trainerId: number; role: "MAIN";
+    effectiveFrom: string; effectiveTo: string | null;
+}
+export const classSetupKey = (id: number) => ["classes", "setup", id] as const;
 
 export type AssignmentRole = "MAIN" | "ASSISTANT";
 
@@ -362,6 +387,22 @@ export interface AssignmentClassContext {
 }
 
 export const classSetupApi = {
+  get: async (id: number) => (await axiosInstance.get<ClassSetup>(`/classes/${id}/setup`)).data,
+  link: async (id: number, programId: number) => (await axiosInstance.put<ProgramLink>(`/classes/${id}/program-link`, { programId })).data,
+  activePrograms: async () => {
+    const result: TrainingProgramItem[] = [];
+    for (let page = 0; ; page++) {
+      const response = await programApi.getPage({ status: "ACTIVE", size: 1000, page });
+      result.push(...response.content.filter(p => p.isActive && p.status === "ACTIVE"));
+      if (page + 1 >= response.totalPages) return result;
+    }
+  },
+  verifiedTrainers: async (): Promise<ExternalTrainer[]> => {
+    const trainers = await externalApi.getTrainers("active");
+    const provenance = (await axiosInstance.get<{ sampleData: boolean }>("/external/data-source")).data;
+    if (provenance.sampleData !== false) throw new Error("BLOCKED: Master Trainer API is sample or unverified. Configure the real directory; no sample trainers can be selected.");
+    return trainers.filter(t => t.id != null && t.status?.toLowerCase() === "active" && t.name?.trim());
+  },
   createAssignmentWithDetails: async (request: AssignmentCreationRequest) =>
     (await axiosInstance.post<TeachingAssignment>("/teaching-assignments/create-with-details", request)).data,
   getNewProgramSubjects: async (signal?: AbortSignal) =>
@@ -445,14 +486,22 @@ export const classSetupApi = {
     (await axiosInstance.get<TeachingAssignment>(`/teaching-assignments/${id}`, { signal })).data,
   getAssignmentSessions: async (id: number, params: AssignmentSessionParams, signal?: AbortSignal) =>
     (await axiosInstance.get<AssignmentPage<AssignmentSession>>(`/teaching-assignments/${id}/sessions`, { params, signal })).data,
-  createAssignment: async (request: TeachingAssignmentRequest) =>
-    (await axiosInstance.post<TeachingAssignment>("/teaching-assignments", request)).data,
+  createAssignment: async (classIdOrRequest: number | TeachingAssignmentRequest, input?: AssignmentInput): Promise<any> => {
+    if (typeof classIdOrRequest === "number") {
+      return (await axiosInstance.post<MainAssignment>(`/classes/${classIdOrRequest}/teaching-assignments`, input)).data;
+    }
+    return (await axiosInstance.post<TeachingAssignment>("/teaching-assignments", classIdOrRequest)).data;
+  },
   getAssignmentEditContext: async (id: number, signal?: AbortSignal) =>
     (await axiosInstance.get<AssignmentEditContext>(`/teaching-assignments/${id}/edit-context`, { signal })).data,
   previewAssignmentImpact: async (id: number, request: TeachingAssignmentUpdateRequest, page: number, signal?: AbortSignal) =>
     (await axiosInstance.post<AssignmentImpact>(`/teaching-assignments/${id}/impact-preview`, request, { params: { page, size: 10 }, signal })).data,
-  updateAssignment: async (id: number, request: TeachingAssignmentUpdateRequest) =>
-    (await axiosInstance.put<TeachingAssignment>(`/teaching-assignments/${id}`, request)).data,
+  updateAssignment: async (classIdOrId: number, idOrRequest: number | TeachingAssignmentUpdateRequest, input?: AssignmentInput): Promise<any> => {
+    if (typeof idOrRequest === "number" && input !== undefined) {
+      return (await axiosInstance.put<MainAssignment>(`/classes/${classIdOrId}/teaching-assignments/${idOrRequest}`, input)).data;
+    }
+    return (await axiosInstance.put<TeachingAssignment>(`/teaching-assignments/${classIdOrId}`, idOrRequest as TeachingAssignmentUpdateRequest)).data;
+  },
   getAssignmentLifecycleContext: async (id: number, signal?: AbortSignal) =>
     (await axiosInstance.get<AssignmentLifecycleContext>(`/teaching-assignments/${id}/lifecycle-context`, { signal })).data,
   previewAssignmentEnd: async (id: number, request: AssignmentEndRequest, page: number, signal?: AbortSignal) =>

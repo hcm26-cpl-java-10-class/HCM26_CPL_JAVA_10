@@ -1,4 +1,5 @@
 import { externalApi } from "@/api/features/external.api";
+import { clsApi } from "@/api/features/cls.api";
 import { auditableFieldsSchema, type EntitySchema, type FieldSchema } from "@/types";
 import { classTitle } from "@/utils/class.utils";
 import { getSessionStatusMeta } from "@/utils/session.utils";
@@ -10,7 +11,7 @@ import { getSessionStatusMeta } from "@/utils/session.utils";
  */
 const classOptions = {
     getPage: async () => ({
-        content: (await externalApi.getClasses()).map((item) => ({ id: item.id, label: classTitle(item) })),
+        content: (await clsApi.getAllClasses()).map((item) => ({ id: item.id, label: classTitle(item) })),
     }),
 };
 

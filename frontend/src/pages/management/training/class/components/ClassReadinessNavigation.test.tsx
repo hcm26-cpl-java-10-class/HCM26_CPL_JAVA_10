@@ -21,7 +21,7 @@ vi.mock("@/hooks/useSidebarMenus", () => ({
     }),
 }));
 
-const permissions = ["CLASS_READ", "CLASS_UPDATE", "SESSION_READ", "ENROLLMENT_READ"];
+const permissions = ["CLASS_READ", "CLASS_UPDATE", "SESSION_READ", "ENROLLMENT_READ", "PROGRAM_READ", "ASSIGNMENT_READ"];
 const pageState = { listSearch: "q=NAV&status=planning&page=2", source: "readiness" };
 const classItem = (id: number) => ({
     id, code: `NAV_${id}`, name: `Navigation class ${id}`, status: "planning", traineeSource: "internal",
@@ -65,17 +65,22 @@ beforeEach(() => {
         fakeHttp.on("get", `/classes/${id}/readiness`, readiness(id));
         fakeHttp.on("get", `/classes/${id}/trainees`, []);
         fakeHttp.on("get", `/classes/${id}/calendars`, []);
+        fakeHttp.on("get", `/classes/${id}/setup`, { classId: id, classCode: `NAV_${id}`, savedProgram: "FULLSTACK_JAVA", masterTrainer: "teacher@example.com",
+            startDate: "2026-11-14", endDate: "2027-01-13", programLink: null, subjects: [], assignments: [] });
     }
+    fakeHttp.on("get", "/programs", { content: [], totalPages: 1 });
+    fakeHttp.on("get", "/external/trainers", []);
+    fakeHttp.on("get", "/external/data-source", { sampleData: false });
 });
 
 describe("Readiness navigation through the application router and RBAC", () => {
-    it.each([0, 1])("keeps Class Details open and explains unavailable setup action %s", async (index) => {
+    it.each([0, 1])("opens real Class Setup without adding a FAMS tab or leaving Class Details %s", async (index) => {
         const { user } = renderApp();
         const buttons = await screen.findAllByRole("button", { name: "Open Class Setup" });
         await user.click(buttons[index]);
-        expect(screen.getByRole("status")).toHaveTextContent("Class Setup is not available in this application");
+        expect(await within(await screen.findByRole("dialog")).findByRole("heading", { name: "Training Program link" })).toBeInTheDocument();
         expect(window.location.pathname + window.location.search + window.location.hash).toBe("/classes/42?tab=info&source=readiness#checks");
-        expect(screen.getAllByRole("tab")).toHaveLength(5);
+        expect(screen.getAllByRole("tab", { hidden: true })).toHaveLength(5);
         expect(fakeHttp.calls.every(call => call.method === "get")).toBe(true);
     });
 

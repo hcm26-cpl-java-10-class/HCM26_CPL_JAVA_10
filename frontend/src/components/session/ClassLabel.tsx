@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useExternalClass } from "@/hooks/useExternalLookups";
+import { useClasses } from "@/hooks/useClasses";
 import { cn } from "@/lib/utils";
 import { classTitle } from "@/utils/class.utils";
 
@@ -12,9 +12,9 @@ interface ClassLabelProps {
     className?: string;
 }
 
-/** The human readable name of a class id. Falls back to "Class #id" while loading or when the master system is down. */
+/** Resolve internal session class IDs through TrainingClass; never use shared-directory identities. */
 export function ClassLabel({ classId, asLink = false, showName = false, className }: ClassLabelProps) {
-    const query = useExternalClass(classId != null ? String(classId) : undefined);
+    const query = useClasses({ classId: classId ?? "", enabled: classId != null });
 
     if (classId == null) {
         return <span className="text-muted-foreground">—</span>;

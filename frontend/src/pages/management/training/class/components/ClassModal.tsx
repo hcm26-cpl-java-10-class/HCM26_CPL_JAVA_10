@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import React, { useState, useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/common/NativeSelect";
-import type { ExternalClass } from "@/types";
+import type { ExternalClass, ExternalTrainer, UserDTO } from "@/types";
 import { clsApi } from "@/api/features/cls.api";
+import { userApi } from "@/api/features/rbac/user.api";
+import { classSetupApi } from "@/api/features/class-setup.api";
 import { AlertCircle } from "lucide-react";
 
 interface ClassModalProps {
@@ -21,17 +23,36 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
     const queryClient = useQueryClient();
     const isEdit = Boolean(classItem);
 
+    // Queries for selectable catalogs
+    const usersQuery = useQuery({
+        queryKey: ["users", "class-admin-options"],
+        queryFn: async () => {
+            const res = await userApi.getPage({ size: 100 });
+            return res?.content || [];
+        },
+        enabled: open,
+        retry: false,
+    });
+
+    const trainersQuery = useQuery({
+        queryKey: ["class-setup", "verified-trainers"],
+        queryFn: classSetupApi.verifiedTrainers,
+        enabled: open,
+        retry: false,
+        staleTime: 0,
+    });
+
     const [code, setCode] = useState("");
     const [name, setName] = useState("");
     const [site, setSite] = useState("HCM");
     const [traineeType, setTraineeType] = useState("Fresher");
-    const [program, setProgram] = useState("FR_NFP_JAVA");
+    const [program, setProgram] = useState("");
     const [deliveryType, setDeliveryType] = useState("Class");
     const [formatType, setFormatType] = useState("Offline");
     const [skills, setSkills] = useState("Java");
-    const [classAdmin, setClassAdmin] = useState("AnhVNP2, BinhHBB");
-    const [masterTrainer, setMasterTrainer] = useState("NgaTTT45");
-    const [location, setLocation] = useState("Center Building, HCM");
+    const [classAdmin, setClassAdmin] = useState("");
+    const [masterTrainer, setMasterTrainer] = useState("");
+    const [location, setLocation] = useState("");
     const [plannedSize, setPlannedSize] = useState<number>(20);
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
@@ -39,6 +60,60 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
 
     const [errorMsg, setErrorMsg] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Candidates calculation
+    const adminCandidates = useMemo(() => {
+        const list = usersQuery.data || [];
+        return list.filter((u: UserDTO) => u.status !== "LOCKED" && u.status !== "INACTIVE");
+    }, [usersQuery.data]);
+
+    const trainerCandidates = useMemo(() => {
+        return trainersQuery.data || [];
+    }, [trainersQuery.data]);
+
+    const getAdminValue = (u: UserDTO): string => {
+        const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ") || (u as any).name;
+        return fullName || u.username || u.email || String(u.id);
+    };
+
+    const getAdminLabel = (u: UserDTO): string => {
+        const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ") || (u as any).name;
+        if (fullName && u.email) return `${fullName} (${u.email})`;
+        if (u.username && u.email) return `${u.username} (${u.email})`;
+        return fullName || u.username || u.email || `User #${u.id}`;
+    };
+
+    const getTrainerValue = (t: ExternalTrainer): string => {
+        return t.name || t.email || String(t.id);
+    };
+
+    const getTrainerLabel = (t: ExternalTrainer): string => {
+        if (t.name && t.email) return `${t.name} (${t.email})`;
+        return t.name || t.email || `Trainer #${t.id}`;
+    };
+
+    // Diagnostics & errors
+    const usersErrorStatus = (usersQuery.error as any)?.response?.status ?? (usersQuery.error as any)?.status;
+    const usersErrorMessage = usersQuery.isError
+        ? usersErrorStatus === 403
+            ? "Thiếu quyền truy cập danh mục User/Admin (Cần USER_READ)."
+            : "Lỗi kết nối API danh mục User/Admin."
+        : (!usersQuery.isLoading && usersQuery.data && usersQuery.data.length === 0)
+            ? "Không có dữ liệu User/Admin trong hệ thống."
+            : "";
+
+    const isMasterTrainerBlocked = Boolean(
+        trainersQuery.isError || (!trainersQuery.isLoading && trainersQuery.data?.length === 0)
+    );
+    const trainerErrorMessage = trainersQuery.isError
+        ? (trainersQuery.error as any)?.message?.includes("BLOCKED")
+            ? (trainersQuery.error as any).message
+            : ((trainersQuery.error as any)?.response?.status === 403 || (trainersQuery.error as any)?.status === 403)
+                ? "BLOCKED: Thiếu quyền truy cập danh mục Trainer."
+                : "BLOCKED: Lỗi kết nối API danh mục Trainer hoặc danh mục chưa được kết nối."
+        : (!trainersQuery.isLoading && trainersQuery.data?.length === 0)
+            ? "BLOCKED: Không tìm thấy giảng viên (Trainer) nào đang hoạt động trong hệ thống."
+            : "";
 
     // Is code locked in Edit mode? Rule: if status is active/completed, cannot change code
     const isCodeLocked = isEdit && (classItem?.status === "active" || classItem?.status === "completed");
@@ -51,13 +126,13 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                 setName(classItem.name || "");
                 setSite(classItem.site || "HCM");
                 setTraineeType(classItem.traineeType || "Fresher");
-                setProgram(classItem.program || classItem.trainingProgram || "FR_NFP_JAVA");
+                setProgram(classItem.program || classItem.trainingProgram || "");
                 setDeliveryType(classItem.deliveryType || "Class");
                 setFormatType(classItem.formatType || "Offline");
                 setSkills(classItem.skills || "Java");
                 setClassAdmin(classItem.classAdmin || "");
                 setMasterTrainer(classItem.masterTrainer || "");
-                setLocation(classItem.location || "Center Building, HCM");
+                setLocation(classItem.location || "");
                 setPlannedSize(classItem.plannedSize || 20);
                 setStartDate(classItem.startDate || "");
                 setEndDate(classItem.endDate || "");
@@ -68,13 +143,13 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                 setName("");
                 setSite("HCM");
                 setTraineeType("Fresher");
-                setProgram("FR_NFP_JAVA");
+                setProgram("");
                 setDeliveryType("Class");
                 setFormatType("Offline");
                 setSkills("Java");
-                setClassAdmin("AnhVNP2, BinhHBB");
-                setMasterTrainer("NgaTTT45");
-                setLocation("Center Building, HCM");
+                setClassAdmin("");
+                setMasterTrainer("");
+                setLocation("");
                 setPlannedSize(20);
                 const today = new Date().toISOString().split("T")[0];
                 const threeMonthsLater = new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0];
@@ -126,11 +201,19 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
 
         // Rule 4: Admin and Trainer validation
         if (!classAdmin.trim()) {
-            setErrorMsg("Quy tắc 4: Vui lòng nhập thông tin Quản lý lớp (Class Admin).");
+            setErrorMsg("Quy tắc 4: Vui lòng chọn Quản lý lớp (Class Admin).");
             return;
         }
         if (!masterTrainer.trim()) {
-            setErrorMsg("Quy tắc 4: Vui lòng nhập thông tin Giảng viên chính (Master Trainer).");
+            setErrorMsg("Quy tắc 4: Vui lòng chọn Master Trainer.");
+            return;
+        }
+        if (!isEdit && isMasterTrainerBlocked) {
+            setErrorMsg("Quy tắc 4: Danh mục Master Trainer đang bị khóa (BLOCKED). Không thể tạo lớp học khi chưa kết nối danh mục Trainer thực tế.");
+            return;
+        }
+        if (isEdit && isMasterTrainerBlocked && masterTrainer !== classItem?.masterTrainer) {
+            setErrorMsg("Quy tắc 4: Danh mục Master Trainer đang bị khóa (BLOCKED). Không thể đổi Master Trainer sang người chưa được xác minh.");
             return;
         }
 
@@ -236,18 +319,13 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                             <Label htmlFor="class-program" className="font-semibold text-xs">
                                 Chương trình đào tạo (Program) <span className="text-red-500">*</span>
                             </Label>
-                            <NativeSelect
+                            <Input
                                 id="class-program"
                                 value={program}
                                 onChange={(e) => setProgram(e.target.value)}
-                            >
-                                <option value="[FSA.HCM] FR_NFP_JAVA_KS">[FSA.HCM] FR_NFP_JAVA_KS</option>
-                                <option value="FR_NFP_JAVA_2">FR_NFP_JAVA_2</option>
-                                <option value="FR_NFP_JAVA">FR_NFP_JAVA</option>
-                                <option value="[NFP] Fresher Full-stack Java Developer">[NFP] Fresher Full-stack Java Developer</option>
-                                <option value="FR_NFP_REACT">FR_NFP_REACT</option>
-                                <option value="FR_NFP_DOTNET">FR_NFP_DOTNET</option>
-                            </NativeSelect>
+                                required
+                            />
+                            <p className="text-xs text-muted-foreground">Enter the exact code or name of an active Training Program. Saving this field does not create the program link.</p>
                         </div>
 
                         {/* Site */}
@@ -285,6 +363,10 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
 
                         {/* Format Type */}
                         <div className="space-y-1.5">
+                            <Label htmlFor="class-delivery-type" className="font-semibold text-xs">Delivery Type</Label>
+                            <Input id="class-delivery-type" value={deliveryType} onChange={e => setDeliveryType(e.target.value)} required />
+                        </div>
+                        <div className="space-y-1.5">
                             <Label htmlFor="class-format-type" className="font-semibold text-xs">
                                 Hình thức đào tạo
                             </Label>
@@ -295,6 +377,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                             >
                                 <option value="Offline">Offline</option>
                                 <option value="Online">Online</option>
+                                <option value="Hybrid">Hybrid</option>
                                 <option value="Blended">Blended (Kết hợp)</option>
                             </NativeSelect>
                         </div>
@@ -309,8 +392,19 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                 type="number"
                                 min={1}
                                 max={50}
-                                value={plannedSize}
-                                onChange={(e) => setPlannedSize(parseInt(e.target.value, 10) || 0)}
+                                value={plannedSize === 0 || (plannedSize as any) === "" ? "" : plannedSize}
+                                placeholder="e.g. 25"
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === "") {
+                                        setPlannedSize("" as any);
+                                    } else {
+                                        const parsed = parseInt(val, 10);
+                                        if (!isNaN(parsed)) {
+                                            setPlannedSize(Math.max(0, parsed));
+                                        }
+                                    }
+                                }}
                             />
                         </div>
 
@@ -363,25 +457,67 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                             <Label htmlFor="class-admin" className="font-semibold text-xs">
                                 Quản lý lớp (Class Admin) <span className="text-red-500">*</span>
                             </Label>
-                            <Input
+                            <NativeSelect
                                 id="class-admin"
                                 value={classAdmin}
                                 onChange={(e) => setClassAdmin(e.target.value)}
-                                placeholder="VD: AnhVNP2, BinhHBB"
-                            />
+                                disabled={usersQuery.isLoading}
+                            >
+                                {classAdmin && !adminCandidates.some(u => getAdminValue(u) === classAdmin) && (
+                                    <option value={classAdmin}>{classAdmin} (Đã lưu)</option>
+                                )}
+                                {!classAdmin && <option value="">-- Chọn Quản lý lớp (Class Admin) --</option>}
+                                {usersQuery.isLoading && <option value="">Đang tải danh sách Admin...</option>}
+                                {adminCandidates.map((u) => {
+                                    const val = getAdminValue(u);
+                                    return (
+                                        <option key={u.id} value={val}>
+                                            {getAdminLabel(u)}
+                                        </option>
+                                    );
+                                })}
+                            </NativeSelect>
+                            {usersErrorMessage && (
+                                <p role="alert" className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                    {usersErrorMessage}
+                                </p>
+                            )}
                         </div>
 
                         {/* Master Trainer */}
                         <div className="space-y-1.5">
                             <Label htmlFor="class-trainer" className="font-semibold text-xs">
-                                Giảng viên chính (Master Trainer) <span className="text-red-500">*</span>
+                                Master Trainer <span className="text-red-500">*</span>
                             </Label>
-                            <Input
+                            <NativeSelect
                                 id="class-trainer"
                                 value={masterTrainer}
                                 onChange={(e) => setMasterTrainer(e.target.value)}
-                                placeholder="VD: NgaTTT45"
-                            />
+                                disabled={!isEdit && isMasterTrainerBlocked}
+                            >
+                                {masterTrainer && !trainerCandidates.some(t => getTrainerValue(t) === masterTrainer) && (
+                                    <option value={masterTrainer}>{masterTrainer} (Đã lưu)</option>
+                                )}
+                                {!masterTrainer && (
+                                    <option value="">
+                                        {isMasterTrainerBlocked ? "BLOCKED: Không có giảng viên khả dụng" : "-- Chọn Master Trainer --"}
+                                    </option>
+                                )}
+                                {trainersQuery.isLoading && <option value="">Đang kiểm tra danh mục Trainer...</option>}
+                                {trainerCandidates.map((t) => {
+                                    const val = getTrainerValue(t);
+                                    return (
+                                        <option key={t.id} value={val}>
+                                            {getTrainerLabel(t)}
+                                        </option>
+                                    );
+                                })}
+                            </NativeSelect>
+                            {trainerErrorMessage && (
+                                <p role="alert" className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                    {trainerErrorMessage}
+                                </p>
+                            )}
                         </div>
 
                         {/* Location */}
@@ -393,8 +529,9 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                                 id="class-location"
                                 value={location}
                                 onChange={(e) => setLocation(e.target.value)}
-                                placeholder="VD: Center Building, HCM - Room 101"
+                                placeholder={formatType === "Online" ? "HTTP(S) meeting URL" : "Exact room name from the real room directory"}
                             />
+                            <p className="text-xs text-muted-foreground">A building name is not a room. Offline/Hybrid/Blended needs a unique room with capacity at least Planned Size; Online needs an HTTP(S) meeting URL.</p>
                         </div>
                     </div>
 

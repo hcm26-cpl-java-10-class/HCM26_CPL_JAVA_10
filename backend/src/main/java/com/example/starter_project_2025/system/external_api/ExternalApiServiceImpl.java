@@ -22,6 +22,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.experimental.NonFinal;
 
 @Slf4j
 @Service
@@ -32,6 +34,15 @@ public class ExternalApiServiceImpl implements ExternalApiService {
     RestTemplate restTemplate;
     String baseUrl;
     String token;
+    AtomicBoolean sampleResponse = new AtomicBoolean();
+    @NonFinal
+    @Value("${external.api.sample-data:false}")
+    boolean configuredSampleData;
+
+    @Override
+    public boolean isSampleData() {
+        return configuredSampleData || sampleResponse.get();
+    }
 
     public ExternalApiServiceImpl(
             RestTemplate restTemplate,
@@ -489,11 +500,15 @@ public class ExternalApiServiceImpl implements ExternalApiService {
             HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
             ResponseEntity<List<T>> response = restTemplate.exchange(url, HttpMethod.GET, entity, typeRef);
 
+            if ("sample".equalsIgnoreCase(response.getHeaders().getFirst("X-Data-Source"))) {
+                sampleResponse.set(true);
+            }
+
             List<T> body = response.getBody();
             return body != null ? body : List.of();
-        } catch (HttpClientErrorException e) {
+        } catch (RestClientResponseException e) {
             throw new ExternalApiException(
-                    "External API client error for " + resourceName + ": " + e.getStatusCode(),
+                    "External API response error for " + resourceName + ": " + e.getStatusCode(),
                     e.getStatusCode().value(),
                     e.getResponseBodyAsString());
         } catch (Exception e) {
