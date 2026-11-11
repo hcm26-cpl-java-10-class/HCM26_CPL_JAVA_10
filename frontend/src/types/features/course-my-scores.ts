@@ -11,6 +11,7 @@ export interface CourseMyScoresDTO {
     courseCode: string | null;
     courseName: string;
     className: string | null;
+    thumbnailUrl: string | null;
     overallScore: number | null;
     resultStatus: "PASSED" | "FAILED" | null;
     gradeItems: CourseGradeItemDTO[];
