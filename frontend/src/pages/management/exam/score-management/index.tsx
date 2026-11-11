@@ -243,6 +243,7 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
   const key = ["sm-gradebook", courseId];
   const { data, isLoading, isError } = useQuery({ queryKey: key, queryFn: () => scoreManagementApi.gradebook(courseId) });
   const [editId, setEditId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SmColumn | null>(null);
   const [reports, setReports] = useState<SmImportReport[]>([]);
 
   const [dirty, setDirty] = useState(false);
@@ -383,9 +384,7 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
                   <ColumnHeader
                     col={c}
                     onEdit={() => setEditId(c.id)}
-                    onDelete={() => {
-                      if (window.confirm(`Delete column "${c.name}" and all its scores?`)) deleteColumn.mutate(c.id);
-                    }}
+                    onDelete={() => setDeleteTarget(c)}
                   />
                 </TableHead>
               ))}
@@ -445,6 +444,30 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
           />
         </div>
       ))}
+
+      <Dialog open={deleteTarget != null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete column?</DialogTitle>
+            <DialogDescription>
+              Delete column "{deleteTarget?.name}" and all its scores? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteColumn.isPending}
+              onClick={() => {
+                if (deleteTarget) deleteColumn.mutate(deleteTarget.id);
+                setDeleteTarget(null);
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmWarnings != null} onOpenChange={(o) => !o && setConfirmWarnings(null)}>
         <DialogContent>
