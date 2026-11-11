@@ -9,6 +9,7 @@ import ProgramManagementPage from "@/pages/management/training/program/ProgramMa
 import ReportsPage from "@/pages/management/training/reports";
 import ClassListPage from "@/pages/management/training/class/ClassListPage";
 import ClassDetailPage from "@/pages/management/training/class/ClassDetailPage";
+import ClassSetupPage from "@/pages/management/training/class/ClassSetupPage";
 import SessionDetailPage from "@/pages/management/demo/session/SessionDetailPage";
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
