@@ -544,6 +544,12 @@ public class CourseComparisonService {
     private List<ModuleInsight> buildInsights(List<CourseComparisonItem> items, LocalDate start, LocalDate end) {
         List<ModuleInsight> insights = new ArrayList<>();
 
+        insights.add(insight(items, "overview", "Overall Comparison",
+                "Health score of each course built from completion, engagement, rating, retention, content quality and study time.",
+                "Overall health score",
+                i -> i.overallScore(),
+                overviewEvaluation(items)));
+
         insights.add(insight(items, "funnel", "Learning Funnel",
                 "Average completion rate per lesson shows how well learners progress through the content.",
                 "Average lesson completion",
@@ -639,6 +645,31 @@ public class CourseComparisonService {
                         fmt2(maxOf(items, i -> i.studyTotalHours())))));
 
         return insights;
+    }
+
+    /** Câu đánh giá tổng quan: khóa dẫn đầu, khóa cần cải thiện và khoảng điểm. */
+    private static String overviewEvaluation(List<CourseComparisonItem> items) {
+        if (items.isEmpty()) {
+            return "No courses to compare yet.";
+        }
+        CourseComparisonItem best = items.stream()
+                .max(java.util.Comparator.comparingDouble(CourseComparisonItem::overallScore)).orElseThrow();
+        CourseComparisonItem worst = items.stream()
+                .min(java.util.Comparator.comparingDouble(CourseComparisonItem::overallScore)).orElseThrow();
+        if (items.size() == 1) {
+            return String.format("%s has a health score of %s (%s).",
+                    best.courseName(), fmt1(best.overallScore()), best.overallVerdict());
+        }
+        if (best.courseId().equals(worst.courseId()) || best.overallScore() == worst.overallScore()) {
+            return String.format("All %d courses have the same health score (%s).",
+                    items.size(), fmt1(best.overallScore()));
+        }
+        double average = items.stream().mapToDouble(CourseComparisonItem::overallScore).average().orElse(0);
+        return String.format("%s leads with a health score of %s (%s), while %s needs the most improvement (%s, %s). "
+                        + "Across %d courses the score ranges from %s to %s, with an average of %s.",
+                best.courseName(), fmt1(best.overallScore()), best.overallVerdict(),
+                worst.courseName(), fmt1(worst.overallScore()), worst.overallVerdict(),
+                items.size(), fmt1(worst.overallScore()), fmt1(best.overallScore()), fmt1(average));
     }
 
     private ModuleInsight insight(List<CourseComparisonItem> items, String key, String title,
