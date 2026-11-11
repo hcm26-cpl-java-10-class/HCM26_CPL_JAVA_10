@@ -15,20 +15,30 @@ import {
     STUDENT_ROLE,
 } from "@/utils/rbac.utils";
 import { ClipboardList, Plus } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 interface AutoCrudPageProps {
     entity: EntityConfig;
+    openCreateOnMount?: boolean;
+    createNotice?: string;
 }
 
-export const AutoCrudPage = ({ entity }: AutoCrudPageProps) => {
+export const AutoCrudPage = ({ entity, openCreateOnMount = false, createNotice }: AutoCrudPageProps) => {
     const navigate = useNavigate();
     const { activeRole } = usePermissions();
     const breadcrumbKey = entity.path.replace(/^\/+/, "");
 
     const table = useProTable(entity.api, entity.schema);
+    const autoOpened = useRef(false);
+
+    useEffect(() => {
+        if (openCreateOnMount && table.permission.canCreate && !autoOpened.current) {
+            autoOpened.current = true;
+            table.openCreate();
+        }
+    }, [openCreateOnMount, table.permission.canCreate, table.openCreate]);
 
     const createPage = entity.actionPages?.create;
     const editPage = entity.actionPages?.edit;
@@ -226,6 +236,9 @@ const headerActions = useMemo(() => {
 
     return (
         <MainLayout pathName={{ [breadcrumbKey]: entity.name }}>
+            {createNotice && (
+                <p className="mb-3 text-sm text-muted-foreground">{createNotice}</p>
+            )}
             <ProTable
                 table={table}
                 mode={browseMode ? "browse" : "default"}

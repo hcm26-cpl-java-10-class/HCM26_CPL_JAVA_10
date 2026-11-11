@@ -120,7 +120,7 @@ function StudentCertificateList() {
 
   return (
     <MainLayout dense pathName={{ certificates: "My Certificates" }}>
-      <div className="mx-auto w-full max-w-7xl space-y-4">
+      <div className="mx-auto w-full max-w-7xl space-y-1.5">
         {/* Banner Section */}
         <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-4 py-7 text-white sm:px-10 sm:py-9">
           <div className="pointer-events-none absolute -right-16 -top-24 size-80 rounded-full bg-amber-500/20 blur-3xl" />
@@ -190,7 +190,7 @@ function StudentCertificateList() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
               {certificates.map((item: any) => (
                 <article
                   key={item.id}

@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import { SectionLessons } from "@/pages/management/demo/lesson/components/SectionLessons";
+import CourseOutlineQuickEditor from "./CourseOutlineQuickEditor";
 import { usePermissions } from "@/hooks/usePermissions";
 
 // ======================================
@@ -256,9 +257,16 @@ export default function CurriculumManagementPage() {
             (a.id ?? 0) - (b.id ?? 0)
     );
 
+    // Newly created Courses might not be present in the first 100 rows of the dropdown.
+    // Fetch the selected Course directly so the quick editor still appears after redirect.
+    const selectedCourseQuery = useQuery({
+        queryKey: ["course-selected-curriculum", courseId],
+        queryFn: () => courseApi.getById(String(courseId)),
+        enabled: courseId > 0 && !courses.some((course) => course.id === courseId),
+    });
     const selectedCourse = courses.find(
         (course) => course.id === courseId
-    );
+    ) ?? selectedCourseQuery.data;
 
     // ======================================
     // VALIDATE TITLE
@@ -711,7 +719,7 @@ export default function CurriculumManagementPage() {
                 curriculum: "Curriculum",
             }}
         >
-            <div className="mx-auto w-full max-w-6xl space-y-3">
+            <div className="mx-auto w-full max-w-6xl space-y-1.5">
                 {/* Back */}
                 <Button asChild variant="ghost" size="sm">
                     <Link
@@ -775,7 +783,7 @@ export default function CurriculumManagementPage() {
                 </div>
 
                 {/* Select Course */}
-                <div className="rounded-xl border bg-card p-4">
+                <div className="rounded-xl border bg-card px-4 py-2">
                     <label
                         htmlFor="course-select"
                         className="mb-2 block text-sm font-medium"
@@ -793,6 +801,9 @@ export default function CurriculumManagementPage() {
                     >
                         <option value={0}>Choose a course</option>
 
+                        {selectedCourse && !courses.some((course) => course.id === selectedCourse.id) && (
+                            <option value={selectedCourse.id}>{selectedCourse.name}</option>
+                        )}
                         {courses.map((course) => (
                             <option key={course.id} value={course.id}>
                                 {course.name}
@@ -816,8 +827,21 @@ export default function CurriculumManagementPage() {
                     )}
                 </div>
 
+                {selectedCourse?.courseType === "FROM_SYLLABUS" &&
+                    selectedCourse.status === "DRAFT" && courseId > 0 &&
+                    !sectionsQuery.isLoading && !sectionsQuery.isError && (
+                        <CourseOutlineQuickEditor
+                            courseId={courseId}
+                            sections={sections}
+                            onOpenAdvanced={(sectionId) => {
+                                setExpandedSectionId(sectionId);
+                                document.getElementById("curriculum-sections")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }}
+                        />
+                    )}
+
                 {/* Sections */}
-                <div className="space-y-3">
+                <div id="curriculum-sections" className="space-y-1.5 scroll-mt-4">
                     <div className="flex items-center gap-2">
                         <BookOpen className="size-5" />
 
@@ -913,7 +937,7 @@ export default function CurriculumManagementPage() {
                             return (
                                 <div
                                     key={section.id}
-                                    className="space-y-3 rounded-xl border bg-card p-4"
+                                    className="space-y-1.5 rounded-xl border bg-card px-4 py-2"
                                 >
                                     {/* Section Header */}
                                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1299,4 +1323,4 @@ export default function CurriculumManagementPage() {
             </div>
         </MainLayout>
     );
-}
+}

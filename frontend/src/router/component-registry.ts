@@ -68,6 +68,8 @@ import { Navigate } from "react-router-dom";
 
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
+import CreateCourseFromSyllabusPage from "@/pages/management/demo/syllabus/CreateCourseFromSyllabusPage";
+import SyllabusCourseWorkspacePage from "@/pages/management/demo/syllabus/SyllabusCourseWorkspacePage";
 import CourseUsagePage from "@/pages/management/demo/syllabus/CourseUsagePage";
 import SyllabusTemplatesPage from "@/pages/management/demo/syllabus/SyllabusTemplatesPage";
 
@@ -76,6 +78,7 @@ import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
 
 import CourseReportPage from "@/pages/management/demo/report";
 import StudentAnalyticsPage from "@/pages/management/analytics/StudentAnalyticsPage";
+import CourseAnalyticsPage from "@/pages/management/demo/analytics";
 import { CourseEnrollmentDetailPage } from "@/pages/management/demo/course/pages/CourseEnrollmentDetailPage";
 import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-questions";
 import LessonReportsPage from "@/pages/management/demo/lesson-reports";
@@ -268,6 +271,19 @@ export const routes: RouteConfig[] = [
     component: SyllabusesPage,
     requiredPermission: "SYLLABUS_READ",
     isModuleDriven: true,
+  },
+  {
+    path: "/syllabuses/:id/workspace",
+    component: SyllabusCourseWorkspacePage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
+  },
+  {
+    path: "/syllabuses/:id/create-course",
+    component: CreateCourseFromSyllabusPage,
+    // The page and Backend also require all four authorities, not any single authority.
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
   },
   {
     path: "/syllabuses/:id",
@@ -503,6 +519,12 @@ export const routes: RouteConfig[] = [
   {
     path: "/course-enrollments",
     component: CourseReportPage,
+    requiredPermission: "COURSE_REPORT_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/course-analytics",
+    component: CourseAnalyticsPage,
     requiredPermission: "COURSE_REPORT_READ",
     isModuleDriven: true,
   },

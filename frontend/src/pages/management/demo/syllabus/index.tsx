@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
     useQuery,
     useQueryClient,
@@ -100,6 +100,13 @@ const syllabusSchema: EntitySchema = {
                 maxLength: 1500,
             },
         },
+        {
+            name: "prepareCourse",
+            label: "Create Syllabus & prepare Course (live two-column workspace)",
+            type: "boolean",
+            hideOnEdit: true,
+            defaultValue: false,
+        },
     ],
 };
 
@@ -133,9 +140,11 @@ function errorMessage(error: unknown) {
 
 export default function SyllabusesPage() {
     const qc = useQueryClient();
+    const navigate = useNavigate();
     const { hasPermission } = usePermissions();
 
     const canCreate = hasPermission("SYLLABUS_CREATE");
+    const canPrepareCourse = ["SYLLABUS_READ", "SYLLABUS_UPDATE", "COURSE_CREATE", "SECTION_CREATE", "LESSON_CREATE"].every(hasPermission);
     const canEdit = hasPermission("SYLLABUS_UPDATE");
     const canDelete = hasPermission("SYLLABUS_DELETE");
 
@@ -257,7 +266,14 @@ export default function SyllabusesPage() {
             if (editing) {
                 await syllabusApi.update(editing.id, clean);
             } else {
-                await syllabusApi.create(clean);
+                const created = await syllabusApi.create(clean);
+                if (values.prepareCourse === true && canPrepareCourse) {
+                    await refreshList();
+                    setFormOpen(false);
+                    toast.success("Syllabus Draft created. Build your Syllabus and Course preview together.");
+                    navigate(`/syllabuses/${created.id}/workspace`);
+                    return;
+                }
             }
 
             await refreshList();
@@ -551,7 +567,10 @@ export default function SyllabusesPage() {
                             setServerErrors({});
                         }
                     }}
-                    schema={syllabusSchema}
+                    schema={canPrepareCourse ? syllabusSchema : {
+                        ...syllabusSchema,
+                        fields: syllabusSchema.fields.filter((field) => field.name !== "prepareCourse"),
+                    }}
                     title={
                         editing
                             ? "Edit Syllabus"

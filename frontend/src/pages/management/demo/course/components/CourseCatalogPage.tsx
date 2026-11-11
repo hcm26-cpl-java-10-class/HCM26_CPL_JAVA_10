@@ -1,4 +1,4 @@
-import { courseApi } from "@/api";
+import { certificateApi, courseApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -147,6 +147,20 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
 
   const { canEnroll, enrollmentsQuery, enrollmentByCourseId, enrollMutation } = useCourseEnrollment();
 
+  const certificatesQuery = useQuery({
+    queryKey: ["my-certificates"],
+    queryFn: certificateApi.getMyCertificates,
+    enabled: !embedded && enrollmentsQuery.isSuccess,
+  });
+  const certificateByCourseId = useMemo(
+    () => new Map(
+      (certificatesQuery.data ?? [])
+        .filter((certificate) => certificate.courseId != null && certificate.verificationToken)
+        .map((certificate) => [certificate.courseId as number, certificate.verificationToken as string]),
+    ),
+    [certificatesQuery.data],
+  );
+
   const courses = coursesQuery.data?.content ?? [];
   const totalElements = coursesQuery.data?.totalElements ?? 0;
   const totalPages = coursesQuery.data?.totalPages ?? 0;
@@ -174,7 +188,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
   const navigate = useNavigate();
 
   const content = (
-    <div className={embedded ? "space-y-3" : "mx-auto w-full max-w-7xl space-y-3"}>
+    <div className={embedded ? "space-y-1.5" : "mx-auto w-full max-w-7xl space-y-3"}>
       {!embedded && (
         <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-4 py-7 text-white sm:px-10 sm:py-4">
           <div className="pointer-events-none absolute -right-16 -top-24 size-80 rounded-full bg-blue-500/30 blur-3xl" />
@@ -192,7 +206,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
         </section>
       )}
 
-      <section className="space-y-3">
+      <section className="space-y-1.5">
         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_200px_170px_170px]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -291,7 +305,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
             </Button>
           </div>
         ) : showSkeleton ? (
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 6 }, (_, i) => (
               <CourseCardSkeleton key={i} />
             ))}
@@ -317,7 +331,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
           </div>
         ) : (
           <div
-            className={`grid gap-2 transition-opacity sm:grid-cols-2 xl:grid-cols-3 ${
+            className={`grid gap-1.5 transition-opacity sm:grid-cols-2 xl:grid-cols-3 ${
               coursesQuery.isPlaceholderData ? "opacity-60" : ""
             }`}
             aria-busy={coursesQuery.isPlaceholderData}
@@ -327,6 +341,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
                 key={course.id}
                 course={course}
                 enrollmentId={enrollmentByCourseId.get(course.id)?.id}
+                certificateToken={certificateByCourseId.get(course.id)}
                 canEnroll={canEnroll}
                 isEnrolling={enrollingCourseId === course.id}
                 canAssign={embedded}

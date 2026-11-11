@@ -24,8 +24,10 @@ import { LessonPreview } from "../lesson/components/LessonPreview";
 import { LessonQnA } from "../lesson/components/LessonQnA";
 import { LessonReportDialog } from "../lesson/components/LessonReportDialog";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useStudyTimeTracker } from "@/hooks/useStudyTimeTracker";
 import { LessonProgressSidebar } from "./LessonProgressSidebar";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
+import { CourseReviewPrompt } from "../course_review/components/CourseReviewPrompt";
 
 export function CourseLearningPage() {
   const { id } = useParams();
@@ -194,6 +196,19 @@ export function CourseLearningPage() {
     recordAccess(lesson.lessonId);
   };
 
+  // Ghi nhận thời gian học viên dành cho bài đang xem (mỗi 30s + khi rời bài).
+  useStudyTimeTracker({
+    lessonId: activeLessonId,
+    onTick: (seconds) => {
+      if (!activeLessonId) return;
+      progressApi
+        .addStudyTime(enrollmentId, activeLessonId, seconds)
+        .catch(() => {
+            // Bỏ qua lỗi ghi nhận thời gian để không ảnh hưởng trải nghiệm học.
+        });
+    },
+  });
+
   const goToLesson = (index: number) => {
     const lesson = progressQuery.data?.lessons[index];
 
@@ -285,6 +300,12 @@ export function CourseLearningPage() {
                             </Button>
                           </div>
                       )}
+                      
+                  {progressQuery.data.progressPercentage === 100 &&
+                      <CourseReviewPrompt
+                        courseId={progressQuery.data.courseId}
+                      />
+                  }
 
                   {currentLesson && (
                       <div className="mt-3">
