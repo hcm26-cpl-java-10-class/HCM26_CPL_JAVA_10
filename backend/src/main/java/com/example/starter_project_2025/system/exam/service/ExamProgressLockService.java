@@ -1,11 +1,13 @@
 package com.example.starter_project_2025.system.exam.service;
 
+import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
 import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.progress.LessonProgress;
 import com.example.starter_project_2025.system.demo.progress.LessonProgressRepository;
 import com.example.starter_project_2025.system.exam.domain.Exam;
+import com.example.starter_project_2025.system.exam.domain.ExamRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,7 @@ public class ExamProgressLockService {
     private final CourseEnrollmentRepository enrollmentRepository;
     private final LessonProgressRepository progressRepository;
     private final LessonRepository lessonRepository;
+    private final ExamRepository examRepository;
 
     public record LockState(boolean locked, String reason) {
         public static final LockState OPEN = new LockState(false, null);
@@ -41,6 +44,28 @@ public class ExamProgressLockService {
         Map<Long, LockState> result = new HashMap<>();
         for (Exam e : exams) {
             result.put(e.getId(), evaluate(e, completed, sectionCache));
+        }
+        return result;
+    }
+
+    /** Only the LOCKED exams (examId -> state) across every course the user is enrolled in. */
+    @Transactional(readOnly = true)
+    public Map<Long, LockState> lockedExamsForUser(Long userId) {
+        if (userId == null) {
+            return Map.of();
+        }
+        Map<Long, LockState> result = new HashMap<>();
+        for (CourseEnrollment enrollment : enrollmentRepository.findAllByUser_IdOrderByCreatedAtDesc(userId)) {
+            Long courseId = enrollment.getCourse().getId();
+            List<Exam> exams = examRepository.findByCourseLink(courseId, null, null, true);
+            if (exams.isEmpty()) {
+                continue;
+            }
+            evaluateAll(exams, userId, courseId).forEach((examId, state) -> {
+                if (state.locked()) {
+                    result.putIfAbsent(examId, state);
+                }
+            });
         }
         return result;
     }

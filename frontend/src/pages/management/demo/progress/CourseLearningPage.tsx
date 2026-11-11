@@ -142,7 +142,7 @@ export function CourseLearningPage() {
 
       // Completing a lesson can unlock exams: refresh their lock state.
       void queryClient.invalidateQueries({ queryKey: ["course-exams"] });
-
+      void queryClient.invalidateQueries({ queryKey: ["student-exam-locks"] });
       toast.success("Progress updated.");
     },
 

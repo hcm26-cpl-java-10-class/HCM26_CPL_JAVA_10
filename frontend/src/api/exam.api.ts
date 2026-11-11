@@ -224,6 +224,12 @@ export const getMyExamAttempts = async () => {
     return response.data;
 };
 
+/** examId -> reason, only for exams locked by lesson/section progress. */
+export const getMyExamLocks = async () => {
+    const response = await api.get<Record<string, string>>('/exams/my-locks');
+    return response.data;
+};
+
 export const startOrResumeExam = async (examId: number, password?: string) => {
     const pass = password || sessionStorage.getItem(`exam_pass_${examId}`) || undefined;
     const response = await api.post<ExamAttempt>(`/exams/${examId}/attempt`, null, {

@@ -201,6 +201,15 @@ public class ExamAttemptService {
                 .toList();
     }
 
+    /** examId -> reason, only for exams this student cannot open yet (lesson/section not completed). */
+    @Transactional(readOnly = true)
+    public Map<Long, String> findLockedExamReasons(Long studentId) {
+        Map<Long, String> result = new HashMap<>();
+        progressLockService.lockedExamsForUser(studentId)
+                .forEach((examId, state) -> result.put(examId, state.reason()));
+        return result;
+    }
+
     @Transactional(readOnly = true)
     public ExamAttemptReviewDTO reviewAttempt(Long attemptId, Long studentId) {
         ExamAttempt attempt = attemptRepository.findByIdAndStudent_Id(attemptId, studentId)
