@@ -37,14 +37,22 @@ export interface MyScoreInsights {
     timeSpentSeconds: number;
   }[];
   classAverages: { examId: number; averagePercent: number; participants: number }[];
-  awaitingPublicationCount: number;
-  pendingAppealCount: number;
-  accuracyByType: {
+  awaitingExamIds: number[];
+  pendingAppealExamIds: number[];
+  accuracyByExamType: {
+    examId: number;
     type: "MULTIPLE_CHOICE" | "ESSAY" | "CODING";
     questionCount: number;
     earned: number;
     possible: number;
-    accuracyPercent: number;
+  }[];
+  courses: {
+    courseId: number;
+    courseName: string;
+    enrolledAt: string | null;
+    lessonsTotal: number;
+    lessonsCompleted: number;
+    examIds: number[];
   }[];
 }
 

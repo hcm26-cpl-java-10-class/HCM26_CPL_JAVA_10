@@ -25,6 +25,10 @@ class MyScoreInsightsServiceTest {
     @Mock private ExamAttemptRepository attemptRepository;
     @Mock private ScoreAppealRepository appealRepository;
     @Mock private ExamResultAccessService resultAccessService;
+    @Mock private com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository enrollmentRepository;
+    @Mock private com.example.starter_project_2025.system.demo.progress.LessonProgressRepository progressRepository;
+    @Mock private com.example.starter_project_2025.system.demo.lesson.LessonRepository lessonRepository;
+    @Mock private ExamRepository examRepository;
     @InjectMocks private MyScoreInsightsService service;
 
     private ExamAttempt attempt(Exam exam, long studentId, String score) {
@@ -88,14 +92,16 @@ class MyScoreInsightsServiceTest {
         when(resultAccessService.isResultPublished(any())).thenReturn(false);
         ScoreAppeal pending = new ScoreAppeal();
         pending.setStatus(ScoreAppealStatus.PENDING);
+        pending.setExam(exam);
         ScoreAppeal done = new ScoreAppeal();
         done.setStatus(ScoreAppealStatus.APPROVED);
+        done.setExam(exam);
         when(appealRepository.findByStudent_IdOrderByCreatedAtDesc(1L)).thenReturn(List.of(pending, done));
 
         MyScoreInsightsDTO dto = service.getInsights(1L);
 
-        assertEquals(1, dto.awaitingPublicationCount());
-        assertEquals(1, dto.pendingAppealCount());
+        assertEquals(List.of(1L), dto.awaitingExamIds());
+        assertEquals(List.of(1L), dto.pendingAppealExamIds());
         assertTrue(dto.attempts().isEmpty());
     }
 
@@ -119,10 +125,43 @@ class MyScoreInsightsServiceTest {
 
         MyScoreInsightsDTO dto = service.getInsights(1L);
 
-        assertEquals(2, dto.accuracyByType().size());
-        var byType = dto.accuracyByType().stream()
+        assertEquals(2, dto.accuracyByExamType().size());
+        var byType = dto.accuracyByExamType().stream()
                 .collect(java.util.stream.Collectors.toMap(MyScoreInsightsDTO.TypeAccuracy::type, t -> t));
-        assertEquals(0, new BigDecimal("100.0").compareTo(byType.get(QuestionType.MULTIPLE_CHOICE).accuracyPercent()));
-        assertEquals(0, BigDecimal.ZERO.compareTo(byType.get(QuestionType.ESSAY).accuracyPercent()));
+        assertEquals(1L, byType.get(QuestionType.MULTIPLE_CHOICE).examId());
+        assertEquals(0, new BigDecimal("5.00").compareTo(byType.get(QuestionType.MULTIPLE_CHOICE).earned()));
+        assertEquals(0, new BigDecimal("5.00").compareTo(byType.get(QuestionType.MULTIPLE_CHOICE).possible()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(byType.get(QuestionType.ESSAY).earned()));
+    }
+
+    @Test
+    void coursesReportEnrollmentDateProgressAndExams() {
+        var course = new com.example.starter_project_2025.system.demo.course.Course();
+        course.setId(5L);
+        course.setName("Java Fundamentals");
+        var enrollment = new com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment();
+        enrollment.setId(50L);
+        enrollment.setCourse(course);
+        enrollment.setCreatedAt(java.time.LocalDateTime.of(2026, 3, 1, 9, 0));
+        var done = new com.example.starter_project_2025.system.demo.progress.LessonProgress();
+        done.setCompleted(true);
+        Exam exam = exam();
+        when(attemptRepository.findAllByStudent_IdOrderByStartedAtDesc(1L)).thenReturn(List.of());
+        when(appealRepository.findByStudent_IdOrderByCreatedAtDesc(1L)).thenReturn(List.of());
+        when(enrollmentRepository.findAllByUser_IdOrderByCreatedAtDesc(1L)).thenReturn(List.of(enrollment));
+        when(lessonRepository.findStatsByCourseIds(any()))
+                .thenReturn(List.of(new com.example.starter_project_2025.system.demo.lesson.CourseLessonStats(5L, 4L, 0L)));
+        when(progressRepository.findAllByEnrollment_Id(50L)).thenReturn(List.of(done));
+        when(examRepository.findByCourseLink(5L, null, null, false)).thenReturn(List.of(exam));
+
+        MyScoreInsightsDTO dto = service.getInsights(1L);
+
+        assertEquals(1, dto.courses().size());
+        var info = dto.courses().get(0);
+        assertEquals("Java Fundamentals", info.courseName());
+        assertEquals(java.time.LocalDateTime.of(2026, 3, 1, 9, 0), info.enrolledAt());
+        assertEquals(4L, info.lessonsTotal());
+        assertEquals(1L, info.lessonsCompleted());
+        assertEquals(List.of(1L), info.examIds());
     }
 }

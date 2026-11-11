@@ -1,9 +1,16 @@
 package com.example.starter_project_2025.system.exam.service;
 
+import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
+import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
+import com.example.starter_project_2025.system.demo.lesson.CourseLessonStats;
+import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
+import com.example.starter_project_2025.system.demo.progress.LessonProgress;
+import com.example.starter_project_2025.system.demo.progress.LessonProgressRepository;
 import com.example.starter_project_2025.system.exam.domain.*;
 import com.example.starter_project_2025.system.exam.dto.MyScoreInsightsDTO;
 import com.example.starter_project_2025.system.exam.dto.MyScoreInsightsDTO.AttemptPoint;
 import com.example.starter_project_2025.system.exam.dto.MyScoreInsightsDTO.ClassAverage;
+import com.example.starter_project_2025.system.exam.dto.MyScoreInsightsDTO.CourseInfo;
 import com.example.starter_project_2025.system.exam.dto.MyScoreInsightsDTO.TypeAccuracy;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +32,10 @@ public class MyScoreInsightsService {
     private final ExamAttemptRepository attemptRepository;
     private final ScoreAppealRepository appealRepository;
     private final ExamResultAccessService resultAccessService;
+    private final CourseEnrollmentRepository enrollmentRepository;
+    private final LessonProgressRepository progressRepository;
+    private final LessonRepository lessonRepository;
+    private final ExamRepository examRepository;
 
     @Transactional(readOnly = true)
     public MyScoreInsightsDTO getInsights(Long studentId) {
@@ -42,11 +53,11 @@ public class MyScoreInsightsService {
                     id -> resultAccessService.isResultPublished(a.getExam()));
         }
 
-        int awaiting = (int) mine.stream()
+        List<Long> awaiting = mine.stream()
                 .map(a -> a.getExam().getId())
                 .filter(id -> !publishedByExam.get(id))
                 .distinct()
-                .count();
+                .toList();
 
         List<ExamAttempt> published = mine.stream()
                 .filter(a -> publishedByExam.get(a.getExam().getId()) && a.getFinalScore() != null)
@@ -55,17 +66,56 @@ public class MyScoreInsightsService {
 
         List<AttemptPoint> points = published.stream().map(this::toPoint).toList();
 
-        int pendingAppeals = (int) appealRepository.findByStudent_IdOrderByCreatedAtDesc(studentId).stream()
+        List<Long> pendingAppeals = appealRepository.findByStudent_IdOrderByCreatedAtDesc(studentId).stream()
                 .filter(ap -> ap.getStatus() == ScoreAppealStatus.PENDING)
-                .count();
+                .map(ap -> ap.getExam().getId())
+                .toList();
 
         return new MyScoreInsightsDTO(
                 points,
                 classAverages(published),
                 awaiting,
                 pendingAppeals,
-                accuracyByType(published)
+                accuracyByExamType(published),
+                courses(studentId)
         );
+    }
+
+    private List<CourseInfo> courses(Long studentId) {
+        List<CourseEnrollment> enrollments = enrollmentRepository.findAllByUser_IdOrderByCreatedAtDesc(studentId).stream()
+                .filter(e -> e.getCourse() != null)
+                .toList();
+        if (enrollments.isEmpty()) {
+            return List.of();
+        }
+        List<Long> courseIds = enrollments.stream().map(e -> e.getCourse().getId()).distinct().toList();
+        Map<Long, Long> lessonCounts = new HashMap<>();
+        for (CourseLessonStats stats : lessonRepository.findStatsByCourseIds(courseIds)) {
+            lessonCounts.put(stats.courseId(), stats.lessonCount());
+        }
+        Map<Long, CourseInfo> byCourse = new LinkedHashMap<>();
+        for (CourseEnrollment enrollment : enrollments) {
+            Long courseId = enrollment.getCourse().getId();
+            if (byCourse.containsKey(courseId)) {
+                continue;
+            }
+            long total = lessonCounts.getOrDefault(courseId, 0L);
+            long done = progressRepository.findAllByEnrollment_Id(enrollment.getId()).stream()
+                    .filter(LessonProgress::isCompleted)
+                    .count();
+            List<Long> examIds = examRepository.findByCourseLink(courseId, null, null, false).stream()
+                    .map(Exam::getId)
+                    .toList();
+            byCourse.put(courseId, new CourseInfo(
+                    courseId,
+                    enrollment.getCourse().getName(),
+                    enrollment.getCreatedAt(),
+                    total,
+                    Math.min(done, total),
+                    examIds
+            ));
+        }
+        return new ArrayList<>(byCourse.values());
     }
 
     private AttemptPoint toPoint(ExamAttempt a) {
@@ -108,15 +158,17 @@ public class MyScoreInsightsService {
         return result;
     }
 
-    private List<TypeAccuracy> accuracyByType(List<ExamAttempt> published) {
-        Map<QuestionType, BigDecimal[]> acc = new EnumMap<>(QuestionType.class);
-        Map<QuestionType, Integer> counts = new EnumMap<>(QuestionType.class);
+    private List<TypeAccuracy> accuracyByExamType(List<ExamAttempt> published) {
+        // key: examId -> type -> [earned, possible, questions]
+        Map<Long, Map<QuestionType, BigDecimal[]>> acc = new LinkedHashMap<>();
+        Map<Long, Map<QuestionType, Integer>> counts = new HashMap<>();
 
         for (ExamAttempt a : published) {
             long totalWeight = a.getQuestions().stream().mapToLong(ExamAttemptQuestion::getPoints).sum();
             if (totalWeight <= 0) {
                 continue;
             }
+            Long examId = a.getExam().getId();
             BigDecimal max = ExamScoring.effectiveMax(a.getMaxScore());
             Map<Long, BigDecimal> scoreByQuestion = new HashMap<>();
             for (ExamAttemptAnswer ans : a.getAnswers()) {
@@ -130,26 +182,26 @@ public class MyScoreInsightsService {
                 }
                 BigDecimal possible = ExamScoring.share(max, (long) q.getPoints(), totalWeight);
                 BigDecimal earned = scoreByQuestion.getOrDefault(q.getId(), BigDecimal.ZERO);
-                BigDecimal[] pair = acc.computeIfAbsent(q.getType(), t -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+                BigDecimal[] pair = acc.computeIfAbsent(examId, id -> new EnumMap<>(QuestionType.class))
+                        .computeIfAbsent(q.getType(), t -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
                 pair[0] = pair[0].add(earned.min(possible));
                 pair[1] = pair[1].add(possible);
-                counts.merge(q.getType(), 1, Integer::sum);
+                counts.computeIfAbsent(examId, id -> new EnumMap<>(QuestionType.class)).merge(q.getType(), 1, Integer::sum);
             }
         }
 
         List<TypeAccuracy> out = new ArrayList<>();
-        acc.forEach((type, pair) -> {
-            if (pair[1].signum() <= 0) {
-                return;
+        acc.forEach((examId, byType) -> byType.forEach((type, pair) -> {
+            if (pair[1].signum() > 0) {
+                out.add(new TypeAccuracy(
+                        examId,
+                        type,
+                        counts.get(examId).get(type),
+                        pair[0].setScale(2, RoundingMode.HALF_UP),
+                        pair[1].setScale(2, RoundingMode.HALF_UP)
+                ));
             }
-            out.add(new TypeAccuracy(
-                    type,
-                    counts.get(type),
-                    pair[0].setScale(2, RoundingMode.HALF_UP),
-                    pair[1].setScale(2, RoundingMode.HALF_UP),
-                    pair[0].multiply(BigDecimal.valueOf(100)).divide(pair[1], 1, RoundingMode.HALF_UP)
-            ));
-        });
+        }));
         return out;
     }
 }

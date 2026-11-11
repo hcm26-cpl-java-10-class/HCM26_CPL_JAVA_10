@@ -12,12 +12,14 @@ public record MyScoreInsightsDTO(
         List<AttemptPoint> attempts,
         /** Class average (percent of max score) per exam the student has a published result for. */
         List<ClassAverage> classAverages,
-        /** Exams the student has submitted whose results are not published yet. */
-        int awaitingPublicationCount,
-        /** Score appeals of the student that are still pending. */
-        int pendingAppealCount,
-        /** Accuracy (earned / possible points) per question type over published attempts. */
-        List<TypeAccuracy> accuracyByType
+        /** Ids of exams the student has submitted whose results are not published yet. */
+        List<Long> awaitingExamIds,
+        /** Exam id of each score appeal of the student that is still pending (one entry per appeal). */
+        List<Long> pendingAppealExamIds,
+        /** Points earned / possible per exam and question type over published attempts. */
+        List<TypeAccuracy> accuracyByExamType,
+        /** Courses the student is enrolled in: enrollment date, lesson progress and the course's exams. */
+        List<CourseInfo> courses
 ) {
     public record AttemptPoint(
             Long examId,
@@ -42,12 +44,24 @@ public record MyScoreInsightsDTO(
     ) {
     }
 
+    public record CourseInfo(
+            Long courseId,
+            String courseName,
+            /** Enrollment date; used by the date filter of My Scores. */
+            java.time.LocalDateTime enrolledAt,
+            long lessonsTotal,
+            long lessonsCompleted,
+            /** Ids of the exams linked to this course. */
+            List<Long> examIds
+    ) {
+    }
+
     public record TypeAccuracy(
+            Long examId,
             QuestionType type,
             int questionCount,
             BigDecimal earned,
-            BigDecimal possible,
-            BigDecimal accuracyPercent
+            BigDecimal possible
     ) {
     }
 }
