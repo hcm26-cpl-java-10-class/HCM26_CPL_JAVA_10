@@ -107,6 +107,15 @@ public interface CourseAnalyticsRepository extends JpaRepository<CourseEnrollmen
             """)
     List<Object[]> aggregateRatings(@Param("courseIds") Collection<Long> courseIds);
 
+    /** [courseId, số sao, số review] — dùng cho so sánh phân bố sao giữa các khóa học. */
+    @Query("""
+            select r.course.id, r.rating, count(r)
+            from CourseReview r
+            where r.course.id = :courseId
+            group by r.course.id, r.rating
+            """)
+    List<Object[]> aggregateRatingDistribution(@Param("courseId") Long courseId);
+
     // ---- 5. Exams ----
 
     /** [examId, studentId, finalScore, status, submittedAt] cho mọi lượt làm của các bài thi thuộc course. */

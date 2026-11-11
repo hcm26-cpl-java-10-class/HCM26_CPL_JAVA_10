@@ -4,6 +4,7 @@ import type {
   ActivityResponse,
   ContentQualityResponse,
   CourseAnalyticsGranularity,
+  CourseComparisonResponse,
   CourseExamAnalyticsResponse,
   CourseRankingResponse,
   CourseRatingRankItem,
@@ -136,6 +137,25 @@ export const courseAnalyticsApi = {
   getStudyTime: async (courseId: number): Promise<StudyTimeResponse> => {
     const response = await axiosInstance.get<StudyTimeResponse>(
       `${path}/courses/${courseId}/study-time`,
+    );
+    return response.data;
+  },
+
+  /**
+   * 10. So sánh TOÀN BỘ các khóa học qua từng module của Course Analytics.
+   * Trả về số liệu của tất cả khóa học + thứ hạng theo từng module + nhận định.
+   */
+  getCourseComparison: async (
+    params: {
+      from?: string;
+      to?: string;
+      granularity?: CourseAnalyticsGranularity;
+      inactiveDays?: number;
+    } = {},
+  ): Promise<CourseComparisonResponse> => {
+    const response = await axiosInstance.get<CourseComparisonResponse>(
+      `${path}/course-comparison`,
+      { params },
     );
     return response.data;
   },

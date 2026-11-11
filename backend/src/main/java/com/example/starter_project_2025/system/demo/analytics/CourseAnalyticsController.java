@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.demo.analytics;
 
 import com.example.starter_project_2025.system.demo.analytics.CourseAnalyticsDTO.*;
+import com.example.starter_project_2025.system.demo.analytics.CourseComparisonDTO.CourseComparisonResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -22,6 +23,7 @@ import java.util.List;
 public class CourseAnalyticsController {
 
     private final CourseAnalyticsService analyticsService;
+    private final CourseComparisonService comparisonService;
 
     /** 1. % học viên hoàn thành từng bài + mức tụt giữa các bài. */
     @GetMapping("/courses/{courseId}/lesson-funnel")
@@ -108,5 +110,26 @@ public class CourseAnalyticsController {
     @GetMapping("/courses/{courseId}/study-time")
     public StudyTimeResponse studyTime(@PathVariable Long courseId) {
         return analyticsService.getStudyTime(courseId);
+    }
+
+    // =====================================================================
+    // 10. So sánh giữa các khóa học
+    // =====================================================================
+
+    /**
+     * So sánh toàn bộ các khóa học mà người dùng được xem theo từng module:
+     * phễu học tập, xu hướng, hoạt động/rủi ro, đánh giá, phòng ban, xếp hạng,
+     * chất lượng nội dung và thời gian học.
+     *
+     * <p>Kèm thứ hạng của từng khóa học trong mỗi module, điểm tổng hợp và
+     * nhận định bằng chữ cho từng module.
+     */
+    @GetMapping("/course-comparison")
+    public CourseComparisonResponse courseComparison(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Granularity granularity,
+            @RequestParam(required = false) Integer inactiveDays) {
+        return comparisonService.compareCourses(from, to, granularity, inactiveDays);
     }
 }

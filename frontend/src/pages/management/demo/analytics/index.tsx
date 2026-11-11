@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { BarChart3, ArrowLeft } from "lucide-react";
+import { BarChart3, ArrowLeft, GitCompareArrows } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnalyticsCourseGrid } from "@/pages/management/demo/analytics/components/AnalyticsCourseGrid";
 import { AnalyticsHeader } from "@/pages/management/demo/analytics/components/AnalyticsHeader";
 import { CourseAnalyticsTabs } from "@/pages/management/demo/analytics/components/CourseAnalyticsTabs";
+import { CourseComparisonPanel } from "@/pages/management/demo/analytics/components/comparison/CourseComparisonPanel";
 import { ExportExcelButton } from "@/pages/management/demo/analytics/components/ExportExcelButton";
 import { courseAnalyticsApi } from "@/api/features/demo/course-analytics.api";
 import { courseReportApi } from "@/api/features/demo/course-report.api";
@@ -150,15 +151,23 @@ export default function CourseAnalyticsPage() {
           </section>
         ) : null}
 
-        {!courseId ? (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-card py-16 text-center">
-            <BarChart3 className="size-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              Select a course above to view analytics.
-            </p>
-          </div>
+        {/* Trang chính: so sánh giữa các khóa học qua từng module của Course Analytics. */}
+        {!isAnalysing ? (
+          <section aria-label="Course comparison" className="space-y-3">
+            <div className="flex items-center gap-2">
+              <GitCompareArrows className="size-5 text-primary" />
+              <h2 className="text-lg font-semibold">Compare courses</h2>
+              <span className="text-sm text-muted-foreground">
+                Side-by-side comparison and evaluation across every analytics module
+              </span>
+            </div>
+            <CourseComparisonPanel />
+          </section>
         ) : (
-          <CourseAnalyticsTabs key={`${courseId}-${courseSelectionKey}`} courseId={courseId} />
+          <CourseAnalyticsTabs
+            key={`${courseId}-${courseSelectionKey}`}
+            courseId={courseId}
+          />
         )}
       </div>
     </MainLayout>

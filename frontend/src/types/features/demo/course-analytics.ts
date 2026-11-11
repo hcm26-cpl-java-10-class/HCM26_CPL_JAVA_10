@@ -319,3 +319,154 @@ export interface StudyTimeResponse {
   topLearner?: StudentStudyTimeItem | null;
   learners: StudentStudyTimeItem[];
 }
+
+// ===== 10. So sánh giữa các khóa học (Course Comparison) =====
+
+/** Xếp loại đánh giá tổng hợp của một khóa học. */
+export type CourseOverallVerdict = "EXCELLENT" | "GOOD" | "AVERAGE" | "POOR";
+
+/**
+ * Số liệu của MỘT khóa học trong toàn bộ các module so sánh.
+ * Các trường được gom phẳng để frontend dựng bảng so sánh dễ dàng.
+ */
+export interface CourseComparisonItem {
+  courseId: number;
+  courseName: string;
+  instructor?: string | null;
+
+  // ===== Tổng quan =====
+  learnerCount: number;
+  completedLearners: number;
+  /** % học viên hoàn thành khóa học. */
+  completionRate: number;
+  /** % học viên chưa hoàn thành. */
+  notCompletedRate: number;
+  /** % học viên bỏ học (không hoạt động hoặc chưa từng bắt đầu). */
+  dropOffRate: number;
+
+  // ===== 1. Phễu học tập =====
+  funnelTotalLessons: number;
+  /** % hoàn thành trung bình các bài học (0-100). */
+  funnelAvgCompletion: number;
+  /** % hoàn thành bài học đầu tiên (0-100). */
+  funnelFirstLessonRate: number;
+  /** % hoàn thành bài học cuối cùng (0-100). */
+  funnelLastLessonRate: number;
+  /** Mức tụt lớn nhất giữa hai bài liền kề (%). */
+  funnelMaxDropOff: number;
+  funnelMaxDropOffLesson?: string | null;
+  /** % hoàn thành thấp nhất trong một bài học. */
+  funnelLowestLessonRate: number;
+  funnelLowestLesson?: string | null;
+  /** Thứ hạng trong module phễu (1 = tốt nhất). */
+  funnelRank: number;
+
+  // ===== 2. Xu hướng theo thời gian =====
+  trendEnrollments: number;
+  trendLessonsCompleted: number;
+  trendCertificates: number;
+  trendEnrollmentsPerDay: number;
+  trendRank: number;
+
+  // ===== 3. Hoạt động & rủi ro =====
+  activityActive: number;
+  activityInactive: number;
+  activityNeverStarted: number;
+  /** % học viên còn hoạt động (0-100). */
+  activityActiveRate: number;
+  activityAtRisk: number;
+  /** % học viên có nguy cơ bỏ học (0-100). */
+  activityAtRiskRate: number;
+  activityAverageRiskScore: number;
+  activityRank: number;
+
+  // ===== 4. Đánh giá =====
+  reviewAverageRating: number;
+  reviewTotal: number;
+  /** % học viên đã đánh giá (0-100). */
+  reviewCoverage: number;
+  /** % đánh giá 5 sao (0-100). */
+  reviewFiveStarRate: number;
+  /** % đánh giá 1-2 sao (0-100). */
+  reviewLowStarRate: number;
+  reviewRank: number;
+
+  // ===== 5. Phòng ban =====
+  departmentCount: number;
+  departmentBest?: string | null;
+  departmentBestRate: number;
+  departmentWorst?: string | null;
+  departmentWorstRate: number;
+  /** Chênh lệch hoàn thành giữa phòng ban tốt nhất và kém nhất (điểm %). */
+  departmentGap: number;
+  departmentRank: number;
+
+  // ===== 6. Xếp hạng =====
+  rankByLearners: number;
+  rankByCompletion: number;
+  rankByRating: number;
+  rankByDropOff: number;
+
+  // ===== 7. Chất lượng nội dung & Q&A =====
+  contentTotalReports: number;
+  contentOpenReports: number;
+  /** % báo cáo đã được xử lý (0-100). */
+  contentResolvedRate: number;
+  contentTotalQuestions: number;
+  contentUnanswered: number;
+  /** % câu hỏi đã được trả lời (0-100). */
+  contentAnswerRate: number;
+  /** Thời gian phản hồi trung bình (giờ). */
+  contentAverageResponseHours?: number | null;
+  contentRank: number;
+
+  // ===== 8. Thời gian học =====
+  studyTotalHours: number;
+  studyAverageHours: number;
+  studyMaxHours: number;
+  studyRank: number;
+
+  // ===== Tổng hợp =====
+  /** Điểm tổng hợp 0-100 (cao = khóa học hoạt động tốt hơn). */
+  overallScore: number;
+  overallVerdict: CourseOverallVerdict | string;
+  /** Điểm mạnh nổi bật. */
+  strengths: string[];
+  /** Điểm yếu cần cải thiện. */
+  weaknesses: string[];
+  /**
+   * Nhận định riêng của khóa học cho TỪNG module, dạng map
+   * `moduleKey -> nhận định`. Ví dụ `{ funnel: "..." }`.
+   */
+  moduleEvaluations?: Record<string, string> | null;
+}
+
+/** Nhận định/đánh giá của một module so sánh. */
+export interface ModuleInsight {
+  /** Khóa module: funnel | trend | activity | reviews | departments | ranking | content | study-time */
+  key: string;
+  title: string;
+  description: string;
+  /** Chỉ số dùng để xếp hạng trong module này. */
+  bestMetric: string;
+  bestCourseId?: number | null;
+  bestCourseName?: string | null;
+  bestValue?: number | null;
+  worstCourseId?: number | null;
+  worstCourseName?: string | null;
+  worstValue?: number | null;
+  /** Câu đánh giá tổng hợp của module. */
+  evaluation: string;
+}
+
+export interface CourseComparisonResponse {
+  totalCourses: number;
+  from: string;
+  to: string;
+  granularity: CourseAnalyticsGranularity;
+  inactiveThresholdDays: number;
+  /** Các khóa học, đã sắp xếp theo điểm tổng hợp giảm dần. */
+  courses: CourseComparisonItem[];
+  /** Nhận định cho từng module. */
+  modules: ModuleInsight[];
+}
