@@ -30,7 +30,7 @@ public class TrainingClassController {
     public ClassStatisticsService.Statistics statistics() { return statistics.get(); }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('CLASS_READ')")
+    @PreAuthorize("hasAuthority('CLASS_READ') or hasAuthority('INVITATION_CREATE')")
     public TrainingClassService.ClassPage list(
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "10") int size,
@@ -45,7 +45,7 @@ public class TrainingClassController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('CLASS_READ')")
+    @PreAuthorize("hasAuthority('CLASS_READ') or hasAuthority('INVITATION_CREATE')")
     public TrainingClassDTO get(@PathVariable @Positive Long id) { return service.get(id); }
 
     @PostMapping

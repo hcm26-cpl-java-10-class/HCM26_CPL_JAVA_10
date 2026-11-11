@@ -42,6 +42,8 @@ export interface InvitationDTO extends BaseDTO {
     sourceType?: string | null;
     /** Lớp (course) dùng làm nguồn khi tạo lời mời hàng loạt. */
     sourceCourseId?: number | null;
+    /** Mã lớp (class code, VD: LOCAL_JAVA_01) dùng làm nguồn khi tạo lời mời hàng loạt. */
+    sourceClassCode?: string | null;
 }
 
 export interface InvitationCreateRequest {
@@ -93,6 +95,7 @@ export interface CourseStudentDTO {
 /** Yêu cầu mời dự thi hàng loạt theo lớp. `userIds` rỗng = mời toàn bộ lớp. */
 export interface GroupInvitationRequest {
     courseId: number;
+    classCode?: string;
     userIds?: number[];
     note?: string;
     availableFrom?: string;

@@ -18,6 +18,9 @@ public class GroupInvitationRequest {
     /** Lớp (course) dùng làm nguồn danh sách học viên. */
     private Long courseId;
 
+    /** Mã lớp (class code, VD: LOCAL_JAVA_01) dùng hiển thị cột Source. */
+    private String classCode;
+
     /** Danh sách học viên được chọn. Rỗng = toàn bộ học viên trong lớp. */
     private List<Long> userIds;
 

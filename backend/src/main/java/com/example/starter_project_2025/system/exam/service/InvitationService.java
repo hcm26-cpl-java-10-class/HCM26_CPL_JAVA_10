@@ -11,16 +11,24 @@ import com.example.starter_project_2025.system.notification.service.EmailService
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentService;
+import com.example.starter_project_2025.system.rbac.role.Role;
+import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.training.ClassEnrollmentService;
+import com.example.starter_project_2025.system.training.TraineeImportContract;
+import com.example.starter_project_2025.system.training.TrainingClassRepository;
+import com.example.starter_project_2025.system.training.entity.TrainingClass;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,6 +63,18 @@ public class InvitationService {
     private final ExamReminderRepository examReminderRepository;
     private final CourseRepository courseRepository;
     private final CourseEnrollmentService courseEnrollmentService;
+
+    @Autowired(required = false)
+    private TrainingClassRepository trainingClassRepository;
+
+    @Autowired(required = false)
+    private ClassEnrollmentService classEnrollmentService;
+
+    @Autowired(required = false)
+    private RoleRepository roleRepository;
+
+    @Autowired(required = false)
+    private PasswordEncoder passwordEncoder;
 
     @Value("${app.frontend-domain}")
     private String frontendUrl;
@@ -219,6 +239,12 @@ public class InvitationService {
 
         examAccessGuard.checkCanManage(exam, principal);
 
+        if (trainingClassRepository != null && classEnrollmentService != null) {
+            Optional<TrainingClass> trainingClassOpt = resolveTrainingClassForBulkInvite(request);
+            if (trainingClassOpt.isPresent()) {
+                return createInvitationsByTrainingClass(exam, trainingClassOpt.get(), request, principal);
+            }
+        }
 
         Course course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -307,6 +333,9 @@ public class InvitationService {
                         .anonymous(false)
                         .sourceType("COURSE")
                         .sourceCourseId(course.getId())
+                        .sourceClassCode(request.getClassCode() != null && !request.getClassCode().isBlank()
+                                ? request.getClassCode().trim()
+                                : course.getName())
                         .build();
 
                 invitation = invitationRepository.save(invitation);
@@ -363,6 +392,247 @@ public class InvitationService {
                 .errors(errors)
                 .items(items)
                 .build();
+    }
+
+    private Optional<TrainingClass> resolveTrainingClassForBulkInvite(GroupInvitationRequest request) {
+        Optional<TrainingClass> byId = trainingClassRepository.findByIdAndIsActiveTrue(request.getCourseId());
+        if (byId.isEmpty()) {
+            return Optional.empty();
+        }
+        if (request.getClassCode() != null && !request.getClassCode().isBlank()) {
+            return byId;
+        }
+        boolean matchingCourseExists = courseRepository != null
+                && courseRepository.findById(request.getCourseId()).isPresent();
+        if (!matchingCourseExists) {
+            return byId;
+        }
+        List<User> courseStudents = courseEnrollmentService.getActiveStudentsByCourse(request.getCourseId());
+        if (courseStudents.isEmpty()) {
+            return byId;
+        }
+        if (request.getUserIds() != null && !request.getUserIds().isEmpty()) {
+            Set<Long> courseUserIds = new HashSet<>();
+            for (User u : courseStudents) {
+                courseUserIds.add(u.getId());
+            }
+            boolean allInCourse = courseUserIds.containsAll(request.getUserIds());
+            if (allInCourse) {
+                return Optional.empty();
+            }
+        }
+        return byId;
+    }
+
+    /**
+     * Mời dự thi hàng loạt theo lớp học (TrainingClass) từ module Class List.
+     */
+    private BatchInvitationResponse createInvitationsByTrainingClass(
+            Exam exam,
+            TrainingClass trainingClass,
+            GroupInvitationRequest request,
+            UserPrincipal principal) {
+
+        List<TraineeImportContract.TraineeView> classTrainees =
+                classEnrollmentService.list(trainingClass.getId(), true);
+
+        Map<Long, TraineeImportContract.TraineeView> enrolledById = new LinkedHashMap<>();
+        for (TraineeImportContract.TraineeView trainee : classTrainees) {
+            enrolledById.put(trainee.id(), trainee);
+        }
+
+        List<Long> targetTraineeIds;
+        if (request.getUserIds() == null || request.getUserIds().isEmpty()) {
+            targetTraineeIds = classTrainees.stream()
+                    .filter(t -> "Active".equalsIgnoreCase(t.status()))
+                    .map(TraineeImportContract.TraineeView::id)
+                    .toList();
+        } else {
+            targetTraineeIds = new ArrayList<>(new java.util.LinkedHashSet<>(request.getUserIds()));
+        }
+
+        List<InvitationBulkItemResult> items = new ArrayList<>();
+        List<InvitationDTO> successful = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        int skippedCount = 0;
+        int failureCount = 0;
+
+        LocalDateTime expiresAt = resolveExpiresAt(request.getExpiresAt(), exam);
+        LocalDateTime availableFrom = parseDateTime(request.getAvailableFrom());
+        String classCode = request.getClassCode() != null && !request.getClassCode().isBlank()
+                ? request.getClassCode().trim()
+                : trainingClass.getCode();
+
+        for (Long traineeId : targetTraineeIds) {
+            TraineeImportContract.TraineeView trainee = enrolledById.get(traineeId);
+
+            if (trainee == null) {
+                failureCount++;
+                items.add(InvitationBulkItemResult.builder()
+                        .userId(traineeId)
+                        .status(InvitationBulkItemResult.Status.FAILED)
+                        .reason("Học viên không thuộc lớp " + classCode)
+                        .build());
+                errors.add("Trainee ID " + traineeId + ": Học viên không thuộc lớp " + classCode);
+                continue;
+            }
+
+            if (!"Active".equalsIgnoreCase(trainee.status())) {
+                failureCount++;
+                items.add(InvitationBulkItemResult.builder()
+                        .userId(trainee.id())
+                        .userEmail(trainee.personalEmail())
+                        .userFullName(trainee.fullName())
+                        .status(InvitationBulkItemResult.Status.FAILED)
+                        .reason("Học viên không ở trạng thái Active (" + trainee.status() + ")")
+                        .build());
+                errors.add((trainee.fullName() != null ? trainee.fullName() : trainee.id())
+                        + ": Học viên không ở trạng thái Active");
+                continue;
+            }
+
+            User student = resolveOrProvisionTraineeUser(trainee);
+
+            if (invitationRepository.existsByExamIdAndUserId(exam.getId(), student.getId())) {
+                skippedCount++;
+                items.add(InvitationBulkItemResult.builder()
+                        .userId(trainee.id())
+                        .userEmail(student.getEmail())
+                        .userFullName(trainee.fullName() != null && !trainee.fullName().isBlank()
+                                ? trainee.fullName()
+                                : student.getFullName())
+                        .status(InvitationBulkItemResult.Status.SKIPPED)
+                        .reason("Học viên đã có lời mời cho đề thi này")
+                        .build());
+                continue;
+            }
+
+            try {
+                Invitation invitation = Invitation.builder()
+                        .exam(exam)
+                        .user(student)
+                        .token(generateToken())
+                        .status(InvitationStatus.PENDING)
+                        .expiresAt(expiresAt)
+                        .availableFrom(availableFrom)
+                        .note(request.getNote())
+                        .anonymous(false)
+                        .sourceType("COURSE")
+                        .sourceCourseId(trainingClass.getId())
+                        .sourceClassCode(classCode)
+                        .build();
+
+                invitation = invitationRepository.save(invitation);
+
+                invitationAuditService.record(invitation, InvitationAuditAction.CREATE, principal, null);
+
+                if (request.isSendEmail()) {
+                    emailService.sendExamInvitation(invitation, student);
+                    invitation.setStatus(InvitationStatus.SENT);
+                    invitation.setSentAt(LocalDateTime.now());
+                    invitation = invitationRepository.save(invitation);
+                }
+
+                InvitationDTO dto = toDTO(invitation);
+                successful.add(dto);
+                items.add(InvitationBulkItemResult.builder()
+                        .userId(trainee.id())
+                        .userEmail(student.getEmail())
+                        .userFullName(trainee.fullName() != null && !trainee.fullName().isBlank()
+                                ? trainee.fullName()
+                                : student.getFullName())
+                        .invitationId(invitation.getId())
+                        .status(InvitationBulkItemResult.Status.SUCCESS)
+                        .reason(request.isSendEmail() ? "Đã tạo lời mời và gửi email" : "Đã tạo lời mời")
+                        .build());
+            } catch (Exception e) {
+                failureCount++;
+                items.add(InvitationBulkItemResult.builder()
+                        .userId(trainee.id())
+                        .userEmail(student.getEmail())
+                        .userFullName(trainee.fullName())
+                        .status(InvitationBulkItemResult.Status.FAILED)
+                        .reason(e.getMessage())
+                        .build());
+                errors.add(student.getEmail() + ": " + e.getMessage());
+            }
+        }
+
+        invitationAuditService.record(
+                exam.getId(),
+                null,
+                null,
+                InvitationAuditAction.BATCH_CREATE,
+                principal.getUser().getId(),
+                "Mời theo lớp " + classCode + " (classId=" + trainingClass.getId() + "): "
+                        + successful.size() + " thành công, "
+                        + skippedCount + " bỏ qua, "
+                        + failureCount + " lỗi");
+
+        return BatchInvitationResponse.builder()
+                .totalRequested(items.size())
+                .successCount(successful.size())
+                .skippedCount(skippedCount)
+                .failureCount(failureCount)
+                .successfulInvitations(successful)
+                .errors(errors)
+                .items(items)
+                .build();
+    }
+
+    private User resolveOrProvisionTraineeUser(TraineeImportContract.TraineeView trainee) {
+        String rawEmail = trainee.personalEmail() != null ? trainee.personalEmail().trim().toLowerCase() : "";
+        String fallbackCode = trainee.code() != null && !trainee.code().isBlank()
+                ? trainee.code().trim().toLowerCase()
+                : "trainee" + trainee.id();
+        String email = !rawEmail.isBlank() ? rawEmail : fallbackCode + "@fpt.edu.vn";
+        String fullName = trainee.fullName() != null && !trainee.fullName().isBlank()
+                ? trainee.fullName().trim()
+                : email;
+        String safeFirstName = fullName.length() > 100 ? fullName.substring(0, 100) : fullName;
+
+        Optional<User> existingOpt = userRepository.findByEmail(email);
+        if (existingOpt.isPresent()) {
+            User existing = existingOpt.get();
+            boolean changed = false;
+            if (!Boolean.TRUE.equals(existing.getIsActive())) {
+                existing.setIsActive(true);
+                changed = true;
+            }
+            if ((existing.getFirstName() == null || existing.getFirstName().isBlank()) && !safeFirstName.isBlank()) {
+                existing.setFirstName(safeFirstName);
+                changed = true;
+            }
+            if (!isStudentRole(existing) && roleRepository != null) {
+                Optional<Role> studentRole = roleRepository.findByName("STUDENT");
+                if (studentRole.isPresent()) {
+                    if (existing.getRoles() == null) {
+                        existing.setRoles(new HashSet<>());
+                    }
+                    existing.getRoles().add(studentRole.get());
+                    changed = true;
+                }
+            }
+            return changed ? userRepository.save(existing) : existing;
+        }
+
+        Set<Role> roles = new HashSet<>();
+        if (roleRepository != null) {
+            roleRepository.findByName("STUDENT").ifPresent(roles::add);
+        }
+
+        User created = User.builder()
+                .email(email)
+                .firstName(safeFirstName)
+                .lastName(null)
+                .passwordHash(passwordEncoder != null ? passwordEncoder.encode("password123") : "{noop}password123")
+                .isActive(true)
+                .locked(false)
+                .isGuest(false)
+                .roles(roles)
+                .build();
+
+        return userRepository.save(created);
     }
 
     /**
@@ -924,6 +1194,7 @@ public class InvitationService {
         dto.setAccessAttemptCount(invitation.getAccessAttemptCount());
         dto.setSourceType(invitation.getSourceType());
         dto.setSourceCourseId(invitation.getSourceCourseId());
+        dto.setSourceClassCode(resolveSourceClassCode(invitation));
 
         if (exam != null) {
             dto.setExamDurationMinutes(exam.getDurationMinutes());
@@ -934,5 +1205,26 @@ public class InvitationService {
         }
 
         return dto;
+    }
+
+    private String resolveSourceClassCode(Invitation invitation) {
+        if (invitation.getSourceClassCode() != null && !invitation.getSourceClassCode().isBlank()) {
+            return invitation.getSourceClassCode();
+        }
+        if ("COURSE".equalsIgnoreCase(invitation.getSourceType()) && invitation.getSourceCourseId() != null) {
+            if (trainingClassRepository != null) {
+                Optional<String> code = trainingClassRepository.findById(invitation.getSourceCourseId())
+                        .map(TrainingClass::getCode);
+                if (code.isPresent() && !code.get().isBlank()) {
+                    return code.get();
+                }
+            }
+            if (courseRepository != null) {
+                return courseRepository.findById(invitation.getSourceCourseId())
+                        .map(Course::getName)
+                        .orElse(null);
+            }
+        }
+        return null;
     }
 }

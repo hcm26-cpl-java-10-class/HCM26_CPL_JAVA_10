@@ -90,4 +90,8 @@ public class InvitationDTO extends BaseDTO {
     /** Lớp (course) dùng làm nguồn khi tạo lời mời hàng loạt. */
     @JsonProperty(access = READ_ONLY)
     private Long sourceCourseId;
+
+    /** Mã lớp (class code) dùng làm nguồn khi tạo lời mời hàng loạt (VD: LOCAL_JAVA_01). */
+    @JsonProperty(access = READ_ONLY)
+    private String sourceClassCode;
 }

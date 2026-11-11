@@ -1,8 +1,5 @@
-import { courseApi, invitationApi } from "@/api";
-import type {
-    GroupInvitationRequest,
-    InvitationBulkItemResult,
-} from "@/types";
+import { invitationApi } from "@/api";
+import { classEnrollmentApi, classEnrollmentKey } from "@/api/features/class-enrollment.api";
 import { ExamScheduleSelector, type ScheduleMode } from "@/components/features/invitation/ExamScheduleSelector";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,9 +15,16 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { useClasses } from "@/hooks/useClasses";
+import type {
+    ExternalClass,
+    GroupInvitationRequest,
+    InvitationBulkItemResult,
+    Trainee,
+} from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, GraduationCap, RefreshCw, Search, Send, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface BulkInviteByClassTabProps {
@@ -43,6 +47,36 @@ const DEFAULT_FORM: ClassForm = {
     expiresAt: "",
     sendEmail: true,
 };
+
+export function formatClassOptionLabel(cls: ExternalClass & { enrolledCount?: number }): string {
+    const count = cls.enrolledTrainees ?? cls.enrolledCount ?? 0;
+    const code = (cls.code ?? "").trim();
+    const name = (cls.name ?? "").trim();
+    const base =
+        code && name && code.toLowerCase() !== name.toLowerCase()
+            ? `${code} - ${name}`
+            : code || name || `Class #${cls.id}`;
+    return `${base} (${count} trainees)`;
+}
+
+function isTraineeActive(trainee: Trainee): boolean {
+    return (trainee.status ?? "Active").trim().toLowerCase() === "active";
+}
+
+function getTraineeEmail(trainee: Trainee): string {
+    return (trainee.personalEmail ?? trainee.email ?? "").trim();
+}
+
+function getResolvedTraineeEmail(trainee: Trainee): string {
+    const raw = getTraineeEmail(trainee).toLowerCase();
+    if (raw) return raw;
+    const code = (trainee.code ?? trainee.fptAccount ?? "").trim().toLowerCase();
+    return code ? `${code}@fpt.edu.vn` : "";
+}
+
+function getTraineeStudentId(trainee: Trainee): string {
+    return (trainee.code ?? trainee.fptAccount ?? "").trim() || "—";
+}
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
     const err = error as {
@@ -72,6 +106,7 @@ export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTab
     const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
     const [search, setSearch] = useState("");
     const [results, setResults] = useState<InvitationBulkItemResult[]>([]);
+    const autoSelectedClassRef = useRef<number | null>(null);
 
     const courseId = form.courseId ? Number(form.courseId) : null;
 
@@ -86,18 +121,21 @@ export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTab
     });
     const durationMinutes = examQuery.data?.durationMinutes || 60;
 
-    const coursesQuery = useQuery({
-        queryKey: ["invitation-class-list"],
-        queryFn: async () => {
-            const response = await courseApi.getPage({ page: 0, size: 100, sort: "name,asc" });
-            return response.content ?? [];
-        },
-        staleTime: 5 * 60 * 1000,
-    });
+    // Bind directly to the real Class List data source (GET /api/classes)
+    const classesQuery = useClasses();
 
+    const selectedClass = useMemo(
+        () => (classesQuery.data ?? []).find((cls) => cls.id === courseId) ?? null,
+        [classesQuery.data, courseId],
+    );
+
+    // Fetch enrolled trainees for the selected class from Trainee List API (GET /api/classes/{classId}/trainees)
     const studentsQuery = useQuery({
-        queryKey: ["invitation-class-students", courseId],
-        queryFn: () => invitationApi.getCourseStudents(courseId!),
+        queryKey: courseId !== null ? classEnrollmentKey(courseId) : ["class-enrollments", "none"],
+        queryFn: async () => {
+            const trainees = await classEnrollmentApi.list(courseId!);
+            return trainees ?? [];
+        },
         enabled: courseId !== null,
         retry: false,
     });
@@ -110,34 +148,100 @@ export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTab
         retry: false,
     });
 
-    const alreadyInvitedIds = useMemo(() => {
-        const set = new Set<number>();
+    const { alreadyInvitedEmails, fallbackInvitedIds } = useMemo(() => {
+        const emailSet = new Set<string>();
+        const idSet = new Set<number>();
         (existingInvitationsQuery.data ?? []).forEach((inv) => {
-            if (inv.userId) set.add(inv.userId);
+            const email = (inv.userEmail ?? inv.guestEmail ?? "").trim().toLowerCase();
+            if (email) {
+                emailSet.add(email);
+            } else if (inv.userId) {
+                idSet.add(inv.userId);
+            }
         });
-        return set;
+        return { alreadyInvitedEmails: emailSet, fallbackInvitedIds: idSet };
     }, [existingInvitationsQuery.data]);
 
+    const isAlreadyInvited = useCallback(
+        (student: Trainee): boolean => {
+            const email = getResolvedTraineeEmail(student);
+            if (email && alreadyInvitedEmails.has(email)) return true;
+            return fallbackInvitedIds.has(student.id);
+        },
+        [alreadyInvitedEmails, fallbackInvitedIds],
+    );
+
+    const allTrainees = studentsQuery.data ?? [];
+    const activeTrainees = useMemo(
+        () => allTrainees.filter(isTraineeActive),
+        [allTrainees],
+    );
+
     const students = useMemo(() => {
-        const all = studentsQuery.data ?? [];
         const keyword = search.trim().toLowerCase();
-        if (!keyword) return all;
-        return all.filter(
+        if (!keyword) return allTrainees;
+        return allTrainees.filter(
             (s) =>
                 (s.fullName ?? "").toLowerCase().includes(keyword) ||
-                (s.email ?? "").toLowerCase().includes(keyword),
+                getTraineeStudentId(s).toLowerCase().includes(keyword) ||
+                getTraineeEmail(s).toLowerCase().includes(keyword),
         );
-    }, [studentsQuery.data, search]);
+    }, [allTrainees, search]);
 
     const selectableStudents = useMemo(
-        () => students.filter((s) => !alreadyInvitedIds.has(s.id)),
-        [students, alreadyInvitedIds],
+        () => students.filter((s) => isTraineeActive(s) && !isAlreadyInvited(s)),
+        [students, isAlreadyInvited],
     );
+
+    // Pre-select all eligible Active trainees when a class is selected and its trainees are loaded
+    useEffect(() => {
+        if (courseId === null) {
+            autoSelectedClassRef.current = null;
+            return;
+        }
+        if (
+            studentsQuery.isSuccess &&
+            !existingInvitationsQuery.isLoading &&
+            autoSelectedClassRef.current !== courseId
+        ) {
+            autoSelectedClassRef.current = courseId;
+            const eligibleIds = (studentsQuery.data ?? [])
+                .filter((s) => isTraineeActive(s) && !isAlreadyInvited(s))
+                .map((s) => s.id);
+            setSelectedIds(new Set(eligibleIds));
+        }
+    }, [
+        courseId,
+        studentsQuery.isSuccess,
+        studentsQuery.data,
+        existingInvitationsQuery.isLoading,
+        isAlreadyInvited,
+    ]);
+
+    // Ensure trainees who are inactive or become already invited cannot stay selected
+    useEffect(() => {
+        if (!studentsQuery.data) return;
+        const selectableMap = new Set(
+            studentsQuery.data
+                .filter((s) => isTraineeActive(s) && !isAlreadyInvited(s))
+                .map((s) => s.id),
+        );
+        setSelectedIds((prev) => {
+            let changed = false;
+            const next = new Set<number>();
+            prev.forEach((id) => {
+                if (selectableMap.has(id)) next.add(id);
+                else changed = true;
+            });
+            return changed ? next : prev;
+        });
+    }, [studentsQuery.data, isAlreadyInvited]);
 
     const bulkMutation = useMutation({
         mutationFn: async () => {
             const request: GroupInvitationRequest = {
                 courseId: courseId!,
+                classCode: selectedClass?.code || undefined,
                 userIds: Array.from(selectedIds),
                 note: form.note || undefined,
                 availableFrom: form.availableFrom ? new Date(form.availableFrom).toISOString() : undefined,
@@ -148,6 +252,7 @@ export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTab
         },
         onSuccess: (response) => {
             setResults(response.items ?? []);
+            setSelectedIds(new Set());
             const skipped = response.skippedCount ?? 0;
             const failed = response.failureCount ?? 0;
             toast.success(
@@ -189,6 +294,7 @@ export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTab
     };
 
     const resetForm = () => {
+        autoSelectedClassRef.current = null;
         setForm(DEFAULT_FORM);
         setSelectedIds(new Set());
         setSearch("");
@@ -218,25 +324,26 @@ export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTab
                 <Select
                     value={form.courseId}
                     onValueChange={(v) => {
+                        autoSelectedClassRef.current = null;
                         setForm((f) => ({ ...f, courseId: v }));
                         setSelectedIds(new Set());
                         setResults([]);
                     }}
                 >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full" aria-label="Class">
                         <SelectValue placeholder="Select a class" />
                     </SelectTrigger>
                     <SelectContent>
-                        {(coursesQuery.data ?? []).map((course) => (
-                            <SelectItem key={course.id} value={String(course.id)}>
-                                {course.name}
+                        {(classesQuery.data ?? []).map((cls) => (
+                            <SelectItem key={cls.id} value={String(cls.id)}>
+                                {formatClassOptionLabel(cls)}
                             </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
-                {coursesQuery.isError && (
+                {classesQuery.isError && (
                     <p className="text-xs text-destructive">
-                        {getErrorMessage(coursesQuery.error, "Failed to load classes.")}
+                        {getErrorMessage(classesQuery.error, "Failed to load classes.")}
                     </p>
                 )}
             </div>
@@ -248,7 +355,7 @@ export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTab
                             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                             <Input
                                 className="pl-8"
-                                placeholder="Search students by name or email..."
+                                placeholder="Search students by name, student ID or email..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                             />
@@ -293,63 +400,95 @@ export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTab
                             </div>
                         )}
 
-                        {!studentsQuery.isLoading && !studentsQuery.isError && students.length === 0 && (
+                        {!studentsQuery.isLoading && !studentsQuery.isError && activeTrainees.length === 0 && (
                             <p className="p-8 text-center text-sm text-muted-foreground">
-                                {search.trim()
-                                    ? "No student matches your search."
-                                    : "This class has no students yet."}
+                                No active trainees enrolled in this class yet.
                             </p>
                         )}
 
-                        {!studentsQuery.isLoading && !studentsQuery.isError && students.length > 0 && (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="w-10">
-                                            <Checkbox
-                                                checked={allSelected}
-                                                onCheckedChange={toggleAll}
-                                                aria-label="Select all students"
-                                            />
-                                        </TableHead>
-                                        <TableHead>Student</TableHead>
-                                        <TableHead className="w-32">Status</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {students.map((student) => {
-                                        const invited = alreadyInvitedIds.has(student.id);
-                                        return (
-                                            <TableRow key={student.id}>
-                                                <TableCell>
-                                                    <Checkbox
-                                                        checked={selectedIds.has(student.id)}
-                                                        disabled={invited}
-                                                        onCheckedChange={() => toggleStudent(student.id)}
-                                                        aria-label={`Select ${student.fullName ?? student.email}`}
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <p className="font-medium">
-                                                        {student.fullName ?? student.email}
-                                                    </p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {student.email}
-                                                    </p>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {invited ? (
-                                                        <Badge variant="secondary">Already invited</Badge>
-                                                    ) : (
-                                                        <Badge variant="outline">Eligible</Badge>
-                                                    )}
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                </TableBody>
-                            </Table>
-                        )}
+                        {!studentsQuery.isLoading &&
+                            !studentsQuery.isError &&
+                            activeTrainees.length > 0 &&
+                            students.length === 0 && (
+                                <p className="p-8 text-center text-sm text-muted-foreground">
+                                    No student matches your search.
+                                </p>
+                            )}
+
+                        {!studentsQuery.isLoading &&
+                            !studentsQuery.isError &&
+                            activeTrainees.length > 0 &&
+                            students.length > 0 && (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-10">
+                                                <Checkbox
+                                                    checked={
+                                                        allSelected
+                                                            ? true
+                                                            : selectableStudents.some((s) => selectedIds.has(s.id))
+                                                              ? "indeterminate"
+                                                              : false
+                                                    }
+                                                    disabled={selectableStudents.length === 0}
+                                                    onCheckedChange={toggleAll}
+                                                    aria-label="Select all students"
+                                                />
+                                            </TableHead>
+                                            <TableHead>Full Name</TableHead>
+                                            <TableHead>Student ID</TableHead>
+                                            <TableHead>Personal Email</TableHead>
+                                            <TableHead className="w-32">Status</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {students.map((student) => {
+                                            const invited = isAlreadyInvited(student);
+                                            const active = isTraineeActive(student);
+                                            const email = getTraineeEmail(student);
+                                            const studentId = getTraineeStudentId(student);
+                                            return (
+                                                <TableRow key={student.id}>
+                                                    <TableCell>
+                                                        <Checkbox
+                                                            checked={selectedIds.has(student.id)}
+                                                            disabled={invited || !active}
+                                                            onCheckedChange={() => toggleStudent(student.id)}
+                                                            aria-label={`Select ${student.fullName || email}`}
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="font-medium">
+                                                        {student.fullName || "—"}
+                                                    </TableCell>
+                                                    <TableCell className="font-mono text-xs text-muted-foreground">
+                                                        {studentId}
+                                                    </TableCell>
+                                                    <TableCell className="text-sm text-muted-foreground">
+                                                        {email || "—"}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {invited ? (
+                                                            <Badge variant="secondary">Already invited</Badge>
+                                                        ) : active ? (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="border-emerald-200 bg-emerald-50 text-emerald-700"
+                                                            >
+                                                                Active
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-muted-foreground">
+                                                                {student.status || "Inactive"}
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            )}
                     </div>
 
                     <div className="space-y-2">
@@ -382,7 +521,7 @@ export function BulkInviteByClassTab({ examId, onSuccess }: BulkInviteByClassTab
                     <div className="flex items-center justify-between gap-3">
                         <p className="text-sm text-muted-foreground">
                             {selectedIds.size} student(s) selected
-                            {studentsQuery.data ? ` of ${studentsQuery.data.length}` : ""}
+                            {studentsQuery.data ? ` of ${activeTrainees.length}` : ""}
                         </p>
                         <Button
                             onClick={() => bulkMutation.mutate()}

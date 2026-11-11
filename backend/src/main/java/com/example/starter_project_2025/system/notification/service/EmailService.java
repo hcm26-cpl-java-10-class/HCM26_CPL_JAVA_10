@@ -42,6 +42,9 @@ public class EmailService {
     @Value("${spring.mail.username}")
     private String hostEmail;
 
+    @Value("${spring.mail.password:}")
+    private String mailPassword;
+
     public void sendExamInvitation(Invitation invitation, User recipient) {
         String examTitle = invitation.getExam().getTitle();
         String acceptLink = String.format("%s/student/invitations", frontendUrl);
@@ -265,6 +268,10 @@ public class EmailService {
     }
 
     private void send(String subject, String to, String template, List<Map.Entry<String, Object>> vars) {
+        if (mailPassword == null || mailPassword.isBlank()) {
+            log.info("Skipping SMTP send to {} with template {} (spring.mail.password is not configured)", to, template);
+            return;
+        }
         try {
             mailUtil.buildAndSendMail(subject, hostEmail, to, template, vars);
             log.info("Email sent to {} with template {}", to, template);

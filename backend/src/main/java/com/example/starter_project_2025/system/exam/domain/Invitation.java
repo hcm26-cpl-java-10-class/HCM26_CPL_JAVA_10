@@ -101,4 +101,8 @@ public class Invitation extends BaseEntity {
     /** Lớp (course) dùng làm nguồn khi tạo lời mời hàng loạt. */
     @Column(name = "source_course_id")
     private Long sourceCourseId;
+
+    /** Mã lớp (class code) dùng làm nguồn khi tạo lời mời hàng loạt (VD: LOCAL_JAVA_01). */
+    @Column(name = "source_class_code", length = 64)
+    private String sourceClassCode;
 }

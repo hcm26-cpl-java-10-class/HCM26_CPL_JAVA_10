@@ -23,8 +23,13 @@ import com.example.starter_project_2025.system.exam.dto.GroupInvitationRequest;
 import com.example.starter_project_2025.system.exam.dto.InvitationDTO;
 import com.example.starter_project_2025.system.notification.service.EmailService;
 import com.example.starter_project_2025.system.rbac.role.Role;
+import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
+import com.example.starter_project_2025.system.training.ClassEnrollmentService;
+import com.example.starter_project_2025.system.training.TraineeImportContract;
+import com.example.starter_project_2025.system.training.TrainingClassRepository;
+import com.example.starter_project_2025.system.training.entity.TrainingClass;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +38,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -91,6 +98,18 @@ class InvitationServiceTest {
 
     @Mock
     private CourseEnrollmentService courseEnrollmentService;
+
+    @Mock
+    private TrainingClassRepository trainingClassRepository;
+
+    @Mock
+    private ClassEnrollmentService classEnrollmentService;
+
+    @Mock
+    private RoleRepository roleRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     private InvitationService service;
 
@@ -513,5 +532,63 @@ class InvitationServiceTest {
         InvitationDTO dto = response.getSuccessfulInvitations().get(0);
         assertEquals("COURSE", dto.getSourceType());
         assertEquals(9L, dto.getSourceCourseId());
+    }
+
+    @Test
+    @DisplayName("Mời theo Class List (TrainingClass): tạo user nếu chưa có, bỏ qua đã mời/không Active và lưu sourceClassCode")
+    void bulkInviteByTrainingClassProvisionsUsersSkipsInvitedAndSetsSourceClassCode() {
+        ReflectionTestUtils.setField(service, "trainingClassRepository", trainingClassRepository);
+        ReflectionTestUtils.setField(service, "classEnrollmentService", classEnrollmentService);
+        ReflectionTestUtils.setField(service, "roleRepository", roleRepository);
+        ReflectionTestUtils.setField(service, "passwordEncoder", passwordEncoder);
+
+        TrainingClass trainingClass = new TrainingClass();
+        trainingClass.setId(1L);
+        trainingClass.setCode("LOCAL_JAVA_01");
+        trainingClass.setName("Lớp Chuyên sâu Java Backend (K26)");
+        trainingClass.setIsActive(true);
+
+        var t1 = new TraineeImportContract.TraineeView(
+                1001L, "AI237193", "AI237193", "Vũ Mai Trang", "trangvm185@gmail.com",
+                null, "2003-01-01", "Female", "Active");
+        var t2 = new TraineeImportContract.TraineeView(
+                1002L, "IA506908", "IA506908", "Phan Phú Dũng", "dungpp714@gmail.com",
+                null, "2003-02-02", "Male", "Active");
+        var t3 = new TraineeImportContract.TraineeView(
+                1003L, "SE408891", "SE408891", "Lý Mai Giang", "gianglm737@gmail.com",
+                null, "2003-03-03", "Female", "Inactive");
+
+        User existingTrang = classStudent(501L, "trangvm185@gmail.com");
+
+        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+        when(trainingClassRepository.findByIdAndIsActiveTrue(1L)).thenReturn(Optional.of(trainingClass));
+        when(classEnrollmentService.list(1L, true)).thenReturn(List.of(t1, t2, t3));
+        when(userRepository.findByEmail("trangvm185@gmail.com")).thenReturn(Optional.of(existingTrang));
+        when(userRepository.findByEmail("dungpp714@gmail.com")).thenReturn(Optional.empty());
+        when(roleRepository.findByName("STUDENT")).thenReturn(Optional.of(Role.builder().name("STUDENT").build()));
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            if (u.getId() == null) u.setId(502L);
+            return u;
+        });
+        when(invitationRepository.existsByExamIdAndUserId(1L, 501L)).thenReturn(true);
+        when(invitationRepository.existsByExamIdAndUserId(1L, 502L)).thenReturn(false);
+
+        GroupInvitationRequest req = groupRequest(1L, List.of(1001L, 1002L, 1003L));
+        req.setClassCode("LOCAL_JAVA_01");
+
+        BatchInvitationResponse response = service.createInvitationsByCourse(1L, req, teacherPrincipal());
+
+        assertEquals(3, response.getTotalRequested());
+        assertEquals(1, response.getSuccessCount());
+        assertEquals(1, response.getSkippedCount());
+        assertEquals(1, response.getFailureCount());
+
+        InvitationDTO created = response.getSuccessfulInvitations().get(0);
+        assertEquals("COURSE", created.getSourceType());
+        assertEquals(1L, created.getSourceCourseId());
+        assertEquals("LOCAL_JAVA_01", created.getSourceClassCode());
+        assertEquals("dungpp714@gmail.com", created.getUserEmail());
     }
 }

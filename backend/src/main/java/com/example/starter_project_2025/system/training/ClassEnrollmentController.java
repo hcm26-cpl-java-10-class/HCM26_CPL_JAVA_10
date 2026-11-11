@@ -16,7 +16,7 @@ import static com.example.starter_project_2025.system.training.TraineeImportCont
 public class ClassEnrollmentController {
     private final ClassEnrollmentService service;
     @GetMapping
-    @PreAuthorize("hasAuthority('CLASS_READ') and hasAuthority('ENROLLMENT_READ')")
+    @PreAuthorize("(hasAuthority('CLASS_READ') and hasAuthority('ENROLLMENT_READ')) or hasAuthority('INVITATION_CREATE')")
     public List<TraineeView> list(@PathVariable @Positive Long classId, Authentication auth) { return service.list(classId, sensitive(auth)); }
     @PostMapping("/preview")
     @PreAuthorize("hasAuthority('CLASS_READ') and hasAuthority('ENROLLMENT_READ') and hasAuthority('ENROLLMENT_CREATE')")

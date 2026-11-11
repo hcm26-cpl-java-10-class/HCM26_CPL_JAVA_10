@@ -138,7 +138,8 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "WORKSPACE_ACTIVITY_READ",
                         "PROGRAM_READ", "PROGRAM_CREATE", "PROGRAM_UPDATE", "PROGRAM_DELETE",
                         "SUBJECT_READ", "SUBJECT_CREATE", "SUBJECT_UPDATE", "SUBJECT_DELETE",
-                        "SESSION_CREATE", "SESSION_READ", "SESSION_UPDATE", "SESSION_DELETE"
+                        "SESSION_CREATE", "SESSION_READ", "SESSION_UPDATE", "SESSION_DELETE",
+                        "CLASS_READ", "ENROLLMENT_READ"
                 )
         );
 

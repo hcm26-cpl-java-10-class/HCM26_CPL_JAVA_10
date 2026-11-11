@@ -131,7 +131,10 @@ export default function InvitationsPage() {
         () =>
             sourceFilter === "ALL"
                 ? allRows
-                : allRows.filter((inv) => (inv.sourceType ?? "MANUAL") === sourceFilter),
+                : allRows.filter((inv) => {
+                      const isByClass = inv.sourceType === "COURSE" || Boolean(inv.sourceClassCode);
+                      return sourceFilter === "COURSE" ? isByClass : !isByClass;
+                  }),
         [allRows, sourceFilter],
     );
     const total = rows.length;
@@ -327,9 +330,10 @@ export default function InvitationsPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        {inv.sourceType === "COURSE" ? (
+                                        {inv.sourceType === "COURSE" || inv.sourceClassCode ? (
                                             <Badge variant="outline" className="gap-1">
-                                                <GraduationCap className="size-3" /> By Class
+                                                <GraduationCap className="size-3" />{" "}
+                                                {inv.sourceClassCode || "By Class"}
                                             </Badge>
                                         ) : (
                                             <Badge variant="secondary" className="gap-1">
