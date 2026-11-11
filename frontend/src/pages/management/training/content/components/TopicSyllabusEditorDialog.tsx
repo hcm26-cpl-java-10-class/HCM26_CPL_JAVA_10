@@ -351,6 +351,7 @@ export function TopicSyllabusEditorDialog({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] sm:max-w-5xl md:max-w-5xl lg:max-w-6xl max-h-[92vh] flex flex-col p-0 overflow-hidden bg-gray-50/50">
         {/* Header */}
@@ -879,5 +880,6 @@ export function TopicSyllabusEditorDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
