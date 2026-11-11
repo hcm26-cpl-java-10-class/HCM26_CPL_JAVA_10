@@ -120,6 +120,32 @@ public class AuditLogServiceImpl implements AuditLogService {
                 oldValue, newValue, UUID.randomUUID().toString(), "SUCCESS");
     }
 
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void logAs(
+            Long actorId,
+            String actorEmail,
+            String action,
+            String entityType,
+            String entityId,
+            String oldValue,
+            String newValue,
+            String correlationId,
+            String result
+    ) {
+        save(
+                actorId,
+                actorEmail != null ? actorEmail : "SYSTEM",
+                action,
+                entityType,
+                entityId,
+                oldValue,
+                newValue,
+                correlationId != null ? correlationId : UUID.randomUUID().toString(),
+                result
+        );
+    }
+
     private void save(
             Long actorId,
             String actorEmail,

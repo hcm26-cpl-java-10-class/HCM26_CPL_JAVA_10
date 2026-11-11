@@ -2,6 +2,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAutoPageSize } from "@/components/datatable/hook/useAutoPageSize";
 import type { EntityCardRendererProps } from "@/types";
 import { ChevronRight } from "lucide-react";
+import { EntityHistoryDialog } from "@/components/audit/EntityHistoryDialog";
+import { usePermissions } from "@/hooks/usePermissions";
+import { isAuditAdmin } from "@/components/audit/auditAccess";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Loading from "./common/Loading";
 import NoResult from "./common/NoResult";
@@ -121,6 +124,7 @@ export function ProTable<TData = any>({
     expandable,
 }: ProTableProps<TData>) {
     const { schema } = table;
+    const { user } = usePermissions();
     const isBrowseMode = mode === "browse";
 
     // Auto-detect expandable from schema — true when any field is marked expandable: true
@@ -152,6 +156,7 @@ export function ProTable<TData = any>({
     const [deleteItem, setDeleteItem] = useState<TData | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [detailRow, setDetailRow] = useState<TData | null>(null);
+    const [historyRow, setHistoryRow] = useState<TData | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>(isBrowseMode ? "card" : "table");
 
     useEffect(() => {
@@ -235,7 +240,10 @@ export function ProTable<TData = any>({
     const hasRowActions = canViewRow || canEditRow || canDeleteRow;
 
     const showActionsColumn = !hideActions && hasRowActions;
-    const ACTION_COLUMN_WIDTH = 140;
+    // Audit history is only available to ADMIN (the audit API is admin-only)
+    const canViewHistory =
+        isAuditAdmin(user.roles) && !!table.permission?.resource;
+    const ACTION_COLUMN_WIDTH = canViewHistory ? 180 : 140;
 
     // Default row actions renderer (uses internal modal system or custom overrides)
     const defaultRenderRowActions = (row: TData) => (
@@ -244,6 +252,7 @@ export function ProTable<TData = any>({
             onView={onView || setDetailRow}
             onEdit={onEdit || table.openEdit}
             onDelete={onDelete || setDeleteItem}
+            onHistory={canViewHistory ? setHistoryRow : undefined}
             viewPermission={table.permission?.keys?.read}
             editPermission={table.permission?.keys?.update}
             deletePermission={table.permission?.keys?.delete}
@@ -601,6 +610,15 @@ export function ProTable<TData = any>({
             />
 
             {/* Detail View Modal: Always use internal system */}
+            {canViewHistory && (
+                <EntityHistoryDialog
+                    open={!!historyRow}
+                    entityType={String(table.permission?.resource ?? "")}
+                    entityId={historyRow ? ((historyRow as any)[schema.idField] ?? null) : null}
+                    onClose={() => setHistoryRow(null)}
+                />
+            )}
+
             <DetailModal
                 open={!!detailRow}
                 onClose={(open) => !open && setDetailRow(null)}

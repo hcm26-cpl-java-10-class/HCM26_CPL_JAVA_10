@@ -8,6 +8,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  getActionBadgeClass,
+  getActionDotClass,
+  getActionLabel,
+} from "@/components/audit/auditActions";
 
 interface EntityHistoryDialogProps {
   open: boolean;
@@ -18,12 +23,6 @@ interface EntityHistoryDialogProps {
 
 const HISTORY_PAGE_SIZE = 10;
 const IGNORED_FIELDS = new Set(["updatedAt", "updatedBy", "version"]);
-
-const ACTION_STYLE: Record<string, { dot: string; badge: string }> = {
-  CREATE: { dot: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700" },
-  UPDATE: { dot: "bg-blue-500", badge: "bg-blue-50 text-blue-700" },
-  DELETE: { dot: "bg-red-500", badge: "bg-red-50 text-red-700" },
-};
 
 function parseObject(value: string | null): Record<string, unknown> | null {
   if (!value) return null;
@@ -131,24 +130,23 @@ export function EntityHistoryDialog({
           <ol className="relative ml-2 border-l border-slate-200 pl-6">
             {logs.map((log) => {
               const action = (log.action ?? "").toUpperCase();
-              const style = ACTION_STYLE[action];
               const changes = getChanges(log);
 
               return (
                 <li key={log.id} className="relative pb-6 last:pb-0">
                   <span
-                    className={`absolute -left-[31px] top-1.5 h-3 w-3 rounded-full ring-4 ring-white ${
-                      style?.dot ?? "bg-slate-400"
-                    }`}
+                    className={`absolute -left-[31px] top-1.5 h-3 w-3 rounded-full ring-4 ring-white ${getActionDotClass(
+                      action,
+                    )}`}
                   />
 
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        style?.badge ?? "bg-slate-100 text-slate-700"
-                      }`}
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${getActionBadgeClass(
+                        action,
+                      )}`}
                     >
-                      {action || "UNKNOWN"}
+                      {getActionLabel(action)}
                     </span>
                     {isFailure(log.result) && (
                       <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">

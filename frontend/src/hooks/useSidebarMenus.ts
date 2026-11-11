@@ -1,9 +1,9 @@
+
+import { isAuditAdmin } from "@/components/audit/auditAccess";
 import { moduleApi, moduleGroupApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
 import {
-    ADMIN_ROLE,
-    normalizeRole,
     canAccessPath,
     canAccessByPermission,
 } from "@/utils/rbac.utils";
@@ -33,35 +33,86 @@ export function useActiveModuleGroups(enabled = true) {
     const { activeRole, hasPermission, user } = usePermissions();
 
     return useQuery<SidebarModuleGroup[]>({
-        queryKey: ["sidebar-menu", "active-module-groups", activeRole, user.email, user.permissions],
+        queryKey: [
+            "sidebar-menu",
+            "active-module-groups",
+            activeRole,
+            user.email,
+            user.permissions,
+            user.roles,
+        ],
         enabled,
+
         queryFn: async () => {
             let groups: ModuleGroupDTO[] = [];
             let modules: ModuleDTO[] = [];
+            let hasAuditLogInDb = false;
 
             try {
                 const [groupPage, modulePage] = await Promise.all([
-                    moduleGroupApi.getPage(menuPagination, undefined, { ids: [], isActive: true }),
-                    moduleApi.getPage(modulePagination, undefined, { ids: [], isActive: true }),
+                    moduleGroupApi.getPage(
+                        menuPagination,
+                        undefined,
+                        { ids: [], isActive: true }
+                    ),
+                    moduleApi.getPage(
+                        modulePagination,
+                        undefined,
+                        { ids: [], isActive: true }
+                    ),
                 ]);
 
                 const isAdmin = activeRole === "ADMIN";
+
                 groups = groupPage.content ?? groupPage.items ?? [];
-                modules = (modulePage.content ?? modulePage.items ?? []).filter((module) => {
+
+                const rawModules =
+                    modulePage.content ?? modulePage.items ?? [];
+
+                hasAuditLogInDb = rawModules.some(
+                    (module) => module.url === "/admin/audit-log"
+                );
+
+                modules = rawModules.filter((module) => {
                     const path = module.url ?? "";
 
-                    if (!canAccessPath(path, activeRole, user.permissions)) {
+                    // Audit Log: chỉ dành cho Audit Admin
+                    if (path === "/admin/audit-log") {
+                        return (
+                            isAuditAdmin(user.roles) &&
+                            canAccessPath(
+                                path,
+                                activeRole,
+                                user.permissions
+                            )
+                        );
+                    }
+
+                    if (
+                        !canAccessPath(
+                            path,
+                            activeRole,
+                            user.permissions
+                        )
+                    ) {
                         return false;
                     }
 
-                    if (path === "/admin/audit-log") {
-                        return normalizeRole(activeRole) === ADMIN_ROLE;
-                    }
-
-                    return isAdmin || canAccessByPermission(module.requiredPermission, hasPermission);
+                    return (
+                        isAdmin ||
+                        canAccessByPermission(
+                            module.requiredPermission,
+                            hasPermission
+                        )
+                    );
                 });
+
             } catch (err) {
-                console.warn("Failed to load sidebar modules from backend, loading fallback navigation:", err);
+                console.warn(
+                    "Failed to load sidebar modules from backend, loading fallback navigation:",
+                    err
+                );
+
                 groups = [
                     {
                         id: 1,
@@ -78,6 +129,7 @@ export function useActiveModuleGroups(enabled = true) {
                         isActive: true,
                     },
                 ];
+
                 modules = [
                     {
                         id: 101,
@@ -146,28 +198,51 @@ export function useActiveModuleGroups(enabled = true) {
                         displayOrder: 2,
                         isActive: true,
                     },
-                ].filter((m) => activeRole === "ADMIN" || canAccessByPermission(m.requiredPermission, hasPermission));
+                ].filter(
+                    (module) =>
+                        activeRole === "ADMIN" ||
+                        canAccessByPermission(
+                            module.requiredPermission,
+                            hasPermission
+                        )
+                );
             }
 
-            const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {
-                if (!module.moduleGroupId) return acc;
-
-                if (!acc[module.moduleGroupId]) {
-                    acc[module.moduleGroupId] = [];
+            // Group modules
+            const groupedModules = modules.reduce<
+                Record<string, SidebarModule[]>
+            >((acc, module) => {
+                if (!module.moduleGroupId) {
+                    return acc;
                 }
 
-                acc[module.moduleGroupId].push({
+                const groupId = String(module.moduleGroupId);
+
+                if (!acc[groupId]) {
+                    acc[groupId] = [];
+                }
+
+                acc[groupId].push({
                     ...module,
                     name: module.title,
                 });
+
                 return acc;
             }, {});
 
-            // Ensure Invitation menu under Exam Management if permitted and not already in DB
-            const hasInvitationInDb = modules.some((m) => m.url === "/invitations");
-            if (!hasInvitationInDb && canAccessByPermission("INVITATION_READ", hasPermission)) {
+            // Ensure Invitation menu under Exam Management
+            const hasInvitationInDb = modules.some(
+                (module) => module.url === "/invitations"
+            );
+
+            if (
+                !hasInvitationInDb &&
+                canAccessByPermission("INVITATION_READ", hasPermission)
+            ) {
                 let examGroup = groups.find(
-                    (g) => (g.name || "").toLowerCase() === "exam management",
+                    (group) =>
+                        (group.name || "").toLowerCase() ===
+                        "exam management"
                 );
 
                 if (!examGroup) {
@@ -178,11 +253,13 @@ export function useActiveModuleGroups(enabled = true) {
                         displayOrder: 1,
                         isActive: true,
                     };
+
                     groups.push(fallbackGroup);
                     examGroup = fallbackGroup;
                 }
 
                 const groupId = String(examGroup.id ?? 9999);
+
                 if (!groupedModules[groupId]) {
                     groupedModules[groupId] = [];
                 }
@@ -200,12 +277,64 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
-            // Ensure Training Operations group and its critical menus (Adjust Calendar & Timetable) always exist
+            // Ensure Audit Log menu under RBAC Management
+            if (
+                !hasAuditLogInDb &&
+                isAuditAdmin(user.roles) &&
+                canAccessPath(
+                    "/admin/audit-log",
+                    activeRole,
+                    user.permissions
+                )
+            ) {
+                let rbacGroup = groups.find(
+                    (group) =>
+                        (group.name || "").toLowerCase() ===
+                        "rbac management"
+                );
+
+                if (!rbacGroup) {
+                    const fallbackGroup: ModuleGroupDTO = {
+                        id: 9996,
+                        name: "RBAC Management",
+                        description: "Role-based Access Control",
+                        displayOrder: 3,
+                        isActive: true,
+                    };
+
+                    groups.push(fallbackGroup);
+                    rbacGroup = fallbackGroup;
+                }
+
+                const groupId = String(rbacGroup.id ?? 9996);
+
+                if (!groupedModules[groupId]) {
+                    groupedModules[groupId] = [];
+                }
+
+                groupedModules[groupId].push({
+                    id: 99996,
+                    moduleGroupId: groupId,
+                    title: "Audit Log",
+                    name: "Audit Log",
+                    url: "/admin/audit-log",
+                    icon: "history",
+                    displayOrder: 3,
+                    isActive: true,
+                });
+            }
+
+            // Ensure Training Operations and critical menus exist
             const isAdmin = activeRole === "ADMIN";
-            const canViewSessions = isAdmin || canAccessByPermission("SESSION_READ", hasPermission);
+
+            const canViewSessions =
+                isAdmin ||
+                canAccessByPermission("SESSION_READ", hasPermission);
 
             let trainingGroup = groups.find(
-                (g) => (g.name || "").toLowerCase() === "training operations",
+                (group) =>
+                    (group.name || "").toLowerCase() ===
+                    "training operations"
             );
 
             if (!trainingGroup && canViewSessions) {
@@ -216,17 +345,24 @@ export function useActiveModuleGroups(enabled = true) {
                     displayOrder: 1,
                     isActive: true,
                 };
+
                 groups.push(fallbackGroup);
                 trainingGroup = fallbackGroup;
             }
 
             if (trainingGroup && canViewSessions) {
                 const groupId = String(trainingGroup.id ?? 9998);
+
                 if (!groupedModules[groupId]) {
                     groupedModules[groupId] = [];
                 }
 
-                const hasAdjust = modules.some((m) => m.url === "/calendar/adjust" || m.url === "/schedule-versions");
+                const hasAdjust = modules.some(
+                    (module) =>
+                        module.url === "/calendar/adjust" ||
+                        module.url === "/schedule-versions"
+                );
+
                 if (!hasAdjust) {
                     groupedModules[groupId].push({
                         id: 99998,
@@ -241,7 +377,12 @@ export function useActiveModuleGroups(enabled = true) {
                     });
                 }
 
-                const hasTimetable = modules.some((m) => m.url === "/calendar/preview" || m.url === "/calendar/timetable");
+                const hasTimetable = modules.some(
+                    (module) =>
+                        module.url === "/calendar/preview" ||
+                        module.url === "/calendar/timetable"
+                );
+
                 if (!hasTimetable) {
                     groupedModules[groupId].push({
                         id: 99997,
@@ -257,12 +398,19 @@ export function useActiveModuleGroups(enabled = true) {
                 }
             }
 
+            // Return grouped modules
             return groups
                 .map((group) => {
                     const groupId = String(group.id ?? "");
-                    const groupMods = (groupedModules[groupId] ?? []).sort(
-                        (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0),
+
+                    const groupMods = (
+                        groupedModules[groupId] ?? []
+                    ).sort(
+                        (a, b) =>
+                            (a.displayOrder ?? 0) -
+                            (b.displayOrder ?? 0)
                     );
+
                     return {
                         ...group,
                         modules: groupMods,
@@ -270,6 +418,7 @@ export function useActiveModuleGroups(enabled = true) {
                 })
                 .filter((group) => group.modules.length > 0);
         },
+
         staleTime: 5 * 60 * 1000,
     });
 }
