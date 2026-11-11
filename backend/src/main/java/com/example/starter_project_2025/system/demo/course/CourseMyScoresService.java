@@ -8,6 +8,8 @@ import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import com.example.starter_project_2025.system.exam.domain.ExamResultPublication;
 import com.example.starter_project_2025.system.exam.domain.ScoreReleasePolicy;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
+import com.example.starter_project_2025.system.exam.gradebook.GradebookPublishedItem;
+import com.example.starter_project_2025.system.exam.gradebook.GradebookPublishedItemRepository;
 import com.example.starter_project_2025.system.exam.service.ExamResultAccessService;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,7 @@ public class CourseMyScoresService {
     private final ExamAttemptRepository attemptRepository;
     private final ExamResultAccessService resultAccessService;
     private final EntityManager entityManager;
+    private final GradebookPublishedItemRepository publishedRepository;
 
     private static final BigDecimal TEN = BigDecimal.TEN;
     private static final BigDecimal HUNDRED = new BigDecimal("100");
@@ -71,10 +74,10 @@ public class CourseMyScoresService {
 
         return enrollments.stream()
                 .filter(enrollment -> enrollment.getCourse() != null)
-                .map(enrollment -> buildCourseScores(
-                        enrollment.getCourse(),
-                        bestAttempts
-                ))
+                .map(enrollment -> publishedScores(enrollment.getCourse(),
+                                publishedRepository.findByCourse_IdAndStudent_IdOrderByPositionAsc(
+                                        enrollment.getCourse().getId(), studentId))
+                        .orElseGet(() -> buildCourseScores(enrollment.getCourse(), bestAttempts)))
                 .collect(Collectors.toMap(
                         CourseMyScoresDTO::courseId,
                         dto -> dto,
@@ -83,6 +86,41 @@ public class CourseMyScoresService {
                 .values()
                 .stream()
                 .toList();
+    }
+
+    /**
+     * Neu giang vien da bam "Save scores" o Score Management thi My Scores lay ban bang diem do:
+     * moi cot diem la mot muc, diem tong = tong(diem x ti trong) / 100 (giong cot Final cua giang vien).
+     */
+    private java.util.Optional<CourseMyScoresDTO> publishedScores(Course course, List<GradebookPublishedItem> items) {
+        if (items == null || items.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        List<CourseGradeItemDTO> gradeItems = new ArrayList<>();
+        BigDecimal sum = BigDecimal.ZERO;
+        for (GradebookPublishedItem i : items) {
+            String label = i.getExamTitle() != null ? i.getColumnName() + " (" + i.getExamTitle() + ")" : i.getColumnName();
+            gradeItems.add(new CourseGradeItemDTO(publishedCategory(i.getColumnType()), i.getExamId(), label,
+                    i.getWeightPercent(), i.getScore()));
+            if (i.getScore() != null) {
+                sum = sum.add(i.getScore().multiply(i.getWeightPercent()));
+            }
+        }
+        BigDecimal overall = sum.divide(HUNDRED, 2, RoundingMode.HALF_UP);
+        String status = overall.compareTo(new BigDecimal("5")) >= 0 ? "PASSED" : "FAILED";
+        return java.util.Optional.of(new CourseMyScoresDTO(course.getId(), null, course.getName(), null,
+                overall, status, gradeItems));
+    }
+
+    private String publishedCategory(String type) {
+        if (type == null) return "Other";
+        return switch (type) {
+            case "ASSIGNMENT" -> "Assignment";
+            case "QUIZ" -> "Quiz";
+            case "MIDTERM" -> "Midterm";
+            case "FINAL_TEST" -> "Final";
+            default -> type;
+        };
     }
 
     private CourseMyScoresDTO buildCourseScores(
@@ -123,12 +161,19 @@ public class CourseMyScoresService {
         Set<Long> publishedExamIds = publications.stream()
                 .filter(p -> p.isPublished() && p.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
                 .map(p -> p.getExam().getId()).collect(Collectors.toSet());
+        Map<Long, List<GradebookPublishedItem>> published = new HashMap<>();
+        for (GradebookPublishedItem item : publishedRepository.findForStudents(courseIds, studentIds)) {
+            published.computeIfAbsent(item.getStudent().getId() * 1_000_000L + item.getCourse().getId(),
+                    k -> new ArrayList<>()).add(item);
+        }
         Map<Long, List<CourseMyScoresDTO>> result = new HashMap<>();
         studentCourses.forEach((studentId, courses) -> {
             Map<Long, ExamAttempt> best = selectBestAttempts(attemptsByStudent.getOrDefault(studentId, List.of()));
-            result.put(studentId, courses.stream().map(course -> buildCourseScores(course, best,
-                    examsByCourse.getOrDefault(course.getId(), List.of()),
-                    exam -> publishedExamIds.contains(exam.getId()))).toList());
+            result.put(studentId, courses.stream().map(course -> publishedScores(course,
+                            published.getOrDefault(studentId * 1_000_000L + course.getId(), List.of()))
+                    .orElseGet(() -> buildCourseScores(course, best,
+                            examsByCourse.getOrDefault(course.getId(), List.of()),
+                            exam -> publishedExamIds.contains(exam.getId())))).toList());
         });
         return result;
     }

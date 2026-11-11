@@ -66,7 +66,9 @@ export function SidebarMenu() {
                             !!module.url &&
                             (location.pathname === module.url ||
                                 (location.pathname.startsWith(`${module.url}/`) &&
-                                    (!isExamsRoot || !location.pathname.startsWith("/exams/curriculum"))));
+                                    (!isExamsRoot ||
+                                        (!location.pathname.startsWith("/exams/curriculum") &&
+                                            !location.pathname.startsWith("/exams/score-management")))));
 
                         return {
                             title: module.title ?? "Untitled",
@@ -99,6 +101,18 @@ export function SidebarMenu() {
                             items = [curriculumItem, ...items];
                         }
                     }
+                }
+
+                if (isAssessmentGroup && !items.some((i) => i.url === "/exams/score-management")) {
+                    items = [
+                        ...items,
+                        {
+                            title: "Score Management",
+                            url: "/exams/score-management",
+                            icon: resolveIcon("graduation-cap"),
+                            isActive: location.pathname.startsWith("/exams/score-management"),
+                        },
+                    ];
                 }
 
                 return {

@@ -1,3 +1,4 @@
+import ScoreManagementPage from "@/pages/management/exam/score-management";
 import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
@@ -156,6 +157,11 @@ export const routes: RouteConfig[] = [
   },
 
   // EXAMS
+  {
+    path: "/exams/score-management",
+    component: ScoreManagementPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
   {
     path: "/exams/curriculum",
     component: ExamCurriculumPage,
