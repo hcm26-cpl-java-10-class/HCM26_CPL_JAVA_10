@@ -120,7 +120,12 @@ export default function SprintWorkspacePage() {
     setSubmitting(true);
 
     try {
-      const created = await sprintApi.create(values as SprintDTO);
+      const created = await sprintApi.create({
+        ...values,
+        // A new sprint always starts as Planned (the status field is not part
+        // of the Create Sprint modal).
+        status: "PLANNED",
+      } as SprintDTO);
       setCreateOpen(false);
       await refreshSprints();
 

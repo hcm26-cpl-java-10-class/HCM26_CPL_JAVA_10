@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.project.ProjectMemberRepository;
 import com.example.starter_project_2025.system.project.ProjectMemberRole;
 import com.example.starter_project_2025.system.project.ProjectTeam;
 import com.example.starter_project_2025.system.project.ProjectTeamAudit;
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
 import com.example.starter_project_2025.system.project.ProjectTeamAuditRepository;
 import com.example.starter_project_2025.system.project.ProjectTeamOutboxEvent;
 import com.example.starter_project_2025.system.project.ProjectTeamOutboxRepository;
@@ -20,7 +21,6 @@ import com.example.starter_project_2025.system.project.milestone.domain.LatePoli
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
-import com.example.starter_project_2025.system.project.resources.project_resources.ProjectResourceProvisioningService;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogPriority;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
@@ -63,14 +63,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TemplateAssignmentProvisioningService {
@@ -100,21 +98,19 @@ public class TemplateAssignmentProvisioningService {
     private final TemplateMilestoneScheduleValidator scheduleValidator;
     private final TemplateMilestoneRubrics milestoneRubrics;
     private final TemplateBriefSnapshotWriter briefSnapshots;
-    private final ProjectResourceProvisioningService projectResourceProvisioning;
+    private final TemplateAssignmentResourceWriter assignmentResources;
     private final ObjectMapper objectMapper;
     private final jakarta.persistence.EntityManager entityManager;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void provision(ProjectTeam team, ProjectTemplate template, Long actorId, String correlationId) {
-
-        if (team.getProjectId() != null) {
-            log.debug("US-13 team {} already owns project {} - provisioning skipped",
-                    team.getId(), team.getProjectId());
+        Long tenantId = Objects.requireNonNull(team.getTrainingClass().getTenantId(),
+                "The training class must belong to a tenant");
+        if (team.getProject() != null) {
+            ensureWorkspace(team, team.getProject(), tenantId, actorId, correlationId);
             return;
         }
 
-        Long tenantId = Objects.requireNonNull(team.getTrainingClass().getTenantId(),
-                "The training class must belong to a tenant");
         entityManager.refresh(template, jakarta.persistence.LockModeType.PESSIMISTIC_READ);
         if (template.getStatus() != ProjectTemplateStatus.ACTIVE || !Boolean.TRUE.equals(template.getIsActive())
                 || template.getTenantId() != null && !tenantId.equals(template.getTenantId())) {
@@ -125,12 +121,13 @@ public class TemplateAssignmentProvisioningService {
         List<TemplateMilestone> milestonePlan =
                 templateMilestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
         var planRequest = TemplateMilestonePlanRequest.from(template.getLockVersion(), milestonePlan);
-        milestoneValidator.validate(planRequest);
+        milestoneValidator.validate(planRequest, template.getParentTemplateId() == null);
         scheduleValidator.validate(planRequest, template.getEstimatedDurationWeeks());
         milestoneRubrics.requirePublished(planRequest, tenantId);
 
         // ---- Step 1: immutable evidence snapshot of the active brief version
-        ProjectTemplateSnapshot snapshot = briefSnapshots.snapshotForAssignment(template, team.getId());
+        ProjectTemplateSnapshot snapshot = briefSnapshots.snapshotForAssignment(
+                template, team.getId(), team.getProjectTemplateVersionId());
 
         // ---- Step 2: project creation
         Project project = createProject(team, template, snapshot, tenantId, actorId);
@@ -141,13 +138,11 @@ public class TemplateAssignmentProvisioningService {
 
         // ---- Step 3: workspace + generated components
         Workspace workspace = ensureWorkspace(team, project, tenantId, actorId, correlationId);
+        int inheritedResources = assignmentResources.copy(project, template, snapshot);
 
         int generatedMilestones = generateMilestones(
                 team, project, tenantId, actorId, now, milestonePlan);
         int generatedBacklogItems = generateSampleBacklog(project, template);
-        // US-RES-001: the project inherits the resource set of the version it
-        // was assigned from. The copies stay independent from the template.
-        int inheritedResources = projectResourceProvisioning.provision(snapshot, project.getId(), tenantId);
 
         recordActivity(workspace, tenantId, actorId, correlationId, ACTIVITY_WORKSPACE_GENERATED);
 
@@ -174,7 +169,10 @@ public class TemplateAssignmentProvisioningService {
         project.setTenant(tenants.findById(tenantId)
                 .orElseThrow(() -> new IllegalStateException("Tenant was not found")));
         project.setCohort(cohortOf(team));
-        project.setStatus(ProjectStatus.PLANNING);
+        // A DRAFT team must not own an ACTIVE project yet; publishing activates it.
+        project.setStatus(team.getStatus() == ProjectTeamStatus.ACTIVE
+                ? ProjectStatus.ACTIVE
+                : ProjectStatus.PLANNING);
         project.setTemplateSnapshotId(snapshot.getId());
         project.setClassId(team.getTrainingClass().getId());
         project.setTeamId(team.getId());
@@ -225,12 +223,13 @@ public class TemplateAssignmentProvisioningService {
                                       Long actorId,
                                       String correlationId) {
 
-        Workspace existing = workspaces.findFirstByTeamIdOrderByIdAsc(team.getId()).orElse(null);
+        Workspace existing = workspaces.findCurrentByTeamId(team.getId()).orElse(null);
         if (existing != null) {
             if (existing.getProject() == null) {
                 existing.setProject(project);
                 workspaces.saveAndFlush(existing);
             }
+            syncWorkspaceStatus(existing, team);
             return existing;
         }
 
@@ -243,7 +242,8 @@ public class TemplateAssignmentProvisioningService {
         workspace.setProject(project);
         workspace.setCode("WS-TEAM-" + team.getId());
         workspace.setName("Workspace / " + team.getTeamName());
-        workspace.setStatus(WorkspaceStatus.ACTIVE);
+        // Only a published (ACTIVE) team gets an ACTIVE workspace.
+        workspace.setStatus(workspaceStatusFor(team));
         workspace.setCreatedBy(actorId);
         workspace.setIsActive(true);
         workspace.setSections(new ArrayList<>(Arrays.asList(WorkspaceSection.values())));
@@ -252,6 +252,25 @@ public class TemplateAssignmentProvisioningService {
         workspaceJournal.recordCreation(saved, actor(actorId), response(saved, tenantId, project, team), correlationId);
 
         return saved;
+    }
+
+    private WorkspaceStatus workspaceStatusFor(ProjectTeam team) {
+        return team.getStatus() == ProjectTeamStatus.ACTIVE
+                ? WorkspaceStatus.ACTIVE
+                : WorkspaceStatus.DRAFT;
+    }
+
+    /** Keeps legacy workspaces aligned with the team publish state. */
+    private void syncWorkspaceStatus(Workspace workspace, ProjectTeam team) {
+        if (workspace.getStatus() == WorkspaceStatus.ARCHIVED
+                || workspace.getStatus() == WorkspaceStatus.CLOSED) {
+            return;
+        }
+        WorkspaceStatus desired = workspaceStatusFor(team);
+        if (workspace.getStatus() != desired) {
+            workspace.setStatus(desired);
+            workspaces.saveAndFlush(workspace);
+        }
     }
 
     private WorkspaceResponse response(Workspace workspace, Long tenantId, Project project, ProjectTeam team) {

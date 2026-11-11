@@ -333,8 +333,8 @@ export function ProjectTaskListView({
                   return (
                     <tr key={task.id} className="align-top hover:bg-slate-50/70">
                       <td className="px-4 py-3">
-                        <span className="block font-mono text-xs font-semibold text-blue-700">{task.code}</span>
-                        <span className="mt-1 block text-[11px] text-slate-400">#{task.id}</span>
+                        <span className="block text-xs font-semibold text-blue-700">{task.code}</span>
+                        <span className="mt-1 block text-xs text-slate-400">#{task.id}</span>
                       </td>
                       <td className="max-w-sm px-4 py-3 font-medium text-slate-800">{task.title}</td>
                       <td className="px-4 py-3">
@@ -486,7 +486,7 @@ export function ProjectTaskListView({
                       <p className="mt-1 text-xs text-slate-500">
                         {formatDateTime(item.occurredAt)} · Version {item.previousVersion} → {item.newVersion}
                       </p>
-                      <p className="mt-1 break-all font-mono text-[11px] text-slate-400">
+                      <p className="mt-1 break-all text-xs text-slate-400">
                         Correlation ID: {item.correlationId ?? "không có"}
                       </p>
                     </div>

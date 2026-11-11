@@ -16,6 +16,7 @@ import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.example.starter_project_2025.system.project.workspace.repository.ProjectTopicSnapshotRepository;
 import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
+import com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection;
 
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
 import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
@@ -128,6 +129,17 @@ class WorkspaceOverviewIntegrationTest {
                 .content(json.writeValueAsString(Map.of("projectId", projectId, "teamId", teamId))))
                 .andExpect(status().isCreated()).andReturn();
         workspaceId = json.readTree(created.getResponse().getContentAsString()).get("id").asLong();
+    }
+
+    @Test
+    void creationPersistsEverySectionIncludingResources() throws Exception {
+        assertThat(jdbc.queryForList("SELECT section FROM workspace_sections WHERE workspace_id=? ORDER BY display_order",
+                String.class, workspaceId)).containsExactlyElementsOf(
+                Arrays.stream(WorkspaceSection.values()).map(Enum::name).toList());
+        var sections = new ArrayList<String>();
+        overview().get("sections").forEach(section -> sections.add(section.asText()));
+        assertThat(sections).contains("resources").containsExactlyElementsOf(
+                Arrays.stream(WorkspaceSection.values()).map(WorkspaceSection::getKey).toList());
     }
 
     JsonNode overview() throws Exception {

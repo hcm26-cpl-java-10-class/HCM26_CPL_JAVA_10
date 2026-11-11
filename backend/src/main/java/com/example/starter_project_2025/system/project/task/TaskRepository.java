@@ -7,14 +7,19 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.Optional;
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository("taskRepository")
 public interface TaskRepository extends BaseCrudRepository<Task, UUID> {
     long countByProjectIdAndMilestoneIdAndIsActiveTrue(UUID projectId, UUID milestoneId);
     long countByProjectIdAndMilestoneIdAndIsActiveTrueAndStatus(UUID projectId, UUID milestoneId, TaskStatus status);
+    List<Task> findAllByIsActiveTrueAndStatusInAndDeadlineBefore(Collection<TaskStatus> statuses, Instant deadline);
+    long countByProjectIdAndMilestoneIdAndIsActiveTrueAndStatusInAndDeadlineBefore(
+            UUID projectId, UUID milestoneId, Collection<TaskStatus> statuses, Instant deadline);
     Optional<Task> findByIdAndIsActiveTrue(UUID id);
     List<Task> findAllByBacklogItem_IdAndIsActiveTrueOrderByCreatedAtAscIdAsc(Long backlogItemId);
     boolean existsByBacklogItem_Id(Long backlogItemId);

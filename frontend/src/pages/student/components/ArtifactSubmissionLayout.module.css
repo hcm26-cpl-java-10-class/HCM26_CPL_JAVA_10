@@ -1,0 +1,21 @@
+.shell {
+  container: artifact / inline-size;
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-bottom: 24px;
+  color: var(--foreground);
+}
+
+.layout {
+  display: grid;
+  min-width: 0;
+  gap: 20px;
+  align-items: start;
+}
+
+@container artifact (min-width: 880px) {
+  .layout {
+    grid-template-columns: minmax(0, 1.85fr) minmax(300px, 1fr);
+  }
+}

@@ -1,11 +1,5 @@
 import axios from "axios";
-import type { ProjectTemplateDTO, ProjectTemplateLevel, TemplateMilestone } from "@/types/features/project-template";
-
-export const templateLevelOptions = [
-  { value: "BEGINNER", label: "Beginner" },
-  { value: "INTERMEDIATE", label: "Intermediate" },
-  { value: "ADVANCED", label: "Advanced" },
-] as const;
+import type { ProjectTemplateDTO, ProjectTemplateOptions, TemplateMilestone } from "@/types/features/project-template";
 
 export const templateStatusOptions = [
   { value: "DRAFT", label: "Draft" },
@@ -18,16 +12,18 @@ export interface TemplateFormValues {
   name: string;
   description: string;
   category: string;
-  level: ProjectTemplateLevel | "";
+  level: string;
   estimatedDurationWeeks: string;
 }
 
 export type TemplateFieldErrors = Partial<Record<keyof TemplateFormValues, string[]>>;
 
-export const maxDescriptionWords = 1000;
+export const maxDescriptionLength = 1000;
+export const maxTemplateCodeNameLength = 100;
 
-export function descriptionWordCount(value: string): number {
-  return value.trim() ? value.trim().split(/\s+/u).length : 0;
+export function templateDescriptionCount(description = "") {
+  const words = description.match(/\S+/g)?.length ?? 0;
+  return `${words.toLocaleString("en-US")} ${words === 1 ? "word" : "words"} · ${description.length.toLocaleString("en-US")} / ${maxDescriptionLength.toLocaleString("en-US")} characters`;
 }
 
 export function toTemplateFormValues(template?: ProjectTemplateDTO): TemplateFormValues {
@@ -50,9 +46,10 @@ export function minimumTemplateDurationWeeks(milestones: TemplateMilestone[]): n
 export function validateTemplateForm(values: TemplateFormValues, minimumDurationWeeks = 0): TemplateFieldErrors {
   const errors: TemplateFieldErrors = {};
   for (const [field, label, maximum] of [
-    ["code", "Code", 100],
-    ["name", "Name", 255],
+    ["code", "Code", maxTemplateCodeNameLength],
+    ["name", "Name", maxTemplateCodeNameLength],
     ["category", "Category", 255],
+    ["level", "Level", 20],
   ] as const) {
     if (!values[field].trim()) errors[field] = [`${label} is required`];
     else if (values[field].trim().length > maximum) {
@@ -60,11 +57,8 @@ export function validateTemplateForm(values: TemplateFormValues, minimumDuration
     }
   }
   if (!values.description.trim()) errors.description = ["Description is required"];
-  else if (descriptionWordCount(values.description) > maxDescriptionWords) {
-    errors.description = ["Description must not exceed 1000 words"];
-  }
-  if (!templateLevelOptions.some((option) => option.value === values.level)) {
-    errors.level = ["Select Beginner, Intermediate or Advanced"];
+  else if (values.description.length > maxDescriptionLength) {
+    errors.description = ["Description must not exceed 1000 characters"];
   }
   const duration = values.estimatedDurationWeeks.trim();
   if (!/^\d+$/.test(duration) || Number(duration) <= 0 || Number(duration) > 2147483647) {
@@ -90,6 +84,6 @@ export function getTemplateError(error: unknown): {
   return { status: undefined, message: "Unable to complete this request. Please try again.", fields: {} };
 }
 
-export function templateLevelLabel(level: ProjectTemplateLevel) {
-  return templateLevelOptions.find((option) => option.value === level)?.label ?? level;
+export function templateLevelLabel(level: string, options: ProjectTemplateOptions["levels"] = []) {
+  return options.find((option) => option.value === level)?.label ?? level;
 }

@@ -103,10 +103,8 @@ export default function DynamicBreadcrumbs({
     }, [modules]);
 
     const ignoredPaths = new Set(ignorePaths.map((segment) => segment.toLowerCase()));
-    const pathnameSegments = location.pathname
-        .split("/")
-        .filter(Boolean)
-        .filter((segment) => !ignoredPaths.has(segment.toLowerCase()));
+    // Hrefs are built from the full path; ignored segments (e.g. ones without a page of their own) are only hidden.
+    const pathnameSegments = location.pathname.split("/").filter(Boolean);
 
     const rawSegments =
         isStudentVariant && pathnameSegments[0]?.toLowerCase() === "student"
@@ -118,6 +116,10 @@ export default function DynamicBreadcrumbs({
         const href = pathLinks?.[segment] || pathLinks?.[routeHref] || routeHref;
         const title = resolveTitle(segment, routeHref, pathTitles, moduleTitleByPath);
         const hasCustomTitle = Boolean(pathTitles?.[segment] || pathTitles?.[routeHref]);
+
+        if (ignoredPaths.has(segment.toLowerCase())) {
+            return [];
+        }
 
         if (!hasCustomTitle && isLikelyIdentifier(segment)) {
             return [];

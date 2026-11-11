@@ -36,7 +36,10 @@ public final class SubmissionDtos {
                          Instant lateUntil, BigDecimal latePenaltyPercent, long lockVersion,
                          ProductInfo product, Version currentVersion, List<Version> versions, Rubric rubric,
                          List<Review> reviews, Map<String, Boolean> availableActions,
-                         com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus milestoneLifecycleStatus) { }
+                         com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus milestoneLifecycleStatus,
+                         /* Why requestChanges / createNextVersion are unavailable; null when allowed. */
+                         com.example.starter_project_2025.system.project.milestone.submission.domain.ResubmissionBlockReason resubmissionBlockedReason,
+                         String resubmissionBlockedMessage) { }
 
     /** Immutable product snapshot created by the artifact-submission workflow. */
     public record ProductInfo(long version, String repositoryUrl, String deploymentUrl,
@@ -98,7 +101,7 @@ public final class SubmissionDtos {
 
     public record CreateVersionRequest(
             @NotBlank @Size(max = 160) String title,
-            @Size(max = 2000) String notes,
+            @Size(max = 1000, message = "Summary must not exceed 1000 characters") String notes,
             @Size(max = 1000) String submissionUrl,
             List<@Valid ArtifactRequest> artifacts) {
         public CreateVersionRequest(String title, String notes, String submissionUrl) {
@@ -108,7 +111,7 @@ public final class SubmissionDtos {
 
     public record UpdateDraftRequest(
             @NotBlank @Size(max = 160) String title,
-            @Size(max = 2000) String notes,
+            @Size(max = 1000, message = "Summary must not exceed 1000 characters") String notes,
             @Size(max = 1000) String submissionUrl,
             @Size(max = 20) List<@Valid ArtifactRequest> artifacts) { }
 

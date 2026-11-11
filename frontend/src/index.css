@@ -122,6 +122,31 @@
   }
 }
 
+.rubric-editor :is(input, textarea, select):not([aria-invalid="true"]):focus-visible {
+  border-color: #2563eb;
+  outline-color: #2563eb;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.16);
+}
+
+.dark .rubric-editor :is(input, textarea, select):not([aria-invalid="true"]):focus-visible {
+  border-color: #60a5fa;
+  outline-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgb(96 165 250 / 0.2);
+}
+
+.rubric-editor textarea.rubric-fixed-textarea {
+  field-sizing: fixed;
+  height: var(--rubric-textarea-height, 80px);
+  min-height: var(--rubric-textarea-height, 80px);
+  max-height: var(--rubric-textarea-height, 80px);
+  overflow-y: auto;
+  resize: none;
+}
+
+.rubric-editor textarea.rubric-fixed-textarea--rubric {
+  --rubric-textarea-height: 96px;
+}
+
 .theme-transition body,
 .theme-transition #root,
 .theme-transition [data-slot="table-container"] {

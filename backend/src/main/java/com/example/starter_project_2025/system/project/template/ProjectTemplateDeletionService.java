@@ -43,24 +43,30 @@ public class ProjectTemplateDeletionService {
         if (lockVersion == null || !lockVersion.equals(template.getLockVersion())) {
             throw ProjectTemplateException.conflict("This template has changed. Reload it before deleting");
         }
-        if (template.getStatus() != ProjectTemplateStatus.DRAFT) {
+        boolean module = template.getParentTemplateId() != null;
+        if (!module && template.getStatus() != ProjectTemplateStatus.DRAFT) {
             throw new ProjectTemplateException(422, "Only unused draft templates can be deleted. Archive active templates instead", Map.of());
         }
         var versionIds = snapshots.findByTemplateIdOrderByCreatedAtDesc(id).stream().map(ProjectTemplateSnapshot::getId).toList();
-        if (teams.existsByProjectTemplate_Id(id) || sessions.existsByProjectTemplate_Id(id)
+        if (!module && (teams.existsByProjectTemplate_Id(id) || sessions.existsByProjectTemplate_Id(id)
                 || classes.existsByProjectTemplate_Id(id) || snapshots.existsByTemplateIdAndProjectIdIsNotNull(id)
-                || !versionIds.isEmpty() && projects.existsByTemplateSnapshotIdIn(versionIds)) {
+                || !versionIds.isEmpty() && projects.existsByTemplateSnapshotIdIn(versionIds))) {
             throw new ProjectTemplateException(422, "This template is linked to a team, class or project and cannot be deleted", Map.of());
+        }
+        for (var child : templates.findAllByParentTemplate_IdAndTenantIdAndIsActiveTrueOrderByCodeAscIdAsc(id, user.getTenantId())) {
+            delete(child.getId(), child.getLockVersion());
         }
         try {
             String before = json.writeValueAsString(ProjectTemplateResponse.from(template, false, constraints.read(template.getConstraintsJson())));
             template.setIsActive(false);
+            if (module) template.setStatus(ProjectTemplateStatus.ARCHIVED);
             template.setUpdatedBy(user.getId());
             template.setUpdatedAt(LocalDateTime.now());
             templates.saveAndFlush(template);
             String after = json.writeValueAsString(Map.of("templateId", id, "deleted", true));
             String correlationId = CorrelationIdFilter.currentId();
-            audits.save(new ProjectTemplateAudit(template.getTenantId(), id, user.getId(), "PROJECT_TEMPLATE_DELETED", before, after, correlationId));
+            audits.save(new ProjectTemplateAudit(template.getTenantId(), id, user.getId(),
+                    module ? "PROJECT_TEMPLATE_MODULE_REMOVED" : "PROJECT_TEMPLATE_DELETED", before, after, correlationId));
             String payload = json.writeValueAsString(Map.of("templateId", id, "tenantId", template.getTenantId(),
                     "actorId", user.getId(), "correlationId", correlationId, "deleted", true));
             events.save(OutboxEvent.templateDeleted(template.getTenantId(), id, payload, Instant.now()));

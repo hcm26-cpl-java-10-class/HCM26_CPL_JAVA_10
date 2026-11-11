@@ -12,11 +12,11 @@ export const workspaceApi = {
   section: async (id: number, key: WorkspaceSectionKey, signal?: AbortSignal) =>
     (await axiosInstance.get<WorkspaceSectionContent>("/workspaces/" + id + "/" + key, { signal })).data,
   /** US-RES-004: project resources visible to the active team. */
-  resources: async (id: number, signal?: AbortSignal): Promise<WorkspaceResourceCollection> =>
-    (await axiosInstance.get<WorkspaceResourceCollection>(`/workspaces/${id}/resources`, { signal })).data,
+  resources: async (id: number, signal?: AbortSignal, projectId?: number | null): Promise<WorkspaceResourceCollection> =>
+    (await axiosInstance.get<WorkspaceResourceCollection>(`/workspaces/${id}/resources`, { signal, params: { projectId } })).data,
   /** US-RES-003: adds a resource to the workspace project. */
-  createResource: async (id: number, payload: WorkspaceResourcePayload): Promise<WorkspaceResource> =>
-    (await axiosInstance.post<WorkspaceResource>(`/workspaces/${id}/resources`, payload)).data,
+  createResource: async (id: number, payload: WorkspaceResourcePayload, projectId?: number | null): Promise<WorkspaceResource> =>
+    (await axiosInstance.post<WorkspaceResource>(`/workspaces/${id}/resources`, payload, { params: { projectId } })).data,
   /** US-RES-003: edits the display fields of one workspace resource. */
   updateResource: async (id: number, resourceId: number, payload: WorkspaceResourcePayload): Promise<WorkspaceResource> =>
     (await axiosInstance.put<WorkspaceResource>(`/workspaces/${id}/resources/${resourceId}`, payload)).data,
@@ -39,15 +39,12 @@ export const workspaceApi = {
     await axiosInstance.delete(`/workspaces/${id}/resources/${resourceId}/files/${fileId}`);
   },
   /** Requests the short-lived signed URL of one attached document. */
-  resourceDownloadTicket: async (id: number, resourceId: number, fileId: number): Promise<WorkspaceResourceDownloadTicket> => {
+  downloadResource: async (id: number, resourceId: number, fileId: number) => {
     const ticket = (await axiosInstance.get<WorkspaceResourceDownloadTicket>(
       `/workspaces/${id}/resources/${resourceId}/files/${fileId}/download-ticket`,
     )).data;
-    const base = (axiosInstance.defaults.baseURL ?? "").replace(/\/$/, "");
-    return {
-      ...ticket,
-      url: ticket.url.startsWith("http") ? ticket.url : `${base}${ticket.url.startsWith("/") ? ticket.url : `/${ticket.url}`}`,
-    };
+    const response = await axiosInstance.get<Blob>(ticket.url, { responseType: "blob" });
+    return { blob: response.data, fileName: ticket.fileName };
   },
   createSectionItem: async (id: number, path: string, input: SectionCreate) =>
     (await axiosInstance.post<WorkspaceSectionItem>("/workspaces/" + id + "/" + path, input)).data,

@@ -24,11 +24,15 @@ public final class WorkspaceResourceDtos {
                                String description,
                                String kind,
                                String url,
-                               String category,
                                Integer orderIndex,
                                LocalDateTime updatedAt,
                                Long updatedBy,
-                               List<FileItem> files) {
+                               List<FileItem> files,
+                               Long sourceTemplateId,
+                               String sourceName,
+                               String origin,
+                               Long projectId,
+                               boolean canManage) {
     }
 
     /** Result of {@code GET /api/workspaces/{id}/resources}. */
@@ -50,7 +54,6 @@ public final class WorkspaceResourceDtos {
                                   String description,
                                   String kind,
                                   String url,
-                                  String category,
                                   Integer orderIndex) {
     }
 

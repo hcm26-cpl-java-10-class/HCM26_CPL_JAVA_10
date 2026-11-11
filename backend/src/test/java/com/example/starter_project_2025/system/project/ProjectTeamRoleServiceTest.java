@@ -119,6 +119,7 @@ class ProjectTeamRoleServiceTest {
 
     @Test
     void updatesRolesAndWritesAuditAndOutboxInOneChange() {
+        team.setLeaderMemberId(19L);
         when(memberRepository.findAllByTeam_IdOrderByIdAsc(13L))
                 .thenReturn(List.of(member));
         MDC.put(CorrelationIdFilter.MDC_KEY, "role-assignment-test");
@@ -190,7 +191,8 @@ class ProjectTeamRoleServiceTest {
     }
 
     @Test
-    void doesNotWriteHistoryForDraftRoleChanges() {
+    void recordsHistoryForDraftRoleChanges() {
+        team.setLeaderMemberId(19L);
         team.setStatus(ProjectTeamStatus.DRAFT);
         when(memberRepository.findAllByTeam_IdOrderByIdAsc(13L))
                 .thenReturn(List.of(member));
@@ -205,7 +207,8 @@ class ProjectTeamRoleServiceTest {
                 authentication);
 
         assertEquals("PM", member.getRole());
-        verifyNoInteractions(historyService);
+        verify(historyService).record(session, member.getClassMember(), team, team, null, "PM",
+                "ROLE_CHANGED", null, authentication);
     }
 
     @Test

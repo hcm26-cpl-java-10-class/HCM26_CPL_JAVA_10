@@ -71,7 +71,8 @@ Backend mặc định chạy ở <http://localhost:8080>.
 
 ### 2.2. (Tùy chọn) Cấu hình Gemini API cho tính năng AI
 
-Chỉ cần khi bạn muốn test chấm bài tự luận bằng AI / phát hiện đạo văn:
+Chỉ cần khi bạn muốn dùng các chức năng gọi AI: chấm bài tự luận / phát hiện đạo văn,
+AI Course Builder, hoặc **AI Course Comparison** (phân tích so sánh khóa học).
 
 ```bash
 cp .env.example .env      # macOS/Linux
@@ -83,10 +84,28 @@ Sửa `backend/.env`:
 GEMINI_API_KEY=YOUR_KEY_CUA_BAN
 ```
 
-Lấy key miễn phí tại <https://aistudio.google.com/>.
+Lấy key miễn phí tại <https://aistudio.google.com/apikey>:
+1. Đăng nhập Google → **Create API key** → chọn project (hoặc tạo project mới).
+2. Copy key bắt đầu bằng `AIza...` và paste vào `GEMINI_API_KEY`.
+
 File `.env` đã được `.gitignore` nên mỗi người tự giữ key riêng, không ai push key lên Git.
 
 > **Không có key vẫn chạy bình thường**, chỉ mất các chức năng gọi AI.
+
+#### Kiểm tra AI đã sẵn sàng
+
+Khi khởi động backend, xem log:
+
+```
+c.e.s.i.config.DotenvLoader  - [Dotenv] Loading environment variables from: ...\backend\.env
+```
+
+Nếu thấy `No .env file found` hoặc API key sai, các endpoint AI sẽ trả lỗi
+`"Gemini API key is not configured. Set GEMINI_API_KEY in backend/.env to use the AI course builder."`
+
+> **Lưu ý timeout:** phân tích so sánh gửi payload lớn (1 khóa mục tiêu + tối đa 15 khóa
+> đối chiếu + toàn bộ `peerStats`), nên cần `AI_TIMEOUT_SECONDS=120` (mặc định đã đặt).
+> Nếu gặp lỗi timeout, tăng giá trị này trong `backend/.env`.
 
 ---
 
@@ -167,8 +186,40 @@ Các endpoint:
 | `GET /api/reports/courses/{id}/content-quality` | Chất lượng nội dung + Q&A |
 | `GET /api/reports/courses/{id}/study-time` | Số giờ học của từng học viên trong khóa học |
 | `GET /api/reports/courses/{id}/exam-analytics` | Kết quả bài thi |
+| `GET /api/reports/course-comparison` | So sánh toàn bộ khóa học theo 8 module |
 
-### 5.1. Endpoint export Excel
+### 5.1. Endpoint AI so sánh khóa học
+
+Cần `GEMINI_API_KEY` trong `backend/.env` (xem mục 2.2).
+
+| Endpoint | Nội dung |
+|---|---|
+| `POST /api/reports/course-comparison/ai/analyze` | Phân tích so sánh 1 khóa mục tiêu + N khóa đối chiếu |
+| `POST /api/reports/course-comparison/ai/ask` | Hỏi đáp tiếp (multi-turn) về kết quả so sánh |
+| `POST /api/reports/course-comparison/ai/outline` | So sánh cấu trúc nội dung (outline) giữa các khóa học |
+| `POST /api/reports/course-comparison/ai/summary` | Tóm tắt 1 đoạn từ kết quả phân tích đã có |
+
+Body của `/analyze`:
+```json
+{
+  "targetCourseId": 12,
+  "peerCourseIds": [3, 7, 9],
+  "from": "2026-08-01",
+  "to": "2026-11-11",
+  "focus": "retention",
+  "language": "vi"
+}
+```
+
+- `peerCourseIds` bỏ trống → backend tự chọn khóa cùng category/level (tối đa 15).
+- `focus` bỏ trống → phân tích đủ 8 module.
+- `language`: `en` (mặc định) hoặc `vi`.
+
+> **Nguyên tắc:** backend tính toàn bộ số liệu (min/median/mean/max, rank, percentile,
+> gap, vị trí module) rồi đưa cho AI; AI chỉ diễn giải bằng chữ và phải dẫn chứng.
+> Sau khi AI trả về, backend kiểm tra lại `moduleKey`, `courseId` và các chỉ số.
+
+### 5.2. Endpoint export Excel
 
 | Endpoint | Nội dung file |
 |---|---|

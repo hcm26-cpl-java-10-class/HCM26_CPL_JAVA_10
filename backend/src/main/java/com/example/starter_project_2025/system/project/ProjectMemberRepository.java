@@ -26,10 +26,15 @@ public interface ProjectMemberRepository
             Long tenantId,
             ClassMemberStatus status);
 
-    @EntityGraph(attributePaths = {"classMember", "classMember.user"})
+    @EntityGraph(attributePaths = {
+            "team", "team.trainingClass", "classMember", "classMember.trainingClass", "classMember.user"
+    })
     List<ProjectMember> findAllByTeam_IdOrderByIdAsc(Long teamId);
 
-    @EntityGraph(attributePaths = {"team", "classMember", "classMember.user"})
+    @EntityGraph(attributePaths = {
+            "team", "team.trainingClass", "classMember", "classMember.trainingClass", "classMember.user",
+            "classMember.user.tenant"
+    })
     List<ProjectMember> findAllByIdIn(Collection<Long> ids);
 
     long countByTeam_Id(Long teamId);
@@ -42,6 +47,14 @@ public interface ProjectMemberRepository
             Long teamId,
             Long userId,
             com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus status);
+
+    @Query("""
+            select count(member) > 0 from ProjectMember member
+             where member.team.id = :teamId and member.isActive = true
+               and member.classMember.isActive = true and member.classMember.trainingClass.id = :classId
+               and member.classMember.user.id = :userId and member.classMember.status = :status
+            """)
+    boolean existsActiveMembership(Long teamId, Long classId, Long userId, ClassMemberStatus status);
 
     boolean existsByTeam_IdAndIsActiveTrueAndClassMember_TrainingClass_IdAndClassMember_User_IdAndClassMember_Status(
             Long teamId,
@@ -88,11 +101,7 @@ public interface ProjectMemberRepository
             @Param("statuses") Collection<ProjectTeamStatus> statuses
     );
 
-    /**
-     * US-10: DRAFT teams in which the given user holds the leadership role
-     * (team roles use {@code PM} for the team leader). US-11 stores multiple
-     * roles as a comma separated value, so the leader can also hold BA/DEV/QA.
-     */
+    /** US-10: teams in which the user is the designated leader. */
     @Query("""
         select pm
         from ProjectMember pm
@@ -102,18 +111,14 @@ public interface ProjectMemberRepository
         where pm.classMember.user.id = :userId
           and pm.classMember.status = :memberStatus
           and team.status = :teamStatus
-          and (
-              pm.role = :role
-              or pm.role like concat(:role, ',%')
-              or pm.role like concat('%,', :role)
-              or pm.role like concat('%,', :role, ',%')
-          )
+          and pm.isActive = true
+          and pm.classMember.isActive = true
+          and team.leaderMemberId = pm.classMember.id
         order by team.id
         """)
     List<ProjectMember> findLeaderTeams(
             @Param("userId") Long userId,
             @Param("memberStatus") ClassMemberStatus memberStatus,
-            @Param("teamStatus") ProjectTeamStatus teamStatus,
-            @Param("role") String role
+            @Param("teamStatus") ProjectTeamStatus teamStatus
     );
 }

@@ -14,7 +14,9 @@ public record AllocationSessionResponse(
                 session.getId(),
                 session.getTrainingClass().getId(),
                 sessionNumber,
-                session.getProjectTemplate().getId(),
+                session.getProjectTemplate() == null
+                        ? null
+                        : session.getProjectTemplate().getId(),
                 session.getMaxMembers(),
                 session.getStatus(),
                 session.getVersion()

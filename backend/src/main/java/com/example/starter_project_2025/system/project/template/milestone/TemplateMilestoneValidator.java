@@ -12,6 +12,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class TemplateMilestoneValidator {
     public void validate(TemplateMilestonePlanRequest request) {
+        validate(request, true);
+    }
+
+    public void validate(TemplateMilestonePlanRequest request, boolean weighted) {
         Map<String, List<String>> errors = new LinkedHashMap<>();
         if (!validVersion(request.lockVersion())) {
             error(errors, "lockVersion", "A valid template revision is required. Please reload the template");
@@ -41,10 +45,10 @@ public class TemplateMilestoneValidator {
                 if (milestone.dueUnit() == null) {
                     error(errors, path + ".dueUnit", "Select days or weeks");
                 }
-                if (!validWeight(milestone.weight())) {
+                if (weighted && !validWeight(milestone.weight())) {
                     error(errors, path + ".weight", "Weight must be between 0 and 100 with up to 2 decimal places");
                     validWeights = false;
-                } else {
+                } else if (weighted) {
                     total = total.add(milestone.weight());
                 }
                 checklist(errors, path, milestone.checklistItems());
@@ -56,7 +60,7 @@ public class TemplateMilestoneValidator {
                     error(errors, path + ".latePolicy", "Configure a late submission policy for this milestone");
                 }
             }
-            if (validWeights && total.compareTo(new BigDecimal("100")) != 0) {
+            if (weighted && validWeights && total.compareTo(new BigDecimal("100")) != 0) {
                 error(errors, "totalWeight", "Milestone weights must total 100%");
             }
         }
