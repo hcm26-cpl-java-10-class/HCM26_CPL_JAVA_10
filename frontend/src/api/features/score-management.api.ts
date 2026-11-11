@@ -42,6 +42,8 @@ export interface SmGradebook {
   students: SmStudentRow[];
   /** Last time the teacher confirmed with "Save scores" (ISO string) or null. */
   savedAt: string | null;
+  /** True when the table differs from the last saved version. */
+  unsaved: boolean;
 }
 
 export interface SmAvailableExam {

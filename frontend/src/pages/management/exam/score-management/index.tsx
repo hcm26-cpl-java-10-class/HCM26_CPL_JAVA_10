@@ -53,14 +53,21 @@ function CourseList({ onOpen }: { onOpen: (id: number) => void }) {
 /* ------------------------------------------------------------------ people tables */
 
 function PeopleTable({ title, description, rows, showScore }: { title: string; description: string; rows: SmPerson[]; showScore?: boolean }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="space-y-2">
-      <div>
-        <h3 className="font-semibold">
-          {title} <Badge variant="outline">{rows.length}</Badge>
-        </h3>
-        <p className="text-xs text-muted-foreground">{description}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">
+            {title} <Badge variant="outline">{rows.length}</Badge>
+          </h3>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+        <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setOpen((o) => !o)} disabled={rows.length === 0}>
+          {open ? "Show less" : "Show more"}
+        </Button>
       </div>
+      {open && (
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -89,78 +96,36 @@ function PeopleTable({ title, description, rows, showScore }: { title: string; d
           </TableBody>
         </Table>
       </div>
+      )}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ gradebook */
 
-function ScoreCell({ value, onSave }: { value: number | undefined; onSave: (v: number | null) => void }) {
-  const [text, setText] = useState(value == null ? "" : String(value));
-  useEffect(() => setText(value == null ? "" : String(value)), [value]);
-  const commit = () => {
-    const t = text.trim();
-    if (t === "") {
-      if (value != null) onSave(null);
-      return;
-    }
-    const n = Number(t);
-    if (Number.isNaN(n) || n < 0 || n > 10) {
-      toast.error("Score must be between 0 and 10");
-      setText(value == null ? "" : String(value));
-      return;
-    }
-    if (n !== value) onSave(n);
-  };
+function ColumnHeader({ col, onEdit }: { col: SmColumn; onEdit: () => void }) {
   return (
-    <Input
-      type="number"
-      min={0}
-      max={10}
-      step="0.01"
-      className="h-8 w-20 px-2 text-right"
-      value={text}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-      }}
-    />
-  );
-}
-
-function ColumnHeader({ col, onEdit, onDelete }: {
-  col: SmColumn;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <div className="flex min-w-36 flex-col gap-1">
+    <div className="flex w-24 flex-col gap-0.5">
       <div className="flex items-center justify-between gap-1">
-        <span className="font-semibold">{col.name}</span>
-        <div className="flex items-center">
-          <Button variant="ghost" size="icon-sm" title="Edit column" onClick={onEdit}>
-            <Pencil className="size-4" />
-          </Button>
-          <Button variant="ghost" size="icon-sm" title="Delete column" onClick={onDelete}>
-            <Trash2 className="size-4 text-destructive" />
-          </Button>
-        </div>
+        <span className="truncate font-semibold" title={col.name}>{col.name}</span>
+        <Button variant="ghost" size="icon-sm" className="size-6 shrink-0" title="Edit column" onClick={onEdit}>
+          <Pencil className="size-3.5" />
+        </Button>
       </div>
-      <span className="text-xs font-normal text-muted-foreground">Weight: {fmt(col.weightPercent)}%</span>
+      <span className="text-xs font-normal text-muted-foreground">{fmt(col.weightPercent)}%</span>
       <span className="truncate text-xs font-normal text-muted-foreground" title={col.examTitle ?? undefined}>
-        {col.examTitle ?? "No assessment selected"}
+        {col.examTitle ?? "No assessment"}
       </span>
     </div>
   );
 }
 
-function ColumnEditDialog({ courseId, column, onClose, onSaveWeight, onReport, onImported }: {
+function ColumnEditDialog({ courseId, column, onClose, onSaveWeight, onDelete, onImported }: {
   courseId: number;
   column: SmColumn | null;
   onClose: () => void;
   onSaveWeight: (weight: number) => void;
-  onReport: () => void;
+  onDelete: () => void;
   onImported: (report: SmImportReport) => void;
 }) {
   const [weight, setWeight] = useState("");
@@ -204,9 +169,9 @@ function ColumnEditDialog({ courseId, column, onClose, onSaveWeight, onReport, o
             <Input type="number" min={0} max={100} className="w-28" value={weight} onChange={(e) => setWeight(e.target.value)} />
           </label>
           <Button size="sm" onClick={saveWeight}>Save weight</Button>
-          {column?.examId != null && (
-            <Button variant="outline" size="sm" onClick={onReport}>View extra / missing students</Button>
-          )}
+          <Button variant="outline" size="sm" className="ml-auto text-destructive" onClick={onDelete}>
+            <Trash2 className="size-4" /> Delete column
+          </Button>
         </div>
         <Input placeholder="Search assessments by name..." value={search} onChange={(e) => setSearch(e.target.value)} />
         {isLoading ? (
@@ -246,10 +211,8 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
   const [deleteTarget, setDeleteTarget] = useState<SmColumn | null>(null);
   const [reports, setReports] = useState<SmImportReport[]>([]);
 
-  const [dirty, setDirty] = useState(false);
   const [confirmWarnings, setConfirmWarnings] = useState<string[] | null>(null);
   const apply = (g: SmGradebook) => {
-    setDirty(true);
     queryClient.setQueryData(key, g);
     void queryClient.invalidateQueries({ queryKey: ["sm-courses"] });
   };
@@ -275,12 +238,6 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
     },
     onError: fail,
   });
-  const setCell = useMutation({
-    mutationFn: (v: { columnId: number; studentId: number; score: number | null }) =>
-      scoreManagementApi.setCell(courseId, v.columnId, v.studentId, v.score),
-    onSuccess: apply,
-    onError: fail,
-  });
   const scanMutation = useMutation({
     mutationFn: () => scoreManagementApi.autoScan(courseId),
     onSuccess: (res) => {
@@ -298,15 +255,9 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
     mutationFn: () => scoreManagementApi.save(courseId),
     onSuccess: (g) => {
       queryClient.setQueryData(key, g);
-      setDirty(false);
       setConfirmWarnings(null);
       toast.success("Scores saved");
     },
-    onError: fail,
-  });
-  const showReport = useMutation({
-    mutationFn: (columnId: number) => scoreManagementApi.report(columnId),
-    onSuccess: (r) => setReports([r]),
     onError: fail,
   });
 
@@ -333,14 +284,14 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
           <div>
             <h2 className="text-lg font-semibold">{data.courseName}</h2>
             <p className="text-xs text-muted-foreground">
-              {data.students.length} student{data.students.length === 1 ? "" : "s"} · scores are on a 10-point scale
+              {data.students.length} student{data.students.length === 1 ? "" : "s"} · scores are on a 10-point scale and come from assessments
+            </p>
+            <p className={`text-xs ${data.unsaved ? "font-medium text-amber-600" : "text-muted-foreground"}`}>
+              {data.unsaved ? "Unsaved changes" : data.savedAt ? `Saved ${new Date(data.savedAt).toLocaleString()}` : "Not saved yet"}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-            {dirty ? "Unsaved changes" : data.savedAt ? `Saved ${new Date(data.savedAt).toLocaleString()}` : "Not saved yet"}
-          </span>
+        <div className="ml-auto flex shrink-0 items-center gap-3">
           <Button size="sm" variant="outline" onClick={requestSave} disabled={saveMutation.isPending}>
             <Save className="size-4" /> Save scores
           </Button>
@@ -377,44 +328,35 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="min-w-28">ID</TableHead>
-              <TableHead className="min-w-44">Student</TableHead>
+              <TableHead className="min-w-40 px-2">Student</TableHead>
               {data.columns.map((c) => (
-                <TableHead key={c.id} className="align-top">
-                  <ColumnHeader
-                    col={c}
-                    onEdit={() => setEditId(c.id)}
-                    onDelete={() => setDeleteTarget(c)}
-                  />
+                <TableHead key={c.id} className="px-2 align-top">
+                  <ColumnHeader col={c} onEdit={() => setEditId(c.id)} />
                 </TableHead>
               ))}
-              <TableHead className="min-w-24 text-right">Final</TableHead>
+              <TableHead className="w-16 px-2 text-right">Final</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.students.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={data.columns.length + 3} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={data.columns.length + 2} className="text-center text-sm text-muted-foreground">
                   No students are enrolled in this course.
                 </TableCell>
               </TableRow>
             ) : (
               data.students.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell>{s.code ?? s.id}</TableCell>
-                  <TableCell>
-                    <div className="font-medium">{s.name}</div>
+                  <TableCell className="px-2 py-1">
+                    <div className="font-medium leading-tight">{s.name}</div>
                     <div className="text-xs text-muted-foreground">{s.email}</div>
                   </TableCell>
                   {data.columns.map((c) => (
-                    <TableCell key={c.id}>
-                      <ScoreCell
-                        value={s.scores[String(c.id)]}
-                        onSave={(v) => setCell.mutate({ columnId: c.id, studentId: s.id, score: v })}
-                      />
+                    <TableCell key={c.id} className="px-2 py-1">
+                      <div className="flex h-8 w-16 items-center justify-center rounded-md border bg-muted/30 text-sm tabular-nums">{fmt(s.scores[String(c.id)])}</div>
                     </TableCell>
                   ))}
-                  <TableCell className="text-right font-semibold">{fmt(s.finalScore)}</TableCell>
+                  <TableCell className="px-2 py-1 text-right font-semibold">{fmt(s.finalScore)}</TableCell>
                 </TableRow>
               ))
             )}
@@ -426,7 +368,7 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
         <div key={report.columnId} className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold">
-              Import result: {report.columnName} ← {report.examTitle}
+              Import result: {report.columnName} ← <span className="text-destructive">{report.examTitle}</span>
             </h3>
             <Button variant="ghost" size="sm" onClick={() => setReports((rs) => rs.filter((r) => r.columnId !== report.columnId))}>Hide</Button>
           </div>
@@ -492,8 +434,8 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
         column={data.columns.find((c) => c.id === editId) ?? null}
         onClose={() => setEditId(null)}
         onSaveWeight={(weight) => editId != null && updateColumn.mutate({ id: editId, weight })}
-        onReport={() => {
-          if (editId != null) showReport.mutate(editId);
+        onDelete={() => {
+          setDeleteTarget(data.columns.find((c) => c.id === editId) ?? null);
           setEditId(null);
         }}
         onImported={(r) => {
@@ -519,10 +461,10 @@ export default function ScoreManagementPage() {
           <p className="mt-1 text-sm text-muted-foreground">Build score tables, set weights and add scores from assessments.</p>
         </header>
         <Tabs defaultValue="course">
-          <TabsList>
-            <TabsTrigger value="class">Class</TabsTrigger>
-            <TabsTrigger value="course">Course</TabsTrigger>
-            <TabsTrigger value="department">Department</TabsTrigger>
+          <TabsList className="w-full">
+            <TabsTrigger value="class" className="flex-1">Class</TabsTrigger>
+            <TabsTrigger value="course" className="flex-1">Course</TabsTrigger>
+            <TabsTrigger value="department" className="flex-1">Department</TabsTrigger>
           </TabsList>
           <TabsContent value="class" className="pt-4" />
           <TabsContent value="course" className="pt-4">

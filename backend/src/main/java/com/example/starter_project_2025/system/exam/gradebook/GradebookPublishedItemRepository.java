@@ -12,6 +12,8 @@ public interface GradebookPublishedItemRepository extends JpaRepository<Gradeboo
 
     boolean existsByCourse_Id(Long courseId);
 
+    List<GradebookPublishedItem> findByCourse_Id(Long courseId);
+
     List<GradebookPublishedItem> findByCourse_IdAndStudent_IdOrderByPositionAsc(Long courseId, Long studentId);
 
     @Query("select i from GradebookPublishedItem i where i.course.id in :courseIds and i.student.id in :studentIds "

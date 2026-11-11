@@ -73,8 +73,28 @@ public class GradebookService {
         return buildGradebook(course);
     }
 
+    private static int typeRank(String type) {
+        if (type == null) return 4;
+        return switch (type) {
+            case "QUIZ" -> 0;
+            case "ASSIGNMENT" -> 1;
+            case "MIDTERM" -> 2;
+            case "FINAL_TEST" -> 3;
+            default -> 4;
+        };
+    }
+
+    private static String snapshotKey(Long studentId, int pos, String type, String name, Long examId,
+                                      BigDecimal weight, BigDecimal score) {
+        return studentId + "|" + pos + "|" + type + "|" + name + "|" + examId + "|"
+                + (weight == null ? "" : weight.stripTrailingZeros().toPlainString()) + "|"
+                + (score == null ? "" : score.stripTrailingZeros().toPlainString());
+    }
+
     private Gradebook buildGradebook(Course course) {
-        List<GradebookColumn> columns = columnRepository.findByCourse_IdOrderByPositionAscIdAsc(course.getId());
+        // thu tu hien thi: Quiz, Assignment, Midterm, Final test (cung loai theo thu tu tao)
+        List<GradebookColumn> columns = new ArrayList<>(columnRepository.findByCourse_IdOrderByPositionAscIdAsc(course.getId()));
+        columns.sort(Comparator.comparingInt((GradebookColumn c) -> typeRank(c.getType())));
         Map<Long, Map<Long, BigDecimal>> byStudent = new HashMap<>();
         for (GradebookScore s : scoreRepository.findAllByCourse(course.getId())) {
             if (s.getScore() == null) continue;
@@ -104,7 +124,27 @@ public class GradebookService {
         }
         java.time.LocalDateTime savedAt = stateRepository.findByCourse_Id(course.getId())
                 .map(GradebookState::getSavedAt).orElse(null);
-        return new Gradebook(course.getId(), course.getName(), colDtos, totalWeight, rows, savedAt);
+        // chua luu = bang diem hien tai khac voi ban da Save gan nhat (hoac chua Save lan nao ma da co cot)
+        List<GradebookPublishedItem> published = publishedRepository.findByCourse_Id(course.getId());
+        boolean unsaved;
+        if (published.isEmpty()) {
+            unsaved = !colDtos.isEmpty();
+        } else {
+            Set<String> current = new HashSet<>();
+            for (StudentRow s : rows) {
+                int pos = 0;
+                for (ColumnDto c : colDtos) {
+                    current.add(snapshotKey(s.id(), pos++, c.type(), c.name(), c.examId(), c.weightPercent(), s.scores().get(c.id())));
+                }
+            }
+            Set<String> saved = new HashSet<>();
+            for (GradebookPublishedItem i : published) {
+                saved.add(snapshotKey(i.getStudent().getId(), i.getPosition(), i.getColumnType(), i.getColumnName(),
+                        i.getExamId(), i.getWeightPercent(), i.getScore()));
+            }
+            unsaved = !current.equals(saved);
+        }
+        return new Gradebook(course.getId(), course.getName(), colDtos, totalWeight, rows, savedAt, unsaved);
     }
 
     /** Giang vien xac nhan luu bang diem (du lieu van duoc luu ngay khi sua; day la moc xac nhan). */
@@ -212,7 +252,7 @@ public class GradebookService {
         int refreshed = 0;
         for (GradebookColumn c : existing) {
             if (c.getSourceExam() != null && exams.stream().anyMatch(x -> x.getId().equals(c.getSourceExam().getId()))) {
-                reports.add(compute(c, c.getSourceExam(), true));
+                reports.add(compute(c, c.getSourceExam(), true, true));
                 refreshed++;
             }
         }
@@ -389,6 +429,11 @@ public class GradebookService {
 
     /** So khop theo user id: co diem + co trong lop -> add; co diem nhung khong trong lop -> thua; trong lop khong co diem -> thieu. */
     private ImportReport compute(GradebookColumn c, Exam exam, boolean apply) {
+        return compute(c, exam, apply, false);
+    }
+
+    /** keepManual = khong ghi de o diem giang vien da nhap tay (dung khi Scan lam moi cot co san). */
+    private ImportReport compute(GradebookColumn c, Exam exam, boolean apply, boolean keepManual) {
         Map<Long, User> enrolled = new LinkedHashMap<>();
         for (CourseEnrollment en : enrollmentRepository.findActiveStudentsByCourse(c.getCourse().getId())) {
             enrolled.put(en.getUser().getId(), en.getUser());
@@ -426,6 +471,9 @@ public class GradebookService {
             if (apply) {
                 GradebookScore s = scoreRepository.findByColumn_IdAndStudent_Id(c.getId(), u.getId())
                         .orElseGet(() -> GradebookScore.builder().column(c).student(u).build());
+                if (keepManual && "MANUAL".equals(s.getSource())) {
+                    continue;   // giu diem nhap tay
+                }
                 s.setScore(e.getValue());
                 s.setSource("EXAM");
                 scoreRepository.save(s);
