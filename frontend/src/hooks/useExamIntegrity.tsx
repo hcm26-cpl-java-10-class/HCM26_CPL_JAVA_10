@@ -28,15 +28,15 @@ interface Options {
 }
 
 const LABELS: Partial<Record<IntegrityEventType, string>> = {
-    TAB_HIDDEN: 'Rời tab',
-    WINDOW_BLUR: 'Chuyển cửa sổ',
-    FULLSCREEN_EXIT: 'Thoát toàn màn hình',
-    COPY: 'Sao chép',
-    CUT: 'Cắt',
-    PASTE: 'Dán',
-    CONTEXT_MENU: 'Chuột phải',
-    DEVTOOLS_KEY: 'Phím công cụ nhà phát triển',
-    PRINT_ATTEMPT: 'In / chụp màn hình',
+    TAB_HIDDEN: 'Tab switch',
+    WINDOW_BLUR: 'Window switch',
+    FULLSCREEN_EXIT: 'Fullscreen exit',
+    COPY: 'Copy',
+    CUT: 'Cut',
+    PASTE: 'Paste',
+    CONTEXT_MENU: 'Right-click',
+    DEVTOOLS_KEY: 'Developer tools shortcut',
+    PRINT_ATTEMPT: 'Print / screenshot',
     CAMERA_OFF: 'Camera turned off',
     CAMERA_COVERED: 'Camera is covered',
     FACE_MISSING: 'You left the camera view',
@@ -349,11 +349,11 @@ export function ExamIntegrityNotice({
             {state.enabled && state.needFullscreen && !state.needEntryPhoto && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-6">
                     <div className="max-w-md space-y-4 rounded-lg border bg-card p-6 text-center shadow-lg">
-                        <h2 className="text-lg font-semibold">Cần bật toàn màn hình để làm bài</h2>
+                        <h2 className="text-lg font-semibold">Fullscreen is required to take the exam</h2>
                         <p className="text-sm text-muted-foreground">
-                            Bài thi yêu cầu chế độ toàn màn hình. Thời gian làm bài vẫn tiếp tục chạy.
+                            This exam requires fullscreen mode. The timer keeps running.
                         </p>
-                        <Button onClick={() => void state.enterFullscreen()}>Vào toàn màn hình</Button>
+                        <Button onClick={() => void state.enterFullscreen()}>Enter fullscreen</Button>
                     </div>
                 </div>
             )}
