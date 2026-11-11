@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlignLeft, CalendarDays, ChevronDown, Download, Eye, Loader2, MoreVertical, Pencil, Save, Settings, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { utils, writeFile } from "xlsx";
 import { toast } from "sonner";
@@ -36,7 +36,7 @@ function modifiedDate(value: string) {
 }
 
 function StatusBadge({ status }: { status: CalendarStatus }) {
-    return <Badge variant="secondary" className={`rounded-full px-3 py-1 font-medium ${status === "active"
+    return <Badge variant="secondary" className={`max-w-full whitespace-normal rounded-full px-2 py-1 text-xs font-medium ${status === "active"
         ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200"
         : status === "inactive" ? "bg-pink-100 text-pink-800 dark:bg-pink-950 dark:text-pink-200"
         : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"}`}>
@@ -77,9 +77,6 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
         });
     };
 
-    const tableViewport = useRef<HTMLDivElement>(null);
-    const horizontalScrollbar = useRef<HTMLDivElement>(null);
-    const [tableWidth, setTableWidth] = useState(1050);
     const save = useMutation({
         mutationFn: (updates: Array<{ id: number; name: string; historyChange: string }>) => externalApi.saveClassCalendars(classItem.id, updates),
         onSuccess: async () => {
@@ -128,6 +125,12 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
         enabled: canRead,
         retry: retryUnlessClientError,
     });
+    const dataSource = useQuery({
+        queryKey: ["external", "data-source"],
+        queryFn: externalApi.getDataSource,
+        enabled: canRead,
+        retry: retryUnlessClientError,
+    });
     const rows = useMemo(() => (query.data ?? []).map((item) => pending[item.id] ?? item)
         .filter((item) => statuses.includes(item.status))
         .sort((a, b) => Number(b.id === 0) - Number(a.id === 0) || b.lastModifiedDate.localeCompare(a.lastModifiedDate) || b.id - a.id), [query.data, statuses, pending]);
@@ -164,23 +167,18 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
         };
     }, [pendingCount, save.isPending]);
 
-    useEffect(() => {
-        const viewport = tableViewport.current;
-        if (!viewport) return;
-        const measure = () => {
-            const contentWidth = Math.max(viewport.scrollWidth, viewport.querySelector("table")?.scrollWidth ?? 0);
-            setTableWidth(contentWidth + viewport.offsetWidth - viewport.clientWidth);
-        };
-        const observer = new ResizeObserver(measure);
-        observer.observe(viewport);
-        const table = viewport.querySelector("table");
-        if (table) observer.observe(table);
-        measure();
-        return () => observer.disconnect();
-    }, [canRead, query.data, pending, mode, detail?.id]);
-
     if (!canRead) return <ApiErrorState error={undefined} kind="forbidden" resource="calendar history" />;
-    if (detail && mode === "detail") return <CalendarDetailView calendar={detail} classItem={classItem} onBack={() => setDetail(null)} />;
+    if (detail && mode === "detail") return <CalendarDetailView
+        calendar={detail}
+        classItem={classItem}
+        onBack={() => setDetail(null)}
+        sourceVerified={!!dataSource.data && !dataSource.data.sampleData}
+        sampleData={!!dataSource.data?.sampleData}
+        onCalendarSaved={(updated) => {
+            setDetail(updated);
+            void queryClient.invalidateQueries({ queryKey: ["session", "class-calendars", classItem.id] });
+        }}
+    />;
     if (detail && mode === "adjust" && canUpdate) return <CalendarAdjustView calendar={detail} classItem={classItem} onBack={() => setDetail(null)} />;
 
     return (
@@ -208,21 +206,31 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            <div ref={tableViewport} role="region" aria-label="Scrollable calendar table" tabIndex={0}
-                onScroll={(event) => {
-                    if (horizontalScrollbar.current) horizontalScrollbar.current.scrollLeft = event.currentTarget.scrollLeft;
-                }}
+            {dataSource.data?.sampleData && <div role="status" className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                Sample data mode is active. Calendar data from the external training system is not available in this environment.
+            </div>}
+
+            <div role="region" aria-label="Calendar history" tabIndex={0}
                 className="max-h-[55dvh] w-full min-w-0 overflow-x-hidden overflow-y-auto border-y focus-visible:outline-2 focus-visible:outline-blue-800">
-                <table aria-label="Calendar version history" className="w-full min-w-[1450px] caption-bottom text-sm [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:h-14">
+                <table aria-label="Calendar version history" className="w-full max-w-full table-fixed caption-bottom text-xs lg:text-sm [&_td]:box-border [&_td]:whitespace-normal [&_td]:[overflow-wrap:anywhere] [&_td]:px-1.5 [&_td]:py-3 [&_th]:box-border [&_th]:whitespace-normal [&_th]:[overflow-wrap:anywhere] [&_th]:px-1.5 [&_th]:py-3">
+                    <colgroup>
+                        <col className="w-[4%]" />
+                        <col className="w-[17%]" />
+                        <col className="w-[23%]" />
+                        <col className="w-[17%]" />
+                        <col className="w-[14%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[15%]" />
+                    </colgroup>
                     <TableHeader className="bg-muted/50">
                         <TableRow>
-                            <TableHead className="w-14">No.</TableHead>
+                            <TableHead>No.</TableHead>
                             <TableHead>Calendar Name</TableHead>
                             <TableHead>History Change</TableHead>
                             <TableHead>Last Modified Date</TableHead>
                             <TableHead>Last Modified By</TableHead>
                             <TableHead className="text-center">Status</TableHead>
-                            <TableHead className="w-20 text-center">Action</TableHead>
+                            <TableHead className="text-center">Action</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -239,7 +247,7 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
                         ) : rows.map((item, index) => (
                             <TableRow key={item.id} className={pending[item.id] ? "bg-amber-50/50 dark:bg-amber-950/20" : ""}>
                                 <TableCell>{index + 1}</TableCell>
-                                <TableCell className="min-w-64">
+                                <TableCell className="min-w-0">
                                     {canUpdate && editingIds.includes(item.id) ? (
                                         <div className="space-y-1">
                                             <input type="text" autoFocus disabled={save.isPending}
@@ -254,13 +262,13 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
                                             {fieldError(item.name, "Calendar name", 100) && <p id={`calendar-name-error-${item.id}`} className="text-xs text-red-600">{fieldError(item.name, "Calendar name", 100)}</p>}
                                         </div>
                                     ) : (
-                                        <button type="button" disabled={save.isPending} onClick={() => open(item, "detail")} className="text-left font-medium text-blue-800 hover:underline focus-visible:outline-2 dark:text-blue-300">
+                                        <button type="button" disabled={save.isPending} onClick={() => open(item, "detail")} className="max-w-full whitespace-normal [overflow-wrap:anywhere] text-left font-medium text-blue-800 hover:underline focus-visible:outline-2 dark:text-blue-300">
                                             {item.name}
                                         </button>
                                     )}
                                     {pending[item.id] && <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">Unsaved</span>}
                                 </TableCell>
-                                <TableCell className="min-w-56 max-w-80">
+                                <TableCell className="min-w-0">
                                     {canUpdate && editingIds.includes(item.id) ? (
                                         <div className="space-y-1">
                                             <input type="text" disabled={save.isPending}
@@ -281,7 +289,7 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
                                 <TableCell>{item.lastModifiedBy || "—"}</TableCell>
                                 <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
                                 <TableCell className="text-center">
-                                    <div className="flex items-center justify-center gap-1">
+                                    <div className="flex flex-wrap items-center justify-center gap-1">
                                     {canUpdate && item.id > 0 && (editingIds.includes(item.id) ? (
                                         <Button type="button" size="sm" variant="outline" disabled={save.isPending} aria-label={`Cancel editing version ${item.version}`} onClick={() => cancelEdit(item.id)}><X className="size-3" /> Cancel</Button>
                                     ) : (
@@ -306,13 +314,6 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
             </div>
 
             <footer className="sticky bottom-0 z-10 mt-auto flex flex-wrap items-center justify-between gap-3 border-t bg-card pb-4">
-            <div ref={horizontalScrollbar} role="region" aria-label="Scroll calendar columns horizontally" tabIndex={0}
-                onScroll={(event) => {
-                    if (tableViewport.current) tableViewport.current.scrollLeft = event.currentTarget.scrollLeft;
-                }}
-                className="h-6 w-full min-w-0 shrink-0 basis-full overflow-x-scroll overflow-y-hidden border-b bg-neutral-100 [scrollbar-width:auto] [scrollbar-color:#909090_#f5f5f5] [&::-webkit-scrollbar]:h-4 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-neutral-400 [&::-webkit-scrollbar-track]:bg-neutral-100">
-                <div style={{ width: tableWidth, minWidth: 1450 }} className="h-px" />
-            </div>
                 <Button variant="outline" asChild><Link to="/classes">Back to Class List</Link></Button>
                 <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
                     <p id="calendar-save-status" role="status" className="text-xs text-muted-foreground">
