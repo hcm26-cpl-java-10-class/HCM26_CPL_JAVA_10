@@ -266,6 +266,7 @@ public class CourseMyScoresService {
                 null,
                 course.getName(),
                 null,
+                course.getThumbnailUrl(),
                 overall,
                 resultStatus,
                 gradeItems

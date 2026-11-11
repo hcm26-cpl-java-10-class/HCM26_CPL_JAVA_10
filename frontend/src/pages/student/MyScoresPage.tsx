@@ -66,7 +66,7 @@ export default function MyScoresPage() {
         <div className="space-y-6 p-4">
           <h1 className="text-2xl font-bold">My Scores</h1>
 
-          <Tabs defaultValue="statistics" className="space-y-4">
+          <Tabs defaultValue="course-scores" className="space-y-4">
             <TabsList className="w-full">
               <TabsTrigger value="statistics" className="flex-1">Statistics</TabsTrigger>
               <TabsTrigger value="course-scores" className="flex-1">Course Scores</TabsTrigger>
@@ -118,57 +118,75 @@ export default function MyScoresPage() {
                 </p>
             )}
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {visibleScores.map((course) => (
                   <Card
                       key={course.courseId}
                       className="cursor-pointer transition-shadow hover:shadow-md"
                       onClick={() => navigate(`/my-scores/${course.courseId}`)}
                   >
-                    <CardHeader>
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <CardTitle>
-                            {course.courseCode
-                                ? `${course.courseCode} - `
-                                : ""}
-                            {course.courseName}
-                          </CardTitle>
 
-                          {course.className && (
-                              <CardDescription>
-                                Class: {course.className}
-                              </CardDescription>
-                          )}
-                        </div>
-
-                        {course.resultStatus && (
-                            <Badge
-                                variant={
-                                  course.resultStatus === "PASSED"
-                                      ? "default"
-                                      : "destructive"
-                                }
-                            >
-                              {course.resultStatus}
-                            </Badge>
+                    <div className="flex items-start gap-4 p-4">
+                      {/* Course thumbnail - 88x88 */}
+                      <div className="h-[88px] w-[120px] shrink-0 overflow-hidden rounded-lg bg-muted">
+                        {course.thumbnailUrl && (
+                            <img
+                                src={course.thumbnailUrl}
+                                alt={course.courseName}
+                                className="h-full w-full object-cover"
+                            />
                         )}
                       </div>
-                    </CardHeader>
 
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">
-                          Overall Score
-                        </span>
+                      {/* Course information */}
+                      <div className="min-w-0 flex-1">
+                        <CardHeader className="p-0 pb-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <CardTitle className="text-base">
+                                {course.courseCode
+                                    ? `${course.courseCode} - `
+                                    : ""}
+                                {course.courseName}
+                              </CardTitle>
 
-                        <span className="text-2xl font-semibold">
-                          {course.overallScore != null
-                          ? course.overallScore.toFixed(1)
-                          : "-"}
-                        </span>
+                              {course.className && (
+                                  <CardDescription>
+                                    Class: {course.className}
+                                  </CardDescription>
+                              )}
+                            </div>
+
+                            {course.resultStatus && (
+                                <Badge
+                                    variant={
+                                      course.resultStatus === "PASSED"
+                                          ? "default"
+                                          : "destructive"
+                                    }
+                                >
+                                  {course.resultStatus}
+                                </Badge>
+                            )}
+                          </div>
+                        </CardHeader>
+
+                        <CardContent className="p-0">
+                          <div className="flex items-center justify-between gap-2">
+        <span className="text-sm text-muted-foreground">
+          Overall Score
+        </span>
+
+                            <span className="text-2xl font-semibold">
+          {course.overallScore != null
+              ? course.overallScore.toFixed(1)
+              : "-"}
+        </span>
+                          </div>
+                        </CardContent>
                       </div>
-                    </CardContent>
+                    </div>
+
                   </Card>
               ))}
             </div>

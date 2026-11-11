@@ -8,8 +8,29 @@ public record CourseMyScoresDTO(
         String courseCode,
         String courseName,
         String className,
+        String thumbnailUrl,
         BigDecimal overallScore,
         String resultStatus,
         List<CourseGradeItemDTO> gradeItems
 ) {
+    public CourseMyScoresDTO(
+            Long courseId,
+            String courseCode,
+            String courseName,
+            String className,
+            BigDecimal overallScore,
+            String resultStatus,
+            List<CourseGradeItemDTO> gradeItems
+    ) {
+        this(
+                courseId,
+                courseCode,
+                courseName,
+                className,
+                null,
+                overallScore,
+                resultStatus,
+                gradeItems
+        );
+    }
 }
