@@ -38,12 +38,13 @@ export function MainLayout({
     focusMode?: boolean;
 }) {
     const isEmbedded = useContext(EmbeddedLayoutContext);
+    // Hooks must run before any early return so hook order stays stable.
+    const { activeRole } = usePermissions();
+    const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
+
     if (isEmbedded) {
         return <>{children}</>;
     }
-
-    const { activeRole } = usePermissions();
-    const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
 
     if (focusMode) {
         return (
