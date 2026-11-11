@@ -4,18 +4,18 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   emptyLatePolicy,
-  milestoneFieldId,
   weightHundredths,
   type LatePolicyValues,
   type MilestonePlanErrors,
 } from "../milestone-plan.utils";
 
-export function TemplateLatePolicyEditor({ policy, milestoneIndex, disabled, editable, errors, onChange }: {
+export function TemplateLatePolicyEditor({ policy, milestoneIndex, disabled, editable, errors, fieldId: milestoneFieldId, onChange }: {
   policy: LatePolicyValues | null;
   milestoneIndex: number;
   disabled: boolean;
   editable: boolean;
   errors: MilestonePlanErrors;
+  fieldId: (path: string) => string;
   onChange: (policy: LatePolicyValues) => void;
 }) {
   const values = policy ?? emptyLatePolicy();

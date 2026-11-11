@@ -36,7 +36,7 @@ public class Milestone {
     @Column(name = "project_id", updatable = false)
     private Long projectId;
 
-    @Column(name = "team_id", nullable = false, updatable = false)
+    @Column(name = "team_id", updatable = false)
     private Long teamId;
 
     @Column(nullable = false, length = 120)
@@ -198,10 +198,29 @@ public class Milestone {
     }
 
     public void startAutomatically(Instant now) {
+        startIfDue(SCHEDULER_ACTOR_ID, now);
+    }
+
+    /** Starts a planned milestone whose scheduled start has been reached; returns whether it started. */
+    public boolean startIfDue(UUID actorId, Instant now) {
         if (!active || !autoStartEnabled || lifecycleStatus() != MilestoneLifecycleStatus.PLANNED
-                || scheduledStartAt == null || now.isBefore(scheduledStartAt)) return;
-        if (status == MilestoneStatus.PLANNED) openForWork(SCHEDULER_ACTOR_ID, now);
-        start(SCHEDULER_ACTOR_ID, now);
+                || scheduledStartAt == null || now.isBefore(scheduledStartAt)) return false;
+        if (status == MilestoneStatus.PLANNED) openForWork(actorId, now);
+        start(actorId, now);
+        return true;
+    }
+
+    /**
+     * Records the reviewer's acceptance-checklist assessment on this team milestone; the latest review wins.
+     * Keys are the milestone checklist item ids the submission snapshot was taken from. Shared (master) milestones
+     * have no single team, so their checklist only defines the criteria and is left untouched.
+     */
+    public void applyChecklistAssessment(java.util.Map<UUID, Boolean> completedByItemId) {
+        if (teamId == null) return;
+        for (MilestoneChecklistItem item : checklistItems) {
+            Boolean completed = completedByItemId.get(item.getId());
+            if (completed != null) item.markAssessed(completed);
+        }
     }
 
     public void addChecklistItem(String content, boolean mandatory, int orderIndex) {

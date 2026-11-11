@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.template.content;
 
 import com.example.starter_project_2025.system.project.template.ProjectTemplateException;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateValidator;
 import java.math.BigDecimal;
 import java.util.*;
 import org.springframework.stereotype.Component;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class TemplateSampleContentValidator {
     public static final int MAX_ITEMS = 1000;
+    private static final int MAX_BACKLOG_TITLE_LENGTH = 100;
 
     public void validate(TemplateSampleContentRequest request) {
         Map<String, List<String>> errors = new LinkedHashMap<>();
@@ -30,8 +32,8 @@ public class TemplateSampleContentValidator {
             var item = items.get(i); String path = prefix + "[" + i + "]";
             if (item == null) { error(errors, path, "Enter the backlog item"); continue; }
             id(errors, path + ".id", item.id(), ids, false);
-            text(errors, path + ".title", item.title(), 200, "Backlog title");
-            description(errors, path + ".description", item.description(), 2000);
+            text(errors, path + ".title", item.title(), MAX_BACKLOG_TITLE_LENGTH, "Backlog title");
+            description(errors, path + ".description", item.description(), ProjectTemplateValidator.MAX_DESCRIPTION_LENGTH);
         }
         return errors;
     }

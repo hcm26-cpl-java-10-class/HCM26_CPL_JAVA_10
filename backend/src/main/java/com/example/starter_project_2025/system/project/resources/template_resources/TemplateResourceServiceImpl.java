@@ -43,13 +43,11 @@ public class TemplateResourceServiceImpl
     static final int MAX_TITLE_LENGTH = 255;
     static final int MAX_DESCRIPTION_LENGTH = 1000;
     static final int MAX_URL_LENGTH = 1000;
-    static final int MAX_CATEGORY_LENGTH = 50;
 
     static final String TITLE_FIELD = "title";
     static final String DESCRIPTION_FIELD = "description";
     static final String KIND_FIELD = "kind";
     static final String URL_FIELD = "url";
-    static final String CATEGORY_FIELD = "category";
     static final String ORDER_INDEX_FIELD = "orderIndex";
     static final String TEMPLATE_ID_FIELD = "templateId";
     static final String TEMPLATE_VERSION_ID_FIELD = "templateVersionId";
@@ -72,7 +70,7 @@ public class TemplateResourceServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        return new String[]{TITLE_FIELD, DESCRIPTION_FIELD, CATEGORY_FIELD};
+        return new String[]{TITLE_FIELD, DESCRIPTION_FIELD};
     }
 
     // ---------------------------------------------------------------------
@@ -85,7 +83,7 @@ public class TemplateResourceServiceImpl
         normalize(entity);
         resolveTemplate(entity, ctx);
         validate(entity.getTitle(), entity.getDescription(), entity.getKind(),
-                entity.getUrl(), entity.getCategory(), entity.getOrderIndex(), ctx);
+                entity.getUrl(), entity.getOrderIndex(), ctx);
 
         if (entity.getIsActive() == null) {
             entity.setIsActive(true);
@@ -104,16 +102,14 @@ public class TemplateResourceServiceImpl
                 ? request.getDescription().trim() : entity.getDescription();
         ResourceKind kind = request.getKind() != null ? request.getKind() : entity.getKind();
         String url = request.getUrl() != null ? request.getUrl().trim() : entity.getUrl();
-        String category = request.getCategory() != null ? request.getCategory().trim() : entity.getCategory();
         Integer orderIndex = request.getOrderIndex() != null ? request.getOrderIndex() : entity.getOrderIndex();
 
-        validate(title, description, kind, url, category, orderIndex, ctx);
+        validate(title, description, kind, url, orderIndex, ctx);
 
         request.setTitle(title);
         request.setDescription(description);
         request.setKind(kind);
         request.setUrl(url);
-        request.setCategory(category);
         request.setOrderIndex(orderIndex);
     }
 
@@ -174,10 +170,6 @@ public class TemplateResourceServiceImpl
             entity.setUrl(entity.getUrl().trim());
         }
 
-        if (entity.getCategory() != null) {
-            entity.setCategory(entity.getCategory().trim());
-        }
-
         if (entity.getKind() == null) {
             entity.setKind(ResourceKind.LINK);
         }
@@ -228,7 +220,6 @@ public class TemplateResourceServiceImpl
                           String description,
                           ResourceKind kind,
                           String url,
-                          String category,
                           Integer orderIndex,
                           ValidationContext ctx) {
 
@@ -251,10 +242,6 @@ public class TemplateResourceServiceImpl
 
         if (url != null && url.length() > MAX_URL_LENGTH) {
             ctx.add(URL_FIELD, "Url must not exceed " + MAX_URL_LENGTH + " characters");
-        }
-
-        if (category != null && category.length() > MAX_CATEGORY_LENGTH) {
-            ctx.add(CATEGORY_FIELD, "Category must not exceed " + MAX_CATEGORY_LENGTH + " characters");
         }
 
         if (orderIndex != null && orderIndex < 0) {

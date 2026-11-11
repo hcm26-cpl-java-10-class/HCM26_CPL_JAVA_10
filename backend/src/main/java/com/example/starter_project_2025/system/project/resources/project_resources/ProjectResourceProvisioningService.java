@@ -1,103 +1,81 @@
 package com.example.starter_project_2025.system.project.resources.project_resources;
 
-import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.resources.ResourceKind;
 import com.example.starter_project_2025.system.project.resources.project_resource_files.ProjectResourceFile;
 import com.example.starter_project_2025.system.project.resources.project_resource_files.ProjectResourceFileRepository;
-import com.example.starter_project_2025.system.project.resources.template_resource_files.TemplateResourceFile;
 import com.example.starter_project_2025.system.project.resources.template_resource_files.TemplateResourceFileRepository;
-import com.example.starter_project_2025.system.project.resources.template_resources.TemplateResource;
 import com.example.starter_project_2025.system.project.resources.template_resources.TemplateResourceRepository;
-import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Copies the resource list of the assigned template version into a project
- * (US-RES-001).
- * <p>
- * The project rows are independent copies: they keep the provenance
- * ({@code source_template_snapshot_id} / {@code source_template_resource_id})
- * but are never read from the template. Editing or deleting a template
- * resource therefore never changes an already assigned project (AC02).
- * <p>
- * File bytes are shared through the same {@code storage_key}; only the
- * metadata row is duplicated.
- */
-@Slf4j
+import java.util.ArrayList;
+import java.util.List;
+
 @Service
-@Transactional(propagation = Propagation.MANDATORY)
 @RequiredArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Transactional(propagation = Propagation.MANDATORY)
 public class ProjectResourceProvisioningService {
+    public record Attachment(String storageKey, String fileName, String contentType, Long sizeBytes) { }
 
-    TemplateResourceRepository templateResourceRepository;
-    TemplateResourceFileRepository templateResourceFileRepository;
-    ProjectResourceRepository projectResourceRepository;
-    ProjectResourceFileRepository projectResourceFileRepository;
+    public record Resource(Long id, String title, String description, ResourceKind kind, String url,
+                           Integer orderIndex, List<Attachment> attachments) { }
 
-    /**
-     * @param assignedSnapshot snapshot created for this assignment; its
-     *                         {@code parentTemplateId} points at the source
-     *                         version holding the resources
-     * @return number of resources copied into the project
-     */
-    public int provision(ProjectTemplateSnapshot assignedSnapshot, Long projectId, Long tenantId) {
+    public record Source(Long templateId, Long versionId, String name, String origin, List<Resource> resources) { }
 
-        if (assignedSnapshot == null || projectId == null) {
-            return 0;
-        }
+    private final TemplateResourceRepository templateResources;
+    private final TemplateResourceFileRepository templateFiles;
+    private final ProjectResourceRepository projectResources;
+    private final ProjectResourceFileRepository projectFiles;
 
-        Long sourceVersionId = assignedSnapshot.getParentTemplateId();
+    public Source capture(Long templateId, Long versionId, String name, String origin) {
+        List<Resource> resources = versionId == null ? List.of() :
+                templateResources.findAllByTemplateVersionIdOrderByOrderIndexAscIdAsc(versionId).stream()
+                        .filter(item -> Boolean.TRUE.equals(item.getIsActive()) && templateId.equals(item.getTemplateId()))
+                        .map(item -> new Resource(item.getId(), item.getTitle(), item.getDescription(), item.getKind(),
+                                item.getUrl(), item.getOrderIndex(), templateFiles
+                                .findAllByResourceIdOrderByIdAsc(item.getId()).stream()
+                                .filter(file -> Boolean.TRUE.equals(file.getIsActive()))
+                                .map(file -> new Attachment(file.getStorageKey(), file.getOriginalName(),
+                                        file.getContentType(), file.getSizeBytes())).toList())).toList();
+        return new Source(templateId, versionId, name, origin, resources);
+    }
 
-        if (sourceVersionId == null) {
-            log.debug("Assignment snapshot {} has no source version - no resources to inherit",
-                    assignedSnapshot.getId());
-            return 0;
-        }
-
-        int copied = 0;
-
-        for (TemplateResource source : templateResourceRepository
-                .findAllByTemplateVersionIdOrderByOrderIndexAscIdAsc(sourceVersionId)) {
-
-            ProjectResource projectResource = new ProjectResource();
-            projectResource.setProjectId(projectId);
-            projectResource.setTenantId(tenantId);
-            projectResource.setTitle(source.getTitle());
-            projectResource.setDescription(source.getDescription());
-            projectResource.setKind(source.getKind());
-            projectResource.setUrl(source.getUrl());
-            projectResource.setCategory(source.getCategory());
-            projectResource.setOrderIndex(source.getOrderIndex());
-            projectResource.setSourceTemplateSnapshotId(sourceVersionId);
-            projectResource.setSourceTemplateResourceId(source.getId());
-            projectResource.setIsActive(Boolean.TRUE);
-
-            ProjectResource savedResource = projectResourceRepository.save(projectResource);
-
-            for (TemplateResourceFile file : templateResourceFileRepository
-                    .findAllByResourceIdOrderByIdAsc(source.getId())) {
-
-                ProjectResourceFile projectFile = new ProjectResourceFile();
-                projectFile.setResourceId(savedResource.getId());
-                projectFile.setStorageKey(file.getStorageKey());
-                projectFile.setOriginalName(file.getOriginalName());
-                projectFile.setContentType(file.getContentType());
-                projectFile.setSizeBytes(file.getSizeBytes());
-                projectFile.setIsActive(Boolean.TRUE);
-
-                projectResourceFileRepository.save(projectFile);
+    public int provision(Project project, Source source) {
+        List<ProjectResourceFile> attachments = new ArrayList<>();
+        List<ProjectResource> rows = source.resources().stream().map(item -> {
+            ProjectResource row = new ProjectResource();
+            row.setProjectId(project.getId());
+            row.setTenantId(project.getTenantId());
+            row.setTitle(item.title());
+            row.setDescription(item.description());
+            row.setKind(item.kind());
+            row.setUrl(item.url());
+            row.setOrderIndex(item.orderIndex());
+            row.setSourceTemplateSnapshotId(source.versionId());
+            row.setSourceTemplateResourceId(item.id());
+            row.setSourceTemplateId(source.templateId());
+            row.setSourceTemplateName(source.name());
+            row.setSourceOrigin(source.origin());
+            row.setIsActive(true);
+            return row;
+        }).toList();
+        List<ProjectResource> saved = projectResources.saveAll(rows);
+        for (int index = 0; index < saved.size(); index++) {
+            for (Attachment attachment : source.resources().get(index).attachments()) {
+                ProjectResourceFile file = new ProjectResourceFile();
+                file.setResourceId(saved.get(index).getId());
+                file.setStorageKey(attachment.storageKey());
+                file.setOriginalName(attachment.fileName());
+                file.setContentType(attachment.contentType());
+                file.setSizeBytes(attachment.sizeBytes());
+                file.setIsActive(true);
+                attachments.add(file);
             }
-
-            copied++;
         }
-
-        log.info("Inherited {} template resources (version {}) into project {}", copied, sourceVersionId, projectId);
-
-        return copied;
+        projectFiles.saveAll(attachments);
+        return saved.size();
     }
 }

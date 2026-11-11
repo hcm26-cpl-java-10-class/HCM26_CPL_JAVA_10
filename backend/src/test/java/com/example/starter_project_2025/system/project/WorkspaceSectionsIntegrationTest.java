@@ -651,8 +651,8 @@ class WorkspaceSectionsIntegrationTest {
         mvc.perform(put("/api/teams/{teamId}/backlog-board/items/{id}/assignee", teamId, itemId)
                         .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("projectMemberId", assigneeId))))
-                // This controller uses the existing global validation envelope (400).
-                .andExpect(status().isBadRequest())
+                // Assignment validation follows the team's current 422 contract.
+                .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("active member")));
         mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").value(assigneeId));
@@ -747,6 +747,51 @@ class WorkspaceSectionsIntegrationTest {
                         .content(json.writeValueAsString(Map.of("title", "Valid assignment", "projectId", projectId,
                                 "isActive", true, "assigneeProjectMemberId", membershipId))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.assigneeProjectMemberId").value(membershipId));
+    }
+
+    @Test void workItemDescriptionsEnforceOneThousandCharactersOnCreateAndEdit() throws Exception {
+        grant("WORKSPACE_READ", "SPRINT_READ", "SPRINT_BACKLOG_READ", "SPRINT_BACKLOG_CREATE", "SPRINT_BACKLOG_UPDATE");
+        String accepted = "a".repeat(1000);
+        String rejected = "a".repeat(1001);
+        for (String description : List.of(accepted, rejected)) {
+            mvc.perform(post("/api/sprint-backlogs")
+                            .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                            .content(json.writeValueAsString(Map.of("title", "Character boundary", "projectId", projectId,
+                                    "isActive", true, "description", description))))
+                    .andExpect(status().is(description.length() == 1000 ? 200 : 422));
+        }
+        Long itemId = workItem();
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("description", accepted))))
+                .andExpect(status().isOk());
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("description", rejected))))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.description").value(accepted));
+    }
+
+    @Test void loweringDescriptionLimitDoesNotTruncateOrBlockLegacyItemWorkflow() throws Exception {
+        grant("WORKSPACE_READ", "SPRINT_READ", "SPRINT_BACKLOG_READ", "SPRINT_BACKLOG_UPDATE");
+        Long itemId = workItem();
+        String original = "a".repeat(1500);
+        tx.executeWithoutResult(status -> {
+            var item = backlogItems.findById(itemId).orElseThrow();
+            item.setDescription(original); backlogItems.saveAndFlush(item);
+        });
+        changeStatus(itemId, "IN_PROGRESS", 200);
+        mvc.perform(get("/api/sprint-backlogs/{id}", itemId).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.description").value(original));
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("description", "b".repeat(1001)))))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(put("/api/sprint-backlogs/{id}", itemId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("description", "b".repeat(1000)))))
+                .andExpect(status().isOk());
     }
 
     @Test void cardDetailEditsAndAssigneeAreReflectedOnTheTeamBoard() throws Exception {

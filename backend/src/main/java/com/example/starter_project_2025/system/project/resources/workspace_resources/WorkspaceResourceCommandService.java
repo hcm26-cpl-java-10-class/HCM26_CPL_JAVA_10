@@ -14,6 +14,8 @@ import com.example.starter_project_2025.system.project.resources.project_resourc
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService;
 import com.example.starter_project_2025.system.project.workspace.service.WorkspaceContextService;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceProjectScope;
+import org.springframework.security.access.AccessDeniedException;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -53,7 +55,6 @@ public class WorkspaceResourceCommandService {
     static final int MAX_TITLE_LENGTH = 255;
     static final int MAX_DESCRIPTION_LENGTH = 1000;
     static final int MAX_URL_LENGTH = 1000;
-    static final int MAX_CATEGORY_LENGTH = 50;
 
     static final String ACTION_CREATE = "RESOURCE_CREATE";
     static final String ACTION_UPDATE = "RESOURCE_UPDATE";
@@ -63,6 +64,7 @@ public class WorkspaceResourceCommandService {
 
     WorkspaceAccessService access;
     WorkspaceContextService contexts;
+    WorkspaceProjectScope scope;
     WorkspaceResourceEditorPolicy editorPolicy;
     ProjectResourceRepository resources;
     ProjectResourceFileRepository files;
@@ -73,11 +75,13 @@ public class WorkspaceResourceCommandService {
     // Resource create / update / delete
     // ---------------------------------------------------------------------
 
-    public WorkspaceResourceDtos.ResourceItem create(Long workspaceId,
+    public WorkspaceResourceDtos.ResourceItem create(Long workspaceId, Long projectId,
                                                      WorkspaceResourceDtos.ResourcePayload request) {
 
-        EditorContext context = requireEditor(workspaceId);
-        Project project = context.project();
+        User user = access.requireUser(false);
+        Workspace workspace = contexts.require(user, workspaceId);
+        Long targetId = projectId == null && workspace.getProject() != null ? workspace.getProject().getId() : projectId;
+        Project project = requireEditableProject(user, workspace, targetId);
 
         if (resources.countByProjectId(project.getId()) >= MAX_RESOURCES_PER_PROJECT) {
             throw validation("resources",
@@ -104,8 +108,7 @@ public class WorkspaceResourceCommandService {
                                                      Long resourceId,
                                                      WorkspaceResourceDtos.ResourcePayload request) {
 
-        EditorContext context = requireEditor(workspaceId);
-        ProjectResource entity = requireResource(context.project(), resourceId);
+        ProjectResource entity = requireEditableResource(workspaceId, resourceId);
         WorkspaceResourceDtos.ResourceItem before = view(entity);
 
         apply(entity, request);
@@ -113,15 +116,14 @@ public class WorkspaceResourceCommandService {
         ProjectResource saved = resources.saveAndFlush(entity);
         WorkspaceResourceDtos.ResourceItem after = view(saved);
 
-        audits.record(ACTION_UPDATE, context.project().getId(), saved.getId(), before, after);
+        audits.record(ACTION_UPDATE, entity.getProjectId(), saved.getId(), before, after);
 
         return after;
     }
 
     public void delete(Long workspaceId, Long resourceId) {
 
-        EditorContext context = requireEditor(workspaceId);
-        ProjectResource entity = requireResource(context.project(), resourceId);
+        ProjectResource entity = requireEditableResource(workspaceId, resourceId);
         WorkspaceResourceDtos.ResourceItem before = view(entity);
 
         entity.setIsActive(false);
@@ -135,7 +137,7 @@ public class WorkspaceResourceCommandService {
         }
         files.flush();
 
-        audits.record(ACTION_DELETE, context.project().getId(), resourceId, before, null);
+        audits.record(ACTION_DELETE, entity.getProjectId(), resourceId, before, null);
     }
 
     // ---------------------------------------------------------------------
@@ -146,8 +148,7 @@ public class WorkspaceResourceCommandService {
                                                  Long resourceId,
                                                  MultipartFile file) {
 
-        EditorContext context = requireEditor(workspaceId);
-        ProjectResource resource = requireResource(context.project(), resourceId);
+        ProjectResource resource = requireEditableResource(workspaceId, resourceId);
 
         StoredTemplateFile stored = storage.store(file);
 
@@ -162,15 +163,14 @@ public class WorkspaceResourceCommandService {
         ProjectResourceFile saved = files.saveAndFlush(entity);
         WorkspaceResourceDtos.FileItem view = fileView(saved);
 
-        audits.record(ACTION_FILE_UPLOAD, context.project().getId(), resource.getId(), null, view);
+        audits.record(ACTION_FILE_UPLOAD, resource.getProjectId(), resource.getId(), null, view);
 
         return view;
     }
 
     public void deleteFile(Long workspaceId, Long resourceId, Long fileId) {
 
-        EditorContext context = requireEditor(workspaceId);
-        ProjectResource resource = requireResource(context.project(), resourceId);
+        ProjectResource resource = requireEditableResource(workspaceId, resourceId);
 
         ProjectResourceFile file = files.findById(fileId)
                 .filter(value -> Boolean.TRUE.equals(value.getIsActive()))
@@ -182,39 +182,40 @@ public class WorkspaceResourceCommandService {
         file.setIsActive(false);
         files.saveAndFlush(file);
 
-        audits.record(ACTION_FILE_DELETE, context.project().getId(), resource.getId(), before, null);
+        audits.record(ACTION_FILE_DELETE, resource.getProjectId(), resource.getId(), before, null);
     }
 
     // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
 
-    private EditorContext requireEditor(Long workspaceId) {
-
-        User user = access.requireUser(false);
-        Workspace workspace = contexts.require(user, workspaceId);
-
-        if (workspace.getProject() == null) {
-            throw new ResourceNotFoundException("This workspace has no project to hold resources");
-        }
-
-        editorPolicy.requireManage(user, workspace);
-
-        return new EditorContext(user, workspace, workspace.getProject());
+    private Project requireEditableProject(User user, Workspace workspace, Long projectId) {
+        if (projectId == null) throw new ResourceNotFoundException("This workspace has no project to hold resources");
+        Project project = scope.projects(workspace).stream()
+                .filter(value -> projectId.equals(value.getId())
+                        && Objects.equals(value.getTenantId(), workspace.getTenant().getId()))
+                .findFirst().orElseThrow(() -> new AccessDeniedException("The resource is outside this workspace"));
+        editorPolicy.requireManage(user, workspace, project);
+        return project;
     }
 
-    private ProjectResource requireResource(Project project, Long resourceId) {
-
-        return resources.findById(resourceId)
+    private ProjectResource requireEditableResource(Long workspaceId, Long resourceId) {
+        User user = access.requireUser(false);
+        Workspace workspace = contexts.require(user, workspaceId);
+        ProjectResource resource = resources.findById(resourceId)
                 .filter(value -> Boolean.TRUE.equals(value.getIsActive()))
-                .filter(value -> Objects.equals(value.getProjectId(), project.getId()))
                 .orElseThrow(WorkspaceResourceCommandService::notFound);
+        if (!Objects.equals(resource.getTenantId(), workspace.getTenant().getId())) {
+            throw new AccessDeniedException("The resource is outside this workspace");
+        }
+        requireEditableProject(user, workspace, resource.getProjectId());
+        return resource;
     }
 
     private void apply(ProjectResource entity, WorkspaceResourceDtos.ResourcePayload request) {
 
         WorkspaceResourceDtos.ResourcePayload safe = request == null
-                ? new WorkspaceResourceDtos.ResourcePayload(null, null, null, null, null, null)
+                ? new WorkspaceResourceDtos.ResourcePayload(null, null, null, null, null)
                 : request;
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
@@ -223,7 +224,6 @@ public class WorkspaceResourceCommandService {
         String description = trim(safe.description());
         ResourceKind kind = parseKind(safe.kind(), errors);
         String url = trim(safe.url());
-        String category = trim(safe.category());
         Integer orderIndex = safe.orderIndex() == null ? entity.getOrderIndex() : safe.orderIndex();
 
         if (orderIndex == null || orderIndex < 0) {
@@ -249,10 +249,6 @@ public class WorkspaceResourceCommandService {
             add(errors, "url", "Url must not exceed " + MAX_URL_LENGTH + " characters");
         }
 
-        if (category != null && category.length() > MAX_CATEGORY_LENGTH) {
-            add(errors, "category", "Category must not exceed " + MAX_CATEGORY_LENGTH + " characters");
-        }
-
         if (!errors.isEmpty()) {
             throw new BusinessValidationException(errors);
         }
@@ -261,7 +257,6 @@ public class WorkspaceResourceCommandService {
         entity.setDescription(description);
         entity.setKind(kind);
         entity.setUrl(url);
-        entity.setCategory(category);
         entity.setOrderIndex(orderIndex);
     }
 
@@ -276,8 +271,9 @@ public class WorkspaceResourceCommandService {
 
         return new WorkspaceResourceDtos.ResourceItem(resource.getId(), resource.getTitle(),
                 resource.getDescription(), resource.getKind() == null ? null : resource.getKind().name(),
-                resource.getUrl(), resource.getCategory(), resource.getOrderIndex(),
-                resource.getUpdatedAt(), resource.getUpdatedBy(), attached);
+                resource.getUrl(), resource.getOrderIndex(),
+                resource.getUpdatedAt(), resource.getUpdatedBy(), attached, resource.getSourceTemplateId(),
+                resource.getSourceTemplateName(), resource.getSourceOrigin(), resource.getProjectId(), true);
     }
 
     private WorkspaceResourceDtos.FileItem fileView(ProjectResourceFile file) {
@@ -317,6 +313,4 @@ public class WorkspaceResourceCommandService {
         return new ResourceNotFoundException("Resource or file was not found");
     }
 
-    private record EditorContext(User user, Workspace workspace, Project project) {
-    }
 }

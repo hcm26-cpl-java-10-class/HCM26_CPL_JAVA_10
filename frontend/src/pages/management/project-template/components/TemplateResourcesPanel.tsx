@@ -231,7 +231,6 @@ export function TemplateResourcesPanel({ versionId, editable }: { versionId: num
                           : <FileText className="size-4 text-muted-foreground" />}
                         <span className="break-words font-medium">{resource.title}</span>
                         <Badge variant="secondary" className="text-[11px]">{resource.kind}</Badge>
-                        {resource.category && <Badge variant="outline" className="text-[11px]">{resource.category}</Badge>}
                       </div>
                       {resource.description && (
                         <p className="mt-1 whitespace-pre-wrap break-words text-sm text-muted-foreground">{resource.description}</p>

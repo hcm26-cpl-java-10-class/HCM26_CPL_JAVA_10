@@ -4,6 +4,9 @@ import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.ProjectTemplate;
 import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
+import jakarta.persistence.EntityManager;
+import java.util.Objects;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateVersionStatus;
@@ -53,7 +56,6 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
     static final int MAX_TITLE_LENGTH = 255;
     static final int MAX_DESCRIPTION_LENGTH = 1000;
     static final int MAX_URL_LENGTH = 1000;
-    static final int MAX_CATEGORY_LENGTH = 50;
 
     static final String ACTION_CREATE = "RESOURCE_CREATE";
     static final String ACTION_UPDATE = "RESOURCE_UPDATE";
@@ -67,6 +69,8 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
     TemplateResourceFileRepository templateResourceFileRepository;
     TemplateResourceFileStorage fileStorage;
     ProjectTemplateSnapshotAuditService audits;
+    ProjectTemplateAccessService access;
+    EntityManager entityManager;
 
     // ---------------------------------------------------------------------
     // Query
@@ -84,8 +88,8 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
                 .map(resource -> view(resource))
                 .toList();
 
-        return new TemplateResourceCollection(items, fileStorage.maxBytes(),
-                fileStorage.allowedExtensions(), isEditable(version));
+        return new TemplateResourceCollection(items, fileStorage.templateMaxBytes(),
+                fileStorage.templateExtensions(), isEditable(version));
     }
 
     // ---------------------------------------------------------------------
@@ -153,10 +157,7 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
         TemplateResource entity = requireResource(versionId, resourceId);
         TemplateResourceView before = view(entity);
 
-        for (TemplateResourceFile file : templateResourceFileRepository.findAllByResourceIdOrderByIdAsc(resourceId)) {
-            fileStorage.delete(file.getStorageKey());
-        }
-
+        // Version and project copies may still reference the same stored file.
         templateResourceFileRepository.deleteByResourceId(resourceId);
         templateResourceRepository.delete(entity);
 
@@ -173,7 +174,7 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
         ProjectTemplateSnapshot version = requireEditableVersion(versionId);
         TemplateResource resource = requireResource(versionId, resourceId);
 
-        StoredTemplateFile stored = fileStorage.store(file);
+        StoredTemplateFile stored = fileStorage.storeTemplate(file);
 
         TemplateResourceFile entity = new TemplateResourceFile();
         entity.setResourceId(resource.getId());
@@ -229,7 +230,6 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
         TemplateResourceFileView before = fileView(versionId, file);
 
         templateResourceFileRepository.delete(file);
-        fileStorage.delete(file.getStorageKey());
 
         audits.record(ACTION_FILE_DELETE, versionId, version.getTemplateId(), null, before, null);
     }
@@ -243,17 +243,23 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
         ProjectTemplateSnapshot version = versionRepository.findById(versionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Template version was not found"));
 
-        if (version.getProjectId() != null) {
+        if (version.getProjectId() != null || version.getTemplateId() == null || !Boolean.TRUE.equals(version.getIsActive())) {
             throw new ResourceNotFoundException("Template version was not found");
         }
 
+        var user = access.requireUser("READ");
+        templateRepository.findReadableById(version.getTemplateId(), user.getTenantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Project template was not found"));
         return version;
     }
 
     private ProjectTemplateSnapshot requireEditableVersion(Long versionId) {
 
         ProjectTemplateSnapshot version = requireVersion(versionId);
-        ProjectTemplate template = requireTemplate(version.getTemplateId());
+        var user = access.requireUser("UPDATE");
+        ProjectTemplate template = templateRepository.findForTemplateUpdate(version.getTemplateId(), user.getTenantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Project template was not found"));
+        entityManager.refresh(version);
 
         if (version.getStatus() != ProjectTemplateVersionStatus.DRAFT
                 || !Boolean.TRUE.equals(version.getIsActive())
@@ -290,7 +296,8 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
         return template != null
                 && version.getStatus() == ProjectTemplateVersionStatus.DRAFT
                 && Boolean.TRUE.equals(version.getIsActive())
-                && template.getStatus() != ProjectTemplateStatus.ARCHIVED;
+                && template.getStatus() != ProjectTemplateStatus.ARCHIVED
+                && Objects.equals(template.getTenantId(), access.requireUser("READ").getTenantId());
     }
 
     private void apply(TemplateResource entity, TemplateResourceRequest request) {
@@ -301,7 +308,6 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
         String description = trim(request.description());
         ResourceKind kind = request.kind() == null ? ResourceKind.LINK : request.kind();
         String url = trim(request.url());
-        String category = trim(request.category());
         Integer orderIndex = request.orderIndex() == null ? entity.getOrderIndex() : request.orderIndex();
         if (orderIndex == null || orderIndex < 0) {
             orderIndex = 0;
@@ -329,11 +335,6 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
                     .add("Url must not exceed " + MAX_URL_LENGTH + " characters");
         }
 
-        if (category != null && category.length() > MAX_CATEGORY_LENGTH) {
-            errors.computeIfAbsent("category", key -> new ArrayList<>())
-                    .add("Category must not exceed " + MAX_CATEGORY_LENGTH + " characters");
-        }
-
         if (!errors.isEmpty()) {
             throw new BusinessValidationException(errors);
         }
@@ -342,7 +343,6 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
         entity.setDescription(description);
         entity.setKind(kind);
         entity.setUrl(url);
-        entity.setCategory(category);
         entity.setOrderIndex(orderIndex);
     }
 
@@ -358,7 +358,7 @@ public class TemplateResourceVersionServiceImpl implements TemplateResourceVersi
 
         return new TemplateResourceView(resource.getId(), resource.getTemplateId(), versionId,
                 resource.getTitle(), resource.getDescription(), resource.getKind(), resource.getUrl(),
-                resource.getCategory(), resource.getOrderIndex(), files);
+                resource.getOrderIndex(), files);
     }
 
     private TemplateResourceFileView fileView(Long versionId, TemplateResourceFile file) {

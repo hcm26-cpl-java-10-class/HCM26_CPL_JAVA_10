@@ -287,9 +287,9 @@ class MilestoneSubmissionIntegrationTest {
         Milestone milestone = milestones.saveAndFlush(Milestone.create(MockMilestoneData.TENANT_ID,
                 MockMilestoneData.PROJECT_ID, MockMilestoneData.TEAM_ID, "Not open " + UUID.randomUUID(),
                 null, now.plusSeconds(3600), true, MockMilestoneData.RUBRIC_ID,
-                MockMilestoneData.TECHNICAL_REVIEWER_ID, LatePolicyType.NO_LATE, null, null, actor, now));
+                UUID.nameUUIDFromBytes("teacher@example.com".getBytes(java.nio.charset.StandardCharsets.UTF_8)), LatePolicyType.NO_LATE, null, null, actor, now));
         MilestoneSubmission submission = submissions.saveAndFlush(MilestoneSubmission.create(milestone, MockMilestoneData.TEAM_ID,
-                "Team", UUID.randomUUID(), "Student", MockMilestoneData.TECHNICAL_REVIEWER_ID, "Reviewer", now));
+                "Team", UUID.randomUUID(), "Student", UUID.nameUUIDFromBytes("teacher@example.com".getBytes(java.nio.charset.StandardCharsets.UTF_8)), "Reviewer", now));
         SubmissionVersion version = SubmissionVersion.draft(submission, 1, "Work", null, null, actor, now);
         version.submit(now, false, BigDecimal.ZERO);
         versions.saveAndFlush(version);
@@ -322,7 +322,7 @@ class MilestoneSubmissionIntegrationTest {
         Milestone milestone = Milestone.create(MockMilestoneData.TENANT_ID, MockMilestoneData.PROJECT_ID,
                 MockMilestoneData.TEAM_ID,
                 "Closed request-changes test " + UUID.randomUUID(), null, now.minusSeconds(3600), true,
-                MockMilestoneData.RUBRIC_ID, MockMilestoneData.TECHNICAL_REVIEWER_ID,
+                MockMilestoneData.RUBRIC_ID, UUID.nameUUIDFromBytes("teacher@example.com".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
                 LatePolicyType.NO_LATE, null, null, actor, now.minusSeconds(7200));
         milestone.openForWork(actor, now.minusSeconds(7200));
         milestone.start(actor, now.minusSeconds(7100));
@@ -331,7 +331,7 @@ class MilestoneSubmissionIntegrationTest {
                 actor, now.minusSeconds(600));
         milestone = milestones.saveAndFlush(milestone);
         MilestoneSubmission submission = MilestoneSubmission.create(milestone, MockMilestoneData.TEAM_ID, "Closed Team",
-                UUID.randomUUID(), "Student", MockMilestoneData.TECHNICAL_REVIEWER_ID, "Reviewer", now.minusSeconds(1800));
+                UUID.randomUUID(), "Student", UUID.nameUUIDFromBytes("teacher@example.com".getBytes(java.nio.charset.StandardCharsets.UTF_8)), "Reviewer", now.minusSeconds(1800));
         submission = submissions.saveAndFlush(submission);
         SubmissionVersion version = SubmissionVersion.draft(submission, 1, "Late work", null, null, actor, now.minusSeconds(1200));
         version.submit(now.minusSeconds(600), true, BigDecimal.ZERO);
@@ -369,7 +369,7 @@ class MilestoneSubmissionIntegrationTest {
     }
 
     @Test
-    void gradeLockAndWaiverDoNotCompleteProjectWithoutAcceptedMilestone() throws Exception {
+    void lockedGradeAndApprovedWaiverCompleteTheMandatoryMilestoneRequirement() throws Exception {
         Instant now = Instant.now();
         UUID actor = UUID.randomUUID();
         Long projectId = 902L;
@@ -395,7 +395,7 @@ class MilestoneSubmissionIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"Approved curriculum exception\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.completed").value(false))
+                .andExpect(jsonPath("$.completed").value(true))
                 .andExpect(jsonPath("$.gradeLocked").value(true));
     }
 
@@ -415,6 +415,32 @@ class MilestoneSubmissionIntegrationTest {
                     .andExpect(jsonPath("$.status").value("ACCEPTED"))
                     .andExpect(jsonPath("$.executionStatus").value("DONE"));
         }
+    }
+
+    @Test
+    void reviewedAcceptanceChecklistIsReflectedOnTheTeamMilestone() throws Exception {
+        JsonNode detail = submittedDetail();
+        UUID id = UUID.fromString(detail.get("id").asText());
+        var milestone = submissions.findById(id).orElseThrow().getMilestone();
+        assertEquals(true, milestone.getTeamId() != null, "seeded submission must belong to a team milestone");
+        var version = versions.findBySubmissionIdAndVersionNumber(id, detail.get("currentVersionNumber").asInt()).orElseThrow();
+        Set<UUID> sourced = new HashSet<>();
+        version.getChecklist().forEach(item -> { if (item.getSourceChecklistItemId() != null) sourced.add(item.getSourceChecklistItemId()); });
+        assertEquals(false, sourced.isEmpty(), "the submission checklist must be copied from the milestone checklist");
+        assertEquals(0, milestone.getChecklistItems().stream().filter(item -> sourced.contains(item.getId()) && item.isCompleted()).count());
+
+        mockMvc.perform(post("/api/milestone-submissions/{id}/review", id)
+                        .header("Authorization", bearer())
+                        .header("Idempotency-Key", "accept-syncs-checklist")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(reviewRequest(detail, "ACCEPT", ""))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACCEPTED"));
+
+        var reviewed = milestones.findById(milestone.getId()).orElseThrow();
+        assertEquals(sourced.size(), reviewed.getChecklistItems().stream()
+                .filter(item -> sourced.contains(item.getId()) && item.isCompleted()).count(),
+                "every item the reviewer checked is completed on the milestone");
     }
 
     @Test
@@ -463,6 +489,46 @@ class MilestoneSubmissionIntegrationTest {
         request.put("checklist", checklist);
         if ("REQUEST_CHANGES".equals(decision)) request.put("overallFeedback", "Please revise the submission using the criterion feedback.");
         return request;
+    }
+
+    @Test
+    void studentCannotReviewEvenWithAValidReviewPayload() throws Exception {
+        JsonNode detail = submittedDetail();
+        mockMvc.perform(post("/api/milestone-submissions/{id}/review", detail.get("id").asText())
+                .header("Authorization", studentBearer())
+                .header("Idempotency-Key", "student-review-denied")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(reviewRequest(detail, "ACCEPT", ""))))
+                .andExpect(status().isForbidden());
+        assertEquals(0, audits.findBySubmissionIdAndActionAndActorIdAndIdempotencyKey(UUID.fromString(detail.get("id").asText()), "SUBMISSION_ACCEPT", UUID.nameUUIDFromBytes("student@example.com".getBytes(java.nio.charset.StandardCharsets.UTF_8)), "student-review-denied").stream().count());
+    }
+
+    @Test
+    void teacherCannotReviewSubmissionAssignedToAnotherReviewer() throws Exception {
+        JsonNode detail = submittedDetail();
+        UUID id = UUID.fromString(detail.get("id").asText());
+        var row = submissions.findById(id).orElseThrow();
+        org.springframework.test.util.ReflectionTestUtils.setField(row, "assignedReviewerId", UUID.randomUUID());
+        submissions.saveAndFlush(row);
+        mockMvc.perform(post("/api/milestone-submissions/{id}/review", id)
+                .header("Authorization", bearer())
+                .header("Idempotency-Key", "unassigned-review-denied")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(reviewRequest(detail, "ACCEPT", ""))))
+                .andExpect(status().isForbidden());
+        assertEquals(com.example.starter_project_2025.system.project.milestone.submission.domain.SubmissionStatus.SUBMITTED, submissions.findById(id).orElseThrow().getStatus());
+    }
+
+    @Test
+    void authorizedAdminCanReviewWithoutReplacingTheAssignedReviewer() throws Exception {
+        JsonNode detail = submittedDetail();
+        var admin = userDetailsService.loadUserByUsername("admin@example.com");
+        String token = "Bearer " + tokenService.generateAccessToken(new UsernamePasswordAuthenticationToken(admin, null, admin.getAuthorities()));
+        mockMvc.perform(post("/api/milestone-submissions/{id}/review", detail.get("id").asText())
+                .header("Authorization", token).header("Idempotency-Key", "admin-review")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(reviewRequest(detail, "ACCEPT", ""))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACCEPTED"));
     }
 
     private String bearer() {

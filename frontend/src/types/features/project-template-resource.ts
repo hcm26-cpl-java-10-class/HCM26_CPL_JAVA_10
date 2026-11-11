@@ -24,7 +24,6 @@ export interface TemplateResource {
   description?: string | null;
   kind: ResourceKind;
   url?: string | null;
-  category?: string | null;
   orderIndex: number;
   files: TemplateResourceFile[];
 }
@@ -41,6 +40,5 @@ export interface TemplateResourcePayload {
   description?: string | null;
   kind: ResourceKind;
   url?: string | null;
-  category?: string | null;
   orderIndex?: number | null;
 }

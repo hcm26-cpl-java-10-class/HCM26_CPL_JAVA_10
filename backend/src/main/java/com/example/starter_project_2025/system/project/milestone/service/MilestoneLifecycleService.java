@@ -143,6 +143,11 @@ public class MilestoneLifecycleService {
                 .filter(Milestone::isActive).orElseThrow(() -> new ResourceNotFoundException("Milestone not found"));
     }
     private void checkVersion(Milestone value, Long expected) {
+        if (value.getProjectId() != null) {
+            var project = projects.requireProjectForRead(value.getProjectId(), actors.requireCurrentActorId(), value.getTenantId());
+            if (java.util.Set.of("COMPLETED", "CANCELLED").contains(project.status().name()))
+                throw new MilestoneConflictException("The project is closed and its milestones are read-only");
+        }
         if (expected == null || value.getVersion() != expected) throw new MilestoneConflictException("Milestone changed; reload and retry");
     }
     public void recordInitialRevision(Milestone milestone, UUID actor, Instant now) {

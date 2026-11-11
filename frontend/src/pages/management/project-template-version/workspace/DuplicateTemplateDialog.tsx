@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import type { ProjectTemplateVersionDTO } from "@/types";
 import { CopyPlus, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { maxTemplateCodeNameLength } from "@/pages/management/project-template/project-template.utils";
 import { versionLabel } from "./version.constants";
 
 interface DuplicateTemplateDialogProps {
@@ -60,7 +61,9 @@ export function DuplicateTemplateDialog({
     const next: FieldErrors = {};
 
     if (!name.trim()) next.name = "Enter a template name";
-    else if (name.trim().length > 255) next.name = "Template name must not exceed 255 characters";
+    else if (name.trim().length > maxTemplateCodeNameLength) {
+      next.name = `Template name must not exceed ${maxTemplateCodeNameLength} characters`;
+    }
 
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -94,17 +97,23 @@ export function DuplicateTemplateDialog({
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="duplicate-template-name" className="text-xs">
-              New name <span className="text-destructive">*</span>
-            </Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="duplicate-template-name" className="text-xs">
+                New name <span className="text-destructive">*</span>
+              </Label>
+              <span id="duplicate-template-name-count" className="text-xs tabular-nums text-muted-foreground">
+                {name.length} / {maxTemplateCodeNameLength} characters
+              </span>
+            </div>
             <Input
               id="duplicate-template-name"
               value={name}
-              maxLength={255}
+              maxLength={maxTemplateCodeNameLength}
               placeholder="e.g. Capstone Project Template (Copy)"
               autoComplete="off"
               disabled={loading}
               aria-invalid={Boolean(errors.name)}
+              aria-describedby="duplicate-template-name-count"
               onChange={(event) => {
                 setName(event.target.value);
                 if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));

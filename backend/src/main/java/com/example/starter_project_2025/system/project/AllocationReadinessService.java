@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
+import com.example.starter_project_2025.system.project.template.assignment.hierarchy.ProjectAssignmentService;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
@@ -11,7 +12,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -39,11 +39,19 @@ public class AllocationReadinessService {
     public static final String ERR_UNASSIGNED_MEMBERS = "ERR_UNASSIGNED_MEMBERS";
     public static final String ERR_TEAMS_NOT_READY = "ERR_TEAMS_NOT_READY";
     public static final String ERR_NO_TEAMS = "ERR_NO_TEAMS";
+    public static final String ERR_NO_DRAFT_TEAMS = "ERR_NO_DRAFT_TEAMS";
     public static final String ERR_SESSION_NOT_OPEN = "ERR_SESSION_NOT_OPEN";
     public static final String ERR_TEAM_TEMPLATE_REQUIRED = "ERR_TEAM_TEMPLATE_REQUIRED";
     public static final String ERR_TEAM_TEMPLATE_INVALID = "ERR_TEAM_TEMPLATE_INVALID";
     public static final String ERR_TEAM_CAPACITY_EXCEEDED = "ERR_TEAM_CAPACITY_EXCEEDED";
     public static final String ERR_TEAM_ROLE_REQUIRED = "ERR_TEAM_ROLE_REQUIRED";
+    public static final String ERR_TEAM_LEADER_REQUIRED = "ERR_TEAM_LEADER_REQUIRED";
+    public static final String ERR_TEAM_MENTOR_REQUIRED = "ERR_TEAM_MENTOR_REQUIRED";
+    public static final String ERR_TEAM_MENTOR_INVALID = "ERR_TEAM_MENTOR_INVALID";
+    public static final String ERR_TEAM_PROJECT_ALREADY_ASSIGNED = "ERR_TEAM_PROJECT_ALREADY_ASSIGNED";
+    public static final String ERR_TEAM_ASSIGNMENT_INVALID = "ERR_TEAM_ASSIGNMENT_INVALID";
+    public static final String ERR_TEAM_MEMBER_INACTIVE = "ERR_TEAM_MEMBER_INACTIVE";
+    public static final String ERR_STUDENT_ALREADY_ASSIGNED = "ERR_STUDENT_ALREADY_ASSIGNED";
     public static final String ERR_MULTI_ROLE_NOT_ALLOWED = "ERR_MULTI_ROLE_NOT_ALLOWED";
     public static final String ERR_TEAM_ROLE_QUOTA_NOT_MET = "ERR_TEAM_ROLE_QUOTA_NOT_MET";
 
@@ -53,6 +61,8 @@ public class AllocationReadinessService {
     private final ProjectMemberRepository memberRepository;
     private final ClassMemberRepository classMemberRepository;
     private final ScopeAuthorizationService scopeAuthorizationService;
+    private final ProjectTeamMentorService teamMentorService;
+    private final ProjectAssignmentService projectAssignments;
     private final ObjectMapper objectMapper;
 
     /** US-12 pre-check endpoint: validates the caller can manage the class. */
@@ -71,7 +81,7 @@ public class AllocationReadinessService {
                 .findByIdAndTrainingClass_Id(sessionId, classId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "TeamAllocationSession", "id", sessionId));
-        return build(session);
+        return build(session, authentication);
     }
 
     /**
@@ -79,54 +89,77 @@ public class AllocationReadinessService {
      * loaded/locked and authorized the session.
      */
     @Transactional(readOnly = true)
-    public AllocationReadinessResponse evaluateSession(Long sessionId) {
+    public AllocationReadinessResponse evaluateSession(Long sessionId, Authentication authentication) {
         TeamAllocationSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "TeamAllocationSession", "id", sessionId));
-        return build(session);
+        return build(session, authentication);
     }
 
-    private AllocationReadinessResponse build(TeamAllocationSession session) {
+    private AllocationReadinessResponse build(TeamAllocationSession session, Authentication authentication) {
         Long classId = session.getTrainingClass().getId();
 
         List<ClassMember> activeMembers = classMemberRepository
                 .findAllByTrainingClass_IdAndStatusOrderByIdAsc(
-                        classId, ClassMemberStatus.ACTIVE);
+                        classId, ClassMemberStatus.ACTIVE).stream()
+                .filter(AllocationStudentEligibility::isEligible).toList();
 
-        Set<Long> assignedMemberIds = new HashSet<>(memberRepository
-                .findAssignedMemberIdsBySessionAndTeamStatuses(
-                        session.getId(),
-                        List.of(ProjectTeamStatus.DRAFT, ProjectTeamStatus.ACTIVE)));
+        List<ProjectTeam> teams = teamRepository.findAllByAllocationSession_IdOrderByIdAsc(session.getId())
+                .stream().filter(team -> team.getStatus() != ProjectTeamStatus.ARCHIVED).toList();
+        Map<Long, List<ProjectMember>> rosters = new HashMap<>();
+        Map<Long, Integer> membershipCounts = new HashMap<>();
+        for (ProjectTeam team : teams) {
+            List<ProjectMember> roster = memberRepository.findAllByTeam_IdOrderByIdAsc(team.getId());
+            rosters.put(team.getId(), roster);
+            roster.forEach(member -> membershipCounts.merge(member.getClassMember().getId(), 1, Integer::sum));
+        }
 
         List<AllocationReadinessResponse.UnassignedStudent> unassignedStudents =
                 activeMembers.stream()
-                        .filter(member -> !assignedMemberIds.contains(member.getId()))
+                        .filter(member -> !membershipCounts.containsKey(member.getId()))
                         .map(member -> new AllocationReadinessResponse.UnassignedStudent(
                                 member.getId(),
                                 member.getUser().getFullName(),
                                 member.getUser().getUserCode()))
                         .toList();
 
-        List<ProjectTeam> teams = teamRepository
-                .findAllByAllocationSession_IdOrderByIdAsc(session.getId())
-                .stream()
-                .filter(team -> team.getStatus() != ProjectTeamStatus.ARCHIVED)
-                .toList();
-
         List<AllocationReadinessResponse.TeamReadinessIssue> teamIssues = new ArrayList<>();
+        Map<Long, String> assignmentIssues = session.getStatus() == TeamAllocationSessionStatus.OPEN
+                ? projectAssignments.pendingPublicationIssues(session, authentication) : Map.of();
         int teamsWithTemplate = 0;
         int draftTeamCount = 0;
         int activeTeamCount = 0;
         for (ProjectTeam team : teams) {
             if (team.getStatus() == ProjectTeamStatus.DRAFT) {
                 draftTeamCount++;
+                List<ProjectMember> roster = rosters.get(team.getId());
+                List<Long> duplicates = roster.stream().map(member -> member.getClassMember().getId())
+                        .filter(id -> membershipCounts.get(id) > 1).toList();
+                if (!duplicates.isEmpty()) {
+                    teamIssues.add(issue(team, ERR_STUDENT_ALREADY_ASSIGNED,
+                            "Có học viên được xếp vào nhiều nhóm trong phiên. Mỗi học viên chỉ được thuộc một nhóm.",
+                            duplicates, List.of()));
+                }
+                List<Long> inactive = roster.stream()
+                        .filter(member -> !Boolean.TRUE.equals(member.getIsActive())
+                                || !Boolean.TRUE.equals(member.getClassMember().getIsActive())
+                                || !AllocationStudentEligibility.isEligible(member.getClassMember()))
+                        .map(member -> member.getClassMember().getId()).toList();
+                if (!inactive.isEmpty()) {
+                    teamIssues.add(issue(team, ERR_TEAM_MEMBER_INACTIVE,
+                            "Nhóm có học viên không còn hoạt động trong lớp.", inactive, List.of()));
+                }
             } else if (team.getStatus() == ProjectTeamStatus.ACTIVE) {
                 activeTeamCount++;
             }
             if (team.getProjectTemplate() != null) {
                 teamsWithTemplate++;
             }
-            teamIssues.addAll(inspectTeam(team));
+            teamIssues.addAll(inspectTeam(team, rosters.get(team.getId())));
+            String assignmentIssue = assignmentIssues.get(team.getId());
+            if (assignmentIssue != null) {
+                teamIssues.add(issue(team, ERR_TEAM_ASSIGNMENT_INVALID, assignmentIssue, List.of(), List.of()));
+            }
         }
 
         Set<String> blockers = new LinkedHashSet<>();
@@ -135,6 +168,8 @@ public class AllocationReadinessService {
         }
         if (teams.isEmpty()) {
             blockers.add(ERR_NO_TEAMS);
+        } else if (session.getStatus() == TeamAllocationSessionStatus.OPEN && draftTeamCount == 0) {
+            blockers.add(ERR_NO_DRAFT_TEAMS);
         }
         if (!unassignedStudents.isEmpty()) {
             blockers.add(ERR_UNASSIGNED_MEMBERS);
@@ -167,24 +202,43 @@ public class AllocationReadinessService {
      * template role quotas are satisfied.
      */
     private List<AllocationReadinessResponse.TeamReadinessIssue> inspectTeam(
-            ProjectTeam team
+            ProjectTeam team, List<ProjectMember> assignments
     ) {
-        ProjectTemplate template = team.getProjectTemplate();
+        List<AllocationReadinessResponse.TeamReadinessIssue> issues = new ArrayList<>();
+        if (team.getStatus() == ProjectTeamStatus.DRAFT) {
+            try {
+                teamMentorService.resolveMentorForPublish(team);
+            } catch (TeamPublishValidationException invalidMentor) {
+                String code = team.getAssignedMentorId() == null ? ERR_TEAM_MENTOR_REQUIRED : ERR_TEAM_MENTOR_INVALID;
+                issues.add(issue(team, code, invalidMentor.getMessage(), List.of(), List.of()));
+            }
+            String assignmentIssue = projectAssignments.directAssignmentPublishIssue(team);
+            if (assignmentIssue != null) {
+                issues.add(issue(team, ERR_TEAM_PROJECT_ALREADY_ASSIGNED, assignmentIssue, List.of(), List.of()));
+            }
+        }
+        if (ProjectTeamLeaderService.activeLeaderId(team, assignments) == null) {
+            issues.add(issue(team, ERR_TEAM_LEADER_REQUIRED,
+                    "Chọn một thành viên ACTIVE làm Leader trước khi công bố nhóm.", List.of(), List.of()));
+        }
+        ProjectTemplate template = ProjectTemplateConstraints.templateFor(team);
         if (template == null) {
-            return List.of(issue(
+            issues.add(issue(
                     team,
                     ERR_TEAM_TEMPLATE_REQUIRED,
                     "Nhóm chưa được gán đề bài dự án hợp lệ.",
                     List.of(),
                     List.of()));
+            return issues;
         }
         if (Boolean.FALSE.equals(template.getIsActive())) {
-            return List.of(issue(
+            issues.add(issue(
                     team,
                     ERR_TEAM_TEMPLATE_INVALID,
                     "Đề bài dự án đã được gán không còn hoạt động (ACTIVE).",
                     List.of(),
                     List.of()));
+            return issues;
         }
 
         ProjectTemplateConstraints.Capacity capacity;
@@ -193,17 +247,15 @@ public class AllocationReadinessService {
             capacity = ProjectTemplateConstraints.parse(objectMapper, template, null);
             policy = ProjectTemplateConstraints.parseRolePolicy(objectMapper, template);
         } catch (RuntimeException invalidTemplate) {
-            return List.of(issue(
+            issues.add(issue(
                     team,
                     ERR_TEAM_TEMPLATE_INVALID,
                     "Cấu hình đề bài dự án không hợp lệ: " + invalidTemplate.getMessage(),
                     List.of(),
                     List.of()));
+            return issues;
         }
 
-        List<ProjectMember> assignments =
-                memberRepository.findAllByTeam_IdOrderByIdAsc(team.getId());
-        List<AllocationReadinessResponse.TeamReadinessIssue> issues = new ArrayList<>();
 
         if (!capacity.accepts(assignments.size())) {
             issues.add(issue(

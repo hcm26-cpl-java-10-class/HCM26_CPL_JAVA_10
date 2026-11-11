@@ -51,7 +51,7 @@ public class SprintBacklogImportTemplateProvider implements ImportTemplateProvid
                         "Từ 1 đến 200 ký tự", "Thiết kế màn hình đăng nhập"))
                 .column(ImportTemplateColumn.text(
                         "Description", false,
-                        "Tối đa 2000 ký tự", "Mô tả ngắn cho backlog item"))
+                        "Tối đa 1000 ký tự", "Mô tả ngắn cho backlog item"))
                 .column(ImportTemplateColumn.dateTime(
                         "Start Date", false,
                         "Phải nhập cùng End Date và trước End Date", "2026-01-05T09:00:00"))
@@ -71,7 +71,7 @@ public class SprintBacklogImportTemplateProvider implements ImportTemplateProvid
                         "Số giờ ước tính, lớn hơn hoặc bằng 0", "8"))
                 .rule(
                         "Title là bắt buộc, tối đa 200 ký tự",
-                        "Description tối đa 2000 ký tự",
+                        "Description tối đa 1000 ký tự",
                         "Start Date và End Date phải nhập cùng nhau, Start Date trước End Date",
                         "Không nhập Status: mọi item import vào đều ở trạng thái "
                                 + SprintBacklogStatus.TODO,

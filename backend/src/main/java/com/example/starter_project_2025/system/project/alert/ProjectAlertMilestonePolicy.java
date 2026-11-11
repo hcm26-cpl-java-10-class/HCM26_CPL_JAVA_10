@@ -17,8 +17,9 @@ public class ProjectAlertMilestonePolicy {
         long total=items.size();
         BigDecimal percentage=total==0?BigDecimal.ZERO:BigDecimal.valueOf(done).multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(total),2,RoundingMode.HALF_UP);
-        boolean upcoming=milestone.getDeadline().isAfter(now)
-                &&!milestone.getDeadline().isAfter(now.plus(Duration.ofHours(48)));
+        Instant deadline=milestone.getDeadline();
+        boolean upcoming=deadline!=null&&deadline.isAfter(now)
+                &&!deadline.isAfter(now.plus(Duration.ofHours(48)));
         boolean open=milestone.lifecycleStatus()==MilestoneLifecycleStatus.IN_PROGRESS;
         // Compare counts before rounding: a displayed 80.00% may still be below 80%.
         boolean below=total==0||BigDecimal.valueOf(done).multiply(BigDecimal.valueOf(100))

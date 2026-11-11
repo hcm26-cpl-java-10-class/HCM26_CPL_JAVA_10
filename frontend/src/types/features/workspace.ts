@@ -17,6 +17,7 @@ export interface WorkspaceCandidateItem {
   classId?: number;
   classCode?: string;
   className?: string;
+  allocationSessionId?: number;
 
   workspaceId?: number;
   workspaceStatus?: string;
