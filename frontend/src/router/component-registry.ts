@@ -75,7 +75,28 @@ import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
-import { Navigate } from "react-router-dom";
+import SessionManagementPage from "@/pages/management/demo/session/SessionManagementPage";
+import ClassSetupPage from "@/pages/management/training/class/ClassSetupPage";
+import { Navigate, useSearchParams } from "react-router-dom";
+
+function TopicMarkRouteRedirect() {
+  const [params] = useSearchParams();
+  const classId = params.get("classId")?.trim();
+  const classCode = params.get("classCode")?.trim();
+  if (classId) {
+    return createElement(Navigate, {
+      to: `/classes/${encodeURIComponent(classId)}?tab=trainees&view=topic-mark`,
+      replace: true,
+    });
+  }
+  if (classCode) {
+    return createElement(Navigate, {
+      to: `/training-operations/class-details/${encodeURIComponent(classCode)}?tab=trainees&view=topic-mark`,
+      replace: true,
+    });
+  }
+  return createElement(TopicMarkGradebookDemoPage);
+}
 
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
