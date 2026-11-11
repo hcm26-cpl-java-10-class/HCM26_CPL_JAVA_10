@@ -32,6 +32,16 @@ type ScoreBand = {
     count: number;
 };
 
+export type GradeDistributionItem = {
+    gradeLetter: string;
+    label: string;
+    minScore: number;
+    maxScore: number;
+    color: string;
+    count: number;
+    percentage: number;
+};
+
 type ExamStatistics = {
     examId: number;
     examTitle: string;
@@ -48,6 +58,7 @@ type ExamStatistics = {
     failedAttempts?: number;
     failRate?: number | null;
     passScore?: number | null;
+    gradeDistribution?: GradeDistributionItem[];
 };
 
 type ReleasePolicy =
@@ -146,6 +157,123 @@ function StatCard({
             {detail && (
                 <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
             )}
+        </div>
+    );
+}
+
+function GradeDistributionChart({ items }: { items: GradeDistributionItem[] }) {
+    const width = 720;
+    const height = 300;
+    const left = 44;
+    const right = 18;
+    const top = 24;
+    const bottom = 52;
+    const chartWidth = width - left - right;
+    const chartHeight = height - top - bottom;
+    const maxCount = Math.max(1, ...items.map((item) => item.count));
+    const slotWidth = chartWidth / Math.max(1, items.length);
+    const barWidth = Math.min(56, slotWidth * 0.58);
+
+    if (items.length === 0) {
+        return (
+            <p className="py-12 text-center text-sm text-muted-foreground">
+                No grade distribution data available.
+            </p>
+        );
+    }
+
+    return (
+        <div className="w-full overflow-x-auto">
+            <svg
+                viewBox={`0 0 ${width} ${height}`}
+                className="w-full min-w-[460px]"
+                role="img"
+                aria-label="Grade distribution bar chart"
+            >
+                {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
+                    const y = top + chartHeight * (1 - fraction);
+                    const value = Math.round(maxCount * fraction);
+
+                    return (
+                        <g key={fraction}>
+                            <line
+                                x1={left}
+                                y1={y}
+                                x2={width - right}
+                                y2={y}
+                                stroke="currentColor"
+                                className="text-border"
+                                strokeDasharray="4 4"
+                            />
+                            <text
+                                x={left - 9}
+                                y={y + 4}
+                                textAnchor="end"
+                                fontSize="11"
+                                fill="currentColor"
+                                className="text-muted-foreground"
+                            >
+                                {value}
+                            </text>
+                        </g>
+                    );
+                })}
+
+                {items.map((item, index) => {
+                    const barHeight = (item.count / maxCount) * chartHeight;
+                    const x = left + slotWidth * index + (slotWidth - barWidth) / 2;
+                    const y = top + chartHeight - barHeight;
+                    const fillColor = item.color || "#3b82f6";
+
+                    return (
+                        <g key={`${item.gradeLetter}-${index}`}>
+                            <rect
+                                x={x}
+                                y={y}
+                                width={barWidth}
+                                height={Math.max(0, barHeight)}
+                                rx="6"
+                                fill={fillColor}
+                                opacity="0.9"
+                                className="transition-all hover:opacity-100"
+                            />
+                            <text
+                                x={x + barWidth / 2}
+                                y={Math.max(top - 4, y - 7)}
+                                textAnchor="middle"
+                                fontSize="12"
+                                fontWeight="700"
+                                fill="currentColor"
+                                className="text-foreground"
+                            >
+                                {item.count}
+                            </text>
+                            {/* Grade Letter */}
+                            <text
+                                x={x + barWidth / 2}
+                                y={height - 30}
+                                textAnchor="middle"
+                                fontSize="13"
+                                fontWeight="700"
+                                fill={fillColor}
+                            >
+                                Grade {item.gradeLetter}
+                            </text>
+                            {/* Range / Label */}
+                            <text
+                                x={x + barWidth / 2}
+                                y={height - 14}
+                                textAnchor="middle"
+                                fontSize="10"
+                                fill="currentColor"
+                                className="text-muted-foreground"
+                            >
+                                {item.minScore} - {item.maxScore} pts
+                            </text>
+                        </g>
+                    );
+                })}
+            </svg>
         </div>
     );
 }
@@ -393,6 +521,15 @@ export default function ResultStatisticsPage() {
         useState<ExamAttemptStatistics | null>(null);
     const [editedScore, setEditedScore] = useState("");
     const [editReason, setEditReason] = useState("");
+    const [chartMode, setChartMode] = useState<"grades" | "percentages">("grades");
+    const [scaleModalOpen, setScaleModalOpen] = useState(false);
+    const [editableScales, setEditableScales] = useState<Array<{
+        gradeLetter: string;
+        minScore: number;
+        maxScore: number;
+        label: string;
+        color: string;
+    }>>([]);
 
     const validExamId =
         Number.isInteger(examId) && examId > 0;
@@ -830,16 +967,68 @@ export default function ResultStatisticsPage() {
 
                         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                             <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
-                                <h2 className="text-lg font-semibold">
-                                    Score Distribution
-                                </h2>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    Number of attempts in each score range.
-                                </p>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <h2 className="text-lg font-semibold">
+                                            Score Distribution ({chartMode === "grades" ? "By Letter Grade A-F" : "By Percentage Range"})
+                                        </h2>
+                                        <p className="mt-1 text-sm text-muted-foreground">
+                                            {chartMode === "grades" 
+                                                ? "Classified by academic grading scale (Excellent ≥ 8.0)"
+                                                : "Number of attempts in each percentage band"}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="flex rounded-lg border bg-muted p-0.5 text-xs">
+                                            <button
+                                                type="button"
+                                                onClick={() => setChartMode("grades")}
+                                                className={`rounded px-2.5 py-1 font-medium transition ${
+                                                    chartMode === "grades" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                                                }`}
+                                            >
+                                                Grade A-F
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setChartMode("percentages")}
+                                                className={`rounded px-2.5 py-1 font-medium transition ${
+                                                    chartMode === "percentages" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                                                }`}
+                                            >
+                                                Percentage %
+                                            </button>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-xs"
+                                            onClick={async () => {
+                                                try {
+                                                    const typeParam = chartMode === "percentages" ? "PERCENTAGE" : "GRADE";
+                                                    const res = await axiosInstance.get(`/exams/${examId}/grade-scales`, {
+                                                        params: { type: typeParam },
+                                                    });
+                                                    setEditableScales(res.data);
+                                                    setScaleModalOpen(true);
+                                                } catch (e) {
+                                                    toast.error("Failed to load grade scales");
+                                                }
+                                            }}
+                                        >
+                                            <Pencil className="mr-1 size-3" />
+                                            {chartMode === "percentages" ? "Configure % Bands" : "Configure Grade Scales"}
+                                        </Button>
+                                    </div>
+                                </div>
                                 <div className="mt-4">
-                                    <ScoreDistributionChart
-                                        bands={statistics.scoreDistribution ?? []}
-                                    />
+                                    {chartMode === "grades" && statistics.gradeDistribution && statistics.gradeDistribution.length > 0 ? (
+                                        <GradeDistributionChart items={statistics.gradeDistribution} />
+                                    ) : (
+                                        <ScoreDistributionChart
+                                            bands={statistics.scoreDistribution ?? []}
+                                        />
+                                    )}
                                 </div>
                             </section>
 
@@ -1665,6 +1854,168 @@ export default function ResultStatisticsPage() {
                 {validExamId && tab === "integrity" && <IntegrityReportSection examId={examId} />}
                 </div>
                 </div>
+
+                {/* MODAL CẤU HÌNH THANG ĐIỂM HỌC THUẬT (A, B, C, D, F) */}
+                {scaleModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+                        <div className="w-full max-w-2xl rounded-2xl border bg-background p-6 shadow-xl">
+                            <div className="flex items-center justify-between border-b pb-4">
+                                <div>
+                                    <h3 className="text-lg font-bold">
+                                        {chartMode === "percentages" ? "Configure Percentage Bands (%)" : "Configure Grade Scales (A-F)"}
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground">
+                                        {chartMode === "percentages"
+                                            ? "Customize percentage ranges and classification labels for this exam"
+                                            : "Customize score ranges and academic performance labels for this exam"}
+                                    </p>
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setScaleModalOpen(false)}
+                                >
+                                    <X className="size-4" />
+                                </Button>
+                            </div>
+
+                            <div className="my-4 max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+                                <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-muted-foreground">
+                                    <span className="col-span-2">{chartMode === "percentages" ? "Band" : "Grade"}</span>
+                                    <span className="col-span-3">Min {chartMode === "percentages" ? "(%)" : "Score"}</span>
+                                    <span className="col-span-3">Max {chartMode === "percentages" ? "(%)" : "Score"}</span>
+                                    <span className="col-span-3">Label</span>
+                                    <span className="col-span-1 text-center">Delete</span>
+                                </div>
+
+                                {editableScales.map((scale, idx) => (
+                                    <div key={idx} className="grid grid-cols-12 items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={scale.gradeLetter}
+                                            onChange={(e) => {
+                                                const copy = [...editableScales];
+                                                copy[idx].gradeLetter = e.target.value.toUpperCase();
+                                                setEditableScales(copy);
+                                            }}
+                                            className="col-span-2 rounded border bg-background px-2 py-1.5 text-center text-sm font-bold"
+                                            placeholder={chartMode === "percentages" ? "90-100%" : "A"}
+                                        />
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={scale.minScore}
+                                            onChange={(e) => {
+                                                const copy = [...editableScales];
+                                                copy[idx].minScore = Number(e.target.value);
+                                                setEditableScales(copy);
+                                            }}
+                                            className="col-span-3 rounded border bg-background px-2 py-1.5 text-sm"
+                                        />
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={scale.maxScore}
+                                            onChange={(e) => {
+                                                const copy = [...editableScales];
+                                                copy[idx].maxScore = Number(e.target.value);
+                                                setEditableScales(copy);
+                                            }}
+                                            className="col-span-3 rounded border bg-background px-2 py-1.5 text-sm"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={scale.label}
+                                            onChange={(e) => {
+                                                const copy = [...editableScales];
+                                                copy[idx].label = e.target.value;
+                                                setEditableScales(copy);
+                                            }}
+                                            className="col-span-3 rounded border bg-background px-2 py-1.5 text-sm"
+                                            placeholder={chartMode === "percentages" ? "Excellent" : "Excellent"}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEditableScales(editableScales.filter((_, i) => i !== idx));
+                                            }}
+                                            className="col-span-1 text-center text-rose-500 hover:text-rose-700"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ))}
+
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full text-xs"
+                                    onClick={() => {
+                                        setEditableScales([
+                                            ...editableScales,
+                                            { gradeLetter: "NEW", minScore: 0, maxScore: 10, label: "", color: "#3b82f6" },
+                                        ]);
+                                    }}
+                                >
+                                    + Add New Range
+                                </Button>
+                            </div>
+
+                            <div className="flex items-center justify-between border-t pt-4">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs text-muted-foreground"
+                                    onClick={async () => {
+                                        try {
+                                            const typeParam = chartMode === "percentages" ? "PERCENTAGE" : "GRADE";
+                                            await axiosInstance.delete(`/exams/${examId}/grade-scales/reset`, {
+                                                params: { type: typeParam },
+                                            });
+                                            const res = await axiosInstance.get(`/exams/${examId}/grade-scales`, {
+                                                params: { type: typeParam },
+                                            });
+                                            setEditableScales(res.data);
+                                            toast.success("Reset to default configuration");
+                                            await queryClient.invalidateQueries({ queryKey: ["exam-result-statistics", examId] });
+                                        } catch {
+                                            toast.error("Failed to reset defaults");
+                                        }
+                                    }}
+                                >
+                                    Reset to Defaults
+                                </Button>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setScaleModalOpen(false)}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={async () => {
+                                            try {
+                                                const typeParam = chartMode === "percentages" ? "PERCENTAGE" : "GRADE";
+                                                await axiosInstance.put(`/exams/${examId}/grade-scales`, editableScales, {
+                                                    params: { type: typeParam },
+                                                });
+                                                toast.success("Saved configuration successfully!");
+                                                setScaleModalOpen(false);
+                                                await queryClient.invalidateQueries({ queryKey: ["exam-result-statistics", examId] });
+                                            } catch (err: unknown) {
+                                                toast.error(getErrorMessage(err));
+                                            }
+                                        }}
+                                    >
+                                        Save Changes
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </MainLayout>
     );

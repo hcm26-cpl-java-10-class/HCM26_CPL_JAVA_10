@@ -18,7 +18,8 @@ public record ExamResultStatisticsDTO(
         Double passRate,
         long failedAttempts,
         Double failRate,
-        BigDecimal passScore
+        BigDecimal passScore,
+        List<GradeDistributionDTO> gradeDistribution
 ) {
     public ExamResultStatisticsDTO(
             Long examId,
@@ -30,7 +31,12 @@ public record ExamResultStatisticsDTO(
             Double averageFinalScore,
             BigDecimal highestFinalScore,
             BigDecimal lowestFinalScore,
-            List<ScoreBandDTO> scoreDistribution
+            List<ScoreBandDTO> scoreDistribution,
+            long passedAttempts,
+            Double passRate,
+            long failedAttempts,
+            Double failRate,
+            BigDecimal passScore
     ) {
         this(
                 examId,
@@ -43,17 +49,29 @@ public record ExamResultStatisticsDTO(
                 highestFinalScore,
                 lowestFinalScore,
                 scoreDistribution,
-                0L,
-                0.0,
-                0L,
-                0.0,
-                null
+                passedAttempts,
+                passRate,
+                failedAttempts,
+                failRate,
+                passScore,
+                List.of()
         );
     }
 
     public record ScoreBandDTO(
             String range,
             long count
+    ) {
+    }
+
+    public record GradeDistributionDTO(
+            String gradeLetter,
+            String label,
+            BigDecimal minScore,
+            BigDecimal maxScore,
+            String color,
+            long count,
+            Double percentage
     ) {
     }
 }
