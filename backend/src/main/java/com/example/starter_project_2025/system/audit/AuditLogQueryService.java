@@ -11,6 +11,12 @@ import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import java.util.List;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.TreeMap;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -122,6 +128,96 @@ public class AuditLogQueryService {
 
         return repository.findAll(spec, pageable)
                 .map(AuditLogDTO::fromEntity);
+    }
+
+    @Transactional(readOnly = true)
+    public AuditStatsDTO getStats(LocalDate fromDate, LocalDate toDate) {
+        LocalDate to = toDate != null ? toDate : LocalDate.now();
+        LocalDate lowerBound = fromDate != null ? fromDate : LocalDate.of(1970, 1, 1);
+
+        List<Object[]> rows = repository.findStatsRows(
+                lowerBound.atStartOfDay(),
+                to.plusDays(1).atStartOfDay()
+        );
+
+        LocalDate from = fromDate;
+
+        if (from == null) {
+            from = rows.stream()
+                    .map(row -> ((LocalDateTime) row[0]).toLocalDate())
+                    .min(Comparator.naturalOrder())
+                    .orElse(to.minusDays(29));
+        }
+
+        Map<LocalDate, long[]> days = new TreeMap<>();
+
+        if (ChronoUnit.DAYS.between(from, to) <= 366) {
+            for (LocalDate day = from; !day.isAfter(to); day = day.plusDays(1)) {
+                days.put(day, new long[2]);
+            }
+        }
+
+        Map<String, Long> byAction = new LinkedHashMap<>();
+        Map<String, Long> byEntityType = new LinkedHashMap<>();
+        Map<String, Long> byResult = new LinkedHashMap<>();
+        Map<String, Long> byActor = new LinkedHashMap<>();
+        long failures = 0;
+
+        for (Object[] row : rows) {
+            LocalDate day = ((LocalDateTime) row[0]).toLocalDate();
+            String result = normalizeResult((String) row[3]);
+            boolean failed = "FAILURE".equals(result);
+
+            long[] counters = days.computeIfAbsent(day, key -> new long[2]);
+            counters[0]++;
+
+            if (failed) {
+                counters[1]++;
+                failures++;
+            }
+
+            byAction.merge(String.valueOf(row[1]), 1L, Long::sum);
+            byEntityType.merge(String.valueOf(row[2]), 1L, Long::sum);
+            byResult.merge(result, 1L, Long::sum);
+            byActor.merge(row[4] != null ? String.valueOf(row[4]) : "SYSTEM", 1L, Long::sum);
+        }
+
+        List<AuditStatsDTO.DayBucket> byDay = days.entrySet().stream()
+                .map(entry -> new AuditStatsDTO.DayBucket(
+                        entry.getKey().toString(),
+                        entry.getValue()[0],
+                        entry.getValue()[1]))
+                .toList();
+
+        return new AuditStatsDTO(
+                from.toString(),
+                to.toString(),
+                rows.size(),
+                failures,
+                byDay,
+                toBuckets(byAction, 20),
+                toBuckets(byEntityType, 10),
+                toBuckets(byResult, 5),
+                toBuckets(byActor, 5)
+        );
+    }
+
+    private static String normalizeResult(String result) {
+        if (result == null) {
+            return "UNKNOWN";
+        }
+
+        String value = result.trim().toUpperCase();
+
+        return "FAILED".equals(value) || "FAIL".equals(value) ? "FAILURE" : value;
+    }
+
+    private static List<AuditStatsDTO.Bucket> toBuckets(Map<String, Long> counts, int limit) {
+        return counts.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(limit)
+                .map(entry -> new AuditStatsDTO.Bucket(entry.getKey(), entry.getValue()))
+                .toList();
     }
 
     @Transactional(readOnly = true)

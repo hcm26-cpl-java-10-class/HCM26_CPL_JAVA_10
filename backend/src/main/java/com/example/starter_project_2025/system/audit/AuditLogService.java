@@ -38,6 +38,21 @@ public interface AuditLogService {
             String newValue
     );
 
+    /**
+     * Full-control variant used by the audit rules: explicit actor, correlation id and result.
+     */
+    void logAs(
+            Long actorId,
+            String actorEmail,
+            String action,
+            String entityType,
+            String entityId,
+            String oldValue,
+            String newValue,
+            String correlationId,
+            String result
+    );
+
     void logLogout(
             Long actorId,
             String actorEmail,

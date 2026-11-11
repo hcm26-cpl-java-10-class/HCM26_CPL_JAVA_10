@@ -1,9 +1,8 @@
+import { isAuditAdmin } from "@/components/audit/auditAccess";
 import { moduleApi, moduleGroupApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
 import {
-    ADMIN_ROLE,
-    normalizeRole,
     canAccessPath,
     canAccessByPermission,
 } from "@/utils/rbac.utils";
@@ -50,7 +49,7 @@ const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =
     }
 
     if (path === "/admin/audit-log") {
-        return normalizeRole(activeRole) === ADMIN_ROLE;
+        return isAuditAdmin(user.roles);
     }
 
     return canAccessByPermission(module.requiredPermission, hasPermission);
@@ -112,7 +111,7 @@ const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =
 
             if (
     !hasAuditLogInDb &&
-    normalizeRole(activeRole) === ADMIN_ROLE &&
+    isAuditAdmin(user.roles) &&
     canAccessPath("/admin/audit-log", activeRole, user.permissions)
 ) {
                 let rbacGroup = groups.find(

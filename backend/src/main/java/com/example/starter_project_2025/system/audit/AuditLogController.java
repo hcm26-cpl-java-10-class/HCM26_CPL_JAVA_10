@@ -61,6 +61,21 @@ public class AuditLogController {
         );
     }
 
+    @GetMapping("/stats")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<AuditStatsDTO> getStats(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate
+    ) {
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        return ResponseEntity.ok(queryService.getStats(fromDate, toDate));
+    }
+
     @GetMapping("/filter-options")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<AuditLogFilterOptions> getFilterOptions() {

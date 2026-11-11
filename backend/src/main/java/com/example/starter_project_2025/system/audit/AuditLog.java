@@ -13,8 +13,7 @@ import java.time.LocalDateTime;
         @Index(name = "idx_audit_entity", columnList = "entity_type, entity_id"),
         @Index(name = "idx_audit_created_at", columnList = "created_at")
 })
-@Getter
-@Setter
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

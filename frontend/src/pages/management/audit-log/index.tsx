@@ -7,6 +7,12 @@ import { SearchInput } from "@/components/datatable/toolbar/SearchInput";
 import { FilterPopover } from "@/components/datatable/toolbar/filter/FilterPopover";
 import { Pagination } from "@/components/datatable/table/Pagination";
 import { EntityHistoryDialog } from "@/components/audit/EntityHistoryDialog";
+import {
+  getActionBadgeClass,
+  getActionLabel,
+  KNOWN_ACTIONS,
+} from "@/components/audit/auditActions";
+import { AuditStatsDashboard } from "./AuditStatsDashboard";
 import type { FieldSchema } from "@/types";
 import {
   auditLogApi,
@@ -17,14 +23,6 @@ import {
 
 
 const PAGE_SIZE = 20;
-
-// Used until the list of actions present in the database has been loaded
-const KNOWN_ACTIONS = [
-  "LOGIN", "LOGOUT", "REGISTER", "VERIFY_EMAIL", "FORGOT_PASSWORD",
-  "RESET_PASSWORD", "CREATE", "UPDATE", "DELETE", "IMPORT", "EXPORT",
-  "ADD_QUESTION", "REMOVE_QUESTION", "CANCEL", "INVITE", "BATCH_INVITE",
-  "RESEND", "REVOKE",
-];
 
 function useDebouncedValue<T>(value: T, delay = 400): T {
   const [debounced, setDebounced] = useState(value);
@@ -95,60 +93,12 @@ function formatValue(value: string | null) {
   }
 }
 
-function getActionLabel(action: string) {
-  const labels: Record<string, string> = {
-    CREATE: "Create",
-    UPDATE: "Update",
-    DELETE: "Delete",
-    LOGIN: "Login",
-    LOGOUT: "Logout",
-    REGISTER: "Register",
-    VERIFY_EMAIL: "Verify email",
-    FORGOT_PASSWORD: "Forgot password",
-    RESET_PASSWORD: "Reset password",
-    IMPORT: "Import",
-    EXPORT: "Export",
-    ADD_QUESTION: "Add question",
-    REMOVE_QUESTION: "Remove question",
-    CANCEL: "Cancel",
-    INVITE: "Invite",
-    BATCH_INVITE: "Batch invite",
-    RESEND: "Resend",
-    REVOKE: "Revoke",
-  };
-
-  return labels[action?.toUpperCase()] ?? action ?? "Unknown";
-}
-
 function ActionBadge({ action }: { action: string }) {
-  const normalized = action?.toUpperCase();
-
-  const classes: Record<string, string> = {
-    CREATE: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
-    UPDATE: "bg-blue-50 text-blue-700 ring-blue-600/20",
-    DELETE: "bg-red-50 text-red-700 ring-red-600/20",
-    LOGIN: "bg-violet-50 text-violet-700 ring-violet-600/20",
-    LOGOUT: "bg-slate-100 text-slate-700 ring-slate-500/20",
-    REGISTER: "bg-teal-50 text-teal-700 ring-teal-600/20",
-    VERIFY_EMAIL: "bg-teal-50 text-teal-700 ring-teal-600/20",
-    FORGOT_PASSWORD: "bg-amber-50 text-amber-700 ring-amber-600/20",
-    RESET_PASSWORD: "bg-amber-50 text-amber-700 ring-amber-600/20",
-    IMPORT: "bg-indigo-50 text-indigo-700 ring-indigo-600/20",
-    EXPORT: "bg-indigo-50 text-indigo-700 ring-indigo-600/20",
-    ADD_QUESTION: "bg-sky-50 text-sky-700 ring-sky-600/20",
-    REMOVE_QUESTION: "bg-orange-50 text-orange-700 ring-orange-600/20",
-    CANCEL: "bg-orange-50 text-orange-700 ring-orange-600/20",
-    INVITE: "bg-sky-50 text-sky-700 ring-sky-600/20",
-    BATCH_INVITE: "bg-sky-50 text-sky-700 ring-sky-600/20",
-    RESEND: "bg-sky-50 text-sky-700 ring-sky-600/20",
-    REVOKE: "bg-red-50 text-red-700 ring-red-600/20",
-  };
-
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${
-    classes[normalized] ?? "bg-gray-100 text-gray-700 ring-gray-500/20"
-}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${getActionBadgeClass(
+        action,
+      )}`}
     >
       {getActionLabel(action)}
     </span>
@@ -602,6 +552,7 @@ async function getAllAuditLogs(
 
 export default function AuditLogPage() {
     const [showExportModal, setShowExportModal] = useState(false);
+    const [view, setView] = useState<"logs" | "stats">("logs");
     const [exporting, setExporting] = useState(false);
 
     const [period, setPeriod] = useState<Period>("30days");
@@ -848,6 +799,29 @@ export default function AuditLogPage() {
             <div className="min-h-full bg-slate-50/70 px-4 py-4 md:px-6 lg:px-7">
                 <div className="mx-auto max-w-none space-y-4">
                     {/* Filters and audit table */}
+                    <div className="flex gap-1 border-b border-slate-200">
+                        {([
+                            { key: "logs", label: "Logs" },
+                            { key: "stats", label: "Statistics" },
+                        ] as const).map((tab) => (
+                            <button
+                                key={tab.key}
+                                type="button"
+                                onClick={() => setView(tab.key)}
+                                className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${
+                                    view === tab.key
+                                        ? "border-blue-600 text-blue-700"
+                                        : "border-transparent text-slate-500 hover:text-slate-700"
+                                }`}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {view === "stats" && <AuditStatsDashboard />}
+
+                    {view === "logs" && (
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
 
                         <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 p-4 md:px-5">
@@ -1126,6 +1100,7 @@ export default function AuditLogPage() {
                             )}
                         </div>
                     </section>
+                    )}
                 </div>
             </div>
             <AnimatePresence>

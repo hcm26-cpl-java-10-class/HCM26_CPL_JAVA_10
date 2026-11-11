@@ -32,6 +32,29 @@ export interface AuditLogFilterOptions {
     entityTypes: string[];
 }
 
+export interface AuditStatsBucket {
+    key: string;
+    count: number;
+}
+
+export interface AuditStatsDay {
+    date: string;
+    total: number;
+    failures: number;
+}
+
+export interface AuditStats {
+    fromDate: string;
+    toDate: string;
+    total: number;
+    failures: number;
+    byDay: AuditStatsDay[];
+    byAction: AuditStatsBucket[];
+    byEntityType: AuditStatsBucket[];
+    byResult: AuditStatsBucket[];
+    topActors: AuditStatsBucket[];
+}
+
 export interface AuditLogPage {
     content: AuditLogDTO[];
     totalPages: number;
@@ -55,6 +78,18 @@ export const auditLogApi = {
 
         const response = await axiosInstance.get<AuditLogPage>(
             "/audit-logs",
+            { params },
+        );
+
+        return response.data;
+    },
+
+    getStats: async (params: {
+        fromDate?: string;
+        toDate?: string;
+    }): Promise<AuditStats> => {
+        const response = await axiosInstance.get<AuditStats>(
+            "/audit-logs/stats",
             { params },
         );
 
