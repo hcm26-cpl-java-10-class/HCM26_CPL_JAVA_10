@@ -838,8 +838,18 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                   type="number"
                   min={1}
                   max={eligibleForRandom.length || 100}
-                  value={randomCount}
-                  onChange={(e) => setRandomCount(Math.max(1, parseInt(e.target.value) || 1))}
+                  value={randomCount === 0 || (randomCount as any) === "" ? "" : randomCount}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "") {
+                      setRandomCount("" as any);
+                    } else {
+                      const parsed = parseInt(val, 10);
+                      if (!isNaN(parsed)) {
+                        setRandomCount(Math.max(0, parsed));
+                      }
+                    }
+                  }}
                   placeholder="e.g. 15, 25, 50"
               />
             </div>

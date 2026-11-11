@@ -2,7 +2,7 @@ import type { RootState } from "@/store/store";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { useSelector } from "react-redux";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 interface NotFoundPageProps {
     isAuthenticated?: boolean;
@@ -10,6 +10,11 @@ interface NotFoundPageProps {
 
 export default function NotFoundPage({ isAuthenticated }: NotFoundPageProps) {
     const navigate = useNavigate();
+    const location = useLocation();
+    const requestedPath = (location.state as { requestedPath?: string } | null)?.requestedPath;
+    if (requestedPath && requestedPath.startsWith("/topic-marks")) {
+        return <Navigate to={requestedPath} replace />;
+    }
     const { isAuthenticated: authState, role } = useSelector((state: RootState) => state.auth);
     const { activeRole, effectivePermissions } = usePermissions();
     const resolvedAuth = isAuthenticated ?? authState;

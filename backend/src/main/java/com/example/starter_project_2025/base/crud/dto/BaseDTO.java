@@ -1,7 +1,6 @@
 package com.example.starter_project_2025.base.crud.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -15,7 +14,6 @@ public abstract class BaseDTO {
 
     private Long id;
 
-    @NotNull(groups = OnCreate.class, message = "Active status is required")
     private Boolean isActive;
 
     @JsonProperty(access = READ_ONLY)

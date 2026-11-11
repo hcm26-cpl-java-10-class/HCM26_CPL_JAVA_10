@@ -80,12 +80,15 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
                         "MILESTONE_READ", "SPRINT_READ", "TASK_WRITE", "ARTIFACT_READ", "ARTIFACT_SUBMIT",
                         "ARTIFACT_DRAFT_WRITE",
-                        "FEEDBACK_READ", "WORKSPACE_ACTIVITY_READ"
+                        "FEEDBACK_READ", "WORKSPACE_ACTIVITY_READ",
+                        "PROGRAM_READ",
+                        "SUBJECT_READ",
+                        "SESSION_READ"
                 )
         );
         upsertRole(
                 TEACHER_ROLE,
-                "Teacher with book, course, section, syllabus and exam management permissions",
+                "Teacher with book, course, section, syllabus, training and exam management permissions",
                 findPermissions(
                         "MENU_READ",
                         "BOOK_CREATE",
@@ -132,7 +135,10 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "WORKSPACE_READ", "WORKSPACE_CREATE", "WORKSPACE_MEMBER_READ", "TEAM_READ", "TEAM_UPDATE",
                         "MILESTONE_READ", "MILESTONE_WRITE", "SPRINT_READ", "SPRINT_WRITE",
                         "ARTIFACT_READ", "ARTIFACT_WRITE", "ARTIFACT_REVIEW", "FEEDBACK_READ", "FEEDBACK_WRITE",
-                        "WORKSPACE_ACTIVITY_READ"
+                        "WORKSPACE_ACTIVITY_READ",
+                        "PROGRAM_READ", "PROGRAM_CREATE", "PROGRAM_UPDATE", "PROGRAM_DELETE",
+                        "SUBJECT_READ", "SUBJECT_CREATE", "SUBJECT_UPDATE", "SUBJECT_DELETE",
+                        "SESSION_CREATE", "SESSION_READ", "SESSION_UPDATE", "SESSION_DELETE"
                 )
         );
 
@@ -207,7 +213,6 @@ public class RoleDataInitializer implements CommandLineRunner {
         role.getPermissions().add(classReadPermission);
         roleRepository.save(role);
     }
-
     private void grantWorkspaceLogAccess(String roleName) {
         roleRepository.findByName(roleName).ifPresent(role -> {
             role.getPermissions().addAll(findPermissions("WORKSPACE_READ", "WORKSPACE_MEMBER_READ",

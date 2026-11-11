@@ -51,6 +51,11 @@ public class ExcelExporter implements Exporter {
             }
         }
 
+        // Auto size columns
+        for (int i = 0; i < config.columns().size(); i++) {
+            sheet.autoSizeColumn(i);
+        }
+
         workbook.write(os);
         workbook.close();
     }

@@ -56,7 +56,7 @@ public class CsvParser implements FileParser {
                 result.add(rowMap);
             }
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Error parsing CSV: " + e.getMessage(), e);
         }
 
         return result;

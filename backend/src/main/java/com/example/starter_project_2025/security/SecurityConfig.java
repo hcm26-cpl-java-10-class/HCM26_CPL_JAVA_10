@@ -62,6 +62,7 @@ public class SecurityConfig {
             "/login/oauth2/**",
             "/verify/**",
             "/api/auth/**",
+            "/api/external/**",
             "/api/public/**",
             "/api/exams/verify-access/**",
             "/api/exams/anonymous-session",

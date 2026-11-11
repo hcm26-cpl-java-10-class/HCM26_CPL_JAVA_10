@@ -30,6 +30,7 @@ backend/.env.*.local
 # === Frontend (Node) ===
 frontend/node_modules/
 frontend/dist/
+frontend/.env
 
 # === Frontend .env (secrets/local config) ===
 # .env.example được commit để người mới biết cần đặt biến nào.
@@ -44,6 +45,10 @@ docker/.env
 *.log
 
 /backend.zip
+# Ignore vscode AI rules & Codacy
+.github/
+.codacy/
+
 /backend/compile.log
 /backend/compile_error.txt
 /test.txt
@@ -59,3 +64,12 @@ backend/portability-test.log
 
 # === Runtime uploaded files (khong commit) ===
 uploads/
+
+# === Local test tools & docx scratch files ===
+*.docx
+/swagger_*.png
+/swagger_rendered.png
+/swagger_test.png
+/extracted_images/
+/extracted_minh_hoang/
+/tools/

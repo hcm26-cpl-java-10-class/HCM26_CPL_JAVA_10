@@ -5,11 +5,12 @@ import com.example.starter_project_2025.base.dataio.exporter.component.ExportCol
 import com.example.starter_project_2025.base.dataio.exporter.component.ExportSheetConfig;
 import org.springframework.stereotype.Component;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintWriter;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Component
 public class CsvExporter implements Exporter {
@@ -26,25 +27,46 @@ public class CsvExporter implements Exporter {
             OutputStream os
     ) throws IOException {
 
-        PrintWriter writer = new PrintWriter(os);
+        // Use UTF-8 BOM so spreadsheet viewers like Excel open Vietnamese text correctly
+        os.write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF});
 
-        writer.println(
-                config.columns().stream()
-                        .map(ExportColumn::header)
-                        .collect(Collectors.joining(","))
-        );
+        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8));
+
+        // Header
+        for (int i = 0; i < config.columns().size(); i++) {
+            if (i > 0) {
+                writer.write(',');
+            }
+            writer.write(escapeCsv(config.columns().get(i).header()));
+        }
+        writer.newLine();
 
         for (T item : data) {
-            String line = config.columns().stream()
-                    .map(c -> {
-                        Object v = c.valueExtractor().apply(item);
-                        return v != null ? v.toString() : "";
-                    })
-                    .collect(Collectors.joining(","));
-
-            writer.println(line);
+            for (int i = 0; i < config.columns().size(); i++) {
+                if (i > 0) {
+                    writer.write(',');
+                }
+                Object v = config.columns().get(i).valueExtractor().apply(item);
+                writer.write(escapeCsv(v != null ? v.toString() : ""));
+            }
+            writer.newLine();
         }
 
         writer.flush();
     }
+
+    private String escapeCsv(String value) {
+        if (value == null) {
+            return "";
+        }
+        boolean hasSpecial = value.indexOf(',') >= 0
+                || value.indexOf('"') >= 0
+                || value.indexOf('\n') >= 0
+                || value.indexOf('\r') >= 0;
+        if (!hasSpecial) {
+            return value;
+        }
+        return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
 }
+

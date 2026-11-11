@@ -116,8 +116,19 @@ export const ModuleGroupModal: React.FC<ModuleGroupModalProps> = ({
                                 id="group-order"
                                 type="number"
                                 min={1}
-                                value={displayOrder}
-                                onChange={(e) => setDisplayOrder(parseInt(e.target.value, 10) || 1)}
+                                value={displayOrder === 0 || (displayOrder as any) === "" ? "" : displayOrder}
+                                placeholder="1"
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === "") {
+                                        setDisplayOrder("" as any);
+                                    } else {
+                                        const parsed = parseInt(val, 10);
+                                        if (!isNaN(parsed)) {
+                                            setDisplayOrder(Math.max(0, parsed));
+                                        }
+                                    }
+                                }}
                             />
                         </div>
                     </div>
