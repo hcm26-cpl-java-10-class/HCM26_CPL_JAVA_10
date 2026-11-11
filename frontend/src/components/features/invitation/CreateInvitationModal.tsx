@@ -6,6 +6,11 @@ import type {
     ReminderRequest,
     ReminderType,
 } from "@/types";
+import { BulkInviteByClassTab } from "@/components/features/invitation/BulkInviteByClassTab";
+import {
+    ExamScheduleSelector,
+    type ScheduleMode,
+} from "@/components/features/invitation/ExamScheduleSelector";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +26,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Link2, Mail, QrCode, RefreshCw, Share2, Users, X } from "lucide-react";
+import { Copy, GraduationCap, Link2, Mail, QrCode, RefreshCw, Share2, Users, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -36,20 +41,23 @@ interface CreateInvitationModalProps {
 interface AuthForm {
     userId: string;
     note: string;
+    availableFrom: string;
     expiresAt: string;
 }
 
 interface AnonForm {
     maxAccessAttempts: string;
+    availableFrom: string;
+    maxAccessTime: string;
 }
 
-const DEFAULT_AUTH: AuthForm = { userId: "", note: "", expiresAt: "" };
-const DEFAULT_ANON: AnonForm = { maxAccessAttempts: "1" };
+const DEFAULT_AUTH: AuthForm = { userId: "", note: "", availableFrom: "", expiresAt: "" };
+const DEFAULT_ANON: AnonForm = { maxAccessAttempts: "1", availableFrom: "", maxAccessTime: "" };
 
 const REMINDER_OPTIONS: { value: ReminderType; label: string }[] = [
-    { value: "ONE_HOUR", label: "1 hour before" },
-    { value: "ONE_DAY", label: "1 day before" },
-    { value: "CUSTOM", label: "Custom" },
+    { value: "ONE_HOUR", label: "Trước 1 giờ" },
+    { value: "ONE_DAY", label: "Trước 1 ngày" },
+    { value: "CUSTOM", label: "Tùy chỉnh" },
 ];
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
@@ -64,9 +72,9 @@ function toIso(value: string) {
 }
 
 function UserPicker({
-                        value,
-                        onChange,
-                    }: {
+    value,
+    onChange,
+}: {
     value: string;
     onChange: (id: string) => void;
 }) {
@@ -83,14 +91,14 @@ function UserPicker({
 
     return (
         <div className="space-y-2">
-            <Label>Student</Label>
+            <Label>Học viên (Student)</Label>
 
             <Input
-                placeholder="Type name or email to search (other users)..."
+                placeholder="Nhập tên hoặc email học viên để tìm kiếm..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
             />
-            {isLoading && <p className="text-sm text-muted-foreground">Searching...</p>}
+            {isLoading && <p className="text-sm text-muted-foreground">Đang tìm kiếm...</p>}
             {users?.content && users.content.length > 0 && (
                 <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
                     {users.content.map((u) => (
@@ -105,7 +113,9 @@ function UserPicker({
                                 setSearch("");
                             }}
                         >
-                            <span>{u.firstName} {u.lastName ?? ""}</span>
+                            <span>
+                                {u.firstName} {u.lastName ?? ""}
+                            </span>
                             <span className="text-muted-foreground">({u.email})</span>
                         </button>
                     ))}
@@ -113,7 +123,7 @@ function UserPicker({
             )}
             {value && (
                 <p className="text-xs text-muted-foreground">
-                    Selected ID: <span className="font-medium text-foreground">{value}</span>
+                    Đã chọn ID: <span className="font-medium text-foreground">{value}</span>
                 </p>
             )}
         </div>
@@ -121,22 +131,39 @@ function UserPicker({
 }
 
 export function CreateInvitationModal({
-                                          examId,
-                                          examTitle,
-                                          open,
-                                          onOpenChange,
-                                          onSuccess,
-                                      }: CreateInvitationModalProps) {
+    examId,
+    examTitle,
+    open,
+    onOpenChange,
+    onSuccess,
+}: CreateInvitationModalProps) {
     const queryClient = useQueryClient();
     const [reminderType, setReminderType] = useState<ReminderType | "NONE">("NONE");
     const [customReminder, setCustomReminder] = useState("");
 
-    const [auth, setAuth] = useState<AuthForm>(DEFAULT_AUTH);
+    // Chế độ lịch cho tab Tài khoản và tab Link chia sẻ
+    const [authScheduleMode, setAuthScheduleMode] = useState<ScheduleMode>("FLEXIBLE");
+    const [anonScheduleMode, setAnonScheduleMode] = useState<ScheduleMode>("FLEXIBLE");
 
+    const [auth, setAuth] = useState<AuthForm>(DEFAULT_AUTH);
     const [anon, setAnon] = useState<AnonForm>(DEFAULT_ANON);
 
     const [authInvitations, setAuthInvitations] = useState<InvitationDTO[]>([]);
-    const [anonInvitations, setAnonInvitations] = useState<Map<number, { inv: InvitationDTO; qr: string | null }>>(new Map());
+    const [anonInvitations, setAnonInvitations] = useState<
+        Map<number, { inv: InvitationDTO; qr: string | null }>
+    >(new Map());
+
+    // Lấy thông tin thời lượng bài thi
+    const examDetailQuery = useQuery({
+        queryKey: ["exam-detail-for-invitation", examId],
+        queryFn: async () => {
+            const { examApi } = await import("@/api");
+            return examApi.getById(String(examId));
+        },
+        enabled: examId > 0 && open,
+        staleTime: 5 * 60 * 1000,
+    });
+    const durationMinutes = examDetailQuery.data?.durationMinutes || 60;
 
     const resetForm = () => {
         setAuth(DEFAULT_AUTH);
@@ -152,23 +179,28 @@ export function CreateInvitationModal({
             const request: InvitationCreateRequest = {
                 userId: Number(auth.userId),
                 note: auth.note || undefined,
+                availableFrom: toIso(auth.availableFrom) || undefined,
                 expiresAt: toIso(auth.expiresAt) || undefined,
             };
             return invitationApi.create(examId, request);
         },
         onSuccess: async (inv) => {
             setAuthInvitations((prev) => [...prev, inv]);
-            toast.success("Invitation created.");
+            toast.success("Đã tạo lời mời thành công.");
 
             if (reminderType !== "NONE") {
                 const req: ReminderRequest = {
                     reminderType: reminderType as ReminderType,
                     scheduledAt: reminderType === "CUSTOM" ? toIso(customReminder) : undefined,
+                    invitationId: inv.id,
                 };
                 try {
                     await invitationApi.scheduleReminder(examId, req);
-                    toast.success("Email reminder scheduled.");
-                } catch {
+                    toast.success("Đã lên lịch nhắc nhở qua email.");
+                } catch (error) {
+                    toast.error(
+                        getErrorMessage(error, "Không thể lên lịch gửi email nhắc nhở."),
+                    );
                 }
             }
 
@@ -177,7 +209,7 @@ export function CreateInvitationModal({
             void queryClient.invalidateQueries({ queryKey: ["exam-invitations", examId] });
         },
         onError: (error: unknown) => {
-            toast.error(getErrorMessage(error, "Failed to create invitation."));
+            toast.error(getErrorMessage(error, "Không thể tạo lời mời."));
         },
     });
 
@@ -185,6 +217,9 @@ export function CreateInvitationModal({
         mutationFn: async () => {
             const request: AnonymousInvitationRequest = {
                 maxAccessAttempts: Number(anon.maxAccessAttempts) || 1,
+                availableFrom: toIso(anon.availableFrom) || undefined,
+                maxAccessTime: toIso(anon.maxAccessTime) || undefined,
+                expiresAt: toIso(anon.maxAccessTime) || undefined,
             };
             return invitationApi.createAnonymous(examId, request);
         },
@@ -193,18 +228,19 @@ export function CreateInvitationModal({
             if (inv.id) {
                 try {
                     qr = await invitationApi.getQrDataUrl(inv.id);
-                } catch {
+                } catch (error) {
+                    toast.error(getErrorMessage(error, "Không thể tạo mã QR."));
                 }
             }
             setAnonInvitations((prev) => new Map(prev).set(inv.id!, { inv, qr }));
-            toast.success("Share link created!");
+            toast.success("Đã tạo link chia sẻ thành công!");
 
             setAnon(DEFAULT_ANON);
             onSuccess?.();
             void queryClient.invalidateQueries({ queryKey: ["exam-invitations", examId] });
         },
         onError: (error: unknown) => {
-            toast.error(getErrorMessage(error, "Failed to create share link."));
+            toast.error(getErrorMessage(error, "Không thể tạo link chia sẻ."));
         },
     });
 
@@ -219,21 +255,38 @@ export function CreateInvitationModal({
         <Dialog open={open} onOpenChange={handleClose}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Create Exam Invitations</DialogTitle>
-                    <DialogDescription>{examTitle}</DialogDescription>
+                    <DialogTitle>Tạo Lời Mời Dự Thi (Exam Invitations)</DialogTitle>
+                    <DialogDescription className="flex items-center gap-2">
+                        <span>{examTitle}</span>
+                        <Badge variant="outline" className="text-xs">
+                            ⏱ {durationMinutes} phút
+                        </Badge>
+                    </DialogDescription>
                 </DialogHeader>
 
                 <Tabs defaultValue="account" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="account" className="gap-2">
                             <Users className="size-4" />
-                            Registered Account
+                            Tài khoản cá nhân
+                        </TabsTrigger>
+                        <TabsTrigger value="class" className="gap-2">
+                            <GraduationCap className="size-4" />
+                            Theo lớp học (By Class)
                         </TabsTrigger>
                         <TabsTrigger value="share" className="gap-2">
                             <Share2 className="size-4" />
-                            Shareable Link
+                            Link chia sẻ tự do
                         </TabsTrigger>
                     </TabsList>
+
+                    <TabsContent value="class">
+                        <BulkInviteByClassTab
+                            key={open ? "open" : "closed"}
+                            examId={examId}
+                            onSuccess={onSuccess}
+                        />
+                    </TabsContent>
 
                     <TabsContent value="account" className="space-y-4 pt-4">
                         <form
@@ -249,9 +302,9 @@ export function CreateInvitationModal({
                             />
 
                             <div className="space-y-2">
-                                <Label>Note (optional)</Label>
+                                <Label>Ghi chú lời mời (Note - tùy chọn)</Label>
                                 <Input
-                                    placeholder="e.g., Class A, Morning shift..."
+                                    placeholder="ví dụ: Ca thi sáng, Kiểm tra tiến độ đợt 1..."
                                     value={auth.note}
                                     onChange={(e) =>
                                         setAuth((f) => ({ ...f, note: e.target.value }))
@@ -259,27 +312,33 @@ export function CreateInvitationModal({
                                 />
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Confirmation Deadline (optional)</Label>
-                                <Input
-                                    type="datetime-local"
-                                    value={auth.expiresAt}
-                                    onChange={(e) =>
-                                        setAuth((f) => ({ ...f, expiresAt: e.target.value }))
-                                    }
-                                />
-                            </div>
+                            {/* Bộ chọn 2 chế độ: Tự do có hạn chót HOẶC Ca thi cố định */}
+                            <ExamScheduleSelector
+                                durationMinutes={durationMinutes}
+                                scheduleMode={authScheduleMode}
+                                onScheduleModeChange={setAuthScheduleMode}
+                                availableFrom={auth.availableFrom}
+                                onAvailableFromChange={(val) =>
+                                    setAuth((f) => ({ ...f, availableFrom: val }))
+                                }
+                                expiresAt={auth.expiresAt}
+                                onExpiresAtChange={(val) =>
+                                    setAuth((f) => ({ ...f, expiresAt: val }))
+                                }
+                            />
 
                             <div className="space-y-3 border-t pt-4">
-                                <Label>Email Reminder (optional)</Label>
+                                <Label>Nhắc nhở qua Email (Email Reminder)</Label>
                                 <RadioGroup
                                     value={reminderType}
-                                    onValueChange={(v) => setReminderType(v as typeof reminderType)}
+                                    onValueChange={(v) =>
+                                        setReminderType(v as typeof reminderType)
+                                    }
                                     className="flex flex-wrap gap-3"
                                 >
                                     <Label className="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-muted/50">
                                         <RadioGroupItem value="NONE" />
-                                        None
+                                        Không nhắc
                                     </Label>
                                     {REMINDER_OPTIONS.map((opt) => (
                                         <Label
@@ -309,12 +368,12 @@ export function CreateInvitationModal({
                                     {createAuthMutation.isPending ? (
                                         <>
                                             <RefreshCw className="size-4 animate-spin" />
-                                            Creating...
+                                            Đang tạo...
                                         </>
                                     ) : (
                                         <>
                                             <Mail className="size-4" />
-                                            Create & Send
+                                            Tạo & Gửi lời mời
                                         </>
                                     )}
                                 </Button>
@@ -323,7 +382,7 @@ export function CreateInvitationModal({
 
                         {authInvitations.length > 0 && (
                             <div className="border-t pt-4 mt-4">
-                                <h4 className="font-medium mb-3">Created Invitations</h4>
+                                <h4 className="font-medium mb-3">Lời mời vừa tạo</h4>
                                 <div className="space-y-2 max-h-48 overflow-y-auto">
                                     {authInvitations.map((inv) => (
                                         <div
@@ -346,9 +405,9 @@ export function CreateInvitationModal({
                             <div className="flex items-start gap-3">
                                 <Share2 className="size-5 text-primary shrink-0 mt-0.5" />
                                 <div>
-                                    <p className="font-medium">Share Exam Link</p>
+                                    <p className="font-medium">Tạo Link Dự Thi Tự Do (Shareable Link)</p>
                                     <p className="text-sm text-muted-foreground mt-1">
-                                        Generate a public link to share with students — no account is required to take the exam. Students enter their own name and email when opening the link.
+                                        Tạo đường link công khai để chia sẻ cho thí sinh — không bắt buộc đăng nhập tài khoản trước. Thí sinh tự nhập họ tên và email khi mở link để làm bài.
                                     </p>
                                 </div>
                             </div>
@@ -362,19 +421,80 @@ export function CreateInvitationModal({
                             className="space-y-4"
                         >
                             <div className="space-y-2">
-                                <Label>Maximum Attempts Allowed</Label>
+                                <div className="flex items-center justify-between">
+                                    <Label>Số lượt làm bài tối đa (Max Attempts)</Label>
+                                    <span className="text-xs text-muted-foreground">Tối đa 100 lượt</span>
+                                </div>
                                 <Input
                                     type="number"
                                     min={1}
+                                    max={100}
                                     value={anon.maxAccessAttempts}
                                     onChange={(e) =>
-                                        setAnon((f) => ({ ...f, maxAccessAttempts: e.target.value }))
+                                        setAnon((f) => ({
+                                            ...f,
+                                            maxAccessAttempts: e.target.value,
+                                        }))
                                     }
                                 />
+                                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                    <span className="text-[11px] text-muted-foreground">Gợi ý nhanh:</span>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 px-2 text-[11px]"
+                                        onClick={() => setAnon((f) => ({ ...f, maxAccessAttempts: "1" }))}
+                                    >
+                                        1 lượt (Đơn lẻ)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 px-2 text-[11px]"
+                                        onClick={() => setAnon((f) => ({ ...f, maxAccessAttempts: "30" }))}
+                                    >
+                                        30 lượt (Lớp nhỏ)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 px-2 text-[11px]"
+                                        onClick={() => setAnon((f) => ({ ...f, maxAccessAttempts: "50" }))}
+                                    >
+                                        50 lượt (Lớp lớn)
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-6 px-2 text-[11px]"
+                                        onClick={() => setAnon((f) => ({ ...f, maxAccessAttempts: "100" }))}
+                                    >
+                                        100 lượt
+                                    </Button>
+                                </div>
                                 <p className="text-xs text-muted-foreground">
-                                    Number of times a student can take the exam using this link
+                                    💡 Nếu chia sẻ link vào nhóm lớp cho nhiều người làm, hãy đặt số lượt tương ứng với sĩ số học viên.
                                 </p>
                             </div>
+
+                            {/* Cấu hình lịch cho Shareable Link */}
+                            <ExamScheduleSelector
+                                durationMinutes={durationMinutes}
+                                scheduleMode={anonScheduleMode}
+                                onScheduleModeChange={setAnonScheduleMode}
+                                availableFrom={anon.availableFrom}
+                                onAvailableFromChange={(val) =>
+                                    setAnon((f) => ({ ...f, availableFrom: val }))
+                                }
+                                expiresAt={anon.maxAccessTime}
+                                onExpiresAtChange={(val) =>
+                                    setAnon((f) => ({ ...f, maxAccessTime: val }))
+                                }
+                            />
 
                             <DialogFooter>
                                 <Button
@@ -384,12 +504,12 @@ export function CreateInvitationModal({
                                     {createAnonMutation.isPending ? (
                                         <>
                                             <RefreshCw className="size-4 animate-spin" />
-                                            Creating...
+                                            Đang tạo link...
                                         </>
                                     ) : (
                                         <>
                                             <Link2 className="size-4" />
-                                            Generate Share Link
+                                            Tạo Link Chia Sẻ
                                         </>
                                     )}
                                 </Button>
@@ -398,15 +518,17 @@ export function CreateInvitationModal({
 
                         {anonInvitations.size > 0 && (
                             <div className="border-t pt-4 mt-4">
-                                <h4 className="font-medium mb-3">Generated Share Links</h4>
+                                <h4 className="font-medium mb-3">Link chia sẻ đã tạo</h4>
                                 <div className="space-y-3 max-h-64 overflow-y-auto">
-                                    {Array.from(anonInvitations.entries()).map(([id, { inv, qr }]) => (
-                                        <ShareLinkCard
-                                            key={id}
-                                            invitation={inv}
-                                            qrDataUrl={qr}
-                                        />
-                                    ))}
+                                    {Array.from(anonInvitations.entries()).map(
+                                        ([id, { inv, qr }]) => (
+                                            <ShareLinkCard
+                                                key={id}
+                                                invitation={inv}
+                                                qrDataUrl={qr}
+                                            />
+                                        ),
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -416,7 +538,7 @@ export function CreateInvitationModal({
                 <DialogFooter>
                     <Button variant="outline" onClick={handleClose}>
                         <X className="size-4" />
-                        Close
+                        Đóng
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -438,21 +560,21 @@ function ShareLinkCard({ invitation, qrDataUrl }: ShareLinkCardProps) {
     const copyCode = () => {
         if (invitation.accessCode) {
             void navigator.clipboard.writeText(invitation.accessCode);
-            toast.success("Access code copied!");
+            toast.success("Đã sao chép mã truy cập!");
         }
     };
 
     const copyLink = () => {
         if (shareableUrl) {
             void navigator.clipboard.writeText(shareableUrl);
-            toast.success("Link copied!");
+            toast.success("Đã sao chép link dự thi!");
         }
     };
 
     return (
         <div className="rounded-md border p-3 space-y-3">
             <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Access Code</p>
+                <p className="text-xs text-muted-foreground">Mã truy cập (Access Code)</p>
                 <div className="flex items-center gap-2">
                     <div className="flex-1 rounded-md border bg-muted/50 px-4 py-2 font-mono text-lg font-bold tracking-widest text-center">
                         {invitation.accessCode}
@@ -464,7 +586,7 @@ function ShareLinkCard({ invitation, qrDataUrl }: ShareLinkCardProps) {
             </div>
 
             <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Shareable Link</p>
+                <p className="text-xs text-muted-foreground">Link dự thi (Shareable Link)</p>
                 <div className="flex items-center gap-2">
                     <div className="flex-1 overflow-hidden text-ellipsis rounded-md border bg-muted/50 px-3 py-2 font-mono text-xs">
                         {shareableUrl}
@@ -477,7 +599,7 @@ function ShareLinkCard({ invitation, qrDataUrl }: ShareLinkCardProps) {
 
             <div className="flex items-center justify-between pt-2 border-t">
                 <span className="text-xs text-muted-foreground">
-                    Max Attempts: {invitation.maxAccessAttempts ?? 1}
+                    Số lượt tối đa: {invitation.maxAccessAttempts ?? 1}
                 </span>
                 {qrDataUrl && (
                     <Button
@@ -491,7 +613,7 @@ function ShareLinkCard({ invitation, qrDataUrl }: ShareLinkCardProps) {
                         }}
                     >
                         <QrCode className="size-4" />
-                        Download QR
+                        Tải mã QR
                     </Button>
                 )}
             </div>

@@ -177,21 +177,25 @@ interface QuestionFormProps {
     submitLabel: string;
     showActive?: boolean;
     onCancel?: () => void;
+    /** Page layout: only the fields scroll; Back/Save stay pinned at the bottom of the parent. */
+    fillHeight?: boolean;
 }
 
 export function QuestionForm({
-                                 form,
-                                 setForm,
-                                 onSubmit,
-                                 isSaving,
-                                 submitLabel,
-                                 showActive = false,
-                                 onCancel,
-                             }: QuestionFormProps) {
+    form,
+    setForm,
+    onSubmit,
+    isSaving,
+    submitLabel,
+    showActive = false,
+    onCancel,
+    fillHeight = false,
+}: QuestionFormProps) {
     const navigate = useNavigate();
     const contentRef = useRef<HTMLTextAreaElement>(null);
     const [isPreview, setIsPreview] = useState(false);
     const [showCodeErrors, setShowCodeErrors] = useState(false);
+    const codeSaveCheckRef = useRef<(() => string[]) | null>(null);
 
     const [isAddingNewTopic, setIsAddingNewTopic] = useState(false);
     const [newTopicText, setNewTopicText] = useState("");
@@ -314,6 +318,19 @@ export function QuestionForm({
                 );
                 return;
             }
+            // Do not save while the declaration and the code disagree (main is never touched here).
+            const notes = codeSaveCheckRef.current?.() ?? [];
+            if (notes.length > 0) {
+                toast.error("Not saved: the coding declaration does not match", {
+                    description: notes.join("\n"),
+                    duration: 12000,
+                });
+                window.setTimeout(
+                    () => document.getElementById("code-save-notes")?.scrollIntoView({ behavior: "smooth", block: "center" }),
+                    50,
+                );
+                return;
+            }
             onSubmit({
                 ...form,
                 content,
@@ -367,430 +384,445 @@ export function QuestionForm({
     };
 
     return (
-        <form className="grid gap-5" onSubmit={handleSubmit}>
-            <div className="grid gap-2">
-                <Label htmlFor="question-topic">Topic</Label>
+        <form
+            className={fillHeight ? "flex flex-col h-full min-h-0" : "grid gap-5"}
+            onSubmit={handleSubmit}
+        >
+            <div className={fillHeight ? "grid gap-5 content-start flex-1 min-h-0 overflow-y-auto p-6" : "contents"}>
+                <div className="grid gap-2">
+                    <Label htmlFor="question-topic">Topic</Label>
 
-                {isAddingNewTopic ? (
-                    <div className="flex items-center gap-2">
-                        <Input
-                            autoFocus
-                            placeholder="Enter new topic name..."
-                            value={newTopicText}
-                            onChange={(e) => setNewTopicText(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    handleConfirmNewTopic();
-                                }
-                            }}
-                        />
-                        <Button type="button" size="sm" onClick={handleConfirmNewTopic}>
-                            Save
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                setIsAddingNewTopic(false);
-                                setNewTopicText("");
-                            }}
-                        >
-                            Cancel
-                        </Button>
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-2">
-                        <Select
-                            value={form.topic}
-                            onValueChange={(val) => {
-                                if (val === "__ADD_NEW__") {
+                    {isAddingNewTopic ? (
+                        <div className="flex items-center gap-2">
+                            <Input
+                                autoFocus
+                                placeholder="Enter new topic name..."
+                                value={newTopicText}
+                                onChange={(e) => setNewTopicText(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        handleConfirmNewTopic();
+                                    }
+                                }}
+                            />
+                            <Button type="button" size="sm" onClick={handleConfirmNewTopic}>
+                                Save
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                    setIsAddingNewTopic(false);
+                                    setNewTopicText("");
+                                }}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-2">
+                            <Select
+                                value={form.topic}
+                                onValueChange={(val) => {
+                                    if (val === "__ADD_NEW__") {
+                                        setIsAddingNewTopic(true);
+                                        setNewTopicText("");
+                                    } else {
+                                        setForm((prev) => ({ ...prev, topic: val }));
+                                    }
+                                }}
+                            >
+                                <SelectTrigger id="question-topic" className="w-full">
+                                    <SelectValue placeholder="Select a topic..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {allTopics.length === 0 && (
+                                        <div className="p-2 text-xs text-muted-foreground text-center">
+                                            No existing topics. Click &quot;Add Topic&quot; to create one.
+                                        </div>
+                                    )}
+                                    {allTopics.map((topic) => (
+                                        <SelectItem key={topic} value={topic}>
+                                            {topic}
+                                        </SelectItem>
+                                    ))}
+                                    <SelectItem value="__ADD_NEW__" className="font-medium text-primary">
+                                        + Add new topic...
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0"
+                                onClick={() => {
                                     setIsAddingNewTopic(true);
                                     setNewTopicText("");
-                                } else {
-                                    setForm((prev) => ({ ...prev, topic: val }));
-                                }
-                            }}
+                                }}
+                            >
+                                <Plus className="mr-1 h-3.5 w-3.5" />
+                                Add Topic
+                            </Button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="grid gap-2">
+                        <Label>Question Type</Label>
+                        <Select
+                            key={form.type}
+                            value={form.type}
+                            onValueChange={(value) =>
+                                setForm((prev) => ({
+                                    ...prev,
+                                    type: value as QuestionType,
+                                    gradingCriteria: value === "ESSAY" ? prev.gradingCriteria : [],
+                                    code: value === "CODING" ? prev.code ?? emptyCodeSpec() : null,
+                                    options:
+                                        value === "ESSAY" || value === "CODING"
+                                            ? []
+                                            : prev.options.length >= 2
+                                                ? prev.options
+                                                : defaultInitialQuestionForm.options,
+                                }))
+                            }
                         >
-                            <SelectTrigger id="question-topic" className="w-full">
-                                <SelectValue placeholder="Select a topic..." />
+                            <SelectTrigger>
+                                <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {allTopics.length === 0 && (
-                                    <div className="p-2 text-xs text-muted-foreground text-center">
-                                        No existing topics. Click &quot;Add Topic&quot; to create one.
-                                    </div>
-                                )}
-                                {allTopics.map((topic) => (
-                                    <SelectItem key={topic} value={topic}>
-                                        {topic}
-                                    </SelectItem>
-                                ))}
-                                <SelectItem value="__ADD_NEW__" className="font-medium text-primary">
-                                    + Add new topic...
-                                </SelectItem>
+                                <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
+                                <SelectItem value="ESSAY">Essay</SelectItem>
+                                <SelectItem value="CODING">Coding</SelectItem>
                             </SelectContent>
                         </Select>
-
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="shrink-0"
-                            onClick={() => {
-                                setIsAddingNewTopic(true);
-                                setNewTopicText("");
-                            }}
-                        >
-                            <Plus className="mr-1 h-3.5 w-3.5" />
-                            Add Topic
-                        </Button>
                     </div>
-                )}
-            </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="grid gap-2">
-                    <Label>Question Type</Label>
-                    <Select
-                        key={form.type}
-                        value={form.type}
-                        onValueChange={(value) =>
-                            setForm((prev) => ({
-                                ...prev,
-                                type: value as QuestionType,
-                                gradingCriteria: value === "ESSAY" ? prev.gradingCriteria : [],
-                                code: value === "CODING" ? prev.code ?? emptyCodeSpec() : null,
-                                options:
-                                    value === "ESSAY" || value === "CODING"
-                                        ? []
-                                        : prev.options.length >= 2
-                                            ? prev.options
-                                            : defaultInitialQuestionForm.options,
-                            }))
-                        }
-                    >
-                        <SelectTrigger>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
-                            <SelectItem value="ESSAY">Essay</SelectItem>
-                            <SelectItem value="CODING">Coding</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <div className="grid gap-2">
+                        <Label>Difficulty Level</Label>
+                        <Select
+                            key={form.difficulty}
+                            value={form.difficulty}
+                            onValueChange={(value) =>
+                                setForm((prev) => ({ ...prev, difficulty: value as QuestionDifficulty }))
+                            }
+                        >
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="EASY">Easy</SelectItem>
+                                <SelectItem value="MEDIUM">Medium</SelectItem>
+                                <SelectItem value="HARD">Hard</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
                 <div className="grid gap-2">
-                    <Label>Difficulty Level</Label>
-                    <Select
-                        key={form.difficulty}
-                        value={form.difficulty}
-                        onValueChange={(value) =>
-                            setForm((prev) => ({ ...prev, difficulty: value as QuestionDifficulty }))
-                        }
-                    >
-                        <SelectTrigger>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="EASY">Easy</SelectItem>
-                            <SelectItem value="MEDIUM">Medium</SelectItem>
-                            <SelectItem value="HARD">Hard</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-
-            <div className="grid gap-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <Label htmlFor="question-content">Question Content</Label>
-                    <div className="flex items-center gap-1">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={() => insertFormatting("**", "**", "bold text")}
-                            title="Bold (**text**)"
-                        >
-                            <Bold className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={() => insertFormatting("*", "*", "italic text")}
-                            title="Italic (*text*)"
-                        >
-                            <Italic className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={() => insertFormatting("`", "`", "code")}
-                            title="Code (`code`)"
-                        >
-                            <Code className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={() => insertFormatting("> Note: ", "\n", "Important note")}
-                            title="Note (> Note: ...)"
-                        >
-                            <Quote className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={handleInsertImageLink}
-                            title="Insert Image URL"
-                        >
-                            <ImageIcon className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                            type="button"
-                            variant={isPreview ? "default" : "ghost"}
-                            size="sm"
-                            className="h-8 px-2.5 text-xs"
-                            onClick={() => setIsPreview(!isPreview)}
-                        >
-                            {isPreview ? (
-                                <>
-                                    <EyeOff className="mr-1 h-3.5 w-3.5" /> Edit
-                                </>
-                            ) : (
-                                <>
-                                    <Eye className="mr-1 h-3.5 w-3.5" /> Preview
-                                </>
-                            )}
-                        </Button>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Label htmlFor="question-content">Question Content</Label>
+                        <div className="flex items-center gap-1">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2"
+                                onClick={() => insertFormatting("**", "**", "bold text")}
+                                title="Bold (**text**)"
+                            >
+                                <Bold className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2"
+                                onClick={() => insertFormatting("*", "*", "italic text")}
+                                title="Italic (*text*)"
+                            >
+                                <Italic className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2"
+                                onClick={() => insertFormatting("`", "`", "code")}
+                                title="Code (`code`)"
+                            >
+                                <Code className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2"
+                                onClick={() => insertFormatting("> Note: ", "\n", "Important note")}
+                                title="Note (> Note: ...)"
+                            >
+                                <Quote className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2"
+                                onClick={handleInsertImageLink}
+                                title="Insert Image URL"
+                            >
+                                <ImageIcon className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant={isPreview ? "default" : "ghost"}
+                                size="sm"
+                                className="h-8 px-2.5 text-xs"
+                                onClick={() => setIsPreview(!isPreview)}
+                            >
+                                {isPreview ? (
+                                    <>
+                                        <EyeOff className="mr-1 h-3.5 w-3.5" /> Edit
+                                    </>
+                                ) : (
+                                    <>
+                                        <Eye className="mr-1 h-3.5 w-3.5" /> Preview
+                                    </>
+                                )}
+                            </Button>
+                        </div>
                     </div>
-                </div>
 
-                {isPreview ? (
-                    <div className="min-h-[140px] max-h-[260px] overflow-y-auto rounded-md border border-input bg-muted/20 p-3">
-                        <QuestionContentPreview content={form.content} />
-                    </div>
-                ) : (
-                    <Textarea
-                        ref={contentRef}
-                        id="question-content"
-                        value={form.content}
-                        onChange={(event) => setForm((prev) => ({ ...prev, content: event.target.value }))}
-                        rows={5}
-                        className="min-h-[140px] max-h-[260px] overflow-y-auto resize-y"
-                        placeholder="Enter question content (highlight text and click B to bold, I to italic, or click Preview to test)..."
-                        autoFocus
+                    {isPreview ? (
+                        <div className="min-h-[140px] max-h-[260px] overflow-y-auto rounded-md border border-input bg-muted/20 p-3">
+                            <QuestionContentPreview content={form.content} />
+                        </div>
+                    ) : (
+                        <Textarea
+                            ref={contentRef}
+                            id="question-content"
+                            value={form.content}
+                            onChange={(event) => setForm((prev) => ({ ...prev, content: event.target.value }))}
+                            rows={5}
+                            className="min-h-[140px] max-h-[260px] overflow-y-auto resize-y"
+                            placeholder="Enter question content (highlight text and click B to bold, I to italic, or click Preview to test)..."
+                            autoFocus
+                        />
+                    )}
+
+                    <ImageUrlField
+                        value={form.imageUrl ?? ""}
+                        onChange={(url) => setForm((prev) => ({ ...prev, imageUrl: url }))}
+                        placeholder="Question image URL (optional, https://...)"
                     />
-                )}
+                    {form.imageUrl?.trim() && (
+                        <img
+                            src={form.imageUrl}
+                            alt=""
+                            className="max-h-48 rounded border object-contain"
+                            onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                        />
+                    )}
+                </div>
 
-                <ImageUrlField
-                    value={form.imageUrl ?? ""}
-                    onChange={(url) => setForm((prev) => ({ ...prev, imageUrl: url }))}
-                    placeholder="Question image URL (optional, https://...)"
-                />
-                {form.imageUrl?.trim() && (
-                    <img
-                        src={form.imageUrl}
-                        alt=""
-                        className="max-h-48 rounded border object-contain"
-                        onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = "none";
+                {form.type === "CODING" ? (
+                    <CodeSpecEditor
+                        value={form.code ?? emptyCodeSpec()}
+                        onChange={(code) => setForm((prev) => ({ ...prev, code }))}
+                        showErrors={showCodeErrors}
+                        onRegisterSaveCheck={(check) => {
+                            codeSaveCheckRef.current = check;
                         }}
                     />
-                )}
-            </div>
-
-            {form.type === "CODING" ? (
-                <CodeSpecEditor
-                    value={form.code ?? emptyCodeSpec()}
-                    onChange={(code) => setForm((prev) => ({ ...prev, code }))}
-                    showErrors={showCodeErrors}
-                />
-            ) : form.type === "ESSAY" ? (
-                <section className="grid gap-3 rounded-md border p-4">
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="grid gap-1">
-                            <Label>Essay Grading Criteria (optional)</Label>
-                            <p className="text-xs text-muted-foreground">
-                                Add criteria and percentages to guide grading. If provided, percentages must total 100%.
-                            </p>
+                ) : form.type === "ESSAY" ? (
+                    <section className="grid gap-3 rounded-md border p-4">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="grid gap-1">
+                                <Label>Essay Grading Criteria (optional)</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Add criteria and percentages to guide grading. If provided, percentages must total 100%.
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={form.gradingCriteria.length >= 20}
+                                onClick={() => setForm((prev) => ({
+                                    ...prev,
+                                    gradingCriteria: [...prev.gradingCriteria, { name: "", description: "", weightPercentage: 0 }],
+                                }))}
+                            >
+                                <Plus className="mr-1 size-4" />
+                                Add criterion
+                            </Button>
                         </div>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={form.gradingCriteria.length >= 20}
-                            onClick={() => setForm((prev) => ({
-                                ...prev,
-                                gradingCriteria: [...prev.gradingCriteria, { name: "", description: "", weightPercentage: 0 }],
-                            }))}
-                        >
-                            <Plus className="mr-1 size-4" />
-                            Add criterion
-                        </Button>
-                    </div>
-                    {form.gradingCriteria.length > 0 && (
-                        <div className="grid gap-3">
-                            {form.gradingCriteria.map((criterion, index) => (
-                                <div key={index} className="grid gap-2 rounded-md bg-muted/40 p-3 sm:grid-cols-[1fr_7rem_auto]">
-                                    <div className="grid gap-2">
-                                        <Input
-                                            maxLength={200}
-                                            value={criterion.name}
-                                            onChange={(event) => updateGradingCriterion(index, { name: event.target.value })}
-                                            placeholder={`Criterion ${index + 1}`}
-                                            aria-label={`Criterion ${index + 1} name`}
-                                        />
-                                        <Textarea
-                                            maxLength={1000}
-                                            rows={2}
-                                            value={criterion.description ?? ""}
-                                            onChange={(event) => updateGradingCriterion(index, { description: event.target.value })}
-                                            placeholder="Description (optional)"
-                                            aria-label={`Criterion ${index + 1} description`}
-                                        />
+                        {form.gradingCriteria.length > 0 && (
+                            <div className="grid gap-3">
+                                {form.gradingCriteria.map((criterion, index) => (
+                                    <div key={index} className="grid gap-2 rounded-md bg-muted/40 p-3 sm:grid-cols-[1fr_7rem_auto]">
+                                        <div className="grid gap-2">
+                                            <Input
+                                                maxLength={200}
+                                                value={criterion.name}
+                                                onChange={(event) => updateGradingCriterion(index, { name: event.target.value })}
+                                                placeholder={`Criterion ${index + 1}`}
+                                                aria-label={`Criterion ${index + 1} name`}
+                                            />
+                                            <Textarea
+                                                maxLength={1000}
+                                                rows={2}
+                                                value={criterion.description ?? ""}
+                                                onChange={(event) => updateGradingCriterion(index, { description: event.target.value })}
+                                                placeholder="Description (optional)"
+                                                aria-label={`Criterion ${index + 1} description`}
+                                            />
+                                        </div>
+                                        <label className="grid content-start gap-1 text-xs text-muted-foreground">
+                                            Weight (%)
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                max={100}
+                                                step={1}
+                                                value={criterion.weightPercentage || ""}
+                                                onChange={(event) => updateGradingCriterion(index, {
+                                                    weightPercentage: event.target.value === "" ? 0 : Number(event.target.value),
+                                                })}
+                                                aria-label={`Criterion ${index + 1} weight percentage`}
+                                            />
+                                        </label>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            aria-label={`Remove criterion ${index + 1}`}
+                                            onClick={() => setForm((prev) => ({
+                                                ...prev,
+                                                gradingCriteria: prev.gradingCriteria.filter((_, i) => i !== index),
+                                            }))}
+                                        >
+                                            <Trash2 className="size-4" />
+                                        </Button>
                                     </div>
-                                    <label className="grid content-start gap-1 text-xs text-muted-foreground">
-                                        Weight (%)
-                                        <Input
-                                            type="number"
-                                            min={1}
-                                            max={100}
-                                            step={1}
-                                            value={criterion.weightPercentage || ""}
-                                            onChange={(event) => updateGradingCriterion(index, {
-                                                weightPercentage: event.target.value === "" ? 0 : Number(event.target.value),
-                                            })}
-                                            aria-label={`Criterion ${index + 1} weight percentage`}
-                                        />
-                                    </label>
+                                ))}
+                                <p className={`text-xs ${form.gradingCriteria.reduce((sum, criterion) => sum + (criterion.weightPercentage || 0), 0) === 100 ? "text-emerald-700" : "text-muted-foreground"}`}>
+                                    Total: {form.gradingCriteria.reduce((sum, criterion) => sum + (criterion.weightPercentage || 0), 0)}%
+                                </p>
+                            </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                            Students type their answer in an editor; teachers can still grade manually when no criteria are defined.
+                        </p>
+                    </section>
+                ) : (
+                    <div className="grid gap-3 border-t pt-3">
+                        <div className="flex items-center justify-between">
+                            <div className="grid gap-0.5">
+                                <Label>Options (tick the correct answer)</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Select option checkbox for correct answers.
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={form.options.length >= 6}
+                                onClick={() =>
+                                    setForm((prev) => ({
+                                        ...prev,
+                                        options: [...prev.options, { content: "", correct: false }],
+                                    }))
+                                }
+                            >
+                                <Plus className="mr-1 h-4 w-4" />
+                                Add option
+                            </Button>
+                        </div>
+
+                        {form.options.map((option, index) => (
+                            <div key={index} className="grid gap-2">
+                                <div className="flex items-center gap-3">
+                                    <Checkbox
+                                        checked={option.correct}
+                                        onCheckedChange={(checked) => toggleCorrect(index, checked === true)}
+                                    />
+                                    <Input
+                                        value={option.content}
+                                        onChange={(event) => updateOption(index, { content: event.target.value })}
+                                        placeholder={`Option ${index + 1}`}
+                                    />
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        aria-label={`Remove criterion ${index + 1}`}
-                                        onClick={() => setForm((prev) => ({
-                                            ...prev,
-                                            gradingCriteria: prev.gradingCriteria.filter((_, i) => i !== index),
-                                        }))}
+                                        disabled={form.options.length <= 2}
+                                        onClick={() =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                options: prev.options.filter((_, i) => i !== index),
+                                            }))
+                                        }
                                     >
-                                        <Trash2 className="size-4" />
+                                        <Trash2 className="h-4 w-4" />
                                     </Button>
                                 </div>
-                            ))}
-                            <p className={`text-xs ${form.gradingCriteria.reduce((sum, criterion) => sum + (criterion.weightPercentage || 0), 0) === 100 ? "text-emerald-700" : "text-muted-foreground"}`}>
-                                Total: {form.gradingCriteria.reduce((sum, criterion) => sum + (criterion.weightPercentage || 0), 0)}%
-                            </p>
-                        </div>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                        Students type their answer in an editor; teachers can still grade manually when no criteria are defined.
-                    </p>
-                </section>
-            ) : (
-                <div className="grid gap-3 border-t pt-3">
-                    <div className="flex items-center justify-between">
-                        <div className="grid gap-0.5">
-                            <Label>Options (tick the correct answer)</Label>
-                            <p className="text-xs text-muted-foreground">
-                                Select option checkbox for correct answers.
-                            </p>
-                        </div>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={form.options.length >= 6}
-                            onClick={() =>
-                                setForm((prev) => ({
-                                    ...prev,
-                                    options: [...prev.options, { content: "", correct: false }],
-                                }))
-                            }
-                        >
-                            <Plus className="mr-1 h-4 w-4" />
-                            Add option
-                        </Button>
-                    </div>
-
-                    {form.options.map((option, index) => (
-                        <div key={index} className="grid gap-2">
-                            <div className="flex items-center gap-3">
-                                <Checkbox
-                                    checked={option.correct}
-                                    onCheckedChange={(checked) => toggleCorrect(index, checked === true)}
+                                <ImageUrlField
+                                    className="ml-8"
+                                    value={option.imageUrl ?? ""}
+                                    onChange={(url) => updateOption(index, { imageUrl: url })}
+                                    placeholder="Image URL (optional, https://...)"
                                 />
-                                <Input
-                                    value={option.content}
-                                    onChange={(event) => updateOption(index, { content: event.target.value })}
-                                    placeholder={`Option ${index + 1}`}
-                                />
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    disabled={form.options.length <= 2}
-                                    onClick={() =>
-                                        setForm((prev) => ({
-                                            ...prev,
-                                            options: prev.options.filter((_, i) => i !== index),
-                                        }))
-                                    }
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
+                                {option.imageUrl?.trim() && (
+                                    <img
+                                        src={option.imageUrl}
+                                        alt=""
+                                        className="ml-8 max-h-32 rounded border object-contain"
+                                        onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = "none";
+                                        }}
+                                    />
+                                )}
                             </div>
-                            <ImageUrlField
-                                className="ml-8"
-                                value={option.imageUrl ?? ""}
-                                onChange={(url) => updateOption(index, { imageUrl: url })}
-                                placeholder="Image URL (optional, https://...)"
-                            />
-                            {option.imageUrl?.trim() && (
-                                <img
-                                    src={option.imageUrl}
-                                    alt=""
-                                    className="ml-8 max-h-32 rounded border object-contain"
-                                    onError={(e) => {
-                                        (e.target as HTMLImageElement).style.display = "none";
-                                    }}
-                                />
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
+                        ))}
+                    </div>
+                )}
 
-            <div className="grid max-w-xs gap-2 border-t pt-3">
-                <Label htmlFor="question-points">Score weight</Label>
-                <Input
-                    id="question-points"
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={form.points}
-                    onChange={(event) =>
-                        setForm((prev) => ({ ...prev, points: Number(event.target.value) }))
-                    }
-                    placeholder="Weight (e.g. 1)"
-                />
-                <p className="text-xs text-muted-foreground">
-                    Question score = exam max score × weight ÷ total weight of all questions in the exam.
-                </p>
+                <div className="grid max-w-xs gap-2 border-t pt-3">
+                    <Label htmlFor="question-points">Score weight</Label>
+                    <Input
+                        id="question-points"
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={form.points}
+                        onChange={(event) =>
+                            setForm((prev) => ({ ...prev, points: Number(event.target.value) }))
+                        }
+                        placeholder="Weight (e.g. 1)"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Question score = exam max score × weight ÷ total weight of all questions in the exam.
+                    </p>
+                </div>
+
             </div>
 
-            <CardFooter className="flex items-center justify-between border-t px-0 pt-4">
+            <CardFooter
+                className={
+                    fillHeight
+                        ? "shrink-0 z-30 flex items-center justify-between border-t bg-card px-6 py-3.5"
+                        : "sticky bottom-0 z-30 flex items-center justify-between border-t bg-card/95 backdrop-blur-md px-6 py-3.5 -mx-6 -mb-6 mt-6 shadow-[0_-4px_16px_rgba(0,0,0,0.25)]"
+                }
+            >
                 <div>
                     {showActive && (
                         <div className="flex items-center gap-3">

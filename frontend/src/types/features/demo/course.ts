@@ -1,10 +1,13 @@
 import type { BaseDTO, BaseFilter } from "@/types/common/base";
 import type { LessonContentType } from "./lesson";
 
+export type CourseType = "STANDARD" | "FROM_SYLLABUS";
+
 export type CourseLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
 export type CourseStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
 export interface CourseDTO extends BaseDTO {
+  courseType?: CourseType;
   name?: string;
   description?: string;
   thumbnailUrl?: string;
@@ -12,6 +15,9 @@ export interface CourseDTO extends BaseDTO {
   instructorId?: number;
   categoryIds?: number[];
   categoryNames?: string[];
+  syllabusId?: number;
+  syllabusCode?: string;
+  syllabusName?: string;
   /** true = bỏ danh mục của khóa học khi cập nhật (backend bỏ qua categoryId = null). */
   clearCategory?: boolean;
   status?: CourseStatus;
@@ -20,6 +26,7 @@ export interface CourseDTO extends BaseDTO {
 }
 
 export interface CourseFilter extends BaseFilter {
+  courseType?: CourseType;
   categoryId?: number;
   status?: CourseStatus;
   level?: CourseLevel;
@@ -49,6 +56,8 @@ export interface CatalogCourse {
   totalDuration: number;
   isFree: boolean;
   enrolled: boolean;
+  averageRating: number;
+  totalReviews: number;
 }
 
 export type CatalogSort = "createdAt,desc" | "name,asc" | "name,desc";
@@ -100,6 +109,8 @@ export interface CourseDetailSection {
 }
 
 export interface CourseDetail {
+  courseType?: CourseType;
+  syllabus?: { id: number; code: string; name: string } | null;
   id: number;
   name: string;
   description?: string | null;

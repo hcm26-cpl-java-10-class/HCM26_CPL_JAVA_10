@@ -7,13 +7,17 @@ import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.notification.NotificationService;
+import com.example.starter_project_2025.system.analytics.student.StudentLearningActivity;
+import com.example.starter_project_2025.system.analytics.student.StudentLearningActivityRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -23,11 +27,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class LessonProgressService {
 
+    /** Tối đa số giây được ghi nhận trong 1 lần gọi (chống ghi nhận sai / spam). */
+    private static final long MAX_STUDY_SECONDS_PER_CALL = 600L;
+
+    /** Sai số cho phép (giây) giữa thời gian client báo và thời gian thực trôi qua trên server. */
+    private static final long STUDY_TIME_SLACK_SECONDS = 5L;
+
     private final LessonProgressRepository progressRepository;
     private final CourseEnrollmentRepository enrollmentRepository;
     private final LessonRepository lessonRepository;
     private final NotificationService notificationService;
     private final CertificateService certificateService;
+    private final StudentLearningActivityRepository activityRepository;
 
     @Transactional(readOnly = true)
     public LessonProgressDTO getProgress(Long userId, Long enrollmentId) {
@@ -97,6 +108,47 @@ public class LessonProgressService {
         return buildProgress(enrollment);
     }
 
+    /**
+     * Ghi nhận thời gian học của học viên cho một bài (tính bằng giây).
+     *
+     * <p>Thời gian được cộng dồn vào {@code LessonProgress.studySeconds} nên có thể
+     * gọi nhiều lần (ví dụ mỗi 30 giây khi người học đang mở bài). Giá trị âm bị bỏ qua,
+     * giá trị vượt quá {@code MAX_STUDY_SECONDS_PER_CALL} hoặc vượt quá thời gian thực đã trôi qua
+     * kể từ lần cập nhật trước bị chặn để tránh ghi nhận sai.
+     */
+    @Transactional
+    public LessonProgressDTO addStudyTime(Long userId, Long enrollmentId, Long lessonId, long seconds) {
+        if (seconds <= 0) {
+            return getProgress(userId, enrollmentId);
+        }
+        long safeSeconds = Math.min(seconds, MAX_STUDY_SECONDS_PER_CALL);
+
+        CourseEnrollment enrollment = getOwnedEnrollmentForUpdate(userId, enrollmentId);
+        Lesson lesson = getCourseLesson(enrollment, lessonId);
+
+        LessonProgress progress = progressRepository
+                .findByEnrollment_IdAndLesson_Id(enrollmentId, lessonId)
+                .orElseGet(() -> LessonProgress.builder()
+                        .enrollment(enrollment)
+                        .lesson(lesson)
+                        .build());
+
+        LocalDateTime now = LocalDateTime.now();
+        // Không ghi nhận nhiều hơn thời gian thực đã trôi qua kể từ lần cập nhật trước của bài này,
+        // để client không thể gọi liên tục nhằm cộng giờ học ảo.
+        if (progress.getLastAccessedAt() != null) {
+            long elapsed = Math.max(0L, Duration.between(progress.getLastAccessedAt(), now).getSeconds());
+            safeSeconds = Math.min(safeSeconds, elapsed + STUDY_TIME_SLACK_SECONDS);
+        }
+
+        long current = progress.getStudySeconds() == null ? 0L : progress.getStudySeconds();
+        progress.setStudySeconds(current + safeSeconds);
+        progress.setLastAccessedAt(now);
+        progressRepository.save(progress);
+
+        return buildProgress(enrollment);
+    }
+
     @Transactional
     public LessonProgressDTO saveAnswer(Long userId, Long enrollmentId, Long lessonId, String answer) {
         CourseEnrollment enrollment = getOwnedEnrollmentForUpdate(userId, enrollmentId);
@@ -162,6 +214,10 @@ public class LessonProgressService {
         enrollment.setLastLessonId(lessonId);
         enrollment.setLastAccessedAt(accessedAt);
         enrollmentRepository.save(enrollment);
+        StudentLearningActivity activity = new StudentLearningActivity();
+        activity.setEnrollment(enrollment);
+        activity.setOccurredAt(Instant.now());
+        activityRepository.save(activity);
     }
 
     private LessonProgressDTO buildProgress(CourseEnrollment enrollment) {
@@ -204,7 +260,8 @@ public class LessonProgressService {
                 progress == null ? null : progress.getStudentAnswer(),
                 progress != null && progress.isCompleted(),
                 progress == null ? null : progress.getCompletedAt(),
-                progress == null ? null : progress.getLastAccessedAt()
+                progress == null ? null : progress.getLastAccessedAt(),
+                progress == null ? null : progress.getStudySeconds()
         );
     }
 }

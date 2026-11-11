@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import type { FieldSchema } from "@/types";
 import { FormFieldRenderer } from "./FormFieldRenderer";
+import { validateForm } from "./validateForm";
 
 type SectionField = {
   name: string;
@@ -178,60 +179,25 @@ export function FormModal({
     setTouched({});
   }, [initial, open]);
 
-  const validateForm = (
+  const validateCurrentForm = (
     values: Record<string, any>,
     fields: FieldSchema[] = editableFields,
   ) => {
-    const errors: Record<string, string[]> = {};
-
-    fields.forEach((field) => {
-      const value = values[field.name];
-      const isEmpty =
-        value === undefined ||
-        value === null ||
-        (typeof value === "string" && !value.trim()) ||
-        (Array.isArray(value) && value.length === 0);
-
-      if (field.required && isEmpty) {
-        errors[field.name] = [
-          field.requiredMessage ?? `${field.label} là bắt buộc`,
-        ];
-        return;
-      }
-
-      if (!isEmpty && typeof value === "string") {
-        if (field.minLength && value.trim().length < field.minLength) {
-          errors[field.name] = [
-            `${field.label} phải có ít nhất ${field.minLength} ký tự`,
-          ];
-        }
-
-        if (field.maxLength && value.length > field.maxLength) {
-          errors[field.name] = [
-            field.maxLengthMessage ??
-              `${field.label} không vượt quá ${field.maxLength} ký tự`,
-          ];
-        }
-      }
+    const errors = validateForm(fields, values, {
+      isEdit: isEditMode,
+      initial,
     });
-
-    const crossFieldErrors: Record<string, string[]> =
-      (schema.validate?.(values) as Record<string, string[]> | undefined) ?? {};
-
-    Object.entries(crossFieldErrors).forEach(([fieldName, messages]) => {
-      if (messages && messages.length) {
-        errors[fieldName] = messages;
-      }
-    });
-
-    return errors;
+    const crossFieldErrors = schema.validate?.(values) as
+      | Record<string, string[]>
+      | undefined;
+    return { ...errors, ...(crossFieldErrors ?? {}) };
   };
 
   /** Validate đúng 1 field với state form mới nhất, cập nhật lỗi của field đó. */
   const validateSingleField = (name: string, nextForm: Record<string, any>) => {
     const field = editableFieldMap.get(name);
     if (!field) return;
-    const errors = validateForm(nextForm, [field]);
+    const errors = validateCurrentForm(nextForm, [field]);
     setClientErrors((prev) => {
       const { [name]: _removed, ...rest } = prev;
       return errors[name] ? { ...rest, [name]: errors[name] } : rest;
@@ -307,7 +273,8 @@ export function FormModal({
       return;
     }
 
-    const errors = validateForm(form);
+    setClientErrors({});
+  const errors = validateCurrentForm(form);
     setClientErrors(errors);
     if (Object.keys(errors).length > 0) return;
     onSubmit(form);

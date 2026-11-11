@@ -85,12 +85,12 @@ export default function LessonReportsPage() {
   const totalPages = listQuery.data?.totalPages ?? 0;
 
   return (
-    <MainLayout pathName={{ "lesson-reports": "Lesson Reports" }}>
-      <section className="space-y-6">
+    <MainLayout dense pathName={{ "lesson-reports": "Lesson Reports" }}>
+      <section className="space-y-1.5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-blue-700">Reports</p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight">Lesson reports</h1>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight">Lesson reports</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Problems students reported in the courses you teach. The newest come first.
             </p>
@@ -117,20 +117,20 @@ export default function LessonReportsPage() {
         </div>
 
         {listQuery.isLoading ? (
-          <p role="status" className="rounded-xl border p-10 text-center text-sm text-muted-foreground">
+          <p role="status" className="rounded-xl border p-4 text-center text-sm text-muted-foreground">
             Loading reports...
           </p>
         ) : listQuery.isError ? (
-          <div role="alert" className="space-y-3 rounded-xl border border-destructive/30 p-6">
+          <div role="alert" className="space-y-2 rounded-xl border border-destructive/30 p-4">
             <p className="text-sm text-destructive">Could not load lesson reports.</p>
             <Button variant="outline" onClick={() => void listQuery.refetch()}>
               Try again
             </Button>
           </div>
         ) : reports.length === 0 ? (
-          <div className="rounded-2xl border border-dashed p-12 text-center">
+          <div className="rounded-2xl border border-dashed p-4 text-center">
             <CheckCircle2 className="mx-auto size-12 text-muted-foreground" />
-            <h2 className="mt-4 text-lg font-semibold">
+            <h2 className="mt-3 text-lg font-semibold">
               {filter === "OPEN" ? "All caught up" : "No reports here"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -140,9 +140,9 @@ export default function LessonReportsPage() {
             </p>
           </div>
         ) : (
-          <ul className="space-y-3" aria-busy={listQuery.isPlaceholderData}>
+          <ul className="space-y-1" aria-busy={listQuery.isPlaceholderData}>
             {reports.map((report) => (
-              <li key={report.id} className="rounded-xl border bg-card p-4">
+              <li key={report.id} className="rounded-xl border bg-card p-3">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <Badge variant="secondary">{report.courseName}</Badge>
                   <span className="min-w-0 truncate">

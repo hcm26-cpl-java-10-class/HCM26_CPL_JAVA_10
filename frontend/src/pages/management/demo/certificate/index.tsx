@@ -119,10 +119,10 @@ function StudentCertificateList() {
   };
 
   return (
-    <MainLayout pathName={{ certificates: "My Certificates" }}>
-      <div className="mx-auto w-full max-w-7xl space-y-8">
+    <MainLayout dense pathName={{ certificates: "My Certificates" }}>
+      <div className="mx-auto w-full max-w-7xl space-y-1.5">
         {/* Banner Section */}
-        <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-10 text-white sm:px-10 sm:py-14">
+        <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-4 py-7 text-white sm:px-10 sm:py-9">
           <div className="pointer-events-none absolute -right-16 -top-24 size-80 rounded-full bg-amber-500/20 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-32 right-1/3 size-72 rounded-full bg-indigo-500/20 blur-3xl" />
 
@@ -136,7 +136,7 @@ function StudentCertificateList() {
             <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
               Verified certifications proving your skills and course completions.
             </p>
-            <div className="mt-7 flex flex-wrap gap-4 text-sm text-slate-200">
+            <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-200">
               <span className="inline-flex items-center gap-2">
                 <Award className="size-4 text-amber-400" /> {certificates.length} certificate(s) earned
               </span>
@@ -146,7 +146,7 @@ function StudentCertificateList() {
         </section>
 
         {/* Content Section */}
-        <section className="space-y-5">
+        <section className="space-y-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">Earned Certificates</h2>
@@ -167,11 +167,11 @@ function StudentCertificateList() {
           </div>
 
           {certificatesQuery.isLoading ? (
-            <p role="status" className="rounded-2xl border p-8 text-center text-sm text-muted-foreground">
+            <p role="status" className="rounded-2xl border p-4 text-center text-sm text-muted-foreground">
               Loading certificates...
             </p>
           ) : certificatesQuery.isError ? (
-            <div role="alert" className="space-y-3 rounded-2xl border border-destructive/30 p-6">
+            <div role="alert" className="space-y-3 rounded-2xl border border-destructive/30 p-4">
               <p className="text-sm text-destructive">
                 Could not load certificates. Please try again later.
               </p>
@@ -180,7 +180,7 @@ function StudentCertificateList() {
               </Button>
             </div>
           ) : certificates.length === 0 ? (
-            <div className="rounded-2xl border border-dashed p-10 text-center">
+            <div className="rounded-2xl border border-dashed p-4 text-center">
               <CheckCircle className="mx-auto size-9 text-muted-foreground" />
               <h3 className="mt-3 font-semibold">No certificates found</h3>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -190,19 +190,19 @@ function StudentCertificateList() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
               {certificates.map((item: any) => (
                 <article
                   key={item.id}
                   className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl dark:border-slate-800 dark:bg-card"
                 >
                   {/* Certificate Preview */}
-                  <div className="relative overflow-hidden bg-linear-to-br from-slate-50 via-white to-blue-50 p-5 dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/40">
+                  <div className="relative overflow-hidden bg-linear-to-br from-slate-50 via-white to-blue-50 p-4 dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/40">
                     {/* Decorative elements */}
                     <div className="pointer-events-none absolute -right-12 -top-12 size-40 rounded-full border border-blue-200/70 dark:border-blue-800/50" />
                     <div className="pointer-events-none absolute -right-6 -top-6 size-28 rounded-full border border-blue-200/70 dark:border-blue-800/50" />
 
-                    <div className="relative rounded-xl border border-blue-200/80 bg-white/90 p-5 shadow-sm dark:border-blue-900 dark:bg-slate-950/80">
+                    <div className="relative rounded-xl border border-blue-200/80 bg-white/90 p-4 shadow-sm dark:border-blue-900 dark:bg-slate-950/80">
                       {/* Brand and badge */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2">
@@ -230,7 +230,7 @@ function StudentCertificateList() {
                       </div>
 
                       {/* Certificate title */}
-                      <div className="mt-7 space-y-2">
+                      <div className="mt-4 space-y-2">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-700 dark:text-blue-400">
                           Certificate of Completion
                         </p>
@@ -243,7 +243,7 @@ function StudentCertificateList() {
                       </div>
 
                       {/* Recipient */}
-                      <div className="mt-5">
+                      <div className="mt-3">
                         <p className="text-xs text-slate-500 dark:text-slate-400">
                           Awarded to
                         </p>
@@ -253,7 +253,7 @@ function StudentCertificateList() {
                       </div>
 
                       {/* Issue date */}
-                      <div className="mt-5 flex items-center gap-2 border-t border-slate-200 pt-4 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                      <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-4 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
                         <Calendar className="size-4 shrink-0 text-blue-600 dark:text-blue-400" />
                         <span>
                           Issued on: {formatDate(item.issuedAt || item.createdAt)}
@@ -271,9 +271,9 @@ function StudentCertificateList() {
                   </div>
 
                   {/* Card footer */}
-                  <div className="p-5 pt-3">
+                  <div className="p-4 pt-3">
                     <Button
-                      className="mt-5 w-full gap-2 bg-blue-700 text-white transition-colors hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500"
+                      className="mt-3 w-full gap-2 bg-blue-700 text-white transition-colors hover:bg-blue-800 dark:bg-blue-600 dark:hover:bg-blue-500"
                       onClick={() => {
                         if (item.verificationToken) {
                           window.location.href =

@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.demo.category.CategoryRepository;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.system.demo.course.CourseStatus;
+import com.example.starter_project_2025.system.demo.course_review.CourseReviewRepository;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
 import com.example.starter_project_2025.system.demo.section.Section;
 import com.example.starter_project_2025.system.demo.section.SectionRepository;
@@ -39,6 +40,8 @@ class CourseCatalogServiceTest {
     LessonRepository lessonRepository;
     @Mock
     CourseEnrollmentRepository enrollmentRepository;
+    @Mock
+    CourseReviewRepository courseReviewRepository;
 
     CourseCatalogService service;
 
@@ -71,7 +74,8 @@ class CourseCatalogServiceTest {
                 sectionRepository,
                 lessonRepository,
                 enrollmentRepository,
-                new CourseContentAccessGuard(enrollmentRepository)
+                new CourseContentAccessGuard(enrollmentRepository),
+                courseReviewRepository
         );
     }
 

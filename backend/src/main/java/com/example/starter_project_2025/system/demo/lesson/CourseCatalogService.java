@@ -7,6 +7,8 @@ import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseLevel;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.system.demo.course.CourseStatus;
+import com.example.starter_project_2025.system.demo.course_review.CourseReviewRepository;
+import com.example.starter_project_2025.system.demo.course_review.dto.response.CourseReviewStats;
 import com.example.starter_project_2025.system.demo.syllabus.Syllabus;
 import com.example.starter_project_2025.system.demo.syllabus.SyllabusStatus;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
@@ -36,6 +38,7 @@ public class CourseCatalogService {
     private final LessonRepository lessonRepository;
     private final CourseEnrollmentRepository enrollmentRepository;
     private final CourseContentAccessGuard contentAccessGuard;
+    private final CourseReviewRepository courseReviewRepository;
 
     public Page<CatalogCourseDTO> search(String keyword, Long categoryId, CourseLevel level, Pageable pageable, Long userId) {
         Pageable safePageable = sanitize(pageable);
@@ -57,10 +60,24 @@ public class CourseCatalogService {
         List<Long> courseIds = page.getContent().stream().map(Course::getId).toList();
         Map<Long, CourseLessonStats> stats = lessonRepository.findStatsByCourseIds(courseIds).stream()
                 .collect(Collectors.toMap(CourseLessonStats::courseId, s -> s));
+        Map<Long, CourseReviewStats> reviewStats = courseReviewRepository
+                .findStatsByCourseIds(courseIds)
+                .stream()
+                .collect(Collectors.toMap(CourseReviewStats::courseId, s -> s));
         Set<Long> enrolledIds = enrolledCourseIds(userId);
 
         return page.map(course -> {
             CourseLessonStats courseStats = stats.get(course.getId());
+
+            CourseReviewStats reviewStat = reviewStats.get(course.getId());
+
+            double averageRating = reviewStat == null || reviewStat.averageRating() == null
+                    ? 0.0
+                    : reviewStat.averageRating();
+
+            long totalReviews = reviewStat == null || reviewStat.totalReviews() == null
+                    ? 0L
+                    : reviewStat.totalReviews();
 
             List<Category> list = sortedCategories(course);
             Category firstCategory = list.isEmpty() ? null : list.getFirst();
@@ -77,7 +94,9 @@ public class CourseCatalogService {
                     courseStats == null ? 0 : courseStats.lessonCount(),
                     courseStats == null ? 0 : courseStats.totalDuration(),
                     Boolean.TRUE.equals(course.getIsFree()),
-                    enrolledIds.contains(course.getId())
+                    enrolledIds.contains(course.getId()),
+                    averageRating,
+                    totalReviews
             );
         });
     }
@@ -224,7 +243,8 @@ public class CourseCatalogService {
                 lessonCount,
                 totalDuration,
                 sectionItems,
-                syllabusInfo(course)
+                syllabusInfo(course),
+                course.getCourseType()
         );
     }
 

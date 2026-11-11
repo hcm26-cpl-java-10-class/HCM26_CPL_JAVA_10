@@ -5,7 +5,8 @@ import DynamicBreadcrumbs from "@/components/layout/DynamicBreadcrumbs.tsx";
 import { StudentNavbar } from "@/components/layout/StudentNavbar";
 import { usePermissions } from "@/hooks/usePermissions";
 import { normalizeRole, STUDENT_ROLE } from "@/utils/rbac.utils";
-import type { ReactNode } from "react";
+import { useContext, type ReactNode } from "react";
+import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
 import { cn } from "@/lib/utils";
 
 function readSidebarOpenCookie(): boolean {
@@ -21,6 +22,8 @@ export function MainLayout({
                                pathLinks,
                                contentClassName,
                                ignorePaths,
+                               dense = false,
+                               focusMode = false,
                            }: {
     children: ReactNode;
     pathName?: Record<string, string>;
@@ -29,9 +32,28 @@ export function MainLayout({
     pathLinks?: Record<string, string>;
     /** URL segments to leave out of the breadcrumb, typically ones that have no page of their own. */
     ignorePaths?: string[];
+    /** Tighter header / content padding (Course Online pages). */
+    dense?: boolean;
+    /** Hide the navbar / breadcrumbs / sidebar (e.g. while taking an exam). */
+    focusMode?: boolean;
 }) {
+    const isEmbedded = useContext(EmbeddedLayoutContext);
+    if (isEmbedded) {
+        return <>{children}</>;
+    }
+
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
+
+    if (focusMode) {
+        return (
+            <div className="flex h-screen max-h-[calc(100vh-18px)] flex-col overflow-hidden">
+                <main className="flex flex-1 min-h-0 flex-col overflow-y-auto px-6 pb-6 pt-4">
+                    {children}
+                </main>
+            </div>
+        );
+    }
 
     if (isStudentView) {
         return (
@@ -53,7 +75,7 @@ export function MainLayout({
         <SidebarProvider defaultOpen={readSidebarOpenCookie()}>
             <SidebarMenu />
             <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
-                <header className="flex min-h-16 shrink-0 items-center gap-2 py-3">
+                <header className={`flex shrink-0 items-center gap-2 ${dense ? "min-h-11 py-0.5" : "min-h-16 py-3"}`}>
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                             <SidebarTrigger aria-label="Toggle navigation sidebar" />
@@ -63,7 +85,12 @@ export function MainLayout({
                     </div>
                 </header>
 
-                <main className={cn("min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6", mainClassName, contentClassName)}>
+                <main className={cn(
+                    "min-h-0 min-w-0 flex-1 flex flex-col overflow-x-hidden overflow-y-auto",
+                    dense ? "px-4 pb-3 pt-1" : "px-6 pb-6 pt-6",
+                    mainClassName,
+                    contentClassName,
+                )}>
                     {children}
                 </main>
             </SidebarInset>

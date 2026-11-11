@@ -1,4 +1,4 @@
-
+import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -12,13 +12,11 @@ import { Dashboard } from "@/pages/management/dashboard";
 import CurriculumManagementPage from "@/pages/management/demo/curriculum";
 import RolePermissionMatrixPage from "@/pages/management/rbac/permission/RolePermissionMatrixPage";
 import ExamManagementPage from "@/pages/management/exam";
+import ExamDetailPage from "@/pages/management/exam/ExamDetailPage";
 import ExamTemplatesPage from "@/pages/management/exam/templates";
-import ResultStatisticsPage from "@/pages/management/exam/ResultStatisticsPage";
-import EssayAttemptListPage from "@/pages/management/exam/grading/EssayAttemptListPage";
 import EssayAttemptDetailPage from "@/pages/management/exam/grading/EssayAttemptDetailPage";
 import ExamSimilarityPage from "@/pages/management/exam/similarity/ExamSimilarityPage";
 import ScoreAppealsPage from "@/pages/management/exam/appeals";
-import InvitationsPage from "@/pages/management/exam/invitation";
 import UnifiedInvitationsPage, {
   StudentInvitationsRedirect,
 } from "@/pages/invitations/InvitationsPage";
@@ -52,8 +50,7 @@ import { StudentSubmissionPage } from "@/pages/student/milestone-submission/Stud
 import { StudentSubmissionListPage } from "@/pages/student/milestone-submission/StudentSubmissionListPage";
 import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandidatePage";
 import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
-import { createElement} from "react";
-import { Navigate } from "react-router-dom";
+import { createElement } from "react";
 import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
 import ProjectReportsPage from "@/pages/management/project-reports";
@@ -70,14 +67,21 @@ import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+import { Navigate } from "react-router-dom";
 
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
+import CreateCourseFromSyllabusPage from "@/pages/management/demo/syllabus/CreateCourseFromSyllabusPage";
+import SyllabusCourseWorkspacePage from "@/pages/management/demo/syllabus/SyllabusCourseWorkspacePage";
+import CourseUsagePage from "@/pages/management/demo/syllabus/CourseUsagePage";
+import SyllabusTemplatesPage from "@/pages/management/demo/syllabus/SyllabusTemplatesPage";
 
 import StudentSyllabusListPage from "@/pages/student/StudentSyllabusListPage";
 import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
 
 import CourseReportPage from "@/pages/management/demo/report";
+import StudentAnalyticsPage from "@/pages/management/analytics/StudentAnalyticsPage";
+import CourseAnalyticsPage from "@/pages/management/demo/analytics";
 import { CourseEnrollmentDetailPage } from "@/pages/management/demo/course/pages/CourseEnrollmentDetailPage";
 import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-questions";
 import LessonReportsPage from "@/pages/management/demo/lesson-reports";
@@ -85,6 +89,7 @@ import CertificateDetailPage from "@/pages/management/demo/certificate/pages/Cer
 import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
 import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage.tsx";
 import DepartmentManagementPage from "@/pages/management/demo/department";
+import CourseGradeDetailPage from "@/pages/student/CourseGradeDetailPage";
 
 export interface RouteConfig {
   path: string;
@@ -102,11 +107,6 @@ export const ROLE_HOME_PATHS = [
 ] as const;
 
 export const routes: RouteConfig[] = [
-  // Dashboard is the default landing page for administrators. Keep this route
-  // available while the backend-driven sidebar is still loading; otherwise a
-  // successful login can temporarily fall through to the blank 404 redirect.
-  { path: "/dashboard", component: Dashboard, requiredPermission: "USER_READ" },
-  { path: "/exams", component: ExamManagementPage, isModuleDriven: true },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
   { path: "/management/reports/projects", component: ProjectReportsPage, requiredPermission: "PROJECT_REPORT_READ" },
@@ -161,6 +161,11 @@ export const routes: RouteConfig[] = [
 
   // EXAMS
   {
+    path: "/exams/curriculum",
+    component: ExamCurriculumPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+  {
     path: "/exams",
     component: ExamManagementPage,
     isModuleDriven: true,
@@ -179,22 +184,35 @@ export const routes: RouteConfig[] = [
     requiredPermission: "INVITATION_READ",
   },
 
+  // One page per exam with 5 tabs: Edit, Questions, Grading, Invitations, Statistics.
   {
-    path: "/exams/:examId/invitations",
-    component: InvitationsPage,
-    requiredPermission: "INVITATION_READ",
-  },
-
-  // EXAM GRADING / SIMILARITY / STATISTICS
-  {
-    path: "/exams/:examId/grading",
-    component: EssayAttemptListPage,
+    path: "/exams/:examId",
+    component: ExamDetailPage,
     requiredPermission: "EXAM_UPDATE",
   },
-
   {
-    path: "/exams/:examId/grading/similarity",
-    component: ExamSimilarityPage,
+    path: "/exams/:examId/questions",
+    component: ExamDetailPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+  {
+    path: "/exams/:examId/edit",
+    component: ExamDetailPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+  {
+    path: "/exams/:examId/grading",
+    component: ExamDetailPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+  {
+    path: "/exams/:examId/invitations",
+    component: ExamDetailPage,
+    requiredPermission: "INVITATION_READ",
+  },
+  {
+    path: "/exams/:examId/result-statistics",
+    component: ExamDetailPage,
     requiredPermission: "EXAM_UPDATE",
   },
 
@@ -207,12 +225,6 @@ export const routes: RouteConfig[] = [
   {
     path: "/exams/:examId/grading/:attemptId",
     component: EssayAttemptDetailPage,
-    requiredPermission: "EXAM_UPDATE",
-  },
-
-  {
-    path: "/exams/:examId/result-statistics",
-    component: ResultStatisticsPage,
     requiredPermission: "EXAM_UPDATE",
   },
 
@@ -256,6 +268,34 @@ export const routes: RouteConfig[] = [
     requiredPermission: "STUDENT_SCORE_READ",
     isModuleDriven: true,
   },
+
+  // M3 ADMIN / TEACHER
+  {
+    path: "/syllabuses",
+    component: SyllabusesPage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/syllabuses/:id/workspace",
+    component: SyllabusCourseWorkspacePage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
+  },
+  {
+    path: "/syllabuses/:id/create-course",
+    component: CreateCourseFromSyllabusPage,
+    // The page and Backend also require all four authorities, not any single authority.
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
+  },
+  {
+    path: "/syllabuses/:id",
+    component: SyllabusDetailPage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
+  },
+
   {
     path: "/team-allocation",
     component: TeamAllocationClassListPage,
@@ -278,8 +318,6 @@ export const routes: RouteConfig[] = [
     component: ProjectAssignmentPage,
     requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
   },
-  { path: "/student", component: StudentLandingPage, requiredPermission: "BOOK_READ" },
-  { path: "/student/exams", component: StudentExamList,requiredPermission: "EXAM_READ", isModuleDriven: true },
   {
     // US-09: mock Project Template catalogue (Project Management tab).
     // Module-driven: `useSidebarMenus` injects the matching student module
@@ -307,7 +345,6 @@ export const routes: RouteConfig[] = [
     component: StudentDraftTeamPage,
     isModuleDriven: true,
   },
-  { path: "/teacher", component: TeacherLandingPage, requiredPermission: "BOOK_UPDATE" },
   { path: "/project-board", component: ProjectBoardPage },
   { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
@@ -347,30 +384,18 @@ export const routes: RouteConfig[] = [
   { path: "/student/milestone-submissions", component: StudentSubmissionListPage },
   { path: "/student/milestone-submissions/:submissionId", component: StudentSubmissionPage },
   { path: "/student/milestone-submissions/:submissionId/edit", component: StudentSubmissionPage },
-  ...buildEntityRoutes(),
-
-  { path: "/not-found-page", component: NotFoundPage, isPublic: true },
-  { path: "/login", component: Login, isPublic: true },
-  { path: "/logout", component: Logout, isPublic: true },
-  { path: "/register", component: RegisterPage, isPublic: true },
-  { path: "/forgot-password", component: ForgotPasswordPage, isPublic: true },
-  { path: "/oauth2/redirect", component: OAuth2RedirectHandler, isPublic: true },
-  { path: "/unauthorized", component: Unauthorized, isPublic: true },
-
-  // M3 ADMIN / TEACHER
   {
-    path: "/syllabuses",
-    component: SyllabusesPage,
+    path: "/syllabuses/course-usage",
+    component: CourseUsagePage,
     requiredPermission: "SYLLABUS_READ",
     isModuleDriven: true,
   },
   {
-    path: "/syllabuses/:id",
-    component: SyllabusDetailPage,
-    requiredPermission: "SYLLABUS_READ",
-    isModuleDriven: false,
+    path: "/syllabuses/templates",
+    component: SyllabusTemplatesPage,
+    requiredPermission: "SYLLABUS_CREATE",
+    isModuleDriven: true,
   },
-
   // M3 STUDENT VIEW
   {
     path: "/student/syllabuses",
@@ -429,6 +454,13 @@ export const routes: RouteConfig[] = [
     component: MyScoresPage,
     requiredPermission: "STUDENT_SCORE_VIEW_OWN",
     isModuleDriven: true,
+  },
+
+  {
+    path: "/my-scores/:courseId",
+    component: CourseGradeDetailPage,
+    requiredPermission: "STUDENT_SCORE_VIEW_OWN",
+    isModuleDriven: false,
   },
 
   {
@@ -494,8 +526,20 @@ export const routes: RouteConfig[] = [
 
   // COURSE REPORT
   {
+    path: "/analytics/students",
+    component: StudentAnalyticsPage,
+    requiredPermission: "STUDENT_ANALYTICS_READ",
+    isModuleDriven: true,
+  },
+  {
     path: "/course-enrollments",
     component: CourseReportPage,
+    requiredPermission: "COURSE_REPORT_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/course-analytics",
+    component: CourseAnalyticsPage,
     requiredPermission: "COURSE_REPORT_READ",
     isModuleDriven: true,
   },

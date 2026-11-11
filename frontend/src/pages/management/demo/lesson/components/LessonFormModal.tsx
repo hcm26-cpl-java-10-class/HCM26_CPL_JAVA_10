@@ -1,4 +1,5 @@
 import { lessonApi } from "@/api";
+import { aiCourseBuilderApi } from "@/api/features/demo/ai-course-builder.api";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { LessonContentType, LessonDTO, ValidationErrorResponse } from "@/types";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
+import { Loader2, Sparkles } from "lucide-react";
 import { type SyntheticEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { formatDuration, LessonPreview } from "./LessonPreview";
@@ -79,7 +81,7 @@ function isHttpUrl(value: string): boolean {
 }
 
 /** Validate phía client, khớp với rule ở LessonDTO / LessonServiceImpl. */
-function validate(form: FormState): FieldErrors {
+function validate(form: FormState, outlineEditable: boolean): FieldErrors {
   const errors: FieldErrors = {};
 
   const title = form.title.trim();
@@ -91,7 +93,7 @@ function validate(form: FormState): FieldErrors {
     if (!url) errors.contentUrl = `Content URL is required for ${form.contentType} lessons`;
     else if (url.length > 500) errors.contentUrl = "Content URL must not exceed 500 characters";
     else if (!isHttpUrl(url)) errors.contentUrl = "Content URL must start with http:// or https://";
-  } else if (!form.textContent.trim()) {
+  } else if (!form.textContent.trim() && !outlineEditable) {
     errors.textContent = "Text content is required for TEXT lessons";
   }
 
@@ -135,6 +137,7 @@ export function LessonFormModal({
   const [documentUploadStatus, setDocumentUploadStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [documentFileName, setDocumentFileName] = useState("");
   const documentFileInputRef = useRef<HTMLInputElement>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Reset form mỗi lần mở modal hoặc đổi bài học đang sửa
   useEffect(() => {
@@ -195,8 +198,38 @@ export function LessonFormModal({
     },
   });
 
+  // AI writes the lesson text from the title (and any notes already typed). Nothing is saved until you press Save.
+  const handleGenerateWithAi = async () => {
+    if (!form.title.trim()) {
+      toast.error("Enter the lesson title first.");
+      return;
+    }
+    if (
+      form.textContent.trim().length > 300 &&
+      !window.confirm("Replace the current text with AI-generated content?")
+    ) {
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const result = await aiCourseBuilderApi.draftLessonContent(sectionId, {
+        title: form.title.trim(),
+        notes: form.textContent,
+        lessonId: lesson?.id,
+      });
+      if (result.content) {
+        setField("textContent", result.content);
+        toast.success("Content generated. Review it, then press Save.");
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message ?? "Could not generate content.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const handleSubmit = () => {
-    const found = validate(form);
+    const found = validate(form, lesson?.outlineEditable === true);
     setErrors(found);
     if (Object.keys(found).length > 0) return;
 
@@ -499,16 +532,36 @@ export function LessonFormModal({
             </div>
           ) : (
             <div className="grid gap-1.5">
-              <Label htmlFor="lesson-text">Text content</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="lesson-text">Text content</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={aiLoading}
+                  onClick={handleGenerateWithAi}
+                >
+                  {aiLoading ? (
+                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-1 h-4 w-4 text-amber-500" />
+                  )}
+                  Generate with AI
+                </Button>
+              </div>
               <Textarea
                 id="lesson-text"
-                rows={8}
+                rows={14}
                 value={form.textContent}
                 aria-invalid={!!errors.textContent}
                 onChange={(e) => setField("textContent", e.target.value)}
                 placeholder="Write the lesson content here..."
               />
-              <p className="text-xs text-muted-foreground">Required for Text lessons</p>
+              <p className="text-xs text-muted-foreground">
+                {lesson?.outlineEditable
+                  ? "You can save this outline while the course is Draft. Add content before publishing."
+                  : "Required for Text lessons"}
+              </p>
               <FieldMessage message={errors.textContent} />
             </div>
           )}

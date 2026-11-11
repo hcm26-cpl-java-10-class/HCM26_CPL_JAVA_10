@@ -63,11 +63,13 @@ export function SidebarMenu() {
         };
 
         return moduleGroups
-            .map((group) => ({
-                id: group.id ?? group.name ?? "group",
-                name: group.name ?? "Menu",
-                hiddenInMenu: group.hiddenInMenu,
-                items: group.modules
+            .map((group) => {
+                const groupNameLower = (group.name ?? "").toLowerCase();
+                const isAssessmentGroup =
+                    groupNameLower.includes("assessment") ||
+                    group.modules.some((m) => m.url === "/exams");
+
+                const baseItems = group.modules
                     .filter((module) => {
                         const url = module.url?.replace(/\/+$/, "") ?? "";
                         return (
@@ -78,15 +80,54 @@ export function SidebarMenu() {
                             url !== "/enrollments"
                         );
                     })
-                    .map((module) => ({
-                        title: module.title ?? "Untitled",
-                        url: module.url ?? "#",
-                        icon: resolveIcon(module.icon),
-                        isActive:
+                    .map((module) => {
+                        const isExamsRoot = module.url === "/exams";
+                        const isMatch =
                             !!module.url &&
-                            (location.pathname === module.url || location.pathname.startsWith(`${module.url}/`)),
-                    })),
-            }))
+                            (location.pathname === module.url ||
+                                (location.pathname.startsWith(`${module.url}/`) &&
+                                    (!isExamsRoot || !location.pathname.startsWith("/exams/curriculum"))));
+
+                        return {
+                            title: module.title ?? "Untitled",
+                            url: module.url ?? "#",
+                            icon: resolveIcon(module.icon),
+                            isActive: isMatch,
+                        };
+                    });
+
+                let items = baseItems;
+                if (isAssessmentGroup) {
+                    const alreadyHas = items.some((i) => i.url === "/exams/curriculum");
+                    if (!alreadyHas) {
+                        const curriculumItem = {
+                            title: "Curriculum Mapping",
+                            url: "/exams/curriculum",
+                            icon: resolveIcon("book-open"),
+                            isActive:
+                                location.pathname === "/exams/curriculum" ||
+                                location.pathname.startsWith("/exams/curriculum"),
+                        };
+                        const examsIndex = items.findIndex((i) => i.url === "/exams");
+                        if (examsIndex >= 0) {
+                            items = [
+                                ...items.slice(0, examsIndex + 1),
+                                curriculumItem,
+                                ...items.slice(examsIndex + 1),
+                            ];
+                        } else {
+                            items = [curriculumItem, ...items];
+                        }
+                    }
+                }
+
+                return {
+                    id: group.id ?? group.name ?? "group",
+                    name: group.name ?? "Menu",
+                    hiddenInMenu: group.hiddenInMenu,
+                    items,
+                };
+            })
             .filter((group) => !group.hiddenInMenu && group.items.length > 0);
     }, [location.pathname, moduleGroups]);
 

@@ -4,6 +4,7 @@ import {
     type Exam,
     type ExamAttemptSummary,
 } from '@/api/exam.api';
+import { examApi } from '@/api';
 import { EXAM_CATEGORY_LABEL } from '@/types';
 import { formatScore } from '@/utils/examScore';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -18,9 +19,9 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { ExamPasswordDialog } from '@/pages/student/components/ExamPasswordDialog';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { AlertCircle, ArrowRight, CalendarDays, Clock3, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowRight, BookOpen, CalendarDays, Clock3, Lock, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const examsQueryKey = ['student-exams'] as const;
@@ -32,23 +33,30 @@ function isExamOpen(exam: Exam, now: number) {
     return started && notClosed;
 }
 
-const compare = (x: number, y: number) => (x < y ? -1 : x > y ? 1 : 0);
-const timeOf = (value: string | null | undefined, fallback: number) =>
-    value ? new Date(value).getTime() : fallback;
-
+// CẬP NHẬT: Ưu tiên sắp xếp bài thi đang mở (Open) lên đầu,
+// tôn trọng thứ tự ID giảm dần do Backend (findAllExamsSortedByActive) trả về.
 function sortExams(exams: Exam[]) {
     const now = Date.now();
-    const rank = (exam: Exam) =>
-        isExamOpen(exam, now) ? 0 : exam.startTime != null && now < new Date(exam.startTime).getTime() ? 1 : 2;
+
     return [...exams].sort((a, b) => {
-        const byRank = compare(rank(a), rank(b));
-        if (byRank !== 0) return byRank;
-        if (rank(a) === 0) {
-            return compare(timeOf(a.endTime, Number.MAX_SAFE_INTEGER), timeOf(b.endTime, Number.MAX_SAFE_INTEGER));
-        }
-        if (rank(a) === 1) return compare(timeOf(a.startTime, 0), timeOf(b.startTime, 0));
-        return compare(timeOf(b.endTime, 0), timeOf(a.endTime, 0));
+        const aIsOpen = isExamOpen(a, now);
+        const bIsOpen = isExamOpen(b, now);
+
+        // Bài thi đang Open luôn đứng trên
+        if (aIsOpen && !bIsOpen) return -1;
+        if (!aIsOpen && bIsOpen) return 1;
+
+        // Nếu cùng trạng thái (cùng Open hoặc cùng không Open), giữ nguyên thứ tự Backend gửi về (ID giảm dần)
+        return 0;
     });
+}
+
+type ExamLock = { locked: boolean; reason: string | null };
+
+/** "Course › Section › Lesson" the exam belongs to, or null when it is not linked to a course. */
+function examCourseLabel(exam: Exam): string | null {
+    if (!exam.courseName) return null;
+    return [exam.courseName, exam.sectionTitle, exam.lessonTitle].filter(Boolean).join(' › ');
 }
 
 function getAttemptStatus(attempt?: ExamAttemptSummary) {
@@ -73,6 +81,7 @@ function ExamCard({
                       onOpen,
                       onReview,
                       disabled: externallyDisabled,
+                      lock,
                   }: {
     exam: Exam;
     attempt?: ExamAttemptSummary;
@@ -80,23 +89,26 @@ function ExamCard({
     onOpen: (examId: number) => void;
     onReview: (attemptId: number) => void;
     disabled: boolean;
+    lock?: ExamLock;
 }) {
     const status = getAttemptStatus(attempt);
-    // De thi "Manually released by teacher": hoc sinh duoc xem bai lam cua minh
-    // ngay sau khi nop, chi thay cau da lam - chua co diem, chua biet dung/sai.
     const canReview = (attempt?.status === 'SUBMITTED' || attempt?.status === 'PENDING_REVIEW')
         && (exam.showAnswersAfterExam === true || exam.resultVisibility === 'MANUAL_RELEASE');
     const open = isExamOpen(exam, now);
     const beforeOpen = exam.startTime != null && now < new Date(exam.startTime).getTime();
     const afterClose = exam.endTime != null && now >= new Date(exam.endTime).getTime();
     const isInProgress = attempt?.status === 'IN_PROGRESS';
+    // Locked by the lesson/section progress rules of the course the exam belongs to.
+    const locked = lock?.locked === true && !isInProgress;
+    const courseText = examCourseLabel(exam);
     const hasAttempts = (attempt?.attemptsUsed ?? 0) > 0;
-    // Diem chi duoc hien thi khi giao vien da cong bo ket qua (Publish Results).
     const isResultPublished = attempt?.resultPublished !== false;
     const outOfAttempts = hasAttempts && (attempt?.attemptsRemaining ?? 0) <= 0 && !isInProgress;
     const disabledBySchedule = (beforeOpen || afterClose) && !isInProgress;
-    const isDisabled = externallyDisabled || outOfAttempts || disabledBySchedule;
-    const buttonLabel = isInProgress
+    const isDisabled = externallyDisabled || locked || outOfAttempts || disabledBySchedule;
+    const buttonLabel = locked
+        ? 'Locked'
+        : isInProgress
         ? 'Continue Exam'
         : outOfAttempts
             ? 'No Attempts Left'
@@ -123,17 +135,34 @@ function ExamCard({
                     {exam.category && (
                         <Badge variant="outline">{EXAM_CATEGORY_LABEL[exam.category]}</Badge>
                     )}
+                    {locked && (
+                        <Badge variant="outline" className="gap-1 border-amber-300 bg-amber-50 text-amber-700">
+                            <Lock className="size-3" />
+                            Locked
+                        </Badge>
+                    )}
                 </div>
                 <CardTitle className="pt-2 text-lg text-slate-900">{exam.title}</CardTitle>
+                {courseText && (
+                    <p className="flex items-start gap-1 text-xs text-slate-500" title={courseText}>
+                        <BookOpen className="mt-0.5 size-3 shrink-0" />
+                        <span className="break-words">{courseText}</span>
+                    </p>
+                )}
                 <CardDescription>
                     Max Score:{' '}
                     <span className="font-medium text-slate-700">
-                        {formatScore(attempt?.maxScore ?? exam.maxScore ?? 10)} {}
+                        {formatScore(attempt?.maxScore ?? exam.maxScore ?? 10)}
                     </span>
                 </CardDescription>
             </CardHeader>
 
             <CardContent className="flex-1">
+                {locked && (
+                    <p className="mb-2 text-sm text-amber-700">
+                        {lock?.reason ?? 'Complete the required lessons to unlock this exam.'}
+                    </p>
+                )}
                 {attempt?.status === 'PENDING_REVIEW' && isResultPublished && (
                     <p className="text-sm text-amber-700">
                         Provisional Score: {formatScore(attempt.objectiveScore ?? 0)}/{formatScore(attempt.maxScore ?? 10)} (ungraded essays count as 0).
@@ -223,9 +252,27 @@ export default function StudentExamList() {
     const exams = sortExams(examsQuery.data ?? []);
     const attempts = attemptsQuery.data ?? [];
 
+    // Lock state comes from the course the exam is linked to (shares the cache with the course learning page).
+    const courseIds = Array.from(
+        new Set(exams.map((item) => item.courseId).filter((id): id is number => id != null)),
+    );
+    const lockQueries = useQueries({
+        queries: courseIds.map((courseId) => ({
+            queryKey: ['course-exams', courseId],
+            queryFn: () => examApi.listByCourse(courseId),
+            retry: false,
+            staleTime: 30_000,
+        })),
+    });
+    const lockById = new Map<number, ExamLock>();
+    lockQueries.forEach((query) =>
+        query.data?.forEach((item) => lockById.set(item.id, { locked: item.locked, reason: item.lockReason })),
+    );
+
     const openExam = (examId: number) => {
         const exam = exams.find((item) => item.id === examId);
         const isInProgress = attempts.some((item) => item.examId === examId && item.status === 'IN_PROGRESS');
+        if (lockById.get(examId)?.locked && !isInProgress) return;
         if (exam?.hasPassword && !isInProgress) {
             setPasswordExam(exam);
             return;
@@ -310,6 +357,7 @@ export default function StudentExamList() {
                                     attempt={attempt}
                                     now={now}
                                     disabled={attemptsQuery.isError}
+                                    lock={lockById.get(exam.id)}
                                     onOpen={openExam}
                                     onReview={(attemptId) => navigate(`/student/exams/attempts/${attemptId}/review`)}
                                 />

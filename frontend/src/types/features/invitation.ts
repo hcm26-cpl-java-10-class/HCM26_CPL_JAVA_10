@@ -22,6 +22,7 @@ export interface InvitationDTO extends BaseDTO {
     sentAt?: string | null;
     acceptedAt?: string | null;
     rejectedAt?: string | null;
+    availableFrom?: string | null;
     expiresAt?: string | null;
     revokedAt?: string | null;
     revokedReason?: string | null;
@@ -39,12 +40,17 @@ export interface InvitationDTO extends BaseDTO {
     examDurationMinutes?: number;
     examMaxAttempts?: number;
     examHasPassword?: boolean;
+    /** Nguồn tạo lời mời: MANUAL hoặc COURSE. */
+    sourceType?: string | null;
+    /** Lớp (course) dùng làm nguồn khi tạo lời mời hàng loạt. */
+    sourceCourseId?: number | null;
 }
 
 export interface InvitationCreateRequest {
     userId: number;
     note?: string;
 
+    availableFrom?: string;
     expiresAt?: string;
 }
 
@@ -65,6 +71,37 @@ export interface BatchInvitationRequest {
     expiresAt?: string;
 }
 
+export type InvitationBulkStatus = "SUCCESS" | "SKIPPED" | "FAILED";
+
+/** Kết quả xử lý lời mời của một học viên trong bulk invite theo lớp. */
+export interface InvitationBulkItemResult {
+    userId?: number | null;
+    userEmail?: string | null;
+    userFullName?: string | null;
+    invitationId?: number | null;
+    status: InvitationBulkStatus;
+    reason?: string | null;
+}
+
+/** Học viên thuộc một lớp (course) — nguồn danh sách để mời dự thi hàng loạt. */
+export interface CourseStudentDTO {
+    id: number;
+    email: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    fullName?: string | null;
+}
+
+/** Yêu cầu mời dự thi hàng loạt theo lớp. `userIds` rỗng = mời toàn bộ lớp. */
+export interface GroupInvitationRequest {
+    courseId: number;
+    userIds?: number[];
+    note?: string;
+    availableFrom?: string;
+    expiresAt?: string;
+    sendEmail?: boolean;
+}
+
 export interface BatchInvitationResponse {
     examId?: number;
     totalRequested: number;
@@ -72,7 +109,7 @@ export interface BatchInvitationResponse {
     skippedCount?: number;
     failedCount?: number;
     failureCount?: number;
-    items?: BatchInvitationItemResult[];
+    items?: InvitationBulkItemResult[];
     successfulInvitations?: InvitationDTO[];
     errors?: string[];
 }
@@ -84,6 +121,7 @@ export interface AnonymousInvitationRequest {
     studentEmail?: string;
     note?: string;
 
+    availableFrom?: string;
     expiresAt?: string;
 
     maxAccessTime?: string;
@@ -92,11 +130,10 @@ export interface AnonymousInvitationRequest {
 
 export interface AnonymousAccessResponse {
     valid: boolean;
-    accessCode?: string;
-    examTitle?: string;
-    studentName?: string;
     accessAttemptsRemaining?: number;
     message?: string;
+    /** Backend có thể không trả về (endpoint public chỉ trả kết quả hợp lệ/không). */
+    studentName?: string | null;
 }
 
 export interface AnonymousSessionRequest {
@@ -136,6 +173,7 @@ export interface ReminderDTO extends BaseDTO {
     status?: ReminderStatus;
     sendAttempts?: number;
     lastError?: string | null;
+    nextRetryAt?: string | null;
 }
 
 export interface ReminderRequest {
@@ -144,4 +182,42 @@ export interface ReminderRequest {
     scheduledAt?: string;
 
     invitationId?: number;
+}
+
+export type InvitationAuditAction =
+    | "CREATE"
+    | "BATCH_CREATE"
+    | "RESEND"
+    | "REVOKE"
+    | "EXPIRE"
+    | "DELETE";
+
+export interface InvitationAuditLog {
+    id: number;
+    invitationId?: number | null;
+    examId?: number | null;
+    targetUserId?: number | null;
+    action: InvitationAuditAction;
+    performedBy?: number | null;
+    details?: string | null;
+    createdAt: string;
+}
+
+/**
+ * Tổng quan lời mời theo đề thi (dùng cho trang danh sách của giáo viên).
+ */
+export interface ExamInvitationOverview {
+    examId: number;
+    examTitle?: string;
+    startTime?: string | null;
+    endTime?: string | null;
+    total?: number;
+    pending?: number;
+    sent?: number;
+    accepted?: number;
+    rejected?: number;
+    expired?: number;
+    revoked?: number;
+    completed?: number;
+    anonymous?: number;
 }

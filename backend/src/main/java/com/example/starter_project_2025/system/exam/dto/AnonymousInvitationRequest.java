@@ -21,6 +21,8 @@ public class AnonymousInvitationRequest {
     @Size(max = 500, message = "Note must not exceed 500 characters")
     private String note;
 
+    private String availableFrom;
+
     private String expiresAt;
 
     private String maxAccessTime;

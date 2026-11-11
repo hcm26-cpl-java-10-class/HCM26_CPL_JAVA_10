@@ -90,6 +90,36 @@ public class CourseEnrollmentService {
         return saved;
     }
 
+    /**
+     * Học viên (role STUDENT, đang active) đã đăng ký một lớp — nguồn danh sách để mời dự thi hàng loạt.
+     */
+    @Transactional(readOnly = true)
+    public List<CourseStudentDTO> getStudentsByCourse(Long courseId) {
+        return getActiveStudentsByCourse(courseId)
+                .stream()
+                .map(student -> new CourseStudentDTO(
+                        student.getId(),
+                        student.getEmail(),
+                        student.getFirstName(),
+                        student.getLastName(),
+                        student.getFullName()))
+                .toList();
+    }
+
+    /**
+     * Danh sách học viên active có role STUDENT đã đăng ký lớp (course).
+     */
+    @Transactional(readOnly = true)
+    public List<User> getActiveStudentsByCourse(Long courseId) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
+
+        return enrollmentRepository.findActiveStudentsByCourse(course.getId())
+                .stream()
+                .map(CourseEnrollment::getUser)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public List<CourseEnrollment> getMyCourses(Long userId) {
         return enrollmentRepository

@@ -56,6 +56,7 @@ import {
   formatTotalDuration,
   getErrorStatus,
 } from "../utils/course.utils.ts";
+import { CourseReviewsSection } from "../../course_review/components/CourseReviewsSection.tsx";
 
 const CONTENT_ICON: Record<LessonContentType, LucideIcon> = {
   VIDEO: Video,
@@ -89,19 +90,14 @@ export function CourseDetailPage({ forceEnrollmentManagement = false }: { forceE
   if (id && course?.name) breadcrumbTitles[id] = course.name;
 
   return (
-    <MainLayout pathName={breadcrumbTitles}>
-      <div className="mx-auto w-full max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Button asChild variant="ghost" className="-ml-3">
+    <MainLayout dense pathName={breadcrumbTitles}>
+      <div className="mx-auto w-full max-w-6xl space-y-1.5">
+        <div className="sticky top-2 z-20 -ml-1 w-fit">
+          <Button asChild variant="outline" className="bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80">
             <Link to={listPath}>
               <ArrowLeft className="size-4" /> {listLabel}
             </Link>
           </Button>
-          {enrollmentManagement && course && (
-            <PermissionGate permissions={["DEPARTMENT_READ", "DEPARTMENT_UPDATE"]} requireAll>
-              <CourseEnrollmentAssignmentDialog course={course} prominent />
-            </PermissionGate>
-          )}
         </div>
 
         {!validId || (detailQuery.isError && getErrorStatus(detailQuery.error) === 404) ? (
@@ -117,7 +113,7 @@ export function CourseDetailPage({ forceEnrollmentManagement = false }: { forceE
         ) : detailQuery.isLoading ? (
           <DetailSkeleton />
         ) : detailQuery.isError || !course ? (
-          <div role="alert" className="space-y-3 rounded-2xl border border-destructive/30 p-6">
+          <div role="alert" className="space-y-2 rounded-xl border border-destructive/30 p-4">
             <p className="text-sm text-destructive">Could not load this course. Please try again.</p>
             <Button variant="outline" onClick={() => void detailQuery.refetch()}>
               Try again
@@ -140,7 +136,7 @@ export function CourseDetailContent({
 }) {
   const hero = (
     <section className="overflow-hidden rounded-2xl border bg-card">
-      <div className="relative h-56 bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100 sm:h-72">
+      <div className="relative h-40 bg-gradient-to-br from-blue-100 via-indigo-100 to-violet-100 sm:h-52">
         {course.thumbnailUrl ? (
           <img src={course.thumbnailUrl} alt="" className="h-full w-full object-cover" />
         ) : (
@@ -149,7 +145,7 @@ export function CourseDetailContent({
           </div>
         )}
       </div>
-      <div className="space-y-4 p-6">
+      <div className="space-y-1 px-4 py-2">
         <div className="flex flex-wrap items-center gap-2">
           {(course.categoryNames?.length
             ? course.categoryNames
@@ -166,10 +162,16 @@ export function CourseDetailContent({
           )}
         </div>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{course.name}</h1>
+        {enrollmentManagement && (
+          <p className="text-sm text-muted-foreground">
+            Course type: {course.courseType === "FROM_SYLLABUS" ? "From Syllabus" : "Standard course"}
+            {course.syllabus && ` · Linked syllabus: ${course.syllabus.code} - ${course.syllabus.name}`}
+          </p>
+        )}
         <p className="text-sm text-muted-foreground">
           Instructor: <span className="font-medium text-foreground">{course.instructor || "—"}</span>
         </p>
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1.5"><Layers className="size-4" /> {course.sections.length} sections</span>
           <span className="inline-flex items-center gap-1.5"><BookOpen className="size-4" /> {course.lessonCount} lessons</span>
           <span className="inline-flex items-center gap-1.5"><Clock className="size-4" /> {formatTotalDuration(course.totalDuration)}</span>
@@ -180,14 +182,14 @@ export function CourseDetailContent({
 
   const information = (
     <>
-      <section className="rounded-2xl border bg-card p-6">
+      <section className="rounded-xl border bg-card px-4 py-2">
         <h2 className="text-lg font-semibold">About this course</h2>
-        <p className="mt-2 whitespace-pre-line text-sm leading-6 text-muted-foreground">
+        <p className="mt-0.5 whitespace-pre-line text-sm leading-6 text-muted-foreground">
           {course.description || "The instructor has not added a description yet."}
         </p>
       </section>
 
-      <section className="rounded-2xl border bg-card p-6">
+      <section className="rounded-xl border bg-card px-4 py-2">
         <h2 className="text-lg font-semibold">Skills you will achieve</h2>
         {(() => {
           const skills = course.categoryNames?.length
@@ -196,11 +198,11 @@ export function CourseDetailContent({
               ? [course.categoryName]
               : [];
           return skills.length === 0 ? (
-            <p className="mt-3 text-sm text-muted-foreground">The instructor has not added any skills yet.</p>
+            <p className="mt-1 text-sm text-muted-foreground">The instructor has not added any skills yet.</p>
           ) : (
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="mt-1 flex flex-wrap gap-1.5">
               {skills.map((skill) => (
-                <span key={skill} className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-[0_2px_8px_rgba(15,23,42,0.08)]">
+                <span key={skill} className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-medium text-slate-700 shadow-[0_2px_8px_rgba(15,23,42,0.08)]">
                   {skill}
                 </span>
               ))}
@@ -214,17 +216,17 @@ export function CourseDetailContent({
 
   if (enrollmentManagement) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-1.5">
         {hero}
         <CourseInformationPanel>{information}</CourseInformationPanel>
-        <CourseLearnersPanel courseId={course.id} />
+        <CourseLearnersPanel course={course} />
       </div>
     );
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <div className="space-y-6">
+    <div className="grid gap-1.5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="space-y-1.5">
         {hero}
         {information}
       </div>
@@ -232,6 +234,7 @@ export function CourseDetailContent({
       <aside className="lg:sticky lg:top-4 lg:self-start">
         <CourseActionCard course={course} />
       </aside>
+      <CourseReviewsSection courseId={course.id} />
     </div>
   );
 }
@@ -240,14 +243,14 @@ function CourseInformationPanel({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <section className="rounded-2xl border bg-card p-6">
+      <section className="rounded-xl border bg-card px-4 py-2">
         <CollapsibleTrigger asChild>
           <button type="button" className="flex w-full items-center justify-between gap-4 text-left">
-            <div><h2 className="text-lg font-semibold">Course information</h2><p className="mt-1 text-sm text-muted-foreground">About, skills, and course content</p></div>
+            <div><h2 className="text-lg font-semibold">Course information</h2><p className="mt-0 text-sm text-muted-foreground">About, skills, and course content</p></div>
             <ChevronDown className={`size-5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
           </button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-6"><div className="space-y-6">{children}</div></CollapsibleContent>
+        <CollapsibleContent className="pt-1.5"><div className="space-y-1.5">{children}</div></CollapsibleContent>
       </section>
     </Collapsible>
   );
@@ -255,13 +258,13 @@ function CourseInformationPanel({ children }: { children: ReactNode }) {
 
 const LEARNERS_PER_PAGE = 6;
 
-function CourseLearnersPanel({ courseId }: { courseId: number }) {
+function CourseLearnersPanel({ course }: { course: CourseDetail }) {
   const [open, setOpen] = useState(true);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
   const [page, setPage] = useState(0);
   const reportQuery = useQuery({ queryKey: ["course-report"], queryFn: courseReportApi.getCourseEnrollmentReport });
-  const courseReport = reportQuery.data?.find((item) => item.courseId === courseId);
+  const courseReport = reportQuery.data?.find((item) => item.courseId === course.id);
   const learners = useMemo(() => courseReport?.learners ?? [], [courseReport]);
   const filteredLearners = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -277,15 +280,20 @@ function CourseLearnersPanel({ courseId }: { courseId: number }) {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <section className="rounded-2xl border bg-card p-6">
-        <CollapsibleTrigger asChild>
-          <button type="button" className="flex w-full items-center justify-between gap-4 text-left">
-            <div className="flex items-start gap-3"><Users className="mt-0.5 size-5 text-muted-foreground" /><div><h2 className="text-lg font-semibold">Assigned & enrolled students</h2><p className="mt-1 text-sm text-muted-foreground">{learners.length} {learners.length === 1 ? "student" : "students"} in this course</p></div></div>
-            <ChevronDown className={`size-5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
-          </button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-6">
-          <div className="grid gap-3 border-y py-4 md:grid-cols-[minmax(0,1fr)_220px]">
+      <section className="rounded-xl border bg-card px-4 py-2">
+        <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-start gap-3"><Users className="mt-0.5 size-5 shrink-0 text-muted-foreground" /><div className="min-w-0"><h2 className="text-lg font-semibold">Assigned & enrolled students</h2><p className="mt-0 text-sm text-muted-foreground">{learners.length} {learners.length === 1 ? "student" : "students"} in this course</p></div></div>
+          <PermissionGate permissions={["DEPARTMENT_READ", "DEPARTMENT_UPDATE"]} requireAll>
+            <CourseEnrollmentAssignmentDialog course={course} prominent />
+          </PermissionGate>
+          <CollapsibleTrigger asChild>
+            <button type="button" className="shrink-0 rounded-md p-2 hover:bg-muted" aria-label={open ? "Collapse assigned students" : "Expand assigned students"}>
+              <ChevronDown className={`size-5 transition-transform ${open ? "rotate-180" : ""}`} />
+            </button>
+          </CollapsibleTrigger>
+        </div>
+        <CollapsibleContent className="pt-1.5">
+          <div className="grid gap-1.5 border-y py-1.5 md:grid-cols-[minmax(0,1fr)_220px]">
             <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Search students by name or email..." className="pl-9" /></div>
             <Select value={status} onValueChange={(value) => { setStatus(value); setPage(0); }}>
               <SelectTrigger aria-label="Filter students by progress status"><SelectValue /></SelectTrigger>
@@ -295,21 +303,21 @@ function CourseLearnersPanel({ courseId }: { courseId: number }) {
           {reportQuery.isLoading ? (
             <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground"><LoaderCircle className="mr-2 size-4 animate-spin" /> Loading students...</div>
           ) : reportQuery.isError ? (
-            <div className="py-10 text-center text-sm text-destructive">Could not load assigned students.</div>
+            <div className="py-1.5 text-center text-sm text-destructive">Could not load assigned students.</div>
           ) : visibleLearners.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">{learners.length === 0 ? "No students are assigned or enrolled in this course." : "No students match the selected filters."}</div>
+            <div className="py-1.5 text-center text-sm text-muted-foreground">{learners.length === 0 ? "No students are assigned or enrolled in this course." : "No students match the selected filters."}</div>
           ) : (
-            <div className="grid gap-3 py-4 md:grid-cols-2">
+            <div className="grid gap-1.5 py-1.5 md:grid-cols-2">
               {visibleLearners.map((learner) => (
-                <article key={learner.enrollmentId} className="rounded-xl border bg-background p-4">
+                <article key={learner.enrollmentId} className="rounded-xl border bg-background p-3">
                   <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-medium">{learner.studentName || learner.studentEmail || "Student"}</p><p className="truncate text-xs text-muted-foreground">{learner.studentEmail || "No email"}</p></div><Badge variant={learner.completed ? "default" : "secondary"}>{learner.completed ? "Completed" : "In progress"}</Badge></div>
-                  <div className="mt-4 flex items-center gap-3"><Progress value={learner.progressPercentage} className="flex-1" /><span className="text-sm font-semibold">{learner.progressPercentage}%</span></div>
-                  <p className="mt-3 text-xs text-muted-foreground">Enrolled {learner.enrolledAt ? new Date(learner.enrolledAt).toLocaleDateString() : "—"}</p>
+                  <div className="mt-2 flex items-center gap-3"><Progress value={learner.progressPercentage} className="flex-1" /><span className="text-sm font-semibold">{learner.progressPercentage}%</span></div>
+                  <p className="mt-2 text-xs text-muted-foreground">Enrolled {learner.enrolledAt ? new Date(learner.enrolledAt).toLocaleDateString() : "—"}</p>
                 </article>
               ))}
             </div>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-1.5 text-sm text-muted-foreground">
             <span>Showing {filteredLearners.length === 0 ? 0 : safePage * LEARNERS_PER_PAGE + 1}–{Math.min((safePage + 1) * LEARNERS_PER_PAGE, filteredLearners.length)} of {filteredLearners.length}</span>
             <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={safePage === 0}><ChevronLeft className="size-4" /> Previous</Button><span>Page {safePage + 1} of {pageCount}</span><Button variant="outline" size="sm" onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))} disabled={safePage >= pageCount - 1}>Next <ChevronRight className="size-4" /></Button></div>
           </div>
@@ -386,7 +394,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
   }
 
   return (
-    <div className="space-y-4 rounded-2xl border bg-card p-6 shadow-sm">
+    <div className="space-y-2 rounded-xl border bg-card px-4 py-3 shadow-sm">
       {course.enrolled ? (
         <div className="flex items-center gap-2 text-sm font-medium text-emerald-700">
           <CheckCircle2 className="size-5" /> You are enrolled
@@ -408,7 +416,7 @@ function CourseActionCard({ course }: { course: CourseDetail }) {
         <DepartmentEnrollmentControl courseId={course.id} />
       </PermissionGate>
 
-      <ul className="space-y-2 border-t pt-4 text-sm text-muted-foreground">
+      <ul className="space-y-2 border-t pt-3 text-sm text-muted-foreground">
         <li className="flex items-center gap-2">
           <BookOpen className="size-4" /> {course.lessonCount} lessons
         </li>
@@ -813,7 +821,7 @@ function Syllabus({ course }: { course: CourseDetail }) {
   const sections = [...course.sections].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 
   return (
-    <section className="rounded-2xl border bg-card p-6">
+    <section className="rounded-xl border bg-card px-4 py-2">
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">
@@ -841,11 +849,11 @@ function Syllabus({ course }: { course: CourseDetail }) {
 
 
       {sections.length === 0 ? (
-        <p className="mt-4 rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+        <p className="mt-1.5 rounded-xl border border-dashed px-4 py-2 text-center text-sm text-muted-foreground">
           The syllabus for this course is not available yet.
         </p>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-1.5 space-y-1">
           {sections.map((section, index) => (
             <SectionItem key={section.id} section={section} index={index} defaultOpen={index === 0} />
           ))}
@@ -853,7 +861,7 @@ function Syllabus({ course }: { course: CourseDetail }) {
       )}
 
       {!course.contentUnlocked && sections.length > 0 && (
-        <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+        <p className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
           <Lock className="size-3.5" /> Enroll in this course to unlock lesson content.
         </p>
       )}
@@ -879,7 +887,7 @@ function SectionItem({
       <CollapsibleTrigger asChild>
         <button
           type="button"
-          className="flex w-full items-center justify-between gap-3 bg-muted/40 px-4 py-3 text-left hover:bg-muted/70"
+          className="flex w-full items-center justify-between gap-3 bg-muted/40 px-3 py-1 text-left hover:bg-muted/70"
         >
           <span className="min-w-0">
             <span className="block truncate font-medium">
@@ -894,7 +902,7 @@ function SectionItem({
       </CollapsibleTrigger>
       <CollapsibleContent>
         {lessons.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted-foreground">No lessons in this section yet.</p>
+          <p className="px-3 py-2 text-sm text-muted-foreground">No lessons in this section yet.</p>
         ) : (
           <ul className="divide-y">
             {lessons.map((lesson) => (
@@ -912,7 +920,7 @@ function LessonRow({ lesson }: { lesson: CourseDetailLesson }) {
   const duration = formatLessonDuration(lesson.duration);
 
   return (
-    <li className="flex items-center gap-3 px-4 py-2.5 text-sm">
+    <li className="flex items-center gap-3 px-3 py-1 text-sm">
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className={`min-w-0 flex-1 truncate ${lesson.locked ? "text-muted-foreground" : ""}`}>
         {lesson.title}
@@ -925,7 +933,7 @@ function LessonRow({ lesson }: { lesson: CourseDetailLesson }) {
 
 function StateCard({ title, text, action }: { title: string; text: string; action?: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed px-6 py-14 text-center">
+    <div className="rounded-xl border border-dashed px-4 py-4 text-center">
       <GraduationCap className="mx-auto size-12 text-muted-foreground" />
       <h2 className="mt-4 text-lg font-semibold">{title}</h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{text}</p>
@@ -936,13 +944,13 @@ function StateCard({ title, text, action }: { title: string; text: string; actio
 
 function DetailSkeleton() {
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" role="status" aria-label="Loading course">
-      <div className="space-y-6">
-        <div className="h-96 animate-pulse rounded-2xl bg-muted" />
-        <div className="h-32 animate-pulse rounded-2xl bg-muted" />
-        <div className="h-64 animate-pulse rounded-2xl bg-muted" />
+    <div className="grid gap-1.5 lg:grid-cols-[minmax(0,1fr)_340px]" role="status" aria-label="Loading course">
+      <div className="space-y-1.5">
+        <div className="h-64 animate-pulse rounded-xl bg-muted" />
+        <div className="h-24 animate-pulse rounded-xl bg-muted" />
+        <div className="h-48 animate-pulse rounded-xl bg-muted" />
       </div>
-      <div className="h-64 animate-pulse rounded-2xl bg-muted" />
+      <div className="h-48 animate-pulse rounded-xl bg-muted" />
     </div>
   );
 }

@@ -93,7 +93,7 @@ function AdminCertificatePage() {
 
   return (
     <MainLayout pathName={{ certificates: "Certificates" }}>
-      <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-7xl flex-col space-y-6">
+      <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-7xl flex-col space-y-1.5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             Certificate Management
@@ -112,7 +112,7 @@ function AdminCertificatePage() {
               tooltip="View detail"
               icon={<Eye size={10} className="text-gray-500" />}
             />
-          )}        
+          )}
         />
 
         <DetailModal
