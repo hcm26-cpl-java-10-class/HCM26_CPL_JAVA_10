@@ -134,6 +134,9 @@ export interface ExamDTO {
   singleSession?: boolean;
   cameraProctoring?: boolean;
   notifyOnViolation?: boolean;
+  headTurnAngleDeg?: number | null;
+  headTurnSeconds?: number | null;
+  fastSubmitPercent?: number | null;
   // Optional link to a course / section / lesson (null = not linked)
   courseId?: number | null;
   sectionId?: number | null;

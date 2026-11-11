@@ -20,6 +20,10 @@ public class ExamIntegrityReportDTO {
 
     private int totalAttempts;
     private int flaggedAttempts;
+    /** He so chong gian lan cua de thi (dat luc tao de). */
+    private int headTurnAngleDeg;
+    private int headTurnSeconds;
+    private int fastSubmitPercent;
     private int extremeDurationAttempts;   // so luot nop duoi 20% thoi luong (canh bao)
     private int totalViolations;
     private Map<String, Integer> totalsByType;

@@ -24,6 +24,10 @@ export interface ExamConfigForm {
   singleSession: boolean;
   cameraProctoring: boolean;
   notifyOnViolation: boolean;
+  /** Anti-cheat coefficients, set at creation only. "" = keep the default. */
+  headTurnAngleDeg: string;
+  headTurnSeconds: string;
+  fastSubmitPercent: string;
   /** Optional link to a course / section / lesson ("" = not linked). */
   courseId: string;
   sectionId: string;
@@ -54,6 +58,9 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   singleSession: true,
   cameraProctoring: false,
   notifyOnViolation: false,
+  headTurnAngleDeg: "",
+  headTurnSeconds: "",
+  fastSubmitPercent: "",
   courseId: "",
   sectionId: "",
   lessonId: "",
@@ -125,6 +132,9 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   singleSession: exam.singleSession ?? false,
   cameraProctoring: exam.cameraProctoring ?? false,
   notifyOnViolation: exam.notifyOnViolation ?? false,
+  headTurnAngleDeg: exam.headTurnAngleDeg != null ? String(exam.headTurnAngleDeg) : "",
+  headTurnSeconds: exam.headTurnSeconds != null ? String(exam.headTurnSeconds) : "",
+  fastSubmitPercent: exam.fastSubmitPercent != null ? String(exam.fastSubmitPercent) : "",
   courseId: exam.courseId != null ? String(exam.courseId) : "",
   sectionId: exam.sectionId != null ? String(exam.sectionId) : "",
   lessonId: exam.lessonId != null ? String(exam.lessonId) : "",
@@ -138,8 +148,8 @@ export function getRequiredFieldErrors(cfg: ExamConfigForm): { examType?: string
   const errors: { examType?: string; category?: string; maxAttempts?: string } = {};
   if (!cfg.examType) errors.examType = "Please select a question format.";
   if (!cfg.category) errors.category = "Please select a category.";
-  if (cfg.maxAttempts.trim() === "") errors.maxAttempts = "Please enter the maximum number of attempts.";
-  else if (!(Number(cfg.maxAttempts) >= 1)) errors.maxAttempts = "Maximum attempts must be at least 1.";
+  // blank = default 1 attempt
+  if (cfg.maxAttempts.trim() !== "" && !(Number(cfg.maxAttempts) >= 1)) errors.maxAttempts = "Maximum attempts must be at least 1.";
   return errors;
 }
 
@@ -149,7 +159,7 @@ export function validateConfig(_duration: number, cfg: ExamConfigForm): string |
   if (required.category) return required.category;
   if (required.maxAttempts) return required.maxAttempts;
 
-  if (!(Number(cfg.maxAttempts) >= 1)) return "Maximum attempts must be at least 1.";
+  if (cfg.maxAttempts.trim() !== "" && !(Number(cfg.maxAttempts) >= 1)) return "Maximum attempts must be at least 1.";
   if (cfg.maxScore !== "" && !(Number(cfg.maxScore) > 0 && Number(cfg.maxScore) <= 1000)) return "Max score must be greater than 0 and at most 1000.";
   if (cfg.passScore !== "" && Number(cfg.passScore) < 0) return "Passing score must be >= 0.";
   if (cfg.passScore !== "" && Number(cfg.passScore) > (cfg.maxScore !== "" ? Number(cfg.maxScore) : 10)) return "Passing score cannot exceed the max score.";
@@ -175,12 +185,13 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
     title: title.trim(),
     durationMinutes: Number(duration),
     isActive,
-    maxAttempts: Number(cfg.maxAttempts),
+    maxAttempts: cfg.maxAttempts.trim() === "" ? 1 : Number(cfg.maxAttempts),
     shuffleQuestions: cfg.shuffleQuestions,
     shuffleOptions: cfg.shuffleOptions,
     showAnswersAfterExam: cfg.showAnswersAfterExam,
     category: cfg.category || undefined,
-    passScore: cfg.passScore !== "" ? Number(cfg.passScore) : undefined,
+    // blank = 5 (capped at the max score when that is lower)
+    passScore: cfg.passScore !== "" ? Number(cfg.passScore) : Math.min(5, cfg.maxScore !== "" ? Number(cfg.maxScore) : 10),
     maxScore: cfg.maxScore !== "" ? Number(cfg.maxScore) : undefined,
     latePolicy: cfg.latePolicy || undefined,
     latePenaltyPercent:
@@ -198,6 +209,10 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
     singleSession: cfg.singleSession,
     cameraProctoring: cfg.cameraProctoring,
     notifyOnViolation: cfg.notifyOnViolation,
+    // blank = default; the server ignores these once students have attempted the exam
+    headTurnAngleDeg: cfg.headTurnAngleDeg ? Number(cfg.headTurnAngleDeg) : null,
+    headTurnSeconds: cfg.headTurnSeconds ? Number(cfg.headTurnSeconds) : null,
+    fastSubmitPercent: cfg.fastSubmitPercent ? Number(cfg.fastSubmitPercent) : null,
     // null (not undefined) so that clearing the link on an existing exam is sent to the server
     courseId: cfg.courseId ? Number(cfg.courseId) : null,
     sectionId: cfg.sectionId ? Number(cfg.sectionId) : null,

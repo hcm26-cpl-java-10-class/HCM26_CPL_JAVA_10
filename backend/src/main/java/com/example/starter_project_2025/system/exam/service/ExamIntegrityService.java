@@ -29,8 +29,6 @@ public class ExamIntegrityService {
     static final String IMAGE_PREFIX = "data:image/jpeg;base64,";
     /** Neu tab cu con "song" (heartbeat) trong khoang nay thi coi la dang mo song song. */
     static final Duration SESSION_ALIVE_WINDOW = Duration.ofSeconds(45);
-    /** Nop bai nhanh hon ti le nay cua thoi luong bai thi -> canh bao "thoi gian cuc doan". */
-    static final double EXTREME_DURATION_RATIO = 0.20;
     /** Do giong nhau (0-100) tu ExamSimilarityService tro len thi coi la noi dung trung. */
     static final double DUPLICATE_SIMILARITY_THRESHOLD = 70.0;
     /** Khoa trong totalsByType cho vi pham noi dung trung. */
@@ -201,6 +199,9 @@ public class ExamIntegrityService {
         dto.setExamId(examId);
         dto.setExamTitle(exam.getTitle());
         dto.setAntiCheatEnabled(Boolean.TRUE.equals(exam.getAntiCheatEnabled()));
+        dto.setHeadTurnAngleDeg(exam.headTurnAngleOrDefault());
+        dto.setHeadTurnSeconds(exam.headTurnSecondsOrDefault());
+        dto.setFastSubmitPercent(exam.fastSubmitPercentOrDefault());
 
         Map<String, Integer> totals = new LinkedHashMap<>();
         for (IntegrityEventType t : IntegrityEventType.values()) totals.put(t.name(), 0);
@@ -272,15 +273,16 @@ public class ExamIntegrityService {
         applyCounts(r, events);
         if (a.getStartedAt() != null && a.getSubmittedAt() != null) {
             r.setDurationSeconds(Math.max(0, Duration.between(a.getStartedAt(), a.getSubmittedAt()).getSeconds()));
-            r.setExtremeDuration(isExtremeDuration(r.getDurationSeconds(), a.getExam().getDurationMinutes()));
+            r.setExtremeDuration(isExtremeDuration(r.getDurationSeconds(), a.getExam().getDurationMinutes(),
+                    a.getExam().fastSubmitPercentOrDefault()));
         }
         return r;
     }
 
-    /** Nop bai duoi 20% tong thoi luong bai thi. Chi canh bao, khong tinh la vi pham va khong gan co. */
-    static boolean isExtremeDuration(Long durationSeconds, int examDurationMinutes) {
+    /** Nop bai duoi `percent`% tong thoi luong bai thi. Chi canh bao, khong tinh la vi pham va khong gan co. */
+    static boolean isExtremeDuration(Long durationSeconds, int examDurationMinutes, int percent) {
         if (durationSeconds == null || examDurationMinutes <= 0) return false;
-        return durationSeconds < examDurationMinutes * 60L * EXTREME_DURATION_RATIO;
+        return durationSeconds * 100L < examDurationMinutes * 60L * percent;
     }
 
     /** Chay tinh nang kiem tra bai trung (ExamSimilarityService) va gom ket qua theo luot thi. */

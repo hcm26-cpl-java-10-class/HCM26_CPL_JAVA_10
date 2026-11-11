@@ -651,6 +651,8 @@ public class ExamAttemptService {
         integrity.setSingleSession(integrity.isEnabled() && Boolean.TRUE.equals(ex.getSingleSession()));
         integrity.setCameraProctoring(integrity.isEnabled() && Boolean.TRUE.equals(ex.getCameraProctoring()));
         integrity.setNotifyOnViolation(integrity.isEnabled() && Boolean.TRUE.equals(ex.getNotifyOnViolation()));
+        integrity.setHeadTurnAngleDeg(ex.headTurnAngleOrDefault());
+        integrity.setHeadTurnSeconds(ex.headTurnSecondsOrDefault());
         integrity.setEntryPhotoDone(!integrity.isCameraProctoring() || attempt.getId() == null
                 || proctorImageRepository.existsByAttemptIdAndEventIdIsNull(attempt.getId()));
         response.setIntegrity(integrity);

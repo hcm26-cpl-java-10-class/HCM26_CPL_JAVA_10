@@ -111,11 +111,14 @@ class ExamIntegrityServiceTest {
 
     @Test
     void extremeDurationIsUnderTwentyPercentOfTheExamTime() {
-        // 60-minute exam: the limit is 12 minutes (720 s)
-        assertTrue(ExamIntegrityService.isExtremeDuration(719L, 60));
-        assertFalse(ExamIntegrityService.isExtremeDuration(720L, 60));
-        assertFalse(ExamIntegrityService.isExtremeDuration(null, 60));
-        assertFalse(ExamIntegrityService.isExtremeDuration(10L, 0));
+        // 60-minute exam, default 20%: the limit is 12 minutes (720 s)
+        assertTrue(ExamIntegrityService.isExtremeDuration(719L, 60, 20));
+        assertFalse(ExamIntegrityService.isExtremeDuration(720L, 60, 20));
+        // custom 30%: the limit becomes 18 minutes (1080 s)
+        assertTrue(ExamIntegrityService.isExtremeDuration(1079L, 60, 30));
+        assertFalse(ExamIntegrityService.isExtremeDuration(1080L, 60, 30));
+        assertFalse(ExamIntegrityService.isExtremeDuration(null, 60, 20));
+        assertFalse(ExamIntegrityService.isExtremeDuration(10L, 0, 20));
     }
 
     @Test

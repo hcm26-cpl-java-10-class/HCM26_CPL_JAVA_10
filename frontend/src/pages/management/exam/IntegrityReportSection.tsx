@@ -28,7 +28,7 @@ const TYPE_LABEL: Record<string, string> = {
     CAMERA_COVERED: "Camera covered",
     FACE_MISSING: "Left camera view",
     MULTIPLE_FACES: "Extra person in view",
-    HEAD_TURNED: "Head turned > 35°",
+    HEAD_TURNED: "Head turned",
     DIFFERENT_PERSON: "Different person",
     DUPLICATE_CONTENT: "Duplicate content",
     EXTREME_DURATION: "Submitted too fast",
@@ -68,11 +68,11 @@ const FILTER_TYPES: { key: string; label: string; count: (r: IntegrityReportRow)
     { key: "CAMERA_COVERED", label: "Camera covered", count: (r) => r.cameraCoveredCount },
     { key: "FACE_MISSING", label: "Left camera view", count: (r) => r.faceMissingCount },
     { key: "MULTIPLE_FACES", label: "Extra person in view", count: (r) => r.multipleFacesCount },
-    { key: "HEAD_TURNED", label: "Head turned > 35°", count: (r) => r.headTurnedCount },
+    { key: "HEAD_TURNED", label: "Head turned", count: (r) => r.headTurnedCount },
     { key: "DIFFERENT_PERSON", label: "Different person", count: (r) => r.differentPersonCount },
     { key: "DUPLICATE_CONTENT", label: "Duplicate content", count: (r) => r.duplicateContentCount },
     // warning only: not counted as a violation and does not flag the attempt
-    { key: "EXTREME_DURATION", label: "Submitted too fast (< 20% of the time)", count: (r) => (r.extremeDuration ? 1 : 0), warning: true },
+    { key: "EXTREME_DURATION", label: "Submitted too fast", count: (r) => (r.extremeDuration ? 1 : 0), warning: true },
 ];
 
 const PAGE_SIZE = 10;
@@ -203,6 +203,11 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
     });
     const report = query.data;
 
+    const labelOf = (key: string, base: string) =>
+        key === "HEAD_TURNED" ? `Head turned > ${report?.headTurnAngleDeg ?? 35}°`
+            : key === "EXTREME_DURATION" ? `Submitted too fast (< ${report?.fastSubmitPercent ?? 20}% of the time)`
+                : base;
+
     const rows = useMemo(() => {
         const term = search.trim().toLowerCase();
         const typeDef = FILTER_TYPES.find((t) => t.key === typeFilter);
@@ -268,11 +273,11 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                 <p className="text-sm text-muted-foreground">No violations recorded yet.</p>
                             )}
                             {typeTotals.map(([t, n]) => (
-                                <BarRow key={t} label={TYPE_LABEL[t] ?? t} value={n} max={maxType} color={TYPE_COLOR[t] ?? "bg-slate-400"} />
+                                <BarRow key={t} label={labelOf(t, TYPE_LABEL[t] ?? t)} value={n} max={maxType} color={TYPE_COLOR[t] ?? "bg-slate-400"} />
                             ))}
                         </div>
                         <p className="mt-3 text-xs text-muted-foreground">
-                            Flag: an attempt with at least 1 violation or with answers duplicated from another student. "Submitted too fast" (under 20% of the exam time) is only a warning and does not flag the attempt.
+                            Flag: an attempt with at least 1 violation or with answers duplicated from another student. "Submitted too fast" (under {report.fastSubmitPercent ?? 20}% of the exam time) is only a warning and does not flag the attempt. Exam settings: head turned over {report.headTurnAngleDeg ?? 35}° for {report.headTurnSeconds ?? 2}s counts as a violation.
                         </p>
                     </div>
 
@@ -308,7 +313,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                         >
                             <option value="ALL">Violation type: all</option>
                             {FILTER_TYPES.map((t) => (
-                                <option key={t.key} value={t.key}>{t.label}</option>
+                                <option key={t.key} value={t.key}>{labelOf(t.key, t.label)}</option>
                             ))}
                         </select>
                         <select

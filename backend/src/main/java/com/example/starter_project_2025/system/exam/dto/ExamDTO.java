@@ -99,6 +99,10 @@ public class ExamDTO extends BaseDTO {
     private Boolean singleSession;
     private Boolean cameraProctoring;
     private Boolean notifyOnViolation;
+    /** Chi dat luc tao de thi (null = mac dinh 35 do / 2 giay / 20%); khi doc luon tra ve gia tri dang ap dung. */
+    private Integer headTurnAngleDeg;
+    private Integer headTurnSeconds;
+    private Integer fastSubmitPercent;
 
     // ---- Lien ket voi course / section / lesson (tuy chon) ----
     private Long courseId;

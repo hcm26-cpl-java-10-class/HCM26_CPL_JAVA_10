@@ -40,7 +40,7 @@ const TICK_MS = 1000;
 const MISSING_TICKS = 3;   // ~3s without a face before it counts as "left the camera"
 const MULTIPLE_TICKS = 2;  // ~2s with 2+ faces before it counts as "extra person"
 const GRACE_TICKS = 3;     // ignore the first seconds after monitoring starts
-const HEAD_TICKS = 3;      // head turned for ~3s in a row before it counts as a violation
+const DEFAULT_HEAD_TICKS = 2; // head turned this many seconds in a row before it counts (exam-configurable)
 
 // ---- identity check (compares the live face with the entry photo) ----
 // Euclidean distance of the 128-d face descriptors: ~0.4 for the same person, 0.6+ for a different one. Tune here.
@@ -50,7 +50,8 @@ const IDENTITY_MISMATCHES = 3;    // 3 mismatching comparisons in a row (~6s) be
 const IDENTITY_MAX_YAW_DEG = 25;  // only compare when the face is roughly frontal (profiles change the descriptor)
 
 // ---- head pose (estimated from landmarks; webcam estimates are approximate, tune here) ----
-export const HEAD_YAW_LIMIT_DEG = 35;   // turned left / right
+export const HEAD_YAW_LIMIT_DEG = 35;   // default angle (exam-configurable)
+// pitch limits and the "profile" angle are tuned for 35° and scaled proportionally for other angles
 const PITCH_DOWN_DELTA = 0.14;          // looking down ~35° (relative to the entry-photo baseline)
 const PITCH_UP_DELTA = 0.17;            // looking up ~35°
 const PROFILE_YAW_DEG = 28;             // a face lost right after being turned this far counts as "turned"
@@ -75,14 +76,15 @@ function poseOf(points: { x: number; y: number }[]): Pose {
 const DEFAULT_BASE: Pose = { yaw: 0, pitch: 0.5 };
 
 /** Direction the head is turned beyond the limit (relative to the baseline), or null. */
-function turnedAway(pose: Pose, base: Pose): { label: string } | null {
+function turnedAway(pose: Pose, base: Pose, limitDeg: number): { label: string } | null {
+    const k = limitDeg / HEAD_YAW_LIMIT_DEG;
     const dYaw = pose.yaw - base.yaw;
-    if (Math.abs(dYaw) > HEAD_YAW_LIMIT_DEG) {
+    if (Math.abs(dYaw) > limitDeg) {
         return { label: `Head turned to the side (~${Math.round(Math.abs(dYaw))}°)` };
     }
     const dPitch = pose.pitch - base.pitch;
-    if (dPitch > PITCH_DOWN_DELTA) return { label: 'Head tilted down (over ~35°)' };
-    if (dPitch < -PITCH_UP_DELTA) return { label: 'Head tilted up (over ~35°)' };
+    if (dPitch > PITCH_DOWN_DELTA * k) return { label: `Head tilted down (over ~${limitDeg}°)` };
+    if (dPitch < -PITCH_UP_DELTA * k) return { label: `Head tilted up (over ~${limitDeg}°)` };
     return null;
 }
 
@@ -133,9 +135,17 @@ interface Options {
     announce: (type: CameraViolationType) => void;
     /** Storage key for the entry-photo face descriptor, so the identity check survives a page reload. */
     referenceKey?: string | null;
+    /** Head-turn angle (deg) and duration (s) set on the exam; defaults 35 / 2. */
+    headTurnAngleDeg?: number;
+    headTurnSeconds?: number;
 }
 
-export function useCameraProctoring({ enabled, monitoring, report, announce, referenceKey }: Options) {
+export function useCameraProctoring({ enabled, monitoring, report, announce, referenceKey, headTurnAngleDeg, headTurnSeconds }: Options) {
+    const headAngle = headTurnAngleDeg ?? HEAD_YAW_LIMIT_DEG;
+    const headTicks = headTurnSeconds ?? DEFAULT_HEAD_TICKS;
+    const profileYaw = PROFILE_YAW_DEG * (headAngle / HEAD_YAW_LIMIT_DEG);
+    const headRef = useRef({ headAngle, headTicks, profileYaw });
+    headRef.current = { headAngle, headTicks, profileYaw };
     const [state, setState] = useState<CameraState>('idle');
     const [stream, setStream] = useState<MediaStream | null>(null);
     const [modelError, setModelError] = useState(false);
@@ -360,9 +370,9 @@ export function useCameraProctoring({ enabled, monitoring, report, announce, ref
                             // detector unavailable: only off / covered can be detected
                         } else if (result.count === 0) {
                             // a face lost right after being turned far to the side = still "turned", not "left"
-                            if (ticks - lastTurnTick <= 2 && lastYawAbs >= PROFILE_YAW_DEG) {
+                            if (ticks - lastTurnTick <= 2 && lastYawAbs >= headRef.current.profileYaw) {
                                 turned += 1; missing = 0;
-                                if (turned >= HEAD_TICKS) { observed = 'HEAD_TURNED'; detail = 'Head turned to the side (face not visible)'; }
+                                if (turned >= headRef.current.headTicks) { observed = 'HEAD_TURNED'; detail = 'Head turned to the side (face not visible)'; }
                             } else {
                                 missing += 1; multiple = 0; turned = 0;
                                 if (missing >= MISSING_TICKS) observed = 'FACE_MISSING';
@@ -372,14 +382,14 @@ export function useCameraProctoring({ enabled, monitoring, report, announce, ref
                             if (multiple >= MULTIPLE_TICKS) observed = 'MULTIPLE_FACES';
                         } else {
                             missing = 0; multiple = 0;
-                            const away = result.pose ? turnedAway(result.pose, baseRef.current) : null;
+                            const away = result.pose ? turnedAway(result.pose, baseRef.current, headRef.current.headAngle) : null;
                             if (result.pose) {
                                 lastYawAbs = Math.abs(result.pose.yaw - baseRef.current.yaw);
-                                if (lastYawAbs >= PROFILE_YAW_DEG) lastTurnTick = ticks;
+                                if (lastYawAbs >= headRef.current.profileYaw) lastTurnTick = ticks;
                             }
                             if (away) {
                                 turned += 1;
-                                if (turned >= HEAD_TICKS) { observed = 'HEAD_TURNED'; detail = away.label; }
+                                if (turned >= headRef.current.headTicks) { observed = 'HEAD_TURNED'; detail = away.label; }
                             } else {
                                 turned = 0;
                                 // identity: compare with the entry photo (frontal faces only)

@@ -124,6 +124,8 @@ export function useExamIntegrity({ attemptId, config, active, send, sendEntryPho
             record(type, secs, detail, snapshot ?? undefined, true),
         announce: (type: CameraViolationType) => announce(type),
         referenceKey: attemptId ? `exam-face-ref-${attemptId}` : null,
+        headTurnAngleDeg: config?.headTurnAngleDeg,
+        headTurnSeconds: config?.headTurnSeconds,
     });
 
     const submitEntryPhoto = useCallback(async (dataUrl: string) => {

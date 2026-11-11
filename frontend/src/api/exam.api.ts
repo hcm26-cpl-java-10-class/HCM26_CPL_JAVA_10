@@ -41,6 +41,8 @@ export interface ExamIntegrityConfig {
     singleSession: boolean;
     cameraProctoring?: boolean;
     notifyOnViolation?: boolean;
+    headTurnAngleDeg?: number;
+    headTurnSeconds?: number;
     /** Entry photo already taken (questions stay hidden until then). */
     entryPhotoDone?: boolean;
 }
@@ -450,6 +452,9 @@ export interface IntegrityReport {
     totalAttempts: number;
     flaggedAttempts: number;
     extremeDurationAttempts: number;
+    headTurnAngleDeg?: number;
+    headTurnSeconds?: number;
+    fastSubmitPercent?: number;
     totalViolations: number;
     totalsByType: Record<string, number>;
     rows: IntegrityReportRow[];

@@ -24,6 +24,17 @@ public class ExamConfigValidator {
         if (r.getMaxScore() != null && (r.getMaxScore().signum() <= 0 || r.getMaxScore().compareTo(BigDecimal.valueOf(1000)) > 0)) {
             ctx.add("maxScore", "Thang điểm phải lớn hơn 0 và không quá 1000");
         }
+        {
+            if (r.getHeadTurnAngleDeg() != null && (r.getHeadTurnAngleDeg() < 10 || r.getHeadTurnAngleDeg() > 80)) {
+                ctx.add("headTurnAngleDeg", "Head-turn angle must be between 10 and 80 degrees");
+            }
+            if (r.getHeadTurnSeconds() != null && (r.getHeadTurnSeconds() < 1 || r.getHeadTurnSeconds() > 30)) {
+                ctx.add("headTurnSeconds", "Head-turn time must be between 1 and 30 seconds");
+            }
+            if (r.getFastSubmitPercent() != null && (r.getFastSubmitPercent() < 1 || r.getFastSubmitPercent() > 50)) {
+                ctx.add("fastSubmitPercent", "Fast-submission threshold must be between 1% and 50% of the exam time");
+            }
+        }
         LatePolicy latePolicy = r.getLatePolicy() != null ? r.getLatePolicy()
                 : (existing == null ? LatePolicy.NOT_ALLOWED : existing.getLatePolicy());
         Integer penalty = r.getLatePenaltyPercent() != null ? r.getLatePenaltyPercent()

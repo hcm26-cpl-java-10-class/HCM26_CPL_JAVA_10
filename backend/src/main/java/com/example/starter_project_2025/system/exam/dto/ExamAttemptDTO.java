@@ -57,6 +57,9 @@ public class ExamAttemptDTO {
         private boolean cameraProctoring;
         /** Hien thong bao cho nguoi thi khi vi pham. */
         private boolean notifyOnViolation;
+        /** He so quay dau cua de thi (do / giay). */
+        private int headTurnAngleDeg = 35;
+        private int headTurnSeconds = 2;
         /** Da chup anh vao thi chua (chua co thi chua duoc xem de). */
         private boolean entryPhotoDone;
     }
