@@ -217,6 +217,11 @@ export const routes: RouteConfig[] = [
     component: ExamSimilarityPage,
     requiredPermission: "EXAM_UPDATE",
   },
+  {
+    path: "/exams/:examId/grading/similarity",
+    component: ExamSimilarityPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
 
   {
     path: "/exams/:examId/grading/:attemptId",

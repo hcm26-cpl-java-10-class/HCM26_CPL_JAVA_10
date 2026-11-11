@@ -175,7 +175,7 @@ export function ExamEditPanel({ examId }: { examId: number }) {
               type="button"
               variant="outline"
               className="text-purple-700 hover:text-purple-800 dark:text-purple-300"
-              onClick={() => navigate(`/exams/${examId}/grading/similarity`)}
+              onClick={() => navigate(`/exams/${examId}/similarity`)}
             >
               <ShieldAlert className="mr-2 size-4 text-purple-600" />
               AI Similarity Check
