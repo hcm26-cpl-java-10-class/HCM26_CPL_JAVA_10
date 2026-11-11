@@ -23,6 +23,16 @@ import type {
 
 const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 
+export interface GradeScaleDTO {
+  id?: number | null;
+  gradeLetter: string;
+  minScore: number;
+  maxScore: number;
+  label: string;
+  color: string;
+  displayOrder?: number;
+}
+
 export interface MyScoreInsights {
   attempts: {
     examId: number;
@@ -103,6 +113,23 @@ export const examApi = {
       },
     });
     return response.data;
+  },
+  getGradeScales: async (examId: number, type: "GRADE" | "PERCENTAGE" = "GRADE"): Promise<GradeScaleDTO[]> => {
+    const response = await axiosInstance.get<GradeScaleDTO[]>(`/exams/${examId}/grade-scales`, {
+      params: { type },
+    });
+    return response.data;
+  },
+  saveGradeScales: async (examId: number, scales: GradeScaleDTO[], type: "GRADE" | "PERCENTAGE" = "GRADE"): Promise<GradeScaleDTO[]> => {
+    const response = await axiosInstance.put<GradeScaleDTO[]>(`/exams/${examId}/grade-scales`, scales, {
+      params: { type },
+    });
+    return response.data;
+  },
+  resetGradeScales: async (examId: number, type: "GRADE" | "PERCENTAGE" = "GRADE"): Promise<void> => {
+    await axiosInstance.delete(`/exams/${examId}/grade-scales/reset`, {
+      params: { type },
+    });
   },
   listInvitationOverviews: async (): Promise<ExamInvitationOverview[]> => {
     const response = await axiosInstance.get<ExamInvitationOverview[]>("/exams/invitations/overview");
