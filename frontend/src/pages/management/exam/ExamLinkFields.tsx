@@ -16,7 +16,7 @@ type LinkLevel = "none" | "course" | "section" | "lesson";
 
 /** Where each exam category usually belongs in a course (a hint only, never enforced). */
 const RECOMMENDED: Record<string, { level: LinkLevel; text: string }> = {
-  QUIZ: { level: "lesson", text: "Quizzes usually attach to a lesson and open after the student completes it." },
+  QUIZ: { level: "section", text: "Module quizzes usually attach to a section and open after all its lessons are completed." },
   ASSIGNMENT: { level: "section", text: "Assignments usually attach to a section and open after all its lessons are completed." },
   MIDTERM: { level: "section", text: "Midterms usually attach to a section and open after all its lessons are completed." },
   FINAL_TEST: { level: "course", text: "Final tests usually attach to the whole course (leave Section and Lesson empty)." },
@@ -81,7 +81,7 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
   }, [cfg.lessonId, cfg.lessonTitle, lessonOptions]);
 
   return (
-    <div className="grid min-w-0 max-w-full gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-3">
+    <div className="grid min-w-0 max-w-full content-start gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-3">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:col-span-3">
         Course (optional)
       </h3>
@@ -92,7 +92,7 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
         </p>
       )}
 
-      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full content-start gap-2 text-sm font-medium">
         <span className="truncate">Course</span>
         <Select
           value={cfg.courseId || NONE}
@@ -112,12 +112,14 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
             }
           }}
         >
-          <SelectTrigger aria-label="Course" className="w-full min-w-0 max-w-full">
-            <SelectValue placeholder="Not linked to a course">
-              {selectedCourseTitle}
-            </SelectValue>
+          <SelectTrigger
+            aria-label="Course"
+            title={selectedCourseTitle}
+            className="h-10 w-full min-w-0 max-w-full"
+          >
+            <SelectValue placeholder="Not linked to a course" />
           </SelectTrigger>
-          <SelectContent className="max-w-[90vw]">
+          <SelectContent className="max-w-[min(90vw,32rem)]">
             <SelectItem value={NONE}>Not linked to a course</SelectItem>
             {courseOptions.map((course) => (
               <SelectItem key={course.id} value={String(course.id)} className="break-words">
@@ -132,12 +134,18 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
             )}
           </SelectContent>
         </Select>
-        <span className="truncate text-xs font-normal text-muted-foreground">
-          {courses.isError ? "Could not load courses." : "Only courses you teach are listed."}
+        <span className="min-h-8 text-xs font-normal leading-4 text-muted-foreground">
+          {courses.isError
+            ? "Could not load courses."
+            : courses.isLoading
+              ? "Loading available courses…"
+              : courseOptions.length === 0
+                ? "No courses are available to link."
+                : "Only courses you teach are listed."}
         </span>
       </label>
 
-      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full content-start gap-2 text-sm font-medium">
         <span className="truncate">Section</span>
         <Select
           value={cfg.sectionId || NONE}
@@ -156,12 +164,14 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
             }
           }}
         >
-          <SelectTrigger aria-label="Section" className="w-full min-w-0 max-w-full">
-            <SelectValue placeholder="Whole course">
-              {selectedSectionTitle}
-            </SelectValue>
+          <SelectTrigger
+            aria-label="Section"
+            title={selectedSectionTitle}
+            className="h-10 w-full min-w-0 max-w-full"
+          >
+            <SelectValue placeholder="Whole course" />
           </SelectTrigger>
-          <SelectContent className="max-w-[90vw]">
+          <SelectContent className="max-w-[min(90vw,32rem)]">
             <SelectItem value={NONE}>Whole course</SelectItem>
             {sectionOptions.map((section) => (
               <SelectItem key={section.id} value={String(section.id)} className="break-words">
@@ -175,9 +185,16 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
             )}
           </SelectContent>
         </Select>
+        <span className="min-h-8 text-xs font-normal leading-4 text-muted-foreground">
+          {courseId == null
+            ? "Select a course to choose a module."
+            : sections.isError
+              ? "Could not load sections."
+              : "Whole course keeps this exam at course level."}
+        </span>
       </label>
 
-      <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+      <label className="grid min-w-0 max-w-full content-start gap-2 text-sm font-medium">
         <span className="truncate">Lesson</span>
         <Select
           value={cfg.lessonId || NONE}
@@ -194,12 +211,14 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
             }
           }}
         >
-          <SelectTrigger aria-label="Lesson" className="w-full min-w-0 max-w-full">
-            <SelectValue placeholder="Whole section">
-              {selectedLessonTitle}
-            </SelectValue>
+          <SelectTrigger
+            aria-label="Lesson"
+            title={selectedLessonTitle}
+            className="h-10 w-full min-w-0 max-w-full"
+          >
+            <SelectValue placeholder="Whole section" />
           </SelectTrigger>
-          <SelectContent className="max-w-[90vw]">
+          <SelectContent className="max-w-[min(90vw,32rem)]">
             <SelectItem value={NONE}>Whole section</SelectItem>
             {lessonOptions.map((lesson) => (
               <SelectItem key={lesson.id} value={String(lesson.id)} className="break-words">
@@ -213,7 +232,31 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
             )}
           </SelectContent>
         </Select>
+        <span className="min-h-8 text-xs font-normal leading-4 text-muted-foreground">
+          {sectionId == null
+            ? "Select a module to choose a lesson."
+            : lessons.isError
+              ? "Could not load lessons."
+              : "Whole section applies this exam to the entire module."}
+        </span>
       </label>
+
+      <p className="min-w-0 break-words rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground sm:col-span-3">
+        <span className="font-medium text-foreground">Selected scope: </span>
+        {selectedCourseTitle ? (
+          <>
+            {selectedCourseTitle}
+            {selectedSectionTitle ? ` › ${selectedSectionTitle}` : " › Whole course"}
+            {selectedSectionTitle
+              ? selectedLessonTitle
+                ? ` › ${selectedLessonTitle}`
+                : " › Whole section"
+              : ""}
+          </>
+        ) : (
+          "Not linked to a course"
+        )}
+      </p>
     </div>
   );
 }

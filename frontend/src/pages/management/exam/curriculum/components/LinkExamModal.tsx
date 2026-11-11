@@ -63,9 +63,13 @@ export function LinkExamModal({
   });
 
   const exams = availableExamsQuery.data ?? [];
-  const filteredExams = exams.filter((e) =>
-    (e.title || "").toLowerCase().includes(search.trim().toLowerCase())
-  );
+  const actionLabel =
+    target?.type === "lesson" ? "Add Quiz" : target?.type === "course" ? "Add Final Exam" : "Add Assessment";
+  const filteredExams = exams.filter((exam) => {
+    if (target?.type === "lesson" && exam.category !== "QUIZ") return false;
+    if (target?.type === "course" && exam.category !== "FINAL_TEST") return false;
+    return (exam.title || "").toLowerCase().includes(search.trim().toLowerCase());
+  });
 
   const handleConfirm = () => {
     if (!selectedExamId) {
@@ -73,6 +77,14 @@ export function LinkExamModal({
       return;
     }
     linkMutation.mutate(selectedExamId);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setSelectedExamId(null);
+      setSearch("");
+    }
+    onOpenChange(nextOpen);
   };
 
   const cleanTitle = (target?.title || "").replace(/^(section|lesson)\s*:\s*/i, "");
@@ -84,12 +96,12 @@ export function LinkExamModal({
       : "Whole Course";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="flex max-h-[85vh] w-full max-w-xl flex-col gap-0 p-0 sm:max-w-2xl overflow-hidden rounded-xl border bg-card shadow-2xl">
         <DialogHeader className="border-b px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
             <ClipboardList className="size-5 text-primary" />
-            Attach Assessment to {target?.type === "lesson" ? "Lesson" : target?.type === "section" ? "Section" : "Course"}
+            {actionLabel} to {target?.type === "lesson" ? "Lesson" : target?.type === "section" ? "Section" : "Course"}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             Target: <span className="font-medium text-foreground">{targetLabel}</span>
@@ -100,7 +112,7 @@ export function LinkExamModal({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search assessment by title..."
+              placeholder={`Search ${target?.type === "lesson" ? "quizzes" : target?.type === "course" ? "final exams" : "assessments"} by title...`}
               className="pl-9 text-sm"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -115,7 +127,13 @@ export function LinkExamModal({
             ) : filteredExams.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground space-y-2">
                 <HelpCircle className="size-8 stroke-1 text-muted-foreground/60" />
-                <p className="text-sm font-medium">No available assessments found.</p>
+                <p className="text-sm font-medium">
+                  {target?.type === "lesson"
+                    ? "No available quizzes found."
+                    : target?.type === "course"
+                      ? "No available final exams found."
+                      : "No available assessments found."}
+                </p>
                 <p className="text-xs">
                   Create a new assessment in Assessment Management to attach it here.
                 </p>
@@ -196,7 +214,7 @@ export function LinkExamModal({
             type="button"
             variant="outline"
             className="h-9 px-4 text-xs font-medium"
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
           >
             Cancel
           </Button>
@@ -206,7 +224,7 @@ export function LinkExamModal({
             disabled={!selectedExamId || linkMutation.isPending}
             onClick={handleConfirm}
           >
-            {linkMutation.isPending ? "Attaching..." : "Attach Assessment"}
+            {linkMutation.isPending ? "Adding..." : actionLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

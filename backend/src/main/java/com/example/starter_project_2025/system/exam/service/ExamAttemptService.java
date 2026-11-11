@@ -84,7 +84,7 @@ public class ExamAttemptService {
             return toResponse(attempt);
         }
 
-        if (!anonymousGuest) {
+        if (!anonymousGuest || progressLockService.requiresCourseEnrollment(exam)) {
             progressLockService.assertUnlocked(exam, studentId);
         }
         if (!anonymousGuest) {
