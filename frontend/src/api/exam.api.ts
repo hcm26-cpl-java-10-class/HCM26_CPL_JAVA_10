@@ -392,6 +392,16 @@ export const sendAnonymousIntegrityEvents = async (
     });
 };
 
+export interface DuplicateMatch {
+    questionId: number | null;
+    questionOrder: number;
+    otherAttemptId: number;
+    otherStudentName: string;
+    similarity: number;
+    matchType: string | null;
+    explanation: string | null;
+}
+
 export interface IntegrityReportRow {
     studentId: number;
     studentName: string;
@@ -423,6 +433,9 @@ export interface IntegrityReportRow {
     multipleFacesCount: number;
     headTurnedCount: number;
     differentPersonCount: number;
+    extremeDuration: boolean;
+    duplicateContentCount: number;
+    duplicateMatches: DuplicateMatch[];
     hasEntryPhoto: boolean;
     totalAwaySeconds: number;
     lastViolationAt: string | null;
@@ -436,6 +449,7 @@ export interface IntegrityReport {
     antiCheatEnabled: boolean;
     totalAttempts: number;
     flaggedAttempts: number;
+    extremeDurationAttempts: number;
     totalViolations: number;
     totalsByType: Record<string, number>;
     rows: IntegrityReportRow[];

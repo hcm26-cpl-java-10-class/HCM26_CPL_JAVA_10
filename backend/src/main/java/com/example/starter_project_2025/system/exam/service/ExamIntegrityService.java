@@ -4,6 +4,7 @@ import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.exam.domain.*;
 import com.example.starter_project_2025.system.exam.dto.AttemptIntegritySummary;
 import com.example.starter_project_2025.system.exam.dto.ExamIntegrityReportDTO;
+import com.example.starter_project_2025.system.exam.dto.ExamSimilarityDTO;
 import com.example.starter_project_2025.system.exam.dto.IntegrityEventRequest;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
@@ -28,11 +29,18 @@ public class ExamIntegrityService {
     static final String IMAGE_PREFIX = "data:image/jpeg;base64,";
     /** Neu tab cu con "song" (heartbeat) trong khoang nay thi coi la dang mo song song. */
     static final Duration SESSION_ALIVE_WINDOW = Duration.ofSeconds(45);
+    /** Nop bai nhanh hon ti le nay cua thoi luong bai thi -> canh bao "thoi gian cuc doan". */
+    static final double EXTREME_DURATION_RATIO = 0.20;
+    /** Do giong nhau (0-100) tu ExamSimilarityService tro len thi coi la noi dung trung. */
+    static final double DUPLICATE_SIMILARITY_THRESHOLD = 70.0;
+    /** Khoa trong totalsByType cho vi pham noi dung trung. */
+    public static final String DUPLICATE_CONTENT_KEY = "DUPLICATE_CONTENT";
 
     private final ExamAttemptRepository attemptRepository;
     private final ExamRepository examRepository;
     private final ExamIntegrityEventRepository eventRepository;
     private final ExamProctorImageRepository proctorImageRepository;
+    private final ExamSimilarityService similarityService;
 
     // ------------------------------------------------------------------ ghi nhan
 
@@ -196,9 +204,11 @@ public class ExamIntegrityService {
 
         Map<String, Integer> totals = new LinkedHashMap<>();
         for (IntegrityEventType t : IntegrityEventType.values()) totals.put(t.name(), 0);
+        totals.put(DUPLICATE_CONTENT_KEY, 0);
+        Map<Long, List<ExamIntegrityReportDTO.DuplicateMatch>> duplicates = findDuplicates(examId);
 
         List<ExamIntegrityReportDTO.Row> rows = new ArrayList<>();
-        int flagged = 0, totalViolations = 0;
+        int flagged = 0, totalViolations = 0, extreme = 0;
 
         List<ExamAttempt> sorted = new ArrayList<>(attempts);
         sorted.sort(Comparator.comparing((ExamAttempt a) -> a.getStudent().getFullName(),
@@ -210,6 +220,16 @@ public class ExamIntegrityService {
             ExamIntegrityReportDTO.Row r = toRow(a, events);
             r.setHasEntryPhoto(withPhoto.contains(a.getId()));
             for (ExamIntegrityEvent e : events) totals.merge(e.getType().name(), 1, Integer::sum);
+            List<ExamIntegrityReportDTO.DuplicateMatch> dup = duplicates.getOrDefault(a.getId(), List.of());
+            if (!dup.isEmpty()) {
+                // noi dung trung: tinh la vi pham va gan co luot thi
+                r.setDuplicateMatches(new ArrayList<>(dup));
+                r.setDuplicateContentCount(dup.size());
+                r.setTotalViolations(r.getTotalViolations() + dup.size());
+                r.setFlagged(true);
+                totals.merge(DUPLICATE_CONTENT_KEY, dup.size(), Integer::sum);
+            }
+            if (r.isExtremeDuration()) extreme++;
             if (r.isFlagged()) flagged++;
             totalViolations += r.getTotalViolations();
             rows.add(r);
@@ -222,6 +242,7 @@ public class ExamIntegrityService {
 
         dto.setTotalAttempts(attempts.size());
         dto.setFlaggedAttempts(flagged);
+        dto.setExtremeDurationAttempts(extreme);
         dto.setTotalViolations(totalViolations);
         dto.setTotalsByType(totals);
         dto.setRows(rows);
@@ -251,8 +272,45 @@ public class ExamIntegrityService {
         applyCounts(r, events);
         if (a.getStartedAt() != null && a.getSubmittedAt() != null) {
             r.setDurationSeconds(Math.max(0, Duration.between(a.getStartedAt(), a.getSubmittedAt()).getSeconds()));
+            r.setExtremeDuration(isExtremeDuration(r.getDurationSeconds(), a.getExam().getDurationMinutes()));
         }
         return r;
+    }
+
+    /** Nop bai duoi 20% tong thoi luong bai thi. Chi canh bao, khong tinh la vi pham va khong gan co. */
+    static boolean isExtremeDuration(Long durationSeconds, int examDurationMinutes) {
+        if (durationSeconds == null || examDurationMinutes <= 0) return false;
+        return durationSeconds < examDurationMinutes * 60L * EXTREME_DURATION_RATIO;
+    }
+
+    /** Chay tinh nang kiem tra bai trung (ExamSimilarityService) va gom ket qua theo luot thi. */
+    private Map<Long, List<ExamIntegrityReportDTO.DuplicateMatch>> findDuplicates(Long examId) {
+        Map<Long, List<ExamIntegrityReportDTO.DuplicateMatch>> out = new HashMap<>();
+        try {
+            for (ExamSimilarityDTO.SimilarPair p : similarityService.scanExamSimilarity(examId, false).getPairs()) {
+                if (p.getOverallSimilarity() < DUPLICATE_SIMILARITY_THRESHOLD) continue;
+                out.computeIfAbsent(p.getAttemptId1(), k -> new ArrayList<>())
+                        .add(duplicateMatch(p, p.getAttemptId2(), p.getStudentName2()));
+                out.computeIfAbsent(p.getAttemptId2(), k -> new ArrayList<>())
+                        .add(duplicateMatch(p, p.getAttemptId1(), p.getStudentName1()));
+            }
+        } catch (RuntimeException e) {
+            // loi khi quet bai trung khong duoc lam hong ca bao cao gian lan
+        }
+        return out;
+    }
+
+    private static ExamIntegrityReportDTO.DuplicateMatch duplicateMatch(
+            ExamSimilarityDTO.SimilarPair p, Long otherAttemptId, String otherName) {
+        ExamIntegrityReportDTO.DuplicateMatch m = new ExamIntegrityReportDTO.DuplicateMatch();
+        m.setQuestionId(p.getQuestionId());
+        m.setQuestionOrder(p.getQuestionDisplayOrder());
+        m.setOtherAttemptId(otherAttemptId);
+        m.setOtherStudentName(otherName);
+        m.setSimilarity(p.getOverallSimilarity());
+        m.setMatchType(p.getMatchType());
+        m.setExplanation(p.getExplanation());
+        return m;
     }
 
     /**

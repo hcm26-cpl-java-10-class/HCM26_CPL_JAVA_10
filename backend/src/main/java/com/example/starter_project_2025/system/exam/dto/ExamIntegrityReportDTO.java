@@ -6,6 +6,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -19,6 +20,7 @@ public class ExamIntegrityReportDTO {
 
     private int totalAttempts;
     private int flaggedAttempts;
+    private int extremeDurationAttempts;   // so luot nop duoi 20% thoi luong (canh bao)
     private int totalViolations;
     private Map<String, Integer> totalsByType;
 
@@ -60,6 +62,9 @@ public class ExamIntegrityReportDTO {
         private int cameraCoveredCount;    // CAMERA_COVERED
         private int faceMissingCount;      // FACE_MISSING (roi khoi camera)
         private int multipleFacesCount;    // MULTIPLE_FACES
+        private boolean extremeDuration;    // nop bai duoi 20% thoi luong (chi canh bao, khong gan co)
+        private int duplicateContentCount;  // so cau co noi dung trung voi sinh vien khac (gan co)
+        private List<DuplicateMatch> duplicateMatches = new ArrayList<>();
         private int headTurnedCount;       // HEAD_TURNED (quay dau > 45 do)
         private int differentPersonCount;  // DIFFERENT_PERSON (khuon mat khac anh luc vao thi)
         private boolean hasEntryPhoto;     // da chup anh luc vao thi
@@ -68,6 +73,18 @@ public class ExamIntegrityReportDTO {
         private boolean flagged;
 
         private Long durationSeconds;            // thoi gian lam bai thuc te (giay)
+    }
+
+    /** Mot cau tra loi trung/giong bai cua sinh vien khac (tu ExamSimilarityService). */
+    @Getter @Setter
+    public static class DuplicateMatch {
+        private Long questionId;
+        private int questionOrder;
+        private Long otherAttemptId;
+        private String otherStudentName;
+        private double similarity;      // 0-100
+        private String matchType;
+        private String explanation;
     }
 
     /** Chi tiet tung su kien cua 1 luot thi. */

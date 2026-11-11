@@ -30,6 +30,8 @@ const TYPE_LABEL: Record<string, string> = {
     MULTIPLE_FACES: "Extra person in view",
     HEAD_TURNED: "Head turned > 35°",
     DIFFERENT_PERSON: "Different person",
+    DUPLICATE_CONTENT: "Duplicate content",
+    EXTREME_DURATION: "Submitted too fast",
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -49,10 +51,12 @@ const TYPE_COLOR: Record<string, string> = {
     MULTIPLE_FACES: "bg-indigo-600",
     HEAD_TURNED: "bg-cyan-600",
     DIFFERENT_PERSON: "bg-red-800",
+    DUPLICATE_CONTENT: "bg-purple-700",
+    EXTREME_DURATION: "bg-amber-600",
 };
 
 /** Nhom loai vi pham dung cho bo loc (khop cac cot dem cua bang). */
-const FILTER_TYPES: { key: string; label: string; count: (r: IntegrityReportRow) => number }[] = [
+const FILTER_TYPES: { key: string; label: string; count: (r: IntegrityReportRow) => number; warning?: boolean }[] = [
     { key: "TAB_HIDDEN", label: "Rời tab", count: (r) => r.tabSwitchCount },
     { key: "WINDOW_BLUR", label: "Chuyển cửa sổ", count: (r) => r.windowBlurCount },
     { key: "FULLSCREEN_EXIT", label: "Thoát toàn màn hình", count: (r) => r.fullscreenExitCount },
@@ -66,6 +70,9 @@ const FILTER_TYPES: { key: string; label: string; count: (r: IntegrityReportRow)
     { key: "MULTIPLE_FACES", label: "Extra person in view", count: (r) => r.multipleFacesCount },
     { key: "HEAD_TURNED", label: "Head turned > 35°", count: (r) => r.headTurnedCount },
     { key: "DIFFERENT_PERSON", label: "Different person", count: (r) => r.differentPersonCount },
+    { key: "DUPLICATE_CONTENT", label: "Duplicate content", count: (r) => r.duplicateContentCount },
+    // warning only: not counted as a violation and does not flag the attempt
+    { key: "EXTREME_DURATION", label: "Submitted too fast (< 20% of the time)", count: (r) => (r.extremeDuration ? 1 : 0), warning: true },
 ];
 
 const PAGE_SIZE = 10;
@@ -79,7 +86,7 @@ const fmtDuration = (s?: number | null) => {
 };
 
 function typeCounts(r: IntegrityReportRow): [string, number][] {
-    return FILTER_TYPES.map((t) => [t.key, t.count(r)] as [string, number]).filter(([, n]) => n > 0);
+    return FILTER_TYPES.filter((t) => !t.warning).map((t) => [t.key, t.count(r)] as [string, number]).filter(([, n]) => n > 0);
 }
 
 function StatCard({ label, value, tone }: { label: string; value: number; tone?: "red" | "amber" | "default" }) {
@@ -103,7 +110,7 @@ function BarRow({ label, value, max, color }: { label: string; value: number; ma
             <div className="h-2.5 overflow-hidden rounded-full bg-muted">
                 <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
             </div>
-            <span className="text-right tabular-nums">{value}</span>
+            <span className="text-right tabular-nums">({value})</span>
         </div>
     );
 }
@@ -247,10 +254,11 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
 
             {report && (
                 <>
-                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <StatCard label="Lượt thi" value={report.totalAttempts} />
                         <StatCard label="Bị gắn cờ (có vi phạm)" value={report.flaggedAttempts} tone="red" />
                         <StatCard label="Tổng vi phạm" value={report.totalViolations} />
+                        <StatCard label="Nộp quá nhanh (cảnh báo)" value={report.extremeDurationAttempts ?? 0} tone="amber" />
                     </div>
 
                     <div className="mt-4 rounded-lg border p-4">
@@ -264,7 +272,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                             ))}
                         </div>
                         <p className="mt-3 text-xs text-muted-foreground">
-                            Cờ: lượt thi có ít nhất 1 vi phạm.
+                            Cờ: lượt thi có ít nhất 1 vi phạm hoặc có nội dung bài làm trùng với sinh viên khác. "Nộp quá nhanh" (dưới 20% thời lượng bài thi) chỉ là cảnh báo, không gắn cờ.
                         </p>
                     </div>
 
@@ -359,6 +367,14 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                             : "Chưa có điểm"}
                                                     </div>
                                                     <div className="text-xs text-muted-foreground">Làm {fmtDuration(r.durationSeconds)}</div>
+                                                    {r.extremeDuration && (
+                                                        <span
+                                                            className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                                            title="Nộp bài dưới 20% thời lượng bài thi (chỉ cảnh báo)"
+                                                        >
+                                                            ⚠ Nộp quá nhanh
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-3 py-3">
                                                     <div className={`text-lg font-semibold tabular-nums ${r.totalViolations > 0 ? "" : "text-muted-foreground"}`}>
@@ -368,7 +384,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                         {counts.map(([t, n]) => (
                                                             <span key={t} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
                                                                 <span className={`size-1.5 rounded-full ${TYPE_COLOR[t] ?? "bg-slate-400"}`} />
-                                                                {TYPE_LABEL[t] ?? t} {n}
+                                                                {TYPE_LABEL[t] ?? t} ({n})
                                                             </span>
                                                         ))}
                                                     </div>
@@ -394,6 +410,35 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                             {r.description && <span className="sm:col-span-2 lg:col-span-4">Mô tả: {r.description}</span>}
                                                         </div>
                                                         {r.hasEntryPhoto && <EntryPhotoBox examId={examId} attemptId={r.attemptId} />}
+                                                        {r.duplicateMatches?.length > 0 && (
+                                                            <div className="mt-3">
+                                                                <p className="mb-2 text-sm font-medium">Nội dung trùng ({r.duplicateMatches.length})</p>
+                                                                <div className="overflow-auto rounded-md border">
+                                                                    <table className="w-full text-xs">
+                                                                        <thead className="bg-muted/80 text-left text-muted-foreground">
+                                                                            <tr>
+                                                                                <th className="px-3 py-1.5">Câu</th>
+                                                                                <th className="px-3 py-1.5">Trùng với</th>
+                                                                                <th className="px-3 py-1.5">Độ giống</th>
+                                                                                <th className="px-3 py-1.5">Mức</th>
+                                                                                <th className="px-3 py-1.5">Giải thích</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {r.duplicateMatches.map((m) => (
+                                                                                <tr key={`${m.questionId}-${m.otherAttemptId}`} className="border-t">
+                                                                                    <td className="px-3 py-1.5">#{m.questionOrder}</td>
+                                                                                    <td className="px-3 py-1.5">{m.otherStudentName}</td>
+                                                                                    <td className="px-3 py-1.5 tabular-nums">{m.similarity.toFixed(0)}%</td>
+                                                                                    <td className="px-3 py-1.5">{m.matchType ?? "—"}</td>
+                                                                                    <td className="px-3 py-1.5">{m.explanation ?? ""}</td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                         <p className="mb-2 mt-3 text-sm font-medium">Chi tiết sự kiện</p>
                                                         <EventList examId={examId} attemptId={r.attemptId} />
                                                     </td>
