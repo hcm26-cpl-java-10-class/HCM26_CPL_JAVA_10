@@ -31,7 +31,7 @@ export interface Exam {
 export type IntegrityEventType =
     | 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'FULLSCREEN_EXIT' | 'COPY' | 'CUT' | 'PASTE'
     | 'CONTEXT_MENU' | 'DEVTOOLS_KEY' | 'PRINT_ATTEMPT' | 'MULTI_SESSION'
-    | 'CAMERA_OFF' | 'CAMERA_COVERED' | 'FACE_MISSING' | 'MULTIPLE_FACES' | 'HEAD_TURNED';
+    | 'CAMERA_OFF' | 'CAMERA_COVERED' | 'FACE_MISSING' | 'MULTIPLE_FACES' | 'HEAD_TURNED' | 'DIFFERENT_PERSON';
 
 export interface ExamIntegrityConfig {
     enabled: boolean;
@@ -422,6 +422,7 @@ export interface IntegrityReportRow {
     faceMissingCount: number;
     multipleFacesCount: number;
     headTurnedCount: number;
+    differentPersonCount: number;
     hasEntryPhoto: boolean;
     totalAwaySeconds: number;
     lastViolationAt: string | null;

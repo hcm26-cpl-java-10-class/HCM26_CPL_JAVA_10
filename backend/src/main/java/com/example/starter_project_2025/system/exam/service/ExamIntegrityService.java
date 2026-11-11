@@ -100,7 +100,7 @@ public class ExamIntegrityService {
             case COPY, CUT, PASTE, CONTEXT_MENU, DEVTOOLS_KEY, PRINT_ATTEMPT ->
                     Boolean.TRUE.equals(exam.getBlockCopyPaste());
             case MULTI_SESSION -> Boolean.TRUE.equals(exam.getSingleSession());
-            case CAMERA_OFF, CAMERA_COVERED, FACE_MISSING, MULTIPLE_FACES, HEAD_TURNED ->
+            case CAMERA_OFF, CAMERA_COVERED, FACE_MISSING, MULTIPLE_FACES, HEAD_TURNED, DIFFERENT_PERSON ->
                     Boolean.TRUE.equals(exam.getCameraProctoring());
         };
     }
@@ -108,7 +108,7 @@ public class ExamIntegrityService {
     static boolean isCameraType(IntegrityEventType type) {
         return type == IntegrityEventType.CAMERA_OFF || type == IntegrityEventType.CAMERA_COVERED
                 || type == IntegrityEventType.FACE_MISSING || type == IntegrityEventType.MULTIPLE_FACES
-                || type == IntegrityEventType.HEAD_TURNED;
+                || type == IntegrityEventType.HEAD_TURNED || type == IntegrityEventType.DIFFERENT_PERSON;
     }
 
     static boolean validImage(String data) {
@@ -276,6 +276,7 @@ public class ExamIntegrityService {
                 case FACE_MISSING -> r.setFaceMissingCount(r.getFaceMissingCount() + 1);
                 case MULTIPLE_FACES -> r.setMultipleFacesCount(r.getMultipleFacesCount() + 1);
                 case HEAD_TURNED -> r.setHeadTurnedCount(r.getHeadTurnedCount() + 1);
+                case DIFFERENT_PERSON -> r.setDifferentPersonCount(r.getDifferentPersonCount() + 1);
             }
             if (e.getDurationSeconds() != null) away += e.getDurationSeconds();
             if (last == null || e.getOccurredAt().isAfter(last)) last = e.getOccurredAt();

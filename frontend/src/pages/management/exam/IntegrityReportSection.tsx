@@ -29,6 +29,7 @@ const TYPE_LABEL: Record<string, string> = {
     FACE_MISSING: "Left camera view",
     MULTIPLE_FACES: "Extra person in view",
     HEAD_TURNED: "Head turned > 35°",
+    DIFFERENT_PERSON: "Different person",
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -47,6 +48,7 @@ const TYPE_COLOR: Record<string, string> = {
     FACE_MISSING: "bg-teal-500",
     MULTIPLE_FACES: "bg-indigo-600",
     HEAD_TURNED: "bg-cyan-600",
+    DIFFERENT_PERSON: "bg-red-800",
 };
 
 /** Nhom loai vi pham dung cho bo loc (khop cac cot dem cua bang). */
@@ -63,6 +65,7 @@ const FILTER_TYPES: { key: string; label: string; count: (r: IntegrityReportRow)
     { key: "FACE_MISSING", label: "Left camera view", count: (r) => r.faceMissingCount },
     { key: "MULTIPLE_FACES", label: "Extra person in view", count: (r) => r.multipleFacesCount },
     { key: "HEAD_TURNED", label: "Head turned > 35°", count: (r) => r.headTurnedCount },
+    { key: "DIFFERENT_PERSON", label: "Different person", count: (r) => r.differentPersonCount },
 ];
 
 const PAGE_SIZE = 10;
