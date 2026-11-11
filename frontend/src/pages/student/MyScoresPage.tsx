@@ -1,7 +1,16 @@
 
 import { courseApi } from "@/api/features/demo/course.api";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { MyExamStatistics } from "@/pages/student/components/MyExamStatistics";
+import { examApi } from "@/api/features/exam.api";
+import { Input } from "@/components/ui/input";
+import {
+  DateRangeFilter,
+  EMPTY_RANGE,
+  MyExamStatistics,
+  effectiveRange,
+  inRange,
+  type DateRange,
+} from "@/pages/student/components/MyExamStatistics";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -10,7 +19,9 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function MyScoresPage() {
@@ -25,15 +36,63 @@ export default function MyScoresPage() {
     queryFn: courseApi.getMyScores,
   });
 
+  const { data: insights } = useQuery({
+    queryKey: ["my-score-insights"],
+    queryFn: () => examApi.getMyScoreInsights(),
+  });
+
+  const [search, setSearch] = useState("");
+  const [range, setRange] = useState<DateRange>(EMPTY_RANGE);
+
+  const enrolledAtByCourse = useMemo(
+    () => new Map((insights?.courses ?? []).map((c) => [c.courseId, c.enrolledAt])),
+    [insights],
+  );
+
+  const visibleScores = useMemo(() => {
+    const applied = effectiveRange(range);
+    const term = search.trim().toLowerCase();
+    return courseScores.filter((course) => {
+      const label = `${course.courseCode ?? ""} ${course.courseName}`.toLowerCase();
+      return (
+        label.includes(term) &&
+        inRange(enrolledAtByCourse.get(course.courseId) ?? null, applied)
+      );
+    });
+  }, [courseScores, search, range, enrolledAtByCourse]);
+
   return (
       <MainLayout pathName={{ "my-scores": "My Scores" }}>
         <div className="space-y-6 p-4">
           <h1 className="text-2xl font-bold">My Scores</h1>
 
-          <MyExamStatistics />
+          <Tabs defaultValue="statistics" className="space-y-4">
+            <TabsList className="w-full">
+              <TabsTrigger value="statistics" className="flex-1">Statistics</TabsTrigger>
+              <TabsTrigger value="course-scores" className="flex-1">Course Scores</TabsTrigger>
+            </TabsList>
 
+            <TabsContent value="statistics">
+              <MyExamStatistics />
+            </TabsContent>
+
+            <TabsContent value="course-scores">
           <section className="space-y-4">
-            <h2 className="text-xl font-semibold">Course Scores</h2>
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-1">
+                <label htmlFor="course-scores-search" className="text-xs font-medium text-muted-foreground">
+                  Search course
+                </label>
+                <Input
+                  id="course-scores-search"
+                  className="w-64"
+                  placeholder="Course name..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <DateRangeFilter value={range} onChange={setRange} idPrefix="course-scores-filter" />
+            </div>
 
             {isLoading && (
                 <p className="text-sm text-muted-foreground">
@@ -53,8 +112,14 @@ export default function MyScoresPage() {
                 </p>
             )}
 
+            {!isLoading && !isError && courseScores.length > 0 && visibleScores.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No course matches the current search or date filter.
+                </p>
+            )}
+
             <div className="grid gap-4 md:grid-cols-2">
-              {courseScores.map((course) => (
+              {visibleScores.map((course) => (
                   <Card
                       key={course.courseId}
                       className="cursor-pointer transition-shadow hover:shadow-md"
@@ -108,6 +173,8 @@ export default function MyScoresPage() {
               ))}
             </div>
           </section>
+            </TabsContent>
+          </Tabs>
         </div>
       </MainLayout>
   );

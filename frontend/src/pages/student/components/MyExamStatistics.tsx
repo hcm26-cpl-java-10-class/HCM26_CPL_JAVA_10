@@ -1,7 +1,6 @@
 import { courseApi } from "@/api/features/demo/course.api";
 import { examApi, type MyScoreInsights, type PublishedExamScore } from "@/api/features/exam.api";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { CourseMyScoresDTO } from "@/types/features/course-my-scores";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EXAM_CATEGORY_LABEL, type ExamCategory } from "@/types";
@@ -228,22 +227,22 @@ const formatDuration = (seconds: number) => {
 /* Date range filter (by enrollment date)                              */
 /* ------------------------------------------------------------------ */
 
-interface DateRange {
+export interface DateRange {
   from: string;
   to: string;
 }
 
-const EMPTY_RANGE: DateRange = { from: "", to: "" };
+export const EMPTY_RANGE: DateRange = { from: "", to: "" };
 
 const rangeError = (range: DateRange) =>
   range.from && range.to && range.to < range.from ? "The end date must not be before the start date." : null;
 
 /** A range with an invalid order is not applied; the warning tells the user why. */
-const effectiveRange = (range: DateRange): DateRange => (rangeError(range) ? EMPTY_RANGE : range);
+export const effectiveRange = (range: DateRange): DateRange => (rangeError(range) ? EMPTY_RANGE : range);
 
 const isRangeActive = (range: DateRange) => Boolean(range.from || range.to);
 
-const inRange = (isoDate: string | null, range: DateRange) => {
+export const inRange = (isoDate: string | null, range: DateRange) => {
   if (!range.from && !range.to) return true;
   if (!isoDate) return false;
   const day = isoDate.slice(0, 10);
@@ -252,7 +251,7 @@ const inRange = (isoDate: string | null, range: DateRange) => {
   return true;
 };
 
-function DateRangeFilter({
+export function DateRangeFilter({
   value,
   onChange,
   idPrefix,
@@ -903,6 +902,14 @@ function CompletionRadios({ value, onChange }: { value: CompletionFilter; onChan
   );
 }
 
+type StatsSection = "all-course" | "course" | "exam";
+
+const SECTIONS: { value: StatsSection; label: string }[] = [
+  { value: "all-course", label: "All course" },
+  { value: "course", label: "Course" },
+  { value: "exam", label: "Exam" },
+];
+
 /** Score statistics of the student's published exam results, drawn with plain SVG/CSS. */
 export function MyExamStatistics() {
   const scoresQuery = useQuery({
@@ -920,6 +927,7 @@ export function MyExamStatistics() {
 
   const [range, setRange] = useState<DateRange>(EMPTY_RANGE);
   const [completion, setCompletion] = useState<CompletionFilter>("ALL");
+  const [section, setSection] = useState<StatsSection>("all-course");
 
   const allPoints = useMemo(() => toPoints(scoresQuery.data ?? []), [scoresQuery.data]);
   const data = insightsQuery.data;
@@ -945,59 +953,73 @@ export function MyExamStatistics() {
   const failed = scoresQuery.isError || insightsQuery.isError;
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-4" aria-labelledby="aggregate-statistics-title">
-        <h2 id="aggregate-statistics-title" className="text-xl font-semibold">Aggregate Statistics</h2>
-
-        {loading && <p className="text-sm text-muted-foreground">Loading statistics...</p>}
-        {failed && <p className="text-sm text-destructive">Unable to load statistics.</p>}
-
-        {!loading && !failed && (
-          <Tabs defaultValue="by-course" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="by-course">By course</TabsTrigger>
-              <TabsTrigger value="by-exam">By exam</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="by-course" className="space-y-4">
-              <div className="flex flex-wrap items-end gap-6">
-                <DateRangeFilter value={range} onChange={setRange} idPrefix="aggregate-course" />
-                <CompletionRadios value={completion} onChange={setCompletion} />
-              </div>
-              {courseTabRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No course matches the current filters.</p>
-              ) : (
-                <CourseOverview rows={courseTabRows} />
-              )}
-            </TabsContent>
-
-            <TabsContent value="by-exam" className="space-y-4">
-              <DateRangeFilter value={range} onChange={setRange} idPrefix="aggregate-exam" />
-              {isRangeActive(applied) && (
-                <p className="text-xs text-muted-foreground">
-                  Only exams of courses enrolled in this period are shown; exams outside any course are hidden while a date filter is on.
-                </p>
-              )}
-              <ExamStatsView
-                allPoints={allPoints}
-                data={data}
-                examIds={examIdsByDate}
-                emptyText="No published exam results yet. Your statistics will appear here once a teacher releases your scores."
-              />
-            </TabsContent>
-          </Tabs>
-        )}
-      </section>
+    <div className="space-y-4">
+      {loading && <p className="text-sm text-muted-foreground">Loading statistics...</p>}
+      {failed && <p className="text-sm text-destructive">Unable to load statistics.</p>}
 
       {!loading && !failed && (
-        <section className="space-y-4" aria-labelledby="course-statistics-title">
-          <h2 id="course-statistics-title" className="text-xl font-semibold">Statistics by Course</h2>
-          {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">You are not enrolled in any course yet.</p>
-          ) : (
-            <StatsByCourse rows={rows} allPoints={allPoints} data={data} />
+        <div className="flex flex-col gap-6 md:flex-row">
+          <nav aria-label="Statistics sections" className="flex shrink-0 gap-1 md:w-44 md:flex-col">
+            {SECTIONS.map((s) => (
+              <button
+                key={s.value}
+                type="button"
+                aria-current={section === s.value ? "page" : undefined}
+                onClick={() => setSection(s.value)}
+                className={`rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
+                  section === s.value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="min-w-0 flex-1 space-y-4">
+          {section === "all-course" && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-end gap-6">
+              <DateRangeFilter value={range} onChange={setRange} idPrefix="aggregate-course" />
+              <CompletionRadios value={completion} onChange={setCompletion} />
+            </div>
+            {courseTabRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No course matches the current filters.</p>
+            ) : (
+              <CourseOverview rows={courseTabRows} />
+            )}
+          </div>
           )}
-        </section>
+
+          {section === "course" && (
+          <div className="space-y-4">
+            {rows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">You are not enrolled in any course yet.</p>
+            ) : (
+              <StatsByCourse rows={rows} allPoints={allPoints} data={data} />
+            )}
+          </div>
+          )}
+
+          {section === "exam" && (
+          <div className="space-y-4">
+            <DateRangeFilter value={range} onChange={setRange} idPrefix="aggregate-exam" />
+            {isRangeActive(applied) && (
+              <p className="text-xs text-muted-foreground">
+                Only exams of courses enrolled in this period are shown; exams outside any course are hidden while a date filter is on.
+              </p>
+            )}
+            <ExamStatsView
+              allPoints={allPoints}
+              data={data}
+              examIds={examIdsByDate}
+              emptyText="No published exam results yet. Your statistics will appear here once a teacher releases your scores."
+            />
+          </div>
+          )}
+          </div>
+        </div>
       )}
     </div>
   );
