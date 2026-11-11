@@ -109,8 +109,6 @@ export interface ExamDTO {
   hasAttempts?: boolean;
   title: string;
   durationMinutes: number;
-  startTime?: string | null;
-  endTime?: string | null;
   maxAttempts?: number;
   shuffleQuestions?: boolean;
   shuffleOptions?: boolean;
@@ -136,6 +134,9 @@ export interface ExamDTO {
   singleSession?: boolean;
   cameraProctoring?: boolean;
   notifyOnViolation?: boolean;
+  headTurnAngleDeg?: number | null;
+  headTurnSeconds?: number | null;
+  fastSubmitPercent?: number | null;
   // Optional link to a course / section / lesson (null = not linked)
   courseId?: number | null;
   sectionId?: number | null;
@@ -179,7 +180,7 @@ export interface CourseExam {
   /** Only returned to the course teacher and admin. */
   questionCount: number | null;
   createdByName: string | null;
-  /** Student view: true while blocked by LessonProgress. Staff always get false. */
+  /** Student view: true while blocked by course or lesson progress. Staff always get false. */
   locked: boolean;
   lockReason: string | null;
 }

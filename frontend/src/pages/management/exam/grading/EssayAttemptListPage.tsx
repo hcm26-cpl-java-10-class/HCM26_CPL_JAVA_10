@@ -64,7 +64,7 @@ export default function EssayAttemptListPage() {
                         <Button
                             variant="outline"
                             className="gap-1.5 border-purple-200 bg-purple-50/50 text-purple-700 hover:bg-purple-100 hover:text-purple-900 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-300"
-                            onClick={() => navigate(`/exams/${numericExamId}/grading/similarity`)}
+                            onClick={() => navigate(`/exams/${numericExamId}/similarity`)}
                             disabled={!validId}
                             title="Kiểm tra tương đồng và trùng lặp bài tự luận"
                         >

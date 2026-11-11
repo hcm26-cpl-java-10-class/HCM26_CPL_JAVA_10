@@ -20,6 +20,8 @@ public class ExamAttemptDTO {
     private int totalPoints;
     private BigDecimal maxScore;
     private BigDecimal passScore;
+    /** Dat/Truot theo diem dat da dong bang; chi co khi ket qua da cong bo va da co diem cuoi. */
+    private Boolean passed;
     private BigDecimal objectiveScore;
     private BigDecimal finalScore;
     private BigDecimal provisionalScore;
@@ -55,6 +57,9 @@ public class ExamAttemptDTO {
         private boolean cameraProctoring;
         /** Hien thong bao cho nguoi thi khi vi pham. */
         private boolean notifyOnViolation;
+        /** He so quay dau cua de thi (do / giay). */
+        private int headTurnAngleDeg = 35;
+        private int headTurnSeconds = 2;
         /** Da chup anh vao thi chua (chua co thi chua duoc xem de). */
         private boolean entryPhotoDone;
     }

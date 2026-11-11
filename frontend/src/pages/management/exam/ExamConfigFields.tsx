@@ -38,7 +38,8 @@ function SectionTitle({ children }: { children: string }) {
 }
 
 /** All fields of the exam form (shared by the Create dialog and the Edit tab). */
-export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, duration: newDuration, setDuration: setNewDuration, cfg, setCfg, showErrors = false }: Props) {
+export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, duration: newDuration, setDuration: setNewDuration, cfg, setCfg, editingExam, showErrors = false }: Props) {
+  const locked = !!editingExam?.hasAttempts;
   const fieldErrors = showErrors ? getRequiredFieldErrors(cfg) : {};
   const invalidClass = "border-destructive focus:ring-destructive focus-visible:ring-destructive";
   // Timing is set when inviting students, so the exam itself has no start/end time or late-submission rules.
@@ -129,7 +130,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
             type="number"
             min={1}
             step={1}
-            placeholder="e.g. 1"
+            placeholder="1"
             aria-invalid={Boolean(fieldErrors.maxAttempts)}
             className={cn("w-full min-w-0 max-w-full", fieldErrors.maxAttempts && invalidClass)}
             value={cfg.maxAttempts}
@@ -139,25 +140,25 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
             <span className="text-xs font-normal text-destructive">{fieldErrors.maxAttempts}</span>
           ) : (
             <span className="text-xs font-normal text-muted-foreground">
-              Number of times a student can take this exam.
+              Number of times a student can take this exam. Leave blank = 1.
             </span>
           )}
         </label>
 
         <SectionTitle>Scoring</SectionTitle>
         <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
-          Max Score (leave blank = 10)
+          Max Score
           <Input type="number" min={0.01} step="0.01" placeholder="10" className="w-full min-w-0 max-w-full" value={cfg.maxScore} onChange={(event) => setCfg((c) => ({ ...c, maxScore: event.target.value }))} />
           <span className="text-xs font-normal text-muted-foreground">
-            Question score = max score × question weight ÷ total weight.
+            Leave blank = 10. Question score = max score × question weight ÷ total weight.
           </span>
         </label>
 
         <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
-          Passing Score (leave blank = no requirement)
-          <Input type="number" min={0} step="0.01" className="w-full min-w-0 max-w-full" value={cfg.passScore} onChange={(event) => setCfg((c) => ({ ...c, passScore: event.target.value }))} />
+          Passing Score
+          <Input type="number" min={0} step="0.01" placeholder="5" className="w-full min-w-0 max-w-full" value={cfg.passScore} onChange={(event) => setCfg((c) => ({ ...c, passScore: event.target.value }))} />
           <span className="text-xs font-normal text-muted-foreground">
-            Minimum score required to pass (e.g. 5.0).
+            Minimum score required to pass. Leave blank = 5.
           </span>
         </label>
 
@@ -167,7 +168,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
           <Select value={cfg.resultVisibility} onValueChange={(value) => setCfg((c) => ({ ...c, resultVisibility: value as ResultVisibility }))}>
             <SelectTrigger aria-label="Result visibility" className="w-full min-w-0 max-w-full"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {(Object.keys(RESULT_VISIBILITY_LABEL) as ResultVisibility[]).map((key) => (
+              {(Object.keys(RESULT_VISIBILITY_LABEL) as ResultVisibility[]).filter((key) => key !== "AFTER_EXAM_CLOSED").map((key) => (
                 <SelectItem key={key} value={key}>{RESULT_VISIBILITY_LABEL[key]}</SelectItem>
               ))}
             </SelectContent>
@@ -200,38 +201,71 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
       <div className="grid min-w-0 max-w-full gap-3 border-t pt-4 sm:col-span-2">
         <SectionTitle>Anti-cheat</SectionTitle>
         <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
-          <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.antiCheatEnabled} onChange={(event) => setCfg((c) => ({ ...c, antiCheatEnabled: event.target.checked }))} />
+          <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.antiCheatEnabled} onChange={(event) => setCfg((c) => ({ ...c, antiCheatEnabled: event.target.checked }))} />
           Anti-cheating monitoring (chống gian lận)
         </label>
         <p className="text-xs text-muted-foreground">
           Violations are only logged (the exam is never auto-submitted). View them in Result Statistics → Integrity Report.
         </p>
+        {locked && (
+          <p className="text-xs text-amber-700">Students have already started this assessment. Anti-cheat settings are disabled to protect student results.</p>
+        )}
         {cfg.antiCheatEnabled && (
+          <div className="grid min-w-0 max-w-full gap-6 sm:col-span-2 lg:grid-cols-2">
           <div className="grid min-w-0 max-w-full gap-3 pl-6 sm:grid-cols-2">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.detectTabSwitch} onChange={(event) => setCfg((c) => ({ ...c, detectTabSwitch: event.target.checked }))} />
+              <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.detectTabSwitch} onChange={(event) => setCfg((c) => ({ ...c, detectTabSwitch: event.target.checked }))} />
               Count tab / window switches
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.blockCopyPaste} onChange={(event) => setCfg((c) => ({ ...c, blockCopyPaste: event.target.checked }))} />
+              <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.blockCopyPaste} onChange={(event) => setCfg((c) => ({ ...c, blockCopyPaste: event.target.checked }))} />
               Block copy / paste / right-click / dev shortcuts
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.requireFullscreen} onChange={(event) => setCfg((c) => ({ ...c, requireFullscreen: event.target.checked }))} />
+              <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.requireFullscreen} onChange={(event) => setCfg((c) => ({ ...c, requireFullscreen: event.target.checked }))} />
               Require fullscreen
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.singleSession} onChange={(event) => setCfg((c) => ({ ...c, singleSession: event.target.checked }))} />
+              <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.singleSession} onChange={(event) => setCfg((c) => ({ ...c, singleSession: event.target.checked }))} />
               Detect multiple tabs / devices
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.cameraProctoring} onChange={(event) => setCfg((c) => ({ ...c, cameraProctoring: event.target.checked }))} />
-              Camera proctoring (face photo at start, detect camera off / covered / away / extra person / head turned over 35°)
+              <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.cameraProctoring} onChange={(event) => setCfg((c) => ({ ...c, cameraProctoring: event.target.checked }))} />
+              Camera proctoring (face photo at start, detect camera off / covered / away / extra person / head turned)
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" className="size-4 accent-primary cursor-pointer" checked={cfg.notifyOnViolation} onChange={(event) => setCfg((c) => ({ ...c, notifyOnViolation: event.target.checked }))} />
+              <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.notifyOnViolation} onChange={(event) => setCfg((c) => ({ ...c, notifyOnViolation: event.target.checked }))} />
               Notify the examinee when a violation is detected
             </label>
+          </div>
+          <div className="h-fit w-full space-y-2 rounded-md border bg-background p-3">
+            <p className="text-xs text-muted-foreground">
+              Detection coefficients. Leave blank to keep the default.{" "}
+              {locked ? "Students have already started this assessment, so these coefficients are locked to keep the statistics consistent." : "They can no longer be changed once a student starts the exam."}
+            </p>
+            <div className="grid w-full gap-4 sm:grid-cols-3">
+              {([
+                ["headTurnAngleDeg", "Head-turn angle (°)", "35", 10, 80],
+                ["headTurnSeconds", "Head-turn time (seconds)", "2", 1, 30],
+                ["fastSubmitPercent", "Fast-submit threshold (% of exam time)", "20", 1, 50],
+              ] as const).map(([key, label, def, min, max]) => (
+                <label key={key} className="space-y-1 text-xs font-medium">
+                  {label}
+                  <Input
+                    type="number"
+                    min={min}
+                    max={max}
+                    step={1}
+                    placeholder={`Default ${def}`}
+                    disabled={locked}
+                    value={cfg[key]}
+                    onChange={(event) => setCfg((c) => ({ ...c, [key]: event.target.value }))}
+                  />
+                  <span className="block text-[11px] font-normal text-muted-foreground">Allowed {min}–{max}</span>
+                </label>
+              ))}
+            </div>
+          </div>
           </div>
         )}
       </div>

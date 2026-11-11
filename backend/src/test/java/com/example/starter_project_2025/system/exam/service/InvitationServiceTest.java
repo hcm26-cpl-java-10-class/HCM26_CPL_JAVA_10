@@ -116,8 +116,6 @@ class InvitationServiceTest {
         exam.setId(1L);
         exam.setTitle("Kỳ thi giữa kỳ");
         exam.setDurationMinutes(60);
-        exam.setStartTime(LocalDateTime.now().plusDays(1));
-        exam.setEndTime(LocalDateTime.now().plusDays(2));
         exam.setIsActive(true);
         exam.setCreatedBy(TEACHER_ID);
 
@@ -181,19 +179,6 @@ class InvitationServiceTest {
     }
 
     @Test
-    @DisplayName("Lịch thi đã bị gỡ: giờ kết thúc cũ trong DB không còn chặn việc tạo lời mời")
-    void legacyPastEndTimeDoesNotBlockInvitation() {
-        exam.setEndTime(LocalDateTime.now().minusDays(1));
-        when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
-        when(userRepository.findById(100L)).thenReturn(Optional.of(student));
-        when(invitationRepository.existsByExamIdAndUserId(1L, 100L)).thenReturn(false);
-
-        InvitationDTO dto = service.createInvitation(1L, createRequest(100L), teacherPrincipal());
-
-        assertEquals(InvitationStatus.SENT, dto.getStatus());
-    }
-
-    @Test
     @DisplayName("expiresAt nằm trong quá khứ thì bị chặn")
     void expiresAtInPastRejected() {
         when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
@@ -209,8 +194,8 @@ class InvitationServiceTest {
     }
 
     @Test
-    @DisplayName("Đề không còn giờ kết thúc nên expiresAt ở tương lai xa vẫn được chấp nhận")
-    void expiresAtInFarFutureAcceptedWithoutExamEndTime() {
+    @DisplayName("expiresAt ở tương lai xa vẫn được chấp nhận (đề không còn giờ kết thúc)")
+    void expiresAtInFarFutureAccepted() {
         when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
         when(userRepository.findById(100L)).thenReturn(Optional.of(student));
         when(invitationRepository.existsByExamIdAndUserId(1L, 100L)).thenReturn(false);

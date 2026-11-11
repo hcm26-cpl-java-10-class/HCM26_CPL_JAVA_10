@@ -215,7 +215,8 @@ class StudentAnalyticsServiceTest {
         when(attempts.findAllByStudent_IdOrderByStartedAtDesc(student.getId())).thenReturn(List.of(attempt));
         when(exams.findByCourseLink(course.getId(), null, null, false)).thenReturn(List.of(exam));
         when(access.canStudentSeeScoreOnMyScores(exam)).thenReturn(true);
-        CourseMyScoresService actual = new CourseMyScoresService(enrollments, exams, attempts, access, db.getEntityManager());
+        CourseMyScoresService actual = new CourseMyScoresService(enrollments, exams, attempts, access, db.getEntityManager(),
+                org.mockito.Mockito.mock(com.example.starter_project_2025.system.exam.gradebook.GradebookPublishedItemRepository.class));
         var result = actual.findCourseScoresForStudents(java.util.Map.of(student.getId(), List.of(course)));
         assertEquals(new BigDecimal("8.50"), result.get(student.getId()).getFirst().overallScore());
         assertEquals(actual.findMyCourseScores(student.getId()).getFirst(),

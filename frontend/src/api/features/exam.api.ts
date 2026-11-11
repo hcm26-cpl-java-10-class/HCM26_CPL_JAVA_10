@@ -23,6 +23,49 @@ import type {
 
 const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 
+export interface GradeScaleDTO {
+  id?: number | null;
+  gradeLetter: string;
+  minScore: number;
+  maxScore: number;
+  label: string;
+  color: string;
+  displayOrder?: number;
+}
+
+export interface MyScoreInsights {
+  attempts: {
+    examId: number;
+    examTitle: string;
+    attemptNumber: number;
+    finalScore: number;
+    maxScore: number;
+    passed: boolean | null;
+    startedAt: string | null;
+    submittedAt: string;
+    durationMinutes: number;
+    timeSpentSeconds: number;
+  }[];
+  classAverages: { examId: number; averagePercent: number; participants: number }[];
+  awaitingExamIds: number[];
+  pendingAppealExamIds: number[];
+  accuracyByExamType: {
+    examId: number;
+    type: "MULTIPLE_CHOICE" | "ESSAY" | "CODING";
+    questionCount: number;
+    earned: number;
+    possible: number;
+  }[];
+  courses: {
+    courseId: number;
+    courseName: string;
+    enrolledAt: string | null;
+    lessonsTotal: number;
+    lessonsCompleted: number;
+    examIds: number[];
+  }[];
+}
+
 export interface PublishedExamScore {
   examId: number;
   examTitle: string;
@@ -38,6 +81,10 @@ export interface PublishedExamScore {
   attemptId: number;
   /** Kết quả đã được giáo viên công bố hay chưa (chỉ khi công bố mới được khiếu nại). */
   resultPublished: boolean;
+  /** Pass score frozen when the attempt started (null when the exam has none). */
+  passScore?: number | null;
+  /** Passed / not passed; null when unpublished, ungraded or the exam has no pass score. */
+  passed?: boolean | null;
 }
 
 export const examApi = {
@@ -66,6 +113,23 @@ export const examApi = {
       },
     });
     return response.data;
+  },
+  getGradeScales: async (examId: number, type: "GRADE" | "PERCENTAGE" = "GRADE"): Promise<GradeScaleDTO[]> => {
+    const response = await axiosInstance.get<GradeScaleDTO[]>(`/exams/${examId}/grade-scales`, {
+      params: { type },
+    });
+    return response.data;
+  },
+  saveGradeScales: async (examId: number, scales: GradeScaleDTO[], type: "GRADE" | "PERCENTAGE" = "GRADE"): Promise<GradeScaleDTO[]> => {
+    const response = await axiosInstance.put<GradeScaleDTO[]>(`/exams/${examId}/grade-scales`, scales, {
+      params: { type },
+    });
+    return response.data;
+  },
+  resetGradeScales: async (examId: number, type: "GRADE" | "PERCENTAGE" = "GRADE"): Promise<void> => {
+    await axiosInstance.delete(`/exams/${examId}/grade-scales/reset`, {
+      params: { type },
+    });
   },
   listInvitationOverviews: async (): Promise<ExamInvitationOverview[]> => {
     const response = await axiosInstance.get<ExamInvitationOverview[]>("/exams/invitations/overview");
@@ -114,6 +178,10 @@ export const examApi = {
   },
   getMyPublishedExamScores: async (): Promise<PublishedExamScore[]> => {
     const response = await axiosInstance.get<PublishedExamScore[]>("/exams/my-scores");
+    return response.data;
+  },
+  getMyScoreInsights: async (): Promise<MyScoreInsights> => {
+    const response = await axiosInstance.get<MyScoreInsights>("/exams/my-scores/insights");
     return response.data;
   },
   addQuestions: async (examId: number, questionIds: number[]): Promise<ExamDTO> => {

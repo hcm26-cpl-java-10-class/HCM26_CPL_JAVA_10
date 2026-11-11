@@ -6,6 +6,10 @@ import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.progress.LessonProgress;
 import com.example.starter_project_2025.system.demo.progress.LessonProgressRepository;
 import com.example.starter_project_2025.system.exam.domain.Exam;
+import com.example.starter_project_2025.system.exam.domain.ExamCategory;
+import com.example.starter_project_2025.system.exam.domain.ExamRepository;
+import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -17,7 +21,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** Decides whether a student can open a lesson/section exam, based on their LessonProgress. */
+/** Decides whether a student can open a course, section, or lesson exam using LessonProgress. */
 @Service
 @RequiredArgsConstructor
 public class ExamProgressLockService {
@@ -25,6 +29,8 @@ public class ExamProgressLockService {
     private final CourseEnrollmentRepository enrollmentRepository;
     private final LessonProgressRepository progressRepository;
     private final LessonRepository lessonRepository;
+    private final ExamRepository examRepository;
+    private final UserRepository userRepository;
 
     public record LockState(boolean locked, String reason) {
         public static final LockState OPEN = new LockState(false, null);
@@ -38,30 +44,79 @@ public class ExamProgressLockService {
             return Map.of();
         }
         Map<Long, List<Lesson>> sectionCache = new HashMap<>();
+        Map<Long, List<Lesson>> courseLessonCache = new HashMap<>();
         Map<Long, LockState> result = new HashMap<>();
         for (Exam e : exams) {
-            result.put(e.getId(), evaluate(e, completed, sectionCache));
+            result.put(e.getId(), evaluate(e, completed, sectionCache, courseLessonCache));
         }
+        return result;
+    }
+
+    /** Returns lock states for active course exams across the user's enrolled courses. */
+    @Transactional(readOnly = true)
+    public Map<Long, LockState> lockedExamsForUser(Long userId) {
+        if (userId == null) {
+            return Map.of();
+        }
+        Map<Long, LockState> result = new HashMap<>();
+        enrollmentRepository.findAllByUser_IdOrderByCreatedAtDesc(userId).stream()
+                .map(enrollment -> enrollment.getCourse().getId())
+                .distinct()
+                .forEach(courseId -> {
+                    List<Exam> exams = examRepository.findByCourseLink(courseId, null, null, true);
+                    evaluateAll(exams, userId, courseId).forEach((examId, state) -> {
+                        if (state.locked()) {
+                            result.put(examId, state);
+                        }
+                    });
+                });
         return result;
     }
 
     /** Server-side guard so a locked exam can't be started by calling the API directly. */
     @Transactional(readOnly = true)
     public void assertUnlocked(Exam exam, Long userId) {
-        if (exam.getCourse() == null || userId == null) {
+        if (exam.getCourse() == null) {
+            return;
+        }
+        if (userId == null) {
+            if (requiresCourseEnrollment(exam)) {
+                throw new AccessDeniedException("You must be enrolled in this course to take this assessment");
+            }
             return;
         }
         Set<Long> completed = completedLessonIds(userId, exam.getCourse().getId());
         if (completed == null) {
+            if (requiresCourseEnrollment(exam) && !isStaff(userId)) {
+                throw new AccessDeniedException("You must be enrolled in this course to take this assessment");
+            }
             return;
         }
-        LockState state = evaluate(exam, completed, new HashMap<>());
+        LockState state = evaluate(exam, completed, new HashMap<>(), new HashMap<>());
         if (state.locked()) {
             throw new AccessDeniedException(state.reason());
         }
     }
 
-    private LockState evaluate(Exam exam, Set<Long> completed, Map<Long, List<Lesson>> sectionCache) {
+    private LockState evaluate(
+            Exam exam,
+            Set<Long> completed,
+            Map<Long, List<Lesson>> sectionCache,
+            Map<Long, List<Lesson>> courseLessonCache
+    ) {
+        if (isCourseFinal(exam)) {
+            Long courseId = exam.getCourse().getId();
+            List<Lesson> lessons = courseLessonCache.computeIfAbsent(
+                    courseId, lessonRepository::findActiveByCourseIdOrdered);
+            long remaining = lessons.stream()
+                    .filter(lesson -> !completed.contains(lesson.getId()))
+                    .count();
+            if (remaining > 0) {
+                return new LockState(true, "Complete all active lessons in course \""
+                        + exam.getCourse().getName() + "\" to unlock the final exam (" + remaining + " left)");
+            }
+            return LockState.OPEN;
+        }
         if (exam.getLesson() != null) {
             Lesson lesson = exam.getLesson();
             if (!completed.contains(lesson.getId())) {
@@ -84,6 +139,27 @@ public class ExamProgressLockService {
             }
         }
         return LockState.OPEN;
+    }
+
+    public boolean requiresCourseEnrollment(Exam exam) {
+        return exam.getCourse() != null
+                && (exam.getCategory() == ExamCategory.QUIZ || isCourseFinal(exam));
+    }
+
+    private boolean isCourseFinal(Exam exam) {
+        return exam.getCategory() == ExamCategory.FINAL_TEST
+                && exam.getCourse() != null
+                && exam.getSection() == null
+                && exam.getLesson() == null;
+    }
+
+    private boolean isStaff(Long userId) {
+        return userRepository.findById(userId)
+                .map(User::getRoles)
+                .filter(roles -> roles != null)
+                .map(roles -> roles.stream()
+                        .anyMatch(role -> "ADMIN".equals(role.getName()) || "TEACHER".equals(role.getName())))
+                .orElse(false);
     }
 
     /** Completed lesson ids of the user's enrollment, or null if the user is not enrolled. */

@@ -10,8 +10,6 @@ export interface Exam {
     totalPoints?: number;
     maxScore?: number;
     isActive?: boolean;
-    startTime?: string | null;
-    endTime?: string | null;
     maxAttempts?: number | null;
     latePolicy?: 'NOT_ALLOWED' | 'ALLOWED' | 'ALLOWED_WITH_PENALTY';
     hasPassword?: boolean;
@@ -33,7 +31,7 @@ export interface Exam {
 export type IntegrityEventType =
     | 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'FULLSCREEN_EXIT' | 'COPY' | 'CUT' | 'PASTE'
     | 'CONTEXT_MENU' | 'DEVTOOLS_KEY' | 'PRINT_ATTEMPT' | 'MULTI_SESSION'
-    | 'CAMERA_OFF' | 'CAMERA_COVERED' | 'FACE_MISSING' | 'MULTIPLE_FACES' | 'HEAD_TURNED';
+    | 'CAMERA_OFF' | 'CAMERA_COVERED' | 'FACE_MISSING' | 'MULTIPLE_FACES' | 'HEAD_TURNED' | 'DIFFERENT_PERSON';
 
 export interface ExamIntegrityConfig {
     enabled: boolean;
@@ -43,6 +41,8 @@ export interface ExamIntegrityConfig {
     singleSession: boolean;
     cameraProctoring?: boolean;
     notifyOnViolation?: boolean;
+    headTurnAngleDeg?: number;
+    headTurnSeconds?: number;
     /** Entry photo already taken (questions stay hidden until then). */
     entryPhotoDone?: boolean;
 }
@@ -114,6 +114,10 @@ export interface ExamAttemptSummary {
     finalScore: number | null;
     totalPoints: number;
     maxScore?: number;
+    /** Pass score frozen when the attempt started (null when the exam has none). */
+    passScore?: number | null;
+    /** Passed / not passed; null until the result is published and graded. */
+    passed?: boolean | null;
     /** Teacher has published the results (Publish Results). */
     resultPublished?: boolean;
     startedAt: string;
@@ -154,6 +158,8 @@ export interface ExamAttemptReview {
     maxScore?: number;
     objectiveScore: number | null;
     finalScore: number | null;
+    passScore?: number | null;
+    passed?: boolean | null;
     submittedAt: string | null;
     /** Results and correct/wrong answers are released (scores published). */
     revealAnswers: boolean;
@@ -215,6 +221,12 @@ export const getStudentExams = async (page = 0, size = 10) => {
 
 export const getMyExamAttempts = async () => {
     const response = await api.get<ExamAttemptSummary[]>('/exams/my-attempts');
+    return response.data;
+};
+
+/** examId -> reason, only for exams locked by lesson/section progress. */
+export const getMyExamLocks = async () => {
+    const response = await api.get<Record<string, string>>('/exams/my-locks');
     return response.data;
 };
 
@@ -388,6 +400,16 @@ export const sendAnonymousIntegrityEvents = async (
     });
 };
 
+export interface DuplicateMatch {
+    questionId: number | null;
+    questionOrder: number;
+    otherAttemptId: number;
+    otherStudentName: string;
+    similarity: number;
+    matchType: string | null;
+    explanation: string | null;
+}
+
 export interface IntegrityReportRow {
     studentId: number;
     studentName: string;
@@ -418,6 +440,10 @@ export interface IntegrityReportRow {
     faceMissingCount: number;
     multipleFacesCount: number;
     headTurnedCount: number;
+    differentPersonCount: number;
+    extremeDuration: boolean;
+    duplicateContentCount: number;
+    duplicateMatches: DuplicateMatch[];
     hasEntryPhoto: boolean;
     totalAwaySeconds: number;
     lastViolationAt: string | null;
@@ -431,6 +457,10 @@ export interface IntegrityReport {
     antiCheatEnabled: boolean;
     totalAttempts: number;
     flaggedAttempts: number;
+    extremeDurationAttempts: number;
+    headTurnAngleDeg?: number;
+    headTurnSeconds?: number;
+    fastSubmitPercent?: number;
     totalViolations: number;
     totalsByType: Record<string, number>;
     rows: IntegrityReportRow[];

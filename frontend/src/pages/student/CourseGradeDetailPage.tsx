@@ -10,7 +10,8 @@ import {
     CardDescription,
 } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
+import { examApi } from "@/api/features/exam.api";
 import { useNavigate, useParams } from "react-router-dom";
 import {
     Table,
@@ -38,11 +39,69 @@ export default function CourseGradeDetailPage() {
         enabled: isValidId,
     });
 
+    const {
+        data: publishedScores = [],
+    } = useQuery({
+        queryKey: ["my-published-exam-scores"],
+        queryFn: examApi.getMyPublishedExamScores,
+        enabled: isValidId,
+    });
+
     const course = courseScores.find(
         (item) => item.courseId === id
     );
 
     const gradeItems = course?.gradeItems ?? [];
+
+    const bestAttemptByExam = new Map<
+        number,
+        (typeof publishedScores)[number]
+    >();
+
+    for (const attempt of publishedScores) {
+        if (
+            attempt.examId == null ||
+            attempt.attemptId == null ||
+            attempt.finalScore == null ||
+            attempt.submittedAt == null ||
+            !attempt.resultPublished
+        ) {
+            continue;
+        }
+
+        const current = bestAttemptByExam.get(attempt.examId);
+
+        const attemptScore = attempt.finalScore;
+        const currentScore = current?.finalScore;
+
+        const attemptTime = Date.parse(attempt.submittedAt);
+        const currentTime = current
+            ? Date.parse(current.submittedAt)
+            : 0;
+
+        const isBetter =
+            !current ||
+            currentScore == null ||
+            (
+                attemptScore != null &&
+                (
+                    attemptScore > currentScore ||
+                    (
+                        attemptScore === currentScore &&
+                        attemptTime > currentTime
+                    ) ||
+                    (
+                        attemptScore === currentScore &&
+                        attemptTime === currentTime &&
+                        attempt.attemptNumber > current.attemptNumber
+                    )
+                )
+            );
+
+        if (isBetter) {
+            bestAttemptByExam.set(attempt.examId, attempt);
+        }
+    }
 
     return (
         <MainLayout pathName={{ "my-scores": "My Scores" }}>
@@ -176,20 +235,58 @@ export default function CourseGradeDetailPage() {
 
                                                     const showCategory = currentCategory !== previousCategory;
 
+                                                    console.log({
+                                                        index,
+                                                        currentCategory,
+                                                        previousCategory,
+                                                        showCategory,
+                                                    });
+
                                                     return (
                                                         <TableRow
                                                             key={`${item.examId ?? item.gradeCategory}-${index}`}
                                                             className={
                                                                 showCategory && index > 0
-                                                                    ? "border-b-0 border-t-2 border-t-border"
-                                                                    : "border-b-0 border-t-0"
+                                                                    ? "!border-t-2 !border-t-solid !border-t-muted-foreground/10 border-b-0"
+                                                                    : "border-0"
                                                             }
                                                         >
                                                             <TableCell className="font-medium">
                                                                 {showCategory ? currentCategory : ""}
                                                             </TableCell>
 
-                                                            <TableCell>{item.gradeItem || "-"}</TableCell>
+                                                            <TableCell>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span>{item.gradeItem || "-"}</span>
+
+                                                                    {(() => {
+                                                                        const attempt =
+                                                                            item.examId != null
+                                                                                ? bestAttemptByExam.get(item.examId)
+                                                                                : undefined;
+
+                                                                        return item.value != null && attempt ? (
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-7 w-7 shrink-0"
+                                                                                aria-label="Review exam"
+                                                                                title="Review Exam"
+                                                                                onClick={() =>
+                                                                                    window.open(
+                                                                                        `/student/exams/attempts/${attempt.attemptId}/review`,
+                                                                                        "_blank",
+                                                                                        "noopener,noreferrer"
+                                                                                    )
+                                                                                }
+                                                                            >
+                                                                                <ExternalLink className="h-4 w-4" />
+                                                                            </Button>
+                                                                        ) : null;
+                                                                    })()}
+                                                                </div>
+                                                            </TableCell>
 
                                                             <TableCell>
                                                                 {item.gradeWeight != null

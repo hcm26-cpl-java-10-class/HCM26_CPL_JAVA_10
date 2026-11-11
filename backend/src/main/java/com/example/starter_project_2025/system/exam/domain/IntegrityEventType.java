@@ -16,5 +16,6 @@ public enum IntegrityEventType {
     CAMERA_COVERED,    // camera bi che (toi/dong nhat)
     FACE_MISSING,      // nguoi thi roi khoi camera
     MULTIPLE_FACES,    // co nguoi khac xuat hien trong camera
-    HEAD_TURNED        // quay/cui/ngua dau qua 45 do (nhin ra ngoai man hinh)
+    HEAD_TURNED,       // quay/cui/ngua dau qua 45 do (nhin ra ngoai man hinh)
+    DIFFERENT_PERSON   // khuon mat khac voi anh chup luc vao thi (nguoi khac thi ho)
 }

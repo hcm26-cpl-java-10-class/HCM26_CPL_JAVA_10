@@ -93,6 +93,11 @@ function SectionLessonsList({
                 <span className="text-[11px] text-muted-foreground">
                   {lesson.contentType} · {lesson.duration ? `${lesson.duration}m` : "No duration"}
                 </span>
+                {lessonExam && (
+                  <span className="block text-[11px] text-purple-600 dark:text-purple-400">
+                    Quiz unlocks after this lesson is completed
+                  </span>
+                )}
               </div>
             </div>
 
@@ -132,7 +137,7 @@ function SectionLessonsList({
                   onClick={() => onAttachExam(lesson)}
                 >
                   <Plus className="size-3" />
-                  Attach Assessment
+                  Add quiz
                 </Button>
               )}
             </div>
@@ -151,11 +156,11 @@ export default function ExamCurriculumPage() {
   const courseId = Number.isSafeInteger(parsedCourseId) && parsedCourseId > 0 ? parsedCourseId : 0;
 
   const [courseSearch, setCourseSearch] = useState("");
-  const [expandedSectionIds, setExpandedSectionIds] = useState<Set<number>>(new Set());
+  const [collapsedSectionIds, setCollapsedSectionIds] = useState<Set<number>>(new Set());
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [linkTarget, setLinkTarget] = useState<{
-    type: "section" | "lesson";
-    id: number;
+    type: "section" | "lesson" | "course";
+    id?: number;
     title: string;
   } | null>(null);
 
@@ -196,6 +201,9 @@ export default function ExamCurriculumPage() {
     if (Array.isArray(raw)) return raw;
     return [];
   }, [courseExamsQuery.data]);
+  const courseLevelExams = courseExams.filter(
+    (exam) => exam.category === "FINAL_TEST" && !exam.sectionId && !exam.lessonId
+  );
 
   // Mutations
   const unlinkExamMutation = useMutation({
@@ -223,7 +231,7 @@ export default function ExamCurriculumPage() {
   }, [courses, courseSearch]);
 
   const toggleSectionLessons = (secId: number) => {
-    setExpandedSectionIds((prev) => {
+    setCollapsedSectionIds((prev) => {
       const next = new Set(prev);
       if (next.has(secId)) next.delete(secId);
       else next.add(secId);
@@ -257,7 +265,7 @@ export default function ExamCurriculumPage() {
                 </h1>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Attach and organize assessments directly across courses, sections, and individual lessons.
+                Add a quiz to a lesson and place the final exam after all course lessons.
               </p>
             </div>
           </div>
@@ -421,7 +429,7 @@ export default function ExamCurriculumPage() {
                 ) : (
                   sections.map((section) => {
                     const sectionExams = courseExams.filter((e) => e.sectionId === section.id && !e.lessonId);
-                    const isLessonsExpanded = expandedSectionIds.has(section.id!);
+                    const isLessonsExpanded = !collapsedSectionIds.has(section.id!);
 
                     return (
                       <div
@@ -464,7 +472,7 @@ export default function ExamCurriculumPage() {
                               ) : (
                                 <ChevronDown className="size-3.5" />
                               )}
-                              <span>Lessons</span>
+                              <span>{isLessonsExpanded ? "Hide lessons" : "Lessons & quizzes"}</span>
                             </Button>
                           </div>
                         </div>
@@ -489,15 +497,14 @@ export default function ExamCurriculumPage() {
                               }}
                             >
                               <Plus className="size-3.5" />
-                              Attach Assessment
+                              Add section assessment
                             </Button>
                           </div>
 
                           {sectionExams.length === 0 ? (
                             <div className="rounded-xl border border-dashed border-border/70 bg-background/30 p-4 text-center">
                               <p className="text-xs text-muted-foreground">
-                                No assessments attached to this section yet. Click{" "}
-                                <span className="font-semibold text-indigo-400">&quot;Attach Assessment&quot;</span> to link one.
+                                No section assessment added. Use the lesson rows below to add a quiz after an individual lesson.
                               </p>
                             </div>
                           ) : (
@@ -517,7 +524,7 @@ export default function ExamCurriculumPage() {
                         {isLessonsExpanded && (
                           <div className="space-y-2 pt-2 border-t">
                             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-                              Lessons in this Section:
+                              Lessons and quizzes:
                             </span>
                             <SectionLessonsList
                               sectionId={section.id!}
@@ -539,6 +546,50 @@ export default function ExamCurriculumPage() {
                   })
                 )}
               </div>
+
+              <section className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.04] p-5 shadow-xs">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                      <ClipboardCheck className="size-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="font-semibold text-foreground">Final exam</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Show this assessment at the end of the course. Students can open it after completing all active lessons.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 border-amber-500/40 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300"
+                    onClick={() => {
+                      setLinkTarget({ type: "course", title: `Course: ${selectedCourse?.name ?? "Final exam"}` });
+                      setLinkModalOpen(true);
+                    }}
+                  >
+                    <Plus className="size-3.5" />
+                    Add final exam
+                  </Button>
+                </div>
+                <div className="mt-4 space-y-2.5">
+                  {courseLevelExams.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-amber-500/30 bg-background/40 p-4 text-center text-sm text-muted-foreground">
+                      No final exam added yet. Choose an existing assessment or create one first.
+                    </div>
+                  ) : (
+                    courseLevelExams.map((exam) => (
+                      <CurriculumExamItem
+                        key={exam.id}
+                        exam={exam}
+                        onUnlink={(item) => setUnlinkTarget(item)}
+                      />
+                    ))
+                  )}
+                </div>
+              </section>
             </div>
           )}
 

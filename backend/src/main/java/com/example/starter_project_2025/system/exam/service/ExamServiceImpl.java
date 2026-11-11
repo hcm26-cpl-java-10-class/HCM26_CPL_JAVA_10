@@ -105,8 +105,6 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 					return ExamInvitationOverviewDTO.builder()
 							.examId(exam.getId())
 							.examTitle(exam.getTitle())
-							.startTime(exam.getStartTime())
-							.endTime(exam.getEndTime())
 							.total(invitations.size())
 							.pending(counts.getOrDefault(InvitationStatus.PENDING, 0L).intValue())
 							.sent(counts.getOrDefault(InvitationStatus.SENT, 0L).intValue())
@@ -119,8 +117,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 							.build();
 				})
 				.filter(dto -> dto.getTotal() != null && dto.getTotal() > 0)
-				.sorted(Comparator.comparing(ExamInvitationOverviewDTO::getStartTime,
-						Comparator.nullsLast(Comparator.naturalOrder())))
+				.sorted(Comparator.comparing(ExamInvitationOverviewDTO::getExamId, Comparator.reverseOrder()))
 				.toList();
 	}
 
@@ -141,11 +138,6 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 
 	@Override
 	protected void beforeDelete(Exam exam) {
-		LocalDateTime now = LocalDateTime.now();
-		if (exam.getStartTime() != null && now.isAfter(exam.getStartTime())
-				&& (exam.getEndTime() == null || now.isBefore(exam.getEndTime()))) {
-			throw new BadRequestException("Cannot delete an exam that is currently in progress");
-		}
 		if (examAttemptRepository.existsByExam_IdAndStatusIn(
 				exam.getId(),
 				List.of(ExamAttemptStatus.NOT_STARTED, ExamAttemptStatus.IN_PROGRESS))) {

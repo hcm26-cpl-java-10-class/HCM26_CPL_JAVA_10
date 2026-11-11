@@ -27,6 +27,7 @@ public class ExamResultStatisticsService {
     private final ExamRepository examRepository;
     private final ExamAttemptRepository attemptRepository;
     private final ExamResultReadinessService readinessService;
+    private final ExamGradeScaleService gradeScaleService;
 
     public static BigDecimal resolvePassThreshold(Exam exam) {
         if (exam == null) {
@@ -81,55 +82,23 @@ public class ExamResultStatisticsService {
                 .min(BigDecimal::compareTo)
                 .orElse(null);
 
-        Map<String, Long> distribution = new LinkedHashMap<>();
-        distribution.put("0-49%", 0L);
-        distribution.put("50-59%", 0L);
-        distribution.put("60-69%", 0L);
-        distribution.put("70-79%", 0L);
-        distribution.put("80-89%", 0L);
-        distribution.put("90%+", 0L);
-        distribution.put("N/A", 0L);
+        // Tính phân phối theo khoảng % (PERCENTAGE) dựa trên cấu hình tùy chỉnh
+        List<com.example.starter_project_2025.system.exam.dto.GradeScaleDTO> percentScales = gradeScaleService.getScales(examId, "PERCENTAGE");
+        List<ExamResultStatisticsDTO.ScoreBandDTO> scoreDistribution = new ArrayList<>();
 
-        for (ExamAttempt attempt : completedAttempts) {
-            BigDecimal maxScore = ExamScoring.effectiveMax(attempt.getMaxScore());
+        for (var scale : percentScales) {
+            long count = completedAttempts.stream()
+                    .filter(attempt -> {
+                        if (attempt.getFinalScore() == null) return false;
+                        BigDecimal maxScore = ExamScoring.effectiveMax(attempt.getMaxScore());
+                        if (maxScore.signum() <= 0) return false;
+                        double pct = attempt.getFinalScore().doubleValue() * 100.0 / maxScore.doubleValue();
+                        return pct >= scale.minScore().doubleValue() && pct <= scale.maxScore().doubleValue();
+                    })
+                    .count();
 
-            if (maxScore.signum() <= 0) {
-                distribution.merge("N/A", 1L, Long::sum);
-                continue;
-            }
-
-            double percentage =
-                    attempt.getFinalScore().doubleValue() * 100.0 / maxScore.doubleValue();
-
-            String range;
-
-            if (percentage < 50) {
-                range = "0-49%";
-            } else if (percentage < 60) {
-                range = "50-59%";
-            } else if (percentage < 70) {
-                range = "60-69%";
-            } else if (percentage < 80) {
-                range = "70-79%";
-            } else if (percentage < 90) {
-                range = "80-89%";
-            } else {
-                range = "90%+";
-            }
-
-            distribution.merge(range, 1L, Long::sum);
+            scoreDistribution.add(new ExamResultStatisticsDTO.ScoreBandDTO(scale.gradeLetter(), count));
         }
-
-        List<ExamResultStatisticsDTO.ScoreBandDTO> scoreDistribution =
-                new ArrayList<>();
-
-        distribution.forEach((range, count) ->
-                scoreDistribution.add(
-                        new ExamResultStatisticsDTO.ScoreBandDTO(
-                                range, count
-                        )
-                )
-        );
 
         BigDecimal passThreshold = resolvePassThreshold(exam);
 
@@ -152,6 +121,35 @@ public class ExamResultStatisticsService {
                     .doubleValue();
         }
 
+        // Tính phân phối theo Grade chữ (A, B, C, D, F)
+        List<com.example.starter_project_2025.system.exam.dto.GradeScaleDTO> scales = gradeScaleService.getScales(examId, "GRADE");
+        List<ExamResultStatisticsDTO.GradeDistributionDTO> gradeDistribution = new ArrayList<>();
+
+        for (var scale : scales) {
+            long count = completedAttempts.stream()
+                    .filter(a -> {
+                        if (a.getFinalScore() == null) return false;
+                        BigDecimal score = a.getFinalScore();
+                        return score.compareTo(scale.minScore()) >= 0 && score.compareTo(scale.maxScore()) <= 0;
+                    })
+                    .count();
+
+            Double pct = completedAttempts.isEmpty() ? 0.0 :
+                    BigDecimal.valueOf(count * 100.0 / completedAttempts.size())
+                            .setScale(2, RoundingMode.HALF_UP)
+                            .doubleValue();
+
+            gradeDistribution.add(new ExamResultStatisticsDTO.GradeDistributionDTO(
+                    scale.gradeLetter(),
+                    scale.label(),
+                    scale.minScore(),
+                    scale.maxScore(),
+                    scale.color(),
+                    count,
+                    pct
+            ));
+        }
+
         return new ExamResultStatisticsDTO(
                 exam.getId(),
                 exam.getTitle(),
@@ -167,7 +165,8 @@ public class ExamResultStatisticsService {
                 passRate,
                 failedAttempts,
                 failRate,
-                passThreshold
+                passThreshold,
+                gradeDistribution
         );
     }
 }

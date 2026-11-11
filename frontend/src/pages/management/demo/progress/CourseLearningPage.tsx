@@ -60,7 +60,7 @@ export function CourseLearningPage() {
 
   const courseId = progressQuery.data?.courseId;
 
-  // Exams linked to this course's lessons/sections, with lock state computed by the backend.
+  // Exams linked to this course's curriculum, with lock state computed by the backend.
   const examsQuery = useQuery({
     queryKey: ["course-exams", courseId],
     queryFn: () => examApi.listByCourse(courseId as number),
@@ -75,7 +75,11 @@ export function CourseLearningPage() {
       return;
     }
 
-    navigate(`/student/exams/${exam.id}/take`);
+    navigate(`/student/exams/${exam.id}/take`, {
+      state: {
+        returnTo: `/enrollments/${enrollmentId}/learn`,
+      },
+    });
   };
 
   const certificateQuery = useQuery({
@@ -142,7 +146,7 @@ export function CourseLearningPage() {
 
       // Completing a lesson can unlock exams: refresh their lock state.
       void queryClient.invalidateQueries({ queryKey: ["course-exams"] });
-
+      void queryClient.invalidateQueries({ queryKey: ["student-exam-locks"] });
       toast.success("Progress updated.");
     },
 
@@ -253,16 +257,26 @@ export function CourseLearningPage() {
                 </Button>
               </div>
           ) : progressQuery.data.lessons.length === 0 ? (
-              <div className="rounded-2xl border border-dashed p-12 text-center">
-                <BookOpen className="mx-auto size-12 text-muted-foreground" />
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-dashed p-12 text-center">
+                  <BookOpen className="mx-auto size-12 text-muted-foreground" />
 
-                <h1 className="mt-4 text-xl font-semibold">
-                  {progressQuery.data.courseName}
-                </h1>
+                  <h1 className="mt-4 text-xl font-semibold">
+                    {progressQuery.data.courseName}
+                  </h1>
 
-                <p className="mt-2 text-sm text-muted-foreground">
-                  This course has no lessons yet.
-                </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    This course has no lessons yet.
+                  </p>
+                </div>
+
+                <LessonProgressSidebar
+                    progress={progressQuery.data}
+                    activeLessonId={activeLessonId}
+                    onLessonSelect={selectLesson}
+                    exams={examsQuery.data}
+                    onExamOpen={openExam}
+                />
               </div>
           ) : (
               <div className="grid gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">

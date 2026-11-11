@@ -14,21 +14,24 @@ import {
 import { formatScore } from "@/utils/examScore";
 
 const TYPE_LABEL: Record<string, string> = {
-    TAB_HIDDEN: "Rời tab",
-    WINDOW_BLUR: "Chuyển cửa sổ",
-    FULLSCREEN_EXIT: "Thoát toàn màn hình",
-    COPY: "Sao chép",
-    CUT: "Cắt",
-    PASTE: "Dán",
-    CONTEXT_MENU: "Chuột phải",
-    DEVTOOLS_KEY: "Phím DevTools",
-    PRINT_ATTEMPT: "In / chụp màn hình",
-    MULTI_SESSION: "Mở nhiều nơi",
+    TAB_HIDDEN: "Tab switch",
+    WINDOW_BLUR: "Window switch",
+    FULLSCREEN_EXIT: "Fullscreen exit",
+    COPY: "Copy",
+    CUT: "Cut",
+    PASTE: "Paste",
+    CONTEXT_MENU: "Right-click",
+    DEVTOOLS_KEY: "DevTools key",
+    PRINT_ATTEMPT: "Print / screenshot",
+    MULTI_SESSION: "Multiple sessions",
     CAMERA_OFF: "Camera off",
     CAMERA_COVERED: "Camera covered",
     FACE_MISSING: "Left camera view",
     MULTIPLE_FACES: "Extra person in view",
-    HEAD_TURNED: "Head turned > 35°",
+    HEAD_TURNED: "Head turned",
+    DIFFERENT_PERSON: "Different person",
+    DUPLICATE_CONTENT: "Duplicate content",
+    EXTREME_DURATION: "Submitted too fast",
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -47,22 +50,29 @@ const TYPE_COLOR: Record<string, string> = {
     FACE_MISSING: "bg-teal-500",
     MULTIPLE_FACES: "bg-indigo-600",
     HEAD_TURNED: "bg-cyan-600",
+    DIFFERENT_PERSON: "bg-red-800",
+    DUPLICATE_CONTENT: "bg-purple-700",
+    EXTREME_DURATION: "bg-amber-600",
 };
 
 /** Nhom loai vi pham dung cho bo loc (khop cac cot dem cua bang). */
-const FILTER_TYPES: { key: string; label: string; count: (r: IntegrityReportRow) => number }[] = [
-    { key: "TAB_HIDDEN", label: "Rời tab", count: (r) => r.tabSwitchCount },
-    { key: "WINDOW_BLUR", label: "Chuyển cửa sổ", count: (r) => r.windowBlurCount },
-    { key: "FULLSCREEN_EXIT", label: "Thoát toàn màn hình", count: (r) => r.fullscreenExitCount },
-    { key: "COPY", label: "Sao chép / dán", count: (r) => r.copyPasteCount },
-    { key: "CONTEXT_MENU", label: "Chuột phải", count: (r) => r.contextMenuCount },
-    { key: "DEVTOOLS_KEY", label: "Phím tắt DevTools / in", count: (r) => r.shortcutCount },
-    { key: "MULTI_SESSION", label: "Mở nhiều nơi", count: (r) => r.multiSessionCount },
+const FILTER_TYPES: { key: string; label: string; count: (r: IntegrityReportRow) => number; warning?: boolean }[] = [
+    { key: "TAB_HIDDEN", label: "Tab switch", count: (r) => r.tabSwitchCount },
+    { key: "WINDOW_BLUR", label: "Window switch", count: (r) => r.windowBlurCount },
+    { key: "FULLSCREEN_EXIT", label: "Fullscreen exit", count: (r) => r.fullscreenExitCount },
+    { key: "COPY", label: "Copy / paste", count: (r) => r.copyPasteCount },
+    { key: "CONTEXT_MENU", label: "Right-click", count: (r) => r.contextMenuCount },
+    { key: "DEVTOOLS_KEY", label: "DevTools / print shortcuts", count: (r) => r.shortcutCount },
+    { key: "MULTI_SESSION", label: "Multiple sessions", count: (r) => r.multiSessionCount },
     { key: "CAMERA_OFF", label: "Camera off", count: (r) => r.cameraOffCount },
     { key: "CAMERA_COVERED", label: "Camera covered", count: (r) => r.cameraCoveredCount },
     { key: "FACE_MISSING", label: "Left camera view", count: (r) => r.faceMissingCount },
     { key: "MULTIPLE_FACES", label: "Extra person in view", count: (r) => r.multipleFacesCount },
-    { key: "HEAD_TURNED", label: "Head turned > 35°", count: (r) => r.headTurnedCount },
+    { key: "HEAD_TURNED", label: "Head turned", count: (r) => r.headTurnedCount },
+    { key: "DIFFERENT_PERSON", label: "Different person", count: (r) => r.differentPersonCount },
+    { key: "DUPLICATE_CONTENT", label: "Duplicate content", count: (r) => r.duplicateContentCount },
+    // warning only: not counted as a violation and does not flag the attempt
+    { key: "EXTREME_DURATION", label: "Submitted too fast", count: (r) => (r.extremeDuration ? 1 : 0), warning: true },
 ];
 
 const PAGE_SIZE = 10;
@@ -76,7 +86,7 @@ const fmtDuration = (s?: number | null) => {
 };
 
 function typeCounts(r: IntegrityReportRow): [string, number][] {
-    return FILTER_TYPES.map((t) => [t.key, t.count(r)] as [string, number]).filter(([, n]) => n > 0);
+    return FILTER_TYPES.filter((t) => !t.warning).map((t) => [t.key, t.count(r)] as [string, number]).filter(([, n]) => n > 0);
 }
 
 function StatCard({ label, value, tone }: { label: string; value: number; tone?: "red" | "amber" | "default" }) {
@@ -100,7 +110,7 @@ function BarRow({ label, value, max, color }: { label: string; value: number; ma
             <div className="h-2.5 overflow-hidden rounded-full bg-muted">
                 <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
             </div>
-            <span className="text-right tabular-nums">{value}</span>
+            <span className="text-right tabular-nums">({value})</span>
         </div>
     );
 }
@@ -130,19 +140,19 @@ function EventList({ examId, attemptId }: { examId: number; attemptId: number })
         queryKey: ["integrity-events", examId, attemptId],
         queryFn: () => getIntegrityEvents(examId, attemptId),
     });
-    if (q.isLoading) return <p className="text-sm text-muted-foreground">Đang tải sự kiện...</p>;
-    if (!q.data?.length) return <p className="text-sm text-muted-foreground">Không có sự kiện vi phạm nào.</p>;
+    if (q.isLoading) return <p className="text-sm text-muted-foreground">Loading events...</p>;
+    if (!q.data?.length) return <p className="text-sm text-muted-foreground">No violation events.</p>;
     return (
         <div className="max-h-64 overflow-auto rounded-md border">
             <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-muted/80 text-left text-muted-foreground">
                     <tr>
-                        <th className="px-3 py-1.5">Thời điểm</th>
-                        <th className="px-3 py-1.5">Loại</th>
-                        <th className="px-3 py-1.5">Rời (giây)</th>
+                        <th className="px-3 py-1.5">Time</th>
+                        <th className="px-3 py-1.5">Type</th>
+                        <th className="px-3 py-1.5">Away (s)</th>
                         <th className="px-3 py-1.5">IP</th>
-                        <th className="px-3 py-1.5">Trình duyệt</th>
-                        <th className="px-3 py-1.5">Chi tiết</th>
+                        <th className="px-3 py-1.5">Browser</th>
+                        <th className="px-3 py-1.5">Details</th>
                         <th className="px-3 py-1.5">Photo</th>
                     </tr>
                 </thead>
@@ -193,6 +203,11 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
     });
     const report = query.data;
 
+    const labelOf = (key: string, base: string) =>
+        key === "HEAD_TURNED" ? `Head turned > ${report?.headTurnAngleDeg ?? 35}°`
+            : key === "EXTREME_DURATION" ? `Submitted too fast (< ${report?.fastSubmitPercent ?? 20}% of the time)`
+                : base;
+
     const rows = useMemo(() => {
         const term = search.trim().toLowerCase();
         const typeDef = FILTER_TYPES.find((t) => t.key === typeFilter);
@@ -220,48 +235,49 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
     const maxType = Math.max(1, ...typeTotals.map(([, n]) => n));
 
     const filters: { key: Filter; label: string }[] = [
-        { key: "ALL", label: "Tất cả" },
-        { key: "FLAGGED", label: "Bị gắn cờ" },
+        { key: "ALL", label: "All" },
+        { key: "FLAGGED", label: "Flagged" },
     ];
 
     return (
         <section className="min-w-0 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm">
             <div>
-                <h2 className="text-lg font-semibold">Integrity Report (Báo cáo vi phạm)</h2>
+                <h2 className="text-lg font-semibold">Integrity Report</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Số lần vi phạm của từng lượt thi, kèm thông tin sinh viên. Chỉ ghi nhận, không tự động xử lý.
+                    Number of violations per attempt, with student information. Violations are only recorded; nothing is handled automatically.
                 </p>
             </div>
 
-            {query.isLoading && <p className="mt-4 text-sm text-muted-foreground">Đang tải...</p>}
-            {query.isError && <p className="mt-4 text-sm text-destructive">Không tải được báo cáo vi phạm.</p>}
+            {query.isLoading && <p className="mt-4 text-sm text-muted-foreground">Loading...</p>}
+            {query.isError && <p className="mt-4 text-sm text-destructive">Unable to load the integrity report.</p>}
 
             {report && !report.antiCheatEnabled && (
                 <p className="mt-4 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                    Đề thi này chưa bật chống gian lận. Bật trong form sửa đề (Anti-cheating monitoring); dữ liệu cũ (nếu có) vẫn hiển thị bên dưới.
+                    Anti-cheating is not enabled for this exam. Turn it on in the exam edit form (Anti-cheating monitoring); any existing data is still shown below.
                 </p>
             )}
 
             {report && (
                 <>
-                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <StatCard label="Lượt thi" value={report.totalAttempts} />
-                        <StatCard label="Bị gắn cờ (có vi phạm)" value={report.flaggedAttempts} tone="red" />
-                        <StatCard label="Tổng vi phạm" value={report.totalViolations} />
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <StatCard label="Attempts" value={report.totalAttempts} />
+                        <StatCard label="Flagged (with violations)" value={report.flaggedAttempts} tone="red" />
+                        <StatCard label="Total violations" value={report.totalViolations} />
+                        <StatCard label="Submitted too fast (warning)" value={report.extremeDurationAttempts ?? 0} tone="amber" />
                     </div>
 
                     <div className="mt-4 rounded-lg border p-4">
-                        <p className="text-sm font-medium">Số vi phạm theo loại</p>
+                        <p className="text-sm font-medium">Violations by type</p>
                         <div className="mt-3 grid gap-2 lg:grid-cols-2 lg:gap-x-8">
                             {typeTotals.length === 0 && (
-                                <p className="text-sm text-muted-foreground">Chưa ghi nhận vi phạm nào.</p>
+                                <p className="text-sm text-muted-foreground">No violations recorded yet.</p>
                             )}
                             {typeTotals.map(([t, n]) => (
-                                <BarRow key={t} label={TYPE_LABEL[t] ?? t} value={n} max={maxType} color={TYPE_COLOR[t] ?? "bg-slate-400"} />
+                                <BarRow key={t} label={labelOf(t, TYPE_LABEL[t] ?? t)} value={n} max={maxType} color={TYPE_COLOR[t] ?? "bg-slate-400"} />
                             ))}
                         </div>
                         <p className="mt-3 text-xs text-muted-foreground">
-                            Cờ: lượt thi có ít nhất 1 vi phạm.
+                            Flag: an attempt with at least 1 violation or with answers duplicated from another student. "Submitted too fast" (under {report.fastSubmitPercent ?? 20}% of the exam time) is only a warning and does not flag the attempt. Exam settings: head turned over {report.headTurnAngleDeg ?? 35}° for {report.headTurnSeconds ?? 2}s counts as a violation.
                         </p>
                     </div>
 
@@ -270,7 +286,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <input
                                 className="h-9 w-64 rounded-md border bg-background pl-8 pr-3 text-sm"
-                                placeholder="Tìm tên / email / mã..."
+                                placeholder="Search name / email / code..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                             />
@@ -293,24 +309,24 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                             className="h-9 rounded-md border bg-background px-2 text-sm"
                             value={typeFilter}
                             onChange={(e) => setTypeFilter(e.target.value)}
-                            aria-label="Lọc theo loại vi phạm"
+                            aria-label="Filter by violation type"
                         >
-                            <option value="ALL">Loại vi phạm: tất cả</option>
+                            <option value="ALL">Violation type: all</option>
                             {FILTER_TYPES.map((t) => (
-                                <option key={t.key} value={t.key}>{t.label}</option>
+                                <option key={t.key} value={t.key}>{labelOf(t.key, t.label)}</option>
                             ))}
                         </select>
                         <select
                             className="h-9 rounded-md border bg-background px-2 text-sm"
                             value={sort}
                             onChange={(e) => setSort(e.target.value as Sort)}
-                            aria-label="Sắp xếp"
+                            aria-label="Sort"
                         >
-                            <option value="FLAG">Sắp xếp: gắn cờ trước</option>
-                            <option value="VIOLATIONS">Sắp xếp: nhiều vi phạm nhất</option>
-                            <option value="NAME">Sắp xếp: theo tên</option>
+                            <option value="FLAG">Sort: flagged first</option>
+                            <option value="VIOLATIONS">Sort: most violations</option>
+                            <option value="NAME">Sort: by name</option>
                         </select>
-                        <span className="text-sm text-muted-foreground">{rows.length} lượt</span>
+                        <span className="text-sm text-muted-foreground">{rows.length} attempts</span>
                     </div>
 
                     <div className="mt-3 overflow-x-auto rounded-lg border">
@@ -318,15 +334,15 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
                                 <tr>
                                     <th className="w-8 px-3 py-2" />
-                                    <th className="px-3 py-2">Sinh viên</th>
-                                    <th className="px-3 py-2">Lượt thi</th>
-                                    <th className="px-3 py-2">Vi phạm</th>
-                                    <th className="px-3 py-2">Cờ</th>
+                                    <th className="px-3 py-2">Student</th>
+                                    <th className="px-3 py-2">Attempt</th>
+                                    <th className="px-3 py-2">Violations</th>
+                                    <th className="px-3 py-2">Flag</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pageRows.length === 0 && (
-                                    <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">Không có dữ liệu.</td></tr>
+                                    <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">No data.</td></tr>
                                 )}
                                 {pageRows.map((r) => {
                                     const open = expanded === r.attemptId;
@@ -345,17 +361,25 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                     <div className="text-xs text-muted-foreground">{r.email ?? "—"}</div>
                                                     <div className="text-xs text-muted-foreground">
                                                         {[r.username, r.employeeCode, r.phone].filter(Boolean).join(" · ") || "—"}
-                                                        {r.guest && <span className="ml-1 rounded bg-muted px-1.5 py-0.5">Khách</span>}
+                                                        {r.guest && <span className="ml-1 rounded bg-muted px-1.5 py-0.5">Guest</span>}
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-3">
-                                                    <div>Lượt #{r.attemptNumber}</div>
+                                                    <div>Attempt #{r.attemptNumber}</div>
                                                     <div className="text-xs text-muted-foreground">
                                                         {r.finalScore != null || r.objectiveScore != null
-                                                            ? `${formatScore(r.finalScore ?? r.objectiveScore)}/${formatScore(r.maxScore ?? 10)} điểm`
-                                                            : "Chưa có điểm"}
+                                                            ? `${formatScore(r.finalScore ?? r.objectiveScore)}/${formatScore(r.maxScore ?? 10)} points`
+                                                            : "No score yet"}
                                                     </div>
-                                                    <div className="text-xs text-muted-foreground">Làm {fmtDuration(r.durationSeconds)}</div>
+                                                    <div className="text-xs text-muted-foreground">Took {fmtDuration(r.durationSeconds)}</div>
+                                                    {r.extremeDuration && (
+                                                        <span
+                                                            className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                                            title="Submitted in under 20% of the exam time (warning only)"
+                                                        >
+                                                            ⚠ Submitted too fast
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-3 py-3">
                                                     <div className={`text-lg font-semibold tabular-nums ${r.totalViolations > 0 ? "" : "text-muted-foreground"}`}>
@@ -365,7 +389,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                         {counts.map(([t, n]) => (
                                                             <span key={t} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
                                                                 <span className={`size-1.5 rounded-full ${TYPE_COLOR[t] ?? "bg-slate-400"}`} />
-                                                                {TYPE_LABEL[t] ?? t} {n}
+                                                                {TYPE_LABEL[t] ?? t} ({n})
                                                             </span>
                                                         ))}
                                                     </div>
@@ -373,7 +397,7 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                 <td className="px-3 py-3">
                                                     {r.flagged ? (
                                                         <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-300">
-                                                            Bị gắn cờ
+                                                            Flagged
                                                         </span>
                                                     ) : (
                                                         <span className="text-xs text-muted-foreground">—</span>
@@ -384,14 +408,43 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
                                                 <tr className="border-t bg-muted/20">
                                                     <td colSpan={5} className="p-4">
                                                         <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
-                                                            <span>Bắt đầu: {fmtDate(r.startedAt)}</span>
-                                                            <span>Nộp bài: {fmtDate(r.submittedAt)}</span>
-                                                            <span>Tổng thời gian rời bài: {fmtDuration(r.totalAwaySeconds)}</span>
-                                                            <span>Vi phạm gần nhất: {fmtDate(r.lastViolationAt)}</span>
-                                                            {r.description && <span className="sm:col-span-2 lg:col-span-4">Mô tả: {r.description}</span>}
+                                                            <span>Started: {fmtDate(r.startedAt)}</span>
+                                                            <span>Submitted: {fmtDate(r.submittedAt)}</span>
+                                                            <span>Total time away: {fmtDuration(r.totalAwaySeconds)}</span>
+                                                            <span>Last violation: {fmtDate(r.lastViolationAt)}</span>
+                                                            {r.description && <span className="sm:col-span-2 lg:col-span-4">Description: {r.description}</span>}
                                                         </div>
                                                         {r.hasEntryPhoto && <EntryPhotoBox examId={examId} attemptId={r.attemptId} />}
-                                                        <p className="mb-2 mt-3 text-sm font-medium">Chi tiết sự kiện</p>
+                                                        {r.duplicateMatches?.length > 0 && (
+                                                            <div className="mt-3">
+                                                                <p className="mb-2 text-sm font-medium">Duplicate content ({r.duplicateMatches.length})</p>
+                                                                <div className="overflow-auto rounded-md border">
+                                                                    <table className="w-full text-xs">
+                                                                        <thead className="bg-muted/80 text-left text-muted-foreground">
+                                                                            <tr>
+                                                                                <th className="px-3 py-1.5">Question</th>
+                                                                                <th className="px-3 py-1.5">Duplicate of</th>
+                                                                                <th className="px-3 py-1.5">Similarity</th>
+                                                                                <th className="px-3 py-1.5">Level</th>
+                                                                                <th className="px-3 py-1.5">Explanation</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {r.duplicateMatches.map((m) => (
+                                                                                <tr key={`${m.questionId}-${m.otherAttemptId}`} className="border-t">
+                                                                                    <td className="px-3 py-1.5">#{m.questionOrder}</td>
+                                                                                    <td className="px-3 py-1.5">{m.otherStudentName}</td>
+                                                                                    <td className="px-3 py-1.5 tabular-nums">{m.similarity.toFixed(0)}%</td>
+                                                                                    <td className="px-3 py-1.5">{m.matchType ?? "—"}</td>
+                                                                                    <td className="px-3 py-1.5">{m.explanation ?? ""}</td>
+                                                                                </tr>
+                                                                            ))}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        <p className="mb-2 mt-3 text-sm font-medium">Event details</p>
                                                         <EventList examId={examId} attemptId={r.attemptId} />
                                                     </td>
                                                 </tr>
@@ -405,10 +458,10 @@ export function IntegrityReportSection({ examId }: { examId: number }) {
 
                     {pageCount > 1 && (
                         <div className="mt-3 flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Trang {safePage + 1}/{pageCount}</span>
+                            <span className="text-muted-foreground">Page {safePage + 1}/{pageCount}</span>
                             <div className="flex gap-2">
-                                <Button variant="outline" size="sm" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>Trước</Button>
-                                <Button variant="outline" size="sm" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>Sau</Button>
+                                <Button variant="outline" size="sm" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>Previous</Button>
+                                <Button variant="outline" size="sm" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}>Next</Button>
                             </div>
                         </div>
                     )}

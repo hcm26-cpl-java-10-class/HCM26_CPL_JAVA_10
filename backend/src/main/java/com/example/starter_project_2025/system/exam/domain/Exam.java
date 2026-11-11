@@ -41,18 +41,8 @@ public class Exam extends BaseEntity {
     @Column(nullable = false)
     private int durationMinutes;
 
-    private LocalDateTime startTime;
-
-    private LocalDateTime endTime;
-
-    /** Tinh nang dat lich (start/end) da bi go bo: luon tra ve null de moi noi coi nhu "mo tu do". Gia tri cu van nam trong DB. */
-    public LocalDateTime getStartTime() {
-        return null;
-    }
-
-    public LocalDateTime getEndTime() {
-        return null;
-    }
+    // Tinh nang dat lich (start/end) da bi go bo: de thi luon "mo tu do", chi gioi han boi thoi luong, so lan lam va
+    // loi moi. Cot start_time / end_time cu van con trong DB nhung khong con duoc ORM doc hay ghi.
 
     @Column(nullable = false)
     private Integer maxAttempts = 1;
@@ -120,6 +110,30 @@ public class Exam extends BaseEntity {
     @Column(nullable = false)
     @ColumnDefault("false")
     private Boolean cameraProctoring = false;
+
+    // ---- He so chong gian lan (chon luc tao de thi, khong sua duoc sau do; null = dung mac dinh) ----
+    public static final int DEFAULT_HEAD_TURN_ANGLE_DEG = 35;
+    public static final int DEFAULT_HEAD_TURN_SECONDS = 2;
+    public static final int DEFAULT_FAST_SUBMIT_PERCENT = 20;
+
+    /** Goc quay dau (do) tu day tro len bi tinh la vi pham HEAD_TURNED. */
+    private Integer headTurnAngleDeg;
+    /** Quay dau lien tuc bao nhieu giay thi bi tinh la vi pham. */
+    private Integer headTurnSeconds;
+    /** Nop bai nhanh hon bao nhieu % thoi luong bai thi thi bi canh bao. */
+    private Integer fastSubmitPercent;
+
+    public int headTurnAngleOrDefault() {
+        return headTurnAngleDeg != null ? headTurnAngleDeg : DEFAULT_HEAD_TURN_ANGLE_DEG;
+    }
+
+    public int headTurnSecondsOrDefault() {
+        return headTurnSeconds != null ? headTurnSeconds : DEFAULT_HEAD_TURN_SECONDS;
+    }
+
+    public int fastSubmitPercentOrDefault() {
+        return fastSubmitPercent != null ? fastSubmitPercent : DEFAULT_FAST_SUBMIT_PERCENT;
+    }
 
     /** Hien thong bao cho nguoi thi khi he thong ghi nhan vi pham. */
     @Column(nullable = false)

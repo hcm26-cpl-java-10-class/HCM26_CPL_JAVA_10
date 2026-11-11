@@ -43,6 +43,11 @@ public class ExamSimilarityService {
     private final AiEssayGradingClient aiClient;
 
     public ExamSimilarityDTO.SimilarityReport scanExamSimilarity(Long examId) {
+        return scanExamSimilarity(examId, true);
+    }
+
+    /** useAi=false: only the fast lexical comparison (used by the integrity report on every open). */
+    public ExamSimilarityDTO.SimilarityReport scanExamSimilarity(Long examId, boolean useAi) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ResourceNotFoundException("Exam not found with id: " + examId));
 
@@ -155,7 +160,7 @@ public class ExamSimilarityService {
         flaggedPairs.sort((a, b) -> Double.compare(b.getOverallSimilarity(), a.getOverallSimilarity()));
 
         // Stage 2: AI Semantic Analysis for top suspect pairs
-        if (!flaggedPairs.isEmpty() && aiClient.isConfigured()) {
+        if (useAi && !flaggedPairs.isEmpty() && aiClient.isConfigured()) {
             List<ExamSimilarityDTO.SimilarPair> topPairs = flaggedPairs.stream()
                     .limit(MAX_AI_EVALUATION_PAIRS)
                     .toList();
@@ -204,6 +209,9 @@ public class ExamSimilarityService {
                 report.setAiEvaluated(false);
                 report.setAiMessage("Lexical similarity analysis only (Google Gemini AI evaluation unavailable: " + e.getMessage() + ").");
             }
+        } else if (!useAi) {
+            report.setAiEvaluated(false);
+            report.setAiMessage("Lexical similarity analysis only (AI analysis skipped).");
         } else if (!aiClient.isConfigured()) {
             report.setAiEvaluated(false);
             report.setAiMessage("Lexical similarity analysis only (Google Gemini API key not configured in backend/.env or system environment).");

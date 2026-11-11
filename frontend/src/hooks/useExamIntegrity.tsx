@@ -28,20 +28,21 @@ interface Options {
 }
 
 const LABELS: Partial<Record<IntegrityEventType, string>> = {
-    TAB_HIDDEN: 'Rời tab',
-    WINDOW_BLUR: 'Chuyển cửa sổ',
-    FULLSCREEN_EXIT: 'Thoát toàn màn hình',
-    COPY: 'Sao chép',
-    CUT: 'Cắt',
-    PASTE: 'Dán',
-    CONTEXT_MENU: 'Chuột phải',
-    DEVTOOLS_KEY: 'Phím công cụ nhà phát triển',
-    PRINT_ATTEMPT: 'In / chụp màn hình',
+    TAB_HIDDEN: 'Tab switch',
+    WINDOW_BLUR: 'Window switch',
+    FULLSCREEN_EXIT: 'Fullscreen exit',
+    COPY: 'Copy',
+    CUT: 'Cut',
+    PASTE: 'Paste',
+    CONTEXT_MENU: 'Right-click',
+    DEVTOOLS_KEY: 'Developer tools shortcut',
+    PRINT_ATTEMPT: 'Print / screenshot',
     CAMERA_OFF: 'Camera turned off',
     CAMERA_COVERED: 'Camera is covered',
     FACE_MISSING: 'You left the camera view',
     MULTIPLE_FACES: 'Another person is in the camera view',
     HEAD_TURNED: 'Head turned away from the screen',
+    DIFFERENT_PERSON: 'A different person is taking the exam',
 };
 
 const newClientId = () =>
@@ -106,7 +107,7 @@ export function useExamIntegrity({ attemptId, config, active, send, sendEntryPho
     // auto-hide the notification banner
     useEffect(() => {
         if (!banner) return;
-        const id = window.setTimeout(() => setBanner(null), 7000);
+        const id = window.setTimeout(() => setBanner(null), 10000);
         return () => window.clearTimeout(id);
     }, [banner]);
 
@@ -122,6 +123,9 @@ export function useExamIntegrity({ attemptId, config, active, send, sendEntryPho
         report: (type: CameraViolationType, secs, snapshot, detail) =>
             record(type, secs, detail, snapshot ?? undefined, true),
         announce: (type: CameraViolationType) => announce(type),
+        referenceKey: attemptId ? `exam-face-ref-${attemptId}` : null,
+        headTurnAngleDeg: config?.headTurnAngleDeg,
+        headTurnSeconds: config?.headTurnSeconds,
     });
 
     const submitEntryPhoto = useCallback(async (dataUrl: string) => {
@@ -321,25 +325,37 @@ export function ExamIntegrityNotice({
             {config.notifyOnViolation && state.banner && (
                 <div
                     key={state.banner.key}
-                    role="alert"
-                    className="fixed left-1/2 top-4 z-[120] flex w-[min(92vw,28rem)] -translate-x-1/2 items-start gap-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900 shadow-lg dark:border-red-800 dark:bg-red-950 dark:text-red-100"
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4"
+                    onClick={state.dismissBanner}
                 >
-                    <div className="flex-1">
-                        <p className="font-semibold">Violation detected: {state.banner.text}</p>
-                        <p className="text-xs opacity-80">This has been recorded and your instructor can review it.</p>
+                    <div
+                        role="alertdialog"
+                        aria-modal="true"
+                        aria-labelledby="violation-popup-title"
+                        className="w-full max-w-md space-y-4 rounded-lg border border-red-300 bg-card p-6 text-center shadow-2xl dark:border-red-800"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-red-100 text-2xl text-red-700 dark:bg-red-950 dark:text-red-300">!</div>
+                        <h2 id="violation-popup-title" className="text-lg font-semibold text-red-700 dark:text-red-300">
+                            Violation detected
+                        </h2>
+                        <p className="text-base font-medium">{state.banner.text}</p>
+                        <p className="text-sm text-muted-foreground">
+                            This has been recorded and your instructor can review it. Please follow the exam rules.
+                        </p>
+                        <Button onClick={state.dismissBanner}>I understand</Button>
                     </div>
-                    <button type="button" className="text-xs underline" onClick={state.dismissBanner}>Dismiss</button>
                 </div>
             )}
 
             {state.enabled && state.needFullscreen && !state.needEntryPhoto && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/95 p-6">
                     <div className="max-w-md space-y-4 rounded-lg border bg-card p-6 text-center shadow-lg">
-                        <h2 className="text-lg font-semibold">Cần bật toàn màn hình để làm bài</h2>
+                        <h2 className="text-lg font-semibold">Fullscreen is required to take the exam</h2>
                         <p className="text-sm text-muted-foreground">
-                            Bài thi yêu cầu chế độ toàn màn hình. Thời gian làm bài vẫn tiếp tục chạy.
+                            This exam requires fullscreen mode. The timer keeps running.
                         </p>
-                        <Button onClick={() => void state.enterFullscreen()}>Vào toàn màn hình</Button>
+                        <Button onClick={() => void state.enterFullscreen()}>Enter fullscreen</Button>
                     </div>
                 </div>
             )}

@@ -161,8 +161,6 @@ class ExamTemplateServiceTest {
 
         CreateExamFromTemplateRequest request = new CreateExamFromTemplateRequest();
         request.setTitle("Bài thi mới từ template");
-        request.setStartTime(LocalDateTime.now());
-        request.setEndTime(LocalDateTime.now().plusHours(1));
 
         ExamDTO result = service.createExamFromTemplate(5L, request);
 

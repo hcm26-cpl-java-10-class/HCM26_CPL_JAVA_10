@@ -25,7 +25,7 @@ public record CourseExamDTO(
         Integer questionCount,
         /** Chi giao vien/admin thay: ten nguoi tao. Sinh vien nhan null. */
         String createdByName,
-        /** Student view: true while blocked by LessonProgress. Staff always get false. */
+        /** Student view: true while blocked by course or lesson progress. Staff always get false. */
         boolean locked,
         /** Why it is locked (null when unlocked). */
         String lockReason
