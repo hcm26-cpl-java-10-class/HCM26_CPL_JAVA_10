@@ -40,10 +40,13 @@ async function withFallback<T>(request: () => Promise<T>, fallback: () => T): Pr
 
 /** Access to the master training system, proxied by the backend under /api/external. */
 export const externalApi = {
+    getDataSource: async (): Promise<{ sampleData: boolean }> => {
+        return (await axiosInstance.get<{ sampleData: boolean }>("/external/data-source")).data;
+    },
     createCalendarVersion: async (classId: number, calendarId: number, data: {
-        classStartDate: string; actualLearningStartDate: string; overviewItems: import("@/types/features/external").CalendarTopic[];
+        classStartDate: string; actualLearningStartDate: string; overviewItems: import("@/types/features/external").CalendarTopic[]; historyChange?: string;
     }): Promise<ClassCalendarVersion> => {
-        const response = await axiosInstance.post<ClassCalendarVersion>(calendarId < 0 ? `/classes/${classId}/calendars` : `/classes/${classId}/calendars/${calendarId}/versions`, data);
+        const response = await axiosInstance.post<ClassCalendarVersion>(`/classes/${classId}/calendars/${calendarId}/versions`, data);
         return response.data;
     },
     downloadCalendarWithDetailedTime: async (classId: number, calendarId: number): Promise<Blob> => {

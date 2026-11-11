@@ -672,7 +672,7 @@ export function TopicSyllabusEditorDialog({
                                             max={4}
                                             step={0.5}
                                             value={
-                                              sess.durationHours === "" ||
+                                              (sess.durationHours as any) === "" ||
                                               sess.durationHours === undefined ||
                                               sess.durationHours === null
                                                 ? ""

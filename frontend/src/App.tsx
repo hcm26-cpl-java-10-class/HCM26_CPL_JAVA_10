@@ -7,9 +7,10 @@ import { RoleSwitchProvider } from "./contexts/RoleSwitchContext";
 import { usePermissions } from "./hooks/usePermissions";
 import { useActiveModuleGroups } from "./hooks/useSidebarMenus";
 import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
-import { ROLE_HOME_PATHS, routes } from "./router/component-registry";
+import { routes } from "./router/component-registry";
 import type { RootState } from "./store/store";
 import { getHomePathByRole } from "./utils/rbac.utils";
+import { resolveMenuPermission } from "./router/menu-permission.utils";
 
 function AppRoutes() {
     const { isAuthenticated } = useSelector((state: RootState) => state.auth);
@@ -18,12 +19,15 @@ function AppRoutes() {
 
     const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions) : "/login";
 
+    // Backend menus may point to either explicit or generated routes. Prefer explicit implementations.
     const componentRegistry = Object.fromEntries(
-        routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
+        [...routes.filter(r => r.isModuleDriven), ...routes.filter(r => !r.isModuleDriven)]
+            .map(r => [r.path, r]),
     );
 
-    const staticRoutes = routes.filter((r) => !r.isModuleDriven);
-    const staticRoutePaths = new Set(staticRoutes.map((r) => r.path));
+    // Get non-module routes (frontend-controlled)
+    const menuPaths = new Set(moduleGroups.flatMap(group => group.modules.map(module => module.url)));
+    const staticRoutes = routes.filter((r) => !r.isModuleDriven && !menuPaths.has(r.path));
 
     return (
         <Routes>
@@ -32,12 +36,9 @@ function AppRoutes() {
             {/* Dynamic routes from backend Module table */}
             {moduleGroups.flatMap((group) =>
                 group.modules.map((m) => {
-                    // Frontend-controlled routes already include their permission checks.
-                    if (!m.url || staticRoutePaths.has(m.url)) return null;
-                    if ((ROLE_HOME_PATHS as readonly string[]).includes(m.url)) {
-                        return null;
-                    }
-                    const Component = componentRegistry[m.url];
+                    if (!m.url) return null;
+                    const registered = componentRegistry[m.url];
+                    const Component = registered?.component;
 
                     if (!Component) {
                         // Frontend-controlled pages can still be exposed in the sidebar.
@@ -50,7 +51,8 @@ function AppRoutes() {
                             key={m.id}
                             path={m.url}
                             element={
-                                <ProtectedRoute requiredPermission={m.requiredPermission}>
+                                <ProtectedRoute requiredPermission={resolveMenuPermission(m.url, m.requiredPermission)}
+                                    requiredPermissions={registered.requiredPermission ? [registered.requiredPermission] : undefined} requireAll>
                                     <Component />
                                 </ProtectedRoute>
                             }

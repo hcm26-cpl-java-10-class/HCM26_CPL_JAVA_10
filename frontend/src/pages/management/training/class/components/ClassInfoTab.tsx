@@ -58,7 +58,6 @@ export function ClassInfoTab({ classItem, onNavigate = () => {} }: { classItem: 
 
     return (
         <div className="space-y-4">
-            <ClassReadinessPanel classItem={classItem} onNavigate={onNavigate} />
             <Collapsible open={open} onOpenChange={setOpen} className="overflow-hidden rounded-lg border bg-card">
                 <CollapsibleTrigger className="flex w-full items-center justify-between bg-muted/30 px-4 py-3 text-left text-sm font-semibold hover:bg-muted/50">
                     <span>General</span>
@@ -84,6 +83,7 @@ export function ClassInfoTab({ classItem, onNavigate = () => {} }: { classItem: 
                     </dl>
                 </CollapsibleContent>
             </Collapsible>
+            <ClassReadinessPanel classItem={classItem} onNavigate={onNavigate} />
         </div>
     );
 }

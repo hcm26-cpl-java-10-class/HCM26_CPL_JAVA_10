@@ -5,9 +5,9 @@ import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
 
 public record TeachingAssignmentRequest(
-        @NotNull Long classId,
-        @NotNull Long programSubjectId,
-        @NotNull Long trainerId,
+        @NotNull @jakarta.validation.constraints.Positive Long classId,
+        @NotNull @jakarta.validation.constraints.Positive Long programSubjectId,
+        @NotNull @jakarta.validation.constraints.Positive Long trainerId,
         @NotNull AssignmentRole role,
         @NotNull LocalDate effectiveFrom,
         LocalDate effectiveTo

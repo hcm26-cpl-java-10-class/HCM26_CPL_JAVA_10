@@ -66,10 +66,11 @@ export interface ClassStatistics {
 
 export interface ClassReadiness {
     classId: number;
-    checks: Array<{ key: string; label: string; status: "READY" | "NOT_READY" | "UNKNOWN"; reason: string; target: string }>;
+    checks: Array<{ key: string; label: string; status: "READY" | "NOT_READY" | "UNKNOWN" | "BLOCKED"; reason: string; target: string; action?: string }>;
     ready: number;
     notReady: number;
     unknown: number;
+    blocked?: number;
     verified: number;
     enrolledTrainees: number;
     evaluatedAt: string;
@@ -121,6 +122,15 @@ export type UpdateTrainingClassInput = Partial<CreateTrainingClassInput>;
  * Note: axiosInstance baseURL already includes '/api', so paths do not repeat '/api'.
  */
 export const clsApi = {
+    getAllClasses: async (): Promise<TrainingClass[]> => {
+        const result: TrainingClass[] = [];
+        for (let page = 0; ; page++) {
+            const { data } = await clsApi.getClasses({ status: "all", page, size: 100 });
+            if (Array.isArray(data)) return data;
+            result.push(...data.content);
+            if (page + 1 >= data.totalPages) return result;
+        }
+    },
     getReadiness: async (id: number): Promise<ClassReadiness> => (await axiosInstance.get<ClassReadiness>(`/classes/${id}/readiness`)).data,
     getStatistics: async (): Promise<ClassStatistics> => (await axiosInstance.get<ClassStatistics>("/classes/stats")).data,
     /**

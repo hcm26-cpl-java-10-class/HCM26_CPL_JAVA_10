@@ -18,7 +18,7 @@ import {
     Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { utils, writeFile } from "xlsx";
 import {
@@ -55,6 +55,7 @@ import { cn } from "@/lib/utils";
 import type { ExternalClass, Trainee } from "@/types";
 import { formatDate, splitLocalDateTime } from "@/utils/session.utils";
 import { TraineeAttendanceView } from "./TraineeAttendanceView";
+import { TraineeTopicMarkView } from "./TraineeTopicMarkView";
 import {
     formatFptStudentIdForSite as legacyStudentId,
     normalizeTraineeGender,
@@ -125,7 +126,6 @@ export interface TraineeListTabProps {
 }
 
 export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps) {
-    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const classId = String(classItem.id);
     const classSite = classItem.site;
@@ -162,9 +162,26 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
     });
 
     // Confirmation dialog state for single row Delete & Bulk Delete
+    const [searchParams, setSearchParams] = useSearchParams();
     const [deleteTarget, setDeleteTarget] = useState<Trainee | null>(null);
     const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-    const [isAttendanceView, setIsAttendanceView] = useState(false);
+    const [isAttendanceView, setIsAttendanceView] = useState(
+        () => searchParams.get("view") === "attendance" || searchParams.get("subview") === "attendance",
+    );
+    const [isTopicMarkView, setIsTopicMarkView] = useState(
+        () => searchParams.get("view") === "topic-mark" || searchParams.get("subview") === "topic-mark",
+    );
+
+    useEffect(() => {
+        const viewParam = searchParams.get("view") ?? searchParams.get("subview");
+        if (viewParam === "topic-mark") {
+            setIsTopicMarkView(true);
+            setIsAttendanceView(false);
+        } else if (viewParam === "attendance") {
+            setIsAttendanceView(true);
+            setIsTopicMarkView(false);
+        }
+    }, [searchParams]);
 
     const activeTrainees = draftTrainees ?? serverTrainees;
 
@@ -474,16 +491,33 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         });
     };
 
+    const clearSubViewSearchParams = () => {
+        if (searchParams.has("view") || searchParams.has("subview")) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("view");
+            next.delete("subview");
+            setSearchParams(next, { replace: true });
+        }
+    };
+
     const handleTopicMark = () => {
-        const params = new URLSearchParams({
-            classId,
-            ...(classItem.code ? { classCode: classItem.code } : {}),
-        });
-        navigate(`/topic-marks?${params.toString()}`);
+        setIsAttendanceView(false);
+        setIsTopicMarkView(true);
+    };
+
+    const handleBackFromTopicMark = () => {
+        setIsTopicMarkView(false);
+        clearSubViewSearchParams();
     };
 
     const handleAttendance = () => {
+        setIsTopicMarkView(false);
         setIsAttendanceView(true);
+    };
+
+    const handleBackFromAttendance = () => {
+        setIsAttendanceView(false);
+        clearSubViewSearchParams();
     };
 
     if (!canRead) return <p role="alert">You do not have permission to view trainee profiles.</p>;
@@ -491,12 +525,22 @@ export function TraineeListTab({ classItem, onDirtyChange }: TraineeListTabProps
         return <ApiErrorState error={error} resource="trainee list" onRetry={() => void refetch()} />;
     }
 
+    if (isTopicMarkView) {
+        return (
+            <TraineeTopicMarkView
+                classItem={classItem}
+                trainees={activeTrainees}
+                onBack={handleBackFromTopicMark}
+            />
+        );
+    }
+
     if (isAttendanceView) {
         return (
             <TraineeAttendanceView
                 classItem={classItem}
                 trainees={activeTrainees}
-                onBack={() => setIsAttendanceView(false)}
+                onBack={handleBackFromAttendance}
             />
         );
     }
