@@ -17,7 +17,7 @@ public final class GradebookDTOs {
 
     public record Gradebook(Long courseId, String courseName, List<ColumnDto> columns,
                             BigDecimal totalWeight, List<StudentRow> students,
-                            java.time.LocalDateTime savedAt) {}
+                            java.time.LocalDateTime savedAt, boolean unsaved) {}
 
     public record ScanResult(Gradebook gradebook, int created, int refreshed, List<ImportReport> reports) {}
 
