@@ -30,6 +30,13 @@ public class SessionDTO extends BaseDTO {
     @NotNull(groups = OnCreate.class, message = "Trainer ID is required")
     Long trainerId;
 
+    Long teachingAssignmentId;
+
+    Long roomId;
+
+    @Size(max = 1000, message = "The meeting URL must not exceed 1,000 characters.")
+    String meetingUrl;
+
     @NotBlank(groups = OnCreate.class, message = "Title is required")
     @Size(max = 150, message = "Title must not exceed 150 characters")
     String title;

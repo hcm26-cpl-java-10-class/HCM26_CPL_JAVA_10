@@ -39,6 +39,21 @@ public class PermissionInitializer implements CommandLineRunner {
                 generatePermissions(clazz);
             }
         }
+
+        ensurePermission("CLASS_UPDATE_PROGRAM", "CLASS", "UPDATE_PROGRAM",
+                "Assign, change or remove an active training program of a class");
+        ensurePermission("CLASS_UPDATE_COURSE", "CLASS", "UPDATE_COURSE",
+                "Link or unlink active LMS courses for class topics");
+    }
+
+    private void ensurePermission(String name, String resource, String action, String description) {
+        if (permissionRepository.existsByName(name)) return;
+        permissionRepository.save(Permission.builder()
+                .name(name)
+                .resource(resource)
+                .action(action)
+                .description(description)
+                .build());
     }
 
     private void generatePermissions(Class<?> entityClass) {

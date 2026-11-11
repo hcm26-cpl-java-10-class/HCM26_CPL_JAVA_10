@@ -17,6 +17,11 @@ public class CourseDTO extends BaseDTO {
     @com.fasterxml.jackson.annotation.JsonProperty(access=com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
     String categoryName;
 
+    @Size(max = 50, message = "Code must not exceed 50 characters")
+    String code;
+
+    Long subjectId;
+
     @NotBlank(groups = OnCreate.class, message = "Course name is required")
     @Size(max = 150, message = "Name must not exceed 150 characters")
     String name;

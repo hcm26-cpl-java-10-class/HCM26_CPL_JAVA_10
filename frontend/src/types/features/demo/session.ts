@@ -3,13 +3,20 @@ import type { BaseDTO, BaseFilter } from "@/types/common/base";
 export type SessionStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
 
 export interface SessionCancelDTO {
-    reason: string;
+    cancelReason: string;
+}
+
+export interface SessionCompleteDTO {
+    note?: string;
 }
 
 export interface SessionDTO extends BaseDTO {
     classId?: number;
     topicId?: number;
     trainerId?: number;
+    teachingAssignmentId?: number | null;
+    roomId?: number;
+    meetingUrl?: string;
     title?: string;
     startTime?: string; // LocalDateTime từ Spring Boot serialize về dạng ISO-8601 string
     endTime?: string;

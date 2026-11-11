@@ -1,0 +1,97 @@
+package com.example.starter_project_2025.system.topic_mark.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Gradebook view response with columns derived from TopicAssessmentComponents.
+ *
+ * Column keys in {@link Row#values}:
+ *  - "{componentId}_{index}" → score for a TopicAssessmentComponent slot (Double or null)
+ *  - "FINAL_SCORE"           → computed final score (Double or null)
+ *  - "IS_PASSED"             → Boolean
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Schema(description = "Gradebook response containing dynamic column definitions and student rows with their scores")
+public class TopicMarkGradebookResponse {
+
+    @Schema(description = "Ordered column definitions – dynamic score columns first, then meta columns")
+    private List<Column> columns;
+
+    @Schema(description = "One row per enrolled student")
+    private List<Row> rows;
+
+    // ── Inner types ───────────────────────────────────────────────────────────
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(description = "Column definition for the gradebook table")
+    public static class Column {
+
+        @Schema(description = "Unique key: '{componentId}_{componentIndex}' or reserved key (FINAL_SCORE, IS_PASSED)",
+                example = "123e4567-e89b-12d3-a456-426614174000_1")
+        private String key;
+
+        @Schema(description = "Display label", example = "Quiz 1")
+        private String label;
+
+        @Schema(description = "UUID of the TopicAssessmentComponent; null for meta columns", nullable = true)
+        private String componentId;
+
+        @Schema(description = "1-based slot index within the component; null for meta columns", nullable = true, example = "1")
+        private Integer componentIndex;
+
+        @Schema(description = "Assessment type (QUIZ, ASSIGNMENT, …); null for meta columns", nullable = true, example = "QUIZ")
+        private String componentType;
+
+        @Schema(description = "Component weight (%); null for meta columns", nullable = true, example = "30.0")
+        private Double weight;
+
+        @Schema(description = "Whether this component counts toward final score; null for meta columns", nullable = true)
+        private Boolean isGraded;
+
+        /** Convenience constructor for meta columns (FINAL_SCORE, IS_PASSED). */
+        public Column(String key, String label) {
+            this.key = key;
+            this.label = label;
+        }
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(description = "Student row in the gradebook")
+    public static class Row {
+
+        @Schema(description = "Student user ID")
+        private UUID userId;
+
+        @Schema(description = "Student full name", example = "John Doe")
+        private String fullName;
+
+        @Schema(description = "Student email", example = "john.doe@example.com")
+        private String email;
+
+        /**
+         * Map of column key → value.
+         * - '{componentId}_{index}' key → Double score (null = not entered)
+         * - FINAL_SCORE                 → Double (nullable)
+         * - IS_PASSED                   → Boolean
+         */
+        @Schema(description = "Score / meta values keyed by column key")
+        private Map<String, Object> values;
+    }
+}

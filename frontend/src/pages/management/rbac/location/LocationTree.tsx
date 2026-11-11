@@ -26,7 +26,7 @@ interface LocationTreeProps {
 }
 
 export const LocationTree: React.FC<LocationTreeProps> = ({
-  selectedLocationId = null,
+  
   onSelectLocation,
 }) => {
   const [treeData, setTreeData] = useState<LocationNode[]>([]);

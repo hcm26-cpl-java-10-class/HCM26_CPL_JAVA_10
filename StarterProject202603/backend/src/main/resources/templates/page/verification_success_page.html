@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Verification Success</title>
+    <meta http-equiv="refresh" th:content="|5;url=${frontendDomain}/login|" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding-top: 80px;
+            background-color: #f4f6f8;
+        }
+
+        .card {
+            display: inline-block;
+            background-color: white;
+            padding: 30px 50px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: #2e7d32;
+        }
+
+        p {
+            margin-top: 10px;
+            font-size: 16px;
+            color: #555;
+        }
+
+        a.button {
+            margin-top: 20px;
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #2e7d32;
+            color: white;
+            border-radius: 6px;
+            text-decoration: none;
+        }
+
+        a.button:hover {
+            background-color: #1b5e20;
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h2>Email Verified Successfully</h2>
+    <p>You will be redirected to the login page in a few seconds.</p>
+    <a th:href="|${frontendDomain}/login|" class="button">Go to Login</a>
+</div>
+</body>
+</html>

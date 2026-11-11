@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.external_api;
 import com.example.starter_project_2025.system.external_api.dto.ExternalClassDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalRoomDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerDTO;
+import com.example.starter_project_2025.system.external_api.dto.ExternalClassRequest;
 
 import java.util.List;
 
@@ -10,6 +11,10 @@ import java.util.List;
  * Service interface for fetching data from the external system (hệ thống tổng).
  */
 public interface ExternalApiService {
+
+    default boolean isSampleData() {
+        return false;
+    }
 
     /**
      * Fetch list of classes from the external system.
@@ -26,6 +31,12 @@ public interface ExternalApiService {
      * @return the external class
      */
     ExternalClassDTO fetchClassById(Long id);
+
+    ExternalClassDTO createClass(ExternalClassRequest request);
+
+    ExternalClassDTO updateClass(Long id, ExternalClassRequest request);
+
+    void deleteClass(Long id);
 
     /**
      * Fetch list of trainers from the external system.

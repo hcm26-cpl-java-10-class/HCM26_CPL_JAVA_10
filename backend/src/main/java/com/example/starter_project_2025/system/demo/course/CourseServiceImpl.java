@@ -21,10 +21,16 @@ public class CourseServiceImpl
     CourseMapper courseMapper;
     CourseRepository courseRepository;
     com.example.starter_project_2025.system.demo.category.CategoryRepository categoryRepository;
+
     private void resolveMetadata(Course course, CourseDTO request) {
-        if(request.getCategory()!=null){
-            java.util.Set<com.example.starter_project_2025.system.demo.category.Category> categories=new java.util.HashSet<>();
-            for(String token:request.getCategory().split("[,;|]")){String code=token.trim();if(!code.isEmpty())categories.add(categoryRepository.findByCodeIgnoreCase(code).orElseGet(()->categoryRepository.save(com.example.starter_project_2025.system.demo.category.Category.builder().code(code).name(code).isActive(true).build())));}
+        if(request.getCategory() != null){
+            java.util.Set<com.example.starter_project_2025.system.demo.category.Category> categories = new java.util.HashSet<>();
+            for(String token : request.getCategory().split("[,;|]")){
+                String code = token.trim();
+                if(!code.isEmpty()) {
+                    categories.add(categoryRepository.findByCodeIgnoreCase(code).orElseGet(() -> categoryRepository.save(com.example.starter_project_2025.system.demo.category.Category.builder().code(code).name(code).isActive(true).build())));
+                }
+            }
             course.setCategories(categories);
         }
     }
@@ -41,7 +47,7 @@ public class CourseServiceImpl
 
     @Override
     protected String[] searchableFields() {
-        return new String[]{"name", "description", "instructor", "category", "instructorEmail"};
+        return new String[]{"code", "name", "description", "instructor"};
     }
 
     @Override
@@ -49,6 +55,10 @@ public class CourseServiceImpl
         resolveMetadata(course, request);
         if (courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
+        }
+        if (request.getCode() != null && !request.getCode().isBlank()
+                && courseRepository.existsByCode(request.getCode().trim())) {
+            ctx.add("code", "Course code already exists");
         }
     }
 
@@ -59,6 +69,11 @@ public class CourseServiceImpl
                 !request.getName().equals(course.getName()) &&
                 courseRepository.existsByName(request.getName())) {
             ctx.add("name", "Course name already exists");
+        }
+        if (request.getCode() != null && !request.getCode().isBlank()
+                && !request.getCode().trim().equalsIgnoreCase(course.getCode() == null ? "" : course.getCode())
+                && courseRepository.existsByCode(request.getCode().trim())) {
+            ctx.add("code", "Course code already exists");
         }
     }
 }

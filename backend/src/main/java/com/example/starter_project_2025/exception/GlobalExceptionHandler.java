@@ -35,6 +35,16 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> handleConflictException(ConflictException ex) {
+        log.warn("[409] Conflict: {}", ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                ex.getMessage(),
+                LocalDateTime.now());
+        return new ResponseEntity<>(error, HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ErrorResponse> handleBadRequestException(BadRequestException ex) {
         log.warn("[400] BadRequest: {}", ex.getMessage());
@@ -143,6 +153,17 @@ public class GlobalExceptionHandler {
         ErrorResponse error = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
                 ex.getMessage(),
+                LocalDateTime.now());
+        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(com.example.starter_project_2025.system.schedule.ScheduleValidationException.class)
+    public ResponseEntity<ErrorResponse> handleScheduleValidation(com.example.starter_project_2025.system.schedule.ScheduleValidationException ex) {
+        log.error("[ScheduleValidation] Issues count: {}, issues: {}", ex.getResult().issues().size(), ex.getResult().issues());
+        String msg = ex.getResult().issues().isEmpty() ? ex.getMessage() : ex.getResult().issues().get(0).message();
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                msg,
                 LocalDateTime.now());
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }

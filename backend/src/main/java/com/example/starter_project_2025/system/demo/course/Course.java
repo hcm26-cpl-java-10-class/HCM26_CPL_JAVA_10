@@ -34,6 +34,12 @@ public class Course extends BaseEntity {
     @Builder.Default
     java.util.Set<com.example.starter_project_2025.system.demo.category.Category> categories = new java.util.HashSet<>();
 
+    @Column(unique = true, length = 50)
+    String code;
+
+    @Column(name = "subject_id")
+    Long subjectId;
+
     @Column(unique = true, nullable = false, length = 150)
     @com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField(name="Name")
     String name;

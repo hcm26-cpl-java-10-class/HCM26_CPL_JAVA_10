@@ -7,6 +7,10 @@
 .DS_Store
 Thumbs.db
 
+# === Docs / Office files ===
+*.docx
+*.doc
+
 # === Backend (Java/Maven) ===
 backend/target/
 backend/*.jar
@@ -17,6 +21,7 @@ backend/data/
 backend/.env
 
 # === Frontend (Node) ===
+node_modules/
 frontend/node_modules/
 frontend/dist/
 
@@ -25,5 +30,10 @@ docker/.env
 
 /backend.zip
 
+<<<<<<< HEAD
 # Local H2 database
 /data/
+=======
+# === Runtime logs ===
+*.log
+>>>>>>> origin/feature/modulesubject_dev

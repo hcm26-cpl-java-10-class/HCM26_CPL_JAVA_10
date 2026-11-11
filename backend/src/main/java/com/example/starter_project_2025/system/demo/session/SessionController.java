@@ -28,6 +28,45 @@ public class SessionController
 
     SessionService sessionService;
     SessionRepository sessionRepository;
+    SessionImportService sessionImportService;
+
+    @Override
+    @org.springframework.web.bind.annotation.GetMapping("/export")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_READ')")
+    public void exportFile(
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "EXCEL") com.example.starter_project_2025.base.dataio.common.FileFormat format,
+            jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+        super.exportFile(format, response);
+    }
+
+    /** Prevent the generic importer from bypassing schedule validation. No partial writes. */
+    @Override
+    @org.springframework.web.bind.annotation.PostMapping(value = "/import", consumes = "multipart/form-data")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_CREATE') and hasAuthority('SESSION_READ')")
+    public com.example.starter_project_2025.base.dataio.importer.result.ImportResult importFile(
+            @org.springframework.web.bind.annotation.RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        return sessionImportService.importFile(file);
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping(value = "/import/preview", consumes = "multipart/form-data")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_CREATE') and hasAuthority('SESSION_READ')")
+    public SessionImportPreview previewImport(
+            @org.springframework.web.bind.annotation.RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        return sessionImportService.preview(file);
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping("/import/preview-rows")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_CREATE') and hasAuthority('SESSION_READ')")
+    public SessionImportPreview previewImportRows(@Valid @RequestBody SessionImportRowsRequest request) {
+        return sessionImportService.previewRows(request);
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping("/import/rows")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_CREATE') and hasAuthority('SESSION_READ')")
+    public com.example.starter_project_2025.base.dataio.importer.result.ImportResult importEditedRows(
+            @Valid @RequestBody SessionImportRowsRequest request) {
+        return sessionImportService.importRows(request);
+    }
 
     @Override
     protected BaseCrudService<Long, SessionDTO, SessionFilter> getService() {
@@ -51,5 +90,32 @@ public class SessionController
             @Valid @RequestBody SessionCancelDTO cancelDTO) {
         SessionDTO updatedSession = sessionService.cancelSession(id, cancelDTO);
         return ResponseEntity.ok(updatedSession);
+    }
+
+    @PatchMapping("/{id}/complete")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_UPDATE')")
+    @Operation(summary = "Complete a scheduled session with an optional note")
+    public ResponseEntity<SessionDTO> completeSession(
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) SessionCompleteDTO completeDTO) {
+        return ResponseEntity.ok(sessionService.completeSession(id, completeDTO));
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping("/batch")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_CREATE')")
+    @Operation(summary = "Batch create scheduled sessions for a class schedule version")
+    public ResponseEntity<java.util.List<SessionDTO>> createBatch(@Valid @RequestBody java.util.List<SessionDTO> dtos) {
+        return ResponseEntity.ok(sessionService.createValidatedBatch(dtos));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/class/{classId}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('SESSION_DELETE')")
+    @Operation(summary = "Clear all sessions of a class to allow rescheduling")
+    public ResponseEntity<Void> deleteByClassId(@PathVariable Long classId) {
+        java.util.List<Session> sessions = sessionRepository.findByClassId(classId);
+        if (!sessions.isEmpty()) {
+            sessionRepository.deleteAll(sessions);
+        }
+        return ResponseEntity.noContent().build();
     }
 }

@@ -1,3 +1,4 @@
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -15,6 +16,7 @@ import { FieldError } from "./FieldError";
 import { MultiRelationSelect } from "./MultiRelationSelect";
 import { PasswordRules } from "./PasswordRules";
 import type { CSSProperties } from "react";
+import { countWords } from "@/components/datatable/util/word-count";
 
 interface FormFieldRendererProps {
   field: FieldSchema;
@@ -22,16 +24,16 @@ interface FormFieldRendererProps {
   errorClass: string;
   fieldErrors?: string[];
   relationOptions?: Record<string, any[]>;
-  /** Shows a red * next to the label. */
   required?: boolean;
   onChange: (name: string, value: any) => void;
 }
 
 function RequiredMark({ show }: { show?: boolean }) {
-  return show ? <span className="ml-0.5 text-destructive">*</span> : null;
+  return show ? (
+    <span className="ml-0.5 text-destructive">*</span>
+  ) : null;
 }
 
-/** Small helper text / character counter under an input. */
 function FieldMeta({
   hint,
   hasError,
@@ -44,13 +46,19 @@ function FieldMeta({
   maxLength?: number;
 }) {
   const showCounter = maxLength !== undefined && length > 0;
+
   if ((!hint || hasError) && !showCounter) return null;
 
   return (
     <div className="flex items-start justify-between gap-3 text-xs text-muted-foreground">
       <span>{!hasError ? hint : null}</span>
+
       {showCounter ? (
-        <span className={length >= (maxLength as number) ? "text-amber-600" : ""}>
+        <span
+          className={
+            length >= maxLength ? "text-amber-600" : ""
+          }
+        >
           {length}/{maxLength}
         </span>
       ) : null}
@@ -73,8 +81,30 @@ export function FormFieldRenderer({
   const rules = field.validation;
   const hasError = !!fieldErrors && fieldErrors.length > 0;
   const textValue = typeof value === "string" ? value : "";
+
   const placeholder =
     rules?.placeholder ?? `Enter ${field.label.toLowerCase()}...`;
+
+  // Custom input supplied by the field schema
+  if (field.renderInput) {
+    return (
+      <div className="grid gap-2">
+        <Label htmlFor={field.name}>
+          {field.label}
+          <RequiredMark show={required} />
+        </Label>
+
+        {field.renderInput({
+          id: field.name,
+          value,
+          onChange: (next) => onChange(field.name, next),
+          invalid: Boolean(fieldErrors?.length),
+        })}
+
+        <FieldError errors={fieldErrors} />
+      </div>
+    );
+  }
 
   switch (field.type) {
     case "boolean":
@@ -82,11 +112,15 @@ export function FormFieldRenderer({
         <div className="flex items-center justify-between gap-4 py-1">
           <Label htmlFor={field.name} className="flex-1">
             {field.label}
+            <RequiredMark show={required} />
           </Label>
+
           <Switch
             id={field.name}
             checked={!!value}
-            onCheckedChange={(checked) => onChange(field.name, checked)}
+            onCheckedChange={(checked) =>
+              onChange(field.name, checked)
+            }
           />
         </div>
       );
@@ -95,16 +129,22 @@ export function FormFieldRenderer({
       return null;
 
     case "icon":
-    case "select":
-      const isIconField = field.type === "icon" || field.name === "icon";
+    case "select": {
+      const isIconField =
+        field.type === "icon" || field.name === "icon";
+
       const options = field.options || [];
+
       const selectedOption = options.find(
         (opt) => opt.value?.toString() === value?.toString()
       );
 
       const selectedIconKey = selectedOption?.value?.toString();
+
       const SelectedIcon =
-        isIconField && selectedIconKey && selectedIconKey in iconMap
+        isIconField &&
+        selectedIconKey &&
+        selectedIconKey in iconMap
           ? iconMap[selectedIconKey as keyof typeof iconMap]
           : null;
 
@@ -114,6 +154,7 @@ export function FormFieldRenderer({
             {field.label}
             <RequiredMark show={required} />
           </Label>
+
           <Select
             value={value?.toString() || ""}
             onValueChange={(val) => onChange(field.name, val)}
@@ -124,24 +165,39 @@ export function FormFieldRenderer({
               >
                 {selectedOption ? (
                   <div className="flex items-center gap-2">
-                    {SelectedIcon ? <SelectedIcon className="h-4 w-4" /> : null}
+                    {SelectedIcon ? (
+                      <SelectedIcon className="h-4 w-4" />
+                    ) : null}
+
                     <span>{selectedOption.label}</span>
                   </div>
                 ) : null}
               </SelectValue>
             </SelectTrigger>
+
             <SelectContent>
               {options.map((opt) => {
                 const optionIconKey = opt.value?.toString();
+
                 const OptionIcon =
-                  isIconField && optionIconKey && optionIconKey in iconMap
-                    ? iconMap[optionIconKey as keyof typeof iconMap]
+                  isIconField &&
+                  optionIconKey &&
+                  optionIconKey in iconMap
+                    ? iconMap[
+                        optionIconKey as keyof typeof iconMap
+                      ]
                     : null;
 
                 return (
-                  <SelectItem key={opt.value} value={opt.value?.toString()}>
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value?.toString()}
+                  >
                     <div className="flex items-center gap-2">
-                      {OptionIcon ? <OptionIcon className="h-4 w-4" /> : null}
+                      {OptionIcon ? (
+                        <OptionIcon className="h-4 w-4" />
+                      ) : null}
+
                       <span>{opt.label}</span>
                     </div>
                   </SelectItem>
@@ -149,16 +205,19 @@ export function FormFieldRenderer({
               })}
             </SelectContent>
           </Select>
+
           <FieldError errors={fieldErrors} />
         </div>
       );
+    }
 
     case "relation": {
       const rel = field.relation;
+
       if (!rel) return null;
+
       const items: any[] = relationOptions[field.name] ?? [];
 
-      // Multiple select with checkboxes
       if (rel.multiple) {
         return (
           <MultiRelationSelect
@@ -173,13 +232,13 @@ export function FormFieldRenderer({
         );
       }
 
-      // Single select
       return (
         <div className="grid gap-2">
           <Label htmlFor={field.name}>
             {field.label}
             <RequiredMark show={required} />
           </Label>
+
           <Select
             value={value?.toString() || ""}
             onValueChange={(val) => onChange(field.name, val)}
@@ -189,6 +248,7 @@ export function FormFieldRenderer({
                 placeholder={`Select ${field.label.toLowerCase()}...`}
               />
             </SelectTrigger>
+
             <SelectContent>
               {items.map((item) => (
                 <SelectItem
@@ -200,6 +260,7 @@ export function FormFieldRenderer({
               ))}
             </SelectContent>
           </Select>
+
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -212,6 +273,7 @@ export function FormFieldRenderer({
             {field.label}
             <RequiredMark show={required} />
           </Label>
+
           <Input
             id={field.name}
             type="number"
@@ -225,6 +287,7 @@ export function FormFieldRenderer({
             }
             placeholder={`Enter ${field.label.toLowerCase()}...`}
           />
+
           <FieldError errors={fieldErrors} />
         </div>
       );
@@ -236,6 +299,7 @@ export function FormFieldRenderer({
             {field.label}
             <RequiredMark show={required} />
           </Label>
+
           <Input
             id={field.name}
             type="date"
@@ -243,27 +307,30 @@ export function FormFieldRenderer({
             value={value || ""}
             onChange={(e) => onChange(field.name, e.target.value)}
           />
+
           <FieldError errors={fieldErrors} />
         </div>
       );
 
-      case "datetime":
-          return (
-              <div className="grid gap-2">
-                  <Label htmlFor={field.name}>
+    case "datetime":
+      return (
+        <div className="grid gap-2">
+          <Label htmlFor={field.name}>
             {field.label}
             <RequiredMark show={required} />
           </Label>
-                  <Input
-                      id={field.name}
-                      type="datetime-local"
-                      className={errorClass}
-                      value={value || ""}
-                      onChange={(e) => onChange(field.name, e.target.value)}
-                  />
-                  <FieldError errors={fieldErrors} />
-              </div>
-          );
+
+          <Input
+            id={field.name}
+            type="datetime-local"
+            className={errorClass}
+            value={value || ""}
+            onChange={(e) => onChange(field.name, e.target.value)}
+          />
+
+          <FieldError errors={fieldErrors} />
+        </div>
+      );
 
     case "password":
       return (
@@ -272,6 +339,7 @@ export function FormFieldRenderer({
             {field.label}
             <RequiredMark show={required} />
           </Label>
+
           <Input
             id={field.name}
             type="password"
@@ -282,29 +350,38 @@ export function FormFieldRenderer({
             placeholder={placeholder}
             autoComplete="new-password"
           />
+
           <FieldError errors={fieldErrors} />
-          {rules?.passwordRules && (textValue.length > 0 || required) ? (
+
+          {rules?.passwordRules &&
+          (textValue.length > 0 || required) ? (
             <PasswordRules value={textValue} />
           ) : null}
+
           <FieldMeta
             hint={rules?.hint}
             hasError={hasError}
             length={0}
-            maxLength={undefined}
           />
         </div>
       );
 
-    case "textarea":
+    case "textarea": {
+      const words = countWords(value);
+
+      const exceedsLimit =
+        field.maxWords !== undefined &&
+        words > field.maxWords;
+
       return (
         <div className="grid gap-2">
           <Label htmlFor={field.name}>
             {field.label}
             <RequiredMark show={required} />
           </Label>
+
           <Textarea
             id={field.name}
-            // Fixed height: long text scrolls inside the box instead of growing it.
             className={`${errorClass} h-28 resize-none overflow-y-auto`}
             style={{ fieldSizing: "fixed" } as CSSProperties}
             value={textValue}
@@ -312,8 +389,33 @@ export function FormFieldRenderer({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={placeholder}
             rows={4}
+            aria-invalid={
+              exceedsLimit || Boolean(fieldErrors?.length)
+            }
+            aria-describedby={
+              field.maxWords !== undefined
+                ? `${field.name}-word-count`
+                : undefined
+            }
           />
+
+          {field.maxWords !== undefined && (
+            <p
+              id={`${field.name}-word-count`}
+              role="status"
+              aria-live="polite"
+              className={`text-right text-xs ${
+                exceedsLimit
+                  ? "text-destructive"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {words} / {field.maxWords} words
+            </p>
+          )}
+
           <FieldError errors={fieldErrors} />
+
           <FieldMeta
             hint={rules?.hint}
             hasError={hasError}
@@ -322,6 +424,7 @@ export function FormFieldRenderer({
           />
         </div>
       );
+    }
 
     case "text":
     default:
@@ -331,6 +434,7 @@ export function FormFieldRenderer({
             {field.label}
             <RequiredMark show={required} />
           </Label>
+
           <Input
             id={field.name}
             className={errorClass}
@@ -339,7 +443,9 @@ export function FormFieldRenderer({
             onChange={(e) => onChange(field.name, e.target.value)}
             placeholder={placeholder}
           />
+
           <FieldError errors={fieldErrors} />
+
           <FieldMeta
             hint={rules?.hint}
             hasError={hasError}

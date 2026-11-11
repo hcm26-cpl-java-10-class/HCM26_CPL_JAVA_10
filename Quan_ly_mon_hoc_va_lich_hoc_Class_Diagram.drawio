@@ -1,0 +1,350 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-10-14T09:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="domain-model" name="1 Domain Model">
+    <mxGraphModel dx="1920" dy="1280" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1920" pageHeight="1280" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="dm-title" value="CLASS DIAGRAM — QUẢN LÝ MÔN HỌC VÀ LỊCH HỌC" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fillColor=none;strokeColor=none;fontSize=22;fontStyle=1;fontColor=#183B56;" vertex="1" parent="1">
+          <mxGeometry x="40" y="15" width="1150" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="dm-subtitle" value="Mô hình nghiệp vụ • ngày giờ cụ thể • phiên bản lịch • tích hợp hệ thống tổng" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fillColor=none;strokeColor=none;fontSize=22;fontStyle=1;fontColor=#183B56;" vertex="1" parent="1">
+          <mxGeometry x="40" y="54" width="1300" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="subject" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#245B78;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;Subject (Topic)&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- code: String&lt;br&gt;- name: String&lt;br&gt;- version: String&lt;br&gt;- description: Text&lt;br&gt;- technicalGroup: String&lt;br&gt;- durationHours: Decimal&lt;br&gt;- status: SubjectStatus&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="660" y="105" width="255" height="205" as="geometry"/>
+        </mxCell>
+        <mxCell id="program" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#245B78;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;TrainingProgram&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- code: String&lt;br&gt;- name: String&lt;br&gt;- version: String&lt;br&gt;- region: String&lt;br&gt;- status: ProgramStatus&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="105" width="250" height="160" as="geometry"/>
+        </mxCell>
+        <mxCell id="program-subject" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#245B78;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ProgramSubject&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- programId: UUID&lt;br&gt;- subjectId: UUID&lt;br&gt;- orderIndex: Integer&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="350" y="105" width="270" height="145" as="geometry"/>
+        </mxCell>
+        <mxCell id="training-class" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#245B78;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;TrainingClass&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- code: String&lt;br&gt;- name: String&lt;br&gt;- programId: UUID&lt;br&gt;- startDate: Date&lt;br&gt;- endDate: Date&lt;br&gt;- plannedSize: Integer&lt;br&gt;- status: ClassStatus&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="990" y="105" width="285" height="190" as="geometry"/>
+        </mxCell>
+        <mxCell id="enrollment" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#637487;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;shared data&amp;gt;&amp;gt;&lt;/div&gt;Enrollment&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- studentId: UUID&lt;br&gt;- classId: UUID&lt;br&gt;- enrolledAt: Date&lt;br&gt;- status: EnrollmentStatus&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="105" width="260" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="student" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#637487;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;shared data&amp;gt;&amp;gt;&lt;/div&gt;Student&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- fullName: String&lt;br&gt;- email: String&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1645" y="105" width="230" height="125" as="geometry"/>
+        </mxCell>
+        <mxCell id="holiday" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#637487;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;shared calendar&amp;gt;&amp;gt;&lt;/div&gt;Holiday&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- date: Date&lt;br&gt;- name: String&lt;br&gt;- site: String&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="405" width="245" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="trainer" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#637487;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;shared data&amp;gt;&amp;gt;&lt;/div&gt;Trainer&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- fullName: String&lt;br&gt;- email: String&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="350" y="405" width="250" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="teaching-assignment" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#245B78;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;TeachingAssignment&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- classId: UUID&lt;br&gt;- programSubjectId: UUID&lt;br&gt;- trainerId: UUID&lt;br&gt;- role: AssignmentRole&lt;br&gt;- effectiveFrom: Date&lt;br&gt;- effectiveTo: Date?&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="660" y="375" width="280" height="190" as="geometry"/>
+        </mxCell>
+        <mxCell id="schedule-version" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#245B78;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ScheduleVersion&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- classId: UUID&lt;br&gt;- versionNumber: Integer&lt;br&gt;- status: ScheduleVersionStatus&lt;br&gt;- createdAt: DateTime&lt;br&gt;- createdBy: UUID&lt;br&gt;- activatedAt: DateTime?&lt;hr style=&quot;border:0;border-top:1px solid #cbd5e1&quot;&gt;+ cloneFromActive()&lt;br&gt;+ validate()&lt;br&gt;+ activate()&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="990" y="375" width="285" height="180" as="geometry"/>
+        </mxCell>
+        <mxCell id="study-session" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#245B78;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;StudySession&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- scheduleVersionId: UUID&lt;br&gt;- teachingAssignmentId: UUID&lt;br&gt;- title: String&lt;br&gt;- startAt: DateTime&lt;br&gt;- endAt: DateTime&lt;br&gt;- roomId: UUID?&lt;br&gt;- meetingUrl: String?&lt;br&gt;- status: SessionStatus&lt;br&gt;- note: Text&lt;br&gt;- cancellationReason: Text?&lt;hr style=&quot;border:0;border-top:1px solid #cbd5e1&quot;&gt;+ reschedule()&lt;br&gt;+ cancel()&lt;br&gt;+ markCompleted()&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1330" y="375" width="285" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="room" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#637487;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;shared resource&amp;gt;&amp;gt;&lt;/div&gt;Room&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;- id: UUID&lt;br&gt;- code: String&lt;br&gt;- name: String&lt;br&gt;- capacity: Integer&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#234B65;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1645" y="405" width="230" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="conflict-service" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#8A5A22;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;domain service&amp;gt;&amp;gt;&lt;/div&gt;ScheduleConflictService&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;+ validateSession(session)&lt;br&gt;+ findTrainerConflicts()&lt;br&gt;+ findRoomConflicts()&lt;br&gt;+ findClassConflicts()&lt;br&gt;+ validateHoliday()&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF9EF;strokeColor=#8A5A22;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="670" y="675" width="410" height="155" as="geometry"/>
+        </mxCell>
+        <mxCell id="rules-note" value="&lt;div style=&quot;font-family:Arial;font-size:12px;line-height:1.4;padding:8px&quot;&gt;&lt;b&gt;Quy tắc&lt;/b&gt;&lt;br&gt;Mỗi lớp tối đa một lịch ACTIVE. Session phải nằm trong khoảng ngày của lớp, đúng phân công còn hiệu lực và không trùng lớp/giảng viên/phòng hoặc ngày nghỉ. Kích hoạt phiên bản mới phải lưu lịch sử trong cùng giao dịch.&lt;/div&gt;" style="shape=note;whiteSpace=wrap;html=1;size=18;fillColor=#FFF7DB;strokeColor=#D6A73D;fontSize=12;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="675" width="755" height="155" as="geometry"/>
+        </mxCell>
+        <mxCell id="integration-note" value="&lt;div style=&quot;font-family:Arial;font-size:12px;line-height:1.4;padding:8px&quot;&gt;&lt;b&gt;Quy tắc&lt;/b&gt;&lt;br&gt;Student, Trainer, Room, Holiday và hồ sơ TrainingClass là dữ liệu tích hợp từ dự án tổng. Module tham chiếu bằng ID; không tạo lại nguồn dữ liệu nếu đã có chủ sở hữu.&lt;/div&gt;" style="shape=note;whiteSpace=wrap;html=1;size=18;fillColor=#EEF4F8;strokeColor=#D6A73D;fontSize=12;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="675" width="570" height="155" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-program-ps" value="1  —  1..*  contains" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;startArrow=diamond;startFill=1;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="program" target="program-subject">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-subject-ps" value="1  —  0..*  uses" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="program-subject" target="subject">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-program-class" value="1  —  0..*  assigned version" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=1;" edge="1" parent="1" source="program" target="training-class">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="165" y="320"/>
+              <mxPoint x="1130" y="320"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-class-enrollment" value="1  —  0..*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;startArrow=diamond;startFill=1;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="training-class" target="enrollment">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-enrollment-student" value="0..*  —  1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="enrollment" target="student">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-class-assignment" value="1  —  0..*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;startArrow=diamond;startFill=1;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="training-class" target="teaching-assignment">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1130" y="335"/>
+              <mxPoint x="800" y="335"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-ps-assignment" value="1  —  0..*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="program-subject" target="teaching-assignment">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="485" y="330"/>
+              <mxPoint x="800" y="330"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-trainer-assignment" value="1  —  0..*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="trainer" target="teaching-assignment">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-class-version" value="1  —  0..*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;startArrow=diamond;startFill=1;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="training-class" target="schedule-version">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1130" y="330"/>
+              <mxPoint x="1130" y="355"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-version-session" value="1  —  0..*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;startArrow=diamond;startFill=1;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="schedule-version" target="study-session">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-assignment-session" value="1  —  0..*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=1;" edge="1" parent="1" source="teaching-assignment" target="study-session">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="950" y="600"/>
+              <mxPoint x="1470" y="600"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-room-session" value="0..1  —  0..*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#526579;strokeWidth=1.4;endArrow=none;fontSize=11;labelBackgroundColor=#ffffff;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="room" target="study-session">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-conflict-session" value="checks" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0.5;entryY=1;" edge="1" parent="1" source="conflict-service" target="study-session">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1090" y="850"/>
+              <mxPoint x="1885" y="850"/>
+              <mxPoint x="1885" y="610"/>
+              <mxPoint x="1472" y="610"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-conflict-assignment" value="checks" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.35;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="1" source="conflict-service" target="teaching-assignment">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e-conflict-room" value="checks" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=1;entryX=0.5;entryY=1;" edge="1" parent="1" source="conflict-service" target="room">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1090" y="850"/>
+              <mxPoint x="1885" y="850"/>
+              <mxPoint x="1885" y="560"/>
+              <mxPoint x="1760" y="560"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-conflict-holiday" value="checks" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=0;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="conflict-service" target="holiday">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="650" y="850"/>
+              <mxPoint x="20" y="850"/>
+              <mxPoint x="20" y="470"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="enum-subject" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#7A5C14;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;enumeration&amp;gt;&amp;gt;&lt;/div&gt;SubjectStatus&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;DRAFT&lt;br&gt;ACTIVE&lt;br&gt;INACTIVE&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFCED;strokeColor=#C5A33C;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="900" width="240" height="125" as="geometry"/>
+        </mxCell>
+        <mxCell id="enum-program" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#7A5C14;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;enumeration&amp;gt;&amp;gt;&lt;/div&gt;ProgramStatus&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;DRAFT&lt;br&gt;ACTIVE&lt;br&gt;INACTIVE&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFCED;strokeColor=#C5A33C;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="300" y="900" width="240" height="125" as="geometry"/>
+        </mxCell>
+        <mxCell id="enum-class" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#7A5C14;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;enumeration&amp;gt;&amp;gt;&lt;/div&gt;ClassStatus / EnrollmentStatus&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Class: PLANNING, IN_PROGRESS, COMPLETED, CANCELLED&lt;br&gt;Enrollment: ENROLLED, IN_TRAINING, PASSED, FAILED, DROPPED_OUT, CANCELLED&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFCED;strokeColor=#C5A33C;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="900" width="280" height="155" as="geometry"/>
+        </mxCell>
+        <mxCell id="enum-assignment" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#7A5C14;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;enumeration&amp;gt;&amp;gt;&lt;/div&gt;AssignmentRole&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;LEAD&lt;br&gt;CO_TRAINER&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFCED;strokeColor=#C5A33C;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="860" y="900" width="240" height="125" as="geometry"/>
+        </mxCell>
+        <mxCell id="enum-version" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#7A5C14;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;enumeration&amp;gt;&amp;gt;&lt;/div&gt;ScheduleVersionStatus&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;DRAFT&lt;br&gt;ACTIVE&lt;br&gt;ARCHIVED&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFCED;strokeColor=#C5A33C;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="900" width="250" height="125" as="geometry"/>
+        </mxCell>
+        <mxCell id="enum-session" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#7A5C14;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;&lt;div style=&quot;font-size:11px;font-style:italic;color:#dbeafe&quot;&gt;&amp;lt;&amp;lt;enumeration&amp;gt;&amp;gt;&lt;/div&gt;SessionStatus&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;SCHEDULED&lt;br&gt;COMPLETED&lt;br&gt;CANCELLED&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFCED;strokeColor=#C5A33C;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1390" y="900" width="240" height="125" as="geometry"/>
+        </mxCell>
+        <mxCell id="week-note" value="&lt;div style=&quot;font-family:Arial;font-size:12px;line-height:1.4;padding:8px&quot;&gt;&lt;b&gt;Quy tắc&lt;/b&gt;&lt;br&gt;Lịch tuần/tháng là chế độ truy vấn StudySession theo khoảng ngày và múi giờ. Không cần entity Week; dayOfWeek suy ra từ startAt.&lt;/div&gt;" style="shape=note;whiteSpace=wrap;html=1;size=18;fillColor=#EEF4F8;strokeColor=#D6A73D;fontSize=12;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1090" width="1590" height="95" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="mvc-architecture" name="2 MVC Architecture">
+    <mxGraphModel dx="1760" dy="1500" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1760" pageHeight="1500" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="mvc-title" value="MVC CLASS DIAGRAM — PHÂN CÔNG 7 THÀNH VIÊN" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fillColor=none;strokeColor=none;fontSize=22;fontStyle=1;fontColor=#183B56;" vertex="1" parent="1">
+          <mxGeometry x="40" y="15" width="1300" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-subtitle" value="Giao diện → Controller → Service → Repository • mỗi thành viên phụ trách full-stack chức năng của mình" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fillColor=none;strokeColor=none;fontSize=22;fontStyle=1;fontColor=#183B56;" vertex="1" parent="1">
+          <mxGeometry x="40" y="54" width="1550" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-subject-view" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#6B5AA6;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;Môn họcView&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Minh Hoàng&lt;br&gt;+ list / detail / form&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B5AA6;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="105" width="260" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-subject-controller" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#2E7D55;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;SubjectController&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Minh Hoàng&lt;br&gt;+ validate request&lt;br&gt;+ return response&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2E7D55;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="390" y="105" width="290" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-subject-service" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#A45E24;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;SubjectService&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Minh Hoàng&lt;br&gt;+ CRUD / search / import / export&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#A45E24;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="780" y="105" width="370" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-subject-repository" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#4B6477;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;SubjectRepository&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Minh Hoàng&lt;br&gt;+ find / save / update&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4B6477;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="105" width="330" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-subject-v-c" value="API request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-subject-view" target="mvc-subject-controller">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-subject-c-s" value="calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-subject-controller" target="mvc-subject-service">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-subject-s-r" value="data access" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-subject-service" target="mvc-subject-repository">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-program-view" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#6B5AA6;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;Chương trìnhView&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: BOSS&lt;br&gt;+ list / detail / form&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B5AA6;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="285" width="260" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-program-controller" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#2E7D55;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ProgramController&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: BOSS&lt;br&gt;+ validate request&lt;br&gt;+ return response&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2E7D55;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="390" y="285" width="290" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-program-service" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#A45E24;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ProgramService&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: BOSS&lt;br&gt;+ edit ordered topics&lt;br&gt;+ clone program version&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#A45E24;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="780" y="285" width="370" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-program-repository" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#4B6477;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;TrainingProgram/ProgramSubjectRepository&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: BOSS&lt;br&gt;+ find / save / update&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4B6477;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="285" width="330" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-program-v-c" value="API request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-program-view" target="mvc-program-controller">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-program-c-s" value="calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-program-controller" target="mvc-program-service">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-program-s-r" value="data access" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-program-service" target="mvc-program-repository">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-assign-view" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#6B5AA6;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;Phân công lớpView&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Tú&lt;br&gt;+ list / detail / form&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B5AA6;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="465" width="260" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-assign-controller" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#2E7D55;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ClassSetupController&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Tú&lt;br&gt;+ validate request&lt;br&gt;+ return response&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2E7D55;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="390" y="465" width="290" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-assign-service" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#A45E24;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ClassSetupService&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Tú&lt;br&gt;+ assign class/program/trainer&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#A45E24;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="780" y="465" width="370" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-assign-repository" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#4B6477;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;TrainingClass/TeachingAssignmentRepository&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Tú&lt;br&gt;+ find / save / update&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4B6477;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="465" width="330" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-assign-v-c" value="API request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-assign-view" target="mvc-assign-controller">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-assign-c-s" value="calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-assign-controller" target="mvc-assign-service">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-assign-s-r" value="data access" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-assign-service" target="mvc-assign-repository">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-calendar-view" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#6B5AA6;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;Lịch tuần/thángView&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Tân&lt;br&gt;+ list / detail / form&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B5AA6;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="645" width="260" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-calendar-controller" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#2E7D55;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;WeeklyCalendarController&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Tân&lt;br&gt;+ validate request&lt;br&gt;+ return response&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2E7D55;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="390" y="645" width="290" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-calendar-service" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#A45E24;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;WeeklyCalendarService&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Tân&lt;br&gt;+ query sessions by date range&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#A45E24;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="780" y="645" width="370" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-calendar-repository" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#4B6477;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;StudySessionRepository&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Tân&lt;br&gt;+ find / save / update&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4B6477;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="645" width="330" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-calendar-v-c" value="API request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-calendar-view" target="mvc-calendar-controller">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-calendar-c-s" value="calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-calendar-controller" target="mvc-calendar-service">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-calendar-s-r" value="data access" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-calendar-service" target="mvc-calendar-repository">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-session-view" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#6B5AA6;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;Buổi họcView&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Danh&lt;br&gt;+ list / detail / form&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B5AA6;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="825" width="260" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-session-controller" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#2E7D55;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ScheduleController&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Danh&lt;br&gt;+ validate request&lt;br&gt;+ return response&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2E7D55;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="390" y="825" width="290" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-session-service" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#A45E24;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ScheduleService&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Danh&lt;br&gt;+ create / edit / cancel session&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#A45E24;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="780" y="825" width="370" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-session-repository" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#4B6477;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;StudySessionRepository&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Danh&lt;br&gt;+ find / save / update&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4B6477;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="825" width="330" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-session-v-c" value="API request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-session-view" target="mvc-session-controller">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-session-c-s" value="calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-session-controller" target="mvc-session-service">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-session-s-r" value="data access" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-session-service" target="mvc-session-repository">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-version-view" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#6B5AA6;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;Phiên bản lịchView&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Phát&lt;br&gt;+ list / detail / form&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#6B5AA6;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1005" width="260" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-version-controller" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#2E7D55;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ScheduleVersionController&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Phát&lt;br&gt;+ validate request&lt;br&gt;+ return response&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2E7D55;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="390" y="1005" width="290" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-version-service" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#A45E24;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ScheduleVersionService&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Phát&lt;br&gt;+ clone / validate / activate&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#A45E24;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="780" y="1005" width="370" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-version-repository" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#4B6477;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ScheduleVersionRepository&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Phát&lt;br&gt;+ find / save / update&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4B6477;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="1005" width="330" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-version-v-c" value="API request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-version-view" target="mvc-version-controller">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-version-c-s" value="calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-version-controller" target="mvc-version-service">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-version-s-r" value="data access" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-version-service" target="mvc-version-repository">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-program-subject-repository" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#4B6477;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;SubjectRepository&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: BOSS / Minh Hoàng&lt;br&gt;+ find active topic&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4B6477;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1370" y="465" width="330" height="112" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-conflict-service" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#A45E24;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;ScheduleConflictService&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Thắng&lt;br&gt;+ check class/trainer/room&lt;br&gt;+ check holiday and bulk conflicts&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#A45E24;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="780" y="1200" width="370" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-conflict-repo" value="&lt;div style=&quot;font-family:Arial;font-size:14px&quot;&gt;&lt;div style=&quot;background:#4B6477;color:#ffffff;padding:7px 8px;font-weight:bold&quot;&gt;Conflict data repositories&lt;/div&gt;&lt;div style=&quot;padding:7px 8px;line-height:1.35;color:#1f2937&quot;&gt;Owner: Thắng&lt;br&gt;StudySessionRepository&lt;br&gt;TeachingAssignmentRepository&lt;br&gt;RoomRepository&lt;br&gt;HolidayRepository&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4B6477;strokeWidth=1.5;align=left;verticalAlign=top;spacing=0;overflow=hidden;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="1200" width="460" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-session-conflict" value="validate before save" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="mvc-session-service" target="mvc-conflict-service">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="965" y="960"/>
+              <mxPoint x="965" y="1175"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="mvc-version-conflict" value="validate before activate" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="mvc-version-service" target="mvc-conflict-service">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="965" y="1135"/>
+              <mxPoint x="965" y="1180"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="mvc-conflict-repos" value="reads" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8A6C38;strokeWidth=1.3;dashed=1;endArrow=open;endFill=0;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mvc-conflict-service" target="mvc-conflict-repo">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-shared-note" value="&lt;div style=&quot;font-family:Arial;font-size:12px;line-height:1.4;padding:8px&quot;&gt;&lt;b&gt;Quy tắc&lt;/b&gt;&lt;br&gt;Dữ liệu dùng chung từ dự án tổng: User/RBAC, Student, Trainer, TrainingClass, Room và Notification. Các repository hiển thị ở đây là ranh giới tích hợp; nhóm module không xây lại CRUD nguồn dữ liệu chung.&lt;/div&gt;" style="shape=note;whiteSpace=wrap;html=1;size=18;fillColor=#EEF4F8;strokeColor=#D6A73D;fontSize=12;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1200" width="680" height="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="mvc-rule-note" value="&lt;div style=&quot;font-family:Arial;font-size:12px;line-height:1.4;padding:8px&quot;&gt;&lt;b&gt;Quy tắc&lt;/b&gt;&lt;br&gt;Tuần review: demo một luồng UI → API → database mỗi tuần. Tuần 3 ghép luồng môn → chương trình → lớp → phân công → buổi học → lịch. Cuối tuần 4 khóa tính năng mới và tập trung ổn định.&lt;/div&gt;" style="shape=note;whiteSpace=wrap;html=1;size=18;fillColor=#EEF4F8;strokeColor=#D6A73D;fontSize=12;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1360" width="1660" height="95" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,3 +1,4 @@
+
 import {
   Sheet,
   SheetContent,
@@ -11,6 +12,7 @@ import { useState, useEffect, useMemo } from "react";
 import type { FieldSchema } from "@/types";
 import { FormFieldRenderer } from "./FormFieldRenderer";
 import { isFieldRequired, validateForm } from "@/utils/form-validation";
+import { wordLimitError } from "@/components/datatable/util/word-count";
 
 type SectionField = {
   name: string;
@@ -107,10 +109,9 @@ export function FormModal({
   fieldErrors = {},
 }: FormModalProps) {
   const [form, setForm] = useState<Record<string, any>>({});
-  // Fields the user has typed in (live errors are shown for these) and fields changed since the
-  // server last reported errors (their old server error is hidden).
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitted, setSubmitted] = useState(false);
+
   const isEdit = !!initial;
 
   const editableFields: FieldSchema[] = schema.fields.filter(
@@ -119,11 +120,14 @@ export function FormModal({
       f.type !== "dynamic" &&
       !f.dynamicChild
   );
+
   const activeLayout = sideMenuFormLayouts[schema.entityName as string];
+
   const editableFieldMap = new Map(
     editableFields.map((field) => [field.name, field])
   );
 
+  // Initialize form data
   useEffect(() => {
     if (initial) {
       const next: Record<string, any> = {};
@@ -134,75 +138,155 @@ export function FormModal({
           return;
         }
 
-        if (field.type === "boolean") next[field.name] = false;
-        else if (field.type === "relation" && field.relation?.multiple)
+        if (field.type === "boolean") {
+          next[field.name] = false;
+        } else if (field.type === "relation" && field.relation?.multiple) {
           next[field.name] = [];
-        else if (field.type === "number") next[field.name] = "";
-        else next[field.name] = "";
+        } else {
+          next[field.name] = "";
+        }
       });
 
       setForm(next);
     } else {
       const defaults: Record<string, any> = {};
-      editableFields.forEach((f) => {
-        if (f.type === "boolean") defaults[f.name] = false;
-        else if (f.type === "relation" && f.relation?.multiple)
-          defaults[f.name] = [];
-        else if (f.type === "number") defaults[f.name] = "";
-        else defaults[f.name] = "";
+
+      editableFields.forEach((field) => {
+        if (field.type === "boolean") {
+          defaults[field.name] = false;
+        } else if (field.type === "relation" && field.relation?.multiple) {
+          defaults[field.name] = [];
+        } else {
+          defaults[field.name] = "";
+        }
       });
+
       setForm(defaults);
     }
+
     setTouched({});
     setSubmitted(false);
   }, [initial, open]);
 
-  // When the server reports new errors, show them again for those fields.
+  // Show server errors again when new errors arrive
   const serverErrorKey = JSON.stringify(fieldErrors ?? {});
+
   useEffect(() => {
     const keys = Object.keys(fieldErrors ?? {});
+
     if (keys.length === 0) return;
+
     setTouched((prev) => {
       const next = { ...prev };
+
       keys.forEach((key) => delete next[key]);
+
       return next;
     });
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverErrorKey]);
 
-  // Live validation: recalculated on every keystroke.
+  // Validate form fields
   const clientErrors = useMemo(
     () => validateForm(editableFields, form, isEdit),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [form, isEdit, schema]
   );
 
+  // Update field value
   const updateField = (name: string, value: any) => {
     const rules = editableFieldMap.get(name)?.validation;
     let next = value;
 
-    // Limit what can be typed: filter characters first, then enforce the max length.
     if (typeof next === "string" && rules) {
-      if (rules.inputFilter) next = rules.inputFilter(next);
+      if (rules.inputFilter) {
+        next = rules.inputFilter(next);
+      }
+
       if (rules.maxLength !== undefined && next.length > rules.maxLength) {
         next = next.slice(0, rules.maxLength);
       }
     }
 
-    setForm((prev) => ({ ...prev, [name]: next }));
-    setTouched((prev) => ({ ...prev, [name]: true }));
+    setForm((prev) => ({
+      ...prev,
+      [name]: next,
+    }));
+
+    setTouched((prev) => ({
+      ...prev,
+      [name]: true,
+    }));
   };
 
+  // Validate word limits
+  const wordLimitErrors: Record<string, string[]> = {};
+
+  editableFields.forEach((field) => {
+    const error = wordLimitError(
+      form[field.name],
+      field.maxWords,
+      field.label
+    );
+
+    if (error) {
+      wordLimitErrors[field.name] = [error];
+    }
+  });
+
+  const hasWordLimitErrors =
+    Object.keys(wordLimitErrors).length > 0;
+
+  // Get errors for a field
+  const errorsFor = (fieldName: string): string[] => {
+    const liveErrors = clientErrors[fieldName];
+
+    if (
+      liveErrors &&
+      liveErrors.length > 0 &&
+      (touched[fieldName] || submitted)
+    ) {
+      return liveErrors;
+    }
+
+    if (wordLimitErrors[fieldName]) {
+      return wordLimitErrors[fieldName];
+    }
+
+    if (touched[fieldName]) {
+      return [];
+    }
+
+    return fieldErrors[fieldName] ?? [];
+  };
+
+  const hasError = (fieldName: string) =>
+    errorsFor(fieldName).length > 0;
+
+  // Submit form
   const handleSubmit = () => {
     setSubmitted(true);
 
-    if (Object.keys(clientErrors).length > 0) return;
+    // Stop if validation fails
+    if (Object.keys(clientErrors).length > 0) {
+      return;
+    }
 
-    const payload: Record<string, any> = { ...form };
+    if (hasWordLimitErrors) {
+      return;
+    }
+
+    const payload: Record<string, any> = {
+      ...form,
+    };
+
     editableFields.forEach((field) => {
-      // Form-only fields (like "confirm password") are not sent to the server.
-      // A blank password on edit means "keep the current password".
-      if (field.transient || (field.type === "password" && !payload[field.name])) {
+      // Do not send temporary fields to backend
+      if (
+        field.transient ||
+        (field.type === "password" && !payload[field.name])
+      ) {
         delete payload[field.name];
       }
     });
@@ -210,16 +294,7 @@ export function FormModal({
     onSubmit(payload);
   };
 
-  // Errors shown under a field: live client errors first, then (unchanged) server errors.
-  const errorsFor = (fieldName: string): string[] => {
-    const live = clientErrors[fieldName];
-    if (live && live.length > 0 && (touched[fieldName] || submitted)) return live;
-    if (touched[fieldName]) return [];
-    return fieldErrors[fieldName] ?? [];
-  };
-
-  const hasError = (fieldName: string) => errorsFor(fieldName).length > 0;
-
+  // Render one field
   const renderField = (field: FieldSchema) => (
     <FormFieldRenderer
       key={field.name}
@@ -249,19 +324,28 @@ export function FormModal({
 
   const resolvedTitle =
     activeLayout && (title === "Create" || title === "Edit")
-      ? `${title} ${schema.entityName === "module" ? "Menu Item" : "Menu Group"}`
+      ? `${title} ${
+          schema.entityName === "module"
+            ? "Menu Item"
+            : "Menu Group"
+        }`
       : title;
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent
         side="right"
-        className={`w-full ${activeLayout?.maxWidthClass ?? "sm:max-w-xl"}`}
+        className={`w-full ${
+          activeLayout?.maxWidthClass ?? "sm:max-w-xl"
+        }`}
       >
         <SheetHeader className="border-b">
           <SheetTitle>{resolvedTitle}</SheetTitle>
+
           {activeLayout?.description ? (
-            <SheetDescription>{activeLayout.description}</SheetDescription>
+            <SheetDescription>
+              {activeLayout.description}
+            </SheetDescription>
           ) : null}
         </SheetHeader>
 
@@ -289,6 +373,7 @@ export function FormModal({
                       <h3 className="text-sm font-semibold text-foreground">
                         {section.title}
                       </h3>
+
                       {section.description ? (
                         <p className="text-xs text-muted-foreground mt-1">
                           {section.description}
@@ -300,7 +385,9 @@ export function FormModal({
                       {sectionFields.map((item) => (
                         <div
                           key={item.name}
-                          className={item.fullWidth ? "md:col-span-2" : ""}
+                          className={
+                            item.fullWidth ? "md:col-span-2" : ""
+                          }
                         >
                           {renderField(item.schema as FieldSchema)}
                         </div>
@@ -310,7 +397,7 @@ export function FormModal({
                 );
               })}
 
-              {remainingFields.length ? (
+              {remainingFields.length > 0 ? (
                 <section className="rounded-xl border p-4">
                   <div className="mb-3">
                     <h3 className="text-sm font-semibold text-foreground">
@@ -320,7 +407,9 @@ export function FormModal({
 
                   <div className="grid content-start auto-rows-min gap-4 md:grid-cols-2">
                     {remainingFields.map((field) => (
-                      <div key={field.name}>{renderField(field)}</div>
+                      <div key={field.name}>
+                        {renderField(field)}
+                      </div>
                     ))}
                   </div>
                 </section>
@@ -339,7 +428,11 @@ export function FormModal({
           >
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
+
+          <Button
+            onClick={handleSubmit}
+            disabled={isSubmitting || hasWordLimitErrors}
+          >
             {isSubmitting ? "Saving..." : "Save"}
           </Button>
         </SheetFooter>

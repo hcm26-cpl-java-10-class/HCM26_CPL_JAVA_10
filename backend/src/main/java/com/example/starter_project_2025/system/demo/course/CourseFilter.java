@@ -1,17 +1,21 @@
 package com.example.starter_project_2025.system.demo.course;
 
 import com.example.starter_project_2025.base.crud.dto.BaseFilter;
+import com.example.starter_project_2025.base.crud.spec.FilterField;
+import com.example.starter_project_2025.base.crud.spec.FilterOperator;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-@lombok.Getter
-@lombok.Setter
-@lombok.NoArgsConstructor
-@lombok.AllArgsConstructor
+@Getter
+@Setter
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class CourseFilter extends BaseFilter {
- @com.example.starter_project_2025.base.crud.spec.FilterField(entityField="category",operator=com.example.starter_project_2025.base.crud.spec.FilterOperator.LIKE) String category;
- @com.example.starter_project_2025.base.crud.spec.FilterField(entityField="courseLevel") String courseLevel;
- @com.example.starter_project_2025.base.crud.spec.FilterField(entityField="publicationStatus") String publicationStatus;
- @com.example.starter_project_2025.base.crud.spec.FilterField(entityField="instructor") String instructor;
 
+    @FilterField(entityField = "subjectId", operator = FilterOperator.EQUAL)
+    private Long subjectId;
 }

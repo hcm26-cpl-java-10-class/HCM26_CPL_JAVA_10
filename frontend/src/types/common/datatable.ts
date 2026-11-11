@@ -86,6 +86,15 @@ export interface FieldSchema {
 
   type: FieldType;
 
+  maxWords?: number;
+
+  renderInput?: (props: {
+    id: string;
+    value: any;
+    onChange: (value: any) => void;
+    invalid: boolean;
+  }) => React.ReactNode;
+
   sortable?: boolean;
 
   filterable?: boolean;

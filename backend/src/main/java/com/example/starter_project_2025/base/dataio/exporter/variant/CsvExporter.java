@@ -7,7 +7,9 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintWriter;
+import java.io.BufferedWriter;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -26,14 +28,16 @@ public class CsvExporter implements Exporter {
             OutputStream os
     ) throws IOException {
 
-        PrintWriter writer = new PrintWriter(os);
+        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8));
 
         // Header
-        writer.println(
+        writer.write(
                 config.columns().stream()
                         .map(ExportColumn::header)
+                        .map(this::escape)
                         .collect(Collectors.joining(","))
         );
+        writer.write("\r\n");
 
         // Data
         for (T item : data) {
@@ -42,12 +46,22 @@ public class CsvExporter implements Exporter {
                         Object v = c.valueExtractor().apply(item);
                         return v != null ? v.toString() : "";
                     })
+                    .map(this::escape)
                     .collect(Collectors.joining(","));
 
-            writer.println(line);
+            writer.write(line);
+            writer.write("\r\n");
         }
 
         writer.flush();
+    }
+
+    private String escape(String value) {
+        if (value.indexOf(',') >= 0 || value.indexOf('"') >= 0
+                || value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
     }
 }
 

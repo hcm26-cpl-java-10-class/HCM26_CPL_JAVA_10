@@ -45,4 +45,16 @@ public class SessionFilter extends BaseFilter {
 
     @FilterField(entityField = "endTime", operator = FilterOperator.LESS_OR_EQUAL)
     LocalDateTime toDate;
+
+    @FilterField(
+            entityField = "startTime",
+            operator = FilterOperator.LESS_THAN
+    )
+    LocalDateTime startsBefore;
+
+    @FilterField(
+            entityField = "endTime",
+            operator = FilterOperator.GREATER_THAN
+    )
+    LocalDateTime endsAfter;
 }

@@ -36,25 +36,118 @@ export function useActiveModuleGroups(enabled = true) {
         queryKey: ["sidebar-menu", "active-module-groups", activeRole, user.email, user.permissions],
         enabled,
         queryFn: async () => {
-            const [groupPage, modulePage] = await Promise.all([
-                moduleGroupApi.getPage(menuPagination, undefined, { ids: [], isActive: true }),
-                moduleApi.getPage(modulePagination, undefined, { ids: [], isActive: true }),
-            ]);
+            let groups: ModuleGroupDTO[] = [];
+            let modules: ModuleDTO[] = [];
 
-            const groups = groupPage.content ?? groupPage.items ?? [];
-const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) => {
-    const path = module.url ?? "";
+            try {
+                const [groupPage, modulePage] = await Promise.all([
+                    moduleGroupApi.getPage(menuPagination, undefined, { ids: [], isActive: true }),
+                    moduleApi.getPage(modulePagination, undefined, { ids: [], isActive: true }),
+                ]);
 
-    if (!canAccessPath(path, activeRole, user.permissions)) {
-        return false;
-    }
+                const isAdmin = activeRole === "ADMIN";
+                groups = groupPage.content ?? groupPage.items ?? [];
+                modules = (modulePage.content ?? modulePage.items ?? []).filter((module) => {
+                    const path = module.url ?? "";
 
-    if (path === "/admin/audit-log") {
-        return normalizeRole(activeRole) === ADMIN_ROLE;
-    }
+                    if (!canAccessPath(path, activeRole, user.permissions)) {
+                        return false;
+                    }
 
-    return canAccessByPermission(module.requiredPermission, hasPermission);
-});
+                    if (path === "/admin/audit-log") {
+                        return normalizeRole(activeRole) === ADMIN_ROLE;
+                    }
+
+                    return isAdmin || canAccessByPermission(module.requiredPermission, hasPermission);
+                });
+            } catch (err) {
+                console.warn("Failed to load sidebar modules from backend, loading fallback navigation:", err);
+                groups = [
+                    {
+                        id: 1,
+                        name: "Training Operations",
+                        description: "Academic & Training Operations",
+                        displayOrder: 1,
+                        isActive: true,
+                    },
+                    {
+                        id: 2,
+                        name: "Subjects & Scheduling",
+                        description: "Curriculum and Sessions",
+                        displayOrder: 2,
+                        isActive: true,
+                    },
+                ];
+                modules = [
+                    {
+                        id: 101,
+                        moduleGroupId: "1",
+                        title: "Adjust Calendar",
+                        url: "/calendar/adjust",
+                        icon: "calendar",
+                        displayOrder: 1,
+                        requiredPermission: "SESSION_READ",
+                        isActive: true,
+                    },
+                    {
+                        id: 102,
+                        moduleGroupId: "1",
+                        title: "Timetable",
+                        url: "/calendar/preview",
+                        icon: "calendar",
+                        displayOrder: 2,
+                        requiredPermission: "SESSION_READ",
+                        isActive: true,
+                    },
+                    {
+                        id: 103,
+                        moduleGroupId: "1",
+                        title: "Class Study Plans",
+                        url: "/class-setup",
+                        icon: "graduation-cap",
+                        displayOrder: 3,
+                        isActive: true,
+                    },
+                    {
+                        id: 104,
+                        moduleGroupId: "1",
+                        title: "Teaching Assignments",
+                        url: "/teaching-assignments",
+                        icon: "users",
+                        displayOrder: 4,
+                        requiredPermission: "ASSIGNMENT_READ",
+                        isActive: true,
+                    },
+                    {
+                        id: 105,
+                        moduleGroupId: "1",
+                        title: "Training Programs",
+                        url: "/programs",
+                        icon: "book-open",
+                        displayOrder: 5,
+                        isActive: true,
+                    },
+                    {
+                        id: 201,
+                        moduleGroupId: "2",
+                        title: "Study Sessions",
+                        url: "/study-sessions",
+                        icon: "clock",
+                        displayOrder: 1,
+                        requiredPermission: "STUDY_SESSION_READ",
+                        isActive: true,
+                    },
+                    {
+                        id: 202,
+                        moduleGroupId: "2",
+                        title: "Subjects",
+                        url: "/subjects",
+                        icon: "book",
+                        displayOrder: 2,
+                        isActive: true,
+                    },
+                ].filter((m) => activeRole === "ADMIN" || canAccessByPermission(m.requiredPermission, hasPermission));
+            }
 
             const groupedModules = modules.reduce<Record<string, SidebarModule[]>>((acc, module) => {
                 if (!module.moduleGroupId) return acc;
@@ -107,48 +200,61 @@ const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) =
                 });
             }
 
-            // Ensure Audit Log menu under RBAC Management if permitted and not already in DB
-            const hasAuditLogInDb = modules.some((m) => m.url === "/admin/audit-log");
+            // Ensure Training Operations group and its critical menus (Adjust Calendar & Timetable) always exist
+            const isAdmin = activeRole === "ADMIN";
+            const canViewSessions = isAdmin || canAccessByPermission("SESSION_READ", hasPermission);
 
-            if (
-    !hasAuditLogInDb &&
-    normalizeRole(activeRole) === ADMIN_ROLE &&
-    canAccessPath("/admin/audit-log", activeRole, user.permissions)
-) {
-                let rbacGroup = groups.find(
-                    (g) => (g.name || "").toLowerCase() === "rbac management",
-                );
+            let trainingGroup = groups.find(
+                (g) => (g.name || "").toLowerCase() === "training operations",
+            );
 
-                if (!rbacGroup) {
-                    const fallbackGroup: ModuleGroupDTO = {
-                        id: 10000,
-                        name: "RBAC Management",
-                        description: "Role-Based Access Control",
-                        displayOrder: 5,
-                        isActive: true,
-                    };
+            if (!trainingGroup && canViewSessions) {
+                const fallbackGroup: ModuleGroupDTO = {
+                    id: 9998,
+                    name: "Training Operations",
+                    description: "Academic & Training Operations",
+                    displayOrder: 1,
+                    isActive: true,
+                };
+                groups.push(fallbackGroup);
+                trainingGroup = fallbackGroup;
+            }
 
-                    groups.push(fallbackGroup);
-                    rbacGroup = fallbackGroup;
-                }
-
-                const groupId = String(rbacGroup.id ?? 10000);
-
+            if (trainingGroup && canViewSessions) {
+                const groupId = String(trainingGroup.id ?? 9998);
                 if (!groupedModules[groupId]) {
                     groupedModules[groupId] = [];
                 }
 
-                groupedModules[groupId].push({
-                    id: 100000,
-                    moduleGroupId: groupId,
-                    title: "Audit Log",
-                    name: "Audit Log",
-                    url: "/admin/audit-log",
-                    icon: "history",
-                    displayOrder: 4,
-                    requiredPermission: "ADMIN",
-                    isActive: true,
-                });
+                const hasAdjust = modules.some((m) => m.url === "/calendar/adjust" || m.url === "/schedule-versions");
+                if (!hasAdjust) {
+                    groupedModules[groupId].push({
+                        id: 99998,
+                        moduleGroupId: groupId,
+                        title: "Adjust Calendar",
+                        name: "Adjust Calendar",
+                        url: "/calendar/adjust",
+                        icon: "calendar",
+                        displayOrder: 1,
+                        requiredPermission: "SESSION_READ",
+                        isActive: true,
+                    });
+                }
+
+                const hasTimetable = modules.some((m) => m.url === "/calendar/preview" || m.url === "/calendar/timetable");
+                if (!hasTimetable) {
+                    groupedModules[groupId].push({
+                        id: 99997,
+                        moduleGroupId: groupId,
+                        title: "Timetable",
+                        name: "Timetable",
+                        url: "/calendar/preview",
+                        icon: "calendar",
+                        displayOrder: 2,
+                        requiredPermission: "SESSION_READ",
+                        isActive: true,
+                    });
+                }
             }
 
             return groups

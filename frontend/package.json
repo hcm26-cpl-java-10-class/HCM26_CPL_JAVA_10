@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "test:teaching-assignment": "node --test tests/teaching-assignment-*.test.mjs"
   },
   "dependencies": {
     "axios": "^1.6.2",

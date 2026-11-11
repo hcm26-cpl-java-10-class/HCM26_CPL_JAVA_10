@@ -37,6 +37,7 @@ export interface EntityConfig {
     path: string;
     api: any;
     schema: EntitySchema;
+    headerActions?: ReactNode;
     actionPages?: EntityActionPagesConfig;
     cardRenderer?: (props: EntityCardRendererProps) => ReactNode;
 }

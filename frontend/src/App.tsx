@@ -19,7 +19,7 @@ function AppRoutes() {
 
     const homePath = isAuthenticated ? getHomePathByRole(activeRole, permissions) : "/login";
 
-    // Create component lookup map from module-driven routes
+    // Create explicit overrides and lookup map for essential routes
     const explicitOverrides: Record<string, any> = {
         "/courses": routes.find((r) => r.path === "/courses")?.component,
         "/enrollments": routes.find((r) => r.path === "/enrollments")?.component,
@@ -33,7 +33,8 @@ function AppRoutes() {
         "/fams/ho-so-ca-nhan-doi-mat-khau": routes.find((r) => r.path === "/fams/ho-so-ca-nhan-doi-mat-khau")?.component,
     };
 
-    const componentRegistry = {
+    // Component registry combining module-driven routes and explicit overrides
+    const componentRegistry: Record<string, any> = {
         ...Object.fromEntries(
             routes.filter((r) => r.isModuleDriven).map((r) => [r.path, r.component]),
         ),
@@ -53,8 +54,8 @@ function AppRoutes() {
             <Route path="/" element={<Navigate to={homePath} replace />} />
 
             {/* Dynamic routes from backend Module table */}
-            {moduleGroups.flatMap((group) =>
-                group.modules.map((m) => {
+            {moduleGroups.flatMap((group: any) =>
+                group.modules.map((m: any) => {
                     if (!m.url) return null;
                     const Component = componentRegistry[m.url];
 
@@ -77,7 +78,7 @@ function AppRoutes() {
             )}
 
             {/* Static routes from componentRegistry */}
-            {staticRoutes.map((route, index) => {
+            {staticRoutes.map((route: any, index: number) => {
                 const Component = route.component;
 
                 if (route.isPublic) {

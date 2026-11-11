@@ -1,3 +1,4 @@
+import type { ImportInputRow } from "@/types/common/import-result";
 import {
   DefaultPagination,
   type FieldSchema,
@@ -503,7 +504,7 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     qc.invalidateQueries({ queryKey: [schema.entityName] });
 
   const handleMutationError = (error: unknown) => {
-    if (axios.isAxiosError(error) && error.response?.status === 400) {
+    if (axios.isAxiosError(error) && error.response && [400, 409].includes(error.response.status)) {
       const body = error.response.data as ValidationErrorResponse;
       if (body?.errors) {
         setFieldErrors(body.errors);
@@ -597,6 +598,11 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
 
   const importMutation = useMutation<ImportResult, any, File>({
     mutationFn: api.import,
+    onSuccess: invalidate,
+  });
+
+  const importRowsMutation = useMutation<ImportResult, unknown, ImportInputRow[]>({
+    mutationFn: rows => api.importEditedRows(rows),
     onSuccess: invalidate,
   });
 
@@ -731,6 +737,8 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     total: query.data?.totalElements ?? 0,
     loading: query.isLoading,
     isFetching: query.isFetching,
+    error: query.error,
+    refetch: query.refetch,
 
     page: pagination.page,
     size: pagination.size,
@@ -769,6 +777,18 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
     isSubmitting: createMutation.isPending || updateMutation.isPending,
 
     importFile,
+    importRows: api.importEditedRows ? async (rows: ImportInputRow[]) => {
+      if (!permission.canImport) throw new Error("Missing import permission");
+      return importRowsMutation.mutateAsync(rows);
+    } : undefined,
+    previewImportRows: api.previewEditedRows ? async (rows: ImportInputRow[]) => {
+      if (!permission.canImport) throw new Error("Missing import permission");
+      return api.previewEditedRows(rows);
+    } : undefined,
+    previewImport: api.previewFileImport ? async (file: File) => {
+      if (!permission.canImport) throw new Error("Missing import permission");
+      return api.previewFileImport(file);
+    } : undefined,
     exportFile,
 
     fieldErrors,
