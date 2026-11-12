@@ -2,12 +2,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import type { EntityCardRendererProps } from "@/types";
-import type { ProjectTemplateListItem } from "@/types/features/project-template";
+import type { ProjectTemplateListItem, ProjectTemplateOptions } from "@/types/features/project-template";
 import { ArrowRight, CalendarDays, GitBranch, LayoutTemplate } from "lucide-react";
 import { templateLevelLabel } from "../project-template.utils";
 import { ProjectTemplateStatusBadge } from "./ProjectTemplateStatusBadge";
 
-export function ProjectTemplateCard({ row, onView, renderRowActions }: EntityCardRendererProps) {
+export function ProjectTemplateCard({ row, onView, renderRowActions, levels }: EntityCardRendererProps & {
+  levels?: ProjectTemplateOptions["levels"];
+}) {
   const template = row as ProjectTemplateListItem;
   const Icon = template.parentTemplateId == null ? LayoutTemplate : GitBranch;
   return (
@@ -35,7 +37,7 @@ export function ProjectTemplateCard({ row, onView, renderRowActions }: EntityCar
         <p className="line-clamp-3 break-words text-muted-foreground">{template.description}</p>
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary" className="max-w-full"><span className="truncate">{template.category}</span></Badge>
-          <Badge variant="outline">{templateLevelLabel(template.level)}</Badge>
+          <Badge variant="outline">{templateLevelLabel(template.level, levels)}</Badge>
         </div>
         <p className="flex items-center gap-2 text-muted-foreground">
           <CalendarDays className="size-4" /> {template.estimatedDurationWeeks} weeks

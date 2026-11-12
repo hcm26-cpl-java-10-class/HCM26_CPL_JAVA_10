@@ -95,6 +95,14 @@ public class AnonymousExamService {
         integrityService.record(attemptId, session.getGuestUserId(), request, userAgent, ip);
     }
 
+    /** Anh chup thi sinh an danh luc vao thi. */
+    @Transactional
+    public void saveEntryPhoto(String sessionToken, Long attemptId, String imageData) {
+        AnonymousSession session = requireSession(sessionToken);
+        assertAttemptBelongsToSession(session, attemptId);
+        integrityService.saveEntryPhoto(attemptId, session.getGuestUserId(), imageData);
+    }
+
     @Transactional
     public ExamAttemptDTO submit(String sessionToken, Long attemptId, List<SaveExamAnswerRequest> requests) {
         AnonymousSession session = requireSession(sessionToken);

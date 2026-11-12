@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirmdialog";
 import { SectionLessons } from "@/pages/management/demo/lesson/components/SectionLessons";
+import CourseOutlineQuickEditor from "./CourseOutlineQuickEditor";
 import { usePermissions } from "@/hooks/usePermissions";
 
 // ======================================
@@ -256,9 +257,16 @@ export default function CurriculumManagementPage() {
             (a.id ?? 0) - (b.id ?? 0)
     );
 
+    // Newly created Courses might not be present in the first 100 rows of the dropdown.
+    // Fetch the selected Course directly so the quick editor still appears after redirect.
+    const selectedCourseQuery = useQuery({
+        queryKey: ["course-selected-curriculum", courseId],
+        queryFn: () => courseApi.getById(String(courseId)),
+        enabled: courseId > 0 && !courses.some((course) => course.id === courseId),
+    });
     const selectedCourse = courses.find(
         (course) => course.id === courseId
-    );
+    ) ?? selectedCourseQuery.data;
 
     // ======================================
     // VALIDATE TITLE
@@ -706,11 +714,12 @@ export default function CurriculumManagementPage() {
 
     return (
         <MainLayout
+            dense
             pathName={{
                 curriculum: "Curriculum",
             }}
         >
-            <div className="mx-auto w-full max-w-6xl space-y-6">
+            <div className="mx-auto w-full max-w-6xl space-y-1.5">
                 {/* Back */}
                 <Button asChild variant="ghost" size="sm">
                     <Link
@@ -774,7 +783,7 @@ export default function CurriculumManagementPage() {
                 </div>
 
                 {/* Select Course */}
-                <div className="rounded-xl border bg-card p-5">
+                <div className="rounded-xl border bg-card px-4 py-2">
                     <label
                         htmlFor="course-select"
                         className="mb-2 block text-sm font-medium"
@@ -792,6 +801,9 @@ export default function CurriculumManagementPage() {
                     >
                         <option value={0}>Choose a course</option>
 
+                        {selectedCourse && !courses.some((course) => course.id === selectedCourse.id) && (
+                            <option value={selectedCourse.id}>{selectedCourse.name}</option>
+                        )}
                         {courses.map((course) => (
                             <option key={course.id} value={course.id}>
                                 {course.name}
@@ -815,8 +827,21 @@ export default function CurriculumManagementPage() {
                     )}
                 </div>
 
+                {selectedCourse?.courseType === "FROM_SYLLABUS" &&
+                    selectedCourse.status === "DRAFT" && courseId > 0 &&
+                    !sectionsQuery.isLoading && !sectionsQuery.isError && (
+                        <CourseOutlineQuickEditor
+                            courseId={courseId}
+                            sections={sections}
+                            onOpenAdvanced={(sectionId) => {
+                                setExpandedSectionId(sectionId);
+                                document.getElementById("curriculum-sections")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }}
+                        />
+                    )}
+
                 {/* Sections */}
-                <div className="space-y-4">
+                <div id="curriculum-sections" className="space-y-1.5 scroll-mt-4">
                     <div className="flex items-center gap-2">
                         <BookOpen className="size-5" />
 
@@ -847,17 +872,17 @@ export default function CurriculumManagementPage() {
                         )}
 
                     {!courseId ? (
-                        <div className="rounded-xl border p-8 text-center text-muted-foreground">
+                        <div className="rounded-xl border p-4 text-center text-muted-foreground">
                             Please select a course.
                         </div>
                     ) : sectionsQuery.isLoading ? (
-                        <div className="rounded-xl border p-8 text-center">
+                        <div className="rounded-xl border p-4 text-center">
                             Loading sections...
                         </div>
                     ) : sectionsQuery.isError ? (
                         <div
                             role="alert"
-                            className="rounded-xl border p-8 text-center"
+                            className="rounded-xl border p-4 text-center"
                         >
                             <p className="mb-3 text-destructive">
                                 Failed to load sections.
@@ -871,7 +896,7 @@ export default function CurriculumManagementPage() {
                             </Button>
                         </div>
                     ) : sections.length === 0 ? (
-                        <div className="rounded-xl border border-dashed p-10 text-center">
+                        <div className="rounded-xl border border-dashed p-4 text-center">
                             <BookOpen className="mx-auto mb-3 size-8 text-muted-foreground" />
 
                             <h3 className="font-semibold">
@@ -912,7 +937,7 @@ export default function CurriculumManagementPage() {
                             return (
                                 <div
                                     key={section.id}
-                                    className="space-y-4 rounded-xl border bg-card p-5"
+                                    className="space-y-1.5 rounded-xl border bg-card px-4 py-2"
                                 >
                                     {/* Section Header */}
                                     <div className="flex flex-wrap items-center justify-between gap-3">

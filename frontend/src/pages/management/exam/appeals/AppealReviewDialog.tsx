@@ -205,7 +205,7 @@ export default function AppealReviewDialog({
               <DialogDescription className="break-words">
                 {appeal
                   ? [
-                      appeal.examTitle || `Exam #${appeal.examId}`,
+                      appeal.examTitle || `Assessment #${appeal.examId}`,
                       `Attempt #${appeal.attemptNumber}`,
                       appeal.studentName || "-",
                     ].join(" · ")

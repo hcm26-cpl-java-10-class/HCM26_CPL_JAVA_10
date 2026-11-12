@@ -8,11 +8,17 @@ import type {
   EssayGradingSummary,
   ExamDTO,
   ExamFilter,
+  ExamCategory,
+  ExamInvitationOverview,
+  ExamLinkOption,
+  CourseExam,
   GradeSubmissionRequest,
   QuestionDTO,
   QuestionFilter,
   QuestionGuidelineDTO,
-  SimilarityReport
+  SimilarityReport,
+  FileFormat,
+  ImportResult
 } from "@/types";
 
 const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
@@ -20,6 +26,7 @@ const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 export interface PublishedExamScore {
   examId: number;
   examTitle: string;
+  category: ExamCategory;
   attemptNumber: number;
   objectiveScore: number | null;
   finalScore: number | null;
@@ -35,6 +42,76 @@ export interface PublishedExamScore {
 
 export const examApi = {
   ...examBase,
+  exportExams: async (format: FileFormat, filters?: { search?: string; category?: string; courseId?: number }): Promise<Blob> => {
+    const ext = format === "EXCEL" ? "xlsx" : format.toLowerCase();
+    const response = await axiosInstance.get(`/exams/export/${ext}`, {
+      params: filters,
+      responseType: "blob",
+    });
+    return response.data;
+  },
+  downloadExamTemplate: async (format: "xlsx" | "csv" = "xlsx"): Promise<Blob> => {
+    const response = await axiosInstance.get("/exams/export/template", {
+      params: { format },
+      responseType: "blob",
+    });
+    return response.data;
+  },
+  importExams: async (file: File): Promise<ImportResult> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await axiosInstance.post<ImportResult>("/exams/import", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  },
+  listInvitationOverviews: async (): Promise<ExamInvitationOverview[]> => {
+    const response = await axiosInstance.get<ExamInvitationOverview[]>("/exams/invitations/overview");
+    return response.data;
+  },
+  /** Courses the current user may attach an exam to (a teacher: only the courses they teach). */
+  getLinkCourses: async (): Promise<ExamLinkOption[]> => {
+    const response = await axiosInstance.get<ExamLinkOption[]>("/exams/link-options/courses");
+    return response.data;
+  },
+  getLinkSections: async (courseId: number): Promise<ExamLinkOption[]> => {
+    const response = await axiosInstance.get<ExamLinkOption[]>(`/exams/link-options/courses/${courseId}/sections`);
+    return response.data;
+  },
+  getLinkLessons: async (sectionId: number): Promise<ExamLinkOption[]> => {
+    const response = await axiosInstance.get<ExamLinkOption[]>(`/exams/link-options/sections/${sectionId}/lessons`);
+    return response.data;
+  },
+  /** Exams attached to a course (optionally narrowed to a section or lesson). */
+  listByCourse: async (courseId: number, params?: { sectionId?: number; lessonId?: number }): Promise<CourseExam[]> => {
+    const response = await axiosInstance.get<CourseExam[]>(`/courses/${courseId}/exams`, { params });
+    return response.data;
+  },
+  listBySection: async (sectionId: number): Promise<CourseExam[]> => {
+    const response = await axiosInstance.get<CourseExam[]>(`/sections/${sectionId}/exams`);
+    return response.data;
+  },
+  listByLesson: async (lessonId: number): Promise<CourseExam[]> => {
+    const response = await axiosInstance.get<CourseExam[]>(`/lessons/${lessonId}/exams`);
+    return response.data;
+  },
+  linkToCurriculum: async (
+    courseId: number,
+    examId: number,
+    params: { sectionId?: number; lessonId?: number }
+  ): Promise<CourseExam> => {
+    const response = await axiosInstance.put<CourseExam>(`/courses/${courseId}/exams/${examId}/link`, null, { params });
+    return response.data;
+  },
+  unlinkFromCurriculum: async (courseId: number, examId: number, unlinkFromCourse = false): Promise<void> => {
+    await axiosInstance.delete(`/courses/${courseId}/exams/${examId}/link`, { params: { unlinkFromCourse } });
+  },
+  getAvailableExamsForCourse: async (courseId: number): Promise<CourseExam[]> => {
+    const response = await axiosInstance.get<CourseExam[]>(`/courses/${courseId}/exams/available`);
+    return response.data;
+  },
   getMyPublishedExamScores: async (): Promise<PublishedExamScore[]> => {
     const response = await axiosInstance.get<PublishedExamScore[]>("/exams/my-scores");
     return response.data;

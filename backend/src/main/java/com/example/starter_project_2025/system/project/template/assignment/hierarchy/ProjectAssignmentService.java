@@ -1,9 +1,8 @@
 package com.example.starter_project_2025.system.project.template.assignment.hierarchy;
 
+import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.*;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
-import com.example.starter_project_2025.system.project.project_template_version.*;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClass;
 import com.example.starter_project_2025.system.project.trainingclass.TrainingClassRepository;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
@@ -20,7 +19,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
-import java.util.Comparator;
 import java.util.Collections;
 import java.util.HexFormat;
 import java.util.HashSet;
@@ -36,7 +34,6 @@ import java.util.Set;
 public class ProjectAssignmentService {
     private final ProjectAssignmentRepository assignments;
     private final ProjectTemplateRepository templates;
-    private final ProjectTemplateSnapshotRepository versions;
     private final ProjectTeamRepository teams;
     private final TrainingClassRepository classes;
     private final com.example.starter_project_2025.system.project.ProjectRepository projects;
@@ -58,22 +55,6 @@ public class ProjectAssignmentService {
                         .filter(project -> tenantId.equals(project.getTenantId()) && Boolean.TRUE.equals(project.getIsActive()))
                         .map(project -> new AssignmentDtos.ClassMaster(project.getId(), project.getName(),
                                 project.getStatus().name(), value.getAssignedAt())).stream()).toList();
-    }
-
-    public List<AssignmentDtos.Template> templates(Long classId, Long sessionId, String search, Authentication authentication) {
-        var session = validation.session(classId, sessionId, authentication, false);
-        Long tenantId = session.getTrainingClass().getTenantId();
-        String keyword = search == null ? "" : search.strip().toLowerCase(java.util.Locale.ROOT);
-        return templates.findAll().stream()
-                .filter(template -> tenantId.equals(template.getTenantId()) && Boolean.TRUE.equals(template.getIsActive())
-                        && template.getParentTemplateId() == null && template.getStatus() == ProjectTemplateStatus.ACTIVE)
-                .filter(template -> keyword.isEmpty() || (template.getCode() + " " + template.getName()).toLowerCase(java.util.Locale.ROOT).contains(keyword))
-                .sorted(Comparator.comparing(ProjectTemplate::getName)).limit(100)
-                .flatMap(template -> versions.findFirstByTemplateIdAndStatusAndIsActiveTrueOrderByCreatedAtDesc(
-                        template.getId(), ProjectTemplateVersionStatus.PUBLISHED).stream()
-                        .filter(version -> version.getProjectId() == null)
-                        .map(version -> new AssignmentDtos.Template(template.getId(), version.getId(), version.getVersion(), template.getCode(), template.getName())))
-                .toList();
     }
 
     public AssignmentDtos.Preview preview(Long classId, Long sessionId, Long templateId, Long versionId, Authentication authentication) {
@@ -152,6 +133,22 @@ public class ProjectAssignmentService {
         return !assignments.findAllBySessionIdAndMasterProjectIdIsNullAndIsActiveTrueOrderByIdAsc(sessionId).isEmpty();
     }
 
+    public Map<Long, String> pendingPublicationIssues(TeamAllocationSession session, Authentication authentication) {
+        Map<Long, String> issues = new LinkedHashMap<>();
+        for (var assignment : assignments.findAllBySessionIdAndMasterProjectIdIsNullAndIsActiveTrueOrderByIdAsc(session.getId())) {
+            var request = savedRequest(assignment);
+            if (!hasAssignedTeams(session.getId(), request)) continue;
+            try {
+                validatePendingPublication(session, assignment, request, authentication, false);
+            } catch (AssignmentException invalid) {
+                teamIds(request).forEach(teamId -> issues.putIfAbsent(teamId, invalid.getReason()));
+            } catch (BadRequestException invalid) {
+                teamIds(request).forEach(teamId -> issues.putIfAbsent(teamId, invalid.getMessage()));
+            }
+        }
+        return issues;
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishPending(TeamAllocationSession session, Authentication authentication) {
         var pending = assignments.findAllBySessionIdAndMasterProjectIdIsNullAndIsActiveTrueOrderByIdAsc(session.getId());
@@ -163,21 +160,9 @@ public class ProjectAssignmentService {
                 assignment.setIsActive(false);
                 continue;
             }
-            var request = new AssignmentDtos.Request(saved.masterTemplateId(), saved.versionId(), saved.mode(),
-                    saved.teamId(), saved.modules());
-            var root = reader.loadAssigned(request.masterTemplateId(), request.versionId(), assignment.getTenantId());
-            var selection = validation.validate(session, root, request, authentication);
-            requireMatchingOwners(session.getTrainingClass(), root, selection);
-            for (var brief : selection.briefs()) {
-                var team = brief.team();
-                var primary = brief.primary();
-                if (!primary.templateId().equals(team.getProjectTemplateId())
-                        || !primary.sourceVersionId().equals(team.getProjectTemplateVersionId()))
-                    throw AssignmentException.invalid("Phân công của " + team.getTeamName()
-                            + " đã thay đổi. Lưu lại toàn bộ phân công Master trước khi công bố.");
-            }
+            var publication = validatePendingPublication(session, assignment, saved, authentication, true);
             assignment.setAssignedAt(milestoneClock.instant());
-            var result = writer.createForPublication(assignment, root, selection);
+            var result = writer.createForPublication(assignment, publication.master(), publication.selection());
             assignment.setResponseJson(write(result));
             assignments.saveAndFlush(assignment);
             String correlation = CorrelationIdFilter.currentId();
@@ -185,6 +170,28 @@ public class ProjectAssignmentService {
                     .payload(assignment.getResponseJson()).correlationId(correlation).status("PENDING").build());
         }
     }
+
+    private PendingPublication validatePendingPublication(TeamAllocationSession session, ProjectAssignment assignment,
+                                                          AssignmentDtos.Request saved, Authentication authentication,
+                                                          boolean lockTeams) {
+        var request = new AssignmentDtos.Request(saved.masterTemplateId(), saved.versionId(), saved.mode(),
+                saved.teamId(), saved.modules());
+        var master = reader.loadAssigned(request.masterTemplateId(), request.versionId(), assignment.getTenantId());
+        var selection = validation.validate(session, master, request, authentication, lockTeams);
+        requireMatchingOwners(session.getTrainingClass(), master, selection);
+        for (var brief : selection.briefs()) {
+            var team = brief.team();
+            var primary = brief.primary();
+            if (!primary.templateId().equals(team.getProjectTemplateId())
+                    || !primary.sourceVersionId().equals(team.getProjectTemplateVersionId())) {
+                throw AssignmentException.invalid("Phân công của " + team.getTeamName()
+                        + " đã thay đổi. Lưu lại toàn bộ phân công Master trước khi công bố.");
+            }
+        }
+        return new PendingPublication(master, selection);
+    }
+
+    private record PendingPublication(AssignmentTemplateReader.Node master, AssignmentValidationService.Selection selection) { }
 
     private void replacePending(Long sessionId, AssignmentDtos.Request request) {
         Set<Long> selectedIds = teamIds(request);
@@ -307,6 +314,11 @@ public class ProjectAssignmentService {
                     : owner.teamId().equals(proposed.getId());
             if (!matches) throw AssignmentException.moduleAlreadyAssigned(ownerConflictMessage(owner));
         }
+    }
+
+    /** Teams of the class that already own (draft or published) any of {@code ids} below {@code masterId}. */
+    List<AssignmentDtos.Owner> ownersOf(TrainingClass trainingClass, Long masterId, Set<Long> ids) {
+        return currentOwners(trainingClass, masterId, ids);
     }
 
     private List<AssignmentDtos.Owner> currentOwners(TrainingClass trainingClass, Long masterId, Set<Long> ids) {

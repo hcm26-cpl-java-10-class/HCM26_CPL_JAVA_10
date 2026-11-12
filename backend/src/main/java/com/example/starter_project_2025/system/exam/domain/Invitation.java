@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @ResourcePermission("INVITATION")
 @ResourceMenu(
         title = "Invitations",
-        group = "Exam Management",
+        group = "Assessment Management",
         icon = "mail",
         url = "/invitations",
         order = 2,
@@ -45,6 +45,9 @@ public class Invitation extends BaseEntity {
     private InvitationStatus status = InvitationStatus.PENDING;
 
     private LocalDateTime sentAt;
+
+    @Column(name = "available_from")
+    private LocalDateTime availableFrom;
 
     private LocalDateTime expiresAt;
 
@@ -77,7 +80,7 @@ public class Invitation extends BaseEntity {
     @Column(name = "guest_user_id")
     private Long guestUserId;
 
-    @Column(length = 10)
+    @Column(length = 10, unique = true)
     private String accessCode;
 
     private LocalDateTime maxAccessTime;
@@ -89,4 +92,13 @@ public class Invitation extends BaseEntity {
     @Builder.Default
     @Column(nullable = false)
     private Integer accessAttemptCount = 0;
+
+    /** Nguồn tạo lời mời: MANUAL (tạo lẻ) hoặc COURSE (bulk theo lớp). */
+    @Builder.Default
+    @Column(name = "source_type", nullable = false, length = 20)
+    private String sourceType = "MANUAL";
+
+    /** Lớp (course) dùng làm nguồn khi tạo lời mời hàng loạt. */
+    @Column(name = "source_course_id")
+    private Long sourceCourseId;
 }

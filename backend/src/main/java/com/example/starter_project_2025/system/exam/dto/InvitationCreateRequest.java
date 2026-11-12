@@ -16,5 +16,7 @@ public class InvitationCreateRequest {
 
     private String note;
 
+    private String availableFrom;
+
     private String expiresAt;
 }

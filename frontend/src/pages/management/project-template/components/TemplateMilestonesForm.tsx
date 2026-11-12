@@ -10,7 +10,7 @@ import type { TemplateMilestonePlan, TemplateMilestonePlanPayload } from "@/type
 import type { MilestoneRubricOption } from "@/types/features/milestone";
 import { useMutation } from "@tanstack/react-query";
 import { AlertCircle, ChevronRight, Flag, Loader2, PanelLeftClose, Plus, RefreshCw, Save } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   milestoneFieldId,
@@ -23,6 +23,7 @@ import {
   type MilestoneValues,
 } from "../milestone-plan.utils";
 import { getTemplateError } from "../project-template.utils";
+import { useTemplateDraft } from "../hooks/useTemplateDraft";
 import { TemplateMilestoneEditor } from "./TemplateMilestoneEditor";
 
 export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubrics, onRefreshRubrics, onSaved, save }: {
@@ -35,11 +36,14 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
   save?: (payload: TemplateMilestonePlanPayload) => Promise<TemplateMilestonePlan>;
 }) {
   const weighted = plan.weightedMilestones !== false;
-  const [milestones, setMilestones] = useState(() => toMilestoneValues(plan));
+  const durationWeeks = plan.estimatedDurationWeeks;
+  const formId = useId();
+  const fieldId = useCallback((path: string) => `${formId}-${milestoneFieldId(path)}`, [formId]);
+  const planValues = useMemo(() => toMilestoneValues(plan), [plan]);
+  const { values: milestones, setValues: setMilestones, hasChanges, lockVersion, acceptSaved } = useTemplateDraft(
+    planValues, plan.lockVersion, values => JSON.stringify(toMilestonePlanPayload(values, 0, weighted).milestones),
+  );
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [savedMilestones, setSavedMilestones] = useState(() => JSON.stringify(toMilestonePlanPayload(milestones, 0, weighted).milestones));
-  const [lockVersion, setLockVersion] = useState(plan.lockVersion);
-  const [durationWeeks, setDurationWeeks] = useState(plan.estimatedDurationWeeks);
   const [errors, setErrors] = useState<MilestonePlanErrors>({});
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTemplateError> | null>(null);
   const [removeKey, setRemoveKey] = useState<string | null>(null);
@@ -60,20 +64,16 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
 
   useEffect(() => {
     if (!focusError.current) return;
-    const target = document.getElementById(milestoneFieldId(focusError.current)) ?? editor.current;
+    const target = document.getElementById(fieldId(focusError.current)) ?? editor.current;
     target?.focus();
     focusError.current = null;
-  }, [errors]);
+  }, [errors, fieldId]);
 
   const mutation = useMutation({
     mutationFn: (payload: TemplateMilestonePlanPayload) => save ? save(payload) : projectTemplateApi.saveMilestones(plan.templateId, payload),
     onSuccess: (saved) => {
-      const savedValues = toMilestoneValues(saved);
-      setMilestones(savedValues);
+      acceptSaved(toMilestoneValues(saved), saved.lockVersion);
       setActiveKey(null);
-      setSavedMilestones(JSON.stringify(toMilestonePlanPayload(savedValues, 0, weighted).milestones));
-      setLockVersion(saved.lockVersion);
-      setDurationWeeks(saved.estimatedDurationWeeks);
       setSubmitError(null);
       setErrors({});
       onSaved(saved);
@@ -87,8 +87,8 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
     onSettled: () => { submitting.current = false; },
   });
   const total = totalWeightHundredths(milestones);
+  const weightOverflow = total > 10000;
   const canEdit = editable && plan.editable;
-  const hasChanges = JSON.stringify(toMilestonePlanPayload(milestones, 0, weighted).milestones) !== savedMilestones;
   const disabled = !canEdit || mutation.isPending;
   const removing = milestones.find((milestone) => milestone.key === removeKey);
   const rubricOptions = [...rubrics];
@@ -115,7 +115,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
   };
   const collapseMilestone = () => {
     setActiveKey(null);
-    document.getElementById(milestoneFieldId("milestones"))?.focus();
+    document.getElementById(fieldId("milestones"))?.focus();
   };
   const addMilestone = () => {
     const item = newMilestone(milestones.length === 0);
@@ -160,22 +160,23 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
             </div>
           </div>
         </CardHeader>
-        <CardContent id={milestoneFieldId("totalWeight")} tabIndex={-1} className="grid gap-3">
+        <CardContent id={fieldId("totalWeight")} tabIndex={-1} className="grid gap-3">
           {weighted && <>
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className="font-medium">Total milestone weight</span>
-            <span className={total === 10000 ? "font-semibold text-emerald-700 dark:text-emerald-400" : "font-semibold"}>
-              {total === null ? "—" : total / 100} / 100%
+            <span className={weightOverflow ? "font-semibold text-destructive"
+              : total === 10000 ? "font-semibold text-emerald-700 dark:text-emerald-400" : "font-semibold"}>
+              {total / 100} / 100%
             </span>
           </div>
-          <Progress value={total === null ? 0 : Math.min(total / 100, 100)} aria-label="Total milestone weight"
-            className={errors.totalWeight ? "[&_[data-slot=progress-indicator]]:bg-destructive"
+          <Progress value={Math.min(total / 100, 100)} aria-label="Total milestone weight" aria-valuetext={`${total / 100}%`}
+            className={weightOverflow || errors.totalWeight ? "[&_[data-slot=progress-indicator]]:bg-destructive"
               : total === 10000 ? "[&_[data-slot=progress-indicator]]:bg-emerald-500"
               : "[&_[data-slot=progress-indicator]]:bg-indigo-500"} />
-          <div aria-live="polite"><FieldError errors={errors.totalWeight} /></div>
+          <div aria-live="polite"><FieldError errors={weightOverflow ? ["Total milestone weight exceeds 100%."] : errors.totalWeight} /></div>
           <p className="text-xs text-muted-foreground">Milestone weights must total 100% when you save.</p>
           </>}
-          <div id={milestoneFieldId("estimatedDurationWeeks")} tabIndex={-1} className="grid gap-2">
+          <div id={fieldId("estimatedDurationWeeks")} tabIndex={-1} className="grid gap-2">
             {durationWeeks !== null && durationWeeks > 0 && <p className="text-sm text-muted-foreground">
               Template duration: {durationWeeks} weeks ({durationWeeks * 7} days). Each milestone must be due within this period.
             </p>}
@@ -185,7 +186,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
       </Card>
 
       <div className="grid min-w-0 items-start gap-4 xl:grid-cols-[17rem_minmax(0,1fr)]">
-        <Card id={milestoneFieldId("milestones")} tabIndex={-1} className="gap-3 xl:sticky xl:top-4">
+        <Card id={fieldId("milestones")} tabIndex={-1} className="gap-3 xl:sticky xl:top-4">
           <CardHeader className="px-4"><CardTitle className="text-base">Milestone list</CardTitle>
             <CardDescription>Select a milestone to open its configuration.</CardDescription></CardHeader>
           <CardContent className="grid min-w-0 gap-3 px-4">
@@ -198,7 +199,7 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
                 const path = `milestones[${index}]`;
                 const invalid = Object.keys(errors).some(field => field === path || field.startsWith(`${path}.`));
                 return <li key={milestone.key}>
-                  <button type="button" aria-expanded={selected} aria-controls="template-milestone-editor"
+                  <button type="button" aria-expanded={selected} aria-controls={fieldId("editor")}
                     className={`flex w-full items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/60" : "hover:bg-muted/40"}`}
                     onClick={() => selected ? collapseMilestone() : openMilestone(milestone.key)}>
                     <span className="shrink-0 font-medium text-muted-foreground">{index + 1}.</span>
@@ -228,10 +229,10 @@ export function TemplateMilestonesForm({ plan, editable, rubrics, refreshingRubr
             </>}
           </CardContent>
         </Card>
-        <div ref={editor} id="template-milestone-editor" tabIndex={-1} className="grid min-w-0 gap-3 scroll-mt-4">
+        <div ref={editor} id={fieldId("editor")} tabIndex={-1} className="grid min-w-0 gap-3 scroll-mt-4">
           {activeMilestone ? <>
             <TemplateMilestoneEditor key={activeMilestone.key} milestone={activeMilestone} index={activeIndex}
-              count={milestones.length} disabled={disabled} editable={canEdit} weighted={weighted} errors={errors} rubrics={rubricOptions}
+              count={milestones.length} disabled={disabled} editable={canEdit} weighted={weighted} errors={errors} rubrics={rubricOptions} fieldId={fieldId}
               onChange={patch => changeMilestone(activeIndex, patch)}
               onMove={direction => moveMilestone(activeIndex, direction)} onRemove={() => setRemoveKey(activeMilestone.key)}
               onCollapse={collapseMilestone} />

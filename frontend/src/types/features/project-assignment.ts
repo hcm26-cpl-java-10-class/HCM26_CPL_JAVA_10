@@ -1,5 +1,46 @@
 export type ProjectAssignmentMode = "SPLIT" | "WHOLE";
 export interface AssignmentTemplate { id: number; versionId: number; version: string; code: string; name: string }
+export type AssignmentTemplateLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+export type AssignmentCatalogSort = "NAME" | "CODE" | "RECENT";
+/** Catalogue card; values come from the published snapshot that would be assigned. */
+export interface AssignmentTemplateSummary extends AssignmentTemplate {
+  category: string | null; level: AssignmentTemplateLevel | null; estimatedDurationWeeks: number | null;
+  technologyStack: string | null; moduleCount: number; milestoneCount: number;
+  minMembers: number; maxMembers: number; publishedAt: string | null; assignedTeams: string[];
+}
+export interface AssignmentCatalogFilter {
+  search: string; category: string; level: string; fit: boolean; sort: AssignmentCatalogSort;
+  page: number; size?: number; teamId?: number | null;
+}
+export interface AssignmentCatalog {
+  items: AssignmentTemplateSummary[]; total: number; page: number; size: number; categories: string[];
+}
+export type AssignmentRubricLevel = "EXCELLENT" | "GOOD" | "FAIR" | "NOT_MET";
+export interface AssignmentBriefRubricCriterion {
+  code: string | null; name: string; description: string | null; weight: number | null; maxScore: number | null;
+  ratings: Array<{ level: AssignmentRubricLevel; percentage: number; description: string }>;
+}
+/** `legacy` rubrics are criteria embedded in older templates: no name, version, weights or rating levels. */
+export interface AssignmentBriefRubric {
+  name: string | null; version: string | null; description: string | null; totalMaxScore: number | null;
+  legacy: boolean; criteria: AssignmentBriefRubricCriterion[];
+}
+export interface AssignmentBriefMilestone {
+  title: string; description: string | null; dueAfter: number | null; dueUnit: "DAYS" | "WEEKS" | null;
+  weight: number | null; mandatory: boolean; checklist: Array<{ content: string; mandatory: boolean }>;
+  rubric: AssignmentBriefRubric | null;
+}
+export interface AssignmentBriefNode {
+  templateId: number; code: string; name: string; description: string | null; technologyStack: string | null;
+  level: AssignmentTemplateLevel | null; estimatedDurationWeeks: number | null; minMembers: number; maxMembers: number;
+  rolePolicy: AssignmentRolePolicy; milestones: AssignmentBriefMilestone[];
+  backlogItems: Array<{ title: string; description: string | null; suggestedRole: string | null }>;
+  modules: AssignmentBriefNode[];
+}
+export interface AssignmentBrief {
+  templateId: number; versionId: number; version: string; category: string | null; publishedAt: string | null;
+  master: AssignmentBriefNode;
+}
 export type AssignmentRole = "PM" | "BA" | "DEV" | "QA";
 export interface AssignmentRolePolicy { allowMultiRole: boolean; quotas: Array<{ role: AssignmentRole; min: number; max: number }> }
 export interface AssignmentMember { memberId: number; name: string; userCode: string; roles: AssignmentRole[] }

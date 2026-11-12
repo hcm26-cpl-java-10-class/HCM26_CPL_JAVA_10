@@ -3,18 +3,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { TemplateSuggestedRole } from "@/types/features/project-template";
 import { ArrowDown, ArrowUp, PanelLeftClose, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { sampleFieldId, type BacklogItemValues, type SampleContentErrors } from "../sample-content.utils";
+import { maxDescriptionLength } from "../project-template.utils";
+import { maxBacklogTitleLength, type BacklogItemValues, type SampleContentErrors } from "../sample-content.utils";
 
-function Field({ path, label, required, errors, children }: {
-  path: string; label: string; required?: boolean; errors: SampleContentErrors; children: ReactNode;
+function Field({ id, label, required, errors, length, limit, children }: {
+  id: string; label: string; required?: boolean; errors?: string[]; children: ReactNode;
+  length: number; limit: number;
 }) {
-  return <div className="grid content-start gap-2"><Label htmlFor={sampleFieldId(path)}>{label}{required && <span className="text-destructive">*</span>}</Label>
-    {children}<div id={`${sampleFieldId(path)}-error`} aria-live="polite"><FieldError errors={errors[path]} /></div></div>;
+  return <div className="grid content-start gap-2">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <Label htmlFor={id}>{label}{required && <span className="text-destructive">*</span>}</Label>
+      <span id={`${id}-count`} className={`text-xs tabular-nums ${length > limit ? "text-destructive" : "text-muted-foreground"}`}>
+        {length.toLocaleString("en-US")} / {limit.toLocaleString("en-US")} characters
+      </span>
+    </div>
+    {children}<div id={`${id}-error`} aria-live="polite"><FieldError errors={errors} /></div></div>;
 }
 
 interface EditorProps {
@@ -31,12 +37,18 @@ function Actions({ index, count, disabled, editable, onMove, onRemove, label }: 
 }
 
 export function TemplateBacklogEditor(props: EditorProps & {
-  item: BacklogItemValues; roles: TemplateSuggestedRole[]; onChange: (patch: Partial<BacklogItemValues>) => void;
+  item: BacklogItemValues; fieldId: (path: string) => string; onChange: (patch: Partial<BacklogItemValues>) => void;
   onCollapse: () => void;
 }) {
-  const { item, index, disabled, errors, roles, onChange, onCollapse } = props;
+  const { item, index, disabled, errors, fieldId, onChange, onCollapse } = props;
   const path = `backlogItems[${index}]`;
-  const fieldProps = (field: string) => ({ id: sampleFieldId(`${path}.${field}`), "aria-invalid": !!errors[`${path}.${field}`], "aria-describedby": `${sampleFieldId(`${path}.${field}`)}-error` });
+  const fieldProps = (field: "title" | "description", maxLength: number) => {
+    const id = fieldId(`${path}.${field}`);
+    return { id, maxLength, "aria-invalid": !!errors[`${path}.${field}`] || item[field].length > maxLength,
+      "aria-describedby": `${id}-error ${id}-count` };
+  };
+  const titleInput = fieldProps("title", maxBacklogTitleLength);
+  const descriptionInput = fieldProps("description", maxDescriptionLength);
   return <Card><CardHeader><div className="flex items-start justify-between gap-3"><div className="min-w-0">
     <p className="text-xs text-muted-foreground">Backlog item {index + 1}</p><CardTitle className="mt-1 break-words text-base">{item.title.trim() || "New backlog item"}</CardTitle>
   </div><div className="flex shrink-0 items-center gap-1">
@@ -46,17 +58,11 @@ export function TemplateBacklogEditor(props: EditorProps & {
   </div></div></CardHeader><CardContent>
     <fieldset disabled={disabled} className="grid gap-4">
       <FieldError errors={errors[path] ?? errors[`${path}.id`]} />
-      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
-        <Field path={`${path}.title`} label="Backlog title" required errors={errors}><Input {...fieldProps("title")} value={item.title}
-          onChange={(event) => onChange({ title: event.target.value })} placeholder="E.g. Design the database" /></Field>
-        <Field path={`${path}.suggestedRole`} label="Suggested role (optional)" errors={errors}>
-          <Select value={item.suggestedRole || "none"} disabled={disabled} onValueChange={(value) => onChange({ suggestedRole: value === "none" ? "" : value as TemplateSuggestedRole })}>
-            <SelectTrigger {...fieldProps("suggestedRole")} className="w-full"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="none">Not specified</SelectItem>{roles.map((role) => <SelectItem key={role} value={role}>{role}</SelectItem>)}</SelectContent>
-          </Select>
-        </Field>
-      </div>
-      <Field path={`${path}.description`} label="Backlog description" errors={errors}><Textarea {...fieldProps("description")} maxLength={1000} rows={3} value={item.description}
+      <Field id={titleInput.id} label="Backlog title" required errors={errors[`${path}.title`]}
+        length={item.title.length} limit={maxBacklogTitleLength}><Input {...titleInput} value={item.title}
+        onChange={(event) => onChange({ title: event.target.value })} placeholder="E.g. Design the database" /></Field>
+      <Field id={descriptionInput.id} label="Backlog description" errors={errors[`${path}.description`]}
+        length={item.description.length} limit={maxDescriptionLength}><Textarea {...descriptionInput} rows={3} value={item.description}
         onChange={(event) => onChange({ description: event.target.value })} placeholder="Describe the expected work (optional)." /></Field>
     </fieldset>
   </CardContent></Card>;

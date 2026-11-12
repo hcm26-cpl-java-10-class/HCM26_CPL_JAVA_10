@@ -7,7 +7,8 @@ import { useState } from "react";
 
 const size = (bytes: number) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-export function SubmissionEvidence({ submission, compact = false }: { submission: SubmissionDetail; compact?: boolean }) {
+/** `variant="button"` renders only the "View evidence" button and its dialog, for pages that already summarise the submission. */
+export function SubmissionEvidence({ submission, compact = false, variant = "card" }: { submission: SubmissionDetail; compact?: boolean; variant?: "card" | "button" }) {
   const [open, setOpen] = useState(false);
   const { product, currentVersion } = submission;
   const links = product
@@ -18,6 +19,7 @@ export function SubmissionEvidence({ submission, compact = false }: { submission
   const linkList = <div className="grid gap-2">{links.length ? links.map(({ label, url, icon: Icon }, index) => <a key={`${label}-${index}`} href={url || undefined} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm text-primary hover:bg-primary/5"><Icon className="size-4 shrink-0" /><span className="min-w-0 flex-1 break-all font-medium">{label}{compact ? "" : ` · ${url}`}</span><ExternalLink className="size-3.5 shrink-0" /><span className="sr-only">opens in a new tab</span></a>) : <p className="text-sm text-muted-foreground">No artifact links submitted.</p>}</div>;
 
   return <>
+    {variant === "button" ? <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}><Paperclip className="size-4" /> View evidence</Button> : <>
     <Card className="min-w-0 border-sky-200/70 dark:border-sky-900/70">
       <CardHeader className="pb-3"><div className="flex items-center justify-between gap-2"><CardTitle className="text-base">Submission evidence</CardTitle><span className="text-xs text-muted-foreground">Version {currentVersion.versionNumber}</span></div></CardHeader>
       <CardContent className="grid gap-3">
@@ -27,6 +29,7 @@ export function SubmissionEvidence({ submission, compact = false }: { submission
         <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => setOpen(true)}>View all evidence</Button>
       </CardContent>
     </Card>
+    </>}
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-h-[85vh] min-w-0 overflow-y-auto sm:max-w-2xl">
         <DialogHeader><DialogTitle>Submission evidence</DialogTitle><DialogDescription>{submission.milestoneTitle} · Version {currentVersion.versionNumber}</DialogDescription></DialogHeader>

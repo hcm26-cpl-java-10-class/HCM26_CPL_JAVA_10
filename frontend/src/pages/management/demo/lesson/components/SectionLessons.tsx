@@ -113,11 +113,11 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
       </div>
 
       {lessonsQuery.isLoading ? (
-        <p role="status" className="rounded-xl border p-8 text-center text-sm text-muted-foreground">
+        <p role="status" className="rounded-xl border p-4 text-center text-sm text-muted-foreground">
           Loading lessons...
         </p>
       ) : lessonsQuery.isError ? (
-        <div role="alert" className="space-y-3 rounded-xl border border-destructive/30 p-6">
+        <div role="alert" className="space-y-3 rounded-xl border border-destructive/30 p-4">
           <p className="text-sm text-destructive">Could not load lessons of this section.</p>
           <Button variant="outline" onClick={() => void lessonsQuery.refetch()}>
             Try again
@@ -219,7 +219,7 @@ export function SectionLessons({ sectionId, deepLink, onDeepLinkConsumed }: Sect
               key={previewing.id}
               lessonId={previewing.id}
               focusQuestionId={focusQuestionId}
-              className="mt-6 border-t pt-6"
+              className="mt-3 border-t pt-3"
             />
           )}
         </DialogContent>

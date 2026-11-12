@@ -4,7 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, LockKeyhole } from "lucide-react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ProjectTemplateForm } from "../components/ProjectTemplateForm";
 import { ProjectTemplateHeader } from "../components/ProjectTemplateHeader";
 import { ProjectTemplateError, ProjectTemplateLoading } from "../components/ProjectTemplateState";
@@ -46,14 +46,17 @@ export function ProjectTemplateFormPage() {
     : parentId ? `/project-templates/${parentId}/detail?tab=modules` : "/project-templates");
 
   return (
-    <MainLayout pathName={{ "project-templates": "Project Templates", create: "Create", edit: "Edit", ...(id ? { [id]: "Template" } : {}) }}>
+    <MainLayout pathName={{ "project-templates": "Project Templates", create: parentId ? "Create child module" : "Create", edit: "Edit draft",
+      ...(id ? { [id]: template.data?.name ?? "Template" } : {}) }}
+      pathLinks={id ? { [id]: `/project-templates/${id}/detail` } : undefined}>
       <section className="mx-auto grid min-w-0 w-full max-w-5xl grid-cols-1 gap-5">
         <ProjectTemplateHeader
           module={!!parentId || template.data?.parentTemplateId != null}
           title={id ? "Edit project template" : parentId ? "Create child module" : "Create project template"}
           description={<>
             <p>{id ? "Update the general information for this draft." : "Save a draft to configure its team, milestones and backlog."}</p>
-            {parent.data && <p className="mt-1 font-medium text-indigo-700 dark:text-indigo-300">Master · {parent.data.code} · {parent.data.name}</p>}
+            {parent.data && <Link to={`/project-templates/${parent.data.id}/detail?tab=modules`}
+              className="mt-1 inline-block font-medium text-indigo-700 hover:underline dark:text-indigo-300">Master · {parent.data.code} · {parent.data.name}</Link>}
           </>}
         />
         {!allowed ? <ProjectTemplateError denied />

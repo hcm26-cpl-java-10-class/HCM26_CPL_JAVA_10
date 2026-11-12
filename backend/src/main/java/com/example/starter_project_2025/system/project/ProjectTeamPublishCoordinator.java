@@ -86,7 +86,7 @@ public class ProjectTeamPublishCoordinator {
                     "Sử dụng Công bố chính thức để kiểm tra toàn lớp và tạo Workspace cho phân công Master.");
         }
 
-        AllocationReadinessResponse readiness = readinessService.evaluateSession(sessionId);
+        AllocationReadinessResponse readiness = readinessService.evaluateSession(sessionId, authentication);
         if (!readiness.unassignedStudents().isEmpty()) {
             String message = "Không thể công bố. Còn " + readiness.unassignedStudentCount()
                     + " học viên chưa được xếp nhóm. Vui lòng phân nhóm cho toàn bộ học viên trước khi công bố";
@@ -240,11 +240,12 @@ public class ProjectTeamPublishCoordinator {
         if (session.getStatus() != TeamAllocationSessionStatus.OPEN)
             return errorResponse(400, "ERR_INVALID_BATCH_DATA", "Allocation session is not open");
 
-        AllocationReadinessResponse readiness = readinessService.evaluateSession(sessionId);
+        AllocationReadinessResponse readiness = readinessService.evaluateSession(sessionId, authentication);
         if (!readiness.readyToPublish()) {
             String message = readiness.unassignedStudentCount() > 0
                     ? "Không thể công bố. Còn " + readiness.unassignedStudentCount()
                             + " học viên chưa được xếp nhóm. Vui lòng phân nhóm cho toàn bộ học viên trước khi công bố"
+                    : readiness.draftTeamCount() == 0 ? "Phiên không có nhóm nháp để công bố."
                     : "Không thể công bố. Còn " + readiness.teamIssues().size()
                             + " lỗi điều kiện nhóm (đề bài/vai trò). Vui lòng xử lý toàn bộ trước khi công bố";
             String errorCode = readiness.unassignedStudentCount() > 0

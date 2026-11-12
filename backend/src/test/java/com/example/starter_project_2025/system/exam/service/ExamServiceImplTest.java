@@ -26,6 +26,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.system.exam.domain.Exam;
+import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.mapper.ExamMapper;
@@ -46,6 +47,9 @@ class ExamServiceImplTest {
 
     @Mock
     private ExamMapper examMapper;
+
+    @Mock
+    private ExamAttemptRepository examAttemptRepository;
 
     @InjectMocks
     private ExamServiceImpl examService;
@@ -130,8 +134,8 @@ class ExamServiceImplTest {
 
     @Test
     void addQuestionsFailsWhenExamAlreadyStarted() {
-        exam.setStartTime(java.time.LocalDateTime.now().minusMinutes(5));
         when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+        when(examAttemptRepository.existsByExam_Id(1L)).thenReturn(true);
 
         assertThrows(
                 BadRequestException.class,
@@ -142,8 +146,8 @@ class ExamServiceImplTest {
 
     @Test
     void removeQuestionFailsWhenExamAlreadyStarted() {
-        exam.setStartTime(java.time.LocalDateTime.now().minusMinutes(5));
         when(examRepository.findById(1L)).thenReturn(Optional.of(exam));
+        when(examAttemptRepository.existsByExam_Id(1L)).thenReturn(true);
 
         assertThrows(
                 BadRequestException.class,

@@ -31,6 +31,19 @@ export const progressApi = {
     return response.data;
   },
 
+  /** Ghi nhận thời gian học (giây) của học viên cho bài đang xem. */
+  addStudyTime: async (
+    enrollmentId: number,
+    lessonId: number,
+    seconds: number,
+  ): Promise<EnrollmentProgress> => {
+    const response = await axiosInstance.put<EnrollmentProgress>(
+      `/progress/enrollments/${enrollmentId}/lessons/${lessonId}/study-time`,
+      { seconds },
+    );
+    return response.data;
+  },
+
   saveAnswer: async (
     enrollmentId: number,
     lessonId: number,

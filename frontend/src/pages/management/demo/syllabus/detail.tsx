@@ -153,6 +153,7 @@ export default function SyllabusDetailPage() {
             qc.invalidateQueries({ queryKey: ["syllabus", syllabusId] }),
             qc.invalidateQueries({ queryKey: ["syllabuses"] }),
             qc.invalidateQueries({ queryKey: ["syllabus-progress", syllabusId] }),
+            qc.invalidateQueries({ queryKey: ["syllabus-coverage", syllabusId] }),
         ]);
         setValidation(null);
     }
@@ -529,6 +530,32 @@ export default function SyllabusDetailPage() {
                             </p>
                         </section>
 
+                        {["SYLLABUS_READ", "COURSE_CREATE", "SECTION_CREATE", "LESSON_CREATE"].every(hasPermission) && (
+                            <div className="flex flex-wrap items-center gap-3">
+                                {published && syllabus.isActive ? (
+                                    <Button asChild>
+                                        <Link to={`/syllabuses/${syllabusId}/create-course`}>
+                                            <Plus className="size-4" />
+                                            Create Course from Syllabus
+                                        </Link>
+                                    </Button>
+                                ) : (
+                                    <>
+                                        <p className="text-sm text-muted-foreground">
+                                            Publish and activate this Syllabus to create a Course.
+                                        </p>
+                                        {canEdit && (
+                                            <Button asChild variant="outline" size="sm">
+                                                <Link to={`/syllabuses/${syllabusId}/workspace`}>
+                                                    <Pencil className="size-4" /> Prepare Course alongside Syllabus
+                                                </Link>
+                                            </Button>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
+
                         {/* General Information */}
                         <GeneralInformationPanel syllabusId={syllabusId} readOnly={published} />
 
@@ -536,7 +563,6 @@ export default function SyllabusDetailPage() {
                         <SyllabusWorkflowPanel syllabusId={syllabusId} />
 
                         <CloPanel syllabusId={syllabusId} readOnly={published} />
-
 
 
                         {/* Sections Toolbar */}

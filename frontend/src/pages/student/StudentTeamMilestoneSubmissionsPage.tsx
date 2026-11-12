@@ -12,6 +12,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ArtifactSubmission, ArtifactSubmissionAttachment } from "@/types";
 import { ArtifactReviewStatusBadge } from "./components/ArtifactReviewStatusBadge";
 
+/** "/teams" and "/teams/:id/milestones" have no page; keep them out of the breadcrumb to avoid 404 links. */
+const TEAM_ROUTE_GAPS = ["teams", "milestones"];
+
 type HistoryItem = Awaited<ReturnType<typeof milestoneApi.getMyTeamArtifactSubmissions>>[number];
 
 function displayTime(value?: string | null) {
@@ -116,7 +119,7 @@ export default function StudentTeamMilestoneSubmissionsPage() {
   const showDraft = draft && (!latestSubmission || new Date(draft.updatedAt).getTime() >= new Date(latestSubmission.submission.submittedAt).getTime());
   const openSubmissionForm = () => navigate(`/teams/${teamId}/milestones/${milestoneId}/submit?workspaceId=${encodeURIComponent(workspaceId ?? "")}`);
 
-  return <MainLayout contentClassName="bg-slate-50/80 dark:bg-background" pathName={{ student: "Student", management: "Management", workspaces: "Workspace", milestones: "Milestone", submissions: "My submissions" }}>
+  return <MainLayout ignorePaths={TEAM_ROUTE_GAPS} contentClassName="bg-slate-50/80 dark:bg-background" pathName={{ student: "Student", management: "Management", workspaces: "Workspace", milestones: "Milestone", submissions: "My submissions" }}>
     <main className="mx-auto w-full max-w-[1200px] space-y-5 pb-8">
       <Button variant="ghost" size="sm" className="-ml-3 w-fit text-muted-foreground" onClick={backToWorkspace}><ArrowLeft className="size-4" />Back to workspace</Button>
       {failed ? <Alert variant="destructive"><AlertCircle /><AlertTitle>Could not load submission history</AlertTitle><AlertDescription className="grid justify-items-start gap-3"><span>Check your connection and access, then try again.</span><Button variant="outline" size="sm" onClick={() => { void workspaceQuery.refetch(); void submissionsQuery.refetch(); }}><RotateCw className="size-4" />Try again</Button></AlertDescription></Alert>
@@ -140,7 +143,7 @@ export default function StudentTeamMilestoneSubmissionsPage() {
           </section>}
 
           {showDraft && <section className="min-w-0 overflow-hidden rounded-xl border border-blue-200 bg-blue-50/40 shadow-sm dark:border-blue-900 dark:bg-blue-950/20" aria-label="Saved draft">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-blue-100 p-4 dark:border-blue-900 sm:px-5"><div className="flex items-start gap-3"><span className="rounded-lg bg-blue-100 p-2 text-blue-600 dark:bg-blue-950 dark:text-blue-300"><Pencil className="size-4" /></span><div><h2 className="flex flex-wrap items-center gap-2 text-base font-semibold">Draft v{draft.version}<ArtifactReviewStatusBadge status="DRAFT" /></h2><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Updated {displayTime(draft.updatedAt)} · Not officially submitted</p></div></div><Button size="sm" variant="outline" className="border-blue-200 bg-background text-blue-700 dark:text-blue-300" onClick={openSubmissionForm}><Pencil className="size-3.5" />Open and edit draft</Button></div>
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-blue-100 p-4 dark:border-blue-900 sm:px-5"><div className="flex items-start gap-3"><span className="rounded-lg bg-blue-100 p-2 text-blue-600 dark:bg-blue-950 dark:text-blue-300"><Pencil className="size-4" /></span><div><h2 className="flex flex-wrap items-center gap-2 text-base font-semibold">Draft v{(workspace?.latestSubmission?.version ?? latestSubmission?.submission.version ?? 0) + 1}<ArtifactReviewStatusBadge status="DRAFT" /></h2><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Updated {displayTime(draft.updatedAt)} · Not officially submitted</p></div></div><Button size="sm" variant="outline" className="border-blue-200 bg-background text-blue-700 dark:text-blue-300" onClick={openSubmissionForm}><Pencil className="size-3.5" />Open and edit draft</Button></div>
             <div className="min-w-0 p-4 sm:p-5"><ArtifactDetails repositoryUrl={draft.repositoryUrl} deploymentUrl={draft.deploymentUrl} releaseNotes={draft.releaseNotes} attachments={draft.attachments ?? []} /></div>
           </section>}
 

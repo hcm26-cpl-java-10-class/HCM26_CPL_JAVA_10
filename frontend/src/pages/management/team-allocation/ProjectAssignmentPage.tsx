@@ -21,7 +21,13 @@ export default function ProjectAssignmentPage() {
     + (sessionId == null ? "" : "/setup?sessionId=" + sessionId + "&tab=review");
 
   return (
-    <MainLayout pathName={{ "team-allocation": "Phân nhóm dự án", assign: "Gán Master Project" }}>
+    <MainLayout
+      pathName={{ "team-allocation": "Phân nhóm dự án", assign: "Gán Master Project" }}
+      // Same as the setup page: keep the "classes" breadcrumb on a real route.
+      pathLinks={{
+        classes: classId == null ? "/team-allocation" : "/team-allocation/classes/" + classId,
+      }}
+    >
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <header className="space-y-3 border-b pb-5">
           <Button variant="ghost" size="sm" asChild>

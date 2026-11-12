@@ -8,15 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { ProjectTemplateDTO, ProjectTemplateLevel, ProjectTemplateOptions, ProjectTemplatePayload } from "@/types/features/project-template";
+import type { ProjectTemplateDTO, ProjectTemplateOptions, ProjectTemplatePayload } from "@/types/features/project-template";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, FileText, Loader2, Save } from "lucide-react";
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
-import { getTemplateError, templateLevelOptions, toTemplateFormValues, validateTemplateForm,
-  maxDescriptionLength,
+import { getTemplateError, templateDescriptionCount, toTemplateFormValues, validateTemplateForm,
+  maxDescriptionLength, maxTemplateCodeNameLength,
   type TemplateFieldErrors, type TemplateFormValues } from "../project-template.utils";
 import { ProjectTemplateStatusBadge } from "./ProjectTemplateStatusBadge";
+import { useTemplateDraft } from "../hooks/useTemplateDraft";
 
 function TemplateField({ name, label, errors, suffix, children, required = true }: {
   name: string;
@@ -48,15 +49,16 @@ export function ProjectTemplateForm({ template, parentTemplate, options, minimum
   save?: (payload: ProjectTemplatePayload) => Promise<ProjectTemplateDTO>;
 }) {
   const queryClient = useQueryClient();
-  const [values, setValues] = useState(() => ({ ...toTemplateFormValues(template),
+  const { values, setValues, lockVersion } = useTemplateDraft({ ...toTemplateFormValues(template),
     ...(!template && parentTemplate ? { category: parentTemplate.category, level: parentTemplate.level,
-      estimatedDurationWeeks: String(parentTemplate.estimatedDurationWeeks) } : {}) }));
+      estimatedDurationWeeks: String(parentTemplate.estimatedDurationWeeks) } : {}) }, template?.lockVersion ?? 0);
   const module = template?.parentTemplateId != null || parentTemplate != null;
   const descriptionLength = values.description.length;
   const categories = [...new Set([...options.categories, ...[template?.category, parentTemplate?.category]
     .filter((value): value is string => !!value)])];
-  const [lockVersion] = useState(template?.lockVersion);
-  const [minimumDuration] = useState(minimumDurationWeeks);
+  const levels = [...(options.levels ?? [])];
+  const savedLevel = template?.level ?? parentTemplate?.level;
+  if (savedLevel && !levels.some(({ value }) => value === savedLevel)) levels.push({ value: savedLevel, label: savedLevel });
   const [errors, setErrors] = useState<TemplateFieldErrors>({});
   const [submitError, setSubmitError] = useState<ReturnType<typeof getTemplateError> | null>(null);
   const submitting = useRef(false);
@@ -65,6 +67,7 @@ export function ProjectTemplateForm({ template, parentTemplate, options, minimum
       ? projectTemplateApi.update(template.id, payload) : projectTemplateApi.create(payload),
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: ["project-templates"] });
+      if (!save) void queryClient.invalidateQueries({ queryKey: ["project-template-versions"] });
       toast.success(template ? "Template updated successfully." : "Template draft created successfully.");
       onSaved(saved);
     },
@@ -83,7 +86,7 @@ export function ProjectTemplateForm({ template, parentTemplate, options, minimum
     event.preventDefault();
     if (submitting.current) return;
     setSubmitError(null);
-    const nextErrors = validateTemplateForm(values, minimumDuration);
+    const nextErrors = validateTemplateForm(values, minimumDurationWeeks);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
       requestAnimationFrame(() => document.getElementById(`template-${Object.keys(nextErrors)[0]}`)?.focus());
@@ -96,16 +99,22 @@ export function ProjectTemplateForm({ template, parentTemplate, options, minimum
       description: values.description.trim(),
       ...(template?.parentTemplateId || parentTemplate?.id ? { parentTemplateId: template?.parentTemplateId ?? parentTemplate?.id } : {}),
       category: values.category.trim(),
-      level: values.level as ProjectTemplateLevel,
+      level: values.level.trim(),
       estimatedDurationWeeks: Number(values.estimatedDurationWeeks),
       ...(template ? { lockVersion } : {}),
     });
   };
-  const inputProps = (field: keyof TemplateFormValues) => ({
+  const inputProps = (field: keyof TemplateFormValues, limit?: number) => ({
     id: `template-${field}`,
-    "aria-invalid": !!errors[field]?.length || field === "description" && descriptionLength > maxDescriptionLength,
-    "aria-describedby": `template-${field}-error${field === "description" ? " template-description-count" : ""}`,
+    maxLength: limit,
+    "aria-invalid": !!errors[field]?.length || limit != null && values[field].length > limit,
+    "aria-describedby": `template-${field}-error${limit != null ? ` template-${field}-count` : ""}`,
   });
+  const codeNameCount = (field: "code" | "name") => (
+    <span id={`template-${field}-count`} className={`text-xs tabular-nums ${values[field].length > maxTemplateCodeNameLength ? "text-destructive" : "text-muted-foreground"}`}>
+      {values[field].length} / {maxTemplateCodeNameLength} characters
+    </span>
+  );
 
   return (
     <form onSubmit={submit} noValidate aria-busy={mutation.isPending} className="grid min-w-0 grid-cols-1 gap-5">
@@ -129,23 +138,23 @@ export function ProjectTemplateForm({ template, parentTemplate, options, minimum
           </CardHeader>
           <CardContent className="grid min-w-0 grid-cols-1 gap-5">
             <div className="grid gap-5 md:grid-cols-2">
-              <TemplateField name="code" label="Code" errors={errors.code}>
-                <Input {...inputProps("code")} value={values.code} onChange={(event) => change("code", event.target.value)} placeholder="E.g. PRJ-WEB-01" autoComplete="off" />
+              <TemplateField name="code" label="Code" errors={errors.code} suffix={codeNameCount("code")}>
+                <Input {...inputProps("code", maxTemplateCodeNameLength)} value={values.code} onChange={(event) => change("code", event.target.value)} placeholder="E.g. PRJ-WEB-01" autoComplete="off" />
                 <p className="text-xs text-muted-foreground">{template?.parentTemplateId || parentTemplate
-                  ? "Unique within the parent template. Up to 100 characters."
-                  : `Unique for this version in ${options.tenantName}. Up to 100 characters.`}</p>
+                  ? "Unique within the parent template."
+                  : `Unique for this version in ${options.tenantName}.`}</p>
               </TemplateField>
-              <TemplateField name="name" label="Name" errors={errors.name}>
-                <Input {...inputProps("name")} value={values.name} onChange={(event) => change("name", event.target.value)} placeholder="E.g. Learning Resource Portal" />
+              <TemplateField name="name" label="Name" errors={errors.name} suffix={codeNameCount("name")}>
+                <Input {...inputProps("name", maxTemplateCodeNameLength)} value={values.name} onChange={(event) => change("name", event.target.value)} placeholder="E.g. Learning Resource Portal" />
               </TemplateField>
             </div>
             <TemplateField name="description" label="Description" errors={errors.description} suffix={
               <span id="template-description-count" role="status"
                 className={`text-xs tabular-nums ${descriptionLength > maxDescriptionLength ? "text-destructive" : "text-muted-foreground"}`}>
-                {descriptionLength.toLocaleString("en-US")} / {maxDescriptionLength.toLocaleString("en-US")} characters
+                {templateDescriptionCount(values.description)}
               </span>
             }>
-              <Textarea {...inputProps("description")} maxLength={maxDescriptionLength} rows={7} wrap="soft"
+              <Textarea {...inputProps("description", maxDescriptionLength)} rows={7} wrap="soft"
                 className="min-w-0 max-w-full resize-y whitespace-pre-wrap [field-sizing:fixed] [overflow-wrap:anywhere]"
                 value={values.description} onChange={(event) => change("description", event.target.value)}
                 placeholder="Describe the project background, objectives and expected scope." />
@@ -159,16 +168,16 @@ export function ProjectTemplateForm({ template, parentTemplate, options, minimum
                 {module && <p className="text-xs text-muted-foreground">Inherited from the master project.</p>}
               </TemplateField>
               <TemplateField name="level" label="Level" errors={errors.level}>
-                <Select value={values.level} onValueChange={(value) => change("level", value as ProjectTemplateLevel)} disabled={mutation.isPending}>
+                <Select value={values.level} onValueChange={(value) => change("level", value)} disabled={mutation.isPending}>
                   <SelectTrigger {...inputProps("level")} className="w-full"><SelectValue placeholder="Select a level" /></SelectTrigger>
-                  <SelectContent>{templateLevelOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+                  <SelectContent>{levels.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                 </Select>
               </TemplateField>
               <TemplateField name="estimatedDurationWeeks" label="Estimated duration (weeks)" errors={errors.estimatedDurationWeeks}>
                 <Input {...inputProps("estimatedDurationWeeks")} inputMode="numeric" value={values.estimatedDurationWeeks}
                   onChange={(event) => change("estimatedDurationWeeks", event.target.value)} placeholder="E.g. 8" />
-                {minimumDuration > 0 && <p className="text-xs text-muted-foreground">
-                  Saved milestones require at least {minimumDuration} weeks. To use a shorter duration, update the milestone schedule first.
+                {minimumDurationWeeks > 0 && <p className="text-xs text-muted-foreground">
+                  Saved milestones require at least {minimumDurationWeeks} weeks. To use a shorter duration, update the milestone schedule first.
                 </p>}
               </TemplateField>
             </div>

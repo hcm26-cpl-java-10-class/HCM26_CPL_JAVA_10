@@ -27,6 +27,9 @@ import { ArtifactReviewStatusBadge } from "./components/ArtifactReviewStatusBadg
 import { countReleaseNoteCharacters, RELEASE_NOTES_MAX_CHARACTERS, releaseNotesWithinLimit } from "@/lib/release-notes";
 import { artifactFormSource } from "@/lib/artifact-form-source";
 
+/** "/teams" and "/teams/:id/milestones" have no page; keep them out of the breadcrumb to avoid 404 links. */
+const TEAM_ROUTE_GAPS = ["teams", "milestones"];
+
 function submissionErrorMessage(error: unknown): string {
   const response = (error as { response?: { status?: number; data?: unknown } } | null)?.response;
   if (!response) return "Could not connect to the server. The submission was not confirmed; check your connection and try again.";
@@ -222,7 +225,7 @@ export default function TeamArtifactSubmissionPage() {
 
   if (query.isPending) {
     return (
-      <MainLayout pathName={{ milestones: "Milestones", submit: "Submit artifact" }}>
+      <MainLayout ignorePaths={TEAM_ROUTE_GAPS} pathName={{ milestones: "Milestones", submit: "Submit artifact" }}>
         <div className="mx-auto flex max-w-4xl items-center justify-center py-20 text-muted-foreground">
           <RotateCw className="mr-2 size-5 animate-spin" /> Loading milestone details...
         </div>
@@ -232,7 +235,7 @@ export default function TeamArtifactSubmissionPage() {
 
   if (!query.data) {
     return (
-      <MainLayout pathName={{ milestones: "Milestones", submit: "Submit artifact" }}>
+      <MainLayout ignorePaths={TEAM_ROUTE_GAPS} pathName={{ milestones: "Milestones", submit: "Submit artifact" }}>
         <main className="mx-auto max-w-4xl p-6">
           <Card>
             <CardHeader>
@@ -269,7 +272,7 @@ export default function TeamArtifactSubmissionPage() {
   const reviewStatus = m.lifecycleStatus === "CHANGES_REQUESTED" ? "CHANGES_REQUESTED" : latestSubmission?.status ?? m.lifecycleStatus;
 
   return (
-    <MainLayout
+    <MainLayout ignorePaths={TEAM_ROUTE_GAPS}
       contentClassName="bg-slate-50/80 dark:bg-background"
       pathName={{
         milestones: "Milestones",
@@ -300,7 +303,7 @@ export default function TeamArtifactSubmissionPage() {
           {draft && artifactFormSource(draft, latestSubmission) === draft && (
             <div role="status" className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
               <Save className="mt-0.5 size-4 shrink-0 text-blue-600" />
-              <div className="min-w-0 text-sm"><p className="font-medium">Saved draft loaded <span className="font-normal text-blue-700 dark:text-blue-300">- Draft v{draft.version}</span></p><p className="mt-1 text-xs leading-relaxed text-blue-800 dark:text-blue-200">Saved {new Date(draft.updatedAt).toLocaleString()}. Continue editing below.</p></div>
+              <div className="min-w-0 text-sm"><p className="font-medium">Saved draft loaded <span className="font-normal text-blue-700 dark:text-blue-300">- Draft v{(latestSubmission?.version ?? 0) + 1}</span></p><p className="mt-1 text-xs leading-relaxed text-blue-800 dark:text-blue-200">Saved {new Date(draft.updatedAt).toLocaleString()}. Not officially submitted. Continue editing below.</p></div>
             </div>
           )}
           {latestSubmission && (

@@ -111,6 +111,9 @@ public class EssayGradingDTO {
         private Instant referenceSubmittedAt;
         private String rubric;
         private Instant rubricSubmittedAt;
+        /** true neu Reference/Rubric da duoc chup (bai da cham); sua rubric sau do khong anh huong bai nay. */
+        private boolean guidelineFrozen;
+        private Instant guidelineSnapshotAt;
         private List<GradingCriterion> gradingCriteria;
     }
 

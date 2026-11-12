@@ -44,6 +44,8 @@ public class ExamAttemptService {
     private final QuestionTakerMapper questionTakerMapper;
     private final InvitationRepository invitationRepository;
     private final ExamResultAccessService resultAccessService;
+    private final ExamProctorImageRepository proctorImageRepository;
+    private final ExamProgressLockService progressLockService;
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId) {
         return startOrResume(examId, studentId, null);
@@ -85,6 +87,9 @@ public class ExamAttemptService {
 
         ensureExamWindowOpen(exam, nowLocal);
         if (!anonymousGuest) {
+            progressLockService.assertUnlocked(exam, studentId);
+        }
+        if (!anonymousGuest) {
             ensureInvitationAccepted(examId, studentId);
         }
         ensureExamPasswordValid(exam, password);
@@ -111,6 +116,7 @@ public class ExamAttemptService {
         attempt.setDurationMinutes(exam.getDurationMinutes());
         attempt.setTotalPoints(questions.stream().mapToInt(Question::getPoints).sum());
         attempt.setMaxScore(ExamScoring.effectiveMax(exam.getMaxScore()));
+        attempt.setPassScore(exam.getPassScore());
         attempt.setStartedAt(startedAt);
         Instant durationDeadline = startedAt.plus(Duration.ofMinutes(exam.getDurationMinutes()));
         Instant examDeadline = exam.getEndTime() == null
@@ -548,6 +554,28 @@ public class ExamAttemptService {
         attempt.setFinalScore(needsManual ? null : ExamScoring.applyPenalty(objectiveScore, penalty));
         attempt.setStatus(ExamAttemptLifecycle.finalStatus(needsManual, expired));
         attempt.setSubmittedAt(submittedAt);
+
+        markInvitationsCompleted(attempt);
+    }
+
+    /**
+     * Khi sinh viên nộp bài (hoặc hết giờ bị chấm), lời mời tương ứng chuyển sang COMPLETED
+     * để không còn ai gửi nhắc nhở nữa và giữ đúng vòng đời lời mời.
+     */
+    private void markInvitationsCompleted(ExamAttempt attempt) {
+        User student = attempt.getStudent();
+        if (student == null || student.getId() == null) {
+            return;
+        }
+        List<Invitation> invitations = invitationRepository
+                .findOpenByExamIdAndStudentId(attempt.getExam().getId(), student.getId());
+        if (invitations.isEmpty()) {
+            return;
+        }
+        for (Invitation invitation : invitations) {
+            invitation.setStatus(InvitationStatus.COMPLETED);
+            invitationRepository.save(invitation);
+        }
     }
 
     private record CodingOutcome(BigDecimal weight, boolean needsReview) {
@@ -597,6 +625,7 @@ public class ExamAttemptService {
         response.setDurationMinutes(attempt.getDurationMinutes());
         response.setTotalPoints(attempt.getTotalPoints());
         response.setMaxScore(ExamScoring.effectiveMax(attempt.getMaxScore()));
+        response.setPassScore(attempt.getPassScore());
 
         // Diem chi duoc cong bo khi giao vien bam "Publish Results".
         boolean resultPublished = resultAccessService.isResultPublished(attempt.getExam());
@@ -635,8 +664,15 @@ public class ExamAttemptService {
         integrity.setBlockCopyPaste(integrity.isEnabled() && Boolean.TRUE.equals(ex.getBlockCopyPaste()));
         integrity.setRequireFullscreen(integrity.isEnabled() && Boolean.TRUE.equals(ex.getRequireFullscreen()));
         integrity.setSingleSession(integrity.isEnabled() && Boolean.TRUE.equals(ex.getSingleSession()));
+        integrity.setCameraProctoring(integrity.isEnabled() && Boolean.TRUE.equals(ex.getCameraProctoring()));
+        integrity.setNotifyOnViolation(integrity.isEnabled() && Boolean.TRUE.equals(ex.getNotifyOnViolation()));
+        integrity.setEntryPhotoDone(!integrity.isCameraProctoring() || attempt.getId() == null
+                || proctorImageRepository.existsByAttemptIdAndEventIdIsNull(attempt.getId()));
         response.setIntegrity(integrity);
-        response.setQuestions(attempt.getQuestions().stream()
+        // Chua chup anh vao thi thi chua duoc xem de (server tu giu lai noi dung cau hoi).
+        boolean hideQuestions = attempt.getStatus() == ExamAttemptStatus.IN_PROGRESS
+                && integrity.isCameraProctoring() && !integrity.isEntryPhotoDone();
+        response.setQuestions(hideQuestions ? List.of() : attempt.getQuestions().stream()
                 .map(questionTakerMapper::toTakerResponse)
                 .toList());
         response.setAnswers(attempt.getAnswers().stream()

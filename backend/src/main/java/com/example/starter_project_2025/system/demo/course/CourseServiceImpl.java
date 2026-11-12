@@ -150,7 +150,8 @@ public class CourseServiceImpl
             ctx.add("description", "Add a course description before publishing");
         }
 
-        if (course.getSyllabus() != null && !isSelectable(course.getSyllabus())) {
+        if (course.getCourseType() != CourseType.FROM_SYLLABUS
+                && course.getSyllabus() != null && !isSelectable(course.getSyllabus())) {
             ctx.add("syllabusId", "Select a Published and Active syllabus before publishing");
         }
 
@@ -221,6 +222,11 @@ public class CourseServiceImpl
         }
         if (request.getSyllabusId() == null) {
             return; // No change on update; optional on create.
+        }
+        if (course.getCourseType() == CourseType.FROM_SYLLABUS
+                && course.getSyllabus() != null
+                && request.getSyllabusId().equals(course.getSyllabus().getId())) {
+            return;
         }
         syllabusRepository.findById(request.getSyllabusId()).ifPresentOrElse(
                 syllabus -> {

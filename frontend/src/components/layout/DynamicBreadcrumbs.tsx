@@ -47,7 +47,7 @@ function isLikelyIdentifier(segment: string) {
     const numericPattern = /^\d+$/;
     const uuidPattern =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    const tokenLikePattern = /^[A-Za-z0-9_-]{16,}$/;
+    const tokenLikePattern = /^(?=.*\d)[A-Za-z0-9_-]{16,}$/;
 
     return numericPattern.test(segment) || uuidPattern.test(segment) || tokenLikePattern.test(segment);
 }
@@ -103,10 +103,8 @@ export default function DynamicBreadcrumbs({
     }, [modules]);
 
     const ignoredPaths = new Set(ignorePaths.map((segment) => segment.toLowerCase()));
-    const pathnameSegments = location.pathname
-        .split("/")
-        .filter(Boolean)
-        .filter((segment) => !ignoredPaths.has(segment.toLowerCase()));
+    // Hrefs are built from the full path; ignored segments (e.g. ones without a page of their own) are only hidden.
+    const pathnameSegments = location.pathname.split("/").filter(Boolean);
 
     const rawSegments =
         isStudentVariant && pathnameSegments[0]?.toLowerCase() === "student"
@@ -118,6 +116,10 @@ export default function DynamicBreadcrumbs({
         const href = pathLinks?.[segment] || pathLinks?.[routeHref] || routeHref;
         const title = resolveTitle(segment, routeHref, pathTitles, moduleTitleByPath);
         const hasCustomTitle = Boolean(pathTitles?.[segment] || pathTitles?.[routeHref]);
+
+        if (ignoredPaths.has(segment.toLowerCase())) {
+            return [];
+        }
 
         if (!hasCustomTitle && isLikelyIdentifier(segment)) {
             return [];

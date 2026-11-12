@@ -161,6 +161,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
   const [priorityFilter, setPriorityFilter] = useState("ALL");
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
   const [searchTerm, setSearchTerm] = useState("");
+  const [showActivity, setShowActivity] = useState(true);
   const [sortBy, setSortBy] = useState<"title" | "priority" | "status">("title");
   const [listPage, setListPage] = useState(0);
   const [draggedItem, setDraggedItem] = useState<SprintBacklogDTO | null>(null);
@@ -194,14 +195,19 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
-  const sprints = useMemo(() => query.data?.sprints ?? [], [query.data?.sprints]);
+  const sprints = useMemo(
+    () => (query.data?.sprints ?? []).filter((sprint) => sprint.status === "ACTIVE"),
+    [query.data?.sprints],
+  );
   const sprintId = sprints.some((sprint) => sprint.id === requestedSprintId)
     ? requestedSprintId : preferredSprint(sprints)?.id;
 
   const selectedSprint = sprints.find((sprint) => sprint.id === sprintId);
   const allItems = useMemo(() => query.data?.items ?? [], [query.data?.items]);
+  // Only the active sprint and its own backlog are shown: the workspace board is
+  // not a product backlog view, and completed sprints disappear from it.
   const boardItems = useMemo(() => allItems.filter((item) =>
-    item.sprintId === sprintId || item.sprintId == null,
+    item.sprintId != null && item.sprintId === sprintId,
   ), [allItems, sprintId]);
   const allSprintItems = allItems.filter((item) => item.sprintId === sprintId);
   const memberIds = useMemo(() => [...new Set([
@@ -231,8 +237,6 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
   const pageSize = 10;
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const listItems = filteredItems.slice(listPage * pageSize, (listPage + 1) * pageSize);
-  const doneCount = allSprintItems.filter((item) => item.status === "DONE").length;
-  const completion = allSprintItems.length ? Math.round((doneCount / allSprintItems.length) * 100) : 0;
   const auditQueries = useQueries({ queries: allSprintItems.filter((item): item is SprintBacklogDTO & { id: number } => item.id != null).slice(0, 25).map((item) => ({
     queryKey: ["sprint-backlog-audit", item.id],
     queryFn: () => sprintBacklogApi.getAuditLogs(item.id),
@@ -356,82 +360,60 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
   }
 
   return <div className="space-y-3">
-    <Card className="gap-0 overflow-hidden border-border py-0 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-gradient-to-r from-primary/5 to-background px-4 py-3">
-        <div className="min-w-0 flex-1 basis-48">
-          <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            <span>Workspace · Team #{teamId}</span>
-            <Badge className="border-0 bg-emerald-100 px-1.5 py-0 text-[9px] text-emerald-800">Sprint Board</Badge>
-          </div>
-          <div className="mt-0.5 flex min-w-0 items-baseline gap-2">
-            <h2 className="truncate text-base font-semibold text-foreground">{selectedSprint?.name ?? "Kanban Board"}</h2>
-            <p className="hidden truncate text-xs text-muted-foreground xl:block">Track sprint work and your team's backlog.</p>
-          </div>
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2 shadow-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg border bg-muted/30 p-0.5" role="group" aria-label="Display mode">
+          <Button type="button" size="sm" className="h-7 px-2.5 text-xs" variant={viewMode === "board" ? "default" : "ghost"} onClick={() => setViewMode("board")}><LayoutGrid className="size-3.5" />Board</Button>
+          <Button type="button" size="sm" className="h-7 px-2.5 text-xs" variant={viewMode === "list" ? "default" : "ghost"} onClick={() => setViewMode("list")}><List className="size-3.5" />List</Button>
         </div>
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 xl:w-auto">
-          <div className="flex h-8 items-center gap-2 rounded-md border bg-background px-2.5 text-xs text-muted-foreground">
-            <strong className="whitespace-nowrap font-semibold text-foreground">Sprint {selectedSprint ? `#${selectedSprint.id}` : "—"}</strong>
-            <span className="hidden whitespace-nowrap border-l pl-2 sm:inline">{formatDate(selectedSprint?.startDate)} – {formatDate(selectedSprint?.endDate)}</span>
-          </div>
-          <select aria-label="Select sprint" className="h-8 min-w-0 max-w-52 rounded-md border bg-background px-2 text-xs" value={sprintId ?? ""}
-            onChange={(event) => setSprintId(Number(event.target.value))} disabled={query.isPending || !sprints.length}>
-            {!sprints.length ? <option value="">No sprints available</option> : null}
-            {sprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} · {sprint.status}</option>)}
+        <label className="flex h-8 w-44 items-center gap-2 rounded-md border bg-background px-2.5 text-xs text-muted-foreground">
+          <UserRound className="size-3.5 shrink-0" />
+          <select aria-label="Filter by team member" className="w-full bg-transparent outline-none" value={memberFilter} onChange={(event) => setMemberFilter(event.target.value)}>
+            <option value="ALL">All members</option><option value="UNASSIGNED">Unassigned</option>
+            {memberIds.map((id) => {
+              const displayName = query.data?.members.find((member) => member.projectMemberId === id)?.displayName
+                ?? boardItems.find((item) => item.assigneeProjectMemberId === id)?.assigneeDisplayName;
+              return <option key={id} value={id}>{displayName || `Member #${id}`}</option>;
+            })}
           </select>
-          <Button variant="outline" size="icon-sm" aria-label="Refresh board" onClick={() => void query.refetch()} disabled={query.isFetching}>
-            <RefreshCw className={`size-4 ${query.isFetching ? "animate-spin" : ""}`} />
-          </Button>
-          {!readOnly && onCreateWorkItem ? <Button size="sm" className="h-8" onClick={onCreateWorkItem}><Plus className="size-3.5" />Create work item</Button> : null}
-        </div>
+        </label>
       </div>
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t bg-muted/25 px-4 py-2">
-        <Metric label="Sprint tasks" value={allSprintItems.length} />
-        <Metric label="Done" value={`${doneCount} / ${allSprintItems.length}`} />
-        <div className="flex items-center gap-2 text-xs"><span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Completion</span><div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted sm:w-32" role="progressbar" aria-label="Sprint completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={completion}><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${completion}%` }} /></div><span className="font-semibold tabular-nums text-emerald-700">{completion}%</span></div>
-        <div className="ml-auto flex items-center gap-1.5 text-xs text-violet-700"><Activity className="size-3.5" /><span>Activity Trail</span><Badge variant="secondary" className="bg-violet-100 px-1.5 py-0 text-[10px] text-violet-700">{activity.length}</Badge></div>
+      <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+        <label className="relative min-w-0 flex-1 sm:flex-none"><Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search work items" className="h-8 w-full bg-background pl-8 text-xs sm:w-52" placeholder="Search work items..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} /></label>
+
+        <select aria-label="Select sprint" title={selectedSprint ? `Sprint #${selectedSprint.id}: ${formatDate(selectedSprint.startDate)} - ${formatDate(selectedSprint.endDate)}` : "Select sprint"} className="h-8 min-w-0 max-w-52 rounded-md border bg-background px-2 text-xs" value={sprintId ?? ""}
+          onChange={(event) => setSprintId(Number(event.target.value))} disabled={query.isPending || !sprints.length}>
+          {!sprints.length ? <option value="">No active sprint</option> : null}
+          {sprints.map((sprint) => <option key={sprint.id} value={sprint.id}>{sprint.name} - {sprint.status}</option>)}
+        </select>
+        <Button type="button" variant="outline" size="icon-sm" aria-label="Refresh board" onClick={() => void query.refetch()} disabled={query.isFetching}>
+          <RefreshCw className={`size-4 ${query.isFetching ? "animate-spin" : ""}`} />
+        </Button>
+        {!readOnly && onCreateWorkItem ? <Button type="button" size="sm" className="h-8" onClick={onCreateWorkItem}><Plus className="size-3.5" />Create work item</Button> : null}
+        <Button type="button" variant={showActivity ? "secondary" : "outline"} size="sm" className="h-8 text-xs" aria-expanded={showActivity} aria-controls="workspace-board-activity" onClick={() => setShowActivity((visible) => !visible)}>
+          <Activity className="size-3.5" />Activity Trail<Badge variant="secondary" className="px-1.5 py-0 text-xs">{activity.length}</Badge>
+        </Button>
+        {viewMode === "list" ? <label className="sr-only" htmlFor="workspace-board-sort">Sort order</label> : null}
+        {viewMode === "list" ? <>
+          <label className="sr-only" htmlFor="workspace-board-status">Filter by status</label>
+          <select id="workspace-board-status" className="h-8 rounded-md border bg-background px-2 text-xs" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="ALL">All statuses</option>
+            {DEFAULT_COLUMNS.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}
+          </select>
+          <label className="sr-only" htmlFor="workspace-board-priority">Filter by priority</label>
+          <select id="workspace-board-priority" className="h-8 rounded-md border bg-background px-2 text-xs" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="ALL">All priorities</option><option value="URGENT">Urgent</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>
+          <label className="sr-only" htmlFor="workspace-board-sort">Sort order</label>
+          <select id="workspace-board-sort" className="h-8 rounded-md border bg-background px-2 text-xs" value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}><option value="title">Name A–Z</option><option value="priority">Priority</option><option value="status">Status</option></select>
+        </> : null}
       </div>
-    </Card>
+    </div>
 
     {query.isPending ? <div className="grid grid-cols-1 gap-3 md:grid-cols-3 2xl:grid-cols-5">{visibleColumns.map((column) => <Skeleton key={column.key} className="h-72" />)}</div>
       : query.isError ? <div role="alert" className="flex items-center justify-between rounded-xl border border-destructive/30 p-4 text-sm text-destructive"><span>Could not load the team's sprints and work items.</span><Button variant="outline" size="sm" onClick={() => void query.refetch()}>Try again</Button></div>
-      : !sprints.length ? <Card><div className="p-12 text-center text-sm text-muted-foreground">This team has no sprints yet. Create a sprint and add work items in the Backlog tab.</div></Card>
+      : !sprints.length ? <Card><div className="p-12 text-center text-sm text-muted-foreground">This team has no active sprint right now. Start a sprint in the Backlog tab — completed sprints stay hidden until another sprint is active.</div></Card>
       : <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-lg border bg-muted/30 p-0.5" role="group" aria-label="Display mode">
-                <Button type="button" size="sm" className="h-7 px-2.5 text-xs" variant={viewMode === "board" ? "default" : "ghost"} onClick={() => setViewMode("board")}><LayoutGrid className="size-3.5" />Board</Button>
-                <Button type="button" size="sm" className="h-7 px-2.5 text-xs" variant={viewMode === "list" ? "default" : "ghost"} onClick={() => setViewMode("list")}><List className="size-3.5" />List</Button>
-              </div>
-              <label className="flex h-8 w-44 items-center gap-2 rounded-md border bg-background px-2.5 text-xs text-muted-foreground">
-                <UserRound className="size-3.5 shrink-0" />
-                <select aria-label="Filter by team member" className="w-full bg-transparent outline-none" value={memberFilter} onChange={(event) => setMemberFilter(event.target.value)}>
-                  <option value="ALL">All members</option><option value="UNASSIGNED">Unassigned</option>
-                  {memberIds.map((id) => {
-                    const displayName = query.data?.members.find((member) => member.projectMemberId === id)?.displayName
-                      ?? boardItems.find((item) => item.assigneeProjectMemberId === id)?.assigneeDisplayName;
-                    return <option key={id} value={id}>{displayName || `Member #${id}`}</option>;
-                  })}
-                </select>
-              </label>
-            </div>
-            <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
-              <label className="relative min-w-0 flex-1 sm:flex-none"><Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search work items" className="h-8 w-full bg-background pl-8 text-xs sm:w-52" placeholder="Search work items..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} /></label>
-              {viewMode === "list" ? <label className="sr-only" htmlFor="workspace-board-sort">Sort order</label> : null}
-              {viewMode === "list" ? <>
-                <label className="sr-only" htmlFor="workspace-board-status">Filter by status</label>
-                <select id="workspace-board-status" className="h-8 rounded-md border bg-background px-2 text-xs" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                  <option value="ALL">All statuses</option>
-                  {DEFAULT_COLUMNS.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}
-                </select>
-                <label className="sr-only" htmlFor="workspace-board-priority">Filter by priority</label>
-                <select id="workspace-board-priority" className="h-8 rounded-md border bg-background px-2 text-xs" value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}><option value="ALL">All priorities</option><option value="URGENT">Urgent</option><option value="HIGH">High</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option></select>
-                <label className="sr-only" htmlFor="workspace-board-sort">Sort order</label>
-                <select id="workspace-board-sort" className="h-8 rounded-md border bg-background px-2 text-xs" value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)}><option value="title">Name A–Z</option><option value="priority">Priority</option><option value="status">Status</option></select>
-              </> : null}
-            </div>
-          </div>
           {selectedSprint?.status !== "ACTIVE" ? <p className="px-1 text-xs text-muted-foreground">This sprint has not started. Start it in the Backlog tab to make it active.</p> : null}
-        <div className="grid items-stretch gap-4 2xl:grid-cols-[minmax(0,1fr)_19rem]">
+        <div className={`grid items-stretch gap-4 ${showActivity ? "2xl:grid-cols-[minmax(0,1fr)_19rem]" : ""}`}>
         <div className="min-w-0">
           {viewMode === "board" ? <div className="overflow-x-auto overscroll-x-contain pb-2" role="region" aria-label="Kanban columns" tabIndex={0}>
             <div className="grid min-w-[1000px] items-stretch gap-2" style={{ gridTemplateColumns: `repeat(${visibleColumns.length}, minmax(0, 1fr))` }}>
@@ -441,7 +423,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
                   className={`flex h-[32rem] min-h-[24rem] max-h-[70vh] flex-col rounded-2xl border border-slate-200 bg-slate-50/70 p-2 ${draggedItem ? "transition-colors" : ""}`}
                   onDragOver={(event) => { if (draggedItem) event.preventDefault(); }}
                   onDrop={(event) => { event.preventDefault(); if (draggedItem) void moveItem(draggedItem, key); }}>
-                  <header className="mb-3 flex items-center justify-between gap-1 px-1"><div className="flex min-w-0 items-center gap-2"><span className={`size-2.5 shrink-0 rounded-full ${color}`} /><h3 className="truncate text-sm font-bold" title={label}>{label}</h3><Badge variant="secondary">{items.length}</Badge></div><div className="flex shrink-0 items-center gap-1"><Icon className="size-4 text-slate-400" /></div></header>
+                  <header className="mb-3 flex items-center justify-between gap-1 px-1"><div className="flex min-w-0 items-center gap-2"><span className={`size-2.5 shrink-0 rounded-full ${color}`} /><h3 className="truncate text-sm font-semibold" title={label}>{label}</h3><Badge variant="secondary">{items.length}</Badge></div><div className="flex shrink-0 items-center gap-1"><Icon className="size-4 text-slate-400" /></div></header>
                   <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain pr-1">
                     {items.map((item) => <article key={item.id} draggable={canUpdate && savingItemId !== item.id}
                       onDragStart={() => setDraggedItem(item)} onDragEnd={() => setDraggedItem(null)}
@@ -456,15 +438,15 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
                       tabIndex={0}
                       aria-label={`Open details for ${item.title ?? "work item"}`}
                       className={`flex shrink-0 cursor-pointer flex-col rounded-xl border bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${savingItemId === item.id ? "opacity-50" : ""}`}>
-                      <p className="font-mono text-[10px] text-muted-foreground">#{item.id ?? "—"}</p>
-                      <div className="flex min-h-5 items-center gap-1.5 text-[10px]">
+                      <p className="text-xs text-muted-foreground">#{item.id ?? "—"}</p>
+                      <div className="flex min-h-5 items-center gap-1.5 text-xs">
                         {item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : null}
                         {item.priority ? <Badge variant="outline" className={priorityStyle(item.priority)}>{priorityLabel(item.priority)}</Badge> : null}
                       </div>
                       <h4 className="mt-2 line-clamp-2 h-10 break-words text-sm font-semibold leading-5 text-slate-800" title={item.title || "Untitled work item"}>{item.title || "Untitled work item"}</h4>
                       <p className="mt-1 line-clamp-3 h-12 whitespace-pre-wrap break-words text-xs leading-4 text-muted-foreground">{item.description || ""}</p>
                       <p className="mt-2 h-4 truncate text-xs leading-4 text-slate-500" title={item.milestoneName || undefined}>{item.milestoneName || ""}</p>
-                      <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2 text-[11px] text-muted-foreground">
+                      <div className="mt-3 flex items-center justify-between gap-2 border-t pt-2 text-xs text-muted-foreground">
                         {canUpdate ? <>
                         <label className="flex min-w-0 items-center gap-1.5" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onDragStart={(event) => event.preventDefault()}>
                           <UserRound className="size-3.5 shrink-0" />
@@ -487,7 +469,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Work item</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Priority</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Assignee</th><th className="px-4 py-3 text-right">Estimate</th><th className="px-4 py-3">Actions</th></tr></thead>
               <tbody className="divide-y">{listItems.map((item) => <tr key={item.id} className="hover:bg-slate-50/80">
-                <td className="max-w-md px-4 py-3"><p className="text-[10px] font-mono text-muted-foreground">#{item.id ?? "—"}</p><p className="font-medium text-slate-800">{item.title || "Untitled work item"}</p>{item.milestoneName ? <p className="mt-1 truncate text-xs text-muted-foreground">{item.milestoneName}</p> : null}</td>
+                <td className="max-w-md px-4 py-3"><p className="text-xs text-muted-foreground">#{item.id ?? "—"}</p><p className="font-medium text-slate-800">{item.title || "Untitled work item"}</p>{item.milestoneName ? <p className="mt-1 truncate text-xs text-muted-foreground">{item.milestoneName}</p> : null}</td>
                 <td className="px-4 py-3">{item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : "—"}</td>
                 <td className="px-4 py-3">{item.priority ? <Badge variant="outline" className={priorityStyle(item.priority)}>{priorityLabel(item.priority)}</Badge> : "—"}</td>
                 <td className="px-4 py-3">{canUpdate ? <select aria-label={`Status for ${item.title ?? "work item"}`} className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700" value={item.status ?? "TODO"} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void updateStatus(item, event.target.value as SprintBacklogStatus)}>{([...new Set([item.status ?? "TODO", ...transitionOptions(item.status ?? "TODO")])] as SprintBacklogStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select> : <Badge variant="outline" className={item.status === "DONE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : item.status === "REVIEW" ? "border-amber-200 bg-amber-50 text-amber-800" : item.status === "IN_PROGRESS" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}>{statusLabel(item.status)}</Badge>}</td>
@@ -504,22 +486,21 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
             {filteredItems.length > 0 ? <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-muted-foreground"><span>{filteredItems.length} work items · Page {listPage + 1}/{pageCount}</span><div className="flex gap-1"><Button variant="outline" size="icon" aria-label="Previous page" disabled={listPage === 0} onClick={() => setListPage((page) => Math.max(0, page - 1))}><ChevronLeft className="size-4" /></Button><Button variant="outline" size="icon" aria-label="Next page" disabled={listPage + 1 >= pageCount} onClick={() => setListPage((page) => Math.min(pageCount - 1, page + 1))}><ChevronRight className="size-4" /></Button></div></div> : null}
           </div>}
         </div>
-        <aside aria-label="Activity Trail" className="flex h-[32rem] min-h-[24rem] max-h-[70vh] flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
+        {showActivity ? <aside id="workspace-board-activity" aria-label="Activity Trail" className="flex h-[32rem] min-h-[24rem] max-h-[70vh] flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
           <div className="shrink-0 border-b bg-violet-50/40 px-4 py-3"><div className="flex items-center justify-between"><h3 className="flex items-center gap-2 text-sm font-semibold"><Activity className="size-4 text-violet-600" />Activity Trail</h3><Badge variant="secondary" className="bg-violet-100 text-violet-700">{activity.length}</Badge></div>
-          <p className="mt-1 text-[11px] text-muted-foreground">Recent work item activity in this sprint</p></div>
+          <p className="mt-1 text-xs text-muted-foreground">Recent work item activity in this sprint</p></div>
           {activity.length ? <ol className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4">{activity.map((entry) => {
             const summary = auditSummary(entry.action, entry.beforeState, entry.afterState);
             const activityColor = DEFAULT_COLUMNS.find(column => column.key === parseAuditState(entry.afterState)?.status)?.color ?? "bg-primary";
             return <li key={entry.id} className="relative border-l border-border pl-4 text-xs">
               <span className={`absolute -left-1 top-1 size-2 rounded-full ring-2 ring-background ${activityColor}`} />
-              <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1"><p className="min-w-0 break-words font-medium text-foreground">{entry.actorEmail || `Member #${entry.actorId ?? "—"}`}</p><time className="text-[10px] text-muted-foreground">{formatDateTime(entry.createdAt)}</time></div>
-              <p className="mt-1 text-[11px] text-muted-foreground">{summary.actionLabel}</p>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1"><p className="min-w-0 break-words font-medium text-foreground">{entry.actorEmail || `Member #${entry.actorId ?? "—"}`}</p><time className="text-xs text-muted-foreground">{formatDateTime(entry.createdAt)}</time></div>
+              <p className="mt-1 text-xs text-muted-foreground">{summary.actionLabel}</p>
               <p className="mt-1 line-clamp-2 font-medium italic text-muted-foreground">{entry.itemTitle}</p>
-              {summary.changes.map((change) => <p key={change} className="mt-1 rounded bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">{change}</p>)}
-              {entry.correlationId ? <details className="mt-1 text-[10px] text-muted-foreground"><summary className="cursor-pointer">Transaction details</summary><code className="mt-1 block break-all">{entry.correlationId}</code></details> : null}
+              {summary.changes.map((change) => <p key={change} className="mt-1 rounded bg-muted/60 px-1.5 py-0.5 text-xs text-muted-foreground">{change}</p>)}
             </li>;
           })}</ol> : <p className="m-4 rounded-lg border border-dashed p-5 text-center text-xs text-muted-foreground">No activity has been recorded yet.</p>}
-        </aside>
+        </aside> : null}
       </div></div>}
     <Dialog open={historyItem !== null} onOpenChange={(open) => { if (!open) setHistoryItem(null); }}>
       <DialogContent className="flex max-h-[85dvh] flex-col overflow-hidden sm:max-w-2xl">
@@ -590,8 +571,4 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
       }}
     />
   </div>;
-}
-
-function Metric({ label, value }: { label: string; value: string | number }) {
-  return <div className="flex items-center gap-2 text-xs"><span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span><span className="font-semibold tabular-nums text-foreground">{value}</span></div>;
 }

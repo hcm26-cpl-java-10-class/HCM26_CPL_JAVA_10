@@ -124,23 +124,28 @@ public class TaskAlertProjectBridge implements TaskProjectAccess {
         return recipient(projectId, memberId).map(row -> row.user().getId());
     }
     public Optional<Member> recipient(UUID projectId, UUID memberId) {
-        if (memberId == null) return Optional.empty();
-        var link = memberLinks.findById(memberId).orElse(null);
-        if (link == null || !projectId.equals(link.getProjectId())) return Optional.empty();
-        return resolve(link);
+        return linkedMember(projectId, memberId, true);
     }
     public Optional<Member> resolve(TaskAlertData.MemberLink link) {
-        return resolve(link, true);
+        return resolve(link, project(link.getProjectId()), true);
     }
     // Retain the task's team context after an assignee leaves. Authorization is
     // still based on the actor's current membership; delivery requires an active recipient.
     private Optional<Member> scopeMember(UUID projectId, UUID memberId) {
-        if (memberId == null) return Optional.empty();
-        return memberLinks.findById(memberId).filter(link -> projectId.equals(link.getProjectId()))
-                .flatMap(link -> resolve(link, false));
+        return linkedMember(projectId, memberId, false);
     }
-    private Optional<Member> resolve(TaskAlertData.MemberLink link, boolean requireCurrent) {
-        Project project = project(link.getProjectId());
+    private Optional<Member> linkedMember(UUID projectId, UUID memberId, boolean requireCurrent) {
+        if (memberId == null) return Optional.empty();
+        var link = memberLinks.findById(memberId).orElse(null);
+        if (link == null) return Optional.empty();
+        // One roster membership may work on several projects owned by the same team.
+        if (!projectId.equals(link.getProjectId())
+                && link.getSource() != TaskAlertData.MemberSource.PROJECT_MEMBER) {
+            return Optional.empty();
+        }
+        return resolve(link, project(projectId), requireCurrent);
+    }
+    private Optional<Member> resolve(TaskAlertData.MemberLink link, Project project, boolean requireCurrent) {
         if (link.getSource() == TaskAlertData.MemberSource.TEAM_MEMBER) {
             var row = teamMembers.findById(link.getSourceMemberId()).orElse(null);
             if (row == null || (requireCurrent && !current(row)) || !matches(row.getTeam(), project)

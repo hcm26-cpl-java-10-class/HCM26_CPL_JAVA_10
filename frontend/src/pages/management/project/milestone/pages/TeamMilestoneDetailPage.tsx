@@ -7,6 +7,9 @@ import { MilestoneDetailError } from "../components/MilestoneDetailError";
 import { MilestoneDetailView } from "../components/MilestoneDetailView";
 import { getMilestoneApiError } from "../milestone.utils";
 
+/** "/teams" and "/teams/:id/milestones" have no page; keep them out of the breadcrumb to avoid 404 links. */
+const TEAM_ROUTE_GAPS = ["teams", "milestones"];
+
 export function TeamMilestoneDetailPage() {
   const { teamId: teamIdParam, milestoneId } = useParams<{ teamId: string; milestoneId: string }>();
   const teamId = Number(teamIdParam);
@@ -29,13 +32,13 @@ export function TeamMilestoneDetailPage() {
     ? routeReturn : null;
   const back = () => navigate(reportReturn ?? workspaceReturn ?? (workspaceId ? `/management/workspaces/${workspaceId}?tab=milestones` : "/milestones/teams"));
 
-  if (query.isPending) return <MainLayout pathName={{ milestones: "Milestone" }}><div className="mx-auto grid max-w-6xl gap-5"><Skeleton className="h-52 rounded-xl" /><Skeleton className="h-10 w-full rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div></MainLayout>;
-  if (query.isError || !query.data) return <MainLayout pathName={{ milestones: "Milestone" }}>
+  if (query.isPending) return <MainLayout ignorePaths={TEAM_ROUTE_GAPS} pathName={{ milestones: "Milestone" }}><div className="mx-auto grid max-w-6xl gap-5"><Skeleton className="h-52 rounded-xl" /><Skeleton className="h-10 w-full rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div></MainLayout>;
+  if (query.isError || !query.data) return <MainLayout ignorePaths={TEAM_ROUTE_GAPS} pathName={{ milestones: "Milestone" }}>
     <MilestoneDetailError error={getMilestoneApiError(query.error)} onBack={back} onRetry={() => void query.refetch()} />
   </MainLayout>;
 
   const milestone = query.data;
-  return <MainLayout pathName={{ milestones: "Milestones", [milestone.id]: milestone.title }}>
+  return <MainLayout ignorePaths={TEAM_ROUTE_GAPS} pathName={{ milestones: "Milestones", [milestone.id]: milestone.title }}>
     <MilestoneDetailView milestone={milestone} teamId={teamId} workspaceId={workspaceId} backLabel={reportReturn ? "Quay lại Project Dashboard" : workspaceId ? "Back to workspace" : "Choose team"} onBack={back} onRefresh={() => { void query.refetch(); }} />
   </MainLayout>;
 }

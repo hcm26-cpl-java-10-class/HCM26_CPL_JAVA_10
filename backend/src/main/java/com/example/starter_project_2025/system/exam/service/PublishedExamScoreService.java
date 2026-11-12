@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.exam.service;
 import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.dto.PublishedExamScoreDTO;
+import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +28,7 @@ public class PublishedExamScoreService {
         List<ExamAttempt> attempts =
                 attemptRepository.findAllByStudent_IdOrderByStartedAtDesc(studentId);
 
-        Map<Long, ExamAttempt> latestScoredAttempts = new LinkedHashMap<>();
+        Map<Long, ExamAttempt> highestScoredAttempts = new LinkedHashMap<>();
 
         for (ExamAttempt attempt : attempts) {
             if (attempt.getExam() == null
@@ -39,17 +40,38 @@ public class PublishedExamScoreService {
 
             Long examId = attempt.getExam().getId();
 
-            latestScoredAttempts.merge(
+            highestScoredAttempts.merge(
                     examId,
                     attempt,
-                    (current, candidate) ->
-                            candidate.getAttemptNumber() > current.getAttemptNumber()
-                                    ? candidate
-                                    : current
+                    (current, candidate) -> {
+                        int scoreComparison = candidate.getFinalScore()
+                                .compareTo(current.getFinalScore());
+
+                        if (scoreComparison > 0) {
+                            return candidate;
+                        }
+
+                        if (scoreComparison == 0) {
+                            int timeComparison = candidate.getSubmittedAt()
+                                    .compareTo(current.getSubmittedAt());
+
+                            if (timeComparison > 0) {
+                                return candidate;
+                            }
+
+                            if (timeComparison == 0
+                                    && candidate.getAttemptNumber()
+                                    > current.getAttemptNumber()) {
+                                return candidate;
+                            }
+                        }
+
+                        return current;
+                    }
             );
         }
 
-        return latestScoredAttempts.values().stream()
+        return highestScoredAttempts.values().stream()
                 .sorted(Comparator.comparing(
                         ExamAttempt::getSubmittedAt,
                         Comparator.reverseOrder()
@@ -67,6 +89,7 @@ public class PublishedExamScoreService {
             return new PublishedExamScoreDTO(
                     attempt.getExam().getId(),
                     attempt.getExam().getTitle(),
+                    attempt.getExam().getCategory(),
                     attempt.getAttemptNumber(),
                     null,
                     null,
@@ -82,6 +105,7 @@ public class PublishedExamScoreService {
         return new PublishedExamScoreDTO(
                 attempt.getExam().getId(),
                 attempt.getExam().getTitle(),
+                attempt.getExam().getCategory(),
                 attempt.getAttemptNumber(),
                 attempt.getObjectiveScore(),
                 attempt.getFinalScore(),
