@@ -64,30 +64,7 @@ async function fetchAllExams(): Promise<Exam[]> {
     return [...byId.values()];
 }
 
-function isExamOpen(exam: Exam, now: number) {
-    const started = exam.startTime == null || now >= new Date(exam.startTime).getTime();
-    const notClosed = exam.endTime == null || now < new Date(exam.endTime).getTime();
-    return started && notClosed;
-}
-
-function sortExams(exams: Exam[], now: number) {
-    return [...exams].sort((a, b) => {
-        // Ưu tiên bài thi đang mở
-        const openDifference =
-            Number(isExamOpen(b, now)) - Number(isExamOpen(a, now));
-
-        if (openDifference !== 0) {
-            return openDifference;
-        }
-
-        // Trong cùng nhóm, bài mới tạo hiển thị trước
-        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-
-        return dateB - dateA;
-    });
-}
-
+/** "Course › Section › Lesson" the exam belongs to, or null when it is not linked to a course. */
 function examCourseLabel(exam: Exam): string | null {
     if (!exam.courseName) return null;
     return [exam.courseName, exam.sectionTitle, exam.lessonTitle].filter(Boolean).join(' › ');
@@ -128,7 +105,6 @@ function getPageNumbers(current: number, total: number): Array<number | 'ellipsi
 function ExamCard({
                       exam,
                       attempt,
-                      now,
                       onOpen,
                       onReview,
                       disabled: externallyDisabled,
@@ -136,7 +112,6 @@ function ExamCard({
                   }: {
     exam: Exam;
     attempt?: ExamAttemptSummary;
-    now: number;
     onOpen: (examId: number) => void;
     onReview: (attemptId: number) => void;
     disabled: boolean;
@@ -147,7 +122,7 @@ function ExamCard({
     const isSubmitted = attempt?.status === 'SUBMITTED' || attempt?.status === 'PENDING_REVIEW';
 
     const locked = lock?.locked === true && !isInProgress;
-    const open = isExamOpen(exam, now) && !locked;
+    const open = !locked;
     const courseText = examCourseLabel(exam);
 
     const hasAttempts = (attempt?.attemptsUsed ?? 0) > 0;
@@ -420,7 +395,6 @@ function ExamCard({
 export default function StudentExamList() {
     const navigate = useNavigate();
     const [passwordExam, setPasswordExam] = useState<Exam | null>(null);
-    const [now] = useState(() => Date.now());
     const [page, setPage] = useState(1);
 
     const examsQuery = useQuery({
@@ -441,7 +415,7 @@ export default function StudentExamList() {
         void attemptsQuery.refetch();
     };
 
-    const exams = sortExams(examsQuery.data ?? [], now);
+    const exams = examsQuery.data ?? [];
     const attempts = attemptsQuery.data ?? [];
 
     const totalPages = Math.max(1, Math.ceil(exams.length / PAGE_SIZE));
@@ -490,8 +464,9 @@ export default function StudentExamList() {
             setPasswordExam(exam);
             return;
         }
-
-        navigate(`/student/exams/${examId}/take`);
+        navigate(`/student/exams/${examId}/take`, {
+            state: { returnTo: "/student/exams" },
+        });
     };
 
     return (
@@ -588,7 +563,6 @@ export default function StudentExamList() {
                                         key={exam.id}
                                         exam={exam}
                                         attempt={attempt}
-                                        now={now}
                                         disabled={attemptsQuery.isError}
                                         lock={lockById.get(exam.id)}
                                         onOpen={openExam}
@@ -668,7 +642,9 @@ export default function StudentExamList() {
                 onSuccess={(examId, password) => {
                     sessionStorage.setItem(`exam_pass_${examId}`, password);
                     setPasswordExam(null);
-                    navigate(`/student/exams/${examId}/take`);
+                    navigate(`/student/exams/${examId}/take`, {
+                        state: { returnTo: "/student/exams" },
+                    });
                 }}
             />
         </MainLayout>

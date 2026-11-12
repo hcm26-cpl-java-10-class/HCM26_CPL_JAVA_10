@@ -107,6 +107,25 @@ export function LessonProgressSidebar({
                 </div>
               </section>
           ))}
+          {exams.some((exam) =>
+              exam.category === "FINAL_TEST" &&
+              exam.sectionId == null &&
+              exam.lessonId == null
+          ) && (
+              <section className="space-y-2 border-t pt-3">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Final exam
+                </h2>
+                <div className="space-y-1">
+                  {exams
+                      .filter((exam) => exam.category === "FINAL_TEST")
+                      .filter((exam) => exam.sectionId == null && exam.lessonId == null)
+                      .map((exam) => (
+                          <ExamRow key={exam.id} exam={exam} onOpen={onExamOpen} />
+                      ))}
+                </div>
+              </section>
+          )}
         </div>
       </aside>
   );

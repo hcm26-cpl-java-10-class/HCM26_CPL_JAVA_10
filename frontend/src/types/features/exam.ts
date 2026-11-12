@@ -180,7 +180,7 @@ export interface CourseExam {
   /** Only returned to the course teacher and admin. */
   questionCount: number | null;
   createdByName: string | null;
-  /** Student view: true while blocked by LessonProgress. Staff always get false. */
+  /** Student view: true while blocked by course or lesson progress. Staff always get false. */
   locked: boolean;
   lockReason: string | null;
 }
