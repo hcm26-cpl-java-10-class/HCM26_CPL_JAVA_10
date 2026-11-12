@@ -1,3 +1,4 @@
+import { assessmentReturnPath } from "@/utils/assessment-navigation";
 import { examApi } from "@/api";
 import HeaderRight from "@/components/layout/HeaderRight";
 import { EmbeddedLayoutContext } from "@/components/layout/embedded-layout";
@@ -32,7 +33,9 @@ function tabFromPath(pathname: string, examId: string): TabKey {
 
 export default function ExamDetailPage() {
   const { examId = "" } = useParams<{ examId: string }>();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const returnTo = assessmentReturnPath(new URLSearchParams(search).get("returnTo"));
+  const returnQuery = returnTo === "/exams" ? "" : "?returnTo=" + encodeURIComponent(returnTo);
   const navigate = useNavigate();
   const id = Number(examId);
   const active = tabFromPath(pathname, examId);
@@ -69,9 +72,9 @@ export default function ExamDetailPage() {
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/exams")}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(returnTo)}>
             <ArrowLeft className="mr-1 size-4" />
-            Assessment Management
+            {returnTo.startsWith("/courses/") || returnTo.startsWith("/course-enrollments/") ? "Back to course" : returnTo.startsWith("/exams/curriculum") ? "Back to curriculum mapping" : "Assessment Management"}
           </Button>
           <span className="text-muted-foreground">/</span>
           <h1 className="truncate text-base font-semibold">{title ?? "Loading..."}</h1>
@@ -85,7 +88,7 @@ export default function ExamDetailPage() {
           ) : (
             <button
               type="button"
-              onClick={() => navigate(`/exams/${examId}/edit`)}
+              onClick={() => navigate(`/exams/${examId}/edit${returnQuery}`)}
               className="hidden shrink-0 rounded-md bg-amber-50 px-2 py-0.5 text-xs text-amber-700 hover:bg-amber-100 md:inline dark:bg-amber-950/50 dark:text-amber-300"
               title="This exam is not linked to any course. Open the Edit tab to link it."
             >
@@ -104,7 +107,7 @@ export default function ExamDetailPage() {
               type="button"
               role="tab"
               aria-selected={active === key}
-              onClick={() => navigate(`/exams/${examId}/${segment}`)}
+              onClick={() => navigate(`/exams/${examId}/${segment}${returnQuery}`)}
               className={`flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                 active === key ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}

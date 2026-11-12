@@ -89,11 +89,11 @@ public class CurriculumValidator {
                                     + MAX_URL_LENGTH + " characters)"));
                 }
             }
-            case TEXT -> {
+            case TEXT, QUIZ, EXAM, ASSIGNMENT -> {
                 String text = lesson.getTextContent();
                 if (text == null || text.isBlank()) {
                     errors.add(new Issue("LESSON_TEXT_MISSING", section.getId(), lesson.getId(),
-                            label + " requires text content (TEXT)"));
+                            label + " requires text content or assessment instructions"));
                 }
             }
         }

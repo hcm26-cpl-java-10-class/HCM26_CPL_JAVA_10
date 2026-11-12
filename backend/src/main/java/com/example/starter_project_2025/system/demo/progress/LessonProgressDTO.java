@@ -14,7 +14,10 @@ public record LessonProgressDTO(
         int progressPercentage,
         Long lastLessonId,
         LocalDateTime lastAccessedAt,
-        List<LessonItem> lessons
+        List<LessonItem> lessons,
+        boolean courseCompleted,
+        String assessmentStatus,
+        java.math.BigDecimal overallScore
 ) {
     public record LessonItem(
             Long lessonId,

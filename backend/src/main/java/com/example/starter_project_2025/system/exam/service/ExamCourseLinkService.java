@@ -56,6 +56,7 @@ public class ExamCourseLinkService {
      */
     public void apply(Exam exam, ExamDTO request, ValidationContext ctx) {
         if (!request.isCourseLinkProvided()) {
+            validateLessonCategory(exam.getLesson(),request.getCategory()!=null?request.getCategory():exam.getCategory(),ctx);
             return;
         }
         Long courseId = request.getCourseId();
@@ -92,9 +93,8 @@ public class ExamCourseLinkService {
         if (section != null && courseId != null && (course == null || !courseId.equals(course.getId()))) {
             ctx.add("courseId", "The selected section/lesson does not belong to the selected course");
         }
-        if (ctx.hasErrors()) {
-            return;
-        }
+        validateLessonCategory(lesson,request.getCategory()!=null?request.getCategory():exam.getCategory(),ctx);
+        if (ctx.hasErrors()) { return; }
 
         Long currentCourseId = exam.getCourse() == null ? null : exam.getCourse().getId();
         if (course != null && !Objects.equals(course.getId(), currentCourseId)) {
@@ -236,6 +236,10 @@ public class ExamCourseLinkService {
         exam.setCourse(course);
         exam.setSection(section);
         exam.setLesson(lesson);
+        ValidationContext weightContext = new ValidationContext();
+        validateLessonCategory(lesson,exam.getCategory(),weightContext);
+        validateWeight(exam, exam.getCourseWeight(), weightContext);
+        weightContext.throwIfErrors();
         examRepository.save(exam);
 
         Long userId = principal == null || principal.getUser() == null ? null : principal.getUser().getId();
@@ -301,6 +305,7 @@ public class ExamCourseLinkService {
                 e.getMaxAttempts(),
                 ExamScoring.effectiveMax(e.getMaxScore()),
                 e.getPassScore(),
+                e.getCourseWeight(),
                 e.getIsActive(),
                 e.getCourse() == null ? null : e.getCourse().getId(),
                 e.getSection() == null ? null : e.getSection().getId(),
@@ -355,6 +360,32 @@ public class ExamCourseLinkService {
     }
 
     // ------------------------------------------------------------------ tien ich
+
+    /** A course plan may be incomplete while being built, but cannot allocate over 100%. */
+    public void validateWeight(Exam exam, java.math.BigDecimal weight, ValidationContext ctx) {
+        if (weight == null) return;
+        if (weight.signum()<0 || weight.compareTo(java.math.BigDecimal.valueOf(100))>0
+                || weight.stripTrailingZeros().scale()>2) {
+            ctx.add("courseWeight", "Course weight must be 0–100 with at most two decimal places");
+            return;
+        }
+        if (exam.getCourse()==null) return;
+        Long courseId=exam.getCourse().getId();
+        courseRepository.findLockedForAssessment(courseId);
+        java.math.BigDecimal others=examRepository.findByCourseLink(courseId,null,null,false).stream()
+                .filter(other -> exam.getId()==null || !exam.getId().equals(other.getId()))
+                .map(Exam::getCourseWeight).filter(java.util.Objects::nonNull)
+                .reduce(java.math.BigDecimal.ZERO,java.math.BigDecimal::add);
+        if (others.add(weight).compareTo(java.math.BigDecimal.valueOf(100))>0)
+            ctx.add("courseWeight", "Course assessment weights would exceed 100%. Other assessments use " + others + "%");
+    }
+
+    private void validateLessonCategory(Lesson lesson,com.example.starter_project_2025.system.exam.domain.ExamCategory category,ValidationContext ctx) {
+        if (lesson==null || !com.example.starter_project_2025.system.demo.course.CourseAssessmentService.isAssessment(lesson)) return;
+        Exam candidate=new Exam();candidate.setCategory(category);
+        if (!com.example.starter_project_2025.system.demo.course.CourseAssessmentService.matches(lesson,candidate))
+            ctx.add("lessonId","Assessment category must match the linked lesson type");
+    }
 
     private boolean isInstructor(Course course, Long userId) {
         return userId != null

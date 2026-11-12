@@ -5,5 +5,8 @@ public enum LessonContentType {
     AUDIO,
     TEXT,
     DOCUMENT,
-    LINK
+    LINK,
+    QUIZ,
+    EXAM,
+    ASSIGNMENT
 }

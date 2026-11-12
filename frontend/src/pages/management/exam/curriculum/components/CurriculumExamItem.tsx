@@ -109,6 +109,7 @@ export function CurriculumExamItem({ exam, onUnlink, compact = false }: Curricul
               <span className="flex items-center gap-1 text-foreground/80">
                 <Trophy className="size-3 text-amber-500" />
                 <span>Max: {exam.maxScore ?? 10} pts</span>
+                <span>Weight: {exam.courseWeight != null ? `${exam.courseWeight}%` : "Not set"}</span>
               </span>
             </div>
           </div>

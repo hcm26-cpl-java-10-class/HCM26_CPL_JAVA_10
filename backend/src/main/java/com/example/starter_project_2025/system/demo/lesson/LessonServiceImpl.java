@@ -300,9 +300,9 @@ public class LessonServiceImpl
                     ctx.add("contentUrl", "Content URL must be a valid http/https URL");
                 }
             }
-            case TEXT -> {
+            case TEXT, QUIZ, EXAM, ASSIGNMENT -> {
                 if (!hasText && !outlineEditable) {
-                    ctx.add("textContent", "Text content is required for TEXT lessons");
+                    ctx.add("textContent", "Text content or assessment instructions are required");
                 }
             }
         }

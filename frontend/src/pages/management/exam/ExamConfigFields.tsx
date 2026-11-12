@@ -29,6 +29,8 @@ interface Props {
   editingExam?: ExamDTO | null;
   /** Show red errors under required fields (set after a failed save attempt). */
   showErrors?: boolean;
+  showCourseLink?: boolean;
+  categoryOptions?: ExamCategory[];
 }
 
 function SectionTitle({ children }: { children: string }) {
@@ -38,7 +40,7 @@ function SectionTitle({ children }: { children: string }) {
 }
 
 /** All fields of the exam form (shared by the Create dialog and the Edit tab). */
-export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, duration: newDuration, setDuration: setNewDuration, cfg, setCfg, editingExam, showErrors = false }: Props) {
+export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, duration: newDuration, setDuration: setNewDuration, cfg, setCfg, editingExam, showErrors = false, showCourseLink = true, categoryOptions = EXAM_CATEGORY_OPTIONS }: Props) {
   const locked = !!editingExam?.hasAttempts;
   const fieldErrors = showErrors ? getRequiredFieldErrors(cfg) : {};
   const invalidClass = "border-destructive focus:ring-destructive focus-visible:ring-destructive";
@@ -47,6 +49,12 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
   return (
     <div className="grid min-w-0 max-w-full gap-4 sm:grid-cols-2">
       <SectionTitle>Basic</SectionTitle>
+      <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+        Course grade weight (%)
+        <Input type="number" min={0} max={100} step="0.01" placeholder="e.g. 15"
+          value={cfg.courseWeight} onChange={event => setCfg(c => ({ ...c, courseWeight: event.target.value }))} />
+        <span className="text-xs font-normal text-muted-foreground">This assessment's share of the final course grade. Set 0 for practice; leave blank if not configured. Linked assessments together must total 100% when the plan is complete.</span>
+      </label>
       <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium sm:col-span-2">
         Exam Title
         <Input required maxLength={200} className="w-full min-w-0 max-w-full" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} />
@@ -105,7 +113,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
             <SelectValue placeholder="Select category" />
           </SelectTrigger>
           <SelectContent>
-            {EXAM_CATEGORY_OPTIONS.map((category) => (
+            {categoryOptions.map((category) => (
               <SelectItem key={category} value={category}>{EXAM_CATEGORY_LABEL[category]}</SelectItem>
             ))}
           </SelectContent>
@@ -119,7 +127,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         )}
       </label>
 
-      <ExamLinkFields cfg={cfg} setCfg={setCfg} />
+      {showCourseLink && <ExamLinkFields cfg={cfg} setCfg={setCfg} />}
 
       <div className="grid min-w-0 max-w-full gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
         <SectionTitle>Attempts</SectionTitle>

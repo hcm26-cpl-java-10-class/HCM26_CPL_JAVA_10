@@ -79,6 +79,34 @@ class ExamCourseLinkServiceTest {
     private UserPrincipal adminPrincipal;
     private UserPrincipal studentPrincipal;
 
+    @Test void weightsRejectInvalidRangeAndPrecision() {
+        Exam exam=new Exam();
+        for (String value:List.of("-1","100.01","1.001")) {
+            ValidationContext ctx=new ValidationContext();
+            service.validateWeight(exam,new BigDecimal(value),ctx);
+            assertTrue(ctx.hasErrors());
+        }
+    }
+    @Test void weightsExcludeCurrentAssessmentAndAllowExactly100() {
+        Course course=Course.builder().id(77L).build();
+        Exam current=new Exam(); current.setId(1L); current.setCourse(course); current.setCourseWeight(new BigDecimal("20"));
+        Exam other=new Exam(); other.setId(2L); other.setCourseWeight(new BigDecimal("60"));
+        when(examRepository.findByCourseLink(77L,null,null,false)).thenReturn(List.of(current,other));
+        ValidationContext allowed=new ValidationContext();
+        service.validateWeight(current,new BigDecimal("40"),allowed);
+        assertFalse(allowed.hasErrors());
+        ValidationContext rejected=new ValidationContext();
+        service.validateWeight(current,new BigDecimal("40.01"),rejected);
+        assertTrue(rejected.hasErrors());
+        verify(courseRepository,times(2)).findLockedForAssessment(77L);
+    }
+    @Test void unconfiguredAndPracticeAssessmentsRemainValid() {
+        ValidationContext ctx=new ValidationContext();
+        service.validateWeight(new Exam(),null,ctx);
+        service.validateWeight(new Exam(),BigDecimal.ZERO,ctx);
+        assertFalse(ctx.hasErrors());
+    }
+
     @BeforeEach
     void setUp() {
         teacherUser = createUser(10L, "teacher@example.com", "Teacher One", "TEACHER");

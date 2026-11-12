@@ -39,6 +39,7 @@ public class CourseCatalogService {
     private final CourseEnrollmentRepository enrollmentRepository;
     private final CourseContentAccessGuard contentAccessGuard;
     private final CourseReviewRepository courseReviewRepository;
+    private final com.example.starter_project_2025.system.exam.domain.ExamRepository examRepository;
 
     public Page<CatalogCourseDTO> search(String keyword, Long categoryId, CourseLevel level, Pageable pageable, Long userId) {
         Pageable safePageable = sanitize(pageable);
@@ -212,6 +213,18 @@ public class CourseCatalogService {
             totalDuration += lesson.getDuration() == null ? 0 : lesson.getDuration();
         }
 
+        var activeSections=sections.stream().map(Section::getId).collect(Collectors.toSet());
+        var activeLessons=lessonsBySection.values().stream().flatMap(List::stream)
+                .map(CourseDetailDTO.LessonItem::id).collect(Collectors.toSet());
+        List<CourseDetailDTO.AssessmentItem> assessments=examRepository.findByCourseLink(courseId,null,null,true).stream()
+                .filter(exam->Boolean.TRUE.equals(exam.getIsActive()))
+                .filter(exam->exam.getSection()==null || activeSections.contains(exam.getSection().getId()))
+                .filter(exam->exam.getLesson()==null || activeLessons.contains(exam.getLesson().getId()))
+                .map(exam->new CourseDetailDTO.AssessmentItem(exam.getId(),exam.getTitle(),exam.getCategory(),
+                        exam.getCourseWeight(),exam.getDurationMinutes(),
+                        exam.getSection()!=null?exam.getSection().getId():exam.getLesson()!=null?exam.getLesson().getSection().getId():null,
+                        exam.getLesson()==null?null:exam.getLesson().getId())).toList();
+
         List<CourseDetailDTO.SectionItem> sectionItems = sections.stream()
                 .map(section -> new CourseDetailDTO.SectionItem(
                         section.getId(),
@@ -244,7 +257,8 @@ public class CourseCatalogService {
                 totalDuration,
                 sectionItems,
                 syllabusInfo(course),
-                course.getCourseType()
+                course.getCourseType(),
+                assessments
         );
     }
 

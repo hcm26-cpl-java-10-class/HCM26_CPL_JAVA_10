@@ -217,7 +217,7 @@ export function LessonPreview({ lesson, hideHeader = false }: LessonPreviewProps
 
       {lesson.contentType === "VIDEO" && <VideoPreview lesson={lesson} />}
       {lesson.contentType === "AUDIO" && <AudioPreview lesson={lesson} />}
-      {lesson.contentType === "TEXT" && <TextPreview lesson={lesson} />}
+      {["TEXT", "QUIZ", "EXAM", "ASSIGNMENT"].includes(lesson.contentType || "") && <TextPreview lesson={lesson} />}
       {(lesson.contentType === "DOCUMENT" || lesson.contentType === "LINK") && (
         <ResourcePreview lesson={lesson} />
       )}
