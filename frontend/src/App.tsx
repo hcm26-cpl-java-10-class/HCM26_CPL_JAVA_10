@@ -10,6 +10,7 @@ import { NotFoundRedirect } from "./pages/error/NotFoundRedirect";
 import { ROLE_HOME_PATHS, routes } from "./router/component-registry";
 import type { RootState } from "./store/store";
 import { getHomePathByRole } from "./utils/rbac.utils";
+import { SystemChatbotWidget } from '@/components/chatbot/SystemChatbotWidget';
 
 function AppRoutes() {
     const { isAuthenticated } = useSelector((state: RootState) => state.auth);
@@ -102,6 +103,7 @@ function App() {
             <AuthProvider>
                 <RoleSwitchProvider>
                     <AppRoutes />
+                    <SystemChatbotWidget />
                 </RoleSwitchProvider>
             </AuthProvider>
         </BrowserRouter>
