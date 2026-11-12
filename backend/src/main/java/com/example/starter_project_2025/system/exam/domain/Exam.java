@@ -21,6 +21,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "exam")
 @ResourcePermission("EXAM")
@@ -161,4 +164,12 @@ public class Exam extends BaseEntity {
             joinColumns = @JoinColumn(name = "exam_id"),
             inverseJoinColumns = @JoinColumn(name = "question_id"))
     private Set<Question> questions = new HashSet<>();
+
+    @OneToMany(
+            mappedBy = "exam",
+            cascade = CascadeType.ALL
+    )
+    @OrderBy("versionNumber ASC")
+    private List<ExamQuestionPoolVersion> questionPoolVersions =
+            new ArrayList<>();
 }

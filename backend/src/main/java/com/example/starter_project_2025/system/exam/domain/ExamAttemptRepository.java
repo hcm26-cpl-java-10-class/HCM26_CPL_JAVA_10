@@ -68,4 +68,6 @@ public interface ExamAttemptRepository extends BaseCrudRepository<ExamAttempt, L
             @Param("statuses") java.util.Collection<ExamAttemptStatus> statuses,
             @Param("types") java.util.Collection<com.example.starter_project_2025.system.question.domain.QuestionType> types
     );
+
+    boolean existsByPoolVersion_Id(Long poolVersionId);
 }

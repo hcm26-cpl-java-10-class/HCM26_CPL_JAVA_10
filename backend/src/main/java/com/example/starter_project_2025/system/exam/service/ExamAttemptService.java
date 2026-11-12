@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.exam.service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import com.example.starter_project_2025.system.exam.code.CodeJudgeService;
+import com.example.starter_project_2025.system.question.domain.*;
 import com.example.starter_project_2025.system.question.dto.CodeSpecDTO;
 import com.example.starter_project_2025.system.question.service.CodeSpecSupport;
 import com.example.starter_project_2025.exception.BadRequestException;
@@ -13,10 +14,6 @@ import com.example.starter_project_2025.system.exam.dto.ExamAttemptReviewDTO;
 import com.example.starter_project_2025.system.exam.dto.ExamAttemptSummaryDTO;
 import com.example.starter_project_2025.system.exam.dto.SaveExamAnswerRequest;
 
-import com.example.starter_project_2025.system.question.domain.Question;
-import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
-import com.example.starter_project_2025.system.question.domain.QuestionOption;
-import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.mapper.QuestionTakerMapper;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
@@ -46,6 +43,9 @@ public class ExamAttemptService {
     private final ExamResultAccessService resultAccessService;
     private final ExamProctorImageRepository proctorImageRepository;
     private final ExamProgressLockService progressLockService;
+    private final ExamQuestionPoolVersionRepository poolVersionRepository;
+    private final ExamPoolRandomSelectionService randomSelectionService;
+    private final ExamPoolAttemptSnapshotService poolAttemptSnapshotService;
 
     public ExamAttemptDTO startOrResume(Long examId, Long studentId) {
         return startOrResume(examId, studentId, null);
@@ -96,9 +96,44 @@ public class ExamAttemptService {
         if (attempts.size() >= maxAttempts) {
             throw new BadRequestException("Bạn đã sử dụng hết số lần làm bài");
         }
-        List<Question> questions = activeQuestions(exam);
-        if (questions.isEmpty()) {
-            throw new BadRequestException("Đề thi chưa có câu hỏi đang hoạt động");
+        ExamQuestionPoolVersion poolVersion =
+                poolVersionRepository
+                        .findTopByExam_IdOrderByVersionNumberDesc(examId)
+                        .orElse(null);
+
+        List<Question> questions = null;
+        List<ExamPoolQuestion> selectedPoolQuestions = null;
+
+        if (poolVersion != null) {
+            selectedPoolQuestions = questionsFromPool(poolVersion);
+
+            if (selectedPoolQuestions.isEmpty()) {
+                throw new BadRequestException(
+                        "Question Pool không có câu hỏi hợp lệ"
+                );
+            }
+        } else {
+            questions = activeQuestions(exam);
+
+            if (questions.isEmpty()) {
+                throw new BadRequestException(
+                        "Đề thi chưa có câu hỏi hợp lệ"
+                );
+            }
+        }
+
+        int totalPoints = poolVersion != null
+                ? selectedPoolQuestions.stream()
+                  .mapToInt(ExamPoolQuestion::getPoints)
+                  .sum()
+                : questions.stream()
+                  .mapToInt(Question::getPoints)
+                  .sum();
+
+        if (totalPoints <= 0) {
+            throw new BadRequestException(
+                    "Tổng điểm các câu hỏi phải lớn hơn 0"
+            );
         }
 
         User student = userRepository.findById(studentId)
@@ -107,12 +142,13 @@ public class ExamAttemptService {
         ExamAttempt attempt = new ExamAttempt();
         attempt.setExam(exam);
         attempt.setStudent(student);
+        attempt.setPoolVersion(poolVersion);
         attempt.setAttemptNumber(attempts.stream()
                 .mapToInt(ExamAttempt::getAttemptNumber)
                 .max()
                 .orElse(0) + 1);
         attempt.setDurationMinutes(exam.getDurationMinutes());
-        attempt.setTotalPoints(questions.stream().mapToInt(Question::getPoints).sum());
+        attempt.setTotalPoints(totalPoints);
         attempt.setMaxScore(ExamScoring.effectiveMax(exam.getMaxScore()));
         attempt.setPassScore(exam.getPassScore());
         attempt.setStartedAt(startedAt);
@@ -124,13 +160,33 @@ public class ExamAttemptService {
         attempt.setOfficialDeadlineAt(durationDeadline);
         attempt.setDeadlineAt(durationDeadline);
         attempt.setStatus(ExamAttemptStatus.IN_PROGRESS);
-        snapshotQuestions(attempt, exam, questions);
+        if (poolVersion != null) {
+            List<ExamAttemptQuestion> snapshots =
+                    poolAttemptSnapshotService.createSnapshots(
+                            attempt,
+                            selectedPoolQuestions
+                    );
+
+            attempt.getQuestions().addAll(snapshots);
+        } else {
+            snapshotQuestions(
+                    attempt,
+                    exam,
+                    questions,
+                    Boolean.TRUE.equals(exam.getShuffleQuestions())
+            );
+        }
         return toResponse(attemptRepository.save(attempt));
     }
 
-    private void snapshotQuestions(ExamAttempt attempt, Exam exam, List<Question> source) {
+    private void snapshotQuestions(
+            ExamAttempt attempt,
+            Exam exam,
+            List<Question> source,
+            boolean shuffleOrder
+    ) {
         List<Question> ordered = new ArrayList<>(source);
-        if (Boolean.TRUE.equals(exam.getShuffleQuestions())) {
+        if (shuffleOrder) {
             Collections.shuffle(ordered);
         }
         int questionOrder = 0;
@@ -607,6 +663,82 @@ public class ExamAttemptService {
                 .filter(question -> Boolean.TRUE.equals(question.getIsActive()))
                 .sorted(Comparator.comparing(Question::getId))
                 .toList();
+    }
+
+    private List<ExamPoolQuestion> questionsFromPool(
+            ExamQuestionPoolVersion version
+    ) {
+        List<ExamPoolQuestion> poolEntries = version.getQuestions();
+
+        if (poolEntries == null || poolEntries.isEmpty()) {
+            throw new BadRequestException("Question Pool chưa có câu hỏi");
+        }
+
+        // Chỉ kiểm tra dữ liệu snapshot đã lưu trong Pool Version.
+        List<ExamPoolQuestion> validPoolEntries = poolEntries.stream()
+                .filter(this::isPoolSnapshotStructurallyValid)
+                .toList();
+
+        if (validPoolEntries.isEmpty()) {
+            throw new BadRequestException(
+                    "Question Pool không có câu hỏi hợp lệ"
+            );
+        }
+
+        // Random không trùng câu trong cùng một Attempt.
+        return randomSelectionService.selectQuestions(
+                version,
+                validPoolEntries
+        );
+    }
+
+    private boolean isPoolSnapshotStructurallyValid(
+            ExamPoolQuestion question
+    ) {
+        if (question == null
+                || question.getQuestionId() == null
+                || question.getContent() == null
+                || question.getContent().isBlank()
+                || question.getType() == null
+                || question.getPoints() <= 0) {
+            return false;
+        }
+
+        List<ExamPoolQuestionOption> options =
+                question.getOptions() == null
+                        ? List.of()
+                        : question.getOptions();
+
+        if (question.getType() == QuestionType.ESSAY) {
+            return options.isEmpty();
+        }
+
+        if (question.getType() == QuestionType.CODING) {
+            return options.isEmpty()
+                    && question.getCodeSpec() != null
+                    && !question.getCodeSpec().isBlank();
+        }
+
+        if (options.size() < 2 || options.size() > 6) {
+            return false;
+        }
+
+        boolean hasEmptyOption = options.stream()
+                .anyMatch(option -> option.getContent() == null
+                        || option.getContent().isBlank());
+
+        boolean hasDuplicateOption = options.stream()
+                .map(option -> option.getContent().trim())
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .distinct()
+                .count() != options.size();
+
+        boolean hasCorrectAnswer = options.stream()
+                .anyMatch(ExamPoolQuestionOption::isCorrect);
+
+        return !hasEmptyOption
+                && !hasDuplicateOption
+                && hasCorrectAnswer;
     }
 
     private ExamAttemptDTO toResponse(ExamAttempt attempt) {

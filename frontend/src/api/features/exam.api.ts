@@ -21,6 +21,33 @@ import type {
   ImportResult
 } from "@/types";
 
+export interface ExamQuestionPoolConfigRequest {
+  randomSelectionEnabled: boolean;
+  randomQuestionCount: number;
+  shuffleQuestionOrder: boolean;
+  questionIds: number[];
+}
+
+export interface ExamQuestionPoolConfigResponse {
+  examId: number;
+  poolVersionId: number;
+  versionNumber: number;
+  randomSelectionEnabled: boolean;
+  randomQuestionCount: number;
+  shuffleQuestionOrder: boolean;
+  totalQuestions: number;
+  questionIds: number[];
+}
+
+export interface ExamQuestionPoolVersionHistoryResponse {
+  poolVersionId: number;
+  versionNumber: number;
+  randomSelectionEnabled: boolean;
+  randomQuestionCount: number;
+  shuffleQuestionOrder: boolean;
+  totalQuestions: number;
+}
+
 const examBase = createBaseApiService<ExamDTO, ExamFilter>({ path: "/exams" });
 
 export interface GradeScaleDTO {
@@ -272,6 +299,31 @@ export const examApi = {
   },
   updateQuestion: async (examId: number, questionId: number, payload: QuestionDTO): Promise<ExamDTO> => {
     const response = await axiosInstance.put<ExamDTO>(`/exams/${examId}/questions/${questionId}`, payload);
+    return response.data;
+  },
+  // Question Pool - Random Question Selection
+  getQuestionPoolConfig: async (examId: number) => {
+    const response = await axiosInstance.get<ExamQuestionPoolConfigResponse>(
+        `/exams/${examId}/question-pool`
+    );
+    return response.data;
+  },
+
+  saveQuestionPoolConfig: async (
+      examId: number,
+      request: ExamQuestionPoolConfigRequest
+  ) => {
+    const response = await axiosInstance.put<ExamQuestionPoolConfigResponse>(
+        `/exams/${examId}/question-pool`,
+        request
+    );
+    return response.data;
+  },
+
+  getQuestionPoolVersionHistory: async (examId: number) => {
+    const response = await axiosInstance.get(
+        `/exams/${examId}/question-pool/versions`
+    );
     return response.data;
   },
 };

@@ -97,4 +97,8 @@ public class ExamAttempt extends BaseEntity {
     @OneToMany(mappedBy = "attempt", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("displayOrder ASC")
     private List<ExamAttemptQuestion> questions = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pool_version_id")
+    private ExamQuestionPoolVersion poolVersion;
 }

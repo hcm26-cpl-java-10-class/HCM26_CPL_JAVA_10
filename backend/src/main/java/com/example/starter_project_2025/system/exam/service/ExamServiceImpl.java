@@ -264,6 +264,83 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		return exam;
 	}
 
+	public Exam getExamForPoolConfiguration(Long examId) {
+		checkPermission(CrudAction.UPDATE);
+		return findExam(examId);
+	}
+
+	/**
+	 * Lấy các câu hỏi đã thuộc Exam để cấu hình Question Pool.
+	 * Không tạo bản sao từ Question Bank.
+	 */
+	public List<Question> getQuestionsForPoolConfiguration(
+			Long examId,
+			List<Long> questionIds
+	) {
+		checkPermission(CrudAction.UPDATE);
+
+		Exam exam = findExam(examId);
+
+		if (questionIds == null || questionIds.isEmpty()) {
+			throw new BadRequestException(
+					"Question Pool phải có ít nhất một câu hỏi"
+			);
+		}
+
+		Set<Long> uniqueIds = new LinkedHashSet<>(questionIds);
+
+		if (uniqueIds.contains(null)) {
+			throw new BadRequestException(
+					"Question ID không được để trống"
+			);
+		}
+
+		if (uniqueIds.size() != questionIds.size()) {
+			throw new BadRequestException(
+					"Question Pool không được chứa câu hỏi trùng lặp"
+			);
+		}
+
+		Map<Long, Question> examQuestions = exam.getQuestions().stream()
+				.collect(Collectors.toMap(
+						Question::getId,
+						question -> question
+				));
+
+		List<Question> selectedQuestions = new ArrayList<>();
+
+		for (Long questionId : questionIds) {
+			Question question = examQuestions.get(questionId);
+
+			if (question == null) {
+				throw new BadRequestException(
+						"Câu hỏi " + questionId
+								+ " không thuộc đề thi này"
+				);
+			}
+
+			if (!Boolean.TRUE.equals(question.getIsActive())) {
+				throw new BadRequestException(
+						"Câu hỏi " + questionId + " đã bị vô hiệu hóa"
+				);
+			}
+
+			if (!ExamTypePolicy.allows(
+					exam.getExamType(),
+					question.getType()
+			)) {
+				throw new BadRequestException(
+						"Câu hỏi " + questionId
+								+ " không phù hợp với loại đề thi"
+				);
+			}
+
+			selectedQuestions.add(question);
+		}
+
+		return selectedQuestions;
+	}
+
 	/** Giao vien (khong phai ADMIN) chi duoc thay/quan ly de thi do chinh minh tao; ADMIN va vai tro khac khong bi gioi han. */
 	private Long ownerScopeUserId() {
 		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
