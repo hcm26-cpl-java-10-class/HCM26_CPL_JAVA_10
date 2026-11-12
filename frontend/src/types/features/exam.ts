@@ -114,6 +114,7 @@ export interface ExamDTO {
   shuffleOptions?: boolean;
   showAnswersAfterExam?: boolean;
   passScore?: number | null;
+  courseWeight?: number | null;
   maxScore?: number | null;
   latePolicy?: LatePolicy;
   latePenaltyPercent?: number | null;
@@ -169,6 +170,7 @@ export interface CourseExam {
   examType: ExamType;
   durationMinutes: number;
   maxAttempts: number | null;
+  courseWeight?: number | null;
   maxScore: number | null;
   passScore: number | null;
   isActive: boolean;

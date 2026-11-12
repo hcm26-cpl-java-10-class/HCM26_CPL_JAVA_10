@@ -10,6 +10,10 @@ import java.util.Optional;
 @Repository
 public interface CourseRepository extends BaseCrudRepository<Course, Long> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from Course c where c.id = :id")
+    Optional<Course> findLockedForAssessment(Long id);
+
     boolean existsByName(String name);
 
     boolean existsBySyllabus_Id(Long syllabusId);

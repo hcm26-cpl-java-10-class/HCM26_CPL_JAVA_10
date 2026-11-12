@@ -22,6 +22,18 @@ class CurriculumValidatorTest {
     private final CurriculumValidator validator = new CurriculumValidator(sectionRepository, lessonRepository);
 
     @Test
+    void assessmentLessonsRequireInstructionsWithoutRequiringAResourceUrl() {
+        for (LessonContentType type:List.of(LessonContentType.QUIZ,LessonContentType.EXAM,LessonContentType.ASSIGNMENT)) {
+            assertLessonIssue(Lesson.builder().contentType(type).textContent(" ").build(),"LESSON_TEXT_MISSING");
+            Section section=section();
+            Lesson lesson=Lesson.builder().id(30L).section(section).contentType(type).textContent("Complete the linked assessment").build();
+            when(sectionRepository.findByCourse_IdOrderByOrderIndexAsc(10L)).thenReturn(List.of(section));
+            when(lessonRepository.findActiveByCourseIdOrdered(10L)).thenReturn(List.of(lesson));
+            assertTrue(validator.validatePublish(10L).errors().isEmpty());
+        }
+    }
+
+    @Test
     void rejectsCourseWithoutSections() {
         when(sectionRepository.findByCourse_IdOrderByOrderIndexAsc(10L)).thenReturn(List.of());
 

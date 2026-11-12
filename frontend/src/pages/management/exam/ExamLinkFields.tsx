@@ -41,6 +41,14 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
     queryFn: () => examApi.getLinkCourses(),
     staleTime: 60_000,
   });
+  const allocation = useQuery({
+    queryKey: ["course-assessment-allocation", courseId],
+    queryFn: () => examApi.listByCourse(courseId as number),
+    enabled: courseId != null,
+    staleTime: 0,
+  });
+  const allocated = Math.round((allocation.data ?? []).reduce((total, exam) => total + (exam.courseWeight ?? 0), 0) * 100) / 100;
+  const unset = (allocation.data ?? []).filter(exam => exam.courseWeight == null).length;
   const sections = useQuery({
     queryKey: ["exam-link-sections", courseId],
     queryFn: () => examApi.getLinkSections(courseId as number),
@@ -82,6 +90,11 @@ export function ExamLinkFields({ cfg, setCfg }: Props) {
 
   return (
     <div className="grid min-w-0 max-w-full content-start gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-3">
+      {courseId != null && <p className="text-sm sm:col-span-2" role="status">
+        {allocation.isError ? "Could not load the course weight allocation." : allocation.isPending ? "Loading course weights…" :
+          `Saved course allocation: ${allocated}/100%. Remaining: ${Math.round((100 - allocated) * 100) / 100}%. ${unset} assessment(s) without a weight.`}
+      </p>}
+
       <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:col-span-3">
         Course (optional)
       </h3>

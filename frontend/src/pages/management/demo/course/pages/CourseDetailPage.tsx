@@ -1,3 +1,4 @@
+import { CourseAssessmentPanel } from "../components/CourseAssessmentPanel";
 import { PermissionGate } from "@/components/PermissionGate";
 
 import { courseApi, departmentApi, enrollmentApi, progressApi } from "@/api";
@@ -21,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { CourseDetail, CourseDetailLesson, CourseDetailSection, DepartmentMember, LessonContentType } from "@/types";
+import type { CourseDetailAssessment, CourseDetail, CourseDetailLesson, CourseDetailSection, DepartmentMember, LessonContentType } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -45,8 +46,8 @@ import {
   Video,
   type LucideIcon,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import {
@@ -62,6 +63,9 @@ const CONTENT_ICON: Record<LessonContentType, LucideIcon> = {
   VIDEO: Video,
   AUDIO: Music2,
   TEXT: FileText,
+  QUIZ: FileText,
+  EXAM: FileText,
+  ASSIGNMENT: FileText,
   DOCUMENT: FileText,
   LINK: Link2,
 };
@@ -120,7 +124,7 @@ export function CourseDetailPage({ forceEnrollmentManagement = false }: { forceE
             </Button>
           </div>
         ) : (
-          <CourseDetailContent course={course} enrollmentManagement={enrollmentManagement} />
+          <><CourseDetailContent course={course} enrollmentManagement={enrollmentManagement} /><CourseAssessmentPanel courseId={course.id} /></>
         )}
       </div>
     </MainLayout>
@@ -818,6 +822,10 @@ function DepartmentEnrollmentControl({ courseId }: { courseId: number }) {
 }
 
 function Syllabus({ course }: { course: CourseDetail }) {
+  const { hasPermission } = usePermissions();
+  const canManage = hasPermission("COURSE_UPDATE");
+  const assessments = course.assessments ?? [];
+  const courseAssessments = assessments.filter(item => item.sectionId == null && item.lessonId == null);
   const sections = [...course.sections].sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 
   return (
@@ -830,7 +838,7 @@ function Syllabus({ course }: { course: CourseDetail }) {
 
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-sm text-muted-foreground">
-            {sections.length} sections · {course.lessonCount} lessons
+            {sections.length} sections · {course.lessonCount} lessons{assessments.length > 0 ? ` · ${assessments.length} assessments` : ""}
           </p>
 
           <PermissionGate
@@ -855,10 +863,17 @@ function Syllabus({ course }: { course: CourseDetail }) {
       ) : (
         <div className="mt-1.5 space-y-1">
           {sections.map((section, index) => (
-            <SectionItem key={section.id} section={section} index={index} defaultOpen={index === 0} />
+            <SectionItem key={section.id} section={section} index={index} defaultOpen={index === 0}
+              assessments={assessments.filter(item => item.sectionId === section.id)} enrolled={course.enrolled} canManage={canManage} />
           ))}
         </div>
       )}
+
+      {courseAssessments.length > 0 && <div className="mt-2 rounded-xl border">
+        <h3 className="bg-muted/40 px-3 py-2 font-medium">Course assessments</h3>
+        <ul className="divide-y">{courseAssessments.map(assessment => <AssessmentOutlineRow key={assessment.id} assessment={assessment} enrolled={course.enrolled} canManage={canManage} />)}</ul>
+      </div>}
+      {assessments.length > 0 && <p className="mt-2 text-xs text-muted-foreground">Assessment access follows enrollment, invitation and lesson-prerequisite requirements.</p>}
 
       {!course.contentUnlocked && sections.length > 0 && (
         <p className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
@@ -873,7 +888,9 @@ function SectionItem({
   section,
   index,
   defaultOpen,
+  assessments, enrolled, canManage,
 }: {
+  assessments: CourseDetailAssessment[]; enrolled: boolean; canManage: boolean;
   section: CourseDetailSection;
   index: number;
   defaultOpen: boolean;
@@ -894,25 +911,47 @@ function SectionItem({
               Section {index + 1}: {section.title}
             </span>
             <span className="block text-xs text-muted-foreground">
-              {lessons.length} lessons · {formatTotalDuration(totalSeconds)}
+              {lessons.length} lessons{assessments.length > 0 ? ` · ${assessments.length} assessments` : ""} · {formatTotalDuration(totalSeconds)}
             </span>
           </span>
           <ChevronDown className={`size-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        {lessons.length === 0 ? (
+        {lessons.length === 0 && assessments.length === 0 ? (
           <p className="px-3 py-2 text-sm text-muted-foreground">No lessons in this section yet.</p>
         ) : (
           <ul className="divide-y">
-            {lessons.map((lesson) => (
-              <LessonRow key={lesson.id} lesson={lesson} />
-            ))}
+            {lessons.map((lesson) => <Fragment key={lesson.id}>
+              <LessonRow lesson={lesson} />
+              {assessments.filter(item => item.lessonId === lesson.id).map(assessment =>
+                <AssessmentOutlineRow key={assessment.id} assessment={assessment} enrolled={enrolled} canManage={canManage} />)}
+            </Fragment>)}
+            {assessments.filter(item => item.lessonId == null).map(assessment =>
+              <AssessmentOutlineRow key={assessment.id} assessment={assessment} enrolled={enrolled} canManage={canManage} />)}
           </ul>
         )}
       </CollapsibleContent>
     </Collapsible>
   );
+}
+
+function AssessmentOutlineRow({ assessment, enrolled, canManage }: {
+  assessment: CourseDetailAssessment; enrolled: boolean; canManage: boolean;
+}) {
+  const location = useLocation();
+  const returnQuery = "?returnTo=" + encodeURIComponent(location.pathname + location.search + "#course-assessments");
+  const label = { QUIZ: "Quiz", ASSIGNMENT: "Assignment", MIDTERM: "Midterm exam", FINAL_TEST: "Final exam" }[assessment.category] || "Assessment";
+  return <li className="flex flex-wrap items-center justify-between gap-2 bg-muted/20 px-3 py-2 text-sm">
+    <div className="flex min-w-0 flex-1 items-start gap-3"><FileText className="mt-1 size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0"><p className="break-words font-medium">{assessment.title}</p>
+        <p className="text-xs text-muted-foreground">{label} · {assessment.courseWeight == null ? "Weight not set" : `${assessment.courseWeight}% of course grade`}
+          {assessment.durationMinutes != null ? ` · ${assessment.durationMinutes} min` : ""}</p></div>
+    </div>
+    {canManage ? <Button asChild variant="outline" size="sm"><Link to={`/exams/${assessment.id}${returnQuery}`}>Manage assessment</Link></Button> :
+      enrolled ? <Button asChild variant="outline" size="sm"><Link to={`/student/exams/${assessment.id}/take`}>Open assessment</Link></Button> :
+      <span className="text-xs text-muted-foreground">Enroll to take this assessment</span>}
+  </li>;
 }
 
 function LessonRow({ lesson }: { lesson: CourseDetailLesson }) {

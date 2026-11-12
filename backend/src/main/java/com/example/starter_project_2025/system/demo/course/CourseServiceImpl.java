@@ -45,6 +45,7 @@ public class CourseServiceImpl
     SyllabusRepository syllabusRepository;
     CurriculumValidator curriculumValidator;
     NotificationService notificationService;
+    CourseAssessmentService assessments;
 
     @Override
     protected BaseCrudRepository<Course, Long> getRepository() {
@@ -131,6 +132,12 @@ public class CourseServiceImpl
             return;
         }
 
+        validatePublishRequirements(course, request, ctx);
+    }
+
+    private void validatePublishRequirements(Course course, CourseDTO request, ValidationContext ctx) {
+        CourseAssessmentService.Plan plan=assessments.plan(course.getId());
+        if (!plan.ready()) plan.issues().forEach(issue->ctx.add("status",issue));
         if (course.getInstructorUser() == null) {
             ctx.add("instructorId", "Assign an instructor before publishing");
         }

@@ -98,6 +98,18 @@ class ExamAttemptServiceTest {
     }
 
     @Test
+    void anonymousGuestCannotBypassCourseEnrollment() {
+        Exam exam=attempt.getExam();
+        exam.setCategory(ExamCategory.QUIZ);
+        exam.setCourse(com.example.starter_project_2025.system.demo.course.Course.builder().id(1L).build());
+        when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
+        when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L,40L)).thenReturn(List.of());
+        when(progressLockService.requiresCourseEnrollment(exam)).thenReturn(true);
+        doThrow(new AccessDeniedException("Enrollment required")).when(progressLockService).assertUnlocked(exam,40L);
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->service.startOrResumeForGuest(20L,40L));
+    }
+
+    @Test
     void startOrResumeRejectsStudentWithoutAcceptedInvitation() {
         Exam exam = attempt.getExam();
         exam.setIsActive(true);

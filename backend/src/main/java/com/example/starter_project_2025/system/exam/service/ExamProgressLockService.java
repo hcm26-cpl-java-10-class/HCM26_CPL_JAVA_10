@@ -29,6 +29,7 @@ public class ExamProgressLockService {
     private final CourseEnrollmentRepository enrollmentRepository;
     private final LessonProgressRepository progressRepository;
     private final LessonRepository lessonRepository;
+    private final com.example.starter_project_2025.system.demo.course.CourseAssessmentService assessments;
     private final ExamRepository examRepository;
     private final UserRepository userRepository;
 
@@ -92,6 +93,7 @@ public class ExamProgressLockService {
             }
             return;
         }
+        assessments.assertReady(exam.getCourse().getId());
         LockState state = evaluate(exam, completed, new HashMap<>(), new HashMap<>());
         if (state.locked()) {
             throw new AccessDeniedException(state.reason());
@@ -119,6 +121,13 @@ public class ExamProgressLockService {
         }
         if (exam.getLesson() != null) {
             Lesson lesson = exam.getLesson();
+            if (com.example.starter_project_2025.system.demo.course.CourseAssessmentService.isAssessment(lesson)) {
+                long remaining=lessonRepository.findBySection_IdOrderByOrderIndexAsc(lesson.getSection().getId()).stream()
+                        .filter(l->!Boolean.FALSE.equals(l.getIsActive()))
+                        .filter(l->l.getOrderIndex()<lesson.getOrderIndex())
+                        .filter(l->!completed.contains(l.getId())).count();
+                return remaining==0?LockState.OPEN:new LockState(true,"Complete earlier lessons in this section to unlock this assessment");
+            }
             if (!completed.contains(lesson.getId())) {
                 return new LockState(true,
                         "Complete the lesson \"" + lesson.getTitle() + "\" to unlock this exam");

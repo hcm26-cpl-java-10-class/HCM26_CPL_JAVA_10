@@ -1,3 +1,4 @@
+import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
 import ScoreManagementPage from "@/pages/management/exam/score-management";
 import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
 import { Logout } from "@/components/auth/Logout";
@@ -108,6 +109,7 @@ export const ROLE_HOME_PATHS = [
 ] as const;
 
 export const routes: RouteConfig[] = [
+  { path: "/courses/:id/grades", component: CourseLearnerGradesPage, requiredPermissions: ["COURSE_REPORT_READ", "EXAM_READ"] },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
   { path: "/management/reports/projects", component: ProjectReportsPage, requiredPermission: "PROJECT_REPORT_READ" },

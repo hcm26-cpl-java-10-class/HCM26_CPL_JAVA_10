@@ -1,3 +1,4 @@
+import { COURSE_GRADE_STATUS_LABEL } from "@/types/features/course-my-scores";
 import { courseApi } from "@/api/features/demo/course.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -193,7 +194,7 @@ export default function CourseGradeDetailPage() {
                                                                     : "outline"
                                                         }
                                                     >
-                                                        {course.resultStatus}
+                                                        {COURSE_GRADE_STATUS_LABEL[course.resultStatus] || course.resultStatus}
                                                     </Badge>
                                                 ) : (
                                                     <span className="text-2xl font-semibold">

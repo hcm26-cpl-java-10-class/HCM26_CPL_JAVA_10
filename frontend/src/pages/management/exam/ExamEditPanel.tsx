@@ -1,3 +1,4 @@
+import { assessmentReturnPath } from "@/utils/assessment-navigation";
 import { examApi, examTemplateApi } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -6,7 +7,7 @@ import type { ExamDTO } from "@/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookmarkPlus, Save, ShieldAlert, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ExamConfigFields } from "./ExamConfigFields";
 import { buildExamRequest, configFromExam, DEFAULT_CONFIG, getErrorMessage, validateConfig, type ExamConfigForm } from "./examConfig";
@@ -14,6 +15,9 @@ import { buildExamRequest, configFromExam, DEFAULT_CONFIG, getErrorMessage, vali
 export function ExamEditPanel({ examId }: { examId: number }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { search } = useLocation();
+  const returnTo = assessmentReturnPath(new URLSearchParams(search).get("returnTo"));
+  const returnQuery = returnTo === "/exams" ? "" : "?returnTo=" + encodeURIComponent(returnTo);
   const examQuery = useQuery({
     queryKey: ["exam-detail", examId],
     queryFn: () => examApi.getById(String(examId)),
@@ -60,7 +64,7 @@ export function ExamEditPanel({ examId }: { examId: number }) {
       queryClient.removeQueries({ queryKey: ["exam-detail", examId] });
       void queryClient.invalidateQueries({ queryKey: ["exam-management"] });
       toast.success("Exam deleted successfully");
-      navigate("/exams");
+      navigate(returnTo);
     },
     onError: (error) => toast.error(getErrorMessage(error, "Failed to delete exam")),
   });
@@ -175,7 +179,7 @@ export function ExamEditPanel({ examId }: { examId: number }) {
               type="button"
               variant="outline"
               className="text-purple-700 hover:text-purple-800 dark:text-purple-300"
-              onClick={() => navigate(`/exams/${examId}/similarity`)}
+              onClick={() => navigate(`/exams/${examId}/similarity${returnQuery}`)}
             >
               <ShieldAlert className="mr-2 size-4 text-purple-600" />
               AI Similarity Check
