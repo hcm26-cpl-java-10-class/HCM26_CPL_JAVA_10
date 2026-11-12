@@ -22,11 +22,12 @@ export function TeamMilestoneDetailPage() {
     retry: false,
   });
   const routeReturn = (location.state as { returnTo?: unknown } | null)?.returnTo;
+  const reportReturn = typeof routeReturn === "string" && (routeReturn === "/management/reports/projects" || routeReturn.startsWith("/management/reports/projects?")) ? routeReturn : null;
   const workspaceReturn = typeof routeReturn === "string" && workspaceId
     && routeReturn.startsWith(`/management/workspaces/${workspaceId}?`)
     && new URLSearchParams(routeReturn.split("?")[1]).get("tab") === "milestones"
     ? routeReturn : null;
-  const back = () => navigate(workspaceReturn ?? (workspaceId ? `/management/workspaces/${workspaceId}?tab=milestones` : "/milestones/teams"));
+  const back = () => navigate(reportReturn ?? workspaceReturn ?? (workspaceId ? `/management/workspaces/${workspaceId}?tab=milestones` : "/milestones/teams"));
 
   if (query.isPending) return <MainLayout pathName={{ milestones: "Milestone" }}><div className="mx-auto grid max-w-6xl gap-5"><Skeleton className="h-52 rounded-xl" /><Skeleton className="h-10 w-full rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div></MainLayout>;
   if (query.isError || !query.data) return <MainLayout pathName={{ milestones: "Milestone" }}>
@@ -35,6 +36,6 @@ export function TeamMilestoneDetailPage() {
 
   const milestone = query.data;
   return <MainLayout pathName={{ milestones: "Milestones", [milestone.id]: milestone.title }}>
-    <MilestoneDetailView milestone={milestone} teamId={teamId} workspaceId={workspaceId} backLabel={workspaceId ? "Back to workspace" : "Choose team"} onBack={back} onRefresh={() => { void query.refetch(); }} />
+    <MilestoneDetailView milestone={milestone} teamId={teamId} workspaceId={workspaceId} backLabel={reportReturn ? "Quay lại Project Dashboard" : workspaceId ? "Back to workspace" : "Choose team"} onBack={back} onRefresh={() => { void query.refetch(); }} />
   </MainLayout>;
 }

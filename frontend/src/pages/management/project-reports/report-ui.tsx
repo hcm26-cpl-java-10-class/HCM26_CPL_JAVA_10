@@ -20,15 +20,15 @@ export function BacklogSummary({ counts, expanded = false }: { counts: BacklogCo
     { label: "Done", value: counts.done, color: "bg-emerald-500", note: "Đã hoàn thành", style: "border-emerald-100 bg-emerald-50 text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300" },
     ...(counts.other ? [{ label: "Khác", value: counts.other, color: "bg-violet-500", note: "Trạng thái khác", style: "border-violet-100 bg-violet-50 text-violet-700 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-300" }] : []),
   ];
-  if (expanded) return <div className="space-y-4">
+  if (expanded) return <div data-report-backlog-summary className="space-y-3">
     <div role="img" aria-label={"Phân bố backlog: " + entries.map(entry => `${entry.label}: ${entry.value}`).join(". ")}
       className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-slate-100 p-0.5 dark:bg-muted">
       {counts.total > 0 && entries.filter(entry => entry.value > 0).map(entry => <span aria-hidden="true" key={entry.label} title={`${entry.label}: ${entry.value}`} className={"min-w-[3px] rounded-full " + entry.color} style={{ flexGrow: entry.value, flexBasis: 0 }} />)}
     </div>
     <dl className={"grid grid-cols-2 gap-2.5 " + (counts.other ? "@[640px]/reports:grid-cols-3" : "@[640px]/reports:grid-cols-4")}>
-      {entries.map(entry => <div key={entry.label} className={"min-w-0 rounded-lg border p-3 " + entry.style}>
-        <dt className="flex items-center justify-between gap-1.5 text-[11px] font-medium"><span>{entry.label}</span><span aria-hidden="true" className={"size-2 shrink-0 rounded-full " + entry.color} /></dt>
-        <dd className="mt-2.5 text-[26px] font-semibold leading-none tracking-tight tabular-nums">{entry.value.toLocaleString("vi-VN")}</dd><dd className="mt-1.5 text-[10px] leading-4 opacity-75">{entry.note}</dd>
+      {entries.map(entry => <div key={entry.label} className={"min-w-0 rounded-lg border p-2.5 " + entry.style}>
+        <dt className="flex items-center justify-between gap-1.5 text-[10px] font-medium"><span>{entry.label}</span><span aria-hidden="true" className={"size-2 shrink-0 rounded-full " + entry.color} /></dt>
+        <dd className="mt-2 text-2xl font-semibold leading-none tracking-tight tabular-nums">{entry.value.toLocaleString("vi-VN")}</dd><dd className="mt-1.5 text-[10px] leading-4 opacity-75">{entry.note}</dd>
       </div>)}
     </dl>
   </div>;

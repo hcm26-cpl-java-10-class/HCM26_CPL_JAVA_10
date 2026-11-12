@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -22,7 +23,9 @@ import static com.example.starter_project_2025.system.project.report.ProjectRepo
 @Transactional(readOnly=true)
 public class ProjectReportService {
     public record Snapshot(ProjectReportScopeService.Actor actor,Filter filter,List<SubProject> all,
-                           List<SubProject> matching,Instant asOf) { }
+                           List<SubProject> matching,Instant asOf,ProjectReportQueryRepository.Source source) { }
+    public record ExportData(Snapshot snapshot, Overview overview, WorkReport work, List<DeliveryRow> deliveries,
+                             List<RiskRow> risks, List<ActivityRow> activities) { }
     private final ProjectReportScopeService scope;
     private final ProjectReportQueryRepository queries;
     private final ProjectReportStatusPolicy statuses;
@@ -30,6 +33,9 @@ public class ProjectReportService {
     private final ProjectReportActivityService activity;
     private final MemberReminderSettings inactivity;
     private final ProjectReportSettings settings;
+    private final ProjectReportKpiService kpis;
+    private final ProjectReportWorkService work;
+    private final ProjectReportFeedService feed;
     @org.springframework.beans.factory.annotation.Autowired @Qualifier("projectReportClock") private Clock clock;
 
     public Options options() {
@@ -46,7 +52,8 @@ public class ProjectReportService {
                 rows.stream().filter(r->r.teamId()!=null).collect(Collectors.toMap(SubProject::teamId,
                         r->new TeamOption(r.teamId(),r.teamName(),r.classId()),(a,b)->a)).values().stream()
                         .sorted(Comparator.comparing(TeamOption::name)).toList(),
-                actor.canExport(),settings.getTimeZone(),inactivity.inactiveWindow().toDays());
+                actor.canExport(),settings.getTimeZone(),inactivity.inactiveWindow().toDays(),
+                rows.stream().map(row -> new ProjectOption(row.id(), row.code() + " · " + row.name(), row.masterId(), row.classId(), row.teamId())).toList());
     }
     private List<Option> options(List<SubProject> rows,Function<SubProject,Long> id,Function<SubProject,String> name) {
         Map<Long,String> values=new HashMap<>();
@@ -55,6 +62,21 @@ public class ProjectReportService {
     }
     public Dashboard dashboard(Filter request) { return dashboard(snapshot(scope.current(ProjectReportScopeService.READ),request)); }
     public Snapshot exportSnapshot(Long actorId,Filter request) { return snapshot(scope.actor(actorId,ProjectReportScopeService.EXPORT),request); }
+    public void validateExport(Long actorId, Filter request) {
+        var snapshot = exportSnapshot(actorId, request);
+        if (snapshot.filter().workSprintId() != null) work.load(snapshot);
+    }
+    public ExportData exportData(Long actorId, Filter request) {
+        var snapshot = exportSnapshot(actorId, request);
+        var result = kpis.evaluate(snapshot);
+        return new ExportData(snapshot, result.overview(), work.load(snapshot), result.deliveries(), result.risks(), feed.all(snapshot, snapshot.asOf()));
+    }
+    public ActivityPage activities(Filter request, int offset, int limit, Instant before) {
+        return feed.page(snapshot(scope.current(ProjectReportScopeService.READ), request), offset, limit, before);
+    }
+    public ActivityHistory activityHistory(Filter request, int page, int size, LocalDate from, LocalDate to, Instant before) {
+        return feed.history(snapshot(scope.current(ProjectReportScopeService.READ), request), page, size, from, to, before);
+    }
     public Set<Long> readableProjectIds(ProjectReportScopeService.Actor actor) {
         return queries.load(actor).entries().values().stream().filter(entry->!entry.contextOnly())
                 .map(entry->entry.project().getId()).collect(Collectors.toSet());
@@ -62,12 +84,13 @@ public class ProjectReportService {
     private Snapshot snapshot(ProjectReportScopeService.Actor actor,Filter request) {
         Filter filter=(request==null?Filter.empty():request).normalized();validate(filter);
         Instant now=clock.instant();
-        List<SubProject> all=rows(queries.load(actor),now,true);
+        var source=queries.load(actor);
+        List<SubProject> all=rows(source,now,true);
         validateScope(filter,all);
         var matching=all.stream().filter(row->!row.contextOnly())
                 .filter(row->filter.status()==null||row.parentProjectId()!=null)
                 .filter(row->matches(row,filter)).toList();
-        return new Snapshot(actor,filter,all,matching,now);
+        return new Snapshot(actor,filter,all,matching,now,source);
     }
     public List<Master> masters(Snapshot snapshot) {
         Map<String,List<SubProject>> full=snapshot.all().stream().collect(Collectors.groupingBy(SubProject::masterKey));
@@ -102,8 +125,10 @@ public class ProjectReportService {
                 matching.stream().flatMap(row->row.inactiveMembers().stream()).map(InactiveMember::userId).distinct().count(),
                 matching.stream().filter(row->row.lateMilestones()>0).count());
         Filter filter=snapshot.filter();int from=(int)Math.min((long)filter.page()*filter.size(),masters.size());
+        var operational = kpis.evaluate(snapshot);
         return new Dashboard(summary,counts,masters.subList(from,Math.min(from+filter.size(),masters.size())),
-                masters.size(),filter.page(),filter.size(),snapshot.asOf(),settings.getTimeZone(),inactivity.inactiveWindow().toDays());
+                masters.size(),filter.page(),filter.size(),snapshot.asOf(),settings.getTimeZone(),inactivity.inactiveWindow().toDays(),
+                operational.overview(), work.load(snapshot), operational.deliveries(), operational.risks(), feed.page(snapshot, 0, 10, null));
     }
     private List<SubProject> rows(ProjectReportQueryRepository.Source source,Instant now,boolean includeActivity) {
         Map<Long,List<InactiveMember>> inactive=includeActivity?activity.load(source,now):Map.of();
@@ -155,7 +180,7 @@ public class ProjectReportService {
         return List.copyOf(result);
     }
     private boolean matches(SubProject row,Filter filter) {
-        if(!eq(filter.programId(),row.programId())||!eq(filter.cohortId(),row.cohortId())||!eq(filter.classId(),row.classId())
+        if(!eq(filter.masterId(),row.masterId())||!eq(filter.programId(),row.programId())||!eq(filter.cohortId(),row.cohortId())||!eq(filter.classId(),row.classId())
                 ||!eq(filter.mentorId(),row.mentorId())||!eq(filter.templateId(),row.templateId())
                 ||!eq(filter.sourceVersionId(),row.sourceVersionId())||!eq(filter.teamId(),row.teamId())||!eq(filter.projectId(),row.id()))return false;
         if(!filter.includeCancelled()&&(row.status()==Status.CANCELLED||row.masterStatus()==Status.CANCELLED)
@@ -173,13 +198,14 @@ public class ProjectReportService {
         if(filter.page()<0||filter.size()<1||filter.size()>50||filter.q().length()>120)throw invalid("Invalid page, page size or search text");
         if(filter.createdFrom()!=null&&filter.createdTo()!=null&&filter.createdFrom().isAfter(filter.createdTo()))throw invalid("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc");
         if((filter.status()==Status.CANCELLED||filter.masterStatus()==Status.CANCELLED)&&!filter.includeCancelled())throw invalid("Bật hiển thị Project đã hủy trước khi lọc CANCELLED");
-        for(Long id:new Long[]{filter.programId(),filter.cohortId(),filter.classId(),filter.mentorId(),filter.templateId(),filter.sourceVersionId(),filter.teamId(),filter.projectId()})
+        for(Long id:new Long[]{filter.programId(),filter.cohortId(),filter.classId(),filter.mentorId(),filter.templateId(),filter.sourceVersionId(),filter.teamId(),filter.projectId(),filter.masterId(),filter.workSprintId()})
             if(id!=null&&id<=0)throw invalid("Filter IDs must be positive");
     }
     private void validateScope(Filter filter,List<SubProject> rows) {
         check(filter.programId(),rows,SubProject::programId);check(filter.cohortId(),rows,SubProject::cohortId);check(filter.classId(),rows,SubProject::classId);
         check(filter.mentorId(),rows,SubProject::mentorId);check(filter.templateId(),rows,SubProject::templateId);
         check(filter.sourceVersionId(),rows,SubProject::sourceVersionId);check(filter.teamId(),rows,SubProject::teamId);check(filter.projectId(),rows,SubProject::id);
+        check(filter.masterId(),rows,SubProject::masterId);
     }
     private void check(Long id,List<SubProject> rows,Function<SubProject,Long> field) {
         if(id!=null&&rows.stream().noneMatch(row->id.equals(field.apply(row))))throw new AccessDeniedException("Bộ lọc nằm ngoài dữ liệu báo cáo được phép xem");

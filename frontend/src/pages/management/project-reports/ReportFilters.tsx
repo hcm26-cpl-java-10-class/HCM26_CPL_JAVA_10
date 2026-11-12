@@ -41,8 +41,12 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
   const [open, setOpen] = useState(false);
   const update = (changes: Partial<ReportFilters>) => onChange({ ...value, ...changes });
   const classes = options.classes.filter(c => (!value.programId || c.programId === value.programId) && (!value.cohortId || c.cohortId === value.cohortId));
+  const projects = (options.projects ?? []).filter(p => classes.some(c => c.id === p.classId) && (!value.classId || p.classId === value.classId));
+  const masters = projects.filter(p => p.id === p.masterId);
+  const teams = options.teams.filter(t => classes.some(c => c.id === t.classId) && (!value.classId || t.classId === value.classId)
+    && (!value.masterId || projects.some(p => p.masterId === value.masterId && p.teamId === t.id)));
   const activeCount = [applied.programId, applied.cohortId, applied.classId, applied.teamId,
-    applied.mentorId, applied.templateId, applied.sourceVersionId, applied.projectId,
+    applied.mentorId, applied.templateId, applied.sourceVersionId, applied.projectId, applied.masterId,
     applied.masterStatus, applied.status, applied.createdFrom, applied.createdTo].filter(item => item !== undefined && item !== "").length
     + Number(!!applied.risk && applied.risk !== "ALL");
 
@@ -51,15 +55,16 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
   const appliedLabels = [name("Chương trình", applied.programId, options.programs), name("Cohort", applied.cohortId, options.cohorts),
     name("Lớp", applied.classId, options.classes), name("Team", applied.teamId, options.teams), name("Mentor", applied.mentorId, options.mentors),
     name("Đề bài", applied.templateId, options.templates), name("Phiên bản", applied.sourceVersionId, options.versions),
+    name("Master", applied.masterId, options.projects ?? []), name("Project", applied.projectId, options.projects ?? []),
     applied.masterStatus ? "Master: " + statusLabels[applied.masterStatus] : "", applied.status ? "Sub-project: " + statusLabels[applied.status] : "", applied.risk ? riskLabels[applied.risk] : "",
     applied.createdFrom ? `Từ ${applied.createdFrom}` : "", applied.createdTo ? `Đến ${applied.createdTo}` : "",
     applied.q ? `Tìm: ${applied.q}` : ""].filter(Boolean);
 
-  return <div className="space-y-2.5 rounded-xl border border-slate-200/80 bg-card p-2.5 shadow-xs dark:border-border" aria-label="Bộ lọc báo cáo"><div className="flex flex-wrap items-center gap-2.5">
+  return <div className="space-y-2.5" aria-label="Bộ lọc báo cáo"><div className="flex min-w-0 flex-wrap items-center gap-2.5">
     <Popover open={open} onOpenChange={setOpen}>
       <TooltipWrapper content="Filter data">
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs shadow-none">
+          <Button variant="outline" size="sm" className="gap-1.5 bg-card text-xs shadow-xs">
             <Filter size={14} />Filters
             {activeCount > 0 && <Badge className="ml-0.5 h-5 min-w-5 rounded-full px-1.5 text-xs">{activeCount}</Badge>}
           </Button>
@@ -72,10 +77,12 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
         </div>
         <form className="flex min-h-0 flex-col overflow-hidden" onSubmit={event => { event.preventDefault(); onApply(); setOpen(false); }}>
           <div className="grid min-h-0 gap-3 overflow-y-auto p-3">
-            <FilterSelect label="Chương trình đào tạo" value={value.programId} options={options.programs} onChange={programId => update({ programId, classId: undefined, teamId: undefined })} />
-            <FilterSelect label="Khóa / Cohort" value={value.cohortId} options={options.cohorts} onChange={cohortId => update({ cohortId, classId: undefined, teamId: undefined })} />
-            <FilterSelect label="Lớp" value={value.classId} options={classes} onChange={classId => update({ classId, teamId: undefined })} />
-            <FilterSelect label="Team" value={value.teamId} options={options.teams.filter(t => classes.some(c => c.id === t.classId) && (!value.classId || t.classId === value.classId))} onChange={teamId => update({ teamId })} />
+            <FilterSelect label="Chương trình đào tạo" value={value.programId} options={options.programs} onChange={programId => update({ programId, cohortId: undefined, classId: undefined, teamId: undefined, masterId: undefined, projectId: undefined, workSprintId: undefined })} />
+            <FilterSelect label="Khóa / Cohort" value={value.cohortId} options={options.cohorts.filter(c => !value.programId || options.classes.some(item => item.programId === value.programId && item.cohortId === c.id))} onChange={cohortId => update({ cohortId, classId: undefined, teamId: undefined, masterId: undefined, projectId: undefined, workSprintId: undefined })} />
+            <FilterSelect label="Lớp" value={value.classId} options={classes} onChange={classId => update({ classId, teamId: undefined, masterId: undefined, projectId: undefined, workSprintId: undefined })} />
+            <FilterSelect label="Master Project" value={value.masterId} options={masters} onChange={masterId => update({ masterId, teamId: undefined, projectId: undefined, workSprintId: undefined })} />
+            <FilterSelect label="Team" value={value.teamId} options={teams} onChange={teamId => update({ teamId, projectId: undefined, workSprintId: undefined })} />
+            <FilterSelect label="Project / phần việc cụ thể" value={value.projectId} options={projects.filter(p => (!value.masterId || p.masterId === value.masterId) && (!value.teamId || p.teamId === value.teamId))} onChange={projectId => update({ projectId, workSprintId: undefined })} />
             <FilterSelect label="Mentor" value={value.mentorId} options={options.mentors} onChange={mentorId => update({ mentorId })} />
             <FilterSelect label="Master Project template" value={value.templateId} options={options.templates} onChange={templateId => update({ templateId, sourceVersionId: undefined })} />
             <FilterSelect label="Phiên bản đề bài" value={value.sourceVersionId} options={options.versions.filter(v => !value.templateId || v.templateId === value.templateId)} onChange={sourceVersionId => update({ sourceVersionId })} />
@@ -112,7 +119,7 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
         </form>
       </PopoverContent>
     </Popover>
-    <div className="contents [&_input]:h-8 [&_input]:bg-slate-50/60 [&_input]:text-xs [&_input]:shadow-none dark:[&_input]:bg-muted/20"><SearchInput compact search={value.q ?? ""} onSearchChange={q => update({ q: q.slice(0, 120) })} /></div>
+    <div className="min-w-0 flex-1 sm:max-w-sm [&_input]:h-8 [&_input]:bg-card [&_input]:text-xs [&_input]:shadow-xs"><SearchInput compact search={value.q ?? ""} onSearchChange={q => update({ q: q.slice(0, 120) })} /></div>
     {(activeCount > 0 || !!applied.q) && <Button type="button" variant="ghost" size="sm" onClick={onReset}>Đặt lại</Button>}
     <span className="ml-auto hidden pr-1 text-[11px] text-muted-foreground md:inline">{activeCount ? `${activeCount} điều kiện đã áp dụng` : "Tất cả dữ liệu trong phạm vi của bạn"}</span>
     </div>

@@ -93,7 +93,7 @@ export function SubmissionReviewPage() {
   if (query.isError || !query.data) return <MainLayout pathName={{ "milestone-submissions": "Milestone reviews" }}><Alert variant="destructive"><AlertCircle /><AlertTitle>Submission could not be loaded</AlertTitle><AlertDescription><Button type="button" variant="outline" className="mt-3" onClick={() => navigate("/milestone-submissions")}>Back to review queue</Button></AlertDescription></Alert></MainLayout>;
   const item = query.data;
   const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
-  const safeReturnTo = returnTo && (returnTo.startsWith("/milestone-submissions") || returnTo.startsWith("/teams/") || returnTo.startsWith("/management/workspaces/") || returnTo.startsWith("/team-allocation/classes/")) ? returnTo : "/milestone-submissions";
+  const safeReturnTo = returnTo && (returnTo.startsWith("/milestone-submissions") || returnTo.startsWith("/teams/") || returnTo.startsWith("/management/workspaces/") || returnTo.startsWith("/team-allocation/classes/") || returnTo === "/management/reports/projects" || returnTo.startsWith("/management/reports/projects?")) ? returnTo : "/milestone-submissions";
   const back = () => { if (!dirty || window.confirm("Discard your unsaved review?")) navigate(safeReturnTo); };
   const reload = () => {
     if (dirty && !window.confirm("Reload the latest submission? Your review draft will be lost.")) return;

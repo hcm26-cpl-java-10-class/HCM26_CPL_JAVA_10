@@ -55,7 +55,7 @@ public class ProjectReportExportService {
         if(!"EXCEL".equals(format))throw error(422,"Báo cáo chỉ hỗ trợ xuất Excel (.xlsx)");
         Filter raw=(request.filters()==null?Filter.empty():request.filters()).normalized();
         Filter filter=new Filter(raw.programId(),raw.cohortId(),raw.classId(),raw.mentorId(),raw.templateId(),raw.sourceVersionId(),raw.teamId(),raw.projectId(),
-                raw.status(),raw.risk(),raw.includeCancelled(),raw.createdFrom(),raw.createdTo(),raw.q(),0,10,raw.masterStatus());
+                raw.status(),raw.risk(),raw.includeCancelled(),raw.createdFrom(),raw.createdTo(),raw.q(),0,10,raw.masterStatus(),raw.masterId(),raw.workSprintId());
         String encoded=encode(filter),fingerprint=hash(format+":"+encoded);
         em.find(User.class,actor.id(),LockModeType.PESSIMISTIC_WRITE);
         var existing=jobs.findByActorIdAndRequestId(actor.id(),key);
@@ -64,7 +64,7 @@ public class ProjectReportExportService {
             if(!existing.get().getTenantId().equals(actor.tenantId()))throw error(403,"Báo cáo nằm ngoài tenant hiện tại");
             return view(existing.get());
         }
-        reports.exportSnapshot(actor.id(),filter); // Validate all filters and the current scope before creating a job.
+        reports.validateExport(actor.id(),filter); // Validate all filters, including the work-only Sprint, before creating a job.
         var job=new ProjectReportExportJob();job.setId(UUID.randomUUID());job.setActorId(actor.id());job.setTenantId(actor.tenantId());
         job.setRequestId(key);job.setFingerprint(fingerprint);job.setFiltersJson(encoded);job.setFormat(format);job.setStatus(State.QUEUED);
         job.setCorrelationId(TaskRequestContext.currentCorrelationId());job.setCreatedAt(clock.instant());jobs.saveAndFlush(job);audit(job,"REQUESTED");
@@ -87,9 +87,10 @@ public class ProjectReportExportService {
             return new Claim(id,job.getActorId(),job.getTenantId(),job.getFiltersJson());});
         if(claim==null)return;
         try {
-            var snapshot=reports.exportSnapshot(claim.actor(),json.readValue(claim.filters(),Filter.class));
+            var data=reports.exportData(claim.actor(),json.readValue(claim.filters(),Filter.class));
+            var snapshot=data.snapshot();
             if(!claim.tenant().equals(snapshot.actor().tenantId()))throw error(403,"Tenant đã thay đổi");
-            byte[] bytes=writer.write(snapshot);
+            byte[] bytes=writer.write(data);
             Set<String> includedMasters=snapshot.matching().stream().map(SubProject::masterKey).collect(Collectors.toSet());
             // Recheck the authorized hierarchy used to build the report at download time.
             String contributors=encode(snapshot.all().stream().filter(r->!r.contextOnly()&&includedMasters.contains(r.masterKey())).map(SubProject::id).toList());
@@ -99,7 +100,7 @@ public class ProjectReportExportService {
                 job.setExpiresAt(now.plus(Duration.ofHours(settings.getExportTtlHours())));job.setRowCount((long)snapshot.matching().size());
                 job.setFileName("project-reports-"+DateTimeFormatter.ofPattern("uuuuMMdd-HHmmss").withZone(settings.zone()).format(now)
                         +"-"+id.toString().substring(0,8)+".xlsx");
-                job.setStatus(State.READY);audit(job,"READY");});
+                job.setStatus(State.READY);audit(job,"READY");audit(job,"EXPORT_MOCK_PROJECT_DASHBOARD");});
         } catch(Exception failure) {
             log.warn("Project report export {} failed",id,failure);
             tx().executeWithoutResult(status->{var job=em.find(ProjectReportExportJob.class,id,LockModeType.PESSIMISTIC_WRITE);

@@ -20,12 +20,14 @@ export function MainLayout({
                                mainClassName,
                                pathLinks,
                                contentClassName,
+                               compactHeader = false,
                            }: {
     children: ReactNode;
     pathName?: Record<string, string>;
     mainClassName?: string;
     contentClassName?: string;
     pathLinks?: Record<string, string>;
+    compactHeader?: boolean;
 }) {
     const { activeRole } = usePermissions();
     const isStudentView = normalizeRole(activeRole) === STUDENT_ROLE;
@@ -50,11 +52,12 @@ export function MainLayout({
         <SidebarProvider defaultOpen={readSidebarOpenCookie()}>
             <SidebarMenu />
             <SidebarInset className="h-screen min-w-0 flex flex-col overflow-hidden max-h-[calc(100vh-18px)]">
-                <header className="flex min-h-16 shrink-0 items-center gap-2 py-3">
+                <header className={cn("flex min-h-16 shrink-0 items-center gap-2 py-3", compactHeader && "h-14 min-h-14 py-2")}>
                     <div className="flex items-center gap-2 px-4 w-full justify-between">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                             <SidebarTrigger aria-label="Toggle navigation sidebar" />
-                            <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} />
+                            {compactHeader ? <div className="hidden min-w-0 xl:block"><DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} /></div>
+                                : <DynamicBreadcrumbs pathTitles={pathName} pathLinks={pathLinks} />}
                         </div>
                         <div className="shrink-0"><HeaderRight /></div>
                     </div>

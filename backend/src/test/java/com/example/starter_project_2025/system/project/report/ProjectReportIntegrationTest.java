@@ -212,7 +212,7 @@ class ProjectReportIntegrationTest {
         mvc.perform(get("/api/project-reports/exports/{id}",id).header("Authorization","Bearer "+admin)).andExpect(jsonPath("$.status").value("READY")).andExpect(jsonPath("$.rowCount").value(3));
         byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
-            assertThat(workbook.getNumberOfSheets()).isEqualTo(1);
+            assertThat(workbook.getNumberOfSheets()).isEqualTo(6);
             var sheet=workbook.getSheet("Tiến độ dự án");
             assertThat(sheet.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(3);
             var header=sheet.getRow(ProjectReportExcelWriter.HEADER_ROW);
@@ -530,12 +530,12 @@ class ProjectReportIntegrationTest {
                 .andExpect(jsonPath("$.content[0].backlog.total").value(3)).andExpect(jsonPath("$.content[0].projects.length()").value(2))
                 .andExpect(jsonPath("$.content[0].projects[1].depth").value(2));
     }
-    @Test void hierarchyExcelUsesOneSheetWithMasterAndModuleRowsWithoutInventedPercentages() throws Exception {
+    @Test void hierarchyExcelPreservesProjectSheetAndAddsScopedReportingSheetsWithoutPercentages() throws Exception {
         splitHierarchy();var id=export("EXCEL",UUID.randomUUID());exports.process(id);
         byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
-            assertThat(workbook.getNumberOfSheets()).isEqualTo(1);
+            assertThat(workbook.getNumberOfSheets()).isEqualTo(6);
             var sheet=workbook.getSheet("Tiến độ dự án");assertThat(sheet.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(3);
             StringBuilder text=new StringBuilder();sheet.forEach(row->row.forEach(cell->text.append(cell.toString()).append("|")));
             assertThat(text.toString()).contains("Split commerce","Auth","Payment","Phần việc trực tiếp Master","Đang triển khai","0/1 được chấp nhận","1/1 được chấp nhận","Chưa có milestone")
@@ -552,7 +552,7 @@ class ProjectReportIntegrationTest {
         byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+mentor))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
-            assertThat(workbook.getNumberOfSheets()).isEqualTo(1);
+            assertThat(workbook.getNumberOfSheets()).isEqualTo(6);
             var assignments=workbook.getSheet("Tiến độ dự án");
             assertThat(assignments.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(1);
             assertThat(assignments.getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(3).getStringCellValue()).contains("Auth");
@@ -600,4 +600,446 @@ class ProjectReportIntegrationTest {
         });
     }
 
+    MilestoneSubmission kpiSubmission(Milestone stage, SubmissionStatus state) {
+        var row=MilestoneSubmission.create(stage,stage.getTeamId(),"KPI team",UUID.randomUUID(),"Student",UUID.randomUUID(),"Reviewer",now);
+        em.persist(row);
+        var version=SubmissionVersion.draft(row,1,"Delivery","Notes","https://example.test",UUID.randomUUID(),now);
+        em.persist(version);
+        if(state!=SubmissionStatus.DRAFT) {
+            version.submit(now,false,BigDecimal.ZERO);row.submitted(1,now);
+            ReviewDecision decision=switch(state) {case ACCEPTED->ReviewDecision.ACCEPT;case REJECTED->ReviewDecision.REJECT;
+                case CHANGES_REQUESTED->ReviewDecision.REQUEST_CHANGES;default->null;};
+            if(decision!=null){version.applyDecision(decision);row.reviewed(decision,now);}
+        }
+        em.flush();return row;
+    }
+
+    @Test void kpiStatesUseLatestVersionBeforePaginationAndNeverIncludeAnotherMentorsTeam() throws Exception {
+        tx.executeWithoutResult(status->{
+            workspace(em.find(ProjectTeam.class,teamA));workspace(em.find(ProjectTeam.class,teamB));
+            var a=kpiSubmission(em.find(Milestone.class,milestoneA),SubmissionStatus.CHANGES_REQUESTED);
+            int next=a.openNextDraft(now);
+            em.persist(SubmissionVersion.draft(a,next,"Updated delivery","Notes",null,UUID.randomUUID(),now));
+            kpiSubmission(em.find(Milestone.class,milestoneB),SubmissionStatus.ACCEPTED);
+        });
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",classId.toString()).param("size","1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.overview.activeMasters").value(2)).andExpect(jsonPath("$.overview.activeTeams").value(2))
+                .andExpect(jsonPath("$.overview.artifactStatuses.DRAFT").value(1))
+                .andExpect(jsonPath("$.overview.artifactStatuses.ACCEPTED").value(1))
+                .andExpect(jsonPath("$.overview.artifactStatuses.CHANGES_REQUESTED").value(0));
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.activeMasters").value(1))
+                .andExpect(jsonPath("$.overview.artifactStatuses.DRAFT").value(1))
+                .andExpect(jsonPath("$.overview.artifactStatuses.ACCEPTED").value(0));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("teamId",teamB.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.overview.artifactStatuses.DRAFT").value(0))
+                .andExpect(jsonPath("$.overview.artifactStatuses.ACCEPTED").value(1));
+    }
+
+    @Test void kpiReviewStatesStaySeparateAndLegacyCopiesAreNotCountedTwice() throws Exception {
+        tx.executeWithoutResult(status->{
+            var team=em.find(ProjectTeam.class,teamA);workspace(team);
+            kpiSubmission(em.find(Milestone.class,milestoneA),SubmissionStatus.CHANGES_REQUESTED);
+            kpiSubmission(milestone(team,now.plusSeconds(10000),false),SubmissionStatus.REJECTED);
+            var pending=milestone(team,now.plusSeconds(10000),false);
+            kpiSubmission(pending,SubmissionStatus.SUBMITTED);
+            for(int version=1;version<=3;version++)em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,pending.getId(),
+                    UUID.randomUUID(),version,"https://example.test",null,null,"{}","[]",now,false,BigDecimal.ZERO));
+        });
+        report(mentor).andExpect(status().isOk())
+                .andExpect(jsonPath("$.overview.milestoneStatuses.CHANGES_REQUESTED").value(1))
+                .andExpect(jsonPath("$.overview.milestoneStatuses.REJECTED").value(1))
+                .andExpect(jsonPath("$.overview.milestoneStatuses.SUBMITTED").value(1))
+                .andExpect(jsonPath("$.overview.artifactStatuses.CHANGES_REQUESTED").value(1))
+                .andExpect(jsonPath("$.overview.artifactStatuses.REJECTED").value(1))
+                .andExpect(jsonPath("$.overview.artifactStatuses.SUBMITTED").value(1))
+                .andExpect(jsonPath("$.overview.milestoneRisks").value(2));
+    }
+
+    @Test void kpiWorkspaceDraftsWithLegacyNullTeamAreCountedAndAnOlderSavedDraftDoesNotOverrideReview() throws Exception {
+        tx.executeWithoutResult(status->{
+            var team=em.find(ProjectTeam.class,teamA);workspace(team);
+            em.persist(MilestoneArtifactDraft.create(milestoneA,projectA,tenantId,UUID.randomUUID(),now.minusSeconds(30),"{}"));
+            var stage=milestone(team,now.plusSeconds(86400),false);
+            em.persist(MilestoneArtifactDraft.create(stage.getId(),projectA,tenantId,UUID.randomUUID(),now.minusSeconds(30),"{}"));
+            kpiSubmission(stage,SubmissionStatus.CHANGES_REQUESTED);
+        });
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.artifactStatuses.DRAFT").value(1))
+                .andExpect(jsonPath("$.overview.artifactStatuses.CHANGES_REQUESTED").value(1));
+    }
+
+    SprintBacklog kpiItem(ProjectTeam team,SprintBacklogStatus state,Instant due,com.example.starter_project_2025.system.project.sprint.Sprint sprint) {
+        var item=new SprintBacklog();item.setProjectId(team.getProjectId());item.setTitle("KPI item");item.setStatus(state);
+        item.setEndDate(due==null?null:LocalDateTime.ofInstant(due,ZoneId.of("Asia/Ho_Chi_Minh")));item.setSprint(sprint);
+        em.persist(item);em.flush();return item;
+    }
+    com.example.starter_project_2025.system.project.sprint.Sprint kpiSprint(ProjectTeam team,com.example.starter_project_2025.system.project.sprint.SprintStatus state) {
+        var sprint=new com.example.starter_project_2025.system.project.sprint.Sprint();sprint.setName("KPI sprint "+state);
+        sprint.setProjectId(team.getProjectId());sprint.setTeamId(team.getId());sprint.setStatus(state);
+        sprint.setStartDate(LocalDateTime.ofInstant(now.minusSeconds(86400),ZoneOffset.UTC));
+        sprint.setEndDate(LocalDateTime.ofInstant(now.plusSeconds(86400),ZoneOffset.UTC));em.persist(sprint);em.flush();return sprint;
+    }
+    void kpiSubtask(ProjectTeam team,SprintBacklog parent,com.example.starter_project_2025.system.project.task.TaskStatus state,Instant due) {
+        var links=em.createQuery("select p from TaskAlertProjectLink p where p.projectId=:project",com.example.starter_project_2025.system.project.task.alert.TaskAlertData.ProjectLink.class)
+                .setParameter("project",team.getProjectId()).getResultList();
+        var link=links.isEmpty()?new com.example.starter_project_2025.system.project.task.alert.TaskAlertData.ProjectLink():links.getFirst();
+        if(links.isEmpty()){link.setId(UUID.randomUUID());link.setProjectId(team.getProjectId());link.setTenantId(tenantId);em.persist(link);}
+        em.persist(com.example.starter_project_2025.system.project.task.Task.builder().projectId(link.getId()).backlogItem(parent)
+                .title("KPI subtask").status(state).deadline(due).createdBy(adminId).updatedBy(adminId).build());
+    }
+
+    @Test void kpiOverdueIncludesUnassignedBacklogAndSubtasksButExcludesReviewAndInactiveSprints() throws Exception {
+        tx.executeWithoutResult(status->{
+            var team=em.find(ProjectTeam.class,teamA);workspace(team);
+            var active=kpiSprint(team,com.example.starter_project_2025.system.project.sprint.SprintStatus.ACTIVE);
+            var planned=kpiSprint(team,com.example.starter_project_2025.system.project.sprint.SprintStatus.PLANNED);
+            var closed=kpiSprint(team,com.example.starter_project_2025.system.project.sprint.SprintStatus.COMPLETED);
+            var parent=kpiItem(team,SprintBacklogStatus.TODO,now.minusSeconds(1),active);
+            kpiItem(team,SprintBacklogStatus.IN_PROGRESS,now.minusSeconds(1),null);
+            kpiItem(team,SprintBacklogStatus.REVIEW,now.minusSeconds(1),active);
+            kpiItem(team,SprintBacklogStatus.DONE,now.minusSeconds(1),active);
+            kpiItem(team,SprintBacklogStatus.TODO,null,active);
+            kpiItem(team,SprintBacklogStatus.TODO,now,active);
+            var waiting=kpiItem(team,SprintBacklogStatus.TODO,now.minusSeconds(1),planned);
+            var finished=kpiItem(team,SprintBacklogStatus.TODO,now.minusSeconds(1),closed);
+            var todo=com.example.starter_project_2025.system.project.task.TaskStatus.TODO;
+            kpiSubtask(team,parent,todo,now.minusSeconds(1));
+            kpiSubtask(team,parent,com.example.starter_project_2025.system.project.task.TaskStatus.IN_PROGRESS,now.minusSeconds(1));
+            kpiSubtask(team,parent,com.example.starter_project_2025.system.project.task.TaskStatus.REVIEW,now.minusSeconds(1));
+            kpiSubtask(team,parent,todo,now);
+            kpiSubtask(team,waiting,todo,now.minusSeconds(1));kpiSubtask(team,finished,todo,now.minusSeconds(1));
+        });
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.overdueBacklogItems").value(2))
+                .andExpect(jsonPath("$.overview.overdueSubtasks").value(2)).andExpect(jsonPath("$.overview.overdueTasks").value(4))
+                .andExpect(jsonPath("$.overview.milestoneRisks").value(1)).andExpect(jsonPath("$.overview.riskCount").value(5));
+    }
+
+    @Test void kpiMilestoneRiskCountsCurrentObjectsOnceAndExcludesWaiversAndAccepted() throws Exception {
+        tx.executeWithoutResult(status->{
+            var team=em.find(ProjectTeam.class,teamA);workspace(team);
+            var rejected=milestone(team,now.minusSeconds(20),false);kpiSubmission(rejected,SubmissionStatus.REJECTED);
+            var waived=milestone(team,now.minusSeconds(20),false);
+            em.persist(MilestoneWaiver.create(tenantId,projectA,waived.getId(),teamA,"Approved exemption",UUID.randomUUID(),now));
+            var review=milestone(team,now.minusSeconds(20),false);kpiSubmission(review,SubmissionStatus.SUBMITTED);
+            milestone(team,now.minusSeconds(20),true);
+            var submitted=milestone(team,now.plusSeconds(20),false);kpiSubmission(submitted,SubmissionStatus.SUBMITTED);
+        });
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.milestoneRisks").value(3))
+                .andExpect(jsonPath("$.overview.milestoneStatuses.WAIVED").value(1))
+                .andExpect(jsonPath("$.overview.milestoneStatuses.ACCEPTED").value(1));
+    }
+
+    @Test void kpiExcludesArchivedWorkspacesAndCompletedProjectsWithoutHidingReportHistory() throws Exception {
+        tx.executeWithoutResult(status->{
+            var a=em.find(ProjectTeam.class,teamA);var b=em.find(ProjectTeam.class,teamB);
+            em.find(Workspace.class,workspace(a)).setStatus(WorkspaceStatus.ARCHIVED);
+            workspace(b);b.getProject().setStatus(ProjectStatus.COMPLETED);
+            kpiSubmission(em.find(Milestone.class,milestoneA),SubmissionStatus.SUBMITTED);
+        });
+        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2))
+                .andExpect(jsonPath("$.overview.activeMasters").value(0)).andExpect(jsonPath("$.overview.activeTeams").value(0))
+                .andExpect(jsonPath("$.overview.artifactStatuses.SUBMITTED").value(0)).andExpect(jsonPath("$.overview.riskCount").value(0));
+    }
+
+    @Test void kpiEmptyScopeAndLegacyAc02KeepEmptyClassesOutOfOptionsAndRejectExplicitIds() throws Exception {
+        Long emptyClass=tx.execute(status->school(em.find(Tenant.class,tenantId),99901L).getId());
+        var options=body(mvc.perform(get("/api/project-reports/options").header("Authorization","Bearer "+admin)).andExpect(status().isOk()));
+        for(var school:options.get("classes"))assertThat(school.get("id").asLong()).isNotEqualTo(emptyClass);
+        for(var cohort:options.get("cohorts"))assertThat(cohort.get("id").asLong()).isNotEqualTo(100001L);
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",emptyClass.toString())).andExpect(status().isForbidden());
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("cohortId","100001")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+manager))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0))
+                .andExpect(jsonPath("$.overview.activeMasters").value(0)).andExpect(jsonPath("$.overview.riskCount").value(0))
+                .andExpect(jsonPath("$.overview.milestoneStatuses.IN_PROGRESS").value(0))
+                .andExpect(jsonPath("$.overview.artifactStatuses.SUBMITTED").value(0));
+    }
+
+    @Test void kpiInactivityUsesActorContributionsWithoutRequiringPendingTasks() throws Exception {
+        Long[] people=tx.execute(status->{
+            var team=em.find(ProjectTeam.class,teamA);workspace(team);var result=new ArrayList<Long>();
+            for(int index=0;index<2;index++) {
+                var student=user(em.find(Tenant.class,tenantId),roles.findByName("STUDENT").orElseThrow(),"KPI student "+index);
+                var cm=new ClassMember();cm.setTrainingClass(team.getTrainingClass());cm.setUser(student);cm.setStatus(ClassMemberStatus.ACTIVE);em.persist(cm);
+                var member=new ProjectMember();member.setTeam(team);member.setClassMember(cm);member.setRole("MEMBER");em.persist(member);em.flush();
+                em.createNativeQuery("update project_members set created_at=:at where id=:id")
+                        .setParameter("at",java.sql.Timestamp.valueOf(LocalDateTime.ofInstant(now.minus(Duration.ofDays(10)),ZoneId.systemDefault())))
+                        .setParameter("id",member.getId()).executeUpdate();result.add(student.getId());
+            }
+            var action=com.example.starter_project_2025.system.project.activity.ProjectActivityLog.builder()
+                    .projectId(projectA).actorId(result.getFirst()).actionType("TASK_UPDATED").entityType("TASK")
+                    .occurredAt(LocalDateTime.ofInstant(now.minusSeconds(60),ZoneId.systemDefault())).build();em.persist(action);em.flush();
+            // CreationTimestamp is wall-clock based; freeze the fixture's contribution time explicitly.
+            em.createNativeQuery("update project_activity_log set occurred_at=:at where id=:id")
+                    .setParameter("at",java.sql.Timestamp.valueOf(LocalDateTime.ofInstant(now.minusSeconds(60),ZoneId.systemDefault())))
+                    .setParameter("id",action.getId()).executeUpdate();
+            return result.toArray(Long[]::new);
+        });
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.inactiveMembers").value(1));
+        tx.executeWithoutResult(status->{
+            var user=em.find(User.class,people[1]);
+            em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,milestoneA,
+                    UUID.nameUUIDFromBytes(user.getEmail().getBytes(StandardCharsets.UTF_8)),1,"https://example.test",null,null,"{}","[]",now,false,BigDecimal.ZERO));
+        });
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.inactiveMembers").value(0));
+    }
+
+    @Test void kpiSplitCountsTheMasterOnceAndHonorsTeamFilterWithoutSiblingMilestones() throws Exception {
+        Long root=splitHierarchy();
+        tx.executeWithoutResult(status->{
+            workspace(em.find(ProjectTeam.class,teamA));workspace(em.find(ProjectTeam.class,teamB));
+            var shared=Milestone.create(tenantId,root,null,"Shared delivery",null,now.plusSeconds(86400),true,
+                    UUID.randomUUID(),null,LatePolicyType.NO_LATE,null,null,UUID.randomUUID(),now);
+            shared.configureAssessment(new BigDecimal("100"),LatePenaltyBasis.FIXED);
+            shared.openForWork(UUID.randomUUID(),now);shared.start(UUID.randomUUID(),now);em.persist(shared);
+        });
+        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.overview.activeMasters").value(1))
+                .andExpect(jsonPath("$.overview.activeTeams").value(2))
+                .andExpect(jsonPath("$.overview.milestoneStatuses.IN_PROGRESS").value(2))
+                .andExpect(jsonPath("$.overview.milestoneStatuses.ACCEPTED").value(1));
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.activeMasters").value(1))
+                .andExpect(jsonPath("$.overview.activeTeams").value(1))
+                .andExpect(jsonPath("$.overview.milestoneStatuses.IN_PROGRESS").value(2))
+                .andExpect(jsonPath("$.overview.milestoneStatuses.ACCEPTED").value(0));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("teamId",teamA.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.overview.activeMasters").value(1))
+                .andExpect(jsonPath("$.overview.activeTeams").value(1))
+                .andExpect(jsonPath("$.overview.milestoneStatuses.IN_PROGRESS").value(1))
+                .andExpect(jsonPath("$.overview.milestoneStatuses.ACCEPTED").value(0));
+    }
+
+    void feedEvent(Long project, String correlation, Instant at) {
+        em.createNativeQuery("insert into project_activity_log(project_id,actor_id,actor_display_name,action_type,entity_type,entity_id,"
+                        + "before_state,after_state,correlation_id,occurred_at) values (:project,:actor,'Admin','TASK_STATUS_CHANGED','TASK',999999,"
+                        + ":before,:after,:correlation,:at)")
+                .setParameter("project", project).setParameter("actor", adminId)
+                .setParameter("before", "{\"status\":\"IN_PROGRESS\",\"privateNote\":\"PRIVATE_FEEDBACK_NOT_FOR_FEED\"}")
+                .setParameter("after", "{\"status\":\"DONE\"}").setParameter("correlation", correlation)
+                .setParameter("at", LocalDateTime.ofInstant(at, ZoneId.systemDefault())).executeUpdate();
+    }
+
+    @Test void workCountsMainWorkspaceAndKanbanItemsButNeverUuidSubtasksAndKeepsSprintSelectionLocal() throws Exception {
+        Long[] ids = tx.execute(status -> {
+            var team = em.find(ProjectTeam.class, teamA);
+            var sprint = kpiSprint(team, com.example.starter_project_2025.system.project.sprint.SprintStatus.ACTIVE);
+            var ownItems = em.createQuery("select b from SprintBacklog b where b.projectId=:id", SprintBacklog.class)
+                    .setParameter("id", projectA).getResultList();
+            ownItems.forEach(item -> item.setSprint(sprint));
+            kpiSubtask(team, ownItems.getFirst(), com.example.starter_project_2025.system.project.task.TaskStatus.TODO, now.plusSeconds(60));
+            var task = new com.example.starter_project_2025.system.project.sprint.Task();
+            task.setProjectId(projectA);task.setTeamId(teamA);task.setSprintId(sprint.getId());task.setTitle("Kanban primary task");
+            task.setCode("RPT-MAIN");task.setStatus(com.example.starter_project_2025.system.project.sprint.TaskStatus.IN_PROGRESS);em.persist(task);em.flush();
+            return new Long[]{sprint.getId(), task.getId()};
+        });
+        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.work.backlog.total").value(3))
+                .andExpect(jsonPath("$.work.backlog.todo").value(1)).andExpect(jsonPath("$.work.backlog.inProgress").value(1))
+                .andExpect(jsonPath("$.work.backlog.done").value(1)).andExpect(jsonPath("$.work.backlog.percent").doesNotExist());
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("classId",classId.toString()).param("workSprintId",ids[0].toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.work.selectedSprintId").value(ids[0]))
+                .andExpect(jsonPath("$.work.backlog.total").value(3)).andExpect(jsonPath("$.summary.masters").value(2));
+        tx.executeWithoutResult(status -> em.find(com.example.starter_project_2025.system.project.sprint.Task.class, ids[1])
+                .setStatus(com.example.starter_project_2025.system.project.sprint.TaskStatus.DONE));
+        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.work.backlog.inProgress").value(0)).andExpect(jsonPath("$.work.backlog.done").value(2));
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+mentor).param("teamId",teamB.toString()).param("workSprintId",ids[0].toString()))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("teamId",teamB.toString()).param("workSprintId",ids[0].toString()))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+admin).header("Idempotency-Key",UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"filters\":{\"teamId\":"+teamB+",\"workSprintId\":"+ids[0]+"}}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test void activityFeedAggregatesAllMatchingMastersBeforePaginationDeduplicatesAndDoesNotExposeRawNotes() throws Exception {
+        tx.executeWithoutResult(status -> {
+            for (int i=0;i<12;i++) feedEvent(projectA,"feed-a-"+i,now.minusSeconds(i+1));
+            feedEvent(projectA,"feed-a-0",now.minusSeconds(1));
+            feedEvent(projectB,"feed-b",now.minusSeconds(2));
+            feedEvent(projectA,"future",now.plusSeconds(1));
+        });
+        var first = body(mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin)
+                .param("classId",classId.toString()).param("size","1")).andExpect(status().isOk()));
+        assertThat(first.get("content")).hasSize(1);
+        assertThat(first.get("activities").get("content")).hasSize(10);
+        assertThat(first.get("activities").get("hasMore").asBoolean()).isTrue();
+        assertThat(first.get("activities").get("content").findValuesAsText("projectId")).contains(projectA.toString(),projectB.toString());
+        assertThat(first.get("activities").toString()).doesNotContain("PRIVATE_FEEDBACK_NOT_FOR_FEED", "beforeState", "afterState");
+        var next = body(mvc.perform(get("/api/project-reports/activities").header("Authorization","Bearer "+admin)
+                .param("classId",classId.toString()).param("offset","10").param("before",first.get("activities").get("asOf").asText()))
+                .andExpect(status().isOk()));
+        assertThat(next.get("content")).hasSize(3);
+        assertThat(next.get("hasMore").asBoolean()).isFalse();
+        assertThat(next.get("content").findValuesAsText("id")).doesNotContainAnyElementsOf(first.get("activities").get("content").findValuesAsText("id"));
+        var mine = body(report(mentor).andExpect(status().isOk())).get("activities");
+        assertThat(mine.get("content").findValuesAsText("projectId")).containsOnly(projectA.toString());
+        mvc.perform(get("/api/project-reports/activities").header("Authorization","Bearer "+admin).param("limit","0"))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(get("/api/project-reports/activities").header("Authorization","Bearer "+student)).andExpect(status().isForbidden());
+    }
+
+    @Test void activityHistoryPaginatesTwoHundredDailyEventsAndPinsItsSnapshot() throws Exception {
+        tx.executeWithoutResult(status -> {
+            for (int i=0;i<205;i++) feedEvent(projectA,"history-"+i,now.minusSeconds(i+1));
+            feedEvent(projectA,"history-0",now.minusSeconds(1));
+            feedEvent(projectB,"history-other-team",now.minusSeconds(1));
+            feedEvent(projectA,"history-old",now.minusSeconds(10*86400));
+            feedEvent(projectA,"history-future",now.plusSeconds(60));
+        });
+        var first=body(mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+mentor))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(205))
+                .andExpect(jsonPath("$.size").value(20)).andExpect(jsonPath("$.content.length()").value(20)));
+        var next=body(mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+mentor)
+                .param("historyPage","1").param("before",first.get("asOf").asText()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(205))
+                .andExpect(jsonPath("$.content.length()").value(20)));
+        var ids=new HashSet<String>();first.get("content").forEach(row->ids.add(row.get("id").asText()));
+        next.get("content").forEach(row->assertThat(ids.add(row.get("id").asText())).isTrue());
+        assertThat(first.toString()).doesNotContain("PRIVATE_FEEDBACK_NOT_FOR_FEED");
+        assertThat(first.get("content").findValuesAsText("projectId")).containsOnly(projectA.toString());
+        mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+mentor).param("historyPage","10"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(5));
+        when(clock.instant()).thenReturn(now.plusSeconds(120));
+        mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+mentor)
+                        .param("historyPage","1").param("before",first.get("asOf").asText()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(205));
+        mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+mentor))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(206));
+    }
+
+    @Test void activityHistoryDatesUseReportTimezoneAndIncludeTheWholeSelectedDayAcrossSources() throws Exception {
+        var start=LocalDate.of(2026,10,29).atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
+        var end=start.plusSeconds(86400);
+        tx.executeWithoutResult(status -> {
+            feedEvent(projectA,"before-day",start.minusMillis(1));feedEvent(projectA,"day-start",start);
+            feedEvent(projectA,"day-end",end.minusMillis(1));feedEvent(projectA,"after-day",end);
+            em.persist(com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditLog.statusEvent(
+                    milestoneA,projectA,tenantId,UUID.randomUUID(),"MILESTONE_STARTED","instant-start",null,start));
+            em.persist(com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditLog.statusEvent(
+                    milestoneA,projectA,tenantId,UUID.randomUUID(),"MILESTONE_UPDATED","instant-end",null,end.minusMillis(1)));
+        });
+        var response=body(mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+mentor)
+                        .param("activityFrom","2026-10-29").param("activityTo","2026-10-29"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(4))
+                .andExpect(jsonPath("$.activityFrom").value("2026-10-29")).andExpect(jsonPath("$.activityTo").value("2026-10-29")));
+        response.get("content").forEach(row -> assertThat(Instant.parse(row.get("occurredAt").asText())).isBetween(start,end.minusMillis(1)));
+        mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+mentor)
+                        .param("activityFrom","2026-01-01").param("activityTo","2026-01-01"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0)).andExpect(jsonPath("$.content").isEmpty());
+    }
+
+    @Test void activityHistoryKeepsScopeChecksAndRejectsInvalidDatesOrPagination() throws Exception {
+        mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+mentor).param("teamId",teamB.toString()))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+student)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+admin)
+                        .param("activityFrom","2026-10-30").param("activityTo","2026-10-29"))
+                .andExpect(status().isUnprocessableEntity());
+        for(var params:List.of(Map.of("historyPage","-1"),Map.of("historySize","51"),Map.of("before",now.plusSeconds(1).toString()))) {
+            var request=get("/api/project-reports/activities/history").header("Authorization","Bearer "+admin);
+            params.forEach(request::param);mvc.perform(request).andExpect(status().isUnprocessableEntity());
+        }
+        mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+admin).param("historyPage","2147483647"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content").isEmpty());
+    }
+
+    @Test void masterFilterNarrowsProjectsWorkAndActivityWithoutGrantingUnreadableAncestors() throws Exception {
+        Long root = splitHierarchy();
+        tx.executeWithoutResult(status -> {
+            feedEvent(projectA,"own-module",now.minusSeconds(1));
+            feedEvent(projectB,"other-module",now.minusSeconds(2));
+            feedEvent(root,"shared-master",now.minusSeconds(3));
+        });
+        var result = body(mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("masterId",root.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1)));
+        assertThat(result.get("activities").get("content").findValuesAsText("projectId")).contains(projectA.toString(),projectB.toString(),root.toString());
+        var filtered = body(mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+mentor)
+                .param("masterId",root.toString()).param("teamId",teamA.toString())).andExpect(status().isOk()));
+        assertThat(filtered.get("activities").get("content").findValuesAsText("projectId")).containsOnly(projectA.toString());
+        assertThat(filtered.get("activities").get("content").findValuesAsText("teamId")).containsOnly(teamA.toString());
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+admin).param("masterId","9223372036854775807"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test void deliveryRowsAndFeedUseCurrentVersionAndReviewLinksWithoutDuplicatingLegacyArtifactCopies() throws Exception {
+        tx.executeWithoutResult(status -> {
+            workspace(em.find(ProjectTeam.class,teamA));
+            var submission = kpiSubmission(em.find(Milestone.class,milestoneA), SubmissionStatus.CHANGES_REQUESTED);
+            int next = submission.openNextDraft(now);
+            var version = SubmissionVersion.draft(submission,next,"Revised delivery",null,null,UUID.randomUUID(),now);
+            em.persist(version);version.submit(now,false,BigDecimal.ZERO);submission.submitted(next,now);
+            em.flush();
+            var copy = MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,milestoneA,submission.getStudentId(),next,null,null,null,"[]","[]",now.minusSeconds(1),false,null);
+            em.persist(copy);em.flush();version.linkArtifactSubmission(copy.getId());
+            em.persist(SubmissionAuditLog.create(submission.getId(),version.getId(),"SUBMISSION_SUBMITTED",submission.getStudentId(),"revision-submit",now.minusSeconds(1)));
+            em.persist(com.example.starter_project_2025.system.project.milestone.audit.MilestoneAuditLog.statusEvent(milestoneA,projectA,tenantId,
+                    submission.getStudentId(),"MILESTONE_SUBMITTED","revision-submit",null,now.minusSeconds(1)));
+        });
+        var result = body(report(mentor).andExpect(status().isOk()));
+        assertThat(result.get("deliveries")).hasSize(1);
+        var row = result.get("deliveries").get(0);
+        assertThat(row.get("version").asInt()).isEqualTo(2);
+        assertThat(row.get("artifactStatus").asText()).isEqualTo("SUBMITTED");
+        assertThat(row.get("milestoneStatus").asText()).isEqualTo("SUBMITTED");
+        assertThat(result.get("overview").get("artifactStatuses").get("SUBMITTED").asInt()).isEqualTo(1);
+        assertThat(result.get("activities").get("content")).hasSize(1);
+        var event = result.get("activities").get("content").get(0);
+        assertThat(event.get("subject").asText()).contains("v2");
+        assertThat(event.get("href").asText()).isEqualTo("/milestone-submissions/"+row.get("submissionId").asText()+"/review");
+    }
+
+    @Test void activityExcelExportsAllScopedEventsBeyondPreviewHistoryPagesAndTheRecentDateWindow() throws Exception {
+        tx.executeWithoutResult(status -> {
+            for(int i=0;i<205;i++)feedEvent(projectA,"excel-volume-"+i,now.minusSeconds(i+1));
+            feedEvent(projectA,"excel-old-event",now.minusSeconds(10*86400));
+            feedEvent(projectB,"excel-other-team",now.minusSeconds(1));
+        });
+        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+mentor).param("teamId",teamA.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.activities.content.length()").value(10));
+        mvc.perform(get("/api/project-reports/activities/history").header("Authorization","Bearer "+mentor).param("teamId",teamA.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(205)).andExpect(jsonPath("$.content.length()").value(20));
+        var request=mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+mentor)
+                .header("Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"format\":\"EXCEL\",\"filters\":{\"teamId\":"+teamA+",\"page\":1,\"size\":1}}"));
+        UUID jobId=UUID.fromString(body(request.andExpect(status().isAccepted())).get("id").asText());
+        exports.process(jobId);
+        byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",jobId).header("Authorization","Bearer "+mentor))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        String expectedCode=tx.execute(status->em.find(Project.class,projectA).getCode());
+        try(var book=WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            assertThat(book.getNumberOfSheets()).isEqualTo(6);
+            var events=book.getSheet("Hoạt động");
+            assertThat(events.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(206);
+            for(int row=ProjectReportExcelWriter.HEADER_ROW+1;row<=events.getLastRowNum();row++)
+                assertThat(events.getRow(row).getCell(2).getStringCellValue()).isEqualTo(expectedCode);
+            assertThat(events.getRow(events.getLastRowNum()).getCell(0).getLocalDateTimeCellValue())
+                    .isEqualTo(LocalDateTime.ofInstant(now.minusSeconds(10*86400),ZoneId.of("Asia/Ho_Chi_Minh")));
+        }
+    }
+
+    @Test void expandedExcelIncludesNewScopedFieldsNumericCountsActivityAndSuccessfulExportAudit() throws Exception {
+        tx.executeWithoutResult(status -> {
+            em.find(TrainingClass.class,classId).setProgramName(null);
+            workspace(em.find(ProjectTeam.class,teamA));kpiSubmission(em.find(Milestone.class,milestoneA),SubmissionStatus.SUBMITTED);
+            feedEvent(projectA,"excel-own",now.minusSeconds(1));feedEvent(projectB,"excel-other",now.minusSeconds(2));
+        });
+        var response = mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+admin)
+                .header("Idempotency-Key",UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"format\":\"EXCEL\",\"filters\":{\"programId\":801,\"teamId\":"+teamA+"}}"));
+        UUID id = UUID.fromString(body(response.andExpect(status().isAccepted())).get("id").asText());exports.process(id);
+        byte[] bytes = mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (var book = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            assertThat(book.getNumberOfSheets()).isEqualTo(6);
+            assertThat(book.getSheetAt(0).getRow(3).getCell(0).getStringCellValue()).contains("Chương trình: #801");
+            assertThat(book.getSheet("Tổng quan").getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(1).getCellType())
+                    .isEqualTo(org.apache.poi.ss.usermodel.CellType.NUMERIC);
+            assertThat(book.getSheet("Milestone và bài nộp").getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(7).getStringCellValue()).isEqualTo("Chờ duyệt");
+            var events = book.getSheet("Hoạt động");
+            assertThat(events.getLastRowNum()-ProjectReportExcelWriter.HEADER_ROW).isEqualTo(1);
+            assertThat(events.getRow(ProjectReportExcelWriter.HEADER_ROW+1).getCell(2).getStringCellValue())
+                    .isEqualTo(tx.execute(status -> em.find(Project.class,projectA).getCode()));
+        }
+        Long auditCount = tx.execute(status -> em.createQuery("select count(a) from ProjectReportExportAudit a where a.jobId=:id "
+                        + "and a.action='EXPORT_MOCK_PROJECT_DASHBOARD'",Long.class).setParameter("id",id).getSingleResult());
+        assertThat(auditCount).isEqualTo(1L);
+    }
 }
