@@ -2,15 +2,20 @@ package com.example.starter_project_2025.system.project.aiassistant.controller;
 
 import com.example.starter_project_2025.system.project.aiassistant.dto.request.GenerateTemplateRequest;
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.GenerateTemplateResponse;
+import com.example.starter_project_2025.system.project.aiassistant.dto.response.SuggestionDetailResponse;
+import com.example.starter_project_2025.system.project.aiassistant.dto.response.SuggestionListItemResponse;
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.output.GeneratedTemplateOutput;
 
 import com.example.starter_project_2025.system.project.aiassistant.entity.AiSuggestion;
+import com.example.starter_project_2025.system.project.aiassistant.enums.SuggestionStatus;
 import com.example.starter_project_2025.system.project.aiassistant.service.generation.AiSuggestionService;
 import com.example.starter_project_2025.system.project.aiassistant.service.generation.GeneratedSuggestionResult;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/ai-assistant")
@@ -41,6 +46,37 @@ public class AiAssistantController {
                         result.suggestion().getAiModel(),
                         result.suggestion().getCreatedAt()
                 )
+        );
+    }
+
+    @GetMapping("/suggestions/{id}")
+    public ResponseEntity<SuggestionDetailResponse> getSuggestionDetail(
+            @PathVariable Long id
+    ) {
+        return ResponseEntity.ok(
+                aiSuggestionService.getSuggestionDetail(id)
+        );
+    }
+
+    @GetMapping("/suggestions")
+    public ResponseEntity<List<SuggestionListItemResponse>> getAllSuggestions() {
+        return ResponseEntity.ok(
+                aiSuggestionService.getAllSuggestions()
+        );
+    }
+
+    @GetMapping("/suggestions")
+    public ResponseEntity<List<SuggestionListItemResponse>> getSuggestions(
+            @RequestParam(required = false) SuggestionStatus status
+    ) {
+        if (status == null) {
+            return ResponseEntity.ok(
+                    aiSuggestionService.getAllSuggestions()
+            );
+        }
+
+        return ResponseEntity.ok(
+                aiSuggestionService.getSuggestionsByStatus(status)
         );
     }
 }

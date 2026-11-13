@@ -2,24 +2,43 @@ package com.example.starter_project_2025.system.project.aiassistant.service.gene
 
 
 import com.example.starter_project_2025.system.project.aiassistant.dto.request.GenerateTemplateRequest;
+import com.example.starter_project_2025.system.project.aiassistant.dto.request.UpdateSuggestionRequest;
+import com.example.starter_project_2025.system.project.aiassistant.dto.response.SuggestionDetailResponse;
+import com.example.starter_project_2025.system.project.aiassistant.dto.response.SuggestionListItemResponse;
+import com.example.starter_project_2025.system.project.aiassistant.dto.response.output.GeneratedTemplateOutput;
 import com.example.starter_project_2025.system.project.aiassistant.entity.AiSuggestion;
 import com.example.starter_project_2025.system.project.aiassistant.enums.SuggestionStatus;
 import com.example.starter_project_2025.system.project.aiassistant.repository.AiSuggestionRepository;
+import com.example.starter_project_2025.system.project.aiassistant.validator.TemplateOutputValidator;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 public class AiSuggestionService {
 
     private final TemplateGenerationService templateGenerationService;
     private final AiSuggestionRepository aiSuggestionRepository;
+    private final TemplateOutputParser templateOutputParser;
+    private final TemplateOutputValidator templateOutputValidator;
+    private final ObjectMapper objectMapper;
 
     public AiSuggestionService(
             TemplateGenerationService templateGenerationService,
-            AiSuggestionRepository aiSuggestionRepository
+            AiSuggestionRepository aiSuggestionRepository,
+            TemplateOutputParser templateOutputParser,
+            TemplateOutputValidator templateOutputValidator,
+            ObjectMapper objectMapper
     ) {
         this.templateGenerationService = templateGenerationService;
         this.aiSuggestionRepository = aiSuggestionRepository;
+        this.templateOutputParser = templateOutputParser;
+        this.templateOutputValidator = templateOutputValidator;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -48,6 +67,122 @@ public class AiSuggestionService {
         return new GeneratedSuggestionResult(
                 savedSuggestion,
                 result.output()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public SuggestionDetailResponse getSuggestionDetail(Long suggestionId) {
+
+        // 1. Find suggestion by ID
+        AiSuggestion suggestion = aiSuggestionRepository.findById(suggestionId)
+                .orElseThrow(() ->
+                        new EntityNotFoundException(
+                                "AI Suggestion not found with ID: " + suggestionId
+                        )
+                );
+
+        // 2. Parse stored JSON
+        GeneratedTemplateOutput output =
+                templateOutputParser.parse(suggestion.getGeneratedContent());
+
+        // 3. Build response
+        return new SuggestionDetailResponse(
+                suggestion.getId(),
+                suggestion.getProjectTitle(),
+                suggestion.getProjectDescription(),
+                suggestion.getProjectType(),
+                suggestion.getAdditionalRequirements(),
+                suggestion.getStatus().name(),
+                output,
+                suggestion.getAiModel(),
+                suggestion.getCreatedAt(),
+                suggestion.getUpdatedAt()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<SuggestionListItemResponse> getAllSuggestions() {
+        return aiSuggestionRepository.findAll()
+                .stream()
+                .map(suggestion -> new SuggestionListItemResponse(
+                        suggestion.getId(),
+                        suggestion.getProjectTitle(),
+                        suggestion.getProjectType(),
+                        suggestion.getStatus().name(),
+                        suggestion.getAiModel(),
+                        suggestion.getCreatedAt(),
+                        suggestion.getUpdatedAt()
+                ))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SuggestionListItemResponse> getSuggestionsByStatus(
+            SuggestionStatus status
+    ) {
+        return aiSuggestionRepository.findByStatus(status)
+                .stream()
+                .map(suggestion -> new SuggestionListItemResponse(
+                        suggestion.getId(),
+                        suggestion.getProjectTitle(),
+                        suggestion.getProjectType(),
+                        suggestion.getStatus().name(),
+                        suggestion.getAiModel(),
+                        suggestion.getCreatedAt(),
+                        suggestion.getUpdatedAt()
+                ))
+                .toList();
+    }
+
+    @Transactional
+    public SuggestionDetailResponse updateSuggestion(
+            Long suggestionId,
+            UpdateSuggestionRequest request
+    ) {
+        // 1. Find suggestion
+        AiSuggestion suggestion = aiSuggestionRepository.findById(suggestionId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "AI Suggestion not found with ID: " + suggestionId
+                ));
+
+        // 2. Check status
+        if (suggestion.getStatus() != SuggestionStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Only PENDING suggestions can be edited"
+            );
+        }
+
+        // 3. Validate edited output
+        templateOutputValidator.validate(request.output());
+
+        // 4. Convert output object to JSON
+        String generatedContent;
+        try {
+            generatedContent = objectMapper.writeValueAsString(request.output());
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException(
+                    "Failed to serialize generated template output", e
+            );
+        }
+
+        // 5. Update only generatedContent
+        suggestion.setGeneratedContent(generatedContent);
+
+        // 6. Save updated suggestion
+        AiSuggestion updatedSuggestion = aiSuggestionRepository.save(suggestion);
+
+        // 7. Return updated detail
+        return new SuggestionDetailResponse(
+                updatedSuggestion.getId(),
+                updatedSuggestion.getProjectTitle(),
+                updatedSuggestion.getProjectDescription(),
+                updatedSuggestion.getProjectType(),
+                updatedSuggestion.getAdditionalRequirements(),
+                updatedSuggestion.getStatus().name(),
+                request.output(),
+                updatedSuggestion.getAiModel(),
+                updatedSuggestion.getCreatedAt(),
+                updatedSuggestion.getUpdatedAt()
         );
     }
 }
