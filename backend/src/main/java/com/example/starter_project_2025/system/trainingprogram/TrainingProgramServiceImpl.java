@@ -4,6 +4,7 @@ import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.exception.ConflictException;
 import com.example.starter_project_2025.system.subject.Subject;
 import com.example.starter_project_2025.system.subject.SubjectRepository;
+import com.example.starter_project_2025.system.subject.SubjectStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +23,9 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<String> findRegions() { return programRepository.findDistinctRegions(); }
+    public List<String> findRegions() {
+        return programRepository.findDistinctRegions();
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -34,7 +37,8 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
 
     @Override
     @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<TrainingProgramResponse> findPage(String search, ProgramStatus status, String region, org.springframework.data.domain.Pageable pageable) {
+    public org.springframework.data.domain.Page<TrainingProgramResponse> findPage(String search, ProgramStatus status,
+            String region, org.springframework.data.domain.Pageable pageable) {
         String q = search == null ? "" : search.trim();
         String r = region == null ? "" : region.trim();
         return programRepository.searchPage(q, status, r, pageable).map(this::toResponse);
@@ -53,17 +57,7 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
             throw new IllegalArgumentException("A training program must contain at least one subject.");
         }
         TrainingProgram p = new TrainingProgram();
-        p.setCode(request.code().trim());
-        p.setName(request.name().trim());
-        p.setVersion(request.version().trim());
-        p.setRegion(trimToNull(request.region()));
-        p.setTechnicalGroup(trimToNull(request.technicalGroup()));
-        p.setContentLink(trimToNull(request.contentLink()));
-        p.setDescription(trimToNull(request.description()));
-        ProgramStatus status = request.status() != null ? request.status() : ProgramStatus.ACTIVE;
-        p.setStatus(status);
-        p.setIsActive(status == ProgramStatus.ACTIVE);
-        programRepository.save(p);
+        applyMetadata(p, request, true);
         applySubjects(p, request.subjects());
         validateProgramSubjects(p);
         return toResponse(programRepository.save(p));
@@ -73,24 +67,15 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
     public TrainingProgramResponse update(Long id, TrainingProgramRequest request) {
         TrainingProgram p = getProgram(id);
         if (classTrainingProgramRepository.existsByProgram_Id(id)) {
-            throw new ConflictException("This program version is assigned to a class. Clone a new version to make changes; existing classes must keep the old programId.");
+            throw new ConflictException(
+                    "This program version is assigned to a class. Clone a new version to make changes; existing classes must keep the old programId.");
         }
         validateCodeVersion(request.code(), request.version(), id);
         if (request.subjects() == null || request.subjects().isEmpty()) {
             throw new IllegalArgumentException("A training program must contain at least one subject.");
         }
-        p.setCode(request.code().trim());
-        p.setName(request.name().trim());
-        p.setVersion(request.version().trim());
-        p.setRegion(trimToNull(request.region()));
-        p.setTechnicalGroup(trimToNull(request.technicalGroup()));
-        p.setContentLink(trimToNull(request.contentLink()));
-        p.setDescription(trimToNull(request.description()));
-        if (request.status() != null) {
-            p.setStatus(request.status());
-            p.setIsActive(request.status() == ProgramStatus.ACTIVE);
-        }
-        if (request.subjects() != null) applySubjects(p, request.subjects());
+        applyMetadata(p, request, false);
+        applySubjects(p, request.subjects());
         validateProgramSubjects(p);
         return toResponse(programRepository.save(p));
     }
@@ -99,7 +84,8 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
     public TrainingProgramResponse updateSubjects(Long id, List<ProgramSubjectRequest> subjects) {
         TrainingProgram p = getProgram(id);
         if (classTrainingProgramRepository.existsByProgram_Id(id)) {
-            throw new ConflictException("This program version is assigned to a class. Clone a new version to change its subjects.");
+            throw new ConflictException(
+                    "This program version is assigned to a class. Clone a new version to change its subjects.");
         }
         applySubjects(p, subjects);
         validateProgramSubjects(p);
@@ -109,7 +95,8 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
     @Override
     public TrainingProgramResponse cloneVersion(Long id, String newVersion) {
         TrainingProgram source = getProgram(id);
-        if (newVersion == null || newVersion.isBlank()) throw new IllegalArgumentException("newVersion is required");
+        if (newVersion == null || newVersion.isBlank())
+            throw new IllegalArgumentException("newVersion is required");
         validateCodeVersion(source.getCode(), newVersion.trim(), null);
         TrainingProgram copy = new TrainingProgram();
         copy.setCode(source.getCode());
@@ -132,16 +119,10 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
     @Override
     public TrainingProgramResponse activate(Long id) {
         TrainingProgram p = getProgram(id);
-        if (p.getSubjects().isEmpty()) throw new IllegalArgumentException("Cannot activate a program without subjects.");
-        for (ProgramSubject ps : p.getSubjects()) {
-            Subject subject = ps.getSubject();
-            if (!Boolean.TRUE.equals(subject.getIsActive())) {
-                throw new IllegalArgumentException("Subject " + subject.getCode() + " is inactive.");
-            }
-            if (subject.getDurationHours() == null || subject.getDurationHours() <= 0) {
-                throw new IllegalArgumentException("Subject " + subject.getCode() + " must have durationHours greater than 0.");
-            }
+        if (p.getSubjects().isEmpty()) {
+            throw new IllegalArgumentException("Cannot activate a program without subjects.");
         }
+        validateProgramSubjects(p);
         p.setStatus(ProgramStatus.ACTIVE);
         p.setIsActive(true);
         return toResponse(programRepository.save(p));
@@ -150,15 +131,18 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
     @Override
     public TrainingProgramResponse changeStatus(Long id, ProgramStatus status) {
         TrainingProgram p = getProgram(id);
-        if (status == null) throw new IllegalArgumentException("status is required");
-        if (status == ProgramStatus.ACTIVE) return activate(id);
+        if (status == null)
+            throw new IllegalArgumentException("status is required");
+        if (status == ProgramStatus.ACTIVE)
+            return activate(id);
         p.setStatus(ProgramStatus.INACTIVE);
         p.setIsActive(false);
         return toResponse(programRepository.save(p));
     }
 
     private void applySubjects(TrainingProgram program, List<ProgramSubjectRequest> requests) {
-        if (requests == null) requests = List.of();
+        if (requests == null)
+            requests = List.of();
         Set<Long> ids = new HashSet<>();
         Set<Integer> orderIndexes = new HashSet<>();
         List<ProgramSubject> links = new ArrayList<>();
@@ -172,23 +156,31 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
                         .findFirst()
                         .orElse(null);
                 if (replacement == null || !Objects.equals(replacement.orderIndex(), existing.getOrderIndex())) {
-                    throw new ConflictException("A program subject referenced by a teaching assignment cannot be removed or reordered.");
+                    throw new ConflictException(
+                            "A program subject referenced by a teaching assignment cannot be removed or reordered.");
                 }
             }
         }
-        if (requests.isEmpty()) throw new IllegalArgumentException("A training program must contain at least one subject.");
+        if (requests.isEmpty())
+            throw new IllegalArgumentException("A training program must contain at least one subject.");
         for (ProgramSubjectRequest req : requests) {
             if (req == null || req.subjectId() == null || req.orderIndex() == null || req.orderIndex() <= 0)
                 throw new IllegalArgumentException("Each subject requires a valid subjectId and positive orderIndex.");
-            if (!ids.add(req.subjectId())) throw new IllegalArgumentException("Duplicate subjectId: " + req.subjectId());
-            if (!orderIndexes.add(req.orderIndex())) throw new IllegalArgumentException("Duplicate orderIndex: " + req.orderIndex());
+            if (!ids.add(req.subjectId()))
+                throw new IllegalArgumentException("Duplicate subjectId: " + req.subjectId());
+            if (!orderIndexes.add(req.orderIndex()))
+                throw new IllegalArgumentException("Duplicate orderIndex: " + req.orderIndex());
             Subject subject = subjectRepository.findById(req.subjectId())
                     .orElseThrow(() -> new ResourceNotFoundException("Subject not found with ID: " + req.subjectId()));
-            if (!Boolean.TRUE.equals(subject.getIsActive())) throw new IllegalArgumentException("Subject is inactive: " + subject.getId());
-            if (subject.getDurationHours() == null || subject.getDurationHours() <= 0)
+                if (!isSubjectActive(subject)) {
+                    throw new IllegalArgumentException("Subject is inactive: " + subject.getId());
+                }
+            if (subject.getDurationHours() == null || subject.getDurationHours() <= 0) {
                 throw new IllegalArgumentException("Subject durationHours must be greater than 0: " + subject.getId());
+            }
             ProgramSubject link = existingBySubjectId.get(req.subjectId());
-            if (link == null) link = new ProgramSubject();
+            if (link == null)
+                link = new ProgramSubject();
             link.setSubject(subject);
             link.setProgram(program);
             link.setOrderIndex(req.orderIndex());
@@ -199,11 +191,14 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
             link.setDurationHours(subject.getDurationHours());
             links.add(link);
         }
-        if (orderIndexes.size() != requests.size()) throw new IllegalArgumentException("Subject order must be continuous from 1 to N.");
+        if (orderIndexes.size() != requests.size())
+            throw new IllegalArgumentException("Subject order must be continuous from 1 to N.");
         for (int expected = 1; expected <= requests.size(); expected++) {
-            if (!orderIndexes.contains(expected)) throw new IllegalArgumentException("Subject order must be continuous from 1 to N.");
+            if (!orderIndexes.contains(expected))
+                throw new IllegalArgumentException("Subject order must be continuous from 1 to N.");
         }
-        Set<Long> retainedSubjectIds = links.stream().map(link -> link.getSubject().getId()).collect(Collectors.toSet());
+        Set<Long> retainedSubjectIds = links.stream().map(link -> link.getSubject().getId())
+                .collect(Collectors.toSet());
         program.getSubjects().removeIf(existing -> !retainedSubjectIds.contains(existing.getSubject().getId()));
         Map<Long, ProgramSubject> current = program.getSubjects().stream()
                 .collect(Collectors.toMap(item -> item.getSubject().getId(), item -> item));
@@ -224,12 +219,34 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
     }
 
     private void validateCodeVersion(String code, String version, Long currentId) {
-        boolean exists = programRepository.findAll().stream()
-                .filter(p -> !Objects.equals(p.getId(), currentId))
-                .anyMatch(p -> p.getCode() != null && p.getVersion() != null
-                        && p.getCode().trim().equalsIgnoreCase(code.trim())
-                        && p.getVersion().trim().equalsIgnoreCase(version.trim()));
-        if (exists) throw new IllegalArgumentException("A program with this code and version already exists.");
+        String normalizedCode = code == null ? "" : code.trim().toUpperCase(Locale.ROOT);
+        String normalizedVersion = version == null ? "" : version.trim();
+        if (programRepository.existsByNormalizedIdentity(normalizedCode, normalizedVersion, currentId)) {
+            throw new IllegalArgumentException("A program with this code and version already exists.");
+        }
+    }
+
+    private void applyMetadata(TrainingProgram target, TrainingProgramRequest request, boolean defaultActiveOnNull) {
+        target.setCode(request.code().trim().toUpperCase(Locale.ROOT));
+        target.setName(request.name().trim());
+        target.setVersion(request.version().trim());
+        target.setRegion(trimToNull(request.region()));
+        target.setTechnicalGroup(trimToNull(request.technicalGroup()));
+        target.setContentLink(trimToNull(request.contentLink()));
+        target.setDescription(trimToNull(request.description()));
+        if (request.status() != null) {
+            target.setStatus(request.status());
+            target.setIsActive(request.status() == ProgramStatus.ACTIVE);
+        } else if (defaultActiveOnNull) {
+            target.setStatus(ProgramStatus.ACTIVE);
+            target.setIsActive(true);
+        }
+    }
+
+    private boolean isSubjectActive(Subject subject) {
+        return subject != null
+                && Boolean.TRUE.equals(subject.getIsActive())
+                && subject.getStatus() == SubjectStatus.ACTIVE;
     }
 
     private TrainingProgram getProgram(Long id) {
@@ -263,21 +280,24 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
                 p.getIsActive(),
                 subjects,
                 total,
-                p.getUpdatedAt()
-        );
+                p.getUpdatedAt());
     }
 
-    private String trimToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }
+    private String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
 
     private void validateProgramSubjects(TrainingProgram program) {
         if (program.getSubjects() == null || program.getSubjects().isEmpty())
             throw new IllegalArgumentException("A training program must contain at least one subject.");
         for (ProgramSubject link : program.getSubjects()) {
             Subject subject = link.getSubject();
-            if (!Boolean.TRUE.equals(subject.getIsActive()))
+            if (!isSubjectActive(subject)) {
                 throw new IllegalArgumentException("Subject " + subject.getCode() + " is inactive.");
-            if (subject.getDurationHours() == null || subject.getDurationHours() <= 0)
+            }
+            if (subject.getDurationHours() == null || subject.getDurationHours() <= 0) {
                 throw new IllegalArgumentException("Subject " + subject.getCode() + " must have positive duration.");
+            }
         }
     }
 
@@ -286,8 +306,10 @@ public class TrainingProgramServiceImpl implements TrainingProgramService {
         TrainingProgram program = getProgram(id);
         if (classTrainingProgramRepository.existsByProgram_Id(id))
             throw new ConflictException("Cannot delete a program assigned to a class. Set it INACTIVE instead.");
-        if (program.getSubjects().stream().anyMatch(ps -> teachingAssignmentRepository.existsByProgramSubject_Id(ps.getId())))
-            throw new ConflictException("Cannot delete a program referenced by teaching assignments. Set it INACTIVE instead.");
+        if (program.getSubjects().stream()
+                .anyMatch(ps -> teachingAssignmentRepository.existsByProgramSubject_Id(ps.getId())))
+            throw new ConflictException(
+                    "Cannot delete a program referenced by teaching assignments. Set it INACTIVE instead.");
         programRepository.delete(program);
     }
 }

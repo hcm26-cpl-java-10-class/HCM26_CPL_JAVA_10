@@ -12,9 +12,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.Getter;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.ToString;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
@@ -24,8 +25,8 @@ import java.time.LocalDate;
         @Index(name = "idx_assignment_class_subject", columnList = "class_id, program_subject_id"),
         @Index(name = "idx_assignment_trainer_dates", columnList = "trainer_id, effective_from, effective_to")
 })
-@Getter
-@Setter
+@Data
+@EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("ASSIGNMENT")
@@ -36,6 +37,8 @@ public class TeachingAssignment extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "program_subject_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     ProgramSubject programSubject;
 
     /** ID of the trainer in the shared system; trainer profile data stays there. */

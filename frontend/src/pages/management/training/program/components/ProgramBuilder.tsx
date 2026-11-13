@@ -27,18 +27,38 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const KNOWN_TECH_GROUPS = ["JAVA", "FRONTEND", "AI", "COBOL", "CPP", "PYTHON", "OTHERS"];
+  const KNOWN_REGIONS = ["HCM", "HN", "DN", "QN", "GLOBAL", "FSA.HCM", "FSA.HN", "FSA.DN", "FSA.QN"];
+
+  const normalizeTechGroupValue = (raw?: string | null) => {
+    const trimmed = (raw || "").trim();
+    if (!trimmed) return "";
+    const upper = trimmed.toUpperCase();
+    return KNOWN_TECH_GROUPS.includes(upper) ? upper : trimmed;
+  };
+
   // Form state
   const [programType, setProgramType] = useState(initialProgram?.code?.split("_")[0] || "FR");
   const [code, setCode] = useState(initialProgram?.code || "");
   const [name, setName] = useState(initialProgram?.name || "");
   const [version, setVersion] = useState(initialProgram?.version || "1.0");
-  const [technicalGroup, setTechnicalGroup] = useState(initialProgram?.technicalGroup || "");
+  const [technicalGroup, setTechnicalGroup] = useState(
+    normalizeTechGroupValue(initialProgram?.technicalGroup)
+  );
   const [statusActive, setStatusActive] = useState(
     initialProgram ? initialProgram.status === "ACTIVE" : true
   );
   const [region, setRegion] = useState(initialProgram?.region || "");
   const [contentLink, setContentLink] = useState(initialProgram?.contentLink || "");
   const [description, setDescription] = useState(initialProgram?.description || "");
+
+  const regionOptions = useMemo(() => {
+    const trimmed = region.trim();
+    if (trimmed && trimmed !== "-" && !KNOWN_REGIONS.includes(trimmed)) {
+      return [trimmed, ...KNOWN_REGIONS];
+    }
+    return KNOWN_REGIONS;
+  }, [region]);
 
   // Topics selection
   const [selectedTopics, setSelectedTopics] = useState<ProgramSubjectItem[]>([]);
@@ -152,11 +172,12 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
     }
     setSaving(true);
     try {
+      const normalizedRegion = region.trim();
       const payload = {
         code: code.trim().toUpperCase(),
         name: name.trim(),
         version: version.trim(),
-        region: region.trim(),
+        region: normalizedRegion === "-" ? "" : normalizedRegion,
         technicalGroup: technicalGroup.trim(),
         contentLink: contentLink.trim(),
         description: description.trim(),
@@ -347,16 +368,20 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
 
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-gray-700">Region</Label>
-            <Select value={region} onValueChange={setRegion}>
+            <Select
+              value={region || "-"}
+              onValueChange={(val) => setRegion(val === "-" ? "" : val)}
+            >
               <SelectTrigger className="w-full text-sm">
                 <SelectValue placeholder="Select region" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="-">—</SelectItem>
-                <SelectItem value="FSA.HCM">FSA.HCM</SelectItem>
-                <SelectItem value="FSA.HN">FSA.HN</SelectItem>
-                <SelectItem value="FSA.DN">FSA.DN</SelectItem>
-                <SelectItem value="FSA.QN">FSA.QN</SelectItem>
+                {regionOptions.map((reg) => (
+                  <SelectItem key={reg} value={reg}>
+                    {reg}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -386,15 +411,15 @@ export function ProgramBuilder({ initialProgram, onBack, onSaved }: ProgramBuild
               <Label className="text-xs font-semibold text-gray-700">Description</Label>
               <span
                 className={`text-[10px] font-mono ${
-                  description.length >= 1000 ? "text-amber-600 font-semibold" : "text-muted-foreground"
+                  description.length >= 2000 ? "text-amber-600 font-semibold" : "text-muted-foreground"
                 }`}
               >
-                {description.length}/1000
+                {description.length}/2000
               </span>
             </div>
             <textarea
               value={description}
-              maxLength={1000}
+              maxLength={2000}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Program description..."
               rows={4}

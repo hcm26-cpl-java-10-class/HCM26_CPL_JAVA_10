@@ -1,0 +1,56 @@
+﻿,,,,,,,,
+,,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,MICROSERVICES & SPRING CLOUD ARCHITECTURE SYLLABUS,,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,SYL-CPL10_SPRING_CLOUD
+,,,,,Version,,,1.0
+,,,,,Effective Date,,,11/11/2026
+Microservices & Spring Cloud Architecture Syllabus,,,,,,,,
+1,Technical Group,Backend,,,,,,
+2,Topic Name,Microservices & Spring Cloud Architecture,,,,,,
+3,Topic Code,CPL10_SPRING_CLOUD,,,,,,
+4,Version,1.0,,,,,,
+5,Training Audience,Backend Engineers familiar with Spring Boot and REST APIs,,,,,,
+6,Course Objectives,"Design distributed microservices with Spring Cloud Gateway, Eureka discovery, OpenFeign, Resilience4j circuit breakers, and Kafka events.",,,,,,
+7,Topic Outline,"- Unit 1: Microservices Decomposition & Service Discovery
+- Unit 2: API Gateway, Inter-Service Calls & Resilience
+- Unit 3: Event-Driven Microservices with Apache Kafka
+- Unit 4: Microservices Evaluation & Capstone Defense",,,,,,
+8,Time Allocation,Concept/Lecture,0.28,"Theory, architecture concepts",10 Sessions,,,
+,,Assignment/Lab,0.38,Hands-on coding & exercises,,,,
+,,Guides/Review,0.06,Code walkthrough & Q&A,,,,
+,,Seminar/Workshop,0.09,Interactive seminar & debugging,,,,
+,,Exam,0.19,Quizzes & practical defense exam,,,,
+9,Training Materials & Environments,Text book,Official Backend Documentation & FAMS Guides,,,,,
+,,References,FAMS Internal LMS Knowledge Base,,,,,
+,,Technical requirements,"Modern IDE, Docker, Git, Browser DevTools",,,,,
+10,Assessment Scheme,Quizzes & Knowledge Tests,2,20,Short quizzes checking core theory (>= 6.0 / 10),,,
+,,Practical Lab Test,2,30,Hands-on lab assignments & Git code quality (>= 6.0 / 10),,,
+,,Final Practical Test,1,50,Capstone implementation & live defense (>= 6.0 / 10),,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% quizzes and final practical test,,,,
+11,Training Delivery Principles,Trainees,Completed prerequisite track; Active participation in daily labs,,,,,
+,Training Delivery Principles,Trainer,Senior Backend Engineer / Technical Mentor,,,,,
+,Training Delivery Principles,Training,"- Concept lectures in morning or online
+- Hands-on lab exercises & reviews in afternoon
+- Max 4h (240 mins) per session",,,,,
+,Training Delivery Principles,Re-Test,2 - Allow up to 2 re-takes with different exam variants,,,,,
+,Training Delivery Principles,Marking,Evaluated by trainer against official FAMS rubric,,,,,
+,Training Delivery Principles,Waiver Criteria,Fast-track entry exam score >= 8.5 / 10,,,,,
+,,,,,,,,
+Microservices & Spring Cloud Architecture - Training Schedule,,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,Microservices Decomposition & Service Discovery,1,Domain-Driven Microservices & Spring Cloud Overview,Identify bounded contexts and decompose monoliths safely,Concept/Lecture,180,Offline - Sáng (Morning),Slide-Microservices-DDD.pdf
+,,2,Eureka Server & Config Server Setup Lab,Register services dynamically and centralize application YAML configs,Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-01-Eureka-Config.zip
+2,"API Gateway, Inter-Service Calls & Resilience",3,Spring Cloud Gateway Routing & Rate Limiting,"Configure gateway filters, JWT forwarding, and Redis rate limiters",Concept/Lecture,180,Online - Sáng (Morning),Slide-Spring-Cloud-Gateway.pdf
+,,4,OpenFeign & Resilience4j Circuit Breaker Lab,"Implement retries, fallbacks, and circuit breakers across services",Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-02-Feign-Resilience4j.zip
+,,5,Distributed Tracing with Micrometer & Zipkin,Trace correlation IDs end-to-end across HTTP and message brokers,Seminar/Workshop,180,Offline - Sáng (Morning),Workshop-Zipkin-Tracing.pdf
+3,Event-Driven Microservices with Apache Kafka,6,"Kafka Topics, Partitions & Outbox Pattern",Guarantee reliable event delivery with transactional outbox,Concept/Lecture,180,Offline - Chiều (Afternoon),Slide-Kafka-Outbox.pdf
+,,7,Order-Inventory Saga Choreography Lab,Build Kafka producer/consumer services with idempotency and DLQ,Assignment/Lab,240,Offline - Sáng (Morning),Lab-03-Kafka-Saga.zip
+,,8,Architecture Q&A & Code Walkthrough,Review distributed consistency trade-offs and failure scenarios,Guides/Review,120,Online - Chiều (Afternoon),Review-Microservices-Guide.pdf
+4,Microservices Evaluation & Capstone Defense,9,Distributed Systems Architecture Quiz,"Assess CAP theorem, Saga, and resilience patterns knowledge",Test/Quiz,120,Offline - Sáng (Morning),Quiz-Spring-Cloud.pdf
+,,10,Capstone Microservices System Defense,Demonstrate 3-service Spring Cloud cluster with Kafka and Gateway,Exam,240,Offline - Chiều (Afternoon),Capstone-SpringCloud-Rubric.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10,,,

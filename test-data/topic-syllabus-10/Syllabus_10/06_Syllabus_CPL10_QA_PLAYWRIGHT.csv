@@ -1,0 +1,51 @@
+﻿,,,,,,,,
+,,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,E2E TEST AUTOMATION WITH PLAYWRIGHT & REST ASSURED SYLLABUS,,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,SYL-CPL10_QA_PLAYWRIGHT
+,,,,,Version,,,1.0
+,,,,,Effective Date,,,11/11/2026
+E2E Test Automation with Playwright & REST Assured Syllabus,,,,,,,,
+1,Technical Group,Testing,,,,,,
+2,Topic Name,E2E Test Automation with Playwright & REST Assured,,,,,,
+3,Topic Code,CPL10_QA_PLAYWRIGHT,,,,,,
+4,Version,1.0,,,,,,
+5,Training Audience,QA Engineers & Fullstack Developers building automated test gates,,,,,,
+6,Course Objectives,"Implement reliable Page Object Model E2E suites with Playwright TypeScript, automated API contract tests in REST Assured, and Allure reports.",,,,,,
+7,Topic Outline,"- Unit 1: Modern Web E2E Automation with Playwright
+- Unit 2: API Automation & Test Reporting
+- Unit 3: QA Automation Evaluation",,,,,,
+8,Time Allocation,Concept/Lecture,0.17,"Theory, architecture concepts",6 Sessions,,,
+,,Assignment/Lab,0.44,Hands-on coding & exercises,,,,
+,,Guides/Review,0.11,Code walkthrough & Q&A,,,,
+,,Seminar/Workshop,0.00,Interactive seminar & debugging,,,,
+,,Exam,0.28,Quizzes & practical defense exam,,,,
+9,Training Materials & Environments,Text book,Official Testing Documentation & FAMS Guides,,,,,
+,,References,FAMS Internal LMS Knowledge Base,,,,,
+,,Technical requirements,"Modern IDE, Docker, Git, Browser DevTools",,,,,
+10,Assessment Scheme,Quizzes & Knowledge Tests,2,20,Short quizzes checking core theory (>= 6.0 / 10),,,
+,,Practical Lab Test,2,30,Hands-on lab assignments & Git code quality (>= 6.0 / 10),,,
+,,Final Practical Test,1,50,Capstone implementation & live defense (>= 6.0 / 10),,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% quizzes and final practical test,,,,
+11,Training Delivery Principles,Trainees,Completed prerequisite track; Active participation in daily labs,,,,,
+,Training Delivery Principles,Trainer,Senior Testing Engineer / Technical Mentor,,,,,
+,Training Delivery Principles,Training,"- Concept lectures in morning or online
+- Hands-on lab exercises & reviews in afternoon
+- Max 4h (240 mins) per session",,,,,
+,Training Delivery Principles,Re-Test,2 - Allow up to 2 re-takes with different exam variants,,,,,
+,Training Delivery Principles,Marking,Evaluated by trainer against official FAMS rubric,,,,,
+,Training Delivery Principles,Waiver Criteria,Fast-track entry exam score >= 8.5 / 10,,,,,
+,,,,,,,,
+E2E Test Automation with Playwright & REST Assured - Training Schedule,,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,Modern Web E2E Automation with Playwright,1,"Playwright Architecture, Locators & Auto-Waiting",Write flake-free role/label locators and intercept network calls,Concept/Lecture,180,Offline - Sáng (Morning),Slide-Playwright-Core.pdf
+,,2,Page Object Model & Auth Storage State Lab,"Automate login, CRUD table, and CSV import E2E user journeys",Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-01-Playwright-POM.zip
+2,API Automation & Test Reporting,3,REST Assured API Testing & JSON Schema Validation,"Verify status codes, auth headers, and strict rollback API errors",Assignment/Lab,240,Offline - Sáng (Morning),Lab-02-RestAssured.zip
+,,4,Allure Reports & CI Trace Viewer Review,Attach failure screenshots/traces automatically in CI runs,Guides/Review,120,Online - Chiều (Afternoon),Guide-Allure-Playwright.pdf
+3,QA Automation Evaluation,5,Test Automation Strategy & Selector Quiz,"Evaluate test pyramid, mocking, and deterministic fixture design",Test/Quiz,120,Offline - Sáng (Morning),Quiz-QA-Automation.pdf
+,,6,Practical E2E & API Suite Defense,Execute automated regression suite live with Allure report output,Exam,180,Offline - Chiều (Afternoon),Exam-QA-Rubric.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10,,,

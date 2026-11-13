@@ -6,6 +6,9 @@ import com.example.starter_project_2025.system.subject.Subject;
 import com.example.starter_project_2025.system.subject.SubjectRepository;
 import com.example.starter_project_2025.system.training.TrainingClassRepository;
 import com.example.starter_project_2025.system.training.entity.TrainingClass;
+import com.example.starter_project_2025.system.trainingprogram.ClassTrainingProgram;
+import com.example.starter_project_2025.system.trainingprogram.ClassTrainingProgramRepository;
+import com.example.starter_project_2025.system.trainingprogram.TrainingProgramRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -28,6 +31,8 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
     SessionRepository sessionRepository;
     SubjectRepository subjectRepository;
     TrainingClassRepository trainingClassRepository;
+    TrainingProgramRepository trainingProgramRepository;
+    ClassTrainingProgramRepository classTrainingProgramRepository;
 
     @Override
     @Transactional
@@ -38,16 +43,11 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
             return;
         }
 
-        Long javaCoreId = subjectRepository.findByCodeAndVersion("JAVA_CORE", "1.0")
-                .map(Subject::getId).orElse(1L);
-        Long springBootId = subjectRepository.findByCodeAndVersion("SPRING_BOOT", "1.0")
-                .map(Subject::getId).orElse(2L);
-        Long sqlId = subjectRepository.findByCodeAndVersion("DATABASE_SQL", "1.0")
-                .map(Subject::getId).orElse(3L);
-        Long reactId = subjectRepository.findByCodeAndVersion("REACT_FRONTEND", "1.0")
-                .map(Subject::getId).orElse(4L);
-        Long devopsId = subjectRepository.findByCodeAndVersion("DEVOPS_BASIC", "1.0")
-                .map(Subject::getId).orElse(5L);
+        Long javaCoreId = resolveSubjectId("JAVA_CORE", "1.0");
+        Long springBootId = resolveSubjectId("SPRING_BOOT", "1.0");
+        Long sqlId = resolveSubjectId("DATABASE_SQL", "1.0");
+        Long reactId = resolveSubjectId("REACT_FRONTEND", "1.0");
+        Long devopsId = resolveSubjectId("DEVOPS_BASIC", "1.0");
 
         // =========================================================================
         // 1. CLASS LOCAL_JAVA_01 (Class ID 1) - START DATE: 2026-10-01
@@ -168,7 +168,7 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
             c1.setPlannedSize(25);
             c1.setSite("TP. Hồ Chí Minh");
             c1.setTraineeType("Fresher");
-            c1.setProgram("LOCAL_JAVA");
+            c1.setProgram("BACKEND_JAVA");
             c1.setClassAdmin("admin@example.com");
             c1.setMasterTrainer("Nguyễn Ngọc Tân (Trainer)");
             c1.setDeliveryType("Class");
@@ -176,7 +176,7 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
             c1.setSkills("Java, Spring Boot");
             c1.setLocation("Phòng Lab 201 (F-Town 2)");
             c1.setIsActive(true);
-            trainingClassRepository.save(c1);
+            c1 = trainingClassRepository.save(c1);
 
             TrainingClass c2 = new TrainingClass();
             c2.setCode("LOCAL_JAVA_02");
@@ -187,7 +187,7 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
             c2.setPlannedSize(30);
             c2.setSite("TP. Hồ Chí Minh");
             c2.setTraineeType("Fresher");
-            c2.setProgram("LOCAL_FULLSTACK");
+            c2.setProgram("FULLSTACK_JAVA");
             c2.setClassAdmin("admin@example.com");
             c2.setMasterTrainer("Nguyễn Mạnh Hoàng (Trainer)");
             c2.setDeliveryType("Class");
@@ -195,10 +195,26 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
             c2.setSkills("Java, React");
             c2.setLocation("Phòng 304 (Innovation Hall)");
             c2.setIsActive(true);
-            trainingClassRepository.save(c2);
+            c2 = trainingClassRepository.save(c2);
+
+            linkClassProgram(c1.getId(), "BACKEND_JAVA", "1.0");
+            linkClassProgram(c2.getId(), "FULLSTACK_JAVA", "1.0");
 
             log.info("Initialized sample TrainingClass entities for LOCAL_JAVA_01 and LOCAL_JAVA_02.");
         }
+    }
+
+    private void linkClassProgram(Long classId, String programCode, String version) {
+        if (classId == null || classTrainingProgramRepository.findByClassId(classId).isPresent()) {
+            return;
+        }
+        trainingProgramRepository.findByCodeAndVersion(programCode, version).ifPresent(program -> {
+            ClassTrainingProgram link = new ClassTrainingProgram();
+            link.setClassId(classId);
+            link.setProgram(program);
+            link.setIsActive(true);
+            classTrainingProgramRepository.save(link);
+        });
     }
 
     private void createSession(Long classId, Long topicId, Long trainerId, String title,
@@ -220,5 +236,12 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
                 .status(sessionStatus)
                 .isActive(true)
                 .build());
+    }
+
+    private Long resolveSubjectId(String code, String version) {
+        return subjectRepository.findByCodeAndVersion(code, version)
+                .map(Subject::getId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Required baseline subject not seeded: " + code + " v" + version));
     }
 }

@@ -1,18 +1,22 @@
 import axiosInstance from "../axios";
-import type { TopicItem, TopicImportPreview } from "@/types/features/content";
+import type { TopicImportPreview, TopicItem, TopicSyllabusDto } from "@/types/features/content";
+import type { ImportResult } from "@/types/common/import-result";
 import type { PageResponse } from "@/types/common/pageable";
+import { normalizeSubjectIdentity } from "@/utils/subject-identity.utils";
 
 const path = "/topics";
 
+export interface TopicPageParams {
+  page?: number;
+  size?: number;
+  search?: string;
+  technicalGroup?: string;
+  status?: string;
+  sort?: string;
+}
+
 export const topicApi = {
-  getPage: async (params: {
-    page?: number;
-    size?: number;
-    search?: string;
-    technicalGroup?: string;
-    status?: string;
-    sort?: string;
-  }): Promise<PageResponse<TopicItem>> => {
+  getPage: async (params: TopicPageParams): Promise<PageResponse<TopicItem>> => {
     const res = await axiosInstance.get<PageResponse<TopicItem>>(path, { params });
     return res.data;
   },
@@ -35,12 +39,12 @@ export const topicApi = {
   },
 
   create: async (data: Partial<TopicItem>): Promise<TopicItem> => {
-    const res = await axiosInstance.post<TopicItem>(path, data);
+    const res = await axiosInstance.post<TopicItem>(path, normalizeSubjectIdentity(data));
     return res.data;
   },
 
   update: async (id: number | string, data: Partial<TopicItem>): Promise<TopicItem> => {
-    const res = await axiosInstance.put<TopicItem>(`${path}/${id}`, data);
+    const res = await axiosInstance.put<TopicItem>(`${path}/${id}`, normalizeSubjectIdentity(data));
     return res.data;
   },
 
@@ -77,17 +81,18 @@ export const topicApi = {
     return res.data;
   },
 
-  importFile: async (file: File): Promise<any> => {
+  importFile: async (file: File): Promise<ImportResult> => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await axiosInstance.post(`${path}/import`, formData, {
+    const res = await axiosInstance.post<ImportResult>(`${path}/import`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return res.data;
   },
 
-  commitImport: async (items: Partial<TopicItem>[]): Promise<any> => {
-    const res = await axiosInstance.post(`${path}/import/commit`, items);
+  commitImport: async (items: Partial<TopicItem>[]): Promise<ImportResult> => {
+    const payload = items.map((item) => normalizeSubjectIdentity(item));
+    const res = await axiosInstance.post<ImportResult>(`${path}/import/commit`, payload);
     return res.data;
   },
 
@@ -96,5 +101,22 @@ export const topicApi = {
       responseType: "blob",
     });
     return res.data;
+  },
+
+  getSyllabus: async (id: number | string): Promise<TopicSyllabusDto> => {
+    const res = await axiosInstance.get<TopicSyllabusDto>(`${path}/${id}/syllabus`);
+    return res.data;
+  },
+
+  saveSyllabus: async (
+    id: number | string,
+    payload: TopicSyllabusDto
+  ): Promise<TopicSyllabusDto> => {
+    const res = await axiosInstance.put<TopicSyllabusDto>(`${path}/${id}/syllabus`, payload);
+    return res.data;
+  },
+
+  resetSyllabus: async (id: number | string): Promise<void> => {
+    await axiosInstance.delete(`${path}/${id}/syllabus`);
   },
 };

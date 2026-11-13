@@ -10,17 +10,39 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Entity
 @Table(name = "training_programs", uniqueConstraints = {
         @UniqueConstraint(name = "uk_training_program_code_version", columnNames = {"code", "version"})
 })
-@Getter @Setter @SuperBuilder @NoArgsConstructor @AllArgsConstructor
+@Data
+@EqualsAndHashCode(callSuper = true)
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("PROGRAM")
 @ResourceMenu(title = "Training Programs", group = "Training Management", icon = "layers",
         url = "/programs", order = 4, permission = "PROGRAM_READ")
 public class TrainingProgram extends BaseEntity {
+
+    @PrePersist
+    @PreUpdate
+    void normalizeAndSyncStatus() {
+        if (code != null) {
+            code = code.trim().toUpperCase(Locale.ROOT);
+        }
+        if (version != null) {
+            version = version.trim();
+        }
+        if (status == null) {
+            status = Boolean.FALSE.equals(isActive) ? ProgramStatus.INACTIVE : ProgramStatus.ACTIVE;
+        }
+        if (isActive == null) {
+            isActive = status == ProgramStatus.ACTIVE;
+        }
+    }
     @Column(nullable = false, length = 50)
     String code;
 
@@ -50,6 +72,8 @@ public class TrainingProgram extends BaseEntity {
     @OneToMany(mappedBy = "program", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("orderIndex ASC")
     @Builder.Default
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     List<ProgramSubject> subjects = new ArrayList<>();
 
     public void replaceSubjects(List<ProgramSubject> newSubjects) {

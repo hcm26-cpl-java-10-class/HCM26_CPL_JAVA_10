@@ -7,16 +7,20 @@ import com.example.starter_project_2025.base.crud.dto.OnUpdate;
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
 import com.example.starter_project_2025.base.dataio.common.FileFormat;
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
+import com.example.starter_project_2025.system.subject.dto.SubjectSyllabusDTO;
 import com.example.starter_project_2025.system.subject.dto.TopicImportPreviewResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -34,8 +38,10 @@ public class SubjectController
         extends BaseCrudDataIoController<Subject, Long, SubjectDTO, SubjectFilter> {
 
     SubjectService subjectService;
+    SubjectSyllabusService subjectSyllabusService;
     SubjectRepository subjectRepository;
     SubjectImportService subjectImportService;
+    SubjectImportTemplateProvider subjectImportTemplateProvider;
 
     @Override
     @GetMapping
@@ -115,67 +121,14 @@ public class SubjectController
     @GetMapping("/import/template")
     @PreAuthorize("hasAuthority('SUBJECT_READ')")
     @Operation(summary = "Download topic import Excel template")
-    public ResponseEntity<byte[]> importTemplate() throws java.io.IOException {
-        try (
-                org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
-                java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream()
-        ) {
-            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Subjects");
-            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
-
-            org.apache.poi.ss.usermodel.CellStyle headerStyle = workbook.createCellStyle();
-            org.apache.poi.ss.usermodel.Font headerFont = workbook.createFont();
-            headerFont.setBold(true);
-            headerFont.setColor(org.apache.poi.ss.usermodel.IndexedColors.WHITE.getIndex());
-            headerStyle.setFont(headerFont);
-            headerStyle.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.ROYAL_BLUE.getIndex());
-            headerStyle.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
-
-            String[] headers = {
-                    "Code",
-                    "Name",
-                    "Version",
-                    "Technical Group",
-                    "Duration (Hours)",
-                    "Description",
-                    "Status"
-            };
-
-            for (int i = 0; i < headers.length; i++) {
-                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
-                cell.setCellValue(headers[i]);
-                cell.setCellStyle(headerStyle);
-            }
-
-            Object[][] sampleData = {
-                    {"L1_AL_CCGM", "Clean Code and Git Multi-platform", "1.0", "Java", 20, "Clean code guidelines and Git branching workflows", "ACTIVE"},
-                    {"L2_JA_ORM", "Hibernate and JPA Persistence", "1.0", "Java", 40, "ORM mapping, queries, caching and criteria", "ACTIVE"}
-            };
-
-            for (int r = 0; r < sampleData.length; r++) {
-                org.apache.poi.ss.usermodel.Row row = sheet.createRow(r + 1);
-                for (int c = 0; c < sampleData[r].length; c++) {
-                    org.apache.poi.ss.usermodel.Cell cell = row.createCell(c);
-                    Object val = sampleData[r][c];
-                    if (val instanceof Number n) {
-                        cell.setCellValue(n.doubleValue());
-                    } else if (val != null) {
-                        cell.setCellValue(val.toString());
-                    }
-                }
-            }
-
-            for (int i = 0; i < headers.length; i++) {
-                sheet.autoSizeColumn(i);
-            }
-
-            workbook.write(output);
-
-            return ResponseEntity.ok()
-                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=topic-import-template.xlsx")
-                    .contentType(org.springframework.http.MediaType.APPLICATION_OCTET_STREAM)
-                    .body(output.toByteArray());
-        }
+    public ResponseEntity<byte[]> importTemplate() {
+        byte[] file = subjectImportTemplateProvider.generate(Subject.class);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=topic-import-template.xlsx")
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(file);
     }
 
     @Override
@@ -215,5 +168,30 @@ public class SubjectController
     @Operation(summary = "Check if topic is referenced", description = "Check if topic is used in training programs or schedules")
     public ResponseEntity<Boolean> isSubjectReferenced(@PathVariable Long id) {
         return ResponseEntity.ok(subjectService.isSubjectReferenced(id));
+    }
+
+    @GetMapping("/{id}/syllabus")
+    @PreAuthorize("hasAuthority('SUBJECT_READ')")
+    @Operation(summary = "Get persisted syllabus outline and assessment scheme for a topic")
+    public ResponseEntity<SubjectSyllabusDTO> getSyllabus(@PathVariable Long id) {
+        return ResponseEntity.ok(subjectSyllabusService.getSyllabus(id));
+    }
+
+    @PutMapping("/{id}/syllabus")
+    @PreAuthorize("hasAuthority('SUBJECT_UPDATE')")
+    @Operation(summary = "Save persisted syllabus outline and assessment scheme for a topic")
+    public ResponseEntity<SubjectSyllabusDTO> saveSyllabus(
+            @PathVariable Long id,
+            @Valid @RequestBody SubjectSyllabusDTO request
+    ) {
+        return ResponseEntity.ok(subjectSyllabusService.saveSyllabus(id, request));
+    }
+
+    @DeleteMapping("/{id}/syllabus")
+    @PreAuthorize("hasAuthority('SUBJECT_UPDATE')")
+    @Operation(summary = "Reset persisted syllabus outline and assessment scheme for a topic")
+    public ResponseEntity<Void> resetSyllabus(@PathVariable Long id) {
+        subjectSyllabusService.resetSyllabus(id);
+        return ResponseEntity.noContent().build();
     }
 }

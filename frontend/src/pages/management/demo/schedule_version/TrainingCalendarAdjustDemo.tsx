@@ -33,9 +33,9 @@ import {
   Menu,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { ScheduleVersionDTO, SubjectDTO, SessionDTO } from "@/types";
+import type { ScheduleVersionDTO, TopicItem, SessionDTO } from "@/types";
 import { scheduleVersionApi } from "@/api/features/demo/schedule_version.api";
-import { subjectApi } from "@/api/features/subject.api";
+import { topicApi } from "@/api/features/topic.api";
 import { sessionApi } from "@/api/features/demo/session.api";
 import { classSetupApi, type SharedClass, type SharedTrainer } from "@/api/features/class-setup.api";
 
@@ -748,7 +748,7 @@ export default function TrainingCalendarAdjustDemo({
   }
 
   // Danh mục môn học thực tế từ API Hoàng
-  const [systemSubjects, setSystemSubjects] = useState<SubjectDTO[]>([]);
+  const [systemSubjects, setSystemSubjects] = useState<TopicItem[]>([]);
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(false);
 
   // Modal thêm Topic với cơ chế tự động chia theo Duration
@@ -845,7 +845,7 @@ export default function TrainingCalendarAdjustDemo({
     const fetchActiveSubjects = async () => {
       setIsLoadingSubjects(true);
       try {
-        const subjects = await subjectApi.getActiveSubjects();
+        const subjects = await topicApi.getActive();
         if (isMounted && subjects && subjects.length > 0) {
           setSystemSubjects(subjects);
         }
@@ -1145,10 +1145,10 @@ export default function TrainingCalendarAdjustDemo({
       }));
     } else {
       try {
-        const apiSubjects = await subjectApi.getActiveSubjects();
+        const apiSubjects = await topicApi.getActive();
         if (apiSubjects && apiSubjects.length > 0) {
           setSystemSubjects(apiSubjects);
-          sourceList = apiSubjects.map((s: any) => ({
+          sourceList = apiSubjects.map((s) => ({
             code: s.code,
             name: s.name,
             durationHours: s.durationHours || 20,

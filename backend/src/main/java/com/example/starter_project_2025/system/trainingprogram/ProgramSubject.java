@@ -3,38 +3,47 @@ package com.example.starter_project_2025.system.trainingprogram;
 import com.example.starter_project_2025.system.subject.Subject;
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 @Entity
 @Table(name = "program_subjects")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class ProgramSubject {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "program_id", nullable = false)
-    private TrainingProgram program;
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    TrainingProgram program;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "subject_id", nullable = false)
-    private Subject subject;
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    Subject subject;
 
     @Column(name = "order_index", nullable = false)
-    private Integer orderIndex;
+    Integer orderIndex;
 
     // Snapshot fields preserved per program version
     @Column(name = "subject_code", length = 50)
-    private String subjectCode;
+    String subjectCode;
 
     @Column(name = "subject_name", length = 255)
-    private String subjectName;
+    String subjectName;
 
     @Column(name = "subject_version", length = 20)
-    private String subjectVersion;
+    String subjectVersion;
 
     @Column(name = "duration_hours")
-    private Integer durationHours;
+    Integer durationHours;
 
     public String resolveCode() {
         return subjectCode != null && !subjectCode.isBlank() ? subjectCode : (subject != null ? subject.getCode() : null);

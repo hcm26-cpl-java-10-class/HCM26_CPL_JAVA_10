@@ -1,44 +1,22 @@
-import type { TopicItem } from "@/types/features/content";
+import type {
+  TopicAssessmentItem,
+  SessionShift,
+  SyllabusDocumentMeta,
+  TopicChapter,
+  TopicItem,
+  TopicSession,
+  TopicSyllabusDto,
+} from "@/types/features/content";
 
-export type SessionShift = "Morning" | "Afternoon";
-
-export interface TopicSession {
-  session: number;
-  content: string;
-  objectives: string;
-  deliveryType:
-    | "Concept/Lecture"
-    | "Assignment/Lab"
-    | "Exam"
-    | "Guides/Review"
-    | "Test/Quiz"
-    | "Seminar/Workshop"
-    | "Class Meeting";
-  sessionTime?: SessionShift;
-  duration: string;
-  durationHours: number;
-  durationMins?: number;
-  trainingFormat: "Online" | "Offline";
-  materials: string;
-}
-
-export interface TopicChapter {
-  id: number;
-  unitNumber?: number;
-  title: string;
-  sessions: TopicSession[];
-}
-
-export interface AssessmentItem {
-  id?: string;
-  category: string;
-  count?: number;
-  method: string;
-  passingScore: string;
-  weight: string;
-  weightedNumber?: number;
-  notes?: string;
-}
+export type AssessmentItem = TopicAssessmentItem;
+export type {
+  TopicAssessmentItem,
+  SessionShift,
+  SyllabusDocumentMeta,
+  TopicChapter,
+  TopicSession,
+  TopicSyllabusDto,
+};
 
 export const DEFAULT_ASSESSMENT_SCHEME: AssessmentItem[] = [
   {
@@ -78,16 +56,6 @@ export const DEFAULT_ASSESSMENT_SCHEME: AssessmentItem[] = [
     notes: "Final theory test",
   },
 ];
-
-export interface SyllabusDocumentMeta {
-  documentCode?: string;
-  version?: string;
-  effectiveDate?: string;
-  trainingAudience?: string;
-  courseObjectives?: string;
-  topicOutline?: string;
-  deliveryPrinciples?: Record<string, string>;
-}
 
 export interface TopicSyllabusPackage {
   meta?: SyllabusDocumentMeta;
@@ -285,7 +253,8 @@ export function resetTopicSyllabusPackage(topicId: number | string, topicCode?: 
 export function calculateSyllabusPackage(
   chapters: TopicChapter[],
   topic: TopicItem,
-  overrideScheme?: AssessmentItem[]
+  overrideScheme?: AssessmentItem[],
+  meta?: SyllabusDocumentMeta | null
 ): TopicSyllabusPackage {
   // Check if custom assessment scheme exists in storage
   const savedScheme = overrideScheme ||
@@ -294,6 +263,7 @@ export function calculateSyllabusPackage(
 
   if (!chapters || chapters.length === 0) {
     return {
+      meta: meta || undefined,
       chapters: [],
       totalSessions: 0,
       timeAllocation: {
@@ -390,6 +360,7 @@ export function calculateSyllabusPackage(
   }
 
   return {
+    meta: meta || undefined,
     chapters,
     totalSessions,
     totalMins: Math.round(totalCalculated * 60),
@@ -400,6 +371,53 @@ export function calculateSyllabusPackage(
       total: totalCalculated > 0 ? totalCalculated : targetDuration,
     },
     assessmentScheme,
+  };
+}
+
+export const DEFAULT_PASS_SCORE = ">= 6.0 / 10";
+
+export function hasPersistedSyllabusData(serverSyllabus?: TopicSyllabusDto | null): boolean {
+  if (!serverSyllabus) return false;
+  const hasChapters = Array.isArray(serverSyllabus.chapters) && serverSyllabus.chapters.length > 0;
+  const hasScheme =
+    Array.isArray(serverSyllabus.assessmentScheme) && serverSyllabus.assessmentScheme.length > 0;
+  const hasMeta = Boolean(serverSyllabus.meta && Object.keys(serverSyllabus.meta).length > 0);
+  const hasCustomPass =
+    Boolean(serverSyllabus.passScore && serverSyllabus.passScore !== DEFAULT_PASS_SCORE);
+  return hasChapters || hasScheme || hasMeta || hasCustomPass;
+}
+
+export function resolveTopicSyllabusPackage(
+  topic: TopicItem,
+  serverSyllabus?: TopicSyllabusDto | null
+): TopicSyllabusPackage & { passScore: string; hasCustomScheme: boolean } {
+  if (hasPersistedSyllabusData(serverSyllabus) && serverSyllabus) {
+    const schemeOverride =
+      serverSyllabus.assessmentScheme && serverSyllabus.assessmentScheme.length > 0
+        ? serverSyllabus.assessmentScheme
+        : undefined;
+    const pkg = calculateSyllabusPackage(
+      serverSyllabus.chapters || [],
+      topic,
+      schemeOverride,
+      serverSyllabus.meta
+    );
+    return {
+      ...pkg,
+      passScore: serverSyllabus.passScore || DEFAULT_PASS_SCORE,
+      hasCustomScheme: Boolean(schemeOverride),
+    };
+  }
+
+  const localPkg = getTopicSyllabusPackage(topic);
+  const localScheme = Boolean(
+    (topic.id && getCustomAssessmentScheme(topic.id)) ||
+      (topic.code && getCustomAssessmentScheme(topic.code))
+  );
+  return {
+    ...localPkg,
+    passScore: (topic.id ? getCustomPassScore(topic.id) : null) || DEFAULT_PASS_SCORE,
+    hasCustomScheme: localScheme,
   };
 }
 

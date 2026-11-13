@@ -39,7 +39,6 @@ export * from "./features/external";
 export * from "./features/content";
 export * from "./features/calendar";
 export * from "./features/demo/schedule_version";
-export * from "./features/subject";
 export * from "./features/workspace";
 export * from "./features/rubric";
 export * from "./features/team-allocation";

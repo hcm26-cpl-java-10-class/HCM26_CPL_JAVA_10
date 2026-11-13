@@ -19,9 +19,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { topicApi } from "@/api/features/topic.api";
+import { topicKeys } from "@/hooks/useTopics";
 import type { TopicItem } from "@/types/features/content";
+import { describeApiError } from "@/utils/api-error.utils";
+import { normalizeSubjectIdentity } from "@/utils/subject-identity.utils";
 import {
   parseStandardSyllabusCsv,
   type ParsedSyllabus,
@@ -45,6 +49,7 @@ export function SyllabusImportDialog({
   targetTopic,
   onSuccess,
 }: SyllabusImportDialogProps) {
+  const queryClient = useQueryClient();
   const [parsed, setParsed] = useState<ParsedSyllabus | null>(null);
   const [activeTab, setActiveTab] = useState<"schedule" | "principles">("schedule");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -100,9 +105,9 @@ export function SyllabusImportDialog({
 
       setParsed(result);
       toast.success(`Parsed syllabus successfully: ${result.totalSessions} sessions across ${result.chapters.length} units.`);
-    } catch (e: any) {
-      console.error("Failed to parse syllabus file", e);
-      setErrorMsg(e.message || "Failed to parse syllabus file");
+    } catch (err) {
+      console.error("Failed to parse syllabus file", err);
+      setErrorMsg(describeApiError(err, "Failed to parse syllabus file").message);
     }
   };
 
@@ -144,30 +149,40 @@ export function SyllabusImportDialog({
       if (targetTopic) {
         resolvedTopic = targetTopic;
       } else {
+        const normalizedTarget = normalizeSubjectIdentity({
+          code: parsed.topicCode,
+          version: parsed.version,
+        });
+        const codeKey = normalizedTarget.code || parsed.topicCode.trim().toUpperCase();
+        const versionKey = normalizedTarget.version || parsed.version.trim();
+
         try {
-          const created = await topicApi.create({
-            code: parsed.topicCode,
+          resolvedTopic = await topicApi.create({
+            code: codeKey,
             name: parsed.topicName,
-            version: parsed.version,
+            version: versionKey,
             description: parsed.courseObjectives || `Syllabus for ${parsed.topicName}`,
             technicalGroup: parsed.technicalGroup,
-            durationHours: Math.ceil(parsed.totalDurationHours),
+            durationHours: Math.max(1, Math.ceil(parsed.totalDurationHours) || 1),
             isActive: true,
           });
-          resolvedTopic = created;
-        } catch {
-          resolvedTopic = {
-            id: Date.now(),
-            code: parsed.topicCode,
-            name: parsed.topicName,
-            version: parsed.version,
-            description: parsed.courseObjectives,
-            technicalGroup: parsed.technicalGroup,
-            durationHours: Math.ceil(parsed.totalDurationHours),
-            isActive: true,
-            status: "ACTIVE",
-          };
+        } catch (createErr) {
+          const errInfo = describeApiError(createErr, "Failed to create topic from syllabus");
+          if (errInfo.status === 409 || errInfo.kind === "conflict") {
+            const allTopics = await topicApi.getAll();
+            const existing = allTopics.find((item) => {
+              const norm = normalizeSubjectIdentity({ code: item.code, version: item.version });
+              return norm.code === codeKey && norm.version === versionKey;
+            });
+            if (!existing) {
+              throw new Error(errInfo.message);
+            }
+            resolvedTopic = existing;
+          } else {
+            throw new Error(errInfo.message);
+          }
         }
+        await queryClient.invalidateQueries({ queryKey: topicKeys.all });
       }
 
       // Save syllabus package & schedule details
@@ -193,6 +208,18 @@ export function SyllabusImportDialog({
         assessmentScheme: parsed.assessmentScheme,
       };
 
+      const passScore = ">= 6.0 / 10";
+      await topicApi.saveSyllabus(resolvedTopic.id, {
+        passScore,
+        meta: pkg.meta ?? null,
+        chapters: pkg.chapters,
+        assessmentScheme:
+          parsed.assessmentScheme && parsed.assessmentScheme.length > 0
+            ? parsed.assessmentScheme
+            : null,
+      });
+      await queryClient.invalidateQueries({ queryKey: topicKeys.syllabus(resolvedTopic.id) });
+
       saveTopicSyllabusPackage(resolvedTopic.id, pkg.chapters, resolvedTopic);
       if (resolvedTopic.code) {
         saveTopicSyllabusPackage(resolvedTopic.code, pkg.chapters, resolvedTopic);
@@ -202,7 +229,7 @@ export function SyllabusImportDialog({
         saveCustomAssessmentScheme(
           resolvedTopic.id,
           parsed.assessmentScheme,
-          ">= 6.0 / 10",
+          passScore,
           resolvedTopic.code
         );
       }
@@ -214,9 +241,9 @@ export function SyllabusImportDialog({
       if (onSuccess) {
         onSuccess(resolvedTopic);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Import syllabus error", err);
-      toast.error(err.message || "Failed to save imported syllabus");
+      toast.error(describeApiError(err, "Failed to save imported syllabus").message);
     } finally {
       setIsProcessing(false);
     }

@@ -106,3 +106,61 @@ export interface TopicImportPreview {
   canImport: boolean;
   rows: TopicImportPreviewRow[];
 }
+
+export type SessionShift = "Morning" | "Afternoon";
+
+export interface TopicSession {
+  session: number;
+  content: string;
+  objectives: string;
+  deliveryType:
+    | "Concept/Lecture"
+    | "Assignment/Lab"
+    | "Exam"
+    | "Guides/Review"
+    | "Test/Quiz"
+    | "Seminar/Workshop"
+    | "Class Meeting";
+  sessionTime?: SessionShift;
+  duration: string;
+  durationHours: number;
+  durationMins?: number;
+  trainingFormat: "Online" | "Offline";
+  materials: string;
+}
+
+export interface TopicChapter {
+  id: number;
+  unitNumber?: number;
+  title: string;
+  sessions: TopicSession[];
+}
+
+export interface TopicAssessmentItem {
+  id?: string;
+  category: string;
+  count?: number;
+  method: string;
+  passingScore: string;
+  weight: string;
+  weightedNumber?: number;
+  notes?: string;
+}
+
+export interface SyllabusDocumentMeta {
+  documentCode?: string;
+  version?: string;
+  effectiveDate?: string;
+  trainingAudience?: string;
+  courseObjectives?: string;
+  topicOutline?: string;
+  deliveryPrinciples?: Record<string, string>;
+}
+
+export interface TopicSyllabusDto {
+  subjectId?: number;
+  passScore?: string | null;
+  meta?: SyllabusDocumentMeta | null;
+  chapters: TopicChapter[];
+  assessmentScheme?: TopicAssessmentItem[] | null;
+}

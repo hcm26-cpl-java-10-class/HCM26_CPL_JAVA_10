@@ -12,8 +12,6 @@ import com.example.starter_project_2025.system.trainingprogram.TeachingAssignmen
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.jdbc.BadSqlGrammarException;
-import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,10 +27,11 @@ public class SubjectServiceImpl
 
     SubjectMapper subjectMapper;
     SubjectRepository subjectRepository;
+    SubjectSyllabusRepository subjectSyllabusRepository;
+    SubjectValidator subjectValidator;
     SessionRepository sessionRepository;
     ProgramSubjectRepository programSubjectRepository;
     TeachingAssignmentRepository teachingAssignmentRepository;
-    JdbcOperations jdbcTemplate;
 
     @Override
     protected BaseCrudRepository<Subject, Long> getRepository() {
@@ -51,65 +50,18 @@ public class SubjectServiceImpl
 
     @Override
     protected void beforeCreate(Subject subject, SubjectDTO request, ValidationContext ctx) {
-        String code = SubjectIdentity.normalizeCode(request.getCode());
-        String version = SubjectIdentity.normalizeVersion(request.getVersion());
-        request.setCode(code);
-        request.setVersion(version);
-        subject.setCode(code);
-        subject.setVersion(version);
-        validateIdentity(code, version, null, ctx);
-
-        if (request.getIsActive() == null) {
-            request.setIsActive(request.getStatus() != SubjectStatus.INACTIVE);
-        }
-        if (request.getStatus() == null) {
-            request.setStatus(Boolean.FALSE.equals(request.getIsActive()) ? SubjectStatus.INACTIVE : SubjectStatus.ACTIVE);
-        }
-        subject.setIsActive(request.getIsActive());
-        subject.setStatus(request.getStatus());
-
-        if (request.getDurationHours() != null && request.getDurationHours() <= 0) {
-            ctx.add("durationHours", "Subject duration must be greater than 0");
-        }
+        subjectValidator.prepareForCreate(subject, request, ctx);
     }
 
     @Override
     protected void beforeUpdate(Subject subject, SubjectDTO request, ValidationContext ctx) {
-        String checkCode = SubjectIdentity.normalizeCode(
-                request.getCode() != null ? request.getCode() : subject.getCode());
-        String checkVersion = SubjectIdentity.normalizeVersion(
-                request.getVersion() != null ? request.getVersion() : subject.getVersion());
-        validateIdentity(checkCode, checkVersion, subject.getId(), ctx);
-        request.setCode(checkCode);
-        request.setVersion(checkVersion);
-
-        if (request.getStatus() != null && request.getIsActive() == null) {
-            request.setIsActive(request.getStatus() == SubjectStatus.ACTIVE);
-        } else if (request.getIsActive() != null && request.getStatus() == null) {
-            request.setStatus(request.getIsActive() ? SubjectStatus.ACTIVE : SubjectStatus.INACTIVE);
-        }
-        if (request.getStatus() != null) subject.setStatus(request.getStatus());
-        if (request.getIsActive() != null) subject.setIsActive(request.getIsActive());
-
-        if (request.getDurationHours() != null && request.getDurationHours() <= 0) {
-            ctx.add("durationHours", "Subject duration must be greater than 0");
-        }
-    }
-
-    private void validateIdentity(String code, String version, Long excludedId, ValidationContext ctx) {
-        if (code == null || code.isBlank()) ctx.add("code", "Subject code is required");
-        if (version == null || version.isBlank()) ctx.add("version", "Version is required");
-        if (code == null || code.isBlank() || version == null || version.isBlank()) return;
-        if (subjectRepository.existsByNormalizedIdentity(code, SubjectIdentity.versionAliases(version), excludedId)) {
-            ctx.add("code", "Subject with code '" + code + "' and version '" + version
-                    + "' already exists (codes are case-insensitive; v1.0 and 1.0 are the same version)");
-        }
+        subjectValidator.prepareForUpdate(subject, request, ctx);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<SubjectDTO> getActiveSubjects() {
-        return subjectRepository.findByIsActiveTrue()
+        return subjectRepository.findByIsActiveTrueAndStatus(SubjectStatus.ACTIVE)
                 .stream()
                 .map(subjectMapper::toResponse)
                 .toList();
@@ -136,6 +88,9 @@ public class SubjectServiceImpl
                     subject.getCode(), subject.getVersion()
             ));
         }
+        if (subjectSyllabusRepository != null && subject.getId() != null) {
+            subjectSyllabusRepository.deleteBySubject_Id(subject.getId());
+        }
     }
 
     @Override
@@ -145,35 +100,15 @@ public class SubjectServiceImpl
             return false;
         }
 
-        // 1. Check in sessions table (Topic ID)
         if (sessionRepository != null && sessionRepository.existsByTopicId(id)) {
             return true;
         }
 
-        // 2. Check in training programs (program_subjects)
         if (programSubjectRepository != null && programSubjectRepository.existsBySubject_Id(id)) {
             return true;
         }
 
-        // 3. Check teaching assignments (teaching_assignments)
-        if (teachingAssignmentRepository != null && teachingAssignmentRepository.existsByProgramSubject_Subject_Id(id)) {
-            return true;
-        }
-
-        // 4. Check other modules such as study_sessions if table exists
-        if (jdbcTemplate != null) {
-            try {
-                Integer count = jdbcTemplate.queryForObject(
-                        "SELECT COUNT(*) FROM study_sessions WHERE subject_id = ? OR topic_id = ?",
-                        Integer.class, id, id);
-                if (count != null && count > 0) {
-                    return true;
-                }
-            } catch (BadSqlGrammarException ignored) {
-                // Table study_sessions not created in this phase
-            }
-        }
-
-        return false;
+        return teachingAssignmentRepository != null
+                && teachingAssignmentRepository.existsByProgramSubject_Subject_Id(id);
     }
 }

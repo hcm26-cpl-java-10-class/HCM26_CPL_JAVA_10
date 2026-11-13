@@ -12,7 +12,7 @@ import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { useEffect, useState, useMemo, createContext, useContext } from "react";
 import { externalApi } from "@/api/features/external.api";
-import axiosInstance from "@/api/axios";
+import { topicApi } from "@/api/features/topic.api";
 import type { ExternalTrainer } from "@/types";
 import {
   Dialog,
@@ -400,10 +400,10 @@ export default function WeeklyCalendarPage() {
       }
     }).catch(() => {});
 
-    axiosInstance.get("/subjects?page=0&size=100").then((res: any) => {
-      const list = res?.data?.content || res?.data || [];
+    topicApi.getPage({ page: 0, size: 100 }).then((res) => {
+      const list = res?.content || [];
       if (Array.isArray(list) && list.length > 0) {
-        setSystemSubjects(list.map((s: any) => ({
+        setSystemSubjects(list.map((s) => ({
           id: s.id,
           code: s.code,
           name: s.name,

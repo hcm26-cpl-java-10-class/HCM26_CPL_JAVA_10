@@ -1,9 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import type { TopicItem } from "@/types/features/content";
+import { useTopicMutations, useTopicSyllabus } from "@/hooks/useTopics";
+import { describeApiError } from "@/utils/api-error.utils";
 import {
-  getTopicSyllabusPackage,
-  saveTopicSyllabusPackage,
+  DEFAULT_PASS_SCORE,
   resetTopicSyllabusPackage,
+  resolveTopicSyllabusPackage,
+  saveTopicSyllabusPackage,
 } from "./topicSyllabusData";
 import type {
   TopicChapter,
@@ -64,19 +67,25 @@ export function TopicSyllabusEditorDialog({
   onOpenChange,
   onSaved,
 }: TopicSyllabusEditorDialogProps) {
-  // Load initial chapters from existing package or empty
-  const initialPackage = useMemo(() => getTopicSyllabusPackage(topic), [topic]);
+  const { data: serverSyllabus } = useTopicSyllabus(topic.id, open);
+  const { saveTopicSyllabus, resetTopicSyllabus } = useTopicMutations();
+
+  // Load initial chapters from persisted syllabus or fallback localStorage
+  const initialPackage = useMemo(
+    () => resolveTopicSyllabusPackage(topic, serverSyllabus),
+    [topic, serverSyllabus]
+  );
   const [chapters, setChapters] = useState<TopicChapter[]>(() =>
     JSON.parse(JSON.stringify(initialPackage.chapters || []))
   );
 
-  // Sync state whenever dialog opens or topic changes
+  // Sync state whenever dialog opens, topic changes, or server syllabus loads
   useEffect(() => {
     if (open) {
-      const pkg = getTopicSyllabusPackage(topic);
+      const pkg = resolveTopicSyllabusPackage(topic, serverSyllabus);
       setChapters(JSON.parse(JSON.stringify(pkg.chapters || [])));
     }
-  }, [open, topic]);
+  }, [open, topic, serverSyllabus]);
 
   // Expanded state for chapter cards
   const [expandedChapters, setExpandedChapters] = useState<Record<number, boolean>>({});
@@ -301,15 +310,36 @@ export function TopicSyllabusEditorDialog({
     setIsResetConfirmOpen(true);
   };
 
-  const handleConfirmReset = () => {
-    resetTopicSyllabusPackage(topic.id, topic.code);
-    setChapters([]);
-    setIsResetConfirmOpen(false);
-    toast.info("Schedule outline cleared.");
+  const handleConfirmReset = async () => {
+    try {
+      const hasMetaOrScheme = Boolean(
+        serverSyllabus?.meta ||
+          (serverSyllabus?.assessmentScheme && serverSyllabus.assessmentScheme.length > 0)
+      );
+      if (hasMetaOrScheme) {
+        await saveTopicSyllabus.mutateAsync({
+          id: topic.id,
+          payload: {
+            passScore: serverSyllabus?.passScore || DEFAULT_PASS_SCORE,
+            meta: serverSyllabus?.meta ?? null,
+            chapters: [],
+            assessmentScheme: serverSyllabus?.assessmentScheme ?? null,
+          },
+        });
+      } else {
+        await resetTopicSyllabus.mutateAsync(topic.id);
+      }
+      resetTopicSyllabusPackage(topic.id, topic.code);
+      setChapters([]);
+      setIsResetConfirmOpen(false);
+      toast.info("Schedule outline cleared.");
+    } catch (err) {
+      toast.error(describeApiError(err, "Failed to clear schedule outline").message);
+    }
   };
 
   // Save Schedule Outline
-  const handleSave = () => {
+  const handleSave = async () => {
     if (chapters.length > 0) {
       for (const ch of chapters) {
         for (const s of ch.sessions) {
@@ -331,8 +361,23 @@ export function TopicSyllabusEditorDialog({
       }
     }
 
-    // Persist custom syllabus
+    // Persist custom syllabus to DB (and sync local fallback cache)
     const finalChapters = renumberSessions(chapters);
+    try {
+      await saveTopicSyllabus.mutateAsync({
+        id: topic.id,
+        payload: {
+          passScore: serverSyllabus?.passScore || DEFAULT_PASS_SCORE,
+          meta: serverSyllabus?.meta ?? null,
+          chapters: finalChapters,
+          assessmentScheme: serverSyllabus?.assessmentScheme ?? null,
+        },
+      });
+    } catch (err) {
+      toast.error(describeApiError(err, "Failed to save schedule outline").message);
+      return;
+    }
+
     const updatedPkg = saveTopicSyllabusPackage(topic.id, finalChapters, topic);
 
     if (finalChapters.length === 0) {

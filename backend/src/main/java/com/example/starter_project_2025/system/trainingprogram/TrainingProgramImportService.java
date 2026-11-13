@@ -1,7 +1,9 @@
 package com.example.starter_project_2025.system.trainingprogram;
 
 import com.example.starter_project_2025.system.subject.Subject;
+import com.example.starter_project_2025.system.subject.SubjectIdentity;
 import com.example.starter_project_2025.system.subject.SubjectRepository;
+import com.example.starter_project_2025.system.subject.SubjectStatus;
 import com.opencsv.CSVParser;
 import com.opencsv.CSVParserBuilder;
 import com.opencsv.CSVReader;
@@ -116,6 +118,26 @@ public class TrainingProgramImportService {
             );
         }
 
+        return importGroupedRows(rows);
+    }
+
+    @Transactional
+    public int importAll(MultipartFile file) {
+        List<Row> rows = read(file);
+        Map<Integer, List<String>> errors = validate(rows);
+
+        if (!errors.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Import rejected (Strict Rollback): Found "
+                            + errors.size()
+                            + " invalid row(s). Please preview and fix all errors before importing."
+            );
+        }
+
+        return importGroupedRows(rows);
+    }
+
+    private int importGroupedRows(List<Row> rows) {
         Map<Key, List<Row>> groups = rows.stream()
                 .collect(Collectors.groupingBy(
                         row -> new Key(
@@ -134,11 +156,7 @@ public class TrainingProgramImportService {
             List<ProgramSubjectRequest> subjects = group.stream()
                     .sorted(Comparator.comparing(Row::orderIndex))
                     .map(row -> {
-                        Subject subject = subjectRepository
-                                .findByCodeAndVersion(
-                                        row.subjectCode().trim(),
-                                        row.subjectVersion().trim()
-                                )
+                        Subject subject = resolveSubject(row.subjectCode(), row.subjectVersion())
                                 .orElseThrow(() ->
                                         new IllegalArgumentException(
                                                 "Topic not found: "
@@ -149,7 +167,7 @@ public class TrainingProgramImportService {
                                         )
                                 );
 
-                        if (!Boolean.TRUE.equals(subject.getIsActive())) {
+                        if (!isSubjectActive(subject)) {
                             throw new IllegalArgumentException(
                                     "Topic "
                                             + row.subjectCode()
@@ -193,94 +211,20 @@ public class TrainingProgramImportService {
         return requests.size();
     }
 
-    @Transactional
-    public int importAll(MultipartFile file) {
-        List<Row> rows = read(file);
-        Map<Integer, List<String>> errors = validate(rows);
-
-        if (!errors.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Import rejected (Strict Rollback): Found "
-                            + errors.size()
-                            + " invalid row(s). Please preview and fix all errors before importing."
-            );
+    private Optional<Subject> resolveSubject(String code, String version) {
+        String normalizedCode = SubjectIdentity.normalizeCode(code);
+        List<String> versions = SubjectIdentity.versionAliases(version);
+        if (normalizedCode == null || normalizedCode.isBlank() || versions.isEmpty()) {
+            return Optional.empty();
         }
+        return subjectRepository.findByNormalizedIdentity(normalizedCode, versions)
+                .or(() -> subjectRepository.findByCodeAndVersion(code.trim(), version.trim()));
+    }
 
-        Map<Key, List<Row>> groups = rows.stream()
-                .collect(Collectors.groupingBy(
-                        row -> new Key(
-                                normCode(row.code()),
-                                normVersion(row.version())
-                        ),
-                        LinkedHashMap::new,
-                        Collectors.toList()
-                ));
-
-        List<TrainingProgramRequest> requests = new ArrayList<>();
-
-        for (List<Row> group : groups.values()) {
-            Row first = group.get(0);
-
-            List<ProgramSubjectRequest> subjects = group.stream()
-                    .sorted(Comparator.comparing(Row::orderIndex))
-                    .map(row -> {
-                        Subject subject = subjectRepository
-                                .findByCodeAndVersion(
-                                        row.subjectCode().trim(),
-                                        row.subjectVersion().trim()
-                                )
-                                .orElseThrow(() ->
-                                        new IllegalArgumentException(
-                                                "Topic not found: "
-                                                        + row.subjectCode()
-                                                        + " (version "
-                                                        + row.subjectVersion()
-                                                        + ")"
-                                        )
-                                );
-
-                        if (!Boolean.TRUE.equals(subject.getIsActive())) {
-                            throw new IllegalArgumentException(
-                                    "Topic "
-                                            + row.subjectCode()
-                                            + " is INACTIVE."
-                            );
-                        }
-
-                        if (subject.getDurationHours() == null
-                                || subject.getDurationHours() <= 0) {
-                            throw new IllegalArgumentException(
-                                    "Duration for topic "
-                                            + row.subjectCode()
-                                            + " must be greater than 0."
-                            );
-                        }
-
-                        return new ProgramSubjectRequest(
-                                subject.getId(),
-                                row.orderIndex()
-                        );
-                    })
-                    .toList();
-
-            requests.add(new TrainingProgramRequest(
-                    first.code().trim(),
-                    first.name().trim(),
-                    first.version().trim(),
-                    first.region() == null ? null : first.region().trim(),
-                    null,
-                    null,
-                    null,
-                    ProgramStatus.ACTIVE,
-                    subjects
-            ));
-        }
-
-        for (TrainingProgramRequest request : requests) {
-            programService.create(request);
-        }
-
-        return requests.size();
+    private boolean isSubjectActive(Subject subject) {
+        return subject != null
+                && Boolean.TRUE.equals(subject.getIsActive())
+                && subject.getStatus() == SubjectStatus.ACTIVE;
     }
 
     private Map<Integer, List<String>> validate(List<Row> rows) {
@@ -300,11 +244,11 @@ public class TrainingProgramImportService {
                         Collectors.toList()
                 ));
 
-        Set<Key> existingPrograms = programRepository.findAll()
+        Set<Key> existingPrograms = programRepository.findAllIdentityPairs()
                 .stream()
-                .map(program -> new Key(
-                        normCode(program.getCode()),
-                        normVersion(program.getVersion())
+                .map(pair -> new Key(
+                        normCode(pair[0] != null ? String.valueOf(pair[0]) : null),
+                        normVersion(pair[1] != null ? String.valueOf(pair[1]) : null)
                 ))
                 .collect(Collectors.toSet());
 
@@ -406,11 +350,7 @@ public class TrainingProgramImportService {
                 if (!blank(row.subjectCode())
                         && !blank(row.subjectVersion())) {
 
-                    Optional<Subject> subject =
-                            subjectRepository.findByCodeAndVersion(
-                                    row.subjectCode().trim(),
-                                    row.subjectVersion().trim()
-                            );
+                    Optional<Subject> subject = resolveSubject(row.subjectCode(), row.subjectVersion());
 
                     if (subject.isEmpty()) {
                         add(errors, row.number(),
@@ -420,7 +360,7 @@ public class TrainingProgramImportService {
                                         + row.subjectVersion()
                                         + ")");
                     } else {
-                        if (!Boolean.TRUE.equals(subject.get().getIsActive())) {
+                        if (!isSubjectActive(subject.get())) {
                             add(errors, row.number(),
                                     "Subject is currently INACTIVE: "
                                             + row.subjectCode());

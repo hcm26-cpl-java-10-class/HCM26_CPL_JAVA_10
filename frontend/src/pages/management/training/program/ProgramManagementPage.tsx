@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { ProgramList } from "../content/components/ProgramList";
-import { ProgramDetailView } from "../content/components/ProgramDetailView";
-import { ProgramBuilder } from "../content/components/ProgramBuilder";
-import { TopicDetailView } from "../content/components/TopicDetailView";
+import { ProgramList } from "./components/ProgramList";
+import { ProgramDetailView } from "./components/ProgramDetailView";
+import { ProgramBuilder } from "./components/ProgramBuilder";
+import { TopicDetailView } from "../topic/components/TopicDetailView";
 import type { TrainingProgramItem, TopicItem } from "@/types/features/content";
 import { topicApi } from "@/api/features/topic.api";
 import { toast } from "sonner";

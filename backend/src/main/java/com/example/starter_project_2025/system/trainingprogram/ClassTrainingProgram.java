@@ -10,9 +10,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.Getter;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.ToString;
 import lombok.experimental.FieldDefaults;
 
 /** Program link for an internal TrainingClass; shared class IDs are not interchangeable. */
@@ -20,8 +21,8 @@ import lombok.experimental.FieldDefaults;
 @Table(name = "class_training_programs", indexes = {
         @Index(name = "uk_class_training_program_class_id", columnList = "class_id", unique = true)
 })
-@Getter
-@Setter
+@Data
+@EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ResourcePermission("CLASS")
@@ -31,5 +32,7 @@ public class ClassTrainingProgram extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "program_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     TrainingProgram program;
 }

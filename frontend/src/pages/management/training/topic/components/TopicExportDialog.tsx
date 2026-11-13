@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Download, FileBarChart, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { topicApi } from "@/api/features/topic.api";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,8 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { topicApi } from "@/api/features/topic.api";
+import { describeApiError } from "@/utils/api-error.utils";
+import { triggerBlobDownload } from "@/utils/file-download.utils";
 
 type ExportFormat = "EXCEL" | "CSV" | "PDF";
 
@@ -21,7 +23,7 @@ interface TopicExportDialogProps {
   description?: string;
 }
 
-const exportOptions = [
+const EXPORT_OPTIONS = [
   {
     format: "EXCEL" as ExportFormat,
     label: "Excel",
@@ -43,7 +45,7 @@ const exportOptions = [
     ext: "pdf",
     icon: FileBarChart,
   },
-];
+] as const;
 
 export function TopicExportDialog({
   open,
@@ -60,21 +62,14 @@ export function TopicExportDialog({
     try {
       setIsExporting(true);
       const blob = await topicApi.exportFile(selectedFormat);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const opt = exportOptions.find((o) => o.format === selectedFormat);
+      const opt = EXPORT_OPTIONS.find((o) => o.format === selectedFormat);
       const ext = opt?.ext || "xlsx";
-      a.download = `topics_${new Date().toISOString().slice(0, 10)}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      triggerBlobDownload(blob, `topics_${new Date().toISOString().slice(0, 10)}.${ext}`);
 
       toast.success(`Exported ${opt?.label || selectedFormat} file successfully!`);
       onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to export file");
+    } catch (err) {
+      toast.error(describeApiError(err, "Failed to export file").message);
     } finally {
       setIsExporting(false);
     }
@@ -100,18 +95,18 @@ export function TopicExportDialog({
             </p>
           </div>
 
-          {/* 3 Radio Selection Cards */}
           <div className="space-y-2.5">
-            {exportOptions.map((option) => {
+            {EXPORT_OPTIONS.map((option) => {
               const Icon = option.icon;
               const isSelected = selectedFormat === option.format;
 
               return (
-                <div
+                <button
+                  type="button"
                   key={option.format}
                   onClick={() => setSelectedFormat(option.format)}
                   className={`
-                    p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3.5
+                    w-full text-left p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3.5
                     ${
                       isSelected
                         ? "border-gray-800 dark:border-gray-300 bg-gray-50/70 dark:bg-gray-800/60 shadow-sm"
@@ -132,7 +127,6 @@ export function TopicExportDialog({
                     </p>
                   </div>
 
-                  {/* Radio indicator */}
                   <div className="pr-1 flex items-center justify-center">
                     <div
                       className={`
@@ -149,15 +143,14 @@ export function TopicExportDialog({
                       )}
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
 
-          {/* Export File Button */}
           <Button
             type="button"
-            onClick={handleExport}
+            onClick={() => void handleExport()}
             disabled={!selectedFormat || isExporting}
             className="w-full h-11 bg-[#767676] hover:bg-gray-700 text-white font-medium gap-2 rounded-xl text-sm transition-colors mt-2"
           >

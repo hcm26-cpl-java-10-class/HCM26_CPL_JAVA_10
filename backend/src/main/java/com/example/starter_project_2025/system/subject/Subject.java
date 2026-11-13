@@ -16,15 +16,16 @@ import jakarta.persistence.PreUpdate;
 import com.example.starter_project_2025.base.dataio.importer.annotation.PostImport;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Builder;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
 @Entity
-@Getter
-@Setter
+@Data
+@EqualsAndHashCode(callSuper = true)
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -67,7 +68,7 @@ public class Subject extends BaseEntity {
 
     @lombok.Builder.Default
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
-    @Column(length = 20)
+    @Column(nullable = false, length = 20)
     @ImportField(name = "Status")
     @ExportField(name = "Status")
     SubjectStatus status = SubjectStatus.ACTIVE;

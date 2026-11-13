@@ -4,19 +4,28 @@ import java.util.List;
 import java.util.Locale;
 
 /** Shared identity rules for CRUD, imports and persistence. */
-final class SubjectIdentity {
+public final class SubjectIdentity {
     private SubjectIdentity() {}
 
-    static String normalizeCode(String code) {
+    public static String normalizeCode(String code) {
         return code == null ? null : code.trim().toUpperCase(Locale.ROOT);
     }
 
-    static String normalizeVersion(String version) {
+    public static String normalizeVersion(String version) {
         return version == null ? null
                 : version.trim().toLowerCase(Locale.ROOT).replaceFirst("^v(?=\\d)", "");
     }
 
-    static List<String> versionAliases(String version) {
+    public static String identityKey(String code, String version) {
+        String normCode = normalizeCode(code);
+        String normVersion = normalizeVersion(version);
+        if (normCode == null || normCode.isBlank() || normVersion == null || normVersion.isBlank()) {
+            return null;
+        }
+        return normCode + "#" + normVersion;
+    }
+
+    public static List<String> versionAliases(String version) {
         String normalized = normalizeVersion(version);
         if (normalized == null || normalized.isBlank()) return List.of();
         // Include legacy values such as v1.0 without rewriting existing records.

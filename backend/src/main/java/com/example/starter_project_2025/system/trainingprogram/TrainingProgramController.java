@@ -264,7 +264,7 @@ public class TrainingProgramController {
                     "Java Backend",
                     "1.0",
                     "HCM",
-                    "JAVA_ADVANCED",
+                    "SPRING_BOOT",
                     "1.0",
                     "2"
             };

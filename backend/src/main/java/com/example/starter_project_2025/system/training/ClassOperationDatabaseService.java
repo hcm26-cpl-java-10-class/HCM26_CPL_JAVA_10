@@ -4,6 +4,7 @@ import com.example.starter_project_2025.system.demo.session.Session;
 import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import com.example.starter_project_2025.system.subject.Subject;
 import com.example.starter_project_2025.system.subject.SubjectRepository;
+import com.example.starter_project_2025.system.subject.SubjectStatus;
 import com.example.starter_project_2025.system.training.entity.ClassActivityEntity;
 import com.example.starter_project_2025.system.training.entity.ClassOperationEntity;
 import com.example.starter_project_2025.system.training.entity.ClassTopicAssessmentEntity;
@@ -334,12 +335,14 @@ public class ClassOperationDatabaseService {
             }
         }
 
-        // 3. Also include active Subject entities from H2 `subjects` table if present
-        for (Subject subj : subjectRepository.findAll()) {
-            if (Boolean.TRUE.equals(subj.getIsActive()) && subj.getCode() != null && !byCode.containsKey(subj.getCode())) {
-                int hours = subj.getDurationHours() != null ? subj.getDurationHours() : 24;
-                String display = String.format("[%s] %s (%s)", subj.getCode(), subj.getName(), subj.getVersion() != null ? subj.getVersion() : "1.0");
-                byCode.put(subj.getCode(), new TopicDescriptor(subj.getCode(), display, hours, Math.max(1, hours / 4)));
+        // 3. Fall back to active Subject entities only when neither program subjects nor sessions exist
+        if (byCode.isEmpty()) {
+            for (Subject subj : subjectRepository.findByIsActiveTrueAndStatus(SubjectStatus.ACTIVE)) {
+                if (subj.getCode() != null && !byCode.containsKey(subj.getCode())) {
+                    int hours = subj.getDurationHours() != null ? subj.getDurationHours() : 24;
+                    String display = String.format("[%s] %s (%s)", subj.getCode(), subj.getName(), subj.getVersion() != null ? subj.getVersion() : "1.0");
+                    byCode.put(subj.getCode(), new TopicDescriptor(subj.getCode(), display, hours, Math.max(1, hours / 4)));
+                }
             }
         }
 
