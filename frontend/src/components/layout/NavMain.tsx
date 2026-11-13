@@ -84,7 +84,6 @@ function writeGroupState(title: string, open: boolean) {
         // storage unavailable; group state simply won't persist
     }
 }
-}
 
 export function NavMain({
     title,

@@ -261,7 +261,6 @@ export function SidebarMenu({
                         },
                     ];
                 }
-                }
 
                 return {
                     id: group.id ?? group.name ?? "group",
