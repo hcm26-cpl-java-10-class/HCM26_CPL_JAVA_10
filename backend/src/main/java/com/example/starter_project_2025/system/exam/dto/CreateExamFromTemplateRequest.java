@@ -14,7 +14,4 @@ public class CreateExamFromTemplateRequest {
     @NotBlank
     @Size(max = 200)
     private String title;
-
-    private LocalDateTime startTime;
-    private LocalDateTime endTime;
 }

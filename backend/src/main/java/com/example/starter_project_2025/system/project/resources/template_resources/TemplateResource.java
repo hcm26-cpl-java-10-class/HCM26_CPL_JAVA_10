@@ -97,15 +97,10 @@ public class TemplateResource extends BaseEntity {
     ResourceKind kind = ResourceKind.LINK;
 
     /** External link / repository URL; required for {@link ResourceKind#LINK}. */
-    @Column(length = 1000)
+    @Column(length = 2000)
     @ImportField(name = "Url")
     @ExportField(name = "Url")
     String url;
-
-    @Column(length = 50)
-    @ImportField(name = "Category")
-    @ExportField(name = "Category")
-    String category;
 
     @Builder.Default
     @Column(name = "order_index", nullable = false)
@@ -130,10 +125,6 @@ public class TemplateResource extends BaseEntity {
 
         if (url != null) {
             url = url.trim();
-        }
-
-        if (category != null) {
-            category = category.trim();
         }
 
         if (kind == null) {

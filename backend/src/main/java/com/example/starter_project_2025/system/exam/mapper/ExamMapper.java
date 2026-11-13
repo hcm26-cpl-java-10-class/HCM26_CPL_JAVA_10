@@ -50,13 +50,12 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setTitle(e.getTitle());
         d.setDurationMinutes(e.getDurationMinutes());
 
-        d.setStartTime(e.getStartTime());
-        d.setEndTime(e.getEndTime());
         d.setMaxAttempts(e.getMaxAttempts());
         d.setShuffleQuestions(e.getShuffleQuestions());
         d.setShuffleOptions(e.getShuffleOptions());
         d.setShowAnswersAfterExam(e.getShowAnswersAfterExam());
         d.setPassScore(e.getPassScore());
+        d.setCourseWeight(e.getCourseWeight());
         d.setMaxScore(ExamScoring.effectiveMax(e.getMaxScore()));
         d.setLatePolicy(e.getLatePolicy());
         d.setLatePenaltyPercent(e.getLatePenaltyPercent());
@@ -92,6 +91,9 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setSingleSession(Boolean.TRUE.equals(e.getSingleSession()));
         d.setCameraProctoring(Boolean.TRUE.equals(e.getCameraProctoring()));
         d.setNotifyOnViolation(Boolean.TRUE.equals(e.getNotifyOnViolation()));
+        d.setHeadTurnAngleDeg(e.headTurnAngleOrDefault());
+        d.setHeadTurnSeconds(e.headTurnSecondsOrDefault());
+        d.setFastSubmitPercent(e.fastSubmitPercentOrDefault());
         d.setHasPassword(e.getAccessCode() != null && !e.getAccessCode().trim().isEmpty());
         return d;
     }
@@ -136,11 +138,10 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
     }
 
     private void apply(Exam e, ExamDTO d) {
+        if (d.isCourseWeightProvided()) e.setCourseWeight(d.getCourseWeight());
         if (d.getTitle() != null) e.setTitle(d.getTitle().trim());
         if (d.getDurationMinutes() != null) e.setDurationMinutes(d.getDurationMinutes());
 
-        if (d.getStartTime() != null) e.setStartTime(d.getStartTime());
-        if (d.getEndTime() != null) e.setEndTime(d.getEndTime());
         if (d.getMaxAttempts() != null) e.setMaxAttempts(d.getMaxAttempts());
         if (d.getShuffleQuestions() != null) e.setShuffleQuestions(d.getShuffleQuestions());
         if (d.getShuffleOptions() != null) e.setShuffleOptions(d.getShuffleOptions());
@@ -155,13 +156,24 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getExamType() != null) e.setExamType(d.getExamType());
         if (d.getCategory() != null) e.setCategory(d.getCategory());
         // NEW (anti-cheat)
-        if (d.getAntiCheatEnabled() != null) e.setAntiCheatEnabled(d.getAntiCheatEnabled());
-        if (d.getDetectTabSwitch() != null) e.setDetectTabSwitch(d.getDetectTabSwitch());
-        if (d.getBlockCopyPaste() != null) e.setBlockCopyPaste(d.getBlockCopyPaste());
-        if (d.getRequireFullscreen() != null) e.setRequireFullscreen(d.getRequireFullscreen());
-        if (d.getSingleSession() != null) e.setSingleSession(d.getSingleSession());
-        if (d.getCameraProctoring() != null) e.setCameraProctoring(d.getCameraProctoring());
-        if (d.getNotifyOnViolation() != null) e.setNotifyOnViolation(d.getNotifyOnViolation());
+        // cau hinh chong gian lan chi sua duoc khi tao de thi hoac khi chua co sinh vien nao thi
+        boolean antiCheatEditable = e.getId() == null || !attemptRepository.existsByExam_Id(e.getId());
+        if (antiCheatEditable) {
+            if (d.getAntiCheatEnabled() != null) e.setAntiCheatEnabled(d.getAntiCheatEnabled());
+            if (d.getDetectTabSwitch() != null) e.setDetectTabSwitch(d.getDetectTabSwitch());
+            if (d.getBlockCopyPaste() != null) e.setBlockCopyPaste(d.getBlockCopyPaste());
+            if (d.getRequireFullscreen() != null) e.setRequireFullscreen(d.getRequireFullscreen());
+            if (d.getSingleSession() != null) e.setSingleSession(d.getSingleSession());
+            if (d.getCameraProctoring() != null) e.setCameraProctoring(d.getCameraProctoring());
+            if (d.getNotifyOnViolation() != null) e.setNotifyOnViolation(d.getNotifyOnViolation());
+        }
+        // cac he so chong gian lan: sua duoc khi tao de thi hoac khi chua co sinh vien nao thi
+        // (sau do bi khoa de thong ke dong nhat)
+        if (antiCheatEditable) {
+            e.setHeadTurnAngleDeg(d.getHeadTurnAngleDeg());
+            e.setHeadTurnSeconds(d.getHeadTurnSeconds());
+            e.setFastSubmitPercent(d.getFastSubmitPercent());
+        }
         if (d.getAccessCode() != null) {
             String trimmed = d.getAccessCode().trim();
             e.setAccessCode(trimmed.isEmpty() ? null : trimmed);

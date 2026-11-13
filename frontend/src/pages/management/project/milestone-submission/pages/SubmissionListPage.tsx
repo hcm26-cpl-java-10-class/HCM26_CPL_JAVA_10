@@ -9,6 +9,8 @@ import { Eye, Inbox } from "lucide-react";
 import { useMemo } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { SubmissionCard } from "../components/SubmissionCard";
+import { ReviewOutcomeBanner } from "../components/ReviewOutcomeBanner";
+import { resultPath, reviewPath } from "../review-outcome";
 import { submissionListSchema } from "../submission-list.schema";
 
 interface Filters { status?: SubmissionStatus; executionStatus?: MilestoneExecutionStatus; mandatory?: boolean; late?: boolean }
@@ -35,7 +37,8 @@ export function SubmissionListPage() {
     permissionOverrides: { canRead: true, canCreate: false, canUpdate: false, canDelete: false, canImport: false, canExport: false },
   });
   const response = table.pageData as SubmissionPage | undefined;
-  const open = (row: SubmissionListItem) => navigate(`/milestone-submissions/${row.id}/review`, { state: { returnTo: `${location.pathname}${location.search}` } });
+  const open = (row: SubmissionListItem) => navigate(row.status === "SUBMITTED" ? reviewPath(row.id) : resultPath(row.id),
+    { state: { returnTo: `${location.pathname}${location.search}` } });
   const selectBucket = (value: "PENDING" | "REVIEWED" | "ALL") => setSearchParams((current) => {
     const next = new URLSearchParams(current);
     next.set("bucket", value);
@@ -44,6 +47,7 @@ export function SubmissionListPage() {
   const bucketActions = <div className="flex rounded-lg border p-1">{(["PENDING", "REVIEWED", "ALL"] as const).map((value) => <Button key={value} size="sm" variant={bucket === value ? "default" : "ghost"} onClick={() => selectBucket(value)}>{value === "PENDING" ? "Pending review" : value === "REVIEWED" ? "Reviewed" : "All submissions"}</Button>)}</div>;
   return (
     <MainLayout pathName={{ "milestone-submissions": "Milestone reviews" }}>
+      <ReviewOutcomeBanner className="mb-4" />
       <ProTable<SubmissionListItem>
         table={table}
         headerActions={bucketActions}

@@ -7,168 +7,131 @@ import com.example.starter_project_2025.system.project.resources.project_resourc
 import com.example.starter_project_2025.system.project.resources.project_resources.ProjectResource;
 import com.example.starter_project_2025.system.project.resources.project_resources.ProjectResourceRepository;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
-import com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository;
 import com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService;
 import com.example.starter_project_2025.system.project.workspace.service.WorkspaceContextService;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceProjectScope;
 import com.example.starter_project_2025.system.rbac.user.User;
-import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import lombok.experimental.FieldDefaults;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
-/**
- * Read-only trainee view of the resources of a workspace project (US-RES-004).
- * <p>
- * Every lookup starts from the workspace and therefore inherits the existing
- * access rule: the caller must be an active member (or mentor) of the
- * workspace team. A trainee of Team A can never read Team B by supplying
- * another {@code workspaceId}; the context resolution rejects it with 403.
- */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class WorkspaceResourceQueryService {
+    private record Source(Long templateId, Long resourceId) { }
 
-    private static final String PUBLIC_DOWNLOAD_PATH = "/public/workspace-resources/download?token=";
+    private final WorkspaceAccessService access;
+    private final WorkspaceContextService contexts;
+    private final WorkspaceProjectScope scope;
+    private final ProjectResourceRepository resources;
+    private final ProjectResourceFileRepository files;
+    private final TemplateResourceFileStorage storage;
+    private final WorkspaceResourceDownloadTokenService tokens;
+    private final WorkspaceResourceEditorPolicy editorPolicy;
 
-    WorkspaceAccessService access;
-    WorkspaceContextService contexts;
-    WorkspaceRepository workspaces;
-    ProjectResourceRepository resources;
-    ProjectResourceFileRepository files;
-    TemplateResourceFileStorage storage;
-    WorkspaceResourceDownloadTokenService tokens;
-    WorkspaceResourceEditorPolicy editorPolicy;
-
-    /** Resources of the workspace project, grouped as returned by the backend. */
-    public WorkspaceResourceDtos.ResourceCollection list(Long workspaceId) {
-
+    public WorkspaceResourceDtos.ResourceCollection list(Long workspaceId, Long selectedProjectId) {
         User user = access.requireUser(false);
         Workspace workspace = contexts.require(user, workspaceId);
-        Project project = workspace.getProject();
-        boolean canManage = editorPolicy.canManage(user, workspace);
+        Map<Long, Project> visible = visibleProjects(workspace);
+        Long primaryId = workspace.getProject() == null ? null : workspace.getProject().getId();
+        Long scopedId = selectedProjectId == null ? primaryId : selectedProjectId;
+        Project target = scopedId == null ? null : visible.get(scopedId);
+        if (selectedProjectId != null && target == null) throw outsideScope();
 
-        if (project == null) {
-            return new WorkspaceResourceDtos.ResourceCollection(workspaceId, null,
-                    workspace.getTeam().getId(), 0, canManage, storage.maxBytes(),
-                    storage.allowedExtensions(), List.of());
-        }
-
-        List<WorkspaceResourceDtos.ResourceItem> items = resources
-                .findAllByProjectIdAndIsActiveTrueOrderByOrderIndexAscIdAsc(project.getId())
-                .stream()
-                .map(this::toItem)
-                .toList();
-
-        return new WorkspaceResourceDtos.ResourceCollection(workspaceId, project.getId(),
-                workspace.getTeam().getId(), items.size(), canManage, storage.maxBytes(),
+        var seen = new HashSet<Source>();
+        List<WorkspaceResourceDtos.ResourceItem> items = target == null ? List.of() :
+                resources.findAllByProjectIdInOrderByOrderIndexAscIdAsc(List.of(target.getId())).stream()
+                        .filter(row -> Objects.equals(row.getTenantId(), workspace.getTenant().getId()))
+                        .filter(row -> row.getSourceTemplateId() == null || row.getSourceTemplateResourceId() == null
+                                || seen.add(new Source(row.getSourceTemplateId(), row.getSourceTemplateResourceId())))
+                        .filter(row -> Boolean.TRUE.equals(row.getIsActive()))
+                        .map(row -> toItem(user, workspace, target, row)).toList();
+        return new WorkspaceResourceDtos.ResourceCollection(workspaceId,
+                target == null ? null : target.getId(), workspace.getTeam().getId(),
+                items.size(), editorPolicy.canManage(user, workspace, target), storage.maxBytes(),
                 storage.allowedExtensions(), items);
     }
 
-    /** Creates a short-lived signed URL after re-checking the team data scope. */
-    public WorkspaceResourceDtos.DownloadTicket createTicket(Long workspaceId,
-                                                             Long resourceId,
-                                                             Long fileId) {
-
-        Workspace workspace = requireWorkspace(workspaceId);
-        ProjectResourceFile file = requireWorkspaceFile(workspace, resourceId, fileId);
-        WorkspaceResourceDownloadTokenService.IssuedToken issued =
-                tokens.issue(workspaceId, resourceId, file.getId());
-
-        return new WorkspaceResourceDtos.DownloadTicket(
-                PUBLIC_DOWNLOAD_PATH + issued.token(),
-                file.getOriginalName(),
-                issued.expiresAt().toString());
-    }
-
-    /** Secure stream handler for callers that already have a valid session. */
-    public WorkspaceResourceDtos.Download downloadForMember(Long workspaceId,
-                                                            Long resourceId,
-                                                            Long fileId) {
-
-        Workspace workspace = requireWorkspace(workspaceId);
-        return read(requireWorkspaceFile(workspace, resourceId, fileId));
-    }
-
-    /**
-     * Public stream handler used by the signed URL. The signature replaces the
-     * bearer token, but the resource is still re-validated against the
-     * workspace/project relation before any bytes are read.
-     */
-    public WorkspaceResourceDtos.Download downloadWithToken(String token) {
-
-        WorkspaceResourceDownloadTokenService.TokenPayload payload = tokens.verify(token);
-
-        Workspace workspace = workspaces.findById(payload.workspaceId())
-                .filter(value -> Boolean.TRUE.equals(value.getIsActive()))
-                .orElseThrow(WorkspaceResourceQueryService::forbidden);
-
-        ProjectResourceFile file = requireWorkspaceFile(workspace,
-                payload.resourceId(), payload.fileId());
-
-        return read(file);
-    }
-
-    private Workspace requireWorkspace(Long workspaceId) {
-
+    public WorkspaceResourceDtos.DownloadTicket createTicket(Long workspaceId, Long resourceId, Long fileId) {
         User user = access.requireUser(false);
-        return contexts.require(user, workspaceId);
+        Workspace workspace = contexts.require(user, workspaceId);
+        ProjectResourceFile file = requireWorkspaceFile(workspace, resourceId, fileId);
+        var ticket = tokens.issue(workspaceId, resourceId, fileId, user.getId());
+        String url = "/workspaces/" + workspaceId + "/resources/" + resourceId + "/files/" + fileId
+                + "/download?token=" + ticket.token();
+        return new WorkspaceResourceDtos.DownloadTicket(url, file.getOriginalName(), ticket.expiresAt().toString());
     }
 
-    private ProjectResourceFile requireWorkspaceFile(Workspace workspace,
-                                                     Long resourceId,
-                                                     Long fileId) {
+    public WorkspaceResourceDtos.Download downloadForMember(Long workspaceId, Long resourceId, Long fileId, String token) {
+        var payload = tokens.verify(token);
+        if (!workspaceId.equals(payload.workspaceId()) || !resourceId.equals(payload.resourceId())
+                || !fileId.equals(payload.fileId())) throw outsideScope();
+        return download(payload);
+    }
 
-        Project project = workspace.getProject();
+    public WorkspaceResourceDtos.Download downloadWithToken(String token) {
+        return download(tokens.verify(token));
+    }
 
+    private WorkspaceResourceDtos.Download download(WorkspaceResourceDownloadTokenService.TokenPayload payload) {
+        User user = access.requireUser(false);
+        if (!user.getId().equals(payload.userId())) throw outsideScope();
+        Workspace workspace = contexts.require(user, payload.workspaceId());
+        ProjectResourceFile file = requireWorkspaceFile(workspace, payload.resourceId(), payload.fileId());
+        return new WorkspaceResourceDtos.Download(file.getOriginalName(), file.getContentType(),
+                storage.read(file.getStorageKey()));
+    }
+
+    private ProjectResourceFile requireWorkspaceFile(Workspace workspace, Long resourceId, Long fileId) {
         ProjectResource resource = resources.findById(resourceId)
                 .filter(value -> Boolean.TRUE.equals(value.getIsActive()))
                 .orElseThrow(WorkspaceResourceQueryService::notFound);
-
-        if (project == null || !Objects.equals(resource.getProjectId(), project.getId())) {
-            throw notFound();
-        }
+        if (!Objects.equals(resource.getTenantId(), workspace.getTenant().getId())
+                || !visibleProjects(workspace).containsKey(resource.getProjectId())) throw outsideScope();
 
         return files.findById(fileId)
-                .filter(value -> Boolean.TRUE.equals(value.getIsActive()))
-                .filter(value -> Objects.equals(value.getResourceId(), resource.getId()))
+                .filter(value -> Boolean.TRUE.equals(value.getIsActive()) && resourceId.equals(value.getResourceId()))
                 .orElseThrow(WorkspaceResourceQueryService::notFound);
     }
 
-    private WorkspaceResourceDtos.ResourceItem toItem(ProjectResource resource) {
-
-        List<WorkspaceResourceDtos.FileItem> attached = files
-                .findAllByResourceIdOrderByIdAsc(resource.getId())
-                .stream()
-                .filter(file -> Boolean.TRUE.equals(file.getIsActive()))
-                .map(file -> new WorkspaceResourceDtos.FileItem(file.getId(),
-                        file.getOriginalName(), file.getContentType(), file.getSizeBytes()))
-                .toList();
-
-        return new WorkspaceResourceDtos.ResourceItem(resource.getId(), resource.getTitle(),
-                resource.getDescription(), resource.getKind() == null ? null : resource.getKind().name(),
-                resource.getUrl(), resource.getCategory(), resource.getOrderIndex(),
-                resource.getUpdatedAt(), resource.getUpdatedBy(), attached);
+    private Map<Long, Project> visibleProjects(Workspace workspace) {
+        return scope.projects(workspace).stream()
+                .filter(project -> Objects.equals(project.getTenantId(), workspace.getTenant().getId())
+                        && Boolean.TRUE.equals(project.getIsActive()))
+                .collect(Collectors.toMap(Project::getId, Function.identity(), (first, duplicate) -> first));
     }
 
-    private WorkspaceResourceDtos.Download read(ProjectResourceFile file) {
-        return new WorkspaceResourceDtos.Download(file.getOriginalName(), file.getContentType(),
-                storage.read(file.getStorageKey()));
+    private WorkspaceResourceDtos.ResourceItem toItem(User user, Workspace workspace, Project project, ProjectResource resource) {
+        List<WorkspaceResourceDtos.FileItem> attached = files.findAllByResourceIdOrderByIdAsc(resource.getId()).stream()
+                .filter(file -> Boolean.TRUE.equals(file.getIsActive()))
+                .map(file -> new WorkspaceResourceDtos.FileItem(file.getId(), file.getOriginalName(),
+                        file.getContentType(), file.getSizeBytes())).toList();
+        String origin = resource.getSourceOrigin();
+        if (origin == null) origin = project.getParentProject() != null ? "SUB_PROJECT" : "PROJECT";
+        return new WorkspaceResourceDtos.ResourceItem(resource.getId(), resource.getTitle(),
+                resource.getDescription(), resource.getKind() == null ? null : resource.getKind().name(),
+                resource.getUrl(), resource.getOrderIndex(),
+                resource.getUpdatedAt(), resource.getUpdatedBy(), attached, resource.getSourceTemplateId(),
+                resource.getSourceTemplateName() == null ? project.getName() : resource.getSourceTemplateName(),
+                origin, project.getId(), editorPolicy.canManage(user, workspace, project));
     }
 
     private static ResponseStatusException notFound() {
         return new ResponseStatusException(HttpStatus.NOT_FOUND, "Resource or file was not found");
     }
 
-    private static ResponseStatusException forbidden() {
-        return new ResponseStatusException(HttpStatus.FORBIDDEN,
-                "This download link is invalid or has expired");
+    private static AccessDeniedException outsideScope() {
+        return new AccessDeniedException("The resource is outside this workspace");
     }
 }

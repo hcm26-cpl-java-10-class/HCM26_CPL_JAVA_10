@@ -18,8 +18,6 @@ public class ExamInvitationOverviewDTO {
 
     private Long examId;
     private String examTitle;
-    private LocalDateTime startTime;
-    private LocalDateTime endTime;
 
     private Integer total;
     private Integer pending;

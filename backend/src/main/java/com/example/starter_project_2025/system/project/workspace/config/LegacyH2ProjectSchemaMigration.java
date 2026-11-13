@@ -35,6 +35,14 @@ public class LegacyH2ProjectSchemaMigration {
     public void migrate() throws Exception {
         try (var connection = Objects.requireNonNull(jdbc.getDataSource()).getConnection()) {
             if (!"H2".equals(connection.getMetaData().getDatabaseProductName())) return;
+            expandWorkspaceSectionEnum();
+            // Lessons now reference sections. Hibernate retains the old course_id
+            // column, whose legacy NOT NULL constraint would reject new lessons.
+            // Preserve every existing value; only relax this obsolete column.
+            if (column("lessons", "course_id") && Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT IS_NULLABLE='NO' FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='PUBLIC' AND TABLE_NAME='LESSONS' AND COLUMN_NAME='COURSE_ID'", Boolean.class))) {
+                relax("lessons", "course_id");
+            }
             if (table("legacy_project_migrations") && count("legacy_project_migrations", "version_key='" + VERSION + "' AND completed=true") > 0) {
                 migratedDatabase = true;
                 return;
@@ -67,6 +75,21 @@ public class LegacyH2ProjectSchemaMigration {
             log.info("Legacy H2 migration completed: {} team mappings, {} preserved workspace(s), {} pending record(s). Original rows are retained in legacy_v1_* tables.",
                     count("legacy_team_mappings", "1=1"), table("workspaces") ? count("workspaces", "1=1") : 0, count("legacy_project_pending", "1=1"));
         }
+    }
+
+    private void expandWorkspaceSectionEnum() {
+        if (!column("workspace_sections", "section")) return;
+        var existing = jdbc.queryForList("SELECT e.VALUE_NAME FROM INFORMATION_SCHEMA.ENUM_VALUES e "
+                + "JOIN INFORMATION_SCHEMA.COLUMNS c ON c.TABLE_SCHEMA=e.OBJECT_SCHEMA AND c.TABLE_NAME=e.OBJECT_NAME AND c.DTD_IDENTIFIER=e.ENUM_IDENTIFIER "
+                + "WHERE c.TABLE_SCHEMA='PUBLIC' AND c.TABLE_NAME='WORKSPACE_SECTIONS' AND c.COLUMN_NAME='SECTION'", String.class);
+        if (existing.isEmpty()) return; // VARCHAR columns already accept new section names.
+        var values = new LinkedHashSet<>(existing);
+        for (var section : com.example.starter_project_2025.system.project.workspace.domain.WorkspaceSection.values()) values.add(section.name());
+        if (values.size() == existing.size()) return;
+        String literals = values.stream().map(value -> "'" + value.replace("'", "''") + "'")
+                .collect(java.util.stream.Collectors.joining(","));
+        // Extend the allowed values without removing old values or changing rows.
+        jdbc.execute("ALTER TABLE workspace_sections ALTER COLUMN section ENUM(" + literals + ")");
     }
 
     private void backup(String url) throws Exception {

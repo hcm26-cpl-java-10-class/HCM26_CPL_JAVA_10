@@ -4,6 +4,29 @@ Dự án nhóm: **HCM26_CPL_JAVA_10**
 
 ---
 
+## 🚀 CHẠY DỰ ÁN TỪ ĐẦU (MỌI MÁY ĐỀU ĐƯỢC)
+
+Yêu cầu: **JDK 21** + **Node.js 20+**. Không cần cài Maven (dự án có `mvnw`).
+Database H2 **tự sinh** và **tự seed dữ liệu demo** khi chạy lần đầu.
+
+```bash
+git clone https://github.com/hcm26-cpl-java-10-class/HCM26_CPL_JAVA_10.git
+cd HCM26_CPL_JAVA_10
+
+# Terminal 1 — Backend (http://localhost:8080)
+cd backend && ./mvnw spring-boot:run     # Windows: mvnw.cmd spring-boot:run
+
+# Terminal 2 — Frontend (http://localhost:5173)
+cd frontend && npm install && npm run dev
+```
+
+Đăng nhập: `teacher@example.com` / `password123` (hoặc `admin@example.com` / `password123`).
+
+📖 **Hướng dẫn đầy đủ (bảng yêu cầu, xử lý lỗi, tài khoản test, endpoint API):**
+👉 [docs/COURSE_ANALYTICS_SETUP.md](docs/COURSE_ANALYTICS_SETUP.md)
+
+---
+
 ## HƯỚNG DẪN CẤU HÌNH GEMINI API KEY BẰNG FILE .ENV (DÀNH CHO THÀNH VIÊN)
 
 Hệ thống AI trong dự án (bao gồm **AI Chấm bài tự luận theo tiêu chí** và **AI Phát hiện bài thi trùng lặp/đạo văn**) sử dụng Google Gemini API.

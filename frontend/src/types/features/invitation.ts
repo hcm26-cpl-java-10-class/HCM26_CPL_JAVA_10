@@ -35,8 +35,6 @@ export interface InvitationDTO extends BaseDTO {
     maxAccessTime?: string | null;
     maxAccessAttempts?: number;
 
-    examStartTime?: string | null;
-    examEndTime?: string | null;
     examDurationMinutes?: number;
     examMaxAttempts?: number;
     examHasPassword?: boolean;
@@ -209,8 +207,6 @@ export interface InvitationAuditLog {
 export interface ExamInvitationOverview {
     examId: number;
     examTitle?: string;
-    startTime?: string | null;
-    endTime?: string | null;
     total?: number;
     pending?: number;
     sent?: number;

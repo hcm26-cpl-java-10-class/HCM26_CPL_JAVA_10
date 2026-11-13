@@ -36,6 +36,7 @@ public class JpaProjectMilestoneAdapter implements ProjectMilestonePort {
     }
 
     private boolean inScope(Project project, User user) {
+        if (project.getAssignmentId() != null) return access.canAccessProject(user, project);
         Long id=project.getId();
         boolean administrator=user.getRoles().stream().anyMatch(role->Boolean.TRUE.equals(role.getIsActive())
                 &&Set.of("ADMIN","SUPER_ADMIN","SYSTEM_ADMIN","PO").contains(role.getName()));
@@ -83,7 +84,7 @@ public class JpaProjectMilestoneAdapter implements ProjectMilestonePort {
         if (project == null || !Boolean.TRUE.equals(project.getIsActive()) || project.getStatus() == null
                 || !Objects.equals(project.getTenantId(), tenantId)
                 || team == null || team.getProject() == null
-                || !Objects.equals(team.getProject().getId(), project.getId())
+                || workspace.getCurrentSlot() != null && !Objects.equals(team.getProject().getId(), project.getId())
                 || !Boolean.TRUE.equals(team.getIsActive()) || team.getStatus() != ProjectTeamStatus.ACTIVE
                 || team.getTrainingClass() == null || !Boolean.TRUE.equals(team.getTrainingClass().getIsActive())
                 || !Objects.equals(team.getTrainingClass().getTenantId(), tenantId)) return false;

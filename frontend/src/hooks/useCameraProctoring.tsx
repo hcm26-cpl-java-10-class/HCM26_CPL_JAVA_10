@@ -1,7 +1,8 @@
 // Camera proctoring: face detection runs fully in the browser (face-api tiny detector, models in /public/models).
 // - Entry photo: exactly one visible, uncovered face is required before the exam can be taken.
 // - While taking the exam: camera off, camera covered, examinee left the camera view, extra person in view,
-//   head turned more than 35° (left/right or up/down, estimated from 68 face landmarks).
+//   head turned more than 35° (left/right or up/down, estimated from 68 face landmarks),
+//   different person (face descriptor no longer matches the one taken at the entry photo).
 // Each violation is reported once it ends (with its duration) together with an evidence photo.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IntegrityEventType } from '@/api/exam.api';
@@ -10,7 +11,7 @@ type FaceApi = typeof import('@vladmandic/face-api');
 export type CameraState = 'idle' | 'starting' | 'live' | 'denied' | 'lost';
 export type CameraViolationType = Extract<
     IntegrityEventType,
-    'CAMERA_OFF' | 'CAMERA_COVERED' | 'FACE_MISSING' | 'MULTIPLE_FACES' | 'HEAD_TURNED'
+    'CAMERA_OFF' | 'CAMERA_COVERED' | 'FACE_MISSING' | 'MULTIPLE_FACES' | 'HEAD_TURNED' | 'DIFFERENT_PERSON'
 >;
 
 export type EntryCheckResult =
@@ -25,6 +26,7 @@ export function loadFaceApi(): Promise<FaceApi> {
             const base = `${import.meta.env.BASE_URL}models`;
             await faceapi.nets.tinyFaceDetector.loadFromUri(base);
             await faceapi.nets.faceLandmark68TinyNet.loadFromUri(base);
+            await faceapi.nets.faceRecognitionNet.loadFromUri(base);
             return faceapi;
         })().catch((e) => {
             faceApiPromise = null;
@@ -38,10 +40,18 @@ const TICK_MS = 1000;
 const MISSING_TICKS = 3;   // ~3s without a face before it counts as "left the camera"
 const MULTIPLE_TICKS = 2;  // ~2s with 2+ faces before it counts as "extra person"
 const GRACE_TICKS = 3;     // ignore the first seconds after monitoring starts
-const HEAD_TICKS = 3;      // head turned for ~3s in a row before it counts as a violation
+const DEFAULT_HEAD_TICKS = 2; // head turned this many seconds in a row before it counts (exam-configurable)
+
+// ---- identity check (compares the live face with the entry photo) ----
+// Euclidean distance of the 128-d face descriptors: ~0.4 for the same person, 0.6+ for a different one. Tune here.
+export const DIFFERENT_PERSON_DISTANCE = 0.6;
+const IDENTITY_EVERY_TICKS = 2;   // compare every ~2s (the descriptor is the expensive part)
+const IDENTITY_MISMATCHES = 3;    // 3 mismatching comparisons in a row (~6s) before it counts as another person
+const IDENTITY_MAX_YAW_DEG = 25;  // only compare when the face is roughly frontal (profiles change the descriptor)
 
 // ---- head pose (estimated from landmarks; webcam estimates are approximate, tune here) ----
-export const HEAD_YAW_LIMIT_DEG = 35;   // turned left / right
+export const HEAD_YAW_LIMIT_DEG = 35;   // default angle (exam-configurable)
+// pitch limits and the "profile" angle are tuned for 35° and scaled proportionally for other angles
 const PITCH_DOWN_DELTA = 0.14;          // looking down ~35° (relative to the entry-photo baseline)
 const PITCH_UP_DELTA = 0.17;            // looking up ~35°
 const PROFILE_YAW_DEG = 28;             // a face lost right after being turned this far counts as "turned"
@@ -66,14 +76,15 @@ function poseOf(points: { x: number; y: number }[]): Pose {
 const DEFAULT_BASE: Pose = { yaw: 0, pitch: 0.5 };
 
 /** Direction the head is turned beyond the limit (relative to the baseline), or null. */
-function turnedAway(pose: Pose, base: Pose): { label: string } | null {
+function turnedAway(pose: Pose, base: Pose, limitDeg: number): { label: string } | null {
+    const k = limitDeg / HEAD_YAW_LIMIT_DEG;
     const dYaw = pose.yaw - base.yaw;
-    if (Math.abs(dYaw) > HEAD_YAW_LIMIT_DEG) {
+    if (Math.abs(dYaw) > limitDeg) {
         return { label: `Head turned to the side (~${Math.round(Math.abs(dYaw))}°)` };
     }
     const dPitch = pose.pitch - base.pitch;
-    if (dPitch > PITCH_DOWN_DELTA) return { label: 'Head tilted down (over ~35°)' };
-    if (dPitch < -PITCH_UP_DELTA) return { label: 'Head tilted up (over ~35°)' };
+    if (dPitch > PITCH_DOWN_DELTA * k) return { label: `Head tilted down (over ~${limitDeg}°)` };
+    if (dPitch < -PITCH_UP_DELTA * k) return { label: `Head tilted up (over ~${limitDeg}°)` };
     return null;
 }
 
@@ -122,9 +133,19 @@ interface Options {
     report: (type: CameraViolationType, durationSeconds: number, snapshot?: string | null, detail?: string) => void;
     /** Examinee should be notified now (violation just started). */
     announce: (type: CameraViolationType) => void;
+    /** Storage key for the entry-photo face descriptor, so the identity check survives a page reload. */
+    referenceKey?: string | null;
+    /** Head-turn angle (deg) and duration (s) set on the exam; defaults 35 / 2. */
+    headTurnAngleDeg?: number;
+    headTurnSeconds?: number;
 }
 
-export function useCameraProctoring({ enabled, monitoring, report, announce }: Options) {
+export function useCameraProctoring({ enabled, monitoring, report, announce, referenceKey, headTurnAngleDeg, headTurnSeconds }: Options) {
+    const headAngle = headTurnAngleDeg ?? HEAD_YAW_LIMIT_DEG;
+    const headTicks = headTurnSeconds ?? DEFAULT_HEAD_TICKS;
+    const profileYaw = PROFILE_YAW_DEG * (headAngle / HEAD_YAW_LIMIT_DEG);
+    const headRef = useRef({ headAngle, headTicks, profileYaw });
+    headRef.current = { headAngle, headTicks, profileYaw };
     const [state, setState] = useState<CameraState>('idle');
     const [stream, setStream] = useState<MediaStream | null>(null);
     const [modelError, setModelError] = useState(false);
@@ -135,6 +156,9 @@ export function useCameraProctoring({ enabled, monitoring, report, announce }: O
     const faceApiRef = useRef<FaceApi | null>(null);
     const lastGoodRef = useRef<string | null>(null);
     const baseRef = useRef<Pose>(DEFAULT_BASE);
+    const referenceRef = useRef<Float32Array | null>(null);
+    const referenceKeyRef = useRef(referenceKey);
+    referenceKeyRef.current = referenceKey;
     const reportRef = useRef(report);
     reportRef.current = report;
     const announceRef = useRef(announce);
@@ -190,6 +214,18 @@ export function useCameraProctoring({ enabled, monitoring, report, announce }: O
         return () => stopStream();
     }, [enabled, start, stopStream]);
 
+    // restore the entry-photo descriptor after a page reload
+    useEffect(() => {
+        if (!enabled || !referenceKey || referenceRef.current) return;
+        try {
+            const raw = window.localStorage.getItem(referenceKey);
+            const arr = raw ? (JSON.parse(raw) as number[]) : null;
+            if (arr && arr.length === 128) referenceRef.current = new Float32Array(arr);
+        } catch {
+            /* storage unavailable: the identity check is simply skipped */
+        }
+    }, [enabled, referenceKey]);
+
     // camera lost -> keep trying to re-open it (works silently once permission is granted)
     useEffect(() => {
         if (!enabled || state !== 'lost') return;
@@ -209,15 +245,21 @@ export function useCameraProctoring({ enabled, monitoring, report, announce }: O
             && video && video.readyState >= 2 && !video.paused);
     }, []);
 
-    const countFaces = useCallback(async (): Promise<{ count: number; pose: Pose | null } | null> => {
+    const countFaces = useCallback(async (withDescriptor: boolean): Promise<{ count: number; pose: Pose | null; descriptor: Float32Array | null } | null> => {
         const f = faceApiRef.current;
         const video = videoRef.current;
         if (!f || !video) return null;
         try {
             const opts = new f.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
-            const found = await f.detectAllFaces(video, opts).withFaceLandmarks(true);
+            const base = f.detectAllFaces(video, opts).withFaceLandmarks(true);
+            if (withDescriptor) {
+                const found = await base.withFaceDescriptors();
+                const pose = found.length === 1 ? poseOf(found[0].landmarks.positions) : null;
+                return { count: found.length, pose, descriptor: found.length === 1 ? found[0].descriptor : null };
+            }
+            const found = await base;
             const pose = found.length === 1 ? poseOf(found[0].landmarks.positions) : null;
-            return { count: found.length, pose };
+            return { count: found.length, pose, descriptor: null };
         } catch {
             return null;
         }
@@ -241,11 +283,12 @@ export function useCameraProctoring({ enabled, monitoring, report, announce }: O
             return { ok: false, reason: 'covered', message: 'Your camera looks covered or too dark. Uncover it and make sure the room is lit.' };
         }
         const f = faceApiRef.current!;
-        let boxes: { detection: { box: { width: number } }; landmarks: { positions: { x: number; y: number }[] } }[];
+        let boxes: { detection: { box: { width: number } }; landmarks: { positions: { x: number; y: number }[] }; descriptor: Float32Array }[];
         try {
             boxes = await f
                 .detectAllFaces(video, new f.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
-                .withFaceLandmarks(true);
+                .withFaceLandmarks(true)
+                .withFaceDescriptors();
         } catch {
             return { ok: false, reason: 'error', message: 'Could not analyse the photo. Please try again.' };
         }
@@ -264,6 +307,12 @@ export function useCameraProctoring({ enabled, monitoring, report, announce }: O
             return { ok: false, reason: 'no-face', message: 'Look straight at the camera (do not turn or tilt your head) and try again.' };
         }
         baseRef.current = entryPose;
+        // the entry face is the reference identity for the whole attempt
+        referenceRef.current = boxes[0].descriptor;
+        const key = referenceKeyRef.current;
+        if (key) {
+            try { window.localStorage.setItem(key, JSON.stringify(Array.from(boxes[0].descriptor))); } catch { /* ignore */ }
+        }
         const dataUrl = snapshotOf(video, 480, 0.8);
         if (!dataUrl) return { ok: false, reason: 'not-ready', message: 'Could not capture the photo. Please try again.' };
         return { ok: true, dataUrl };
@@ -278,6 +327,8 @@ export function useCameraProctoring({ enabled, monitoring, report, announce }: O
         let turned = 0;
         let lastYawAbs = 0;
         let lastTurnTick = -10;
+        let mismatches = 0;
+        let differentActive = false;
         let busy = false;
         let current: { type: CameraViolationType; startMs: number; snapshot: string | null; detail?: string } | null = null;
 
@@ -313,14 +364,15 @@ export function useCameraProctoring({ enabled, monitoring, report, announce }: O
                         snapshot = snapshotOf(video, 320, 0.6);
                         missing = 0; multiple = 0;
                     } else {
-                        const result = await countFaces();
+                        const checkIdentity = referenceRef.current != null && ticks % IDENTITY_EVERY_TICKS === 0;
+                        const result = await countFaces(checkIdentity);
                         if (result === null) {
                             // detector unavailable: only off / covered can be detected
                         } else if (result.count === 0) {
                             // a face lost right after being turned far to the side = still "turned", not "left"
-                            if (ticks - lastTurnTick <= 2 && lastYawAbs >= PROFILE_YAW_DEG) {
+                            if (ticks - lastTurnTick <= 2 && lastYawAbs >= headRef.current.profileYaw) {
                                 turned += 1; missing = 0;
-                                if (turned >= HEAD_TICKS) { observed = 'HEAD_TURNED'; detail = 'Head turned to the side (face not visible)'; }
+                                if (turned >= headRef.current.headTicks) { observed = 'HEAD_TURNED'; detail = 'Head turned to the side (face not visible)'; }
                             } else {
                                 missing += 1; multiple = 0; turned = 0;
                                 if (missing >= MISSING_TICKS) observed = 'FACE_MISSING';
@@ -330,16 +382,33 @@ export function useCameraProctoring({ enabled, monitoring, report, announce }: O
                             if (multiple >= MULTIPLE_TICKS) observed = 'MULTIPLE_FACES';
                         } else {
                             missing = 0; multiple = 0;
-                            const away = result.pose ? turnedAway(result.pose, baseRef.current) : null;
+                            const away = result.pose ? turnedAway(result.pose, baseRef.current, headRef.current.headAngle) : null;
                             if (result.pose) {
                                 lastYawAbs = Math.abs(result.pose.yaw - baseRef.current.yaw);
-                                if (lastYawAbs >= PROFILE_YAW_DEG) lastTurnTick = ticks;
+                                if (lastYawAbs >= headRef.current.profileYaw) lastTurnTick = ticks;
                             }
                             if (away) {
                                 turned += 1;
-                                if (turned >= HEAD_TICKS) { observed = 'HEAD_TURNED'; detail = away.label; }
+                                if (turned >= headRef.current.headTicks) { observed = 'HEAD_TURNED'; detail = away.label; }
                             } else {
                                 turned = 0;
+                                // identity: compare with the entry photo (frontal faces only)
+                                const ref = referenceRef.current;
+                                if (ref && result.descriptor && result.pose
+                                    && Math.abs(result.pose.yaw - baseRef.current.yaw) <= IDENTITY_MAX_YAW_DEG) {
+                                    const dist = faceApiRef.current?.euclideanDistance(ref, result.descriptor) ?? 0;
+                                    if (dist > DIFFERENT_PERSON_DISTANCE) {
+                                        mismatches += 1;
+                                        if (mismatches >= IDENTITY_MISMATCHES && !differentActive) {
+                                            differentActive = true;
+                                            detail = `Face does not match the entry photo (distance ${dist.toFixed(2)})`;
+                                        }
+                                    } else {
+                                        mismatches = 0;
+                                        differentActive = false;
+                                    }
+                                }
+                                if (differentActive) observed = 'DIFFERENT_PERSON';
                             }
                         }
                         if (observed) snapshot = snapshotOf(video, 320, 0.6);

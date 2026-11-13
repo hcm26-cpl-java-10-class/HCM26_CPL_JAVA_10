@@ -5,6 +5,7 @@ import type {
   TemplateLatePolicy,
   TemplateRubricCriterion,
 } from "@/types/features/project-template";
+import { maxDescriptionLength } from "./project-template.utils";
 
 export interface MilestoneChecklistValues {
   key: string;
@@ -64,7 +65,7 @@ export function toMilestoneValues(plan: TemplateMilestonePlan): MilestoneValues[
     description: milestone.description ?? "",
     dueAfter: String(milestone.dueAfter),
     dueUnit: milestone.dueUnit,
-    weight: String(milestone.weight),
+    weight: milestone.weight == null ? "" : String(milestone.weight),
     mandatory: milestone.mandatory,
     rubricVersionId: milestone.rubricVersionId ?? "",
     checklistItems: milestone.checklistItems.map((item) => ({
@@ -82,28 +83,28 @@ export function toMilestoneValues(plan: TemplateMilestonePlan): MilestoneValues[
   }));
 }
 
-export function weightHundredths(value: string): number | null {
+function parseWeightHundredths(value: string): number | null {
   const trimmed = value.trim();
-  if (!/^\d+(?:\.\d{1,2})?$/.test(trimmed) || Number(trimmed) > 100) return null;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(trimmed)) return null;
   const [whole, fraction = ""] = trimmed.split(".");
-  return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  const hundredths = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  return Number.isSafeInteger(hundredths) ? hundredths : null;
 }
 
-export function totalWeightHundredths(milestones: MilestoneValues[]): number | null {
-  let total = 0;
-  for (const milestone of milestones) {
-    const weight = weightHundredths(milestone.weight);
-    if (weight === null) return null;
-    total += weight;
-  }
-  return total;
+export function weightHundredths(value: string): number | null {
+  const hundredths = parseWeightHundredths(value);
+  return hundredths !== null && hundredths <= 10000 ? hundredths : null;
+}
+
+export function totalWeightHundredths(milestones: MilestoneValues[]): number {
+  return milestones.reduce((total, milestone) => total + (parseWeightHundredths(milestone.weight) ?? 0), 0);
 }
 
 export function milestoneFieldId(path: string) {
   return `plan-${path.replace(/[.[\]]+/g, "-").replace(/-$/, "")}`;
 }
 
-export function validateMilestonePlan(milestones: MilestoneValues[], durationWeeks: number | null): MilestonePlanErrors {
+export function validateMilestonePlan(milestones: MilestoneValues[], durationWeeks: number | null, weighted = true): MilestonePlanErrors {
   const errors: MilestonePlanErrors = {};
   const validDuration = durationWeeks !== null && Number.isInteger(durationWeeks) && durationWeeks > 0;
   if (!validDuration) {
@@ -115,8 +116,8 @@ export function validateMilestonePlan(milestones: MilestoneValues[], durationWee
     if (!milestone.title.trim() || milestone.title.trim().length > 120) {
       errors[`${path}.title`] = ["Milestone name must contain 1 to 120 characters"];
     }
-    if (milestone.description.trim().length > 1000) {
-      errors[`${path}.description`] = ["Description must not exceed 1000 characters"];
+    if (milestone.description.length > maxDescriptionLength) {
+      errors[`${path}.description`] = [`Description must not exceed ${maxDescriptionLength} characters`];
     }
     const dueAfter = milestone.dueAfter.trim();
     if (!/^\d+$/.test(dueAfter) || Number(dueAfter) <= 0 || Number(dueAfter) > 2147483647) {
@@ -128,7 +129,7 @@ export function validateMilestonePlan(milestones: MilestoneValues[], durationWee
     if (milestone.dueUnit !== "DAYS" && milestone.dueUnit !== "WEEKS") {
       errors[`${path}.dueUnit`] = ["Select days or weeks"];
     }
-    if (weightHundredths(milestone.weight) === null) {
+    if (weighted && weightHundredths(milestone.weight) === null) {
       errors[`${path}.weight`] = ["Weight must be between 0 and 100 with up to 2 decimal places"];
     }
     if (!milestone.checklistItems.length || milestone.checklistItems.length > 100) {
@@ -151,7 +152,7 @@ export function validateMilestonePlan(milestones: MilestoneValues[], durationWee
     }
   });
   const total = totalWeightHundredths(milestones);
-  if (milestones.length && total !== null && total !== 10000) errors.totalWeight = ["Milestone weights must total 100%"];
+  if (weighted && milestones.length && total !== 10000) errors.totalWeight = ["Milestone weights must total 100%"];
   return errors;
 }
 
@@ -163,7 +164,7 @@ function toLatePolicyPayload(policy: LatePolicyValues | null): TemplateLatePolic
   };
 }
 
-export function toMilestonePlanPayload(milestones: MilestoneValues[], lockVersion: number): TemplateMilestonePlanPayload {
+export function toMilestonePlanPayload(milestones: MilestoneValues[], lockVersion: number, weighted = true): TemplateMilestonePlanPayload {
   return {
     lockVersion,
     milestones: milestones.map((milestone) => ({
@@ -172,7 +173,7 @@ export function toMilestonePlanPayload(milestones: MilestoneValues[], lockVersio
       description: milestone.description.trim(),
       dueAfter: Number(milestone.dueAfter),
       dueUnit: milestone.dueUnit,
-      weight: Number(milestone.weight),
+      weight: weighted ? Number(milestone.weight) : null,
       mandatory: milestone.mandatory,
       rubricVersionId: milestone.rubricVersionId,
       checklistItems: milestone.checklistItems.map((item) => ({

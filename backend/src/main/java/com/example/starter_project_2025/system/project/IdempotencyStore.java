@@ -80,6 +80,15 @@ public class IdempotencyStore {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void complete(Long recordId, int status, String responseBody) {
+        markCompleted(recordId, status, responseBody);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void completeInTransaction(Long recordId, int status, String responseBody) {
+        markCompleted(recordId, status, responseBody);
+    }
+
+    private void markCompleted(Long recordId, int status, String responseBody) {
         IdempotencyRecord record = repository.findById(recordId).orElseThrow();
         record.setStatus(IdempotencyStatus.COMPLETED);
         record.setHttpStatus(status);

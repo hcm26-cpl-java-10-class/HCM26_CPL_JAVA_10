@@ -55,14 +55,13 @@ public class ExamResultAccessService {
         }
         // De thi "Manually released by teacher": giao vien tu cham va cong bo,
         // nen sau khi cong bo hoc sinh xem duoc diem + cau dung/sai.
-        if (exam.getResultVisibility() == ResultVisibility.MANUAL_RELEASE) {
+        if (isManualRelease(exam.getResultVisibility())) {
             return true;
         }
         if (!Boolean.TRUE.equals(exam.getShowAnswersAfterExam())) {
             return false;
         }
-        boolean examClosed = exam.getEndTime() != null && !LocalDateTime.now().isBefore(exam.getEndTime());
-        return attemptsRemaining <= 0 || examClosed;
+        return attemptsRemaining <= 0;
     }
 
     @Transactional(readOnly = true)
@@ -91,6 +90,7 @@ public class ExamResultAccessService {
         return publicationRepository.findByExam_Id(exam.getId())
                 .map(publication ->
                         publication.isPublished()
+                                && publication.getReleasePolicy()!=null
                                 && publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
                 .orElse(false);
     }
@@ -108,6 +108,7 @@ public class ExamResultAccessService {
         return publicationRepository.findByExam_Id(exam.getId())
                 .map(publication ->
                         publication.isPublished()
+                                && publication.getReleasePolicy()!=null
                                 && publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
                 .orElse(false);
     }
@@ -144,12 +145,13 @@ public class ExamResultAccessService {
         return switch (visibility) {
             case IMMEDIATE -> true;
 
-            case AFTER_EXAM_CLOSED ->
-                    exam.getEndTime() != null
-                            && !LocalDateTime.now()
-                            .isBefore(exam.getEndTime());
-
-            case MANUAL_RELEASE -> true;
+            // AFTER_EXAM_CLOSED la gia tri cu (khong con gio dong de): coi nhu MANUAL_RELEASE.
+            case AFTER_EXAM_CLOSED, MANUAL_RELEASE -> true;
         };
+    }
+
+    /** MANUAL_RELEASE, kem gia tri cu AFTER_EXAM_CLOSED (khong con gio dong de) duoc coi nhu MANUAL_RELEASE. */
+    private static boolean isManualRelease(ResultVisibility visibility) {
+        return visibility == ResultVisibility.MANUAL_RELEASE || visibility == ResultVisibility.AFTER_EXAM_CLOSED;
     }
 }

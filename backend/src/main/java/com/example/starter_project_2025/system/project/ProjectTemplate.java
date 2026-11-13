@@ -2,10 +2,14 @@ package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateLevel;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
@@ -20,8 +24,10 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
 @Entity
-@Table(name = "project_templates", uniqueConstraints = @UniqueConstraint(
-        name = "uk_template_tenant_code_version", columnNames = {"tenant_id", "code", "template_version"}))
+@Table(name = "project_templates", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_template_code_scope_version", columnNames = {"tenant_id", "code_scope_id", "code", "template_version"}),
+        @UniqueConstraint(name = "uk_template_module_code", columnNames = {"tenant_id", "parent_template_id", "code"})
+})
 @Getter
 @Setter
 @SuperBuilder
@@ -44,12 +50,22 @@ public class ProjectTemplate extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     String description;
 
+    @Column(name = "technology_stack", length = 2000)
+    String technologyStack;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_template_id")
+    ProjectTemplate parentTemplate;
+
+    @Builder.Default
+    @Column(name = "code_scope_id", nullable = false, columnDefinition = "bigint default 0")
+    Long codeScopeId = 0L;
+
     @Column(length = 255)
     String category;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "difficulty_level", length = 20)
-    ProjectTemplateLevel level;
+    String level;
 
     @Column(name = "estimated_duration_weeks")
     Integer estimatedDurationWeeks;
@@ -75,5 +91,15 @@ public class ProjectTemplate extends BaseEntity {
         if (major != null && major > 0) {
             this.templateVersion = major;
         }
+    }
+
+    public Long getParentTemplateId() {
+        return parentTemplate == null ? null : parentTemplate.getId();
+    }
+
+    @PrePersist
+    @PreUpdate
+    private void initializeCodeScope() {
+        codeScopeId = parentTemplate == null ? 0L : parentTemplate.getId();
     }
 }

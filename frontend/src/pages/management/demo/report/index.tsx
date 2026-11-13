@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 import type { CourseReportItem } from "@/types";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Award, BarChart3, BookOpen, CheckCircle2, Download, Users } from "lucide-react";
+import { Activity, Award, BarChart3, BookOpen, CheckCircle2, Clock3, Download, Users } from "lucide-react";
 import { useMemo } from "react";
 import { Navigate } from "react-router-dom";
 import { CourseCatalogPage } from "@/pages/management/demo/course/components/CourseCatalogPage";
+import { LearningHoursAnalytics } from "./LearningHoursAnalytics";
 
 const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 
@@ -60,30 +61,47 @@ export default function CourseReportPage() {
   ] as const;
 
   return (
-    <MainLayout dense pathName={{ "course-enrollments": "Enrollments", enrollments: "Enrollments" }}>
-      <section className="space-y-1.5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div><p className="text-sm font-medium text-blue-600">COURSE OVERVIEW</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Enrollments</h1></div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => downloadCsv(data)} disabled={!data.length}><Download className="size-4" /> Export CSV</Button>
-          </div>
-        </div>
-
-        <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-4">
-          {cards.map(([label, value, Icon]) => <div key={label} className="rounded-xl border bg-card px-4 py-2 shadow-sm"><div className="flex items-center justify-between text-sm text-muted-foreground"><span>{label}</span><Icon className="size-4" /></div><div className="mt-1 text-3xl font-semibold">{value}</div></div>)}
-        </div>
-
-        <div className="rounded-xl border bg-card px-4 py-2">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-blue-600">COURSE CATALOG</p>
-              <h2 className="mt-1 text-xl font-semibold tracking-tight">Courses available</h2>
+      <MainLayout dense pathName={{ "course-enrollments": "Enrollments", enrollments: "Enrollments" }}>
+        <section className="space-y-1.5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div><p className="text-sm font-medium text-blue-600">COURSE OVERVIEW</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Enrollments</h1></div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => downloadCsv(data)} disabled={!data.length}><Download className="size-4" /> Export CSV</Button>
             </div>
           </div>
-          <CourseCatalogPage embedded />
-        </div>
 
-      </section>
-    </MainLayout>
+          <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-4">
+            {cards.map(([label, value, Icon]) => <div key={label} className="rounded-xl border bg-card px-4 py-2 shadow-sm"><div className="flex items-center justify-between text-sm text-muted-foreground"><span>{label}</span><Icon className="size-4" /></div><div className="mt-1 text-3xl font-semibold">{value}</div></div>)}
+          </div>
+
+          <div className="rounded-xl border bg-card px-4 py-2">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-blue-600">COURSE CATALOG</p>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight">Courses available</h2>
+              </div>
+            </div>
+            <CourseCatalogPage embedded />
+          </div>
+
+          <section className="rounded-xl border bg-card px-4 py-3" aria-labelledby="learning-hours-heading">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Clock3 className="size-5 text-blue-600" />
+                  <h2 id="learning-hours-heading" className="text-lg font-semibold">Learning hours analytics</h2>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Learning time by student, department and course, with enrollment dates for reconciliation.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3">
+              <LearningHoursAnalytics />
+            </div>
+          </section>
+
+        </section>
+      </MainLayout>
   );
 }

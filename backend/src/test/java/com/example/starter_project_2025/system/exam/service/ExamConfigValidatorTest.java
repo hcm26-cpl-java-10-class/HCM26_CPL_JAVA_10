@@ -29,50 +29,10 @@ class ExamConfigValidatorTest {
     void acceptsGracePeriodWhenLateSubmissionIsAllowed() {
         ExamDTO request = new ExamDTO();
         request.setLatePolicy(LatePolicy.ALLOWED);
-        request.setEndTime(java.time.LocalDateTime.now().plusHours(1));
         request.setLateGraceMinutes(15);
         ValidationContext context = new ValidationContext();
 
         validator.validate(null, request, 10, context);
-
-        context.throwIfErrors();
-    }
-
-    @Test
-    void ignoresStartTimeBecauseSchedulingWasRemoved() {
-        // Tinh nang dat lich (start/end) da bi go bo (commit "remove set time"): validator khong con kiem tra gio mo/dong.
-        ExamDTO request = new ExamDTO();
-        request.setStartTime(java.time.LocalDateTime.now().minusHours(2));
-        ValidationContext context = new ValidationContext();
-
-        validator.validate(null, request, 10, context);
-
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(context::throwIfErrors);
-    }
-
-    @Test
-    void acceptsStartTimeInTheFuture() {
-        ExamDTO request = new ExamDTO();
-        request.setStartTime(java.time.LocalDateTime.now().plusHours(2));
-        request.setEndTime(java.time.LocalDateTime.now().plusHours(4));
-        ValidationContext context = new ValidationContext();
-
-        validator.validate(null, request, 10, context);
-
-        context.throwIfErrors();
-    }
-
-    @Test
-    void allowsUnchangedPastStartTimeWhenUpdatingExam() {
-        java.time.LocalDateTime pastTime = java.time.LocalDateTime.now().minusHours(5);
-        Exam existing = new Exam();
-        existing.setStartTime(pastTime);
-
-        ExamDTO request = new ExamDTO();
-        request.setStartTime(pastTime);
-        ValidationContext context = new ValidationContext();
-
-        validator.validate(existing, request, 10, context);
 
         context.throwIfErrors();
     }

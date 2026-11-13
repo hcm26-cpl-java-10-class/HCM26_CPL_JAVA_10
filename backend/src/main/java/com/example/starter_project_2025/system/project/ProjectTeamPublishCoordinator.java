@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
+import com.example.starter_project_2025.system.project.template.assignment.hierarchy.ProjectAssignmentService;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 @Service
 @RequiredArgsConstructor
@@ -39,6 +41,7 @@ public class ProjectTeamPublishCoordinator {
     private final IdempotencyStore idempotencyStore;
     private final ObjectMapper objectMapper;
     private final Validator validator;
+    private final ProjectAssignmentService projectAssignments;
 
     @Transactional
     public ResponseEntity<String> publish(
@@ -78,8 +81,12 @@ public class ProjectTeamPublishCoordinator {
         if (session.getStatus() != TeamAllocationSessionStatus.OPEN) {
             return errorResponse(400, "ERR_INVALID_BATCH_DATA", "Allocation session is not open");
         }
+        if (projectAssignments.hasPending(sessionId)) {
+            return errorResponse(422, AllocationReadinessService.ERR_TEAMS_NOT_READY,
+                    "Sử dụng Công bố chính thức để kiểm tra toàn lớp và tạo Workspace cho phân công Master.");
+        }
 
-        AllocationReadinessResponse readiness = readinessService.evaluateSession(sessionId);
+        AllocationReadinessResponse readiness = readinessService.evaluateSession(sessionId, authentication);
         if (!readiness.unassignedStudents().isEmpty()) {
             String message = "Không thể công bố. Còn " + readiness.unassignedStudentCount()
                     + " học viên chưa được xếp nhóm. Vui lòng phân nhóm cho toàn bộ học viên trước khi công bố";
@@ -221,15 +228,24 @@ public class ProjectTeamPublishCoordinator {
             return errorResponse(400, "ERR_INVALID_BATCH_DATA",
                     "X-Idempotency-Key is required and must not exceed 128 characters");
         }
-        if (session.getStatus() != TeamAllocationSessionStatus.OPEN) {
-            return errorResponse(400, "ERR_INVALID_BATCH_DATA", "Allocation session is not open");
+        if (session.getStatus() == TeamAllocationSessionStatus.PUBLISHED) {
+            Long actorId = ((UserPrincipal) authentication.getPrincipal()).getUser().getId();
+            try {
+                return replayOrConflict(idempotencyStore.find(actorId, SESSION_OPERATION, key),
+                        hash(new PublishSessionPayload(sessionId)));
+            } catch (IdempotencyRequestInProgressException missing) {
+                return errorResponse(400, "ERR_INVALID_BATCH_DATA", "Allocation session is already published");
+            }
         }
+        if (session.getStatus() != TeamAllocationSessionStatus.OPEN)
+            return errorResponse(400, "ERR_INVALID_BATCH_DATA", "Allocation session is not open");
 
-        AllocationReadinessResponse readiness = readinessService.evaluateSession(sessionId);
+        AllocationReadinessResponse readiness = readinessService.evaluateSession(sessionId, authentication);
         if (!readiness.readyToPublish()) {
             String message = readiness.unassignedStudentCount() > 0
                     ? "Không thể công bố. Còn " + readiness.unassignedStudentCount()
                             + " học viên chưa được xếp nhóm. Vui lòng phân nhóm cho toàn bộ học viên trước khi công bố"
+                    : readiness.draftTeamCount() == 0 ? "Phiên không có nhóm nháp để công bố."
                     : "Không thể công bố. Còn " + readiness.teamIssues().size()
                             + " lỗi điều kiện nhóm (đề bài/vai trò). Vui lòng xử lý toàn bộ trước khi công bố";
             String errorCode = readiness.unassignedStudentCount() > 0
@@ -250,7 +266,7 @@ public class ProjectTeamPublishCoordinator {
         }
 
         Long actorId = ((UserPrincipal) authentication.getPrincipal()).getUser().getId();
-        String requestHash = hash(new PublishSessionPayload(sessionId, teamIds));
+        String requestHash = hash(new PublishSessionPayload(sessionId));
         IdempotencyRecord record;
         try {
             record = idempotencyStore.claim(actorId, SESSION_OPERATION, key, requestHash);
@@ -263,6 +279,7 @@ public class ProjectTeamPublishCoordinator {
         }
 
         try {
+            projectAssignments.publishPending(session, authentication);
             List<Long> succeeded = new ArrayList<>();
             List<PublishTeamsResponse.FailedItem> failed = new ArrayList<>();
             for (Long teamId : teamIds) {
@@ -286,14 +303,18 @@ public class ProjectTeamPublishCoordinator {
                             teamId, "ERR_STALE_DATA_CONFLICT", invalid.getMessage(), null, null));
                 }
             }
-            if (failed.isEmpty()) {
-                sessionStateService.closeAsPublishedWhenNoDrafts(sessionId);
+            if (!failed.isEmpty()) {
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                idempotencyStore.releaseForRetry(record.getId());
+                return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON)
+                        .body(writeJson(new PublishTeamsResponse(sessionId, List.of(), failed)));
             }
+            sessionStateService.closeAsPublishedWhenNoDrafts(sessionId);
 
             PublishTeamsResponse response =
                     new PublishTeamsResponse(sessionId, succeeded, failed);
             String body = writeJson(response);
-            idempotencyStore.complete(record.getId(), 200, body);
+            idempotencyStore.completeInTransaction(record.getId(), 200, body);
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(body);
         } catch (RuntimeException systemError) {
             idempotencyStore.releaseForRetry(record.getId());
@@ -322,6 +343,6 @@ public class ProjectTeamPublishCoordinator {
     private record PublishPayload(Long sessionId, PublishTeamsRequest request) {
     }
 
-    private record PublishSessionPayload(Long sessionId, List<Long> teamIds) {
+    private record PublishSessionPayload(Long sessionId) {
     }
 }

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { getTemplateError } from "../project-template.utils";
 
 export function TemplateDeleteDialog({ template, onDeleted }: { template: ProjectTemplateDTO; onDeleted?: () => void }) {
+  const module = template.parentTemplateId != null;
   const [open, setOpen] = useState(false);
   const pending = useRef(false);
   const client = useQueryClient();
@@ -19,7 +20,7 @@ export function TemplateDeleteDialog({ template, onDeleted }: { template: Projec
       setOpen(false);
       void client.invalidateQueries({ queryKey: ["project-templates"] });
       void client.invalidateQueries({ queryKey: ["project-template-versions"] });
-      toast.success("Template draft deleted successfully.");
+      toast.success(module ? "Module removed successfully." : "Template draft deleted successfully.");
       onDeleted?.();
     },
     onSettled: () => { pending.current = false; },
@@ -30,13 +31,14 @@ export function TemplateDeleteDialog({ template, onDeleted }: { template: Projec
     setOpen(value);
     if (value) mutation.reset();
   }}>
-    <DialogTrigger asChild><Button variant="outline" size="icon" className="text-destructive" aria-label={`Delete template ${template.code}`}>
+    <DialogTrigger asChild><Button variant="outline" size="icon" className="text-destructive" aria-label={module ? `Remove module ${template.code}` : `Delete template ${template.code}`}>
       <Trash2 className="size-4" />
     </Button></DialogTrigger>
     <DialogContent showCloseButton={!mutation.isPending} onEscapeKeyDown={event => { if (pending.current) event.preventDefault(); }}
       onInteractOutside={event => { if (pending.current) event.preventDefault(); }}>
-      <DialogHeader><DialogTitle>Delete template draft?</DialogTitle>
-        <DialogDescription>Only drafts that have never been assigned to a team, class or project can be deleted.</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>{module ? "Remove this module?" : "Delete template draft?"}</DialogTitle>
+        <DialogDescription>{module ? "Remove this module and its child modules from the library tree. Existing project snapshots and resources remain available."
+          : "Only drafts that have never been assigned to a team, class or project can be deleted."}</DialogDescription></DialogHeader>
       <p className="break-words rounded-lg border p-3 text-sm font-medium">{template.code} · {template.name}</p>
       {error && <Alert variant="destructive"><AlertDescription>{error.message}</AlertDescription></Alert>}
       <DialogFooter>
@@ -46,7 +48,7 @@ export function TemplateDeleteDialog({ template, onDeleted }: { template: Projec
           pending.current = true;
           mutation.mutate();
         }}>{mutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-          {mutation.isPending ? "Deleting..." : "Delete draft"}</Button>
+          {mutation.isPending ? "Deleting..." : module ? "Remove module" : "Delete draft"}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;

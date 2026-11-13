@@ -6,9 +6,11 @@ public record ProjectTemplateOptions(
         Long tenantId,
         String tenantName,
         List<String> categories,
+        List<Option> levels,
         boolean canCreate,
         boolean canUpdate,
         boolean canActivate,
         boolean canArchive
 ) {
+    public record Option(String value, String label) { }
 }

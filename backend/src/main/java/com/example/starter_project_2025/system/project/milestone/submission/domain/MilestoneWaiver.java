@@ -24,7 +24,7 @@ public class MilestoneWaiver {
     private Long projectId;
     @Column(name = "milestone_id", nullable = false, updatable = false)
     private UUID milestoneId;
-    @Column(name = "team_id", nullable = false, updatable = false)
+    @Column(name = "team_id", updatable = false)
     private Long teamId;
     @Column(nullable = false, length = 500)
     private String reason;

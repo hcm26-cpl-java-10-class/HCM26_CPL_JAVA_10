@@ -49,10 +49,6 @@ public class ExamDTO extends BaseDTO {
     @Min(value = 1, groups = {OnCreate.class, OnUpdate.class})
     private Integer durationMinutes;
 
-    private LocalDateTime startTime;
-
-    private LocalDateTime endTime;
-
     @Min(value = 1, groups = {OnCreate.class, OnUpdate.class}, message = "maxAttempts phải >= 1")
     private Integer maxAttempts;
 
@@ -64,6 +60,16 @@ public class ExamDTO extends BaseDTO {
 
     @DecimalMin(value = "0", groups = {OnCreate.class, OnUpdate.class}, message = "passScore phải >= 0")
     private BigDecimal passScore;
+
+    @DecimalMin(value="0", groups={OnCreate.class,OnUpdate.class})
+    @DecimalMax(value="100", groups={OnCreate.class,OnUpdate.class})
+    @jakarta.validation.constraints.Digits(integer=3,fraction=2,groups={OnCreate.class,OnUpdate.class})
+    private BigDecimal courseWeight;
+    @JsonIgnore private boolean courseWeightProvided;
+    public void setCourseWeight(BigDecimal weight) {
+        this.courseWeight=weight;
+        this.courseWeightProvided=true;
+    }
 
     @DecimalMin(value = "0.01", groups = {OnCreate.class, OnUpdate.class}, message = "maxScore phải > 0")
     @DecimalMax(value = "1000", groups = {OnCreate.class, OnUpdate.class}, message = "maxScore tối đa 1000")
@@ -103,6 +109,10 @@ public class ExamDTO extends BaseDTO {
     private Boolean singleSession;
     private Boolean cameraProctoring;
     private Boolean notifyOnViolation;
+    /** Chi dat luc tao de thi (null = mac dinh 35 do / 2 giay / 20%); khi doc luon tra ve gia tri dang ap dung. */
+    private Integer headTurnAngleDeg;
+    private Integer headTurnSeconds;
+    private Integer fastSubmitPercent;
 
     // ---- Lien ket voi course / section / lesson (tuy chon) ----
     private Long courseId;
@@ -137,12 +147,4 @@ public class ExamDTO extends BaseDTO {
 
     @JsonProperty(access = READ_ONLY)
     private Boolean hasPassword;
-
-    @JsonProperty(value = "isCurrentlyOpen", access = READ_ONLY)
-    public Boolean getIsCurrentlyOpen() {
-        LocalDateTime now = LocalDateTime.now();
-        boolean afterStart = (startTime == null || !now.isBefore(startTime));
-        boolean beforeEnd = (endTime == null || !now.isAfter(endTime));
-        return afterStart && beforeEnd;
-    }
 }

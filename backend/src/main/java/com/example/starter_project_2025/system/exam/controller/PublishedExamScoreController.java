@@ -19,6 +19,7 @@ import java.util.List;
 public class PublishedExamScoreController {
 
     private final PublishedExamScoreService scoreService;
+    private final com.example.starter_project_2025.system.exam.service.MyScoreInsightsService insightsService;
 
     @GetMapping
     public ResponseEntity<List<PublishedExamScoreDTO>> getMyPublishedScores(
@@ -32,5 +33,16 @@ public class PublishedExamScoreController {
         return ResponseEntity.ok(
                 scoreService.findMyPublishedScores(principal.getUser().getId())
         );
+    }
+
+    @GetMapping("/insights")
+    public ResponseEntity<com.example.starter_project_2025.system.exam.dto.MyScoreInsightsDTO> getInsights(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        if (principal == null || principal.getUser() == null
+                || principal.getUser().getId() == null) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(insightsService.getInsights(principal.getUser().getId()));
     }
 }

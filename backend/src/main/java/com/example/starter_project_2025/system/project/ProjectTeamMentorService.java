@@ -80,15 +80,10 @@ public class ProjectTeamMentorService {
                 .orElse(null);
     }
 
-    @Transactional(readOnly = true)
     public Long resolveMentorForPublish(ProjectTeam team) {
         Long mentorId = team.getAssignedMentorId();
         if (mentorId == null) {
-            mentorId = team.getTrainingClass().getMentorId();
-            if (mentorId == null) {
-                throw new TeamPublishValidationException(
-                        "Nhóm chưa được gán Mentor và lớp học chưa có Mentor mặc định.");
-            }
+            throw new TeamPublishValidationException("Chọn Mentor phụ trách nhóm trước khi công bố.");
         }
         try {
             validateMentor(team.getTrainingClass(), mentorId);

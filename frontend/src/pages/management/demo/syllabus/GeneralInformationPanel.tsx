@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/usePermissions";
 
 type FieldName =
@@ -21,6 +22,10 @@ type FieldName =
     | "timeAllocation"
     | "studentResponsibilities"
     | "requiredTools";
+
+const DEGREE_LEVEL_OPTIONS = [
+    "Undergraduate", "Postgraduate", "Master's", "Doctoral", "Vocational / Professional",
+] as const;
 
 const fields: {
     key: FieldName;
@@ -127,6 +132,7 @@ export default function GeneralInformationPanel({
         useState<SyllabusInformationInput>(empty);
 
     const [scoreText, setScoreText] = useState("");
+    const [customDegree, setCustomDegree] = useState(false);
 
     const query = useQuery({
         queryKey: ["syllabus-information", syllabusId],
@@ -151,6 +157,8 @@ export default function GeneralInformationPanel({
             requiredTools: info.requiredTools ?? "",
             scoringScale: info.scoringScale ?? null,
         });
+
+        setCustomDegree(Boolean(info.degreeLevel) && !DEGREE_LEVEL_OPTIONS.some((v) => v === info.degreeLevel));
 
         setScoreText(
             info.scoringScale == null
@@ -403,7 +411,25 @@ export default function GeneralInformationPanel({
                                 {field.label}
                             </label>
 
-                            {field.multiline ? (
+                            {field.key === "degreeLevel" ? (
+                                <div className="space-y-2">
+                                    <Select value={customDegree ? "__custom__" : DEGREE_LEVEL_OPTIONS.some((v) => v === form.degreeLevel) ? form.degreeLevel : "__none__"}
+                                        onValueChange={(value) => {
+                                            setCustomDegree(value === "__custom__");
+                                            updateField("degreeLevel", value === "__custom__" || value === "__none__" ? "" : value);
+                                        }}>
+                                        <SelectTrigger id="info-degreeLevel" className="w-full"><SelectValue placeholder="Choose degree level" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">Not selected</SelectItem>
+                                            {DEGREE_LEVEL_OPTIONS.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
+                                            <SelectItem value="__custom__">Other / custom</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {customDegree && <Input aria-label="Custom Degree Level" placeholder="Enter a custom degree level" value={form.degreeLevel} maxLength={100}
+                                        onChange={(event) => updateField("degreeLevel", event.target.value)} />}
+                                    <p className="text-xs text-muted-foreground">Academic degree level, not Course difficulty. Existing values are preserved.</p>
+                                </div>
+                            ) : field.multiline ? (
                                 <textarea
                                     id={`info-${field.key}`}
                                     className="w-full rounded-md border bg-background p-3 text-sm"

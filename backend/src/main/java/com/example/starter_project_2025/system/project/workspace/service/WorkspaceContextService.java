@@ -24,7 +24,7 @@ public class WorkspaceContextService {
             throw new AccessDeniedException("Workspace is outside the current tenant");
         if (!Boolean.TRUE.equals(workspace.getIsActive()))
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace was not found");
-        if (workspace.getProject() == null && workspace.getTeam().getProject() != null) {
+        if (workspace.getCurrentSlot() != null && workspace.getProject() == null && workspace.getTeam().getProject() != null) {
             workspace.setProject(workspace.getTeam().getProject());
         }
         if (workspace.getProject() != null) {

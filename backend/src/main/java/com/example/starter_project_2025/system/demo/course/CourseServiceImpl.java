@@ -45,6 +45,7 @@ public class CourseServiceImpl
     SyllabusRepository syllabusRepository;
     CurriculumValidator curriculumValidator;
     NotificationService notificationService;
+    CourseAssessmentService assessments;
 
     @Override
     protected BaseCrudRepository<Course, Long> getRepository() {
@@ -131,6 +132,12 @@ public class CourseServiceImpl
             return;
         }
 
+        validatePublishRequirements(course, request, ctx);
+    }
+
+    private void validatePublishRequirements(Course course, CourseDTO request, ValidationContext ctx) {
+        CourseAssessmentService.Plan plan=assessments.plan(course.getId());
+        if (!plan.ready()) plan.issues().forEach(issue->ctx.add("status",issue));
         if (course.getInstructorUser() == null) {
             ctx.add("instructorId", "Assign an instructor before publishing");
         }
@@ -150,7 +157,8 @@ public class CourseServiceImpl
             ctx.add("description", "Add a course description before publishing");
         }
 
-        if (course.getSyllabus() != null && !isSelectable(course.getSyllabus())) {
+        if (course.getCourseType() != CourseType.FROM_SYLLABUS
+                && course.getSyllabus() != null && !isSelectable(course.getSyllabus())) {
             ctx.add("syllabusId", "Select a Published and Active syllabus before publishing");
         }
 
@@ -221,6 +229,11 @@ public class CourseServiceImpl
         }
         if (request.getSyllabusId() == null) {
             return; // No change on update; optional on create.
+        }
+        if (course.getCourseType() == CourseType.FROM_SYLLABUS
+                && course.getSyllabus() != null
+                && request.getSyllabusId().equals(course.getSyllabus().getId())) {
+            return;
         }
         syllabusRepository.findById(request.getSyllabusId()).ifPresentOrElse(
                 syllabus -> {

@@ -29,6 +29,7 @@ public class NotificationService {
     @Transactional
     public void createOnce(Long userId, String eventKey, String title, String message, String targetUrl) {
         if (notificationRepository.existsByEventKey(eventKey)) {
+            notificationRepository.updateTargetUrlByEventKey(eventKey, targetUrl);
             return;
         }
         notificationRepository.save(Notification.builder()
@@ -54,4 +55,3 @@ public class NotificationService {
         notificationRepository.markAllRead(userId, LocalDateTime.now());
     }
 }
-

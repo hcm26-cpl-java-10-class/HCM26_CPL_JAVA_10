@@ -42,6 +42,16 @@ public class SyllabusContentController {
                 .body(cloService.create(syllabusId, input));
     }
 
+    @PostMapping("/clos/bulk")
+    @PreAuthorize("hasAuthority('SYLLABUS_CREATE')")
+    public ResponseEntity<List<CloView>> bulkCreateClos(
+            @PathVariable Long syllabusId,
+            @RequestBody SyllabusCloService.BulkCloInput input
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(cloService.createBulk(syllabusId, input));
+    }
+
     @PutMapping("/clos/{cloId}")
     @PreAuthorize("hasAuthority('SYLLABUS_UPDATE')")
     public CloView updateClo(

@@ -1,3 +1,5 @@
+import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
+import ScoreManagementPage from "@/pages/management/exam/score-management";
 import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
 import WeeklyCalendarPage from "@/pages/management/calendar/WeeklyCalendarPage";
 import ScheduleVersionListPage from "@/pages/management/demo/schedule_version";
@@ -35,7 +37,9 @@ import UnifiedInvitationsPage, {
 } from "@/pages/invitations/InvitationsPage";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import TeamAllocationPage from "@/pages/management/team-allocation";
+import TeamAllocationSetupPage from "@/pages/management/team-allocation/setup";
 import TeamAllocationClassListPage from "@/pages/management/team-allocation/class-list";
+import ProjectAssignmentPage from "@/pages/management/team-allocation/ProjectAssignmentPage";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
@@ -64,6 +68,7 @@ import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPag
 import { createElement } from "react";
 import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
+import ProjectReportsPage from "@/pages/management/project-reports";
 import ProjectTemplateListPage from "@/pages/management/project-template";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
@@ -81,6 +86,8 @@ import { Navigate } from "react-router-dom";
 
 import SyllabusesPage from "@/pages/management/demo/syllabus";
 import SyllabusDetailPage from "@/pages/management/demo/syllabus/detail";
+import CreateCourseFromSyllabusPage from "@/pages/management/demo/syllabus/CreateCourseFromSyllabusPage";
+import SyllabusCourseWorkspacePage from "@/pages/management/demo/syllabus/SyllabusCourseWorkspacePage";
 import CourseUsagePage from "@/pages/management/demo/syllabus/CourseUsagePage";
 import SyllabusTemplatesPage from "@/pages/management/demo/syllabus/SyllabusTemplatesPage";
 
@@ -89,6 +96,7 @@ import StudentSyllabusPage from "@/pages/student/StudentSyllabusPage";
 
 import CourseReportPage from "@/pages/management/demo/report";
 import StudentAnalyticsPage from "@/pages/management/analytics/StudentAnalyticsPage";
+import CourseAnalyticsPage from "@/pages/management/demo/analytics";
 import { CourseEnrollmentDetailPage } from "@/pages/management/demo/course/pages/CourseEnrollmentDetailPage";
 import UnansweredQuestionsPage from "@/pages/management/demo/unanswered-questions";
 import LessonReportsPage from "@/pages/management/demo/lesson-reports";
@@ -135,8 +143,10 @@ export const routes: RouteConfig[] = [
   { path: "/calendar/preview", component: WeeklyCalendarPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/schedule-versions", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/calendar/adjust", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/courses/:id/grades", component: CourseLearnerGradesPage, requiredPermissions: ["COURSE_REPORT_READ", "EXAM_READ"] },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
+  { path: "/management/reports/projects", component: ProjectReportsPage, requiredPermission: "PROJECT_REPORT_READ" },
   { path: "/tasks/create", component: TaskManagementPage, requiredPermission: "TASK_CREATE" },
   { path: "/tasks/:id/edit", component: TaskManagementPage, requiredPermission: "TASK_UPDATE" },
   { path: "/tasks/:id/detail", component: TaskManagementPage, requiredPermission: "TASK_READ" },
@@ -187,6 +197,11 @@ export const routes: RouteConfig[] = [
   },
 
   // EXAMS
+  {
+    path: "/exams/score-management",
+    component: ScoreManagementPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
   {
     path: "/exams/curriculum",
     component: ExamCurriculumPage,
@@ -245,6 +260,11 @@ export const routes: RouteConfig[] = [
 
   {
     path: "/exams/:examId/similarity",
+    component: ExamSimilarityPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+  {
+    path: "/exams/:examId/grading/similarity",
     component: ExamSimilarityPage,
     requiredPermission: "EXAM_UPDATE",
   },
@@ -310,6 +330,19 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   {
+    path: "/syllabuses/:id/workspace",
+    component: SyllabusCourseWorkspacePage,
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
+  },
+  {
+    path: "/syllabuses/:id/create-course",
+    component: CreateCourseFromSyllabusPage,
+    // The page and Backend also require all four authorities, not any single authority.
+    requiredPermission: "SYLLABUS_READ",
+    isModuleDriven: false,
+  },
+  {
     path: "/syllabuses/:id",
     component: SyllabusDetailPage,
     requiredPermission: "SYLLABUS_READ",
@@ -325,6 +358,17 @@ export const routes: RouteConfig[] = [
   {
     path: "/team-allocation/classes/:classId",
     component: TeamAllocationPage,
+    requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
+  },
+  {
+    // Allocation workspace of one session: "Allocate Teams" + "Set up Teams".
+    path: "/team-allocation/classes/:classId/setup",
+    component: TeamAllocationSetupPage,
+    requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
+  },
+  {
+    path: "/team-allocation/classes/:classId/assign",
+    component: ProjectAssignmentPage,
     requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
   },
   {
@@ -543,6 +587,12 @@ export const routes: RouteConfig[] = [
   {
     path: "/course-enrollments",
     component: CourseReportPage,
+    requiredPermission: "COURSE_REPORT_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/course-analytics",
+    component: CourseAnalyticsPage,
     requiredPermission: "COURSE_REPORT_READ",
     isModuleDriven: true,
   },

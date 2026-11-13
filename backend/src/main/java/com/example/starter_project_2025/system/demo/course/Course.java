@@ -69,6 +69,16 @@ public class Course extends BaseEntity {
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20,
+            columnDefinition = "varchar(20) default 'STANDARD'")
+    CourseType courseType = CourseType.STANDARD;
+
+    public boolean allowsOutlineEditing() {
+        return courseType == CourseType.FROM_SYLLABUS && status == CourseStatus.DRAFT;
+    }
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     CourseStatus status = CourseStatus.DRAFT;
 

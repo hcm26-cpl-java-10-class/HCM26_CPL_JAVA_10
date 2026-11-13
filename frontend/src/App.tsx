@@ -11,6 +11,7 @@ import { routes } from "./router/component-registry";
 import type { RootState } from "./store/store";
 import { getHomePathByRole } from "./utils/rbac.utils";
 import { resolveMenuPermission } from "./router/menu-permission.utils";
+import { SystemChatbotWidget } from '@/components/chatbot/SystemChatbotWidget';
 
 function AppRoutes() {
     const { isAuthenticated } = useSelector((state: RootState) => state.auth);
@@ -104,6 +105,7 @@ function App() {
             <AuthProvider>
                 <RoleSwitchProvider>
                     <AppRoutes />
+                    <SystemChatbotWidget />
                 </RoleSwitchProvider>
             </AuthProvider>
         </BrowserRouter>

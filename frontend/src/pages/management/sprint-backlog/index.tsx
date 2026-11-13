@@ -22,7 +22,7 @@ import {
  * Business rules mirrored on the client (the backend stays authoritative and
  * answers 422 with the same field keys):
  * - title mandatory, 1..200 characters
- * - description optional, at most 2000 characters
+ * - description optional, at most 1000 characters
  * - work type one of `SPRINT_BACKLOG_WORK_TYPE_OPTIONS` (fixed set, no custom
  *   work types can be created)
  * - start / end date optional but both-or-none, start strictly before end
@@ -31,7 +31,7 @@ import {
  */
 
 const MAX_TITLE_LENGTH = 200;
-const MAX_DESCRIPTION_LENGTH = 2000;
+const MAX_DESCRIPTION_LENGTH = 1000;
 
 /** Lifecycle of a Sprint Backlog item: To do -> In progress -> Review -> Done. */
 const statusOptions = SPRINT_BACKLOG_STATUS_OPTIONS;
@@ -89,8 +89,8 @@ export const sprintBacklogSchema: EntitySchema = {
             maxLength: MAX_DESCRIPTION_LENGTH,
             rows: 5,
             maxLengthMessage:
-                "Mô tả Sprint Backlog không vượt quá 2000 ký tự",
-            helpText: "Mô tả chi tiết, tối đa 2000 ký tự",
+                "Mô tả Sprint Backlog không vượt quá 1000 ký tự",
+            helpText: "Mô tả chi tiết, tối đa 1000 ký tự",
             width: 320,
         },
         {
@@ -193,7 +193,7 @@ export const sprintBacklogSchema: EntitySchema = {
             description.length > MAX_DESCRIPTION_LENGTH
         ) {
             errors.description = [
-                "Mô tả Sprint Backlog không vượt quá 2000 ký tự",
+                "Mô tả Sprint Backlog không vượt quá 1000 ký tự",
             ];
         }
 

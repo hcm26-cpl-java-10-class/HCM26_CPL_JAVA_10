@@ -37,10 +37,10 @@ public class WorkspaceResourceDownloadTokenService {
     }
 
     /** Creates a signed token valid for the configured TTL. */
-    public IssuedToken issue(Long workspaceId, Long resourceId, Long fileId) {
+    public IssuedToken issue(Long workspaceId, Long resourceId, Long fileId, Long userId) {
 
         long expiry = Instant.now().getEpochSecond() + ttlSeconds;
-        String payload = workspaceId + ":" + resourceId + ":" + fileId + ":" + expiry;
+        String payload = workspaceId + ":" + resourceId + ":" + fileId + ":" + userId + ":" + expiry;
         String encoded = encode(payload.getBytes(StandardCharsets.UTF_8));
 
         return new IssuedToken(encoded + "." + sign(encoded), Instant.ofEpochSecond(expiry));
@@ -72,18 +72,18 @@ public class WorkspaceResourceDownloadTokenService {
             String[] parts = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8)
                     .split(":");
 
-            if (parts.length != 4) {
+            if (parts.length != 5) {
                 throw forbidden();
             }
 
-            long expiry = Long.parseLong(parts[3]);
+            long expiry = Long.parseLong(parts[4]);
 
             if (expiry < Instant.now().getEpochSecond()) {
                 throw forbidden();
             }
 
             return new TokenPayload(Long.valueOf(parts[0]), Long.valueOf(parts[1]),
-                    Long.valueOf(parts[2]), expiry);
+                    Long.valueOf(parts[2]), Long.valueOf(parts[3]), expiry);
         } catch (IllegalArgumentException exception) {
             throw forbidden();
         }
@@ -124,6 +124,6 @@ public class WorkspaceResourceDownloadTokenService {
     public record IssuedToken(String token, Instant expiresAt) {
     }
 
-    public record TokenPayload(Long workspaceId, Long resourceId, Long fileId, long expiresAtEpoch) {
+    public record TokenPayload(Long workspaceId, Long resourceId, Long fileId, Long userId, long expiresAtEpoch) {
     }
 }

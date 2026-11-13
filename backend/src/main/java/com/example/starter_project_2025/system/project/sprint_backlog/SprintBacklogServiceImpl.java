@@ -9,16 +9,19 @@ import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.project.ProjectMember;
 import com.example.starter_project_2025.system.project.ProjectMemberEligibility;
 import com.example.starter_project_2025.system.project.ProjectMemberRepository;
+import com.example.starter_project_2025.system.project.ProjectRepository;
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.system.project.milestone.domain.Milestone;
 import com.example.starter_project_2025.system.project.milestone.integration.port.MilestoneTenantProvider;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
+import com.example.starter_project_2025.system.project.resources.TeamSubprojectAssignmentRepository;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.project.sprint.SprintRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLogDTO;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditService;
 import com.example.starter_project_2025.system.project.sprint_backlog.event.SprintBacklogOutboxService;
 import com.example.starter_project_2025.system.project.task.TaskRepository;
+import com.example.starter_project_2025.system.project.template.assignment.hierarchy.AssignedProjectAccess;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -30,6 +33,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -46,7 +50,7 @@ import java.util.UUID;
  *     AC03); a milestone of another project than the sprint is rejected
  *     (422)</li>
  *     <li>title mandatory, 1..200 characters (422)</li>
- *     <li>description optional, at most 2000 characters (422)</li>
+ *     <li>description optional, at most 1000 characters (422)</li>
  *     <li>start date &lt; end date when both are provided (422)</li>
  *     <li>status one of {@link SprintBacklogStatus}; the team may move an item
  *     to <em>any</em> status of the workflow (no forward-only transition matrix)</li>
@@ -69,7 +73,7 @@ public class SprintBacklogServiceImpl
         implements SprintBacklogService {
 
     static final int MAX_TITLE_LENGTH = 200;
-    static final int MAX_DESCRIPTION_LENGTH = 2000;
+    static final int MAX_DESCRIPTION_LENGTH = 1000;
 
     static final String SPRINT_ID_FIELD = "sprintId";
     static final String PROJECT_ID_FIELD = "projectId";
@@ -109,6 +113,9 @@ public class SprintBacklogServiceImpl
     TaskRepository subtasks;
     ProjectMemberRepository projectMemberRepository;
     ProjectTeamRepository projectTeamRepository;
+    AssignedProjectAccess assignmentAccess;
+    ProjectRepository assignedProjects;
+    TeamSubprojectAssignmentRepository projectAssignments;
 
     @Override
     protected BaseCrudRepository<SprintBacklog, Long> getRepository() {
@@ -148,6 +155,8 @@ public class SprintBacklogServiceImpl
         Milestone milestone = resolveMilestone(request.getMilestoneId());
 
         Long projectId = resolveProjectId(request.getProjectId(), sprint, milestone, errors);
+        assignmentAccess.requireProject(projectId, true);
+        if (projectId == null && sprint != null) assignmentAccess.requireTeamOnlyWrite(sprint.getTeamId());
 
         validateTitle(backlog.getTitle(), errors);
         validateDescription(backlog.getDescription(), errors);
@@ -218,6 +227,8 @@ public class SprintBacklogServiceImpl
 
         SprintBacklog backlog = sprintBacklogRepository.findForSubtaskUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Backlog item was not found"));
+        assignmentAccess.requireProject(backlog.getProjectId(), true);
+        if (backlog.getProjectId() == null && backlog.getSprint() != null) assignmentAccess.requireTeamOnlyWrite(backlog.getSprint().getTeamId());
 
         String title = request.getTitle() != null
                 ? request.getTitle().trim()
@@ -248,7 +259,12 @@ public class SprintBacklogServiceImpl
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
         validateTitle(title, errors);
-        validateDescription(description, errors);
+        // Preserve existing longer descriptions on unrelated partial updates.
+        // New or changed descriptions must obey the current character limit.
+        if (request.getDescription() != null
+                && !Objects.equals(description, backlog.getDescription())) {
+            validateDescription(description, errors);
+        }
         validateDates(startDate, endDate, errors);
         validateReporter(reporterId, errors);
         validateEstimatedHours(estimatedHours, errors);
@@ -288,6 +304,8 @@ public class SprintBacklogServiceImpl
                 milestone,
                 errors
         );
+        assignmentAccess.requireProject(projectId, true);
+        if (projectId == null && sprint != null) assignmentAccess.requireTeamOnlyWrite(sprint.getTeamId());
 
         // Preserve historical assignments on unrelated edits, but validate every
         // explicit assignment and any move to another team/project scope.
@@ -374,6 +392,8 @@ public class SprintBacklogServiceImpl
 
         SprintBacklog backlog = sprintBacklogRepository.findForSubtaskUpdate(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Backlog item was not found"));
+        assignmentAccess.requireProject(backlog.getProjectId(), true);
+        if (backlog.getProjectId() == null && backlog.getSprint() != null) assignmentAccess.requireTeamOnlyWrite(backlog.getSprint().getTeamId());
         if (subtasks.existsByBacklogItem_Id(id)) {
             throw new SprintBacklogValidationException(Map.of("subtasks",
                     List.of("A backlog item with subtask history cannot be deleted")));
@@ -405,6 +425,7 @@ public class SprintBacklogServiceImpl
         if (!sprintRepository.existsById(sprintId)) {
             throw new ResourceNotFoundException("Sprint", "id", sprintId);
         }
+        assignmentAccess.requireProject(sprintRepository.findById(sprintId).orElseThrow().getProjectId(), false);
 
         return sprintBacklogRepository.findBySprintIdOrderByIdAsc(sprintId)
                 .stream()
@@ -474,6 +495,7 @@ public class SprintBacklogServiceImpl
 
         check("SPRINT_BACKLOG_READ");
 
+        assignmentAccess.requireProject(projectId, false);
         Long resolvedTeamId = resolveAssigneeTeamId(teamId, projectId);
 
         if (resolvedTeamId == null) {
@@ -503,6 +525,13 @@ public class SprintBacklogServiceImpl
      * team/allocation keeps its `team_id`).
      */
     private Long resolveAssigneeTeamId(Long teamId, Long projectId) {
+
+        var project = projectId == null ? null : assignedProjects.findById(projectId).orElse(null);
+        if (project != null && project.getAssignmentId() != null) {
+            if (teamId != null && !teamId.equals(project.getTeamId()))
+                throw new org.springframework.security.access.AccessDeniedException("Team does not own this project");
+            return project.getTeamId();
+        }
 
         if (teamId != null) {
             return teamId;
@@ -659,16 +688,19 @@ public class SprintBacklogServiceImpl
     private void validateAssignee(Long assigneeId, Sprint sprint, Long projectId, Map<String, List<String>> errors) {
         if (assigneeId == null) return;
         ProjectMember member = assigneeId <= 0 ? null : projectMemberRepository.findById(assigneeId).orElse(null);
-        boolean inScope = member != null && member.getTeam() != null
-                && (sprint != null && sprint.getTeamId() != null
-                    ? sprint.getTeamId().equals(member.getTeam().getId())
-                    : projectId != null && projectId.equals(member.getTeam().getProjectId()));
-        if (!inScope || !ProjectMemberEligibility.canAssign(member)) {
+        if (!ProjectMemberEligibility.canAssign(member) || !matchesWorkItemTeam(member, sprint, projectId)) {
             addError(errors, ASSIGNEE_FIELD, "Assignee must be an active, unlocked member of this work item's team or project");
         }
     }
 
-    /** Same TEMPORARY rule as the assignee, applied to the reporter id. */
+    private boolean matchesWorkItemTeam(ProjectMember member, Sprint sprint, Long projectId) {
+        var team = member.getTeam();
+        if (sprint != null && sprint.getTeamId() != null) return sprint.getTeamId().equals(team.getId());
+        return projectId != null && (projectId.equals(team.getProjectId())
+                || projectAssignments.existsByTeam_IdAndProject_IdAndIsActiveTrue(team.getId(), projectId));
+    }
+
+    /** Verifies that the reporter is an existing project member. */
     private void validateReporter(Long reporterId, Map<String, List<String>> errors) {
 
         if (reporterId != null && reporterId <= 0) {
@@ -716,9 +748,29 @@ public class SprintBacklogServiceImpl
     // ---------------------------------------------------------------------
 
     private SprintBacklog requireBacklog(Long id) {
-
-        return sprintBacklogRepository.findById(id)
+        SprintBacklog backlog = sprintBacklogRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SprintBacklog", "id", id));
+        assignmentAccess.requireProject(backlog.getProjectId(), false);
+        return backlog;
+    }
+
+    @Override
+    public SprintBacklogDTO getById(Long id) {
+        requireBacklog(id);
+        return super.getById(id);
+    }
+
+    @Override
+    public org.springframework.data.domain.Page<SprintBacklogDTO> getAll(org.springframework.data.domain.Pageable pageable, String search, SprintBacklogFilter filter) {
+        checkPermission(CrudAction.READ);
+        org.springframework.data.jpa.domain.Specification<SprintBacklog> spec = assignmentAccess.visibility();
+        org.springframework.data.jpa.domain.Specification<SprintBacklog> filters = autoSpecBuilder.build(filter);
+        if (filters != null) spec = spec.and(filters);
+        if (search != null && !search.isBlank()) {
+            String keyword = "%" + search.toLowerCase(java.util.Locale.ROOT) + "%";
+            spec = spec.and((root, query, cb) -> cb.or(cb.like(cb.lower(root.get("title")), keyword), cb.like(cb.lower(root.get("description")), keyword)));
+        }
+        return sprintBacklogRepository.findAll(spec, pageable).map(sprintBacklogMapper::toResponse);
     }
 
     private Set<SprintBacklogStatus> allowedTransitionsFor(SprintBacklogStatus current) {

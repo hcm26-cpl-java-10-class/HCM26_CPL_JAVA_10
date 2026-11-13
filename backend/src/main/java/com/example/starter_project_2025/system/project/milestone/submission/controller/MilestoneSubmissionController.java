@@ -80,6 +80,7 @@ public class MilestoneSubmissionController {
     }
 
     @PostMapping("/{submissionId}/review")
+    @PreAuthorize("hasAuthority('ARTIFACT_REVIEW')")
     public SubmissionDtos.Detail review(@PathVariable UUID submissionId,
                                         @RequestHeader("Idempotency-Key") String idempotencyKey,
                                         @Valid @RequestBody SubmissionDtos.ReviewRequest request) {

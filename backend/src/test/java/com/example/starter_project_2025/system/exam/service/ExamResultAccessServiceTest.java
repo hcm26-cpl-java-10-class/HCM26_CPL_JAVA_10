@@ -70,7 +70,6 @@ class ExamResultAccessServiceTest {
 
     @Test
     void deniesWhenAttemptsRemainAndExamStillOpen() {
-        exam.setEndTime(LocalDateTime.now().plusDays(1));
         assertFalse(service.canStudentViewAnswers(exam, ExamAttemptStatus.SUBMITTED, 1));
     }
 
@@ -80,10 +79,11 @@ class ExamResultAccessServiceTest {
     }
 
     @Test
-    void deniesWhenAttemptsRemainEvenIfLegacyEndTimePassed() {
-        // Exam khong con gio dong de (lich thi da bi go bo) nen con luot lam thi chua cho xem dap an.
-        exam.setEndTime(LocalDateTime.now().minusMinutes(1));
-        assertFalse(service.canStudentViewAnswers(exam, ExamAttemptStatus.SUBMITTED, 2));
+    void legacyAfterExamClosedVisibilityBehavesLikeManualRelease() {
+        // AFTER_EXAM_CLOSED la gia tri cu (khong con gio dong de): sau khi cong bo thi xem duoc dap an.
+        exam.setResultVisibility(ResultVisibility.AFTER_EXAM_CLOSED);
+        exam.setShowAnswersAfterExam(false);
+        assertTrue(service.canStudentViewAnswers(exam, ExamAttemptStatus.SUBMITTED, 1));
     }
 
     @Test

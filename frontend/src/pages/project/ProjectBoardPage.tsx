@@ -276,12 +276,12 @@ function TaskCardView({
       }}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="font-mono text-[11px] font-semibold tracking-wide text-slate-500">
+        <span className="text-xs font-semibold tracking-wide text-slate-500">
           {task.code}
         </span>
         {task.priority && (
           <span
-            className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${PRIORITY_STYLES[task.priority]}`}
+            className={`rounded-md border px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${PRIORITY_STYLES[task.priority]}`}
           >
             {task.priority}
           </span>
@@ -293,7 +293,7 @@ function TaskCardView({
           <UserRound className="size-3.5 shrink-0" />
           <span className="truncate">{task.assignee?.displayName ?? "Chưa phân công"}</span>
         </div>
-        <Badge className={`shrink-0 border-0 text-[10px] ${statusStyle.badge}`}>
+        <Badge className={`shrink-0 border-0 text-xs ${statusStyle.badge}`}>
           {task.status.replaceAll("_", " ")}
         </Badge>
       </div>
@@ -954,7 +954,7 @@ export default function ProjectBoardPage() {
               </div>
             ) : <form onSubmit={handleSubmit} className="grid w-full gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:grid-cols-[1fr_1fr_auto] xl:max-w-[760px]">
               <label className="min-w-0">
-                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Project
                 </span>
                 <select
@@ -980,7 +980,7 @@ export default function ProjectBoardPage() {
                 </select>
               </label>
               <label className="min-w-0">
-                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Sprint
                 </span>
                 <select
@@ -1140,18 +1140,18 @@ export default function ProjectBoardPage() {
 
               <div className="grid grid-cols-2 border-t border-slate-100 bg-slate-50/70 sm:grid-cols-3">
                 <div className="border-b border-r border-slate-100 px-4 py-3 sm:border-b-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Sprint tasks</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sprint tasks</p>
                   <p className="mt-1 text-lg font-bold text-slate-900">{sprintTaskCount}</p>
                 </div>
                 <div className="border-b border-slate-100 px-4 py-3 sm:border-b-0 sm:border-r">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Done</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Done</p>
                   <p className="mt-1 flex items-center gap-2 text-lg font-bold text-emerald-700">
                     {doneTaskCount}
                     <span className="text-xs font-medium text-slate-500">/ {sprintTaskCount} tasks</span>
                   </p>
                 </div>
                 <div className="px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Completion</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Completion</p>
                   <div className="mt-2 flex items-center gap-2">
                     <div
                       aria-label={`Hoàn thành ${completionPercent}%`}
@@ -1259,7 +1259,7 @@ export default function ProjectBoardPage() {
                     Chưa có hoạt động nào được ghi nhận.
                   </div>
                 )}
-                <div className="mt-4 flex items-center gap-1.5 border-t border-slate-100 pt-3 text-[11px] text-slate-400">
+                <div className="mt-4 flex items-center gap-1.5 border-t border-slate-100 pt-3 text-xs text-slate-400">
                   <TrendingUp className="size-3.5" />
                   Chỉ hiển thị activity thuộc Project này
                 </div>

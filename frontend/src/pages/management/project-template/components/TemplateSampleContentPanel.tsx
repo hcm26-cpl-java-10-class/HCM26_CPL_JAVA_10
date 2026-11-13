@@ -14,5 +14,9 @@ export function TemplateSampleContentPanel({ templateId, editable }: { templateI
   if (query.isError) return <ProjectTemplateError error={query.error} onRetry={() => void query.refetch()} />;
   if (!query.data) return null;
   return <TemplateSampleContentForm key={templateId} content={query.data} editable={editable && query.data.editable}
-    onSaved={(saved) => { client.setQueryData(queryKey, saved); void client.invalidateQueries({ queryKey: ["project-templates"] }); }} />;
+    onSaved={(saved) => {
+      client.setQueryData(queryKey, saved);
+      void client.invalidateQueries({ queryKey: ["project-templates"] });
+      void client.invalidateQueries({ queryKey: ["project-template-versions"] });
+    }} />;
 }

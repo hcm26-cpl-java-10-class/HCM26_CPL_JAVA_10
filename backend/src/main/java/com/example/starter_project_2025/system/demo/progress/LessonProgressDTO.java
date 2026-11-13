@@ -14,7 +14,10 @@ public record LessonProgressDTO(
         int progressPercentage,
         Long lastLessonId,
         LocalDateTime lastAccessedAt,
-        List<LessonItem> lessons
+        List<LessonItem> lessons,
+        boolean courseCompleted,
+        String assessmentStatus,
+        java.math.BigDecimal overallScore
 ) {
     public record LessonItem(
             Long lessonId,
@@ -29,7 +32,9 @@ public record LessonProgressDTO(
             String studentAnswer,
             boolean completed,
             LocalDateTime completedAt,
-            LocalDateTime lastAccessedAt
+            LocalDateTime lastAccessedAt,
+            /** Tổng số giây học viên đã dành cho bài học này. */
+            Long studySeconds
     ) {
     }
 }

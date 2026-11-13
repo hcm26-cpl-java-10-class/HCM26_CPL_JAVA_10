@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { isAxiosError } from "axios";
 import { Activity, Bell, BookOpen, CalendarDays, FolderOpen, LayoutDashboard, ListTodo, PanelsTopLeft, Users, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -21,17 +22,22 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: "Cancelled", DRAFT: "Draft", ARCHIVED: "Archived", CLOSED: "Closed",
 };
 
-export function WorkspaceStatusBadge({ status }: { status?: string }) {
-  return <Badge variant={status === "CANCELLED" ? "destructive" : "secondary"}>{status ? STATUS_LABELS[status] ?? status : "Not created"}</Badge>;
+export function WorkspaceStatusBadge({ status, colored = false }: { status?: string; colored?: boolean }) {
+  const color = status === "COMPLETED" || status === "ACTIVE"
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400"
+    : status === "CANCELLED" ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400"
+    : status === "PLANNING" ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400"
+    : "border-border bg-muted text-muted-foreground";
+  return <Badge variant={status === "CANCELLED" ? "destructive" : "secondary"} className={cn(colored && "gap-1.5 rounded-full border px-2.5 py-0.5", colored && color)}>{colored && <span className="size-1.5 shrink-0 rounded-full bg-current" />}{status ? STATUS_LABELS[status] ?? status : "Not created"}</Badge>;
 }
 
-export function WorkspaceEmptyState({ icon: Icon, title, description, action }: {
-  icon: LucideIcon; title: string; description: string; action?: ReactNode;
+export function WorkspaceEmptyState({ icon: Icon, title, description, action, compact = false }: {
+  icon: LucideIcon; title: string; description: string; action?: ReactNode; compact?: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 px-5 py-12 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground"><Icon className="size-5" /></div>
-      <div className="space-y-1"><p className="text-sm font-medium">{title}</p><p className="mx-auto max-w-md text-sm leading-6 text-muted-foreground">{description}</p></div>
+    <div className={compact ? "flex flex-wrap items-center gap-3 rounded-lg border border-dashed bg-muted/20 p-4" : "flex flex-col items-center justify-center gap-3 px-5 py-12 text-center"}>
+      <div className={`flex shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground ${compact ? "size-10" : "size-12 rounded-full"}`}><Icon className="size-5" /></div>
+      <div className={compact ? "min-w-0 flex-1 basis-40 space-y-1" : "space-y-1"}><p className="text-sm font-medium">{title}</p><p className={compact ? "text-xs leading-5 text-muted-foreground" : "mx-auto max-w-md text-sm leading-6 text-muted-foreground"}>{description}</p></div>
       {action}
     </div>
   );

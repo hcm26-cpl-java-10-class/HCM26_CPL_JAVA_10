@@ -47,8 +47,6 @@ export interface UpdateExamTemplateRequest {
 
 export interface CreateExamFromTemplateRequest {
     title: string;
-    startTime?: string;
-    endTime?: string;
 }
 
 export const examTemplateApi = {

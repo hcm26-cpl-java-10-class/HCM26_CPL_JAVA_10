@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.exam.service;
 
+import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
@@ -10,6 +12,26 @@ public final class ExamScoring {
     public static final int DISPLAY_SCALE = 2;
 
     private ExamScoring() {
+    }
+
+    /** Diem dat cua luot lam: ban da dong bang luc bat dau, luot cu chua co thi lay cau hinh hien tai cua de. */
+    public static BigDecimal effectivePassScore(ExamAttempt attempt) {
+        if (attempt.getPassScore() != null) {
+            return attempt.getPassScore();
+        }
+        return attempt.getExam() == null ? null : attempt.getExam().getPassScore();
+    }
+
+    /** Dat khi diem cuoi >= diem dat; null khi de khong dat diem dat hoac chua co diem cuoi. */
+    public static Boolean passed(BigDecimal finalScore, BigDecimal passScore) {
+        if (finalScore == null || passScore == null) {
+            return null;
+        }
+        return finalScore.compareTo(passScore) >= 0;
+    }
+
+    public static Boolean passed(ExamAttempt attempt) {
+        return passed(attempt.getFinalScore(), effectivePassScore(attempt));
     }
 
     public static BigDecimal effectiveMax(BigDecimal maxScore) {

@@ -49,7 +49,8 @@ public class WorkspaceReadService {
         Project project = workspace.getProject();
         ProjectTeam team = workspace.getTeam();
         var trainingClass = team.getTrainingClass();
-        var snapshot = project == null ? null : snapshots.findByProjectId(project.getId()).map(this::snapshotResponse).orElse(null);
+        var snapshot = project == null ? null : project.getAssignmentId() != null ? projectBrief(project)
+                : snapshots.findByProjectId(project.getId()).map(this::snapshotResponse).orElse(null);
         String description = project == null ? null : project.getDescription();
         String projectClassName = project == null || project.getClassId() == null ? null
                 : classes.findByIdAndTenantId(project.getClassId(), project.getTenantId())

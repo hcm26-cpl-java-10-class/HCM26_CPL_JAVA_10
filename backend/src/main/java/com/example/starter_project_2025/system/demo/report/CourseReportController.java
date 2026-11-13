@@ -22,4 +22,14 @@ public class CourseReportController {
     public List<CourseReportDTO> getCourseEnrollmentReport() {
         return courseReportService.getCourseReport();
     }
+
+    /**
+     * Learning hours analytics: giờ học theo học viên / phòng ban / khóa học,
+     * kèm ngày đăng ký để đối chiếu.
+     */
+    @GetMapping("/learning-hours")
+    @PreAuthorize("hasAnyAuthority('COURSE_REPORT_READ', 'COURSE_READ')")
+    public LearningHoursReportDTO getLearningHoursReport() {
+        return courseReportService.getLearningHoursReport();
+    }
 }

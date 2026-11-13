@@ -38,8 +38,16 @@ class CourseServiceImplTest {
             categoryRepository,
             mock(SyllabusRepository.class),
             new CurriculumValidator(mock(SectionRepository.class), mock(LessonRepository.class)),
-            mock(NotificationService.class)
+            mock(NotificationService.class),
+            readyAssessments()
     );
+
+    private static CourseAssessmentService readyAssessments() {
+        CourseAssessmentService service=mock(CourseAssessmentService.class);
+        org.mockito.Mockito.lenient().when(service.plan(org.mockito.ArgumentMatchers.<Long>any()))
+                .thenReturn(new CourseAssessmentService.Plan(java.math.BigDecimal.ZERO,true,List.of()));
+        return service;
+    }
 
     @Test
     void clearCategoryEmptiesManagedCollectionWithoutReplacingIt() {

@@ -14,7 +14,8 @@ public record TemplateMilestonePlanResponse(
         Long lockVersion,
         Integer estimatedDurationWeeks,
         boolean editable,
-        List<Milestone> milestones
+        List<Milestone> milestones,
+        boolean weightedMilestones
 ) {
     public static TemplateMilestonePlanResponse from(
             ProjectTemplate template, List<TemplateMilestone> milestones, boolean canUpdate) {
@@ -30,7 +31,8 @@ public record TemplateMilestonePlanResponse(
             ProjectTemplate template, List<TemplateMilestone> milestones, boolean canUpdate, Long tenantId) {
         return new TemplateMilestonePlanResponse(template.getId(), template.getLockVersion(), template.getEstimatedDurationWeeks(),
                 canUpdate && template.getStatus() == ProjectTemplateStatus.DRAFT,
-                milestones.stream().map(milestone -> Milestone.from(milestone, tenantId)).toList());
+                milestones.stream().map(milestone -> Milestone.from(milestone, tenantId)).toList(),
+                template.getParentTemplateId() == null);
     }
 
     public record Milestone(
@@ -53,7 +55,8 @@ public record TemplateMilestonePlanResponse(
             boolean ownTenant = version != null && tenantId != null
                     && RubricTenantIdentity.from(tenantId).equals(version.getRubric().getTenantId());
             return new Milestone(milestone.getId(), milestone.getTitle(), milestone.getDescription(),
-                    milestone.getDueAfter(), milestone.getDueUnit(), milestone.getWeight(), milestone.isMandatory(),
+                    milestone.getDueAfter(), milestone.getDueUnit(),
+                    milestone.getTemplate().getParentTemplateId() == null ? milestone.getWeight() : null, milestone.isMandatory(),
                     milestone.getOrderIndex(), ownTenant ? version.getId() : null,
                     ownTenant ? RubricOptionResponse.from(RubricCatalogService.snapshot(version)) : null,
                     milestone.getChecklistItems().stream().map(ChecklistItem::from).toList(),

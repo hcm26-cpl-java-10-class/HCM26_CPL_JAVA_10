@@ -38,6 +38,10 @@ public class LessonDTO extends BaseDTO {
 
     String textContent;
 
+    @com.fasterxml.jackson.annotation.JsonProperty(
+            access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    boolean outlineEditable;
+
     @Min(value = 0, groups = {OnCreate.class, OnUpdate.class},
             message = "Duration must not be negative")
     Integer duration;
