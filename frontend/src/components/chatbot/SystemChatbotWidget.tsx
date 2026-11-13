@@ -121,7 +121,7 @@ export const SystemChatbotWidget: React.FC = () => {
             {isOpen && (
                 <div className="mb-3 flex h-[520px] w-[380px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-200">
                     {/* Header */}
-                    <div className="flex items-center justify-between border-b bg-primary px-4 py-3 text-primary-foreground">
+                    <div className="flex items-center justify-between border-b bg-blue-700 px-4 py-3 text-white shadow-xl">
                         <div className="flex items-center gap-2.5">
                             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-foreground/15">
                                 <Sparkles className="h-4 w-4" />
@@ -135,7 +135,7 @@ export const SystemChatbotWidget: React.FC = () => {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-primary-foreground hover:bg-primary-foreground/15"
+                                className="h-7 w-7 text-white hover:bg-primary-foreground/15"
                                 onClick={handleClearHistory}
                                 title="Xóa cuộc trò chuyện"
                             >
@@ -144,7 +144,7 @@ export const SystemChatbotWidget: React.FC = () => {
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7 text-primary-foreground hover:bg-primary-foreground/15"
+                                className="h-7 w-7 text-white hover:bg-primary-foreground/15"
                                 onClick={() => setIsOpen(false)}
                                 title="Thu gọn"
                             >
@@ -163,7 +163,7 @@ export const SystemChatbotWidget: React.FC = () => {
                                 <div
                                     className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
                                         msg.role === 'user'
-                                            ? 'rounded-br-sm bg-primary text-primary-foreground'
+                                            ? 'rounded-br-sm bg-blue-700 text-white'
                                             : 'rounded-bl-sm bg-muted text-foreground'
                                     }`}
                                 >
@@ -219,7 +219,7 @@ export const SystemChatbotWidget: React.FC = () => {
                         <Button
                             type="submit"
                             size="icon"
-                            className="h-9 w-9 shrink-0 rounded-full"
+                            className="h-9 w-9 shrink-0 rounded-full bg-blue-700 text-white"
                             disabled={!input.trim() || isLoading}
                         >
                             <Send className="h-4 w-4" />
@@ -232,7 +232,7 @@ export const SystemChatbotWidget: React.FC = () => {
             {!isOpen && (
                 <div className="flex items-center gap-3">
                     {showBubble && (
-                        <div className="relative flex items-center rounded-full bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg">
+                        <div className="relative flex items-center rounded-full bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg">
                             <span>Bạn cần hỗ trợ gì?</span>
                             <button
                                 type="button"
@@ -254,7 +254,7 @@ export const SystemChatbotWidget: React.FC = () => {
                             setIsOpen(true);
                             setShowBubble(false);
                         }}
-                        className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500 text-white shadow-xl transition-transform hover:scale-105 active:scale-95"
+                        className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-xl transition-transform hover:scale-105 active:scale-95"
                         aria-label="Mở trợ lý AI"
                     >
                         <Bot className="h-7 w-7" />
