@@ -228,50 +228,116 @@ public class ProjectTemplatePrompt {
                 
                 5. The orderIndex sequence starts from 1
                    and is independent for each milestone.
-                RUBRIC CRITERIA RULES:
                 
-                Each milestone must contain a "rubricCriteria" array.
+                    RUBRIC CRITERIA RULES:
                 
-                Each rubric criterion must contain:
+                    Each milestone must contain a non-empty "rubricCriteria" array.
                 
-                - name:
-                  A concise name describing the evaluation criterion.
-                  Required, maximum length: 100 characters.
+                    IMPORTANT:
+                    Each milestone will have its own separate Rubric.
+                    The Backend will create one Rubric for each milestone
+                    using the generated rubricCriteria.
                 
-                - description:
-                  An explanation of what is evaluated
-                  and what constitutes a good result.
-                  Maximum length: 500 characters.
+                    Each rubric criterion must contain:
                 
-                - maxScore:
-                  The maximum score awarded for this criterion.
-                  Must be a positive number.
+                    - code:
+                      A unique short code within its parent milestone's Rubric.
+                      Maximum length: 30 characters.
+                      Use uppercase letters, numbers, and underscores.
+                      Example: REQUIREMENT_COMPLETENESS.
                 
-                - orderIndex:
-                  A positive integer representing the display order
-                  within its parent milestone.
-                  Start from 1 and increment sequentially.
+                    - name:
+                      A concise name describing the evaluation criterion.
+                      Required, maximum length: 100 characters.
                 
-                ADDITIONAL RULES:
+                    - description:
+                      An explanation of what is evaluated
+                      and what constitutes a good result.
+                      Maximum length: 500 characters.
                 
-                1. Each milestone must contain at least one rubric criterion.
+                    - weight:
+                      The percentage contribution of this criterion
+                      to the total Rubric score.
+                      Must be greater than 0 and at most 100.
+                      Use a decimal number with at most 2 decimal places.
                 
-                2. Criteria must evaluate different aspects of the milestone's
-                   expected deliverables.
+                    - maxScore:
+                      The maximum score awarded for this criterion.
+                      Must be greater than 0.
+                      Use the same numerical value as weight.
+                      The total maxScore of one Rubric must equal 100.00.
                 
-                3. Criteria must be specific, measurable,
-                   and relevant to their parent milestone.
+                    - orderIndex:
+                      The display order within its parent Rubric.
+                      Must start from 0 and increment sequentially.
                 
-                4. Avoid duplicate or overlapping evaluation criteria.
+                    - ratings:
+                      An array containing exactly four rating levels.
+                      Each rating must contain:
                 
-                5. The orderIndex sequence starts from 1
-                   and is independent for each milestone.
+                      - level:
+                        Must be exactly one of:
+                        "EXCELLENT", "GOOD", "FAIR", "NOT_MET".
                 
-                6. Distribute maxScore values reasonably
-                   according to the importance of each criterion.
+                      - description:
+                        A clear and measurable description of the expected
+                        performance at that rating level.
+                        Maximum length: 500 characters.
                 
-                7. Do not assume that the sum of maxScore values
-                   must equal 10 or any other fixed number.
+                    RUBRIC ADDITIONAL RULES:
+                
+                    1. Each milestone must contain at least one rubric criterion.
+                
+                    2. Criteria must evaluate different aspects of the milestone's
+                       expected deliverables.
+                
+                    3. Criteria must be specific, measurable,
+                       and relevant to their parent milestone.
+                
+                    4. Avoid duplicate or overlapping evaluation criteria.
+                
+                    5. Criterion codes must be unique within each milestone's Rubric.
+                
+                    6. The orderIndex sequence must start from 0
+                       and increment sequentially without gaps.
+                
+                    7. The sum of all criterion weights within each Rubric
+                       must equal exactly 100.00.
+                
+                    8. The sum of all criterion maxScore values within each Rubric
+                       must equal exactly 100.00.
+                
+                    9. Each criterion must contain exactly four distinct rating levels.
+                
+                    10. Every criterion must contain all four rating levels:
+                        EXCELLENT, GOOD, FAIR, NOT_MET.
+                
+                    11. Rating descriptions must clearly distinguish the quality
+                        of work at each performance level.
+                
+                    12. Use the following rating meanings consistently:
+                
+                        EXCELLENT:
+                        Outstanding work that fully satisfies or exceeds
+                        all expected requirements.
+                
+                        GOOD:
+                        Good work that satisfies most requirements
+                        with only minor issues.
+                
+                        FAIR:
+                        Partially satisfactory work with noticeable
+                        gaps or weaknesses.
+                
+                        NOT_MET:
+                        Work that fails to satisfy the essential requirements.
+                
+                    13. Do not generate rubricVersionId, rubricId,
+                        database IDs, tenant IDs, or other system-managed identifiers.
+                
+                    14. Do not generate Rubric or Rubric Version statuses.
+                        The Backend manages their lifecycle.
+                
                 BACKLOG ITEMS RULES:
                 
                 The "backlogItems" field must be a non-empty array.
@@ -472,13 +538,59 @@ public class ProjectTemplatePrompt {
                         }
                       ],
                       "rubricCriteria": [
-                        {
-                          "name": "string",
-                          "description": "string",
-                          "maxScore": 10.00,
-                          "orderIndex": 1
-                        }
-                      ]
+                            {
+                              "code": "REQUIREMENT_COMPLETENESS",
+                              "name": "Requirement Completeness",
+                              "description": "Evaluate the completeness and clarity of collected requirements.",
+                              "weight": 50.00,
+                              "maxScore": 50.00,
+                              "orderIndex": 0,
+                              "ratings": [
+                                {
+                                  "level": "EXCELLENT",
+                                  "description": "All requirements are complete, clear, and properly documented."
+                                },
+                                {
+                                  "level": "GOOD",
+                                  "description": "Most requirements are documented with only minor omissions."
+                                },
+                                {
+                                  "level": "FAIR",
+                                  "description": "Several important requirements are missing or unclear."
+                                },
+                                {
+                                  "level": "NOT_MET",
+                                  "description": "Requirements are largely missing or insufficiently documented."
+                                }
+                              ]
+                            },
+                            {
+                              "code": "REQUIREMENT_TRACEABILITY",
+                              "name": "Requirement Traceability",
+                              "description": "Evaluate the traceability between requirements and project objectives.",
+                              "weight": 50.00,
+                              "maxScore": 50.00,
+                              "orderIndex": 1,
+                              "ratings": [
+                                {
+                                  "level": "EXCELLENT",
+                                  "description": "All requirements are clearly linked to project objectives."
+                                },
+                                {
+                                  "level": "GOOD",
+                                  "description": "Most requirements are traceable to project objectives."
+                                },
+                                {
+                                  "level": "FAIR",
+                                  "description": "Some requirements lack clear links to project objectives."
+                                },
+                                {
+                                  "level": "NOT_MET",
+                                  "description": "Requirements have no meaningful traceability to project objectives."
+                                }
+                              ]
+                            }
+                          ]
                     }
                   ],
                   "backlogItems": [

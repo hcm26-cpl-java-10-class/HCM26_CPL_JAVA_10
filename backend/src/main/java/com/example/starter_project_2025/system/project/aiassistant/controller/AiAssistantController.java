@@ -15,12 +15,14 @@ import com.example.starter_project_2025.system.project.aiassistant.service.gener
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/ai-assistant")
+@PreAuthorize("hasRole('MENTOR')")
 @Tag(name = "AI Assistant",
         description = "Endpoints for AI-assisted project template generation")
 public class AiAssistantController {
@@ -57,13 +59,6 @@ public class AiAssistantController {
     ) {
         return ResponseEntity.ok(
                 aiSuggestionService.getSuggestionDetail(id)
-        );
-    }
-
-    @GetMapping("/suggestions")
-    public ResponseEntity<List<SuggestionListItemResponse>> getAllSuggestions() {
-        return ResponseEntity.ok(
-                aiSuggestionService.getAllSuggestions()
         );
     }
 

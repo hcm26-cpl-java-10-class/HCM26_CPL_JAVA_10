@@ -6,7 +6,9 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Component
 public class TemplateOutputValidator {
@@ -294,6 +296,7 @@ public class TemplateOutputValidator {
         }
     }
 
+
     private void validateRubricCriteria(
             MilestoneOutput milestone,
             String prefix,
@@ -306,34 +309,130 @@ public class TemplateOutputValidator {
             return;
         }
 
+        BigDecimal totalWeight = BigDecimal.ZERO;
+        BigDecimal totalMaxScore = BigDecimal.ZERO;
+
+        Set<String> criterionCodes = new HashSet<>();
+
+        Set<String> allowedRatingLevels = Set.of(
+                "EXCELLENT",
+                "GOOD",
+                "FAIR",
+                "NOT_MET"
+        );
+
         for (int i = 0; i < criteria.size(); i++) {
 
             RubricCriterionOutput criterion = criteria.get(i);
 
+            String criterionPrefix = prefix + "rubric criterion " + (i + 1) + ": ";
+
             if (criterion == null) {
-                errors.add(prefix + "rubric criterion " + (i + 1) + " must not be null");
+                errors.add(criterionPrefix + "must not be null");
                 continue;
             }
 
-            if (criterion.name() == null || criterion.name().isBlank()) {
-                errors.add(prefix + "rubric criterion name is required");
-            } else if (criterion.name().length() > 100) {
-                errors.add(prefix + "rubric criterion name must not exceed 100 characters");
+            // Validate code
+            if (criterion.code() == null || criterion.code().isBlank()) {
+                errors.add(criterionPrefix + "code is required");
+            } else {
+                if (criterion.code().length() > 30) {
+                    errors.add(criterionPrefix + "code must not exceed 30 characters");
+                }
+
+                if (!criterionCodes.add(criterion.code().toUpperCase())) {
+                    errors.add(criterionPrefix + "code must be unique within its Rubric");
+                }
             }
 
+            // Validate name
+            if (criterion.name() == null || criterion.name().isBlank()) {
+                errors.add(criterionPrefix + "name is required");
+            } else if (criterion.name().length() > 100) {
+                errors.add(criterionPrefix + "name must not exceed 100 characters");
+            }
+
+            // Validate description
             if (criterion.description() != null
                     && criterion.description().length() > 500) {
-                errors.add(prefix + "rubric criterion description must not exceed 500 characters");
+                errors.add(criterionPrefix + "description must not exceed 500 characters");
             }
 
+            // Validate weight
+            if (criterion.weight() == null
+                    || criterion.weight().compareTo(BigDecimal.ZERO) <= 0
+                    || criterion.weight().compareTo(new BigDecimal("100")) > 0) {
+                errors.add(criterionPrefix + "weight must be greater than 0 and not exceed 100");
+            } else {
+                totalWeight = totalWeight.add(criterion.weight());
+            }
+
+            // Validate maxScore
             if (criterion.maxScore() == null
                     || criterion.maxScore().compareTo(BigDecimal.ZERO) <= 0) {
-                errors.add(prefix + "rubric criterion maxScore must be positive");
+                errors.add(criterionPrefix + "maxScore must be positive");
+            } else {
+                totalMaxScore = totalMaxScore.add(criterion.maxScore());
             }
 
-            if (criterion.orderIndex() == null || criterion.orderIndex() != i + 1) {
-                errors.add(prefix + "rubric criterion orderIndex must be sequential");
+            // maxScore must be equal to weight
+            if (criterion.weight() != null
+                    && criterion.maxScore() != null
+                    && criterion.maxScore().compareTo(criterion.weight()) != 0) {
+                errors.add(criterionPrefix + "maxScore must equal weight");
             }
+
+            // Validate orderIndex: starts from 0
+            if (criterion.orderIndex() == null || criterion.orderIndex() != i) {
+                errors.add(criterionPrefix + "orderIndex must start at 0 and increment sequentially");
+            }
+
+            // Validate ratings
+            List<RubricRatingOutput> ratings = criterion.ratings();
+
+            if (ratings == null || ratings.size() != 4) {
+                errors.add(criterionPrefix + "must contain exactly four ratings");
+                continue;
+            }
+
+            Set<String> actualRatingLevels = new HashSet<>();
+
+            for (RubricRatingOutput rating : ratings) {
+
+                if (rating == null) {
+                    errors.add(criterionPrefix + "rating must not be null");
+                    continue;
+                }
+
+                // Validate rating level
+                if (rating.level() == null
+                        || !allowedRatingLevels.contains(rating.level())) {
+                    errors.add(criterionPrefix + "rating level must be EXCELLENT, GOOD, FAIR or NOT_MET");
+                } else if (!actualRatingLevels.add(rating.level())) {
+                    errors.add(criterionPrefix + "rating levels must be unique");
+                }
+
+                // Validate rating description
+                if (rating.description() == null || rating.description().isBlank()) {
+                    errors.add(criterionPrefix + "rating description is required");
+                } else if (rating.description().length() > 500) {
+                    errors.add(criterionPrefix + "rating description must not exceed 500 characters");
+                }
+            }
+
+            if (!actualRatingLevels.equals(allowedRatingLevels)) {
+                errors.add(criterionPrefix + "must contain all four rating levels");
+            }
+        }
+
+        // Validate total weight
+        if (totalWeight.compareTo(new BigDecimal("100.00")) != 0) {
+            errors.add(prefix + "total rubric criterion weights must equal 100.00");
+        }
+
+        // Validate total maxScore
+        if (totalMaxScore.compareTo(new BigDecimal("100.00")) != 0) {
+            errors.add(prefix + "total rubric criterion maxScore must equal 100.00");
         }
     }
 

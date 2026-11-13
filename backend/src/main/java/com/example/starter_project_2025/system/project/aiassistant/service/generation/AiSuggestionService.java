@@ -147,9 +147,10 @@ public class AiSuggestionService {
                 ));
 
         // 2. Check status
-        if (suggestion.getStatus() != SuggestionStatus.PENDING) {
+        if (!suggestion.getStatus().canEdit()) {
             throw new IllegalStateException(
-                    "Only PENDING suggestions can be edited"
+                    "Suggestion cannot be edited in current status: "
+                            + suggestion.getStatus()
             );
         }
 
@@ -197,9 +198,11 @@ public class AiSuggestionService {
                 ));
 
         // 2. Check current status
-        if (suggestion.getStatus() != SuggestionStatus.PENDING) {
+        if (!suggestion.getStatus()
+                .canTransitionTo(SuggestionStatus.APPROVED)) {
             throw new IllegalStateException(
-                    "Only PENDING suggestions can be approved"
+                    "Cannot approve suggestion from status: "
+                            + suggestion.getStatus()
             );
         }
 
@@ -240,9 +243,11 @@ public class AiSuggestionService {
                 ));
 
         // 2. Check current status
-        if (suggestion.getStatus() != SuggestionStatus.PENDING) {
+        if (!suggestion.getStatus()
+                .canTransitionTo(SuggestionStatus.REJECTED)) {
             throw new IllegalStateException(
-                    "Only PENDING suggestions can be rejected"
+                    "Cannot reject suggestion from status: "
+                            + suggestion.getStatus()
             );
         }
 
@@ -270,5 +275,60 @@ public class AiSuggestionService {
                 rejectedSuggestion.getCreatedAt(),
                 rejectedSuggestion.getUpdatedAt()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public GeneratedTemplateOutput getApprovedOutput(Long suggestionId) {
+
+        AiSuggestion suggestion = aiSuggestionRepository.findById(suggestionId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "AI Suggestion not found with ID: " + suggestionId
+                ));
+
+        if (suggestion.getStatus() != SuggestionStatus.APPROVED) {
+            throw new IllegalStateException(
+                    "Only APPROVED suggestions can be applied"
+            );
+        }
+
+        return templateOutputParser.parse(suggestion.getGeneratedContent());
+    }
+
+    @Transactional
+    public void markApplied(Long suggestionId) {
+        AiSuggestion suggestion = aiSuggestionRepository.findById(suggestionId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "AI Suggestion not found: " + suggestionId
+                ));
+
+        if (!suggestion.getStatus().canTransitionTo(SuggestionStatus.APPLIED)) {
+            throw new IllegalStateException(
+                    "Only APPROVED suggestions can be marked as APPLIED"
+            );
+        }
+
+        suggestion.setStatus(SuggestionStatus.APPLIED);
+
+        aiSuggestionRepository.save(suggestion);
+    }
+
+    @Transactional
+    public GeneratedTemplateOutput getApprovedOutputForApply(Long suggestionId) {
+
+        // 1. Find and lock Suggestion
+        AiSuggestion suggestion = aiSuggestionRepository.findByIdForUpdate(suggestionId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "AI Suggestion not found: " + suggestionId
+                ));
+
+        // 2. Check Suggestion status
+        if (suggestion.getStatus() != SuggestionStatus.APPROVED) {
+            throw new IllegalStateException(
+                    "Only APPROVED suggestions can be applied"
+            );
+        }
+
+        // 3. Parse AI generated content
+        return templateOutputParser.parse(suggestion.getGeneratedContent());
     }
 }
