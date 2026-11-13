@@ -36,6 +36,7 @@ export * from "./features/rbac/user";
 export * from "./features/score-appeal";
 export * from "./features/demo/session";
 export * from "./features/workspace";
+export * from "./features/project-analytics";
 export * from "./features/rubric";
 export * from "./features/team-allocation";
 export * from "./features/training-class";

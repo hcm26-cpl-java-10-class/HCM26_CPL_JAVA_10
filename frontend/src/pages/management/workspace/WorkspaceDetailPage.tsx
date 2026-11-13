@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Hash, RefreshCw, Users } from "lucide-react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft, BarChart3, Hash, RefreshCw, Users } from "lucide-react";
 import { workspaceApi } from "@/api/features/workspace.api";
 import { projectAssignmentApi } from "@/api/features/project-assignment.api";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -34,6 +34,7 @@ export default function WorkspaceDetailPage() {
 function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   const { user, activeRole, hasPermission } = usePermissions();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const selected = params.get("tab") ?? "overview";
   const tab: WorkspaceSectionKey = WORKSPACE_SECTIONS.find(section => section.id === selected)?.id ?? "overview";
@@ -51,6 +52,11 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     void refetchNavigation().then(result => { if (result.isSuccess) setBlocked(undefined); });
   }, [tab, refetchNavigation]);
   function changeTab(value: string) {
+    // US-ANL-001: Analytics is a dedicated read-only route, not a workspace section.
+    if (value === "analytics") {
+      if (Number.isSafeInteger(projectId) && Number(projectId) > 0) navigate(`/projects/${projectId}/analytics`);
+      return;
+    }
     setParams(previous => { const next = new URLSearchParams(previous);
       if (value === "overview") next.delete("tab"); else next.set("tab", value); return next;
     }, { replace: true });
@@ -88,6 +94,8 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
   }) ?? [];
   const current = sections.find(item => item.key === tab);
   const members = sections.find(item => item.key === "members");
+  const canViewAnalytics = hasPermission("PROJECT_ANALYTICS_READ");
+  const hasProject = Number.isSafeInteger(projectId) && Number(projectId) > 0;
   const denied = blocked === tab || !current?.canRead;
   const validContext = context && Number.isSafeInteger(context.teamId);
   async function refresh() {
@@ -123,7 +131,10 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
             <div className="min-w-0 overflow-x-auto overflow-y-hidden border-b"><TabsList aria-label="Workspace sections"
               className="h-10 w-max min-w-full justify-start gap-1 rounded-none bg-transparent p-0 align-top group-data-[orientation=horizontal]/tabs:h-10">{WORKSPACE_SECTIONS.map(({ id, label, icon: Icon }) =>
               <TabsTrigger key={id} value={id} disabled={!sections.find(item => item.key === id)?.canRead}
-                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><Icon className="size-4" />{label}</TabsTrigger>)}</TabsList></div>
+                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><Icon className="size-4" />{label}</TabsTrigger>)}
+              {hasProject && <TabsTrigger value="analytics" disabled={!canViewAnalytics}
+                title={canViewAnalytics ? "Open read-only project analytics" : "Analytics access is not granted for your role"}
+                className="h-10 flex-none gap-2 rounded-none rounded-t-md border-0 border-b-2 border-transparent px-3 text-xs text-muted-foreground shadow-none after:hidden data-[state=active]:border-foreground data-[state=active]:bg-muted/40 data-[state=active]:text-foreground dark:data-[state=active]:bg-muted/30 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-none"><BarChart3 className="size-4" />Analytics</TabsTrigger>}</TabsList></div>
             <TabsContent key={tab} value={tab} className="space-y-5">
               {denied || !current ? <WorkspaceSectionState denied retry={reloadAccess} />
                 : tab === "overview" ? <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId} selectedProject={projectScoped ? project : undefined}
