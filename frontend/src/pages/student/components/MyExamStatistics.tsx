@@ -325,7 +325,7 @@ interface CourseRow {
   allScored: boolean;
   completed: boolean;
   overall: number | null;
-  status: "PASSED" | "FAILED" | null;
+  status: CourseMyScoresDTO["resultStatus"];
   examIds: number[];
   items: CourseMyScoresDTO["gradeItems"];
 }

@@ -89,11 +89,36 @@ class MilestoneIntegrationTest {
     }
 
     @Test
-    void rejectsStartDateTodayAndRemovedManualRoutes() throws Exception {
+    void createWithTodayStartDateStartsImmediately() throws Exception {
         Map<String, Object> request = new LinkedHashMap<>(validRequest());
-        request.put("startDate", LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).toString());
+        String startDate = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).toString();
+        request.put("startDate", startDate);
+        request.put("deadline", Instant.now().plus(2, ChronoUnit.DAYS).toString());
+        String result = mockMvc.perform(post(endpoint())
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .header("Idempotency-Key", "start-today-immediate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.lifecycleStatus").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.startDate").value(startDate))
+                .andReturn().getResponse().getContentAsString();
+        var id = java.util.UUID.fromString(objectMapper.readTree(result).get("id").asText());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus.IN_PROGRESS,
+                milestoneRepository.findById(id).orElseThrow().lifecycleStatus());
+        org.junit.jupiter.api.Assertions.assertTrue(auditRepository.findAll().stream()
+                .anyMatch(log -> "MILESTONE_AUTO_STARTED".equals(log.getAction())));
+        org.junit.jupiter.api.Assertions.assertTrue(outboxRepository.findAll().stream()
+                .anyMatch(event -> "MILESTONE_STARTED".equals(event.getEventType())));
+    }
+
+    @Test
+    void rejectsPastStartDateAndRemovedManualRoutes() throws Exception {
+        Map<String, Object> request = new LinkedHashMap<>(validRequest());
+        request.put("startDate", LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).minusDays(1).toString());
         mockMvc.perform(post(endpoint()).header("Authorization", "Bearer " + teacherToken)
-                        .header("Idempotency-Key", "start-today-rejected")
+                        .header("Idempotency-Key", "start-yesterday-rejected")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnprocessableEntity())
@@ -539,6 +564,36 @@ class MilestoneIntegrationTest {
     }
 
     @Test
+    void teamListSupportsWorkspaceSearchSortPaginationAndTenantDeadlineFilter() throws Exception {
+        ZoneId tenantZone = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate firstDate = LocalDate.now(tenantZone).plusDays(3);
+        LocalDate secondDate = firstDate.plusDays(1);
+        createMilestone("Team alpha delivery", firstDate.atTime(12, 0).atZone(tenantZone).toInstant(), "team-list-alpha");
+        createMilestone("Team beta delivery", secondDate.atTime(12, 0).atZone(tenantZone).toInstant(), "team-list-beta");
+        String teamEndpoint = "/api/teams/" + MockMilestoneData.TEAM_ID + "/milestones";
+
+        mockMvc.perform(get(teamEndpoint).header("Authorization", "Bearer " + teacherToken)
+                        .param("search", "team").param("lifecycleStatus", "PLANNED")
+                        .param("sort", "deadline:desc").param("page", "0").param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.content[0].title").value("Team beta delivery"));
+
+        mockMvc.perform(get(teamEndpoint).header("Authorization", "Bearer " + teacherToken)
+                        .param("search", "team").param("sort", "deadline:desc")
+                        .param("page", "1").param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].title").value("Team alpha delivery"));
+
+        mockMvc.perform(get(teamEndpoint).header("Authorization", "Bearer " + teacherToken)
+                        .param("deadlineFrom", firstDate.toString()).param("deadlineTo", firstDate.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("Team alpha delivery"));
+    }
+
+    @Test
     void rejectsInvalidMilestoneFilters() throws Exception {
         mockMvc.perform(get(endpoint())
                         .header("Authorization", "Bearer " + teacherToken)
@@ -729,6 +784,55 @@ class MilestoneIntegrationTest {
                         .header("Authorization", "Bearer " + tokenForUnassignedStudent()))
                 .andExpect(status().isForbidden());
         org.junit.jupiter.api.Assertions.assertEquals(0, artifactDraftRepository.count());
+    }
+
+    @Test
+    void characterLimitAndDraftAfterDeadlineAreConsistentForProjectAndTeam() throws Exception {
+        for (boolean team : List.of(false, true)) {
+            String id;
+            if (team) {
+                String created = mockMvc.perform(post("/api/teams/" + MockMilestoneData.TEAM_ID + "/milestones")
+                        .header("Authorization", "Bearer " + teacherToken).header("Idempotency-Key", "team-character-limit")
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(validRequest())))
+                        .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+                id = objectMapper.readTree(created).get("id").asText();
+                openTeamMilestone(id);
+            } else {
+                id = createMilestoneAndGetId("Character limit", Instant.now().plusSeconds(86400), "project-character-limit");
+                openProjectMilestone(id);
+            }
+            String base = (team ? "/api/teams/" + MockMilestoneData.TEAM_ID + "/milestones" : endpoint()) + "/" + id + "/artifact-draft";
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("repositoryUrl", "https://github.com/example/project");
+            body.put("releaseNotes", "a".repeat(1000));
+            body.put("checklist", Map.of());
+            String saved = mockMvc.perform(put(base).header("Authorization", "Bearer " + studentToken)
+                    .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(body)))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            body.put("expectedVersion", objectMapper.readTree(saved).get("version").asLong());
+            body.put("releaseNotes", "a".repeat(1001));
+            mockMvc.perform(put(base).header("Authorization", "Bearer " + studentToken)
+                    .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(body)))
+                    .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.errors.releaseNotes").exists());
+            mockMvc.perform(post(base + "/submissions").header("Authorization", "Bearer " + studentToken)
+                    .header("Idempotency-Key", "over-limit-" + team).contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(body)))
+                    .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.errors.releaseNotes").exists());
+            transactionTemplate.executeWithoutResult(status -> {
+                var milestone = milestoneRepository.findById(java.util.UUID.fromString(id)).orElseThrow();
+                org.springframework.test.util.ReflectionTestUtils.setField(milestone, "deadline", Instant.now().minusSeconds(60));
+                org.springframework.test.util.ReflectionTestUtils.setField(milestone, "latePolicyType", com.example.starter_project_2025.system.project.milestone.domain.LatePolicyType.NO_LATE);
+                milestoneRepository.saveAndFlush(milestone);
+            });
+            body.put("releaseNotes", "Draft after deadline");
+            mockMvc.perform(put(base).header("Authorization", "Bearer " + studentToken)
+                    .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(body)))
+                    .andExpect(status().isOk());
+            mockMvc.perform(post(base + "/submissions").header("Authorization", "Bearer " + studentToken)
+                    .header("Idempotency-Key", "closed-window-" + team).contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(body)))
+                    .andExpect(status().isUnprocessableEntity());
+        }
     }
 
     @Test

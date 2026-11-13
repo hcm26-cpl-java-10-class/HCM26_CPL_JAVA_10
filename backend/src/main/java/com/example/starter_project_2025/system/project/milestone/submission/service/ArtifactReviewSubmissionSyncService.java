@@ -64,7 +64,7 @@ public class ArtifactReviewSubmissionSyncService {
             if (!submissionQueryService.canRequestChanges(submission)) {
                 throw new com.example.starter_project_2025.system.project.milestone.exception.MilestoneValidationException(
                         java.util.Map.of("submission", java.util.List.of(
-                                "Không thể nộp lại do Milestone đã hết hạn theo Late Policy")));
+                                "Cannot resubmit: " + submissionQueryService.resubmissionBlockMessage(submission))));
             }
             int number = submission.openNextDraft(artifact.getSubmittedAt());
             version = createVersion(submission, artifact, milestone, number);

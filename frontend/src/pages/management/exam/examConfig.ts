@@ -9,6 +9,7 @@ export interface ExamConfigForm {
   category: ExamCategory | "";
   passScore: string;
   maxScore: string;
+  courseWeight: string;
   latePolicy: LatePolicy;
   latePenaltyPercent: string;
   lateGraceMinutes: string;
@@ -45,6 +46,7 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   category: "",
   passScore: "",
   maxScore: "",
+  courseWeight: "",
   latePolicy: "NOT_ALLOWED",
   latePenaltyPercent: "",
   lateGraceMinutes: "0",
@@ -113,6 +115,7 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   showAnswersAfterExam: exam.showAnswersAfterExam ?? false,
   category: pickEnum(exam.category, EXAM_CATEGORY_LABEL, ""),
   passScore: exam.passScore != null ? String(exam.passScore) : "",
+  courseWeight: exam.courseWeight != null ? String(exam.courseWeight) : "",
   maxScore: exam.maxScore != null ? String(exam.maxScore) : "",
   latePolicy: pickEnum(exam.latePolicy, LATE_POLICY_LABEL, "NOT_ALLOWED"),
   latePenaltyPercent: exam.latePenaltyPercent != null ? String(exam.latePenaltyPercent) : "",
@@ -160,6 +163,7 @@ export function validateConfig(_duration: number, cfg: ExamConfigForm): string |
   if (required.maxAttempts) return required.maxAttempts;
 
   if (cfg.maxAttempts.trim() !== "" && !(Number(cfg.maxAttempts) >= 1)) return "Maximum attempts must be at least 1.";
+  if (cfg.courseWeight !== "" && (!Number.isFinite(Number(cfg.courseWeight)) || Number(cfg.courseWeight)<0 || Number(cfg.courseWeight)>100 || !/^\d+(\.\d{1,2})?$/.test(cfg.courseWeight))) return "Course weight must be 0–100 with at most two decimal places.";
   if (cfg.maxScore !== "" && !(Number(cfg.maxScore) > 0 && Number(cfg.maxScore) <= 1000)) return "Max score must be greater than 0 and at most 1000.";
   if (cfg.passScore !== "" && Number(cfg.passScore) < 0) return "Passing score must be >= 0.";
   if (cfg.passScore !== "" && Number(cfg.passScore) > (cfg.maxScore !== "" ? Number(cfg.maxScore) : 10)) return "Passing score cannot exceed the max score.";
@@ -192,6 +196,7 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
     category: cfg.category || undefined,
     // blank = 5 (capped at the max score when that is lower)
     passScore: cfg.passScore !== "" ? Number(cfg.passScore) : Math.min(5, cfg.maxScore !== "" ? Number(cfg.maxScore) : 10),
+    courseWeight: cfg.courseWeight !== "" ? Number(cfg.courseWeight) : null,
     maxScore: cfg.maxScore !== "" ? Number(cfg.maxScore) : undefined,
     latePolicy: cfg.latePolicy || undefined,
     latePenaltyPercent:

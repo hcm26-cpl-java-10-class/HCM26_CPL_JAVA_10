@@ -61,6 +61,16 @@ public class ExamDTO extends BaseDTO {
     @DecimalMin(value = "0", groups = {OnCreate.class, OnUpdate.class}, message = "passScore phải >= 0")
     private BigDecimal passScore;
 
+    @DecimalMin(value="0", groups={OnCreate.class,OnUpdate.class})
+    @DecimalMax(value="100", groups={OnCreate.class,OnUpdate.class})
+    @jakarta.validation.constraints.Digits(integer=3,fraction=2,groups={OnCreate.class,OnUpdate.class})
+    private BigDecimal courseWeight;
+    @JsonIgnore private boolean courseWeightProvided;
+    public void setCourseWeight(BigDecimal weight) {
+        this.courseWeight=weight;
+        this.courseWeightProvided=true;
+    }
+
     @DecimalMin(value = "0.01", groups = {OnCreate.class, OnUpdate.class}, message = "maxScore phải > 0")
     @DecimalMax(value = "1000", groups = {OnCreate.class, OnUpdate.class}, message = "maxScore tối đa 1000")
     private BigDecimal maxScore;

@@ -41,6 +41,7 @@ public class GradebookService {
     private final ExamAccessGuard accessGuard;
     private final GradebookStateRepository stateRepository;
     private final GradebookPublishedItemRepository publishedRepository;
+    private final com.example.starter_project_2025.system.demo.course.CourseAssessmentCompletionService courseCompletion;
 
     @PersistenceContext
     private EntityManager em;
@@ -183,6 +184,7 @@ public class GradebookService {
             }
         }
         publishedRepository.saveAll(items);
+        courseCompletion.refreshCourse(course.getId());
     }
 
     /**
@@ -230,6 +232,13 @@ public class GradebookService {
             }
             // lam tron: dua phan du vao cot cuoi de tong dung 100
             weightOf.put(lastKey, weightOf.get(lastKey).add(HUNDRED.subtract(assigned)));
+        }
+
+        // Respect explicit course assessment weights when initializing a complete plan.
+        if (fresh && !toCreate.isEmpty() && toCreate.stream().allMatch(e->e.getCourseWeight()!=null
+                && e.getCourseWeight().signum()>=0 && e.getCourseWeight().compareTo(HUNDRED)<=0)
+                && toCreate.stream().map(Exam::getCourseWeight).reduce(BigDecimal.ZERO,BigDecimal::add).compareTo(HUNDRED)==0) {
+            for (Exam exam:toCreate) weightOf.put(exam.getId().toString(),exam.getCourseWeight());
         }
 
         int pos = existing.size();

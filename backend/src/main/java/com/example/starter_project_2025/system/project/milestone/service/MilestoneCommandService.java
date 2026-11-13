@@ -126,6 +126,9 @@ public class MilestoneCommandService {
                 now
         );
         milestone.scheduleStart(request.startDate(), request.startDate().atStartOfDay(tenantZone).toInstant());
+        // A milestone whose start date is today (tenant time zone) is already due: start it now
+        // instead of waiting for MilestoneDeadlineJob's next tick.
+        boolean startedOnCreate = milestone.startIfDue(actorId, now);
         if (request.resubmissionPolicy() != null) {
             milestone.configureResubmission(
                     request.resubmissionPolicy().allowed(),
@@ -142,6 +145,10 @@ public class MilestoneCommandService {
         lifecycle.recordInitialRevision(milestone, actorId, now);
         auditWriter.writeCreated(milestone, actorId, idempotencyKey, now);
         outboxWriter.writeMilestoneCreated(milestone, now);
+        if (startedOnCreate) {
+            auditWriter.writeStartedOnCreate(milestone, actorId, now);
+            outboxWriter.writeMilestoneStarted(milestone, now);
+        }
         idempotencyRepository.save(IdempotencyRecord.completed(
                 tenantId, actorId, OPERATION, idempotencyKey, requestHash,
                 milestone.getId(), HttpStatus.CREATED.value(), now

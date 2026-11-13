@@ -12,7 +12,7 @@ import type { MilestoneRubricOption } from "./milestone";
 export type ProjectTemplateStatus = "ACTIVE" | "DRAFT" | "ARCHIVED";
 
 /** Difficulty level used by the catalogue filter (AC01). */
-export type ProjectTemplateLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+export type ProjectTemplateLevel = string;
 
 /** Team roles the template reserves seats for (AC02). */
 export type ProjectRoleCode = "PM" | "BA" | "DEV" | "QA";
@@ -132,7 +132,7 @@ export interface TemplateMilestone {
   description: string | null;
   dueAfter: number;
   dueUnit: TemplateMilestoneTimeUnit;
-  weight: number;
+  weight: number | null;
   mandatory: boolean;
   orderIndex: number;
   checklistItems: TemplateMilestoneChecklistItem[];
@@ -148,6 +148,7 @@ export interface TemplateMilestonePlan {
   estimatedDurationWeeks: number | null;
   editable: boolean;
   milestones: TemplateMilestone[];
+  weightedMilestones?: boolean;
 }
 
 export interface TemplateMilestonePlanPayload {
@@ -158,7 +159,7 @@ export interface TemplateMilestonePlanPayload {
     description: string;
     dueAfter: number;
     dueUnit: TemplateMilestoneTimeUnit;
-    weight: number;
+    weight: number | null;
     mandatory: boolean;
     rubricVersionId: string;
     checklistItems: {
@@ -211,6 +212,8 @@ export interface ProjectTemplateDTO {
   code: string;
   name: string;
   description: string;
+  parentTemplateId?: number | null;
+  removed?: boolean;
   category: string;
   level: ProjectTemplateLevel;
   estimatedDurationWeeks: number;
@@ -229,6 +232,7 @@ export interface ProjectTemplatePayload {
   code: string;
   name: string;
   description: string;
+  parentTemplateId?: number | null;
   category: string;
   level: ProjectTemplateLevel;
   estimatedDurationWeeks: number;
@@ -252,22 +256,24 @@ export interface TemplateVersionListResponse {
 }
 
 export interface ProjectTemplateFilter {
-  status?: ProjectTemplateStatus;
-  level?: ProjectTemplateLevel;
-  category?: string;
+  status?: ProjectTemplateStatus | ProjectTemplateStatus[];
+  level?: ProjectTemplateLevel | ProjectTemplateLevel[];
+  category?: string | string[];
+  includeModules?: boolean;
 }
 
 export interface ProjectTemplateOptions {
   tenantId: number;
   tenantName: string;
   categories: string[];
+  levels: { value: ProjectTemplateLevel; label: string }[];
   canCreate: boolean;
   canUpdate: boolean;
   canActivate: boolean;
   canArchive: boolean;
 }
 
-export type TemplateConfigurationSection = "overview" | "team-constraints" | "milestones";
+export type TemplateConfigurationSection = "overview" | "team-constraints" | "milestones" | "modules";
 
 export interface TemplateActivationChecklist {
   templateId: number;

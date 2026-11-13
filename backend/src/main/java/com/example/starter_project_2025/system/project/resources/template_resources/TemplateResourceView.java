@@ -13,7 +13,6 @@ public record TemplateResourceView(
         String description,
         ResourceKind kind,
         String url,
-        String category,
         Integer orderIndex,
         List<TemplateResourceFileView> files
 ) {

@@ -35,7 +35,8 @@ public interface ProjectTemplateRepository
      * by {@code ProjectTeamTemplateDemoDataInitializer}) are readable by every
      * tenant. Mutations keep using {@link #findByIdAndTenantIdAndIsActiveTrue}.
      */
-    @Query("select t from ProjectTemplate t where t.id = :id and t.isActive = true "
+    @Query("select t from ProjectTemplate t where t.id = :id and (t.isActive = true "
+            + "or (t.parentTemplate is not null and t.status = com.example.starter_project_2025.system.project.template.ProjectTemplateStatus.ARCHIVED)) "
             + "and (t.tenantId = :tenantId or t.tenantId is null)")
     Optional<ProjectTemplate> findReadableById(Long id, Long tenantId);
 
@@ -44,8 +45,34 @@ public interface ProjectTemplateRepository
     boolean existsByTenantIdAndCodeAndTemplateVersionAndIdNot(
             Long tenantId, String code, Integer templateVersion, Long id);
 
+    boolean existsByTenantIdAndCodeScopeIdAndCodeAndTemplateVersion(
+            Long tenantId, Long codeScopeId, String code, Integer templateVersion);
+
+    boolean existsByTenantIdAndCodeScopeIdAndCodeAndTemplateVersionAndIdNot(
+            Long tenantId, Long codeScopeId, String code, Integer templateVersion, Long id);
+
+    boolean existsByTenantIdAndCodeScopeIdAndCode(Long tenantId, Long codeScopeId, String code);
+
+    boolean existsByTenantIdAndCodeScopeIdAndCodeAndIdNot(Long tenantId, Long codeScopeId, String code, Long id);
+
+    List<ProjectTemplate> findAllByParentTemplate_IdAndTenantIdAndIsActiveTrueOrderByCodeAscIdAsc(
+            Long parentTemplateId, Long tenantId);
+
+    List<ProjectTemplate> findAllByParentTemplateIsNotNullAndIsActiveTrue();
+
+    boolean existsByParentTemplate_IdAndIsActiveTrue(Long parentTemplateId);
+
+    /** Master templates of one tenant that the class assignment catalogue may offer. */
+    List<ProjectTemplate> findAllByTenantIdAndParentTemplateIsNullAndStatusAndIsActiveTrue(
+            Long tenantId, com.example.starter_project_2025.system.project.template.ProjectTemplateStatus status);
+
     @Query("select distinct t.category from ProjectTemplate t "
             + "where (t.tenantId = :tenantId or t.tenantId is null) "
             + "and t.isActive = true and t.category is not null order by t.category")
     List<String> findCategories(Long tenantId);
+
+    @Query("select distinct t.level from ProjectTemplate t "
+            + "where (t.tenantId = :tenantId or t.tenantId is null) "
+            + "and t.isActive = true and t.level is not null order by t.level")
+    List<String> findLevels(Long tenantId);
 }

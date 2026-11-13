@@ -18,35 +18,39 @@ import { WorkspaceCreateDialog } from "./WorkspaceCreateDialog";
 
 export default function WorkspaceCandidatePage() {
   const navigate = useNavigate();
-  const { hasPermission } = usePermissions();
+  const { user, activeRole, hasPermission } = usePermissions();
   const [params, setParams] = useSearchParams();
   const [createFor, setCreateFor] = useState<WorkspaceCandidateItem | null | undefined>(undefined);
   const canCreate = hasPermission("WORKSPACE_CREATE");
   const search = params.get("search") ?? "";
   const cohort = params.get("cohort") ?? "all";
   const classId = params.get("classId") ?? "all";
+  const sessionId = params.get("sessionId");
   const workspaceState = params.get("workspace") ?? "all";
   const size = [10, 20, 50, 100].includes(Number(params.get("size"))) ? Number(params.get("size")) : 10;
-  const query = useQuery({ queryKey: ["workspace-candidates"], queryFn: workspaceApi.getCandidates });
+  const query = useQuery({ queryKey: ["workspace-candidates", user.email, activeRole], queryFn: workspaceApi.getCandidates, refetchOnMount: "always" });
   const candidates = query.data ?? [];
   const cohorts = useMemo(() => [...new Map(candidates.filter(row => row.cohortId != null).map(row => [String(row.cohortId), row.cohortName ?? `Cohort #${row.cohortId}`])).entries()], [candidates]);
   const classes = useMemo(() => [...new Map(candidates.filter(row => row.classId != null).map(row => [String(row.classId), `${row.classCode ? `${row.classCode} - ` : ""}${row.className ?? `Class #${row.classId}`}`])).entries()], [candidates]);
   const hasUnassignedClass = candidates.some(row => row.classId == null);
   const filtered = useMemo(() => candidates.filter(row => {
-    const matchesSearch = `${row.projectName} ${row.projectCode} ${row.teamName} ${row.teamCode}`.toLocaleLowerCase("en").includes(search.trim().toLocaleLowerCase("en"));
+    const matchesSearch = [row.projectName, row.projectCode, row.teamName, row.teamCode, row.className, row.classCode]
+      .join(" ").toLocaleLowerCase("en").includes(search.trim().toLocaleLowerCase("en"));
     return matchesSearch && (cohort === "all" || String(row.cohortId) === cohort)
       && (classId === "all" || (classId === "unassigned" ? row.classId == null : String(row.classId) === classId))
+      && (sessionId == null || String(row.allocationSessionId) === sessionId)
       && (workspaceState === "all" || (workspaceState === "created" ? !!row.workspaceId : !row.workspaceId));
-  }), [candidates, search, cohort, classId, workspaceState]);
+  }), [candidates, search, cohort, classId, sessionId, workspaceState]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / size));
   const page = Math.min(Math.max(1, Number(params.get("page")) || 1), pageCount);
   const rows = filtered.slice((page - 1) * size, page * size);
-  const hasFilters = !!search || cohort !== "all" || classId !== "all" || workspaceState !== "all";
+  const hasFilters = !!search || cohort !== "all" || classId !== "all" || sessionId != null || workspaceState !== "all";
 
   function updateParam(key: string, value: string) {
     setParams(previous => {
       const next = new URLSearchParams(previous);
       if (!value || value === "all") next.delete(key); else next.set(key, value);
+      if (key === "classId") next.delete("sessionId");
       if (key !== "page") next.delete("page");
       return next;
     }, { replace: true });
@@ -77,6 +81,7 @@ export default function WorkspaceCandidatePage() {
             <Select value={cohort} onValueChange={value => updateParam("cohort", value)}><SelectTrigger className="w-full sm:w-48" aria-label="Cohort"><SelectValue placeholder="Cohort" /></SelectTrigger><SelectContent><SelectItem value="all">All cohorts</SelectItem>{cohorts.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}</SelectContent></Select>
             <Select value={classId} onValueChange={value => updateParam("classId", value)}><SelectTrigger className="w-full sm:w-52" aria-label="Class"><SelectValue placeholder="Class" /></SelectTrigger><SelectContent><SelectItem value="all">All classes</SelectItem>{classes.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}{hasUnassignedClass && <SelectItem value="unassigned">Not assigned</SelectItem>}</SelectContent></Select>
             <Select value={workspaceState} onValueChange={value => updateParam("workspace", value)}><SelectTrigger className="w-full sm:w-44" aria-label="Workspace status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All workspaces</SelectItem><SelectItem value="uncreated">Not created</SelectItem><SelectItem value="created">Created</SelectItem></SelectContent></Select>
+            {sessionId != null && <Badge variant="outline">Phiên phân nhóm #{sessionId}</Badge>}
             {hasFilters && <Button variant="ghost" onClick={() => setParams({})}><X />Clear filters</Button>}
           </div>
           <div className="rounded-md border">

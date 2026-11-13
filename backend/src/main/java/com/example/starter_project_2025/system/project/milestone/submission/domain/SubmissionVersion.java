@@ -126,6 +126,15 @@ public class SubmissionVersion {
         }
     }
 
+    /** Reviewed completion keyed by the milestone checklist item each snapshot entry was copied from. */
+    public java.util.Map<UUID, Boolean> checklistAssessmentBySourceItem() {
+        java.util.Map<UUID, Boolean> result = new java.util.HashMap<>();
+        for (SubmissionChecklistSnapshot item : checklist) {
+            if (item.getSourceChecklistItemId() != null) result.put(item.getSourceChecklistItemId(), item.isCompleted());
+        }
+        return result;
+    }
+
     public void linkArtifactSubmission(UUID artifactSubmissionId) {
         if (this.artifactSubmissionId != null && !this.artifactSubmissionId.equals(artifactSubmissionId)) {
             throw new IllegalStateException("Submission version is already linked to another artifact submission");

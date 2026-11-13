@@ -62,6 +62,9 @@ public class Exam extends BaseEntity {
     @Column(precision = 8, scale = 2)
     private BigDecimal passScore;
 
+    @Column(precision = 5, scale = 2)
+    private BigDecimal courseWeight;
+
     @Column(nullable = false, precision = 8, scale = 2)
     private BigDecimal maxScore = BigDecimal.TEN;
 

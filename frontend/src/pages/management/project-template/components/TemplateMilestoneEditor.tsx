@@ -9,12 +9,14 @@ import { Textarea } from "@/components/ui/textarea";
 import type { TemplateMilestoneTimeUnit } from "@/types/features/project-template";
 import type { MilestoneRubricOption } from "@/types/features/milestone";
 import { MilestoneRubricSelector } from "@/pages/management/project/milestone/components/MilestoneRubricSelector";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, PanelLeftClose, Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { milestoneFieldId, type MilestonePlanErrors, type MilestoneValues } from "../milestone-plan.utils";
+import type { MilestonePlanErrors, MilestoneValues } from "../milestone-plan.utils";
+import { maxDescriptionLength } from "../project-template.utils";
 import { TemplateLatePolicyEditor } from "./TemplateLatePolicyEditor";
 
-function MilestoneField({ path, label, required, errors, children }: {
+function MilestoneField({ id, path, label, required, errors, children }: {
+  id: string;
   path: string;
   label: string;
   required?: boolean;
@@ -23,24 +25,27 @@ function MilestoneField({ path, label, required, errors, children }: {
 }) {
   return (
     <div className="grid content-start gap-2">
-      <Label htmlFor={milestoneFieldId(path)}>{label}{required && <span className="text-destructive">*</span>}</Label>
+      <Label htmlFor={id}>{label}{required && <span className="text-destructive">*</span>}</Label>
       {children}
-      <div id={`${milestoneFieldId(path)}-error`} aria-live="polite"><FieldError errors={errors[path]} /></div>
+      <div id={`${id}-error`} aria-live="polite"><FieldError errors={errors[path]} /></div>
     </div>
   );
 }
 
-export function TemplateMilestoneEditor({ milestone, index, count, disabled, editable, errors, rubrics, onChange, onMove, onRemove }: {
+export function TemplateMilestoneEditor({ milestone, index, count, disabled, editable, weighted = true, errors, rubrics, fieldId: milestoneFieldId, onChange, onMove, onRemove, onCollapse }: {
   milestone: MilestoneValues;
   index: number;
   count: number;
   disabled: boolean;
   editable: boolean;
+  weighted?: boolean;
   errors: MilestonePlanErrors;
   rubrics: MilestoneRubricOption[];
+  fieldId: (path: string) => string;
   onChange: (patch: Partial<MilestoneValues>) => void;
   onMove: (direction: -1 | 1) => void;
   onRemove: () => void;
+  onCollapse: () => void;
 }) {
   const path = `milestones[${index}]`;
   const fieldProps = (field: string) => ({
@@ -60,45 +65,54 @@ export function TemplateMilestoneEditor({ milestone, index, count, disabled, edi
             <p className="text-xs text-muted-foreground">Milestone {index + 1}</p>
             <CardTitle className="mt-1 break-words text-base leading-relaxed">{milestone.title.trim() || "New milestone"}</CardTitle>
           </div>
-          {editable && <div className="flex shrink-0 gap-1">
+          <div className="flex shrink-0 gap-1">
+            {editable && <>
             <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move milestone ${index + 1} up`}
               disabled={disabled || index === 0} onClick={() => onMove(-1)}><ArrowUp /></Button>
             <Button type="button" variant="ghost" size="icon-sm" aria-label={`Move milestone ${index + 1} down`}
               disabled={disabled || index === count - 1} onClick={() => onMove(1)}><ArrowDown /></Button>
             <Button type="button" variant="ghost" size="icon-sm" className="text-destructive" aria-label={`Remove milestone ${index + 1}`}
               disabled={disabled} onClick={onRemove}><Trash2 /></Button>
-          </div>}
+            </>}
+            <Button type="button" variant="outline" size="icon-sm" aria-label="Collapse milestone" title="Collapse milestone"
+              onClick={onCollapse}><PanelLeftClose /></Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="grid gap-5">
         <fieldset disabled={disabled} className="grid min-w-0 gap-5">
           {errors[path] && <div aria-live="polite"><FieldError errors={errors[path]} /></div>}
-          <MilestoneField path={`${path}.title`} label="Milestone name" required errors={errors}>
+          <MilestoneField path={`${path}.title`} id={fieldProps("title").id} label="Milestone name" required errors={errors}>
             <Input {...fieldProps("title")} value={milestone.title} onChange={(event) => onChange({ title: event.target.value })}
               placeholder="E.g. Requirements analysis" />
           </MilestoneField>
-          <MilestoneField path={`${path}.description`} label="Description" errors={errors}>
-            <Textarea {...fieldProps("description")} rows={3} value={milestone.description}
+          <MilestoneField path={`${path}.description`} id={fieldProps("description").id} label="Description" errors={errors}>
+            <Textarea {...fieldProps("description")} maxLength={maxDescriptionLength} rows={3} value={milestone.description}
               onChange={(event) => onChange({ description: event.target.value })} placeholder="Describe the expected outcome (optional)." />
+            <p className="text-right text-xs tabular-nums text-muted-foreground">
+              {milestone.description.length.toLocaleString("en-US")} / {maxDescriptionLength.toLocaleString("en-US")} characters
+            </p>
           </MilestoneField>
           <div className="grid gap-4 sm:grid-cols-3">
-            <MilestoneField path={`${path}.dueAfter`} label="Due after" required errors={errors}>
+            <MilestoneField path={`${path}.dueAfter`} id={fieldProps("dueAfter").id} label="Due after" required errors={errors}>
               <Input {...fieldProps("dueAfter")} inputMode="numeric" value={milestone.dueAfter}
                 onChange={(event) => onChange({ dueAfter: event.target.value })} placeholder="E.g. 2" />
             </MilestoneField>
-            <MilestoneField path={`${path}.dueUnit`} label="Time unit" required errors={errors}>
+            <MilestoneField path={`${path}.dueUnit`} id={fieldProps("dueUnit").id} label="Time unit" required errors={errors}>
               <Select value={milestone.dueUnit} disabled={disabled}
                 onValueChange={(value) => onChange({ dueUnit: value as TemplateMilestoneTimeUnit })}>
                 <SelectTrigger {...fieldProps("dueUnit")} className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="DAYS">Days</SelectItem><SelectItem value="WEEKS">Weeks</SelectItem></SelectContent>
               </Select>
             </MilestoneField>
-            <MilestoneField path={`${path}.weight`} label="Weight (%)" required errors={errors}>
+            {weighted && <MilestoneField path={`${path}.weight`} id={fieldProps("weight").id} label="Weight (%)" required errors={errors}>
               <Input {...fieldProps("weight")} inputMode="decimal" value={milestone.weight}
                 onChange={(event) => onChange({ weight: event.target.value })} placeholder="E.g. 25" />
-            </MilestoneField>
+            </MilestoneField>}
           </div>
-          <p className="text-xs text-muted-foreground">Due after the project start date. One week equals 7 days.</p>
+          <p className="text-xs text-muted-foreground">{weighted
+            ? "Due after the project start date. One week equals 7 days."
+            : "Due after the project is assigned. One week equals 7 days."}</p>
           <div className="flex items-center gap-2">
             <Checkbox {...fieldProps("mandatory")} checked={milestone.mandatory} disabled={disabled}
               onCheckedChange={(checked) => onChange({ mandatory: checked === true })} />
@@ -158,7 +172,7 @@ export function TemplateMilestoneEditor({ milestone, index, count, disabled, edi
         </div>
         <fieldset disabled={disabled}>
           <TemplateLatePolicyEditor policy={milestone.latePolicy} milestoneIndex={index}
-            disabled={disabled} editable={editable} errors={errors}
+            disabled={disabled} editable={editable} errors={errors} fieldId={milestoneFieldId}
             onChange={(latePolicy) => onChange({ latePolicy })} />
         </fieldset>
       </CardContent>

@@ -174,6 +174,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 			exam.setQuestions(resolveQuestions(exam, request.getQuestionIds(), context, examType));
 		}
 		courseLinkService.apply(exam, request, context);
+		courseLinkService.validateWeight(exam, request.isCourseWeightProvided() ? request.getCourseWeight() : exam.getCourseWeight(), context);
 		configValidator.validate(null, request, totalPoints(exam.getQuestions()), context);
 	}
 
@@ -192,6 +193,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 			}
 		}
 		courseLinkService.apply(exam, request, context);
+		courseLinkService.validateWeight(exam, request.isCourseWeightProvided() ? request.getCourseWeight() : exam.getCourseWeight(), context);
 		configValidator.validate(exam, request, totalPoints(exam.getQuestions()), context);
 	}
 

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,8 +40,8 @@ public class WorkspaceResourceController {
     private final WorkspaceResourceCommandService commands;
 
     @GetMapping
-    public WorkspaceResourceDtos.ResourceCollection list(@PathVariable Long workspaceId) {
-        return service.list(workspaceId);
+    public WorkspaceResourceDtos.ResourceCollection list(@PathVariable Long workspaceId, @RequestParam(required = false) Long projectId) {
+        return service.list(workspaceId, projectId);
     }
 
     @PostMapping
@@ -48,8 +49,9 @@ public class WorkspaceResourceController {
     @ResponseStatus(HttpStatus.CREATED)
     public WorkspaceResourceDtos.ResourceItem create(
             @PathVariable Long workspaceId,
+            @RequestParam(required = false) Long projectId,
             @RequestBody WorkspaceResourceDtos.ResourcePayload request) {
-        return commands.create(workspaceId, request);
+        return commands.create(workspaceId, projectId, request);
     }
 
     @PutMapping("/{resourceId}")
@@ -96,12 +98,12 @@ public class WorkspaceResourceController {
         return service.createTicket(workspaceId, resourceId, fileId);
     }
 
-    /** Direct authenticated stream, kept as a fallback for same-origin clients. */
     @GetMapping("/{resourceId}/files/{fileId}/download")
     public ResponseEntity<byte[]> download(@PathVariable Long workspaceId,
                                            @PathVariable Long resourceId,
-                                           @PathVariable Long fileId) {
-        return stream(service.downloadForMember(workspaceId, resourceId, fileId));
+                                           @PathVariable Long fileId,
+                                           @RequestParam(required = false) String token) {
+        return stream(service.downloadForMember(workspaceId, resourceId, fileId, token));
     }
 
     static ResponseEntity<byte[]> stream(WorkspaceResourceDtos.Download download) {

@@ -31,13 +31,14 @@ public class TemplateVersionListService {
     private final TemplateTeamConstraintsMapper teams;
     private final ProjectTemplateAccessService access;
 
-    public Page<TemplateVersionListItem> getPage(String search, ProjectTemplateStatus status,
-            ProjectTemplateLevel level, String category, Pageable pageable) {
+    public Page<TemplateVersionListItem> getPage(String search, ProjectTemplateFilters filters,
+            Pageable pageable, boolean includeModules) {
         var user = access.requireUser("READ");
         Specification<ProjectTemplate> readable = (root, query, builder) -> builder.and(
                 builder.isTrue(root.get("isActive")),
                 builder.or(builder.isNull(root.get("tenantId")), builder.equal(root.get("tenantId"), user.getTenantId())),
                 builder.or(builder.isNull(root.get("code")), builder.notEqual(root.get("code"), "MANUAL-GROUPING-DEFAULT")));
+        if (!includeModules) readable = readable.and((root, query, builder) -> builder.isNull(root.get("parentTemplate")));
         var owners = templates.findAll(readable);
         Map<Long, List<ProjectTemplateSnapshot>> byTemplate = new LinkedHashMap<>();
         if (!owners.isEmpty()) {
@@ -62,9 +63,9 @@ public class TemplateVersionListService {
         }
         String keyword = search == null ? "" : search.strip().toLowerCase(Locale.ROOT);
         var result = rows.stream()
-                .filter(row -> status == null || row.template().status() == status)
-                .filter(row -> level == null || row.template().level() == level)
-                .filter(row -> category == null || category.isBlank() || category.strip().equals(row.template().category()))
+                .filter(row -> filters.statuses().isEmpty() || filters.statuses().contains(row.template().status()))
+                .filter(row -> filters.levels().isEmpty() || filters.levels().contains(row.template().level()))
+                .filter(row -> filters.categories().isEmpty() || filters.categories().contains(row.template().category()))
                 .filter(row -> keyword.isEmpty() || contains(row.template().code(), keyword)
                         || contains(row.template().name(), keyword) || contains(row.versionLabel(), keyword))
                 .sorted(comparator(pageable.getSort()))

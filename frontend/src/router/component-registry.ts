@@ -1,3 +1,4 @@
+import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
 import ScoreManagementPage from "@/pages/management/exam/score-management";
 import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
 import { Logout } from "@/components/auth/Logout";
@@ -23,7 +24,9 @@ import UnifiedInvitationsPage, {
 } from "@/pages/invitations/InvitationsPage";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import TeamAllocationPage from "@/pages/management/team-allocation";
+import TeamAllocationSetupPage from "@/pages/management/team-allocation/setup";
 import TeamAllocationClassListPage from "@/pages/management/team-allocation/class-list";
+import ProjectAssignmentPage from "@/pages/management/team-allocation/ProjectAssignmentPage";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
@@ -52,6 +55,7 @@ import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPag
 import { createElement } from "react";
 import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
+import ProjectReportsPage from "@/pages/management/project-reports";
 import ProjectTemplateListPage from "@/pages/management/project-template";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
@@ -105,8 +109,10 @@ export const ROLE_HOME_PATHS = [
 ] as const;
 
 export const routes: RouteConfig[] = [
+  { path: "/courses/:id/grades", component: CourseLearnerGradesPage, requiredPermissions: ["COURSE_REPORT_READ", "EXAM_READ"] },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
+  { path: "/management/reports/projects", component: ProjectReportsPage, requiredPermission: "PROJECT_REPORT_READ" },
   { path: "/tasks/create", component: TaskManagementPage, requiredPermission: "TASK_CREATE" },
   { path: "/tasks/:id/edit", component: TaskManagementPage, requiredPermission: "TASK_UPDATE" },
   { path: "/tasks/:id/detail", component: TaskManagementPage, requiredPermission: "TASK_READ" },
@@ -312,6 +318,17 @@ export const routes: RouteConfig[] = [
   {
     path: "/team-allocation/classes/:classId",
     component: TeamAllocationPage,
+    requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
+  },
+  {
+    // Allocation workspace of one session: "Allocate Teams" + "Set up Teams".
+    path: "/team-allocation/classes/:classId/setup",
+    component: TeamAllocationSetupPage,
+    requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
+  },
+  {
+    path: "/team-allocation/classes/:classId/assign",
+    component: ProjectAssignmentPage,
     requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
   },
   {

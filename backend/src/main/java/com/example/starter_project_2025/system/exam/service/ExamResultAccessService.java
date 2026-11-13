@@ -90,6 +90,7 @@ public class ExamResultAccessService {
         return publicationRepository.findByExam_Id(exam.getId())
                 .map(publication ->
                         publication.isPublished()
+                                && publication.getReleasePolicy()!=null
                                 && publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
                 .orElse(false);
     }
@@ -107,6 +108,7 @@ public class ExamResultAccessService {
         return publicationRepository.findByExam_Id(exam.getId())
                 .map(publication ->
                         publication.isPublished()
+                                && publication.getReleasePolicy()!=null
                                 && publication.getReleasePolicy() != ScoreReleasePolicy.HIDDEN)
                 .orElse(false);
     }

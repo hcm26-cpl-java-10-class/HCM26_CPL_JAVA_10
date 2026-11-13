@@ -3,7 +3,7 @@ import { NavMain } from "@/components/layout/NavMain";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, LoaderCircle, LogOutIcon, RefreshCw } from "lucide-react";
-import { useMemo } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, type UIEvent } from "react";
 import { useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi } from "@/api/features/auth.api";
@@ -11,6 +11,16 @@ import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
 import { setLogout } from "@/store/slices/auth/authSlice";
 import { useQueryClient } from "@tanstack/react-query";
+
+const SIDEBAR_SCROLL_KEY = "sidebar_scroll_top";
+
+function readStoredScroll(): number {
+    try {
+        return Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY)) || 0;
+    } catch {
+        return 0;
+    }
+}
 
 export function SidebarMenu() {
     const location = useLocation();
@@ -24,6 +34,15 @@ export function SidebarMenu() {
         isError: isMenuError,
         refetch: refetchMenu,
     } = useActiveModuleGroups();
+
+    const contentRef = useRef<HTMLDivElement>(null);
+    const handleContentScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+        try {
+            sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(event.currentTarget.scrollTop));
+        } catch {
+            // storage unavailable; scroll position simply won't persist
+        }
+    }, []);
 
     const handleLogout = async () => {
         try {
@@ -56,6 +75,7 @@ export function SidebarMenu() {
                         return (
                             !!module.url &&
                             !module.hiddenInMenu &&
+                            url !== "/project-board" &&
                             url !== "/project-template-versions" &&
                             url !== "/enrollments"
                         );
@@ -125,6 +145,17 @@ export function SidebarMenu() {
             .filter((group) => !group.hiddenInMenu && group.items.length > 0);
     }, [location.pathname, moduleGroups]);
 
+    // Restore the menu scroll position after remounts (each page renders its own layout),
+    // then make sure the active item is visible.
+    const menuReady = !isMenuLoading && navGroups.length > 0;
+    useLayoutEffect(() => {
+        const el = contentRef.current;
+        if (!menuReady || !el) return;
+        el.scrollTop = readStoredScroll();
+        const active = el.querySelector<HTMLElement>('[data-active="true"][data-sidebar="menu-sub-button"], [data-active="true"][data-sidebar="menu-button"]');
+        active?.scrollIntoView({ block: "nearest" });
+    }, [menuReady, location.pathname, state]);
+
     return (
         <Sidebar variant="inset" collapsible="icon">
             <SidebarHeader className="py-3 px-0">
@@ -148,7 +179,7 @@ export function SidebarMenu() {
                 </Button>
             </SidebarHeader>
 
-            <SidebarContent>
+            <SidebarContent ref={contentRef} onScroll={handleContentScroll}>
                 {isMenuLoading ? (
                     <div className="flex items-center justify-center px-3 py-6 text-muted-foreground">
                         <LoaderCircle className="size-5 animate-spin" />

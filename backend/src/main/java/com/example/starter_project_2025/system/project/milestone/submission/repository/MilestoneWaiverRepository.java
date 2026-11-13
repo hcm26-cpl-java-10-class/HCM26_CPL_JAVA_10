@@ -8,4 +8,5 @@ import java.util.Optional;
 public interface MilestoneWaiverRepository extends JpaRepository<MilestoneWaiver, UUID> {
     boolean existsByMilestoneIdAndTeamId(UUID milestoneId, Long teamId);
     Optional<MilestoneWaiver> findByTenantIdAndMilestoneIdAndTeamId(Long tenantId, UUID milestoneId, Long teamId);
+    java.util.List<MilestoneWaiver> findAllByTenantIdAndProjectIdAndTeamId(Long tenantId, Long projectId, Long teamId);
 }

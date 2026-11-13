@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, LockKeyhole, Pen } from "lucide-react";
+import { ArrowLeft, CalendarDays, ClipboardList, FileText, Flag, FolderOpen, FolderTree, History, Layers3, LockKeyhole, Pen, Tags, Users } from "lucide-react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ProjectTemplateHeader } from "../components/ProjectTemplateHeader";
 import { ProjectTemplateError, ProjectTemplateLoading } from "../components/ProjectTemplateState";
 import { ProjectTemplateStatusBadge } from "../components/ProjectTemplateStatusBadge";
 import { TemplateTeamConstraintsForm } from "../components/TemplateTeamConstraintsForm";
@@ -17,9 +18,22 @@ import { TemplateMilestonesPanel } from "../components/TemplateMilestonesPanel";
 import { TemplateActivationDialog } from "../components/TemplateActivationDialog";
 import { TemplateArchiveDialog } from "../components/TemplateArchiveDialog";
 import { TemplateSampleContentPanel } from "../components/TemplateSampleContentPanel";
+import { TemplateModulesPanel } from "../components/TemplateModulesPanel";
+import { TemplateResourcesPanel } from "../components/TemplateResourcesPanel";
 import { TemplateVersionsPanel } from "../components/TemplateVersionsPanel";
+import { TemplateDraftTab } from "../components/TemplateDraftTab";
 import { useProjectTemplateOptions } from "../hooks/useProjectTemplateOptions";
-import { descriptionWordCount, maxDescriptionWords, templateLevelLabel } from "../project-template.utils";
+import { templateDescriptionCount, templateLevelLabel } from "../project-template.utils";
+
+const templateSections = [
+  { id: "overview", label: "Overview", icon: FileText },
+  { id: "team-constraints", label: "Team constraints", icon: Users },
+  { id: "milestones", label: "Milestones", icon: Flag },
+  { id: "sample-content", label: "Backlog", icon: ClipboardList },
+  { id: "modules", label: "Modules", icon: FolderTree },
+  { id: "resources", label: "Resources", icon: FolderOpen },
+  { id: "versions", label: "Versions", icon: History },
+];
 
 export function ProjectTemplateDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -28,7 +42,10 @@ export function ProjectTemplateDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const options = useProjectTemplateOptions();
   const requestedTab = searchParams.get("tab");
-  const tab = requestedTab === "team-constraints" || requestedTab === "milestones" || requestedTab === "sample-content" || requestedTab === "versions" ? requestedTab : "overview";
+  const tab = requestedTab === "team-constraints" || requestedTab === "milestones" || requestedTab === "sample-content"
+    || requestedTab === "versions" || requestedTab === "modules" || requestedTab === "resources" ? requestedTab : "overview";
+  const viewingVersion = tab === "versions" && searchParams.has("version");
+  const tabLabel = templateSections.find(section => section.id === tab)?.label ?? "Overview";
   const detailQueryKey = ["project-templates", options.user.email, options.activeRole, "detail", id];
   const query = useQuery({
     queryKey: detailQueryKey,
@@ -39,23 +56,36 @@ export function ProjectTemplateDetailPage() {
     refetchOnReconnect: false,
   });
   const template = query.data;
+  const resourceVersions = useQuery({
+    queryKey: ["project-template-versions", "by-template", template?.id, options.user.email, options.activeRole],
+    queryFn: () => projectTemplateVersionApi.getByTemplate(template!.id),
+    enabled: !!template && tab === "resources" && options.hasPermission("PROJECT_TEMPLATE_VERSION_READ"),
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const resourceVersion = resourceVersions.data?.find(version => version.isActive
+    && version.status === (template?.status === "ACTIVE" ? "PUBLISHED" : template?.status));
+
   const versionId = Number(searchParams.get("version"));
   const versionQuery = useQuery({
     queryKey: ["project-template-versions", options.user.email, options.activeRole, "configuration", versionId],
     queryFn: ({ signal }) => projectTemplateVersionApi.getConfiguration(versionId, signal),
-    enabled: tab === "versions" && Number.isSafeInteger(versionId) && versionId > 0 && options.isSuccess
+    enabled: viewingVersion && Number.isSafeInteger(versionId) && versionId > 0 && options.isSuccess
       && options.hasPermission("PROJECT_TEMPLATE_VERSION_READ"),
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const displayedTemplate = tab === "versions" && versionQuery.data?.template.id === template?.id
+  const displayedTemplate = viewingVersion && versionQuery.data?.template.id === template?.id
     ? versionQuery.data?.template : template;
+  const headingTemplate = options.isSuccess && !query.isError ? displayedTemplate : undefined;
+  const isModule = headingTemplate?.parentTemplateId != null;
   const canEdit = options.isSuccess && options.data?.canUpdate === true && !query.isError && !!template?.editable
     && options.hasPermission("PROJECT_TEMPLATE_UPDATE");
-  const canActivate = options.isSuccess && options.data?.canActivate === true && !query.isError
-    && template?.readOnly !== true
-    && template?.status === "DRAFT" && (options.activeRole === "ADMIN" || options.activeRole === "PROGRAM_MANAGER")
+  const canActivateTemplate = options.isSuccess && options.data?.canActivate === true && !query.isError
+    && !!template && !template.readOnly && template.status !== "ARCHIVED"
+    && (options.activeRole === "ADMIN" || options.activeRole === "PROGRAM_MANAGER")
     && options.hasPermission("PROJECT_TEMPLATE_ACTIVATE");
+  const canActivate = canActivateTemplate && template?.status === "DRAFT";
   const canArchive = options.isSuccess && options.data?.canArchive === true && !query.isError
     && template?.readOnly !== true
     && template?.status === "ACTIVE" && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE");
@@ -64,41 +94,46 @@ export function ProjectTemplateDetailPage() {
     const next = new URLSearchParams(current);
     if (value === "overview") next.delete("tab");
     else next.set("tab", value);
+    next.delete("version");
+    next.delete("edit");
+    next.delete("action");
     return next;
   }, { replace: true });
 
   return (
-    <MainLayout pathName={{ "project-templates": "Project Templates", ...(id ? { [id]: "Template" } : {}), detail: "Details" }}>
-      <section className="mx-auto grid min-w-0 w-full max-w-5xl grid-cols-1 gap-5">
-        <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Project Templates</p>
-            <h1 className="mt-1 text-2xl font-semibold">{tab === "versions" ? "Template version details" : "Template details"}</h1>
-            {displayedTemplate && options.isSuccess && !query.isError && (
-              <p className="mt-2 break-words text-sm text-muted-foreground">{displayedTemplate.code} · {displayedTemplate.name}</p>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
+    <MainLayout pathName={{ "project-templates": "Project Templates", ...(id ? { [id]: headingTemplate?.name ?? "Template" } : {}), detail: tabLabel }}
+      pathLinks={id ? { [id]: `/project-templates/${id}/detail` } : undefined}>
+      <section className="mx-auto grid min-w-0 w-full max-w-6xl grid-cols-1 gap-5">
+        <ProjectTemplateHeader module={isModule}
+          title={headingTemplate?.name ?? "Template details"}
+          label={tab === "versions" ? "Template versions" : isModule ? "Child module" : "Master template"}
+          description={headingTemplate && <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="max-w-full font-mono"><span className="truncate">{headingTemplate.code}</span></Badge>
+            <ProjectTemplateStatusBadge status={headingTemplate.status} />
+          </div>}>
             <Button variant="outline" onClick={() => navigate("/project-templates")}><ArrowLeft /> Back to templates</Button>
-            {tab === "versions" && <Button variant="outline" onClick={() => navigate(`/project-templates/${id}/detail`)}>Current template</Button>}
+            {template?.parentTemplateId && <Button variant="outline" onClick={() => navigate(`/project-templates/${template.parentTemplateId}/detail?tab=modules`)}>
+              <ArrowLeft />Parent template</Button>}
+            {tab === "versions" && <Button variant="outline" onClick={() => selectTab("overview")}>Current template</Button>}
             {tab === "overview" && canEdit && (
               <Button onClick={() => navigate(`/project-templates/${id}/edit`)}><Pen /> Edit draft</Button>
             )}
-            {tab !== "versions" && template && template.status === "DRAFT" && !template.readOnly && options.data?.canArchive
+            {tab !== "versions" && template && !template.removed && (template.status === "DRAFT" || template.parentTemplateId != null) && !template.readOnly && options.data?.canArchive
               && options.hasPermission("PROJECT_TEMPLATE_ARCHIVE") && <TemplateDeleteDialog template={template}
-                onDeleted={() => navigate("/project-templates")} />}
+                onDeleted={() => navigate(template.parentTemplateId ? `/project-templates/${template.parentTemplateId}/detail?tab=modules` : "/project-templates")} />}
             {tab !== "versions" && canActivate && template && <TemplateActivationDialog template={template}
               onOpenSection={selectTab}
               onActivated={(saved) => {
                 queryClient.setQueryData(detailQueryKey, saved);
                 void queryClient.invalidateQueries({ queryKey: ["project-templates"] });
+                void queryClient.invalidateQueries({ queryKey: ["project-template-versions"] });
               }} />}
             {tab !== "versions" && canArchive && template && <TemplateArchiveDialog template={template} onArchived={(saved) => {
               queryClient.setQueryData(detailQueryKey, saved);
               void queryClient.invalidateQueries({ queryKey: ["project-templates"] });
+              void queryClient.invalidateQueries({ queryKey: ["project-template-versions"] });
             }} />}
-          </div>
-        </header>
+        </ProjectTemplateHeader>
         {!options.canRead ? <ProjectTemplateError denied />
           : options.isLoading || (options.isSuccess && query.isLoading) ? <ProjectTemplateLoading />
           : options.isError || query.isError ? <ProjectTemplateError error={options.error ?? query.error}
@@ -113,41 +148,44 @@ export function ProjectTemplateDetailPage() {
               {template.readOnly && (
                 <Alert><LockKeyhole /><AlertDescription>This template comes from the shared catalogue and is read-only. Duplicate it to create an editable draft in your organization.</AlertDescription></Alert>
               )}
-              {tab === "versions" ? <TemplateVersionsPanel template={template} /> : <Tabs value={tab} onValueChange={selectTab} className="min-w-0 gap-4">
-                <TabsList aria-label="Template configuration"
-                  className="grid w-full max-w-3xl grid-cols-2 group-data-[orientation=horizontal]/tabs:h-auto sm:grid-cols-5">
-                  <TabsTrigger value="overview" className="h-full min-h-9 whitespace-normal">Overview</TabsTrigger>
-                  <TabsTrigger value="team-constraints" className="h-full min-h-9 whitespace-normal">Team constraints</TabsTrigger>
-                  <TabsTrigger value="milestones" className="h-full min-h-9 whitespace-normal">Milestones</TabsTrigger>
-                  <TabsTrigger value="sample-content" className="h-full min-h-9 whitespace-normal">Backlog</TabsTrigger>
-                  <TabsTrigger value="versions" className="h-full min-h-9 whitespace-normal">Versions</TabsTrigger>
-                </TabsList>
+              <Tabs key={`${template.id}:${options.user.email}:${options.activeRole}`} value={tab} onValueChange={selectTab} className="min-w-0 gap-4">
+                {!viewingVersion && <div className="min-w-0 overflow-x-auto overflow-y-hidden rounded-xl border bg-card p-1.5">
+                  <TabsList aria-label="Template configuration" className="h-auto w-max min-w-full justify-start gap-1 bg-transparent">
+                    {templateSections.map(({ id: section, label, icon: Icon }) => <TabsTrigger key={section} value={section}
+                      className="min-h-9 px-3 text-xs data-[state=active]:border-indigo-200 data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700 dark:data-[state=active]:border-indigo-800 dark:data-[state=active]:bg-indigo-950 dark:data-[state=active]:text-indigo-300">
+                      <Icon className="size-4" aria-hidden />{label}
+                    </TabsTrigger>)}
+                  </TabsList>
+                </div>}
                 <TabsContent value="overview">
                   <Card className="min-w-0">
-                    <CardHeader className="gap-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="max-w-full font-mono"><span className="truncate">{template.code}</span></Badge>
-                        <ProjectTemplateStatusBadge status={template.status} />
-                        <Button variant="outline" size="xs" onClick={() => selectTab("versions")}
-                          aria-label="View version history">Version {template.templateVersion} · View history</Button>
-                      </div>
-                      <CardTitle className="break-words text-xl leading-relaxed">{template.name}</CardTitle>
+                    <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+                      <CardTitle className="flex items-center gap-2 text-base"><FileText className="size-5 text-indigo-600 dark:text-indigo-400" />Project brief</CardTitle>
                     </CardHeader>
                     <CardContent className="grid min-w-0 grid-cols-1 gap-6">
+                      <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                        {[
+                          { label: "Domain / category", value: template.category, icon: Tags },
+                          { label: "Level", value: templateLevelLabel(template.level, options.data?.levels), icon: Layers3 },
+                          { label: "Estimated duration", value: template.estimatedDurationWeeks == null ? "—" : `${template.estimatedDurationWeeks} weeks`, icon: CalendarDays },
+                        ].map(({ label, value, icon: Icon }) => (
+                          <div key={label} className="min-w-0 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 dark:border-indigo-900/60 dark:bg-indigo-950/30">
+                            <dt className="flex items-center gap-2 text-xs text-muted-foreground"><Icon className="size-4 text-indigo-600 dark:text-indigo-400" aria-hidden />{label}</dt>
+                            <dd className="mt-1.5 break-words font-medium">{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h2 className="text-sm font-medium">Description</h2>
                           <span className="text-xs tabular-nums text-muted-foreground">
-                            {descriptionWordCount(template.description ?? "").toLocaleString("en-US")} / {maxDescriptionWords.toLocaleString("en-US")} words
+                            {templateDescriptionCount(template.description ?? "")}
                           </span>
                         </div>
                         <p className="mt-2 min-w-0 max-w-full whitespace-pre-wrap text-sm leading-7 text-muted-foreground [overflow-wrap:anywhere]">{template.description}</p>
                       </div>
-                      <dl className="grid gap-5 rounded-lg border bg-muted/20 p-4 text-sm sm:grid-cols-2 md:grid-cols-3">
+                      <dl className="grid gap-4 border-t pt-4 text-xs sm:grid-cols-3">
                         {[
-                          ["Domain / category", template.category],
-                          ["Level", templateLevelLabel(template.level)],
-                          ["Estimated duration", template.estimatedDurationWeeks == null ? "—" : `${template.estimatedDurationWeeks} weeks`],
                           ["Tenant", options.data?.tenantName],
                           ["Created at", formatDate(template.createdAt)],
                           ["Updated at", formatDate(template.updatedAt)],
@@ -158,24 +196,35 @@ export function ProjectTemplateDetailPage() {
                     </CardContent>
                   </Card>
                 </TabsContent>
-                <TabsContent value="team-constraints">
+                <TemplateDraftTab value="team-constraints" activeTab={tab}>
                   <TemplateTeamConstraintsForm
-                    key={template.id}
                     template={template}
                     editable={canEdit}
                     onSaved={(saved) => {
                       queryClient.setQueryData(detailQueryKey, saved);
                       void queryClient.invalidateQueries({ queryKey: ["project-templates"] });
+                      void queryClient.invalidateQueries({ queryKey: ["project-template-versions"] });
                     }}
                   />
-                </TabsContent>
-                <TabsContent value="milestones">
+                </TemplateDraftTab>
+                <TemplateDraftTab value="milestones" activeTab={tab}>
                   <TemplateMilestonesPanel templateId={template.id} editable={canEdit} />
-                </TabsContent>
-                <TabsContent value="sample-content">
+                </TemplateDraftTab>
+                <TemplateDraftTab value="sample-content" activeTab={tab}>
                   <TemplateSampleContentPanel templateId={template.id} editable={canEdit} />
+                </TemplateDraftTab>
+                <TabsContent value="modules"><TemplateModulesPanel templateId={template.id}
+                  canActivate={canActivateTemplate}
+                  canCreate={!!options.data?.canCreate && !template.readOnly && template.status !== "ARCHIVED"} /></TabsContent>
+                <TabsContent value="resources">
+                  {!options.hasPermission("PROJECT_TEMPLATE_VERSION_READ") ? <Alert><AlertDescription>Version access is required to view resources.</AlertDescription></Alert>
+                    : resourceVersions.isPending ? <ProjectTemplateLoading />
+                    : resourceVersions.isError ? <ProjectTemplateError error={resourceVersions.error} onRetry={() => void resourceVersions.refetch()} />
+                    : resourceVersion?.id != null ? <TemplateResourcesPanel versionId={resourceVersion.id} editable={canEdit} />
+                    : <Alert><AlertDescription>Select a version in the Versions tab to view its resources.</AlertDescription></Alert>}
                 </TabsContent>
-              </Tabs>}
+                <TemplateDraftTab value="versions" activeTab={tab}><TemplateVersionsPanel template={template} /></TemplateDraftTab>
+              </Tabs>
             </>
           )}
       </section>

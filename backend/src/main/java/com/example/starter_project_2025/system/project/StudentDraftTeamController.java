@@ -15,9 +15,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * US-10/US-11: the student (team leader) view of a DRAFT team. A student only
- * sees / edits the DRAFT teams they lead (role {@code PM}); the service
- * re-checks ownership on every write.
+ * US-10/US-11: student access to team configuration is gated by publication.
  */
 @RestController
 @RequiredArgsConstructor
@@ -36,7 +34,7 @@ public class StudentDraftTeamController {
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     public List<TeamProjectTemplateResponse> getMyDraftTeams(Authentication authentication) {
-        return teamTemplateService.getMyDraftTeams(authentication);
+        return List.of();
     }
 
     @PutMapping("/{teamId}/project-template")
@@ -46,8 +44,8 @@ public class StudentDraftTeamController {
             @Valid @RequestBody AssignProjectTemplateRequest request,
             Authentication authentication
     ) {
-        return teamTemplateService.assignTemplateAsTeamLeader(
-                teamId, request.projectTemplateId(), authentication);
+        throw new org.springframework.security.access.AccessDeniedException(
+                "Quyền Leader có hiệu lực sau khi công bố nhóm.");
     }
 
     /**
@@ -63,6 +61,7 @@ public class StudentDraftTeamController {
             @RequestBody UpdateTeamRolesRequest request,
             Authentication authentication
     ) {
-        teamRoleService.updateRolesAsTeamLeader(teamId, request, authentication);
+        throw new org.springframework.security.access.AccessDeniedException(
+                "Quyền Leader có hiệu lực sau khi công bố nhóm.");
     }
 }

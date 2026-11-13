@@ -17,6 +17,7 @@ import com.example.starter_project_2025.system.project.project_template_version.
 import com.example.starter_project_2025.system.project.template.TemplateConfigurationService;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateValidator;
 import com.example.starter_project_2025.system.project.template.assignment.TemplateBriefSnapshotWriter;
 import com.example.starter_project_2025.system.rbac.user.User;
 import org.springframework.data.jpa.domain.Specification;
@@ -103,9 +104,6 @@ public class ProjectTemplateSnapshotServiceImpl
 
     /** US-07: baseline version created together with a new Project Template. */
     static final String INITIAL_VERSION = "v1.0";
-
-    /** Mirrors the {@code ProjectTemplate.name} column. */
-    static final int MAX_NAME_LENGTH = 255;
 
     static final String PERMISSION_READ = "PROJECT_TEMPLATE_VERSION_READ";
 
@@ -938,8 +936,7 @@ public class ProjectTemplateSnapshotServiceImpl
     }
 
     /**
-     * US-08: the name of the copy is mandatory and must fit
-     * {@code project_templates.name} (255 chars).
+     * US-08: apply the project template name limit to the copy.
      */
     private void validateName(String name, Map<String, List<String>> errors) {
 
@@ -948,9 +945,9 @@ public class ProjectTemplateSnapshotServiceImpl
             return;
         }
 
-        if (name.length() > MAX_NAME_LENGTH) {
+        if (name.length() > ProjectTemplateValidator.MAX_CODE_NAME_LENGTH) {
             errors.put(NAME_FIELD,
-                    List.of("Tên Project Template không vượt quá " + MAX_NAME_LENGTH + " ký tự"));
+                    List.of("Tên Project Template không vượt quá " + ProjectTemplateValidator.MAX_CODE_NAME_LENGTH + " ký tự"));
         }
     }
 

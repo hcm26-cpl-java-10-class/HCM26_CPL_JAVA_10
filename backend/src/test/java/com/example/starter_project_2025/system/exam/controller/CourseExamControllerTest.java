@@ -39,6 +39,7 @@ class CourseExamControllerTest {
             1,
             BigDecimal.TEN,
             BigDecimal.valueOf(5),
+            BigDecimal.valueOf(20),
             true,
             100L,
             10L,

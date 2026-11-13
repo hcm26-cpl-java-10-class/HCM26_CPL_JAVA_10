@@ -9,7 +9,7 @@ public record ProjectTemplateResponse(
         String name,
         String description,
         String category,
-        ProjectTemplateLevel level,
+        String level,
         Integer estimatedDurationWeeks,
         Integer templateVersion,
         ProjectTemplateStatus status,
@@ -18,7 +18,10 @@ public record ProjectTemplateResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         boolean editable,
-        boolean readOnly
+        boolean readOnly,
+        Long parentTemplateId,
+        String technologyStack,
+        boolean removed
 ) {
     public static ProjectTemplateResponse from(ProjectTemplate template, boolean canUpdate,
             TemplateTeamConstraints teamConstraints) {
@@ -29,6 +32,6 @@ public record ProjectTemplateResponse(
                 template.getTemplateVersion(), template.getStatus(), template.getLockVersion(), teamConstraints,
                 template.getCreatedAt(), template.getUpdatedAt(),
                 !shared && canUpdate && template.getStatus() == ProjectTemplateStatus.DRAFT,
-                shared);
+                shared, template.getParentTemplateId(), template.getTechnologyStack(), !Boolean.TRUE.equals(template.getIsActive()));
     }
 }

@@ -12,6 +12,8 @@ import java.util.UUID;
 import java.util.List;
 
 public interface MilestoneRepository extends JpaRepository<Milestone, UUID>, JpaSpecificationExecutor<Milestone> {
+    List<Milestone> findByActiveTrue();
+
     List<Milestone> findByActiveTrueAndAutoStartEnabledTrueAndLifecycleState(
             com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus state);
     List<Milestone> findByActiveTrueAndStatusAndExecutionStatus(
