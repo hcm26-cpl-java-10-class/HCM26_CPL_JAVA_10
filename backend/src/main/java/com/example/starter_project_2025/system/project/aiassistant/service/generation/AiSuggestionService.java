@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.project.aiassistant.service.gene
 
 
 import com.example.starter_project_2025.system.project.aiassistant.dto.request.GenerateTemplateRequest;
+import com.example.starter_project_2025.system.project.aiassistant.dto.request.RejectSuggestionRequest;
 import com.example.starter_project_2025.system.project.aiassistant.dto.request.UpdateSuggestionRequest;
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.SuggestionDetailResponse;
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.SuggestionListItemResponse;
@@ -183,6 +184,91 @@ public class AiSuggestionService {
                 updatedSuggestion.getAiModel(),
                 updatedSuggestion.getCreatedAt(),
                 updatedSuggestion.getUpdatedAt()
+        );
+    }
+
+    @Transactional
+    public SuggestionDetailResponse approveSuggestion(Long suggestionId) {
+
+        // 1. Find suggestion
+        AiSuggestion suggestion = aiSuggestionRepository.findById(suggestionId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "AI Suggestion not found with ID: " + suggestionId
+                ));
+
+        // 2. Check current status
+        if (suggestion.getStatus() != SuggestionStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Only PENDING suggestions can be approved"
+            );
+        }
+
+        // 3. Change status
+        suggestion.setStatus(SuggestionStatus.APPROVED);
+
+        // 4. Save
+        AiSuggestion approvedSuggestion = aiSuggestionRepository.save(suggestion);
+
+        // 5. Parse generated content
+        GeneratedTemplateOutput output =
+                templateOutputParser.parse(approvedSuggestion.getGeneratedContent());
+
+        // 6. Return detail
+        return new SuggestionDetailResponse(
+                approvedSuggestion.getId(),
+                approvedSuggestion.getProjectTitle(),
+                approvedSuggestion.getProjectDescription(),
+                approvedSuggestion.getProjectType(),
+                approvedSuggestion.getAdditionalRequirements(),
+                approvedSuggestion.getStatus().name(),
+                output,
+                approvedSuggestion.getAiModel(),
+                approvedSuggestion.getCreatedAt(),
+                approvedSuggestion.getUpdatedAt()
+        );
+    }
+
+    @Transactional
+    public SuggestionDetailResponse rejectSuggestion(
+            Long suggestionId,
+            RejectSuggestionRequest request
+    ) {
+        // 1. Find suggestion
+        AiSuggestion suggestion = aiSuggestionRepository.findById(suggestionId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "AI Suggestion not found with ID: " + suggestionId
+                ));
+
+        // 2. Check current status
+        if (suggestion.getStatus() != SuggestionStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Only PENDING suggestions can be rejected"
+            );
+        }
+
+        // 3. Update status and rejection reason
+        suggestion.setStatus(SuggestionStatus.REJECTED);
+        suggestion.setRejectionReason(request.reason());
+
+        // 4. Save
+        AiSuggestion rejectedSuggestion = aiSuggestionRepository.save(suggestion);
+
+        // 5. Parse generated content
+        GeneratedTemplateOutput output =
+                templateOutputParser.parse(rejectedSuggestion.getGeneratedContent());
+
+        // 6. Return detail
+        return new SuggestionDetailResponse(
+                rejectedSuggestion.getId(),
+                rejectedSuggestion.getProjectTitle(),
+                rejectedSuggestion.getProjectDescription(),
+                rejectedSuggestion.getProjectType(),
+                rejectedSuggestion.getAdditionalRequirements(),
+                rejectedSuggestion.getStatus().name(),
+                output,
+                rejectedSuggestion.getAiModel(),
+                rejectedSuggestion.getCreatedAt(),
+                rejectedSuggestion.getUpdatedAt()
         );
     }
 }

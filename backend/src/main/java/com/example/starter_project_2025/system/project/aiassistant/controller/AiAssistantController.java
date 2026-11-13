@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.project.aiassistant.controller;
 
 import com.example.starter_project_2025.system.project.aiassistant.dto.request.GenerateTemplateRequest;
+import com.example.starter_project_2025.system.project.aiassistant.dto.request.RejectSuggestionRequest;
 import com.example.starter_project_2025.system.project.aiassistant.dto.request.UpdateSuggestionRequest;
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.GenerateTemplateResponse;
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.SuggestionDetailResponse;
@@ -90,4 +91,24 @@ public class AiAssistantController {
                 aiSuggestionService.updateSuggestion(id, request)
         );
     }
+
+    @PatchMapping("/suggestions/{id}/approve")
+    public ResponseEntity<SuggestionDetailResponse> approveSuggestion(
+            @PathVariable Long id
+    ) {
+        return ResponseEntity.ok(
+                aiSuggestionService.approveSuggestion(id)
+        );
+    }
+
+    @PatchMapping("/suggestions/{id}/reject")
+    public ResponseEntity<SuggestionDetailResponse> rejectSuggestion(
+            @PathVariable Long id,
+            @Valid @RequestBody RejectSuggestionRequest request
+    ) {
+        return ResponseEntity.ok(
+                aiSuggestionService.rejectSuggestion(id, request)
+        );
+    }
+
 }
