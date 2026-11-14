@@ -24,7 +24,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/ai-assistant")
-@PreAuthorize("hasRole('MENTOR')")
+@PreAuthorize("hasAnyRole('MENTOR', 'ADMIN')")
 @Tag(name = "AI Assistant",
         description = "Endpoints for AI-assisted project template generation")
 public class AiAssistantController {

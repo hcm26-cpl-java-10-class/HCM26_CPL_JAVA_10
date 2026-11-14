@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project.aiassistant.service.appl
 import com.example.starter_project_2025.system.project.ProjectMemberRole;
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.output.*;
 import com.example.starter_project_2025.system.project.aiassistant.service.generation.AiSuggestionService;
+import com.example.starter_project_2025.system.project.aiassistant.repository.AIApplyBatchRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotDTO;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotService;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateVersionStatus;
@@ -41,6 +42,7 @@ public class AIApplyService {
     private final TemplateResourceVersionService templateResourceVersionService;
     private final AiSuggestionService aiSuggestionService;
     private final AIApplyBatchService aiApplyBatchService;
+    private final AIApplyBatchRepository aiApplyBatchRepository;
 
     private ProjectTemplateResponse createMasterTemplate(
             GeneratedTemplateOutput output
@@ -238,7 +240,7 @@ public class AIApplyService {
     ) {
         TemplateSampleContentRequest request = new TemplateSampleContentRequest(
                 BigDecimal.valueOf(lockVersion),
-                backlogItems.stream()
+                (backlogItems == null ? List.<BacklogItemOutput>of() : backlogItems).stream()
                         .map(item -> new TemplateSampleContentRequest.BacklogItem(
                                 null,
                                 item.title(),
@@ -258,7 +260,7 @@ public class AIApplyService {
             Long masterTemplateId,
             List<ModuleOutput> modules
     ) {
-        return modules.stream()
+        return (modules == null ? List.<ModuleOutput>of() : modules).stream()
                 .map(module -> {
                     ProjectTemplateRequest request = new ProjectTemplateRequest(
                             module.code(),
@@ -283,7 +285,7 @@ public class AIApplyService {
             Long snapshotId,
             List<ResourceOutput> resources
     ) {
-        for (ResourceOutput resource : resources) {
+        for (ResourceOutput resource : resources == null ? List.<ResourceOutput>of() : resources) {
             TemplateResourceRequest request = new TemplateResourceRequest(
                     resource.title(),
                     resource.description(),
@@ -298,6 +300,12 @@ public class AIApplyService {
 
     @Transactional
     public ProjectTemplateResponse applyApprovedSuggestion(Long suggestionId) {
+        var existingBatch = aiApplyBatchRepository.findBySuggestion_Id(suggestionId);
+        if (existingBatch.isPresent()) {
+            return projectTemplateService.getById(
+                    existingBatch.get().getProjectTemplate().getId()
+            );
+        }
 
         // 1. Lấy dữ liệu AI từ Suggestion đã APPROVED
         GeneratedTemplateOutput output =

@@ -14,6 +14,14 @@ import java.util.Set;
 public class TemplateOutputValidator {
 
     public void validate(GeneratedTemplateOutput output) {
+        validate(output, true);
+    }
+
+    public void validateForReview(GeneratedTemplateOutput output) {
+        validate(output, false);
+    }
+
+    private void validate(GeneratedTemplateOutput output, boolean requireAllGeneratedSections) {
 
         List<String> errors = new ArrayList<>();
 
@@ -36,15 +44,18 @@ public class TemplateOutputValidator {
             errors.add("At least one milestone is required");
         }
 
-        if (output.backlogItems() == null || output.backlogItems().isEmpty()) {
+        if (requireAllGeneratedSections
+                && (output.backlogItems() == null || output.backlogItems().isEmpty())) {
             errors.add("At least one backlog item is required");
         }
 
-        if (output.modules() == null || output.modules().isEmpty()) {
+        if (requireAllGeneratedSections
+                && (output.modules() == null || output.modules().isEmpty())) {
             errors.add("At least one module is required");
         }
 
-        if (output.resources() == null || output.resources().isEmpty()) {
+        if (requireAllGeneratedSections
+                && (output.resources() == null || output.resources().isEmpty())) {
             errors.add("At least one resource is required");
         }
 

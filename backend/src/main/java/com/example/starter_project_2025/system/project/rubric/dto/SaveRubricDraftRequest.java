@@ -5,7 +5,7 @@ import jakarta.validation.constraints.*;
 import java.util.List;
 
 public record SaveRubricDraftRequest(
-        @NotBlank @Size(max = 50) String name,
+        @NotBlank @Size(max = 250) String name,
         @Size(max = 500) String description,
         @NotEmpty @Size(max = 100) List<@Valid RubricCriterionRequest> criteria
 ) {}

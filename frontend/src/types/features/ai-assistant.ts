@@ -13,6 +13,31 @@ export interface GenerateTemplateResponse {
   createdAt: string;
 }
 
+export type AiSuggestionStatus = "PENDING" | "APPROVED" | "REJECTED" | "APPLIED";
+
+export interface AiSuggestionListItem {
+  suggestionId: number;
+  projectTitle: string;
+  projectType: string;
+  status: AiSuggestionStatus;
+  model: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface AiSuggestionDetail extends AiSuggestionListItem {
+  projectDescription: string;
+  additionalRequirements: string | null;
+  output: GeneratedTemplateOutput;
+}
+
+export interface ProjectTemplateApplyResult {
+  id: number;
+  code: string;
+  name: string;
+  status: string;
+}
+
 export interface GeneratedTemplateOutput {
   projectTemplate: ProjectTemplateOutput | null;
   teamConstraints: TeamConstraintsOutput | null;

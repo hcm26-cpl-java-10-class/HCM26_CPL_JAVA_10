@@ -31,7 +31,7 @@ public class RubricVersion {
     @Column(name = "version_number", nullable = false, updatable = false)
     private int versionNumber;
 
-    @Column(name = "name_snapshot", nullable = false, length = 50)
+    @Column(name = "name_snapshot", nullable = false, length = 250)
     private String nameSnapshot;
 
     @Column(name = "description_snapshot", length = 500)

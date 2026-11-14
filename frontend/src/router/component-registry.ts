@@ -55,6 +55,8 @@ import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
 import ProjectReportsPage from "@/pages/management/project-reports";
 import AiAssistantPage from "@/pages/management/ai-assistant";
+import AiSuggestionWorkspacePage from "@/pages/management/ai-assistant/pages/AiSuggestionWorkspacePage";
+import AiSuggestionDetailPage from "@/pages/management/ai-assistant/pages/AiSuggestionDetailPage";
 import ProjectTemplateListPage from "@/pages/management/project-template";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
@@ -115,6 +117,8 @@ export const routes: RouteConfig[] = [
   { path: "/tasks/:id/edit", component: TaskManagementPage, requiredPermission: "TASK_UPDATE" },
   { path: "/tasks/:id/detail", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/project-templates", component: ProjectTemplateListPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
+  { path: "/ai-assistant/suggestions", component: AiSuggestionWorkspacePage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
+  { path: "/ai-assistant/suggestions/:id", component: AiSuggestionDetailPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
   { path: "/ai-assistant", component: AiAssistantPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
   { path: "/project-template-versions", component: ProjectTemplateVersionPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
   { path: "/project-templates/create", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },

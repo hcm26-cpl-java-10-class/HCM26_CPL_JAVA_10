@@ -155,7 +155,7 @@ public class AiSuggestionService {
         }
 
         // 3. Validate edited output
-        templateOutputValidator.validate(request.output());
+        templateOutputValidator.validateForReview(request.output());
 
         // 4. Convert output object to JSON
         String generatedContent;

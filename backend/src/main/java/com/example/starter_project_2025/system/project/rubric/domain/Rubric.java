@@ -26,7 +26,7 @@ public class Rubric {
     @Column(name = "tenant_id", nullable = false, updatable = false)
     private UUID tenantId;
 
-    @Column(nullable = false, length = 50)
+    @Column(nullable = false, length = 250)
     private String name;
 
     @Column(length = 500)
