@@ -34,4 +34,5 @@ public interface RubricVersionRepository extends JpaRepository<RubricVersion, UU
     List<RubricVersion> searchAll(@Param("tenantId") UUID tenantId,
                                   @Param("search") String search,
                                   @Param("status") RubricVersionStatus status);
+
 }

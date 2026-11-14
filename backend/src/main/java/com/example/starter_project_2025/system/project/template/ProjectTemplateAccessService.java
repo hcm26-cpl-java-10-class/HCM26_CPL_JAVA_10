@@ -68,4 +68,55 @@ public class ProjectTemplateAccessService {
         return user.getRoles().stream().anyMatch(role -> Boolean.TRUE.equals(role.getIsActive())
                 && name.equals(role.getName()));
     }
+
+    public User requireReviewUser() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()
+                || !(authentication.getPrincipal() instanceof UserPrincipal principal)) {
+            throw new AuthenticationCredentialsNotFoundException("Please sign in");
+        }
+
+        User user = users.findById(principal.getUser().getId())
+                .orElseThrow(() -> new AuthenticationCredentialsNotFoundException("Please sign in"));
+
+        boolean admin = hasRole(user, "ADMIN");
+        boolean mentor = hasRole(user, "MENTOR");
+
+        if (!Boolean.TRUE.equals(user.getIsActive())
+                || Boolean.TRUE.equals(user.getLocked())
+                || (!admin && !mentor)
+                || !can(user, "REVIEW")) {
+            throw new AccessDeniedException("AI template review is not allowed");
+        }
+
+        return user;
+    }
+
+    public void requireReviewTenantScope(User user) {
+        if (hasRole(user, "ADMIN")) {
+            return;
+        }
+
+        Long tenantId = user.getTenantId();
+
+        if (tenantId == null) {
+            throw new AccessDeniedException(
+                    "A tenant must be assigned to review tenant templates"
+            );
+        }
+
+        var tenant = tenants.findById(tenantId)
+                .filter(value -> Boolean.TRUE.equals(value.getIsActive())
+                        && Boolean.TRUE.equals(value.getActive()))
+                .orElseThrow(() -> new AccessDeniedException(
+                        "The current tenant is not available"
+                ));
+
+        if (!hasTenantScope(user)) {
+            throw new AccessDeniedException(
+                    "Project templates are outside your data scope"
+            );
+        }
+    }
 }
