@@ -10,8 +10,10 @@ import com.example.starter_project_2025.system.project.aiassistant.dto.response.
 
 import com.example.starter_project_2025.system.project.aiassistant.entity.AiSuggestion;
 import com.example.starter_project_2025.system.project.aiassistant.enums.SuggestionStatus;
+import com.example.starter_project_2025.system.project.aiassistant.service.apply.AIApplyService;
 import com.example.starter_project_2025.system.project.aiassistant.service.generation.AiSuggestionService;
 import com.example.starter_project_2025.system.project.aiassistant.service.generation.GeneratedSuggestionResult;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -28,9 +30,14 @@ import java.util.List;
 public class AiAssistantController {
 
     private final AiSuggestionService aiSuggestionService;
+    private final AIApplyService aiApplyService;
 
-    public AiAssistantController(AiSuggestionService aiSuggestionService) {
+    public AiAssistantController(
+            AiSuggestionService aiSuggestionService,
+            AIApplyService aiApplyService
+    ) {
         this.aiSuggestionService = aiSuggestionService;
+        this.aiApplyService = aiApplyService;
     }
 
     @PostMapping("/templates/generate")
@@ -103,6 +110,15 @@ public class AiAssistantController {
     ) {
         return ResponseEntity.ok(
                 aiSuggestionService.rejectSuggestion(id, request)
+        );
+    }
+
+    @PostMapping("/suggestions/{id}/apply")
+    public ResponseEntity<ProjectTemplateResponse> applySuggestion(
+            @PathVariable Long id
+    ) {
+        return ResponseEntity.ok(
+                aiApplyService.applyApprovedSuggestion(id)
         );
     }
 

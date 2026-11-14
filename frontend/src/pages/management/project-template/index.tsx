@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ProjectTemplateFilter, ProjectTemplateListItem } from "@/types/features/project-template";
 import type { Pagination } from "@/types";
-import { Eye, Files, FolderTree, Pen, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Eye, Files, FolderTree, Pen, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ProjectTemplateCard } from "./components/ProjectTemplateCard";
@@ -103,6 +103,9 @@ export default function ProjectTemplateListPage() {
               }}
               headerActions={(
                 <div className="flex items-center gap-2">
+                  {table.permission.canCreate && <Button type="button" size="sm" onClick={() => navigate("/ai-assistant")}>
+                    <Sparkles className="size-4" />Generate with AI
+                  </Button>}
                   <Button type="button" variant="outline" size="sm" aria-pressed={showModules}
                     className="aria-pressed:border-indigo-200 aria-pressed:bg-indigo-50 aria-pressed:text-indigo-700 dark:aria-pressed:border-indigo-800 dark:aria-pressed:bg-indigo-950 dark:aria-pressed:text-indigo-300" onClick={() => {
                     table.setPage(0); setShowModules(value => !value);
