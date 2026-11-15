@@ -1,6 +1,6 @@
 # Use Cases – FAMS LMS (Mock Project Hub)
 
-Tài liệu tóm tắt các use case trong `docs/project/`. Các tài liệu chi tiết được giữ riêng; bản này chỉ giữ luồng chính, trạng thái HTTP và các quy tắc người dùng cần biết.
+Tài liệu tóm tắt các use case trong `docs/05-project-workspace/use-cases/`. Các tài liệu chi tiết được giữ riêng; bản này chỉ giữ luồng chính, trạng thái HTTP và các quy tắc người dùng cần biết.
 
 ## Danh sách use case
 

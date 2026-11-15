@@ -547,7 +547,7 @@ Nếu Project, Task hoặc Activity đang được thành viên khác triển kh
 - `backend/src/main/java/com/example/starter_project_2025/system/project/sprint/SprintServiceImpl.java`
 - `backend/src/main/java/com/example/starter_project_2025/system/project/sprint/audit/`
 - `backend/src/main/java/com/example/starter_project_2025/system/project/sprint/event/`
-- `docs/CLASS_DIAGRAM.md`
+- `docs/02-architecture/CLASS_DIAGRAM.md`
 - `SRS_FAMS_LMS_MockProject_Hub_ThucTe_v2.0_With_UI.docx` (tài liệu nguồn được đặt ngoài thư mục repository)
 
 ## 15. Chạy thử Board bằng dữ liệu demo

@@ -80,7 +80,7 @@ Permissions: WORKSPACE_READ / VIEW_PROJECT_WORKSPACE and WORKSPACE_CREATE / CREA
 
 ## Acceptance tests AC08–AC13
 
-Step-by-step evidence collection, an importable Postman collection, concurrent request script, isolated H2 fixtures and report commands are in [workspace-acceptance/README.md](workspace-acceptance/README.md). The most recent integration evidence is exported separately; running the Postman collection is a manual HTTP verification step.
+Step-by-step evidence collection, an importable Postman collection, concurrent request script, isolated H2 fixtures and report commands are in [workspace-acceptance/README.md](../06-testing-verification/workspace-acceptance/README.md). The most recent integration evidence is exported separately; running the Postman collection is a manual HTTP verification step.
 
 | AC | Procedure | Expected result |
 | --- | --- | --- |

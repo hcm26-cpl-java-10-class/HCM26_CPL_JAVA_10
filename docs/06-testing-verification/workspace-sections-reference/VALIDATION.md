@@ -44,14 +44,14 @@ Browser check chạy Chrome headless trên Vite riêng cổng 5174, dùng respon
 
 Ảnh UI từ fixture có kiểm soát:
 
-![Workspace UI reference](<D:/SE172316/Semeter 6/HCM26_CPL_JAVA_10/docs/us-prj-001-03/workspace-reference.png>)
+![Workspace UI reference](workspace-reference.png)
 
 ## Đối chiếu bộ mã
 
 - 29 file source/test tham chiếu.
 - Nội dung bản build/test trùng với các file trong reference sau chuẩn hóa CRLF/LF.
 - Apply-Reference.ps1 đã được chạy chế độ dry run trên source chính: preflight thành công, không copy file.
-- Source chính của backend/frontend không bị sửa. Chỉ thư mục docs/us-prj-001-03 được bổ sung trong phần việc này.
+- Source chính của backend/frontend không bị sửa. Chỉ thư mục docs/06-testing-verification/workspace-sections-reference được bổ sung trong phần việc này.
 - Chưa kiểm thử thủ công toàn bộ AC với dữ liệu/tài khoản của người dùng; làm theo IMPLEMENTATION_GUIDE.md khi nghiệm thu.
 
 Các giới hạn có chủ ý: business data mock lưu RAM, mất sau restart; action endpoints là khung để test quyền/ngữ cảnh, chưa thay thế nghiệp vụ Milestone/Sprint/Artifact/Feedback thực tế.

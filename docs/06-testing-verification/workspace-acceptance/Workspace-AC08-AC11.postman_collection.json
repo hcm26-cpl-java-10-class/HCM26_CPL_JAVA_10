@@ -2,7 +2,7 @@
   "info": {
     "name": "Workspace AC08-AC11 evidence",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Run individual folders on separate fresh QA fixtures, not the entire collection blindly. See docs/workspace-acceptance/README.md. AC12 uses integration fault injection; AC13 uses the UI. Tokens are saved only in local collection variables."
+    "description": "Run individual folders on separate fresh QA fixtures, not the entire collection blindly. See docs/06-testing-verification/workspace-acceptance/README.md. AC12 uses integration fault injection; AC13 uses the UI. Tokens are saved only in local collection variables."
   },
   "auth": {
     "type": "bearer",

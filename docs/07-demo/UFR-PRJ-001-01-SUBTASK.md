@@ -175,10 +175,10 @@ Recorded browser checks covered dropdown selection, zero-member guards, removed 
 
 Evidence:
 
-- docs/workspace-acceptance/evidence/AC08-AC12-results.md
-- docs/workspace-acceptance/evidence/AC10-results.md
-- docs/workspace-acceptance/evidence/AC12-results.md
-- docs/issues/AC11-project-team-relationship.md
+- docs/06-testing-verification/workspace-acceptance/evidence/AC08-AC12-results.md
+- docs/06-testing-verification/workspace-acceptance/evidence/AC10-results.md
+- docs/06-testing-verification/workspace-acceptance/evidence/AC12-results.md
+- docs/06-testing-verification/issues/AC11-project-team-relationship.md
 
 These are focused feature checks. No claim is made that the entire repository test suite is green or that an automated result overrides a later manual failure report.
 

@@ -94,7 +94,7 @@ Seed data sẵn có (`ProjectTemplateSnapshotDataInitializer`):
 
 ### 4.2. Đường dẫn 2: workspace phiên bản (STUDENT / có `PROJECT_TEMPLATE_VERSION_*`)
 
-1. Mở `/project-template-versions` bằng tài khoản STUDENT (ví dụ tài khoản học viên chuẩn trong `docs/us-prj-001-02/standard-accounts.sql`).
+1. Mở `/project-template-versions` bằng tài khoản STUDENT (ví dụ tài khoản học viên chuẩn trong `docs/06-testing-verification/workspace-overview-acceptance/standard-accounts.sql`).
 2. Chọn một phiên bản ở dropdown **Version x of y** (mặc định là phiên bản mới nhất đang active).
 3. Bấm **Create New Version** ở góc phải header.
 4. Xác nhận trong dialog → app tự chọn phiên bản mới và chuyển sang tab **Versions**.
