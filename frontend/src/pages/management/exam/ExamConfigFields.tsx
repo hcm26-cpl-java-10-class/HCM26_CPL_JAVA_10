@@ -277,6 +277,57 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
           </div>
         )}
       </div>
+
+      {/* Tu danh gia / danh gia cheo (UFR-EXM-012) */}
+      <div className="grid min-w-0 max-w-full gap-3 border-t pt-4 sm:col-span-2">
+        <SectionTitle>Self / Peer review</SectionTitle>
+        <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+          <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.selfReviewEnabled} onChange={(event) => setCfg((c) => ({ ...c, selfReviewEnabled: event.target.checked }))} />
+          Enable self assessment (Tự đánh giá)
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+          <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.peerReviewEnabled} onChange={(event) => setCfg((c) => ({ ...c, peerReviewEnabled: event.target.checked }))} />
+          Enable peer review (Đánh giá chéo)
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Students review essay answers of other students in the same exam, following the question rubric.
+          Reviews are stored separately and never change the official score. Use "Assign reviewers" in the
+          Peer review screen after students submit.
+        </p>
+        {locked && (
+          <p className="text-xs text-amber-700">Students have already started this assessment. Review settings are locked to protect student results.</p>
+        )}
+        {(cfg.selfReviewEnabled || cfg.peerReviewEnabled) && (
+          <div className="grid min-w-0 max-w-full gap-6 sm:col-span-2 lg:grid-cols-2">
+            <div className="grid min-w-0 max-w-full gap-3 pl-6 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.peerReviewAnonymous} onChange={(event) => setCfg((c) => ({ ...c, peerReviewAnonymous: event.target.checked }))} />
+                Hide reviewer identity (ẩn danh)
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.peerReviewShowReference} onChange={(event) => setCfg((c) => ({ ...c, peerReviewShowReference: event.target.checked }))} />
+                Show reference answer / rubric to reviewers
+              </label>
+            </div>
+            <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+              Number of peer reviewers per submission
+              <Input
+                type="number"
+                min={1}
+                max={5}
+                step={1}
+                placeholder="2"
+                disabled={locked || !cfg.peerReviewEnabled}
+                value={cfg.peerReviewCount}
+                onChange={(event) => setCfg((c) => ({ ...c, peerReviewCount: event.target.value }))}
+              />
+              <span className="text-xs font-normal text-muted-foreground">
+                Allowed 1–5. Each reviewer must have submitted this exam to be eligible.
+              </span>
+            </label>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

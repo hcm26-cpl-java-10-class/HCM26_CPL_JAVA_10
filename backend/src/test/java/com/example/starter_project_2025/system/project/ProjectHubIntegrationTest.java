@@ -264,7 +264,7 @@ class ProjectHubIntegrationTest {
     void optionalLocalFixtureCanRunTwiceWithoutCreatingWorkspace() {
         Path repository = Path.of(System.getProperty("user.dir")).toAbsolutePath();
         if (repository.getFileName().toString().equals("backend")) repository = repository.getParent();
-        var fixture = new ResourceDatabasePopulator(new FileSystemResource(repository.resolve("docs/project-hub-demo.sql")));
+        var fixture = new ResourceDatabasePopulator(new FileSystemResource(repository.resolve("docs/05-project-workspace/fixtures/project-hub-demo.sql")));
         long workspaceCount = workspaces.count();
         fixture.execute(dataSource);
         fixture.execute(dataSource);
