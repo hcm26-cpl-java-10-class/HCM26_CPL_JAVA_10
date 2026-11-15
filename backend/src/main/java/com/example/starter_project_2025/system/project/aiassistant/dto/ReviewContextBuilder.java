@@ -1,10 +1,6 @@
 package com.example.starter_project_2025.system.project.aiassistant.dto;
 
 import com.example.starter_project_2025.system.project.ProjectTemplate;
-import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
-import com.example.starter_project_2025.system.project.aiassistant.dto.ReviewResourceContextMapper;
-import com.example.starter_project_2025.system.project.aiassistant.dto.ReviewRubricContextMapper;
-import com.example.starter_project_2025.system.project.aiassistant.dto.SnapshotReviewDataMapper;
 import com.example.starter_project_2025.system.project.aiassistant.service.review.TemplateSnapshotRetrievalService;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
 import com.example.starter_project_2025.system.project.resources.template_resources.TemplateResourceRepository;
@@ -132,7 +128,7 @@ public class ReviewContextBuilder {
             JsonNode module,
             Long tenantId
     ) {
-        Long moduleTemplateId = module.path("templateId").asLong();
+        Long moduleTemplateId = requiredPositiveLong(module, "templateId");
 
         if (moduleTemplateId <= 0) {
             throw new IllegalStateException(
@@ -240,5 +236,20 @@ public class ReviewContextBuilder {
                 .stream()
                 .map(resourceContextMapper::toContext)
                 .toList();
+    }
+
+    private Long requiredPositiveLong(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+
+        if (value == null
+                || !value.isIntegralNumber()
+                || !value.canConvertToLong()
+                || value.longValue() <= 0) {
+            throw new IllegalStateException(
+                    "Invalid or missing positive numeric field: " + field
+            );
+        }
+
+        return value.longValue();
     }
 }

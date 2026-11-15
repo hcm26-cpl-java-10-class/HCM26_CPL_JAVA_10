@@ -5,6 +5,8 @@ import com.example.starter_project_2025.system.project.ProjectTemplateRepository
 import com.example.starter_project_2025.system.project.aiassistant.dto.ReviewContext;
 import com.example.starter_project_2025.system.project.aiassistant.dto.ReviewContextBuilder;
 
+import com.example.starter_project_2025.system.project.aiassistant.dto.response.output.review.AIReviewOutput;
+import com.example.starter_project_2025.system.project.aiassistant.entity.AIReviewReport;
 import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
@@ -16,48 +18,42 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReviewService {
 
-    private final ProjectTemplateAccessService projectTemplateAccessService;
-    private final ProjectTemplateRepository templateRepository;
+    private final ProjectTemplateReviewAccessService reviewAccessService;
     private final ReviewContextBuilder reviewContextBuilder;
+    private final ProjectTemplateReviewOrchestrator reviewOrchestrator;
+    private final AIReviewResultPersistenceService resultPersistenceService;
+
 
     @Transactional(readOnly = true)
     public ReviewContext buildReviewContext(Long templateId, Long snapshotId) {
 
-        User reviewer = projectTemplateAccessService.requireReviewUser();
-
-        ProjectTemplate template = resolveReadableTemplate(reviewer, templateId);
+        ProjectTemplate template =
+                reviewAccessService.requireReadableTemplate(templateId);
 
         return reviewContextBuilder.build(template, snapshotId);
     }
 
-    private ProjectTemplate resolveReadableTemplate(User reviewer, Long templateId) {
+    public AIReviewReport review(Long templateId, Long snapshotId) {
+        // 1. Kiểm tra quyền và lấy Template
+        ProjectTemplate template =
+                reviewAccessService.requireReadableTemplate(templateId);
 
-        boolean admin = reviewer.getRoles().stream()
-                .anyMatch(role -> Boolean.TRUE.equals(role.getIsActive())
-                        && "ADMIN".equals(role.getName()));
+        // 2. Xây dựng context từ Snapshot
+        ReviewContext context =
+                reviewContextBuilder.build(template, snapshotId);
 
-        if (admin) {
-            return templateRepository.findReadableByIdForAdmin(templateId)
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "Project template not found or not readable"
-                    ));
-        }
+        // 3. Gọi AI review toàn bộ Template
+        AIReviewOutput output =
+                reviewOrchestrator.review(context);
 
-        Long tenantId = reviewer.getTenantId();
-
-        // Mentor có thể truy cập Template thuộc Tenant của mình
-        // hoặc Global Template.
-        ProjectTemplate template = templateRepository
-                .findReadableById(templateId, tenantId)
-                .orElseThrow(() -> new AccessDeniedException(
-                        "Project template is outside your data scope"
-                ));
-
-        // Chỉ yêu cầu Tenant scope khi Template thuộc một Tenant.
-        if (template.getTenantId() != null) {
-            projectTemplateAccessService.requireReviewTenantScope(reviewer);
-        }
-
-        return template;
+        // 4. Lưu Report và Findings
+        return resultPersistenceService.persist(
+                output,
+                template,
+                snapshotId
+        );
     }
+
+
+
 }
