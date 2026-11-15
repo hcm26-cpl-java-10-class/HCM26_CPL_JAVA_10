@@ -12,6 +12,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { usePermissions } from "@/hooks/usePermissions";
+import { CourseSyllabusPickerDialog } from "./CourseSyllabusPickerDialog";
 import type {
   AiApplyResult,
   AiChatMessage,
@@ -21,7 +22,7 @@ import type {
   AiLanguage,
   AiOptionsResponse,
 } from "@/types/features/demo/ai-course-builder";
-import { ArrowLeft, Loader2, Plus, Send, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Loader2, Plus, Send, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -749,12 +750,16 @@ function AiCourseBuilderSheet({
 }
 
 /**
- * Header actions for the Courses page: "Create with AI" + the normal manual "Create" button.
+ * Header actions for Courses: manual Create, From Syllabus, and Create with AI.
  * Because the course entity has no separate create page, AutoCrudPage would otherwise hide the default Create button.
  */
 export function CourseHeaderActions({ table }: { table: any }) {
   const { hasPermission } = usePermissions();
   const [open, setOpen] = useState(false);
+  const [syllabusPickerOpen, setSyllabusPickerOpen] = useState(false);
+  const canCreateFromSyllabus = [
+    "SYLLABUS_READ", "COURSE_CREATE", "SECTION_CREATE", "LESSON_CREATE",
+  ].every(hasPermission);
 
   return (
     <>
@@ -770,12 +775,19 @@ export function CourseHeaderActions({ table }: { table: any }) {
         </PermissionGate>
       )}
 
+      {canCreateFromSyllabus && (
+        <Button type="button" variant="outline" onClick={() => setSyllabusPickerOpen(true)}>
+          <BookOpen className="mr-2 size-4" /> From Syllabus
+        </Button>
+      )}
+
       {hasPermission("COURSE_CREATE") && (
         <Button variant="outline" onClick={() => setOpen(true)}>
           <Sparkles className="mr-2 h-4 w-4 text-amber-500" /> Create with AI
         </Button>
       )}
 
+      <CourseSyllabusPickerDialog open={syllabusPickerOpen} onOpenChange={setSyllabusPickerOpen} />
       <AiCourseBuilderSheet open={open} onOpenChange={setOpen} />
     </>
   );

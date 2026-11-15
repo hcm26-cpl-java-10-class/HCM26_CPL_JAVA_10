@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.demo.syllabus;
 
+import com.example.starter_project_2025.system.demo.syllabus.dto.SyllabusModels;
+
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +16,22 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusClo;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusCloRepository;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusMaterial;
+import com.example.starter_project_2025.system.demo.syllabus.storage.SyllabusMaterialFileService;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusMaterialRepository;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusSection;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusSectionRepository;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusService;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusStatus;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusTemplateService;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusTopic;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusTopicCloLink;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusTopicCloLinkRepository;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusTopicRepository;
 
 @ExtendWith(MockitoExtension.class)
 class SyllabusTemplateServiceTest {
