@@ -55,7 +55,6 @@ public class TemplateResourceCopyService {
             copy.setDescription(source.getDescription());
             copy.setKind(source.getKind());
             copy.setUrl(source.getUrl());
-            copy.setCategory(source.getCategory());
             copy.setOrderIndex(source.getOrderIndex());
             copy.setIsActive(source.getIsActive() == null ? Boolean.TRUE : source.getIsActive());
 

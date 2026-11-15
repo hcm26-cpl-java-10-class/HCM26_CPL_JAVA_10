@@ -2,16 +2,19 @@ import { milestoneApi } from "@/api/features/milestone.api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 
-export function MilestoneDraftHistory({ projectId, teamId, milestoneId }: {
+export function MilestoneDraftHistory({ projectId, teamId, milestoneId, showEmpty = false }: {
   projectId?: string;
   teamId: number;
   milestoneId: string;
+  showEmpty?: boolean;
 }) {
   const query = useQuery({
     queryKey: ["milestone-revisions", projectId, teamId, milestoneId],
     queryFn: () => milestoneApi.getDraftRevisions(projectId, teamId, milestoneId),
   });
-  if (!query.data?.length) return null;
+  if (query.isPending) return showEmpty ? <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Loading milestone history...</CardContent></Card> : null;
+  if (query.isError) return showEmpty ? <Card><CardContent className="py-8 text-center text-sm text-destructive">Could not load milestone history.</CardContent></Card> : null;
+  if (!query.data?.length) return showEmpty ? <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">No milestone revisions yet.</CardContent></Card> : null;
   return <Card>
     <CardHeader><CardTitle>Milestone revision history</CardTitle></CardHeader>
     <CardContent className="grid gap-2 text-sm">

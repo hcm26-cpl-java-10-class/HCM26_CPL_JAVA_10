@@ -122,8 +122,6 @@ public class ExamTemplateService {
         Exam exam = new Exam();
         exam.setIsActive(Boolean.TRUE);
         exam.setTitle(request.getTitle().trim());
-        exam.setStartTime(request.getStartTime());
-        exam.setEndTime(request.getEndTime());
 
         // Copy exam configuration from template
         exam.setDurationMinutes(template.getDurationMinutes());

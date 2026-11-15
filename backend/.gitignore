@@ -35,6 +35,13 @@ build/
 
 uploads/
 
+### Local test artifacts ###
+*.log
+*.err
+login-body.json
+token.txt
+export-test/
+
 # === Environment Variables / Secrets ===
 .env
 .env.local

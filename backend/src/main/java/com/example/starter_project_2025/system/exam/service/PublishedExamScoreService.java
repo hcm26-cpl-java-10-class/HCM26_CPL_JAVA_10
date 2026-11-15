@@ -98,7 +98,9 @@ public class PublishedExamScoreService {
                     null,
                     attempt.getSubmittedAt(),
                     attempt.getId(),
-                    false
+                    false,
+                    ExamScoring.effectivePassScore(attempt),
+                    null
             );
         }
 
@@ -114,7 +116,9 @@ public class PublishedExamScoreService {
                 attempt.getFirstScore() == null ? null : attempt.getFinalScore(),
                 attempt.getSubmittedAt(),
                 attempt.getId(),
-                true
+                true,
+                ExamScoring.effectivePassScore(attempt),
+                ExamScoring.passed(attempt)
         );
     }
 }

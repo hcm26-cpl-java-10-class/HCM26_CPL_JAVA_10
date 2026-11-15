@@ -105,8 +105,6 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 					return ExamInvitationOverviewDTO.builder()
 							.examId(exam.getId())
 							.examTitle(exam.getTitle())
-							.startTime(exam.getStartTime())
-							.endTime(exam.getEndTime())
 							.total(invitations.size())
 							.pending(counts.getOrDefault(InvitationStatus.PENDING, 0L).intValue())
 							.sent(counts.getOrDefault(InvitationStatus.SENT, 0L).intValue())
@@ -119,8 +117,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 							.build();
 				})
 				.filter(dto -> dto.getTotal() != null && dto.getTotal() > 0)
-				.sorted(Comparator.comparing(ExamInvitationOverviewDTO::getStartTime,
-						Comparator.nullsLast(Comparator.naturalOrder())))
+				.sorted(Comparator.comparing(ExamInvitationOverviewDTO::getExamId, Comparator.reverseOrder()))
 				.toList();
 	}
 
@@ -141,11 +138,6 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 
 	@Override
 	protected void beforeDelete(Exam exam) {
-		LocalDateTime now = LocalDateTime.now();
-		if (exam.getStartTime() != null && now.isAfter(exam.getStartTime())
-				&& (exam.getEndTime() == null || now.isBefore(exam.getEndTime()))) {
-			throw new BadRequestException("Cannot delete an exam that is currently in progress");
-		}
 		if (examAttemptRepository.existsByExam_IdAndStatusIn(
 				exam.getId(),
 				List.of(ExamAttemptStatus.NOT_STARTED, ExamAttemptStatus.IN_PROGRESS))) {
@@ -182,6 +174,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 			exam.setQuestions(resolveQuestions(exam, request.getQuestionIds(), context, examType));
 		}
 		courseLinkService.apply(exam, request, context);
+		courseLinkService.validateWeight(exam, request.isCourseWeightProvided() ? request.getCourseWeight() : exam.getCourseWeight(), context);
 		configValidator.validate(null, request, totalPoints(exam.getQuestions()), context);
 	}
 
@@ -200,6 +193,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 			}
 		}
 		courseLinkService.apply(exam, request, context);
+		courseLinkService.validateWeight(exam, request.isCourseWeightProvided() ? request.getCourseWeight() : exam.getCourseWeight(), context);
 		configValidator.validate(exam, request, totalPoints(exam.getQuestions()), context);
 	}
 
@@ -270,6 +264,83 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 				.orElseThrow(() -> new ResourceNotFoundException("Exam not found"));
 		checkOwnership(exam);
 		return exam;
+	}
+
+	public Exam getExamForPoolConfiguration(Long examId) {
+		checkPermission(CrudAction.UPDATE);
+		return findExam(examId);
+	}
+
+	/**
+	 * Lấy các câu hỏi đã thuộc Exam để cấu hình Question Pool.
+	 * Không tạo bản sao từ Question Bank.
+	 */
+	public List<Question> getQuestionsForPoolConfiguration(
+			Long examId,
+			List<Long> questionIds
+	) {
+		checkPermission(CrudAction.UPDATE);
+
+		Exam exam = findExam(examId);
+
+		if (questionIds == null || questionIds.isEmpty()) {
+			throw new BadRequestException(
+					"Question Pool phải có ít nhất một câu hỏi"
+			);
+		}
+
+		Set<Long> uniqueIds = new LinkedHashSet<>(questionIds);
+
+		if (uniqueIds.contains(null)) {
+			throw new BadRequestException(
+					"Question ID không được để trống"
+			);
+		}
+
+		if (uniqueIds.size() != questionIds.size()) {
+			throw new BadRequestException(
+					"Question Pool không được chứa câu hỏi trùng lặp"
+			);
+		}
+
+		Map<Long, Question> examQuestions = exam.getQuestions().stream()
+				.collect(Collectors.toMap(
+						Question::getId,
+						question -> question
+				));
+
+		List<Question> selectedQuestions = new ArrayList<>();
+
+		for (Long questionId : questionIds) {
+			Question question = examQuestions.get(questionId);
+
+			if (question == null) {
+				throw new BadRequestException(
+						"Câu hỏi " + questionId
+								+ " không thuộc đề thi này"
+				);
+			}
+
+			if (!Boolean.TRUE.equals(question.getIsActive())) {
+				throw new BadRequestException(
+						"Câu hỏi " + questionId + " đã bị vô hiệu hóa"
+				);
+			}
+
+			if (!ExamTypePolicy.allows(
+					exam.getExamType(),
+					question.getType()
+			)) {
+				throw new BadRequestException(
+						"Câu hỏi " + questionId
+								+ " không phù hợp với loại đề thi"
+				);
+			}
+
+			selectedQuestions.add(question);
+		}
+
+		return selectedQuestions;
 	}
 
 	/** Giao vien (khong phai ADMIN) chi duoc thay/quan ly de thi do chinh minh tao; ADMIN va vai tro khac khong bi gioi han. */

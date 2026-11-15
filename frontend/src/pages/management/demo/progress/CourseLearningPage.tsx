@@ -1,3 +1,4 @@
+import { COURSE_GRADE_STATUS_LABEL } from "@/types/features/course-my-scores";
 
 import { certificateApi, examApi, progressApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -24,6 +25,7 @@ import { LessonPreview } from "../lesson/components/LessonPreview";
 import { LessonQnA } from "../lesson/components/LessonQnA";
 import { LessonReportDialog } from "../lesson/components/LessonReportDialog";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useStudyTimeTracker } from "@/hooks/useStudyTimeTracker";
 import { LessonProgressSidebar } from "./LessonProgressSidebar";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 import { CourseReviewPrompt } from "../course_review/components/CourseReviewPrompt";
@@ -59,7 +61,7 @@ export function CourseLearningPage() {
 
   const courseId = progressQuery.data?.courseId;
 
-  // Exams linked to this course's lessons/sections, with lock state computed by the backend.
+  // Exams linked to this course's curriculum, with lock state computed by the backend.
   const examsQuery = useQuery({
     queryKey: ["course-exams", courseId],
     queryFn: () => examApi.listByCourse(courseId as number),
@@ -74,7 +76,11 @@ export function CourseLearningPage() {
       return;
     }
 
-    navigate(`/student/exams/${exam.id}/take`);
+    navigate(`/student/exams/${exam.id}/take`, {
+      state: {
+        returnTo: `/enrollments/${enrollmentId}/learn`,
+      },
+    });
   };
 
   const certificateQuery = useQuery({
@@ -88,7 +94,7 @@ export function CourseLearningPage() {
           (certificate) => certificate.courseId === progressQuery.data?.courseId
       );
     },
-    enabled: progressQuery.data?.progressPercentage === 100,
+    enabled: progressQuery.data?.courseCompleted === true,
     retry: false,
   });
 
@@ -141,7 +147,7 @@ export function CourseLearningPage() {
 
       // Completing a lesson can unlock exams: refresh their lock state.
       void queryClient.invalidateQueries({ queryKey: ["course-exams"] });
-
+      void queryClient.invalidateQueries({ queryKey: ["student-exam-locks"] });
       toast.success("Progress updated.");
     },
 
@@ -195,6 +201,19 @@ export function CourseLearningPage() {
     recordAccess(lesson.lessonId);
   };
 
+  // Ghi nhận thời gian học viên dành cho bài đang xem (mỗi 30s + khi rời bài).
+  useStudyTimeTracker({
+    lessonId: activeLessonId,
+    onTick: (seconds) => {
+      if (!activeLessonId) return;
+      progressApi
+        .addStudyTime(enrollmentId, activeLessonId, seconds)
+        .catch(() => {
+            // Bỏ qua lỗi ghi nhận thời gian để không ảnh hưởng trải nghiệm học.
+        });
+    },
+  });
+
   const goToLesson = (index: number) => {
     const lesson = progressQuery.data?.lessons[index];
 
@@ -239,16 +258,26 @@ export function CourseLearningPage() {
                 </Button>
               </div>
           ) : progressQuery.data.lessons.length === 0 ? (
-              <div className="rounded-2xl border border-dashed p-12 text-center">
-                <BookOpen className="mx-auto size-12 text-muted-foreground" />
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-dashed p-12 text-center">
+                  <BookOpen className="mx-auto size-12 text-muted-foreground" />
 
-                <h1 className="mt-4 text-xl font-semibold">
-                  {progressQuery.data.courseName}
-                </h1>
+                  <h1 className="mt-4 text-xl font-semibold">
+                    {progressQuery.data.courseName}
+                  </h1>
 
-                <p className="mt-2 text-sm text-muted-foreground">
-                  This course has no lessons yet.
-                </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    This course has no lessons yet.
+                  </p>
+                </div>
+
+                <LessonProgressSidebar
+                    progress={progressQuery.data}
+                    activeLessonId={activeLessonId}
+                    onLessonSelect={selectLesson}
+                    exams={examsQuery.data}
+                    onExamOpen={openExam}
+                />
               </div>
           ) : (
               <div className="grid gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -265,7 +294,13 @@ export function CourseLearningPage() {
                     {progressQuery.data.courseName}
                   </p>
 
-                  {progressQuery.data.progressPercentage === 100 &&
+                  <div className="mt-3 rounded border p-3 text-sm" role="status">
+                    <p>{progressQuery.data.courseCompleted ? "Course completed" : "Course in progress"} · {COURSE_GRADE_STATUS_LABEL[progressQuery.data.assessmentStatus] || progressQuery.data.assessmentStatus}</p>
+                    {progressQuery.data.overallScore != null && <p>Final course grade: {progressQuery.data.overallScore.toFixed(2)} / 10</p>}
+                    {!progressQuery.data.courseCompleted && <p className="text-muted-foreground">Complete the lessons and meet the course assessment requirements to earn your certificate.</p>}
+                  </div>
+
+                  {progressQuery.data.courseCompleted === true &&
                       courseCertificate?.verificationToken && (
                           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
                             <div>
@@ -287,7 +322,7 @@ export function CourseLearningPage() {
                           </div>
                       )}
                       
-                  {progressQuery.data.progressPercentage === 100 &&
+                  {progressQuery.data.courseCompleted === true &&
                       <CourseReviewPrompt
                         courseId={progressQuery.data.courseId}
                       />
@@ -377,6 +412,7 @@ export function CourseLearningPage() {
                             <Button
                                 disabled={
                                     currentLesson.completed ||
+                                    ["QUIZ", "EXAM", "ASSIGNMENT"].includes(currentLesson.contentType) ||
                                     updateMutation.isPending
                                 }
                                 onClick={() =>
@@ -392,7 +428,7 @@ export function CourseLearningPage() {
                                   ? "Lesson completed"
                                   : updateMutation.isPending
                                       ? "Saving..."
-                                      : "Mark lesson complete"}
+                                      : ["QUIZ", "EXAM", "ASSIGNMENT"].includes(currentLesson.contentType) ? "Completes after graded results are published" : "Mark lesson complete"}
                             </Button>
 
                             <Button

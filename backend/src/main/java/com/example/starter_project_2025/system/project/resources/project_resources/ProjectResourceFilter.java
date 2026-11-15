@@ -20,9 +20,6 @@ public class ProjectResourceFilter extends BaseFilter {
     @FilterField(entityField = "kind", operator = FilterOperator.EQUAL)
     ResourceKind kind;
 
-    @FilterField(entityField = "category", operator = FilterOperator.EQUAL)
-    String category;
-
     @FilterField(entityField = "title", operator = FilterOperator.LIKE)
     String title;
 }

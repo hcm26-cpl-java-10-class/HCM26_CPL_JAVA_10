@@ -148,6 +148,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.unprocessableEntity().body(response);
     }
 
+    @ExceptionHandler(com.example.starter_project_2025.system.project.AutoAllocationException.class)
+    public ResponseEntity<TeamErrorResponse> handleAutoAllocation(
+            com.example.starter_project_2025.system.project.AutoAllocationException ex) {
+        return ResponseEntity.status(ex.getStatus()).body(new TeamErrorResponse(
+                ex.getStatus().value(), ex.getCode(), ex.getMessage(),
+                null, null, LocalDateTime.now()));
+    }
+
     @ExceptionHandler(StudentAlreadyAssignedException.class)
     public ResponseEntity<TeamErrorResponse> handleStudentAlreadyAssigned(
             StudentAlreadyAssignedException ex

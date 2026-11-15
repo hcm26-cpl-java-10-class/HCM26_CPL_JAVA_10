@@ -36,6 +36,13 @@ public class ProjectTemplateAccessInitializer implements CommandLineRunner {
                 roles.save(role);
             });
         }
+        for (String name : List.of("MENTOR", "TEACHER", "TRAINER")) {
+            roles.findByName(name).ifPresent(role -> {
+                templatePermissions.stream().filter(permission -> !"ACTIVATE".equals(permission.getAction()))
+                        .forEach(role.getPermissions()::add);
+                roles.save(role);
+            });
+        }
         roles.findByName("PROGRAM_MANAGER").ifPresent(role -> {
             permissions.findByName("MENU_READ").ifPresent(permission -> role.getPermissions().add(permission));
             roles.save(role);

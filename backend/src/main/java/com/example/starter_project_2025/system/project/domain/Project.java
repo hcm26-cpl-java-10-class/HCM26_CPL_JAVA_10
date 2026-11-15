@@ -84,6 +84,13 @@ public class Project extends BaseEntity {
     @Column(name = "team_id")
     private Long teamId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_project_id")
+    private Project parentProject;
+
+    @Column(name = "assignment_id")
+    private Long assignmentId;
+
     public void setTenant(Tenant tenant) {
         this.tenant = tenant;
         this.tenantId = tenant == null ? null : tenant.getId();

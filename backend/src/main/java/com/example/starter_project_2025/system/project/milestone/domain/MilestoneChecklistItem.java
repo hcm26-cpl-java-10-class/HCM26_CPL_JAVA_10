@@ -54,4 +54,9 @@ public class MilestoneChecklistItem {
         item.orderIndex = orderIndex;
         return item;
     }
+
+    /** Completion is decided by the reviewer's acceptance checklist, never edited directly. */
+    void markAssessed(boolean value) {
+        this.completed = value;
+    }
 }

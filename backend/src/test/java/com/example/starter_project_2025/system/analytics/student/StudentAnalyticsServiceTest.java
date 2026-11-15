@@ -193,6 +193,11 @@ class StudentAnalyticsServiceTest {
 
     @Test
     void batchedCourseScoresUseOnlyPublishedExamResults() {
+        exam.setCourseWeight(new BigDecimal("100"));
+        com.example.starter_project_2025.system.question.domain.Question q=new com.example.starter_project_2025.system.question.domain.Question();
+        q.setContent("Assessment question");q.setType(com.example.starter_project_2025.system.question.domain.QuestionType.MULTIPLE_CHOICE);
+        q.setDifficulty(com.example.starter_project_2025.system.question.domain.Difficulty.EASY);q.setIsActive(true);
+        db.persist(q);exam.getQuestions().add(q);
         ExamAttempt attempt = new ExamAttempt();
         attempt.setExam(exam);
         attempt.setStudent(student);
@@ -200,6 +205,7 @@ class StudentAnalyticsServiceTest {
         attempt.setSubmittedAt(Instant.parse("2026-11-02T03:30:00Z"));
         attempt.setDurationMinutes(30);
         attempt.setFinalScore(new BigDecimal("8.50"));
+        attempt.setStatus(com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.SUBMITTED);
         db.persist(attempt);
         ExamResultPublication publication = new ExamResultPublication();
         publication.setExam(exam);
@@ -215,7 +221,8 @@ class StudentAnalyticsServiceTest {
         when(attempts.findAllByStudent_IdOrderByStartedAtDesc(student.getId())).thenReturn(List.of(attempt));
         when(exams.findByCourseLink(course.getId(), null, null, false)).thenReturn(List.of(exam));
         when(access.canStudentSeeScoreOnMyScores(exam)).thenReturn(true);
-        CourseMyScoresService actual = new CourseMyScoresService(enrollments, exams, attempts, access, db.getEntityManager());
+        CourseMyScoresService actual = new CourseMyScoresService(enrollments, exams, attempts, access, db.getEntityManager(),
+                org.mockito.Mockito.mock(com.example.starter_project_2025.system.exam.gradebook.GradebookPublishedItemRepository.class));
         var result = actual.findCourseScoresForStudents(java.util.Map.of(student.getId(), List.of(course)));
         assertEquals(new BigDecimal("8.50"), result.get(student.getId()).getFirst().overallScore());
         assertEquals(actual.findMyCourseScores(student.getId()).getFirst(),

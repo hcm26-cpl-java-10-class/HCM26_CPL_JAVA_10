@@ -14,9 +14,6 @@ import java.time.LocalDateTime;
 public class ExamConfigValidator {
 
     public void validate(Exam existing, ExamDTO r, Integer totalPoints, ValidationContext ctx) {
-        // Tinh nang dat lich da bi go bo: bo qua start/end.
-        LocalDateTime start = null;
-        LocalDateTime end = null;
         Integer duration = r.getDurationMinutes() != null ? r.getDurationMinutes()
                 : (existing == null ? null : Integer.valueOf(existing.getDurationMinutes()));
         Integer maxAttempts = r.getMaxAttempts() != null ? r.getMaxAttempts()
@@ -27,21 +24,23 @@ public class ExamConfigValidator {
         if (r.getMaxScore() != null && (r.getMaxScore().signum() <= 0 || r.getMaxScore().compareTo(BigDecimal.valueOf(1000)) > 0)) {
             ctx.add("maxScore", "Thang điểm phải lớn hơn 0 và không quá 1000");
         }
+        {
+            if (r.getHeadTurnAngleDeg() != null && (r.getHeadTurnAngleDeg() < 10 || r.getHeadTurnAngleDeg() > 80)) {
+                ctx.add("headTurnAngleDeg", "Head-turn angle must be between 10 and 80 degrees");
+            }
+            if (r.getHeadTurnSeconds() != null && (r.getHeadTurnSeconds() < 1 || r.getHeadTurnSeconds() > 30)) {
+                ctx.add("headTurnSeconds", "Head-turn time must be between 1 and 30 seconds");
+            }
+            if (r.getFastSubmitPercent() != null && (r.getFastSubmitPercent() < 1 || r.getFastSubmitPercent() > 50)) {
+                ctx.add("fastSubmitPercent", "Fast-submission threshold must be between 1% and 50% of the exam time");
+            }
+        }
         LatePolicy latePolicy = r.getLatePolicy() != null ? r.getLatePolicy()
                 : (existing == null ? LatePolicy.NOT_ALLOWED : existing.getLatePolicy());
         Integer penalty = r.getLatePenaltyPercent() != null ? r.getLatePenaltyPercent()
                 : (existing == null ? null : existing.getLatePenaltyPercent());
         Integer lateGraceMinutes = r.getLateGraceMinutes() != null ? r.getLateGraceMinutes()
                 : (existing == null ? 0 : existing.getLateGraceMinutes());
-
-        if (start != null && end != null) {
-            if (!start.isBefore(end)) {
-                ctx.add("endTime", "Thời gian đóng phải sau thời gian mở");
-            } else if (duration != null && duration > Duration.between(start, end).toMinutes()) {
-                ctx.add("durationMinutes", "Thời lượng làm bài không được vượt quá khoảng thời gian từ lúc mở đến lúc đóng ("
-                        + Duration.between(start, end).toMinutes() + " phút)");
-            }
-        }
 
         if (maxAttempts == null || maxAttempts < 1) {
             ctx.add("maxAttempts", "Số lần làm tối đa phải >= 1");

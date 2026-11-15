@@ -32,8 +32,10 @@ public class TeamBacklogController {
 
     @GetMapping
     @Operation(summary = "Sprints and work items that belong to one team workspace")
-    public ResponseEntity<TeamBacklogBoard> getBoard(@PathVariable Long teamId) {
-        return ResponseEntity.ok(teamBacklogService.read(teamId));
+    public ResponseEntity<TeamBacklogBoard> getBoard(@PathVariable Long teamId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Long projectId,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Long workspaceId) {
+        return ResponseEntity.ok(teamBacklogService.read(teamId, projectId, workspaceId));
     }
 
     @PutMapping("/items/{itemId}/assignee")

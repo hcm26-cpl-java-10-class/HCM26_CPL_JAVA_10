@@ -50,8 +50,8 @@ public class EmailService {
         vars.add(Map.entry("username", recipient.getFullName()));
         vars.add(Map.entry("examTitle", examTitle));
         vars.add(Map.entry("durationMinutes", invitation.getExam().getDurationMinutes()));
-        vars.add(Map.entry("startTime", formatDateTime(invitation.getExam().getStartTime())));
-        vars.add(Map.entry("endTime", formatDateTime(invitation.getExam().getEndTime())));
+        vars.add(Map.entry("startTime", formatDateTime(invitation.getAvailableFrom())));
+        vars.add(Map.entry("endTime", formatDateTime(invitation.getExpiresAt())));
         vars.add(Map.entry("acceptLink", acceptLink));
         vars.add(Map.entry("expiresAt", formatDateTime(invitation.getExpiresAt())));
         vars.add(Map.entry("note", invitation.getNote() == null ? "" : invitation.getNote()));
@@ -80,7 +80,7 @@ public class EmailService {
         List<Map.Entry<String, Object>> vars = new ArrayList<>();
         vars.add(Map.entry("username", invitation.getUser().getFullName()));
         vars.add(Map.entry("examTitle", examTitle));
-        vars.add(Map.entry("startTime", formatDateTime(invitation.getExam().getStartTime())));
+        vars.add(Map.entry("startTime", formatDateTime(invitation.getAvailableFrom())));
         vars.add(Map.entry("examLink", String.format("%s/student/exams", frontendUrl)));
 
         send("[Đã xác nhận] " + examTitle, invitation.getUser().getEmail(), EXAM_ACCEPTED_EMAIL, vars);
@@ -92,8 +92,8 @@ public class EmailService {
         }
 
         String examTitle = invitation.getExam().getTitle();
-        LocalDateTime startTime = invitation.getAvailableFrom() != null ? invitation.getAvailableFrom() : invitation.getExam().getStartTime();
-        LocalDateTime endTime = invitation.getExpiresAt() != null ? invitation.getExpiresAt() : invitation.getExam().getEndTime();
+        LocalDateTime startTime = invitation.getAvailableFrom() != null ? invitation.getAvailableFrom() : null;
+        LocalDateTime endTime = invitation.getExpiresAt() != null ? invitation.getExpiresAt() : null;
         String countdown = buildCountdown(startTime != null ? startTime : endTime, now);
         String examLink = String.format("%s/student/exams/%d", frontendUrl, invitation.getExam().getId());
 
@@ -116,7 +116,7 @@ public class EmailService {
         }
 
         String examTitle = invitation.getExam().getTitle();
-        LocalDateTime startTime = invitation.getExam().getStartTime();
+        LocalDateTime startTime = invitation.getAvailableFrom();
         String countdown = buildCountdown(startTime, now);
         String examLink = String.format("%s/anonymous-exam?code=%s", frontendUrl, invitation.getAccessCode());
 
@@ -124,7 +124,7 @@ public class EmailService {
         vars.add(Map.entry("username", invitation.getGuestName() == null ? "Học sinh" : invitation.getGuestName()));
         vars.add(Map.entry("examTitle", examTitle));
         vars.add(Map.entry("startTime", formatDateTime(startTime)));
-        vars.add(Map.entry("endTime", formatDateTime(invitation.getExam().getEndTime())));
+        vars.add(Map.entry("endTime", formatDateTime(invitation.getExpiresAt())));
         vars.add(Map.entry("durationMinutes", invitation.getExam().getDurationMinutes()));
         vars.add(Map.entry("countdown", countdown));
         vars.add(Map.entry("accessCode", invitation.getAccessCode()));
@@ -143,7 +143,7 @@ public class EmailService {
         vars.add(Map.entry("examTitle", examTitle));
         vars.add(Map.entry("accessCode", invitation.getAccessCode()));
         vars.add(Map.entry("accessLink", accessLink));
-        vars.add(Map.entry("startTime", formatDateTime(invitation.getExam().getStartTime())));
+        vars.add(Map.entry("startTime", formatDateTime(invitation.getAvailableFrom())));
         vars.add(Map.entry("durationMinutes", invitation.getExam().getDurationMinutes()));
         vars.add(Map.entry("maxAccessTime", formatDateTime(invitation.getMaxAccessTime())));
         vars.add(Map.entry("maxAccessAttempts", invitation.getMaxAccessAttempts()));

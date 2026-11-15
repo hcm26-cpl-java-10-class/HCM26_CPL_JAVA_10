@@ -57,7 +57,11 @@ const parseRolePermissionsFromStorage = (): Record<string, string[]> => {
     }
 };
 
+const clearRecommendationChats = () => {
+    try { Object.keys(sessionStorage).filter(key => key.startsWith("course_recommendation_chat:")).forEach(key => sessionStorage.removeItem(key)); } catch { /* Storage may be disabled. */ }
+};
 const clearAuthStorage = () => {
+    clearRecommendationChats();
     AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
 };
 
@@ -103,6 +107,7 @@ const authSlice = createSlice({
                 rolePermissions,
             });
 
+            if (state.email !== email) clearRecommendationChats();
             state.token = token || "";
             state.email = email || "";
             state.permissions = normalized.permissions;

@@ -55,6 +55,22 @@ public class LessonProgressController {
         return progressService.recordAccess(getUserId(principal), enrollmentId, lessonId);
     }
 
+    /** Ghi nhận thời gian học (giây) cho một bài — dùng để tính "số giờ học". */
+    @PutMapping("/{enrollmentId}/lessons/{lessonId}/study-time")
+    @PreAuthorize("hasAuthority('LESSON_PROGRESS_UPDATE')")
+    public LessonProgressDTO addStudyTime(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long enrollmentId,
+            @PathVariable Long lessonId,
+            @RequestBody UpdateStudyTimeRequest request
+    ) {
+        if (request.seconds() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "seconds is required");
+        }
+        return progressService.addStudyTime(
+                getUserId(principal), enrollmentId, lessonId, request.seconds());
+    }
+
     @PutMapping("/{enrollmentId}/lessons/{lessonId}/answer")
     @PreAuthorize("hasAuthority('LESSON_PROGRESS_UPDATE')")
     public LessonProgressDTO saveAnswer(
@@ -86,5 +102,8 @@ public class LessonProgressController {
     }
 
     public record UpdateAnswerRequest(String answer) {
+    }
+
+    public record UpdateStudyTimeRequest(Long seconds) {
     }
 }

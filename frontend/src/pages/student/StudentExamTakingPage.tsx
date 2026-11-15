@@ -14,7 +14,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Loader2, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { CodingWorkspace } from './components/CodingWorkspace';
@@ -99,7 +99,27 @@ export default function StudentExamTakingPage() {
     const { examId: rawExamId } = useParams();
     const examId = Number(rawExamId);
     const validExamId = Number.isSafeInteger(examId) && examId > 0;
+    const location = useLocation();
     const navigate = useNavigate();
+    const navigationState = location.state as { returnTo?: unknown } | null;
+    const requestedReturnTo = navigationState?.returnTo;
+    const isCourseReturnPath = typeof requestedReturnTo === 'string'
+        && /^\/enrollments\/\d+\/learn$/.test(requestedReturnTo);
+    const returnTo = requestedReturnTo === '/invitations'
+        ? '/invitations'
+        : isCourseReturnPath
+            ? requestedReturnTo
+            : '/student/exams';
+    const returnLabel = returnTo === '/invitations'
+        ? 'Back to Invitations'
+        : isCourseReturnPath
+            ? 'Back to Course'
+            : 'Back to Exam Schedule';
+    const returnCrumbLabel = returnTo === '/invitations'
+        ? 'Invitations'
+        : isCourseReturnPath
+            ? 'Course Learning'
+            : 'Exam Schedule';
     const [searchParams, setSearchParams] = useSearchParams();
     const essayParam = Number(searchParams.get('essay'));
     const codeParam = Number(searchParams.get('code'));
@@ -488,9 +508,11 @@ export default function StudentExamTakingPage() {
         scheduleAnswerSave(questionId, next);
     };
 
-    const openEssay = (questionId: number) => setSearchParams({ essay: String(questionId) });
-    const openCode = (questionId: number) => setSearchParams({ code: String(questionId) });
-    const closeEssay = () => setSearchParams({});
+    const openEssay = (questionId: number) =>
+        setSearchParams({ essay: String(questionId) }, { state: location.state });
+    const openCode = (questionId: number) =>
+        setSearchParams({ code: String(questionId) }, { state: location.state });
+    const closeEssay = () => setSearchParams({}, { state: location.state });
 
     const hasText = (questionId: number) => (answers[questionId]?.textAnswer ?? '').trim().length > 0;
     const isAnswered = (question: { id: number; type: string }) =>
@@ -559,7 +581,7 @@ export default function StudentExamTakingPage() {
             <MainLayout>
                 <div role="alert" className="space-y-4 rounded-lg border border-destructive p-6 text-destructive">
                     <p>{getStartErrorMessage(attemptQuery.error)}</p>
-                    <Button variant="outline" onClick={() => navigate('/invitations')}>Back to Invitations</Button>
+                    <Button variant="outline" onClick={() => navigate(returnTo)}>{returnLabel}</Button>
                 </div>
             </MainLayout>
         );
@@ -684,7 +706,11 @@ export default function StudentExamTakingPage() {
 
     if (!isFinished && currentCode) {
         return (
-            <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }} focusMode>
+            <MainLayout
+                pathName={{ exams: returnCrumbLabel, take: 'Take Exam' }}
+                pathLinks={{ exams: returnTo }}
+                focusMode
+            >
                 {timeUpOverlay}
 {confirmOverlay}
                 <CodingWorkspace
@@ -708,7 +734,11 @@ export default function StudentExamTakingPage() {
     }
 
     return (
-        <MainLayout pathName={{ exams: 'Exam Schedule', take: 'Take Exam' }} focusMode={!isFinished}>
+        <MainLayout
+            pathName={{ exams: returnCrumbLabel, take: 'Take Exam' }}
+            pathLinks={{ exams: returnTo }}
+            focusMode={!isFinished}
+        >
             {timeUpOverlay}
 {confirmOverlay}
             <main className="flex w-full flex-col gap-5">
@@ -790,8 +820,8 @@ export default function StudentExamTakingPage() {
                                     Final score will be updated once grading is finished: coding answers are graded automatically within a few minutes, and essay answers are graded by your teacher.
                                 </p>
                             )}
-                            <Button className="mt-5" variant="outline" onClick={() => navigate('/invitations')}>
-                                Back to Invitations
+                            <Button className="mt-5" variant="outline" onClick={() => navigate(returnTo)}>
+                                {returnLabel}
                             </Button>
                         </section>
                     ) : (

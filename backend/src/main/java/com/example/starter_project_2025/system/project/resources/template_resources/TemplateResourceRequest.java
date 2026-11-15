@@ -14,7 +14,6 @@ public record TemplateResourceRequest(
         String description,
         ResourceKind kind,
         String url,
-        String category,
         Integer orderIndex
 ) {
 }

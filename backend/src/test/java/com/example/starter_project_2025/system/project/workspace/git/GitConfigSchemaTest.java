@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
 
 class GitConfigSchemaTest {
     @ParameterizedTest @ValueSource(strings = {"", ";MODE=MySQL"})
-    void additiveSchemaPreservesExistingDataAndEnforcesWorkspaceUniqueness(String mode) {
+    void additiveSchemaPreservesExistingDataAndEnforcesWorkspaceUniqueness(String mode) throws Exception {
         var dataSource = new DriverManagerDataSource("jdbc:h2:mem:git-schema-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1" + mode, "sa", "");
         var jdbc = new JdbcTemplate(dataSource);
         jdbc.execute("create table workspaces (id bigint primary key)");
@@ -25,6 +25,11 @@ class GitConfigSchemaTest {
         assertThatThrownBy(() -> jdbc.update(insert, 999)).isInstanceOf(DataIntegrityViolationException.class);
         assertThat(jdbc.queryForObject("select count(*) from workspaces", Long.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("select count(*) from project_git_configs", Long.class)).isEqualTo(1);
-        jdbc.execute("shutdown");
+        // JdbcTemplate reads SQL warnings after execute when DEBUG is enabled;
+        // H2 has already closed the database by then. Shut down without that
+        // post-execution inspection so running with the Spring tests is safe.
+        try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+            statement.execute("shutdown");
+        }
     }
 }

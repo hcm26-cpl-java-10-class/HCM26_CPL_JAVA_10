@@ -1,6 +1,8 @@
 import { BacklogBoard } from "@/pages/management/backlog";
 
 interface WorkspaceBacklogPanelProps {
+  readOnly?: boolean;
+  workspaceId?: number;
   /** Project of the workspace, so the board only lists its own sprints. */
   projectId?: number | null;
   /**
@@ -37,6 +39,8 @@ export function WorkspaceBacklogPanel({
   teamId = null,
   projectName = null,
   taskKeyPrefix = null,
+  readOnly = false,
+  workspaceId,
 }: WorkspaceBacklogPanelProps) {
   return (
     <BacklogBoard
@@ -45,6 +49,8 @@ export function WorkspaceBacklogPanel({
       teamId={teamId}
       projectName={projectName}
       taskKeyPrefix={taskKeyPrefix}
+      readOnly={readOnly}
+      workspaceId={workspaceId}
     />
   );
 }

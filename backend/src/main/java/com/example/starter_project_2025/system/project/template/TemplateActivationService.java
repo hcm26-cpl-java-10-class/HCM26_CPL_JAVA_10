@@ -15,6 +15,7 @@ import com.example.starter_project_2025.web.CorrelationIdFilter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,7 @@ public class TemplateActivationService {
     private final ProjectTemplateAuditRepository audits;
     private final ObjectMapper objectMapper;
     private final TemplateMilestoneRubrics rubrics;
+    private final TemplateHierarchyService hierarchy;
     /** US-07: activating a template publishes its newest DRAFT version. */
     private final ProjectTemplateSnapshotService snapshotService;
 
@@ -84,15 +86,19 @@ public class TemplateActivationService {
                 decimal(template.getEstimatedDurationWeeks()), null), false));
         var team = teamErrors(template);
         var input = TemplateMilestonePlanRequest.from(template.getLockVersion(), plan);
-        var milestoneErrors = errors(() -> milestoneValidator.validate(input));
+        var milestoneErrors = errors(() -> milestoneValidator.validate(input, template.getParentTemplateId() == null));
         milestoneErrors.putAll(errors(() -> scheduleValidator.validate(input, template.getEstimatedDurationWeeks())));
         if (milestoneErrors.isEmpty()) {
             milestoneErrors.putAll(errors(() -> rubrics.requirePublished(input, tenantId)));
         }
-        List<TemplateActivationChecklist.Item> items = List.of(
+        var moduleIssues = hierarchy.moduleActivationIssues(template);
+        List<TemplateActivationChecklist.Item> items = new ArrayList<>(List.of(
                 item("overview", "General information", overview),
                 item("team-constraints", "Team constraints and role quotas", team),
-                item("milestones", "Milestones, rubrics and late policies", milestoneErrors));
+                item("milestones", "Milestones, rubrics and late policies", milestoneErrors)));
+        if (template.getParentTemplateId() == null || !moduleIssues.isEmpty()) {
+            items.add(item("modules", "Active child modules", moduleIssues.isEmpty() ? Map.of() : Map.of("modules", moduleIssues)));
+        }
         boolean draft = template.getStatus() == ProjectTemplateStatus.DRAFT;
         return new TemplateActivationChecklist(template.getId(), template.getLockVersion(), template.getStatus(),
                 draft && items.stream().allMatch(TemplateActivationChecklist.Item::passed), draft && canActivate, items);

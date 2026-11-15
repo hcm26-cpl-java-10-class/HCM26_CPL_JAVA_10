@@ -69,8 +69,6 @@ class ReminderServiceTest {
         exam.setId(1L);
         exam.setTitle("Kỳ thi");
         exam.setDurationMinutes(60);
-        exam.setStartTime(LocalDateTime.now().plusDays(2));
-        exam.setEndTime(LocalDateTime.now().plusDays(3));
         exam.setIsActive(true);
         exam.setCreatedBy(1L);
         return exam;

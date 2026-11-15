@@ -7,12 +7,9 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock,
-  ExternalLink,
   Eye,
   FileCheck2,
-  Info,
   RotateCw,
-  Send,
   Save,
 } from "lucide-react";
 import { milestoneApi } from "@/api/features/milestone.api";
@@ -21,24 +18,21 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MilestoneRubricCard } from "@/pages/management/project/milestone/components/MilestoneRubricCard";
-import { countReleaseNoteWords, RELEASE_NOTES_MAX_WORDS, releaseNotesWithinLimit } from "@/lib/release-notes";
+import { ArtifactSubmissionPreviewDialog } from "./components/ArtifactSubmissionPreviewDialog";
+import { ArtifactSubmissionReference } from "./components/ArtifactSubmissionReference";
+import styles from "./components/ArtifactSubmissionLayout.module.css";
+import { ArtifactReviewStatusBadge } from "./components/ArtifactReviewStatusBadge";
+import { countReleaseNoteCharacters, RELEASE_NOTES_MAX_CHARACTERS, releaseNotesWithinLimit } from "@/lib/release-notes";
 import { artifactFormSource } from "@/lib/artifact-form-source";
+
+/** "/teams" and "/teams/:id/milestones" have no page; keep them out of the breadcrumb to avoid 404 links. */
+const TEAM_ROUTE_GAPS = ["teams", "milestones"];
 
 function submissionErrorMessage(error: unknown): string {
   const response = (error as { response?: { status?: number; data?: unknown } } | null)?.response;
-  if (!response) return "Không thể kết nối đến máy chủ. Yêu cầu nộp chưa được ghi nhận; vui lòng kiểm tra kết nối và thử lại.";
+  if (!response) return "Could not connect to the server. The submission was not confirmed; check your connection and try again.";
 
   const data = response.data as { message?: unknown; errors?: unknown } | undefined;
   if (data?.errors && typeof data.errors === "object") {
@@ -50,11 +44,11 @@ function submissionErrorMessage(error: unknown): string {
   if (typeof data?.message === "string" && data.message.trim()) return data.message;
 
   switch (response.status) {
-    case 401: return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
-    case 403: return "Bạn không có quyền nộp sản phẩm cho milestone này.";
-    case 404: return "Không tìm thấy nhóm hoặc milestone.";
-    case 409: return "Trạng thái milestone hoặc bản nháp đã thay đổi. Vui lòng làm mới trang.";
-    default: return `Nộp bài thất bại (HTTP ${response.status}). Vui lòng kiểm tra lại thông tin và thử lại.`;
+    case 401: return "Your session has expired. Sign in again.";
+    case 403: return "You are not allowed to submit artifacts for this milestone.";
+    case 404: return "The team or milestone could not be found.";
+    case 409: return "The milestone or draft changed. Refresh the page and try again.";
+    default: return `Submission failed (HTTP ${response.status}). Check the details and try again.`;
   }
 }
 
@@ -83,9 +77,18 @@ export default function TeamArtifactSubmissionPage() {
   const [saveSuccessTime, setSaveSuccessTime] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [clientValidationError, setClientValidationError] = useState<string | null>(null);
+  const [renderedAt, setRenderedAt] = useState(0);
 
   const submitKey = useRef<string | null>(null);
+  const submissionInFlight = useRef(false);
+  const previewTriggerRef = useRef<HTMLButtonElement>(null);
+  const previewHeadingRef = useRef<HTMLHeadingElement>(null);
   const initializedFormScope = useRef<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setRenderedAt(Date.now()), 0);
+    return () => window.clearTimeout(timer);
+  }, [teamId, milestoneId]);
 
   const query = useQuery({
     queryKey: ["team-artifact-workspace", teamId, milestoneId],
@@ -121,14 +124,14 @@ export default function TeamArtifactSubmissionPage() {
         expectedVersion: query.data?.draft?.version,
       }),
     onSuccess: () => {
-      const timeStr = new Date().toLocaleTimeString("vi-VN");
+      const timeStr = new Date().toLocaleTimeString();
       setSaveSuccessTime(timeStr);
-      toast.success("Bản nháp đã được lưu thành công!");
+      toast.success("Draft saved successfully.");
       void qc.invalidateQueries({ queryKey: ["team-artifact-workspace", teamId, milestoneId] });
       navigate(`/student/teams/${teamId}/milestones/${milestoneId}/submissions${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`);
     },
     onError: () => {
-      toast.error("Không thể lưu bản nháp. Vui lòng thử lại.");
+      toast.error("Could not save the draft. Try again.");
     },
   });
 
@@ -152,17 +155,25 @@ export default function TeamArtifactSubmissionPage() {
       // Retain the accepted response even if refreshing the workspace fails.
       qc.setQueryData<Awaited<ReturnType<typeof milestoneApi.getTeamArtifactWorkspace>>>(
         ["team-artifact-workspace", teamId, milestoneId],
-        (current) => current ? { ...current, latestSubmission: data, canSubmit: false } : current,
+        (current) => current ? {
+          ...current,
+          milestone: { ...current.milestone, lifecycleStatus: "SUBMITTED" },
+          latestSubmission: data,
+          canSubmit: false,
+        } : current,
       );
       void qc.invalidateQueries({ queryKey: ["team-artifact-submissions-workspace", teamId] });
       void qc.invalidateQueries({ queryKey: ["my-team-milestone-submissions", teamId, milestoneId] });
       void qc.invalidateQueries({ queryKey: ["student-team-artifact-workspace", teamId, milestoneId] });
       void qc.invalidateQueries({ queryKey: ["my-milestone-submissions"] });
-      toast.success(`Nộp sản phẩm phiên bản ${data.version} thành công!`);
+      toast.success(`Version ${data.version} submitted successfully.`);
       return qc.invalidateQueries({ queryKey: ["team-artifact-workspace", teamId, milestoneId] });
     },
     onError: (err) => {
       toast.error(submissionErrorMessage(err));
+    },
+    onSettled: () => {
+      submissionInFlight.current = false;
     },
   });
 
@@ -176,22 +187,22 @@ export default function TeamArtifactSubmissionPage() {
   const handleValidateAndOpenPreview = () => {
     setClientValidationError(null);
     if (!releaseNotesWithinLimit(releaseNotes)) {
-      setClientValidationError(`Release notes không được vượt quá ${RELEASE_NOTES_MAX_WORDS} từ.`);
+      setClientValidationError(`Release notes cannot exceed ${RELEASE_NOTES_MAX_CHARACTERS} characters.`);
       return;
     }
     const repo = repositoryUrl.trim();
     const deploy = deploymentUrl.trim();
 
     if (!repo && !deploy) {
-      setClientValidationError("Vui lòng cung cấp ít nhất Repository URL hoặc Deployment URL.");
+      setClientValidationError("Provide a Repository URL or a Deployment URL before submitting.");
       return;
     }
     if (repo && !isValidHttpUrl(repo)) {
-      setClientValidationError("Repository URL không hợp lệ. Vui lòng nhập URL bắt đầu bằng http:// hoặc https://");
+      setClientValidationError("Repository URL is invalid. Enter a URL starting with http:// or https://.");
       return;
     }
     if (deploy && !isValidHttpUrl(deploy)) {
-      setClientValidationError("Deployment URL không hợp lệ. Vui lòng nhập URL bắt đầu bằng http:// hoặc https://");
+      setClientValidationError("Deployment URL is invalid. Enter a URL starting with http:// or https://.");
       return;
     }
 
@@ -199,6 +210,8 @@ export default function TeamArtifactSubmissionPage() {
   };
 
   const handleConfirmSubmit = () => {
+    if (submissionInFlight.current || submit.isPending) return;
+    submissionInFlight.current = true;
     submit.mutate();
   };
 
@@ -212,9 +225,9 @@ export default function TeamArtifactSubmissionPage() {
 
   if (query.isPending) {
     return (
-      <MainLayout pathName={{ milestones: "Milestone", submit: "Nộp sản phẩm" }}>
+      <MainLayout ignorePaths={TEAM_ROUTE_GAPS} pathName={{ milestones: "Milestones", submit: "Submit artifact" }}>
         <div className="mx-auto flex max-w-4xl items-center justify-center py-20 text-muted-foreground">
-          <RotateCw className="mr-2 size-5 animate-spin" /> Đang tải thông tin milestone...
+          <RotateCw className="mr-2 size-5 animate-spin" /> Loading milestone details...
         </div>
       </MainLayout>
     );
@@ -222,24 +235,24 @@ export default function TeamArtifactSubmissionPage() {
 
   if (!query.data) {
     return (
-      <MainLayout pathName={{ milestones: "Milestone", submit: "Nộp sản phẩm" }}>
+      <MainLayout ignorePaths={TEAM_ROUTE_GAPS} pathName={{ milestones: "Milestones", submit: "Submit artifact" }}>
         <main className="mx-auto max-w-4xl p-6">
           <Card>
             <CardHeader>
               <CardTitle className="text-destructive flex items-center gap-2">
-                <AlertCircle className="size-5" /> Không thể tải milestone
+                <AlertCircle className="size-5" /> Could not load milestone
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-muted-foreground">
-                Không tìm thấy dữ liệu milestone hoặc bạn không có quyền truy cập vào nhóm này.
+                The milestone could not be found, or you do not have access to this team.
               </p>
               <div className="flex gap-2">
                 <Button onClick={() => void query.refetch()}>
-                  <RotateCw className="mr-2 size-4" /> Thử lại
+                  <RotateCw className="mr-2 size-4" /> Try again
                 </Button>
                 <Button variant="outline" onClick={handleBack}>
-                  <ArrowLeft className="mr-2 size-4" /> Quay lại
+                  <ArrowLeft className="mr-2 size-4" /> Back
                 </Button>
               </div>
             </CardContent>
@@ -253,175 +266,76 @@ export default function TeamArtifactSubmissionPage() {
   const draft = query.data.draft;
   const latestSubmission = query.data.latestSubmission;
   const canSubmit = query.data.canSubmit;
+  const canSaveDraft = ["IN_PROGRESS", "CHANGES_REQUESTED"].includes(m.lifecycleStatus);
   const deadlineDate = new Date(m.deadline);
-  const isPastDeadline = Date.now() > deadlineDate.getTime();
+  const isPastDeadline = renderedAt > 0 && renderedAt > deadlineDate.getTime();
+  const reviewStatus = m.lifecycleStatus === "CHANGES_REQUESTED" ? "CHANGES_REQUESTED" : latestSubmission?.status ?? m.lifecycleStatus;
 
   return (
-    <MainLayout
+    <MainLayout ignorePaths={TEAM_ROUTE_GAPS}
+      contentClassName="bg-slate-50/80 dark:bg-background"
       pathName={{
         milestones: "Milestones",
         [m.id]: m.title,
-        submit: "Nộp sản phẩm",
+        submit: "Submit artifact",
       }}
     >
-      <main className="mx-auto grid max-w-4xl gap-6 pb-12">
-        {/* Navigation & Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <Button variant="outline" size="sm" onClick={handleBack}>
-            <ArrowLeft className="mr-2 size-4" />
-            {workspaceId ? "Quay lại Workspace" : "Quay lại"}
+      <main className={styles.shell}>
+        <header className="mb-5 space-y-4">
+          <Button variant="ghost" size="sm" className="-ml-3 text-muted-foreground" onClick={handleBack}>
+            <ArrowLeft className="size-4" /> {workspaceId ? "Back to workspace" : "Go back"}
           </Button>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{m.lifecycleStatus}</Badge>
-          </div>
-        </div>
-
-        {/* Existing Draft Alert (Fix Bug #25) */}
-        {draft && artifactFormSource(draft, latestSubmission) === draft && (
-          <Alert className="border-blue-300 bg-blue-50 text-blue-900 dark:bg-blue-950/20 dark:text-blue-200">
-            <Info className="size-4" />
-            <AlertTitle className="font-semibold">Đang mở bản nháp đã lưu</AlertTitle>
-            <AlertDescription className="text-xs mt-1">
-              Hệ thống đã tự động nạp bản nháp phiên bản <strong>v{draft.version}</strong> (cập nhật lúc {new Date(draft.updatedAt).toLocaleString("vi-VN")}). Bạn có thể tiếp tục chỉnh sửa, lưu nháp mới hoặc nộp chính thức bên dưới.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {latestSubmission && artifactFormSource(draft, latestSubmission) === latestSubmission && (
-          <Alert className="border-blue-300 bg-blue-50 text-blue-900 dark:bg-blue-950/20 dark:text-blue-200">
-            <Info className="size-4" />
-            <AlertTitle>Đã kế thừa nội dung phiên bản {latestSubmission.version}</AlertTitle>
-            <AlertDescription>Repository URL, Deployment URL và Release notes đã được điền từ bản nộp trước để bạn chỉnh sửa. Bản đã nộp vẫn được giữ nguyên.</AlertDescription>
-          </Alert>
-        )}
-
-        {/* Save Draft Success Feedback (Fix Bug #22) */}
-        {saveSuccessTime && (
-          <Alert className="border-green-400 bg-green-50 text-green-900 dark:bg-green-950/20 dark:text-green-200">
-            <CheckCircle2 className="size-4 text-green-600" />
-            <AlertTitle className="font-semibold">Lưu bản nháp thành công</AlertTitle>
-            <AlertDescription className="text-xs mt-1">
-              Bản nháp đã được cập nhật thành công trên hệ thống vào lúc <strong>{saveSuccessTime}</strong>.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Latest Submission Banner / Clear Green Success State (Fix Bug #29) */}
-        {latestSubmission && (
-          <Alert className="border-emerald-400 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/20 dark:text-emerald-100">
-            <FileCheck2 className="size-5 text-emerald-600" />
-            <AlertTitle className="font-semibold text-base">
-              Đã nộp thành công Phiên bản {latestSubmission.version}
-            </AlertTitle>
-            <AlertDescription className="mt-1 text-xs space-y-1">
-              <p>
-                Thời gian nộp: <strong>{new Date(latestSubmission.submittedAt).toLocaleString("vi-VN")}</strong> · Trạng thái:{" "}
-                <Badge variant={latestSubmission.submittedLate ? "destructive" : "secondary"} className="text-[11px] px-1.5 py-0">
-                  {latestSubmission.submittedLate ? "Nộp muộn" : "Đúng hạn"}
-                </Badge>
-              </p>
-              {canSubmit && <p className="text-emerald-800 dark:text-emerald-200">
-                Bạn có thể nộp phiên bản mới (v{latestSubmission.version + 1}) theo yêu cầu chỉnh sửa của reviewer.
-              </p>}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Milestone Overview Card */}
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <CardTitle className="text-xl">{m.title}</CardTitle>
-                <CardDescription className="mt-1">
-                  {m.description || "Milestone bàn giao sản phẩm của nhóm."}
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Clock className="size-4" />
-                <span>Hạn chót: <strong>{deadlineDate.toLocaleString("vi-VN")}</strong></span>
-                {isPastDeadline && (
-                  <Badge variant="destructive" className="ml-1 text-xs">Đã qua hạn</Badge>
-                )}
-              </div>
+          <div className="flex flex-col items-start gap-4 rounded-xl border bg-card p-5 shadow-sm sm:flex-row sm:justify-between">
+            <div className="min-w-0 flex-1 space-y-2">
+              <h1 ref={previewHeadingRef} tabIndex={-1} className="text-2xl font-semibold tracking-tight">Submit artifact</h1>
+              <h2 className="break-words text-base font-medium [overflow-wrap:anywhere]">{m.title}</h2>
+              <p className="max-w-2xl break-words text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{m.description || "Prepare your team's deliverable for review."}</p>
             </div>
-          </CardHeader>
-        </Card>
-
-        {/* Acceptance Checklist Card (Fix Bug #20) */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Tiêu chí nghiệm thu (Checklist)</CardTitle>
-                <CardDescription className="text-sm">
-                  Reviewer sẽ đánh giá các tiêu chí này sau khi nộp bài.
-                </CardDescription>
-              </div>
-              <Badge variant="outline" className="text-xs">
-                {m.checklist.length} tiêu chí
-              </Badge>
+            <div className="flex flex-col items-start gap-3 sm:items-end">
+              <ArtifactReviewStatusBadge status={reviewStatus} />
+              <p className="flex items-center gap-2 text-xs text-muted-foreground"><Clock className="size-3.5 shrink-0" />Deadline: {deadlineDate.toLocaleString()}</p>
+              {isPastDeadline && <span className="text-xs text-muted-foreground">Deadline passed - Late policy applies</span>}
             </div>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {m.checklist.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">Milestone này không yêu cầu checklist nghiệm thu riêng.</p>
-            ) : (
-              m.checklist.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/30"
-                >
-                  <Checkbox
-                    id={`check-${item.id}`}
-                    disabled
-                    checked={false}
-                    className="mt-0.5"
-                    aria-label={`${item.content} — reviewer assessment`}
-                  />
-                  <label
-                    htmlFor={`check-${item.id}`}
-                    className="flex-1 text-sm leading-relaxed"
-                  >
-                    {item.content}
-                    {item.mandatory && (
-                      <span className="ml-2 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                        Bắt buộc
-                      </span>
-                    )}
-                  </label>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Milestone Rubric Card (Fix Bug #21) */}
-        {m.rubric && (
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Tiêu chuẩn chấm điểm (Rubric)
-            </h3>
-            <MilestoneRubricCard rubric={m.rubric} />
           </div>
-        )}
+        </header>
+        <div className={styles.layout}>
+        <div className="min-w-0 space-y-4">
+          {draft && artifactFormSource(draft, latestSubmission) === draft && (
+            <div role="status" className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
+              <Save className="mt-0.5 size-4 shrink-0 text-blue-600" />
+              <div className="min-w-0 text-sm"><p className="font-medium">Saved draft loaded <span className="font-normal text-blue-700 dark:text-blue-300">- Draft v{(latestSubmission?.version ?? 0) + 1}</span></p><p className="mt-1 text-xs leading-relaxed text-blue-800 dark:text-blue-200">Saved {new Date(draft.updatedAt).toLocaleString()}. Not officially submitted. Continue editing below.</p></div>
+            </div>
+          )}
+          {latestSubmission && (
+            <div role="status" className="rounded-xl border bg-card p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2"><p className="flex items-center gap-2 text-sm font-medium"><FileCheck2 className="size-4 text-blue-600" />Previously submitted <span className="text-blue-600">v{latestSubmission.version}</span></p><Badge variant="outline" className={latestSubmission.submittedLate ? "border-amber-200 text-amber-800 dark:text-amber-200" : "border-emerald-200 text-emerald-700 dark:text-emerald-300"}>{latestSubmission.submittedLate ? "Submitted late" : "Submitted on time"}</Badge></div>
+              <p className="mt-2 text-xs text-muted-foreground">{new Date(latestSubmission.submittedAt).toLocaleString()} - Submission receipt is separate from the review outcome.</p>
+              {canSubmit && <p className="mt-2 text-xs text-blue-700 dark:text-blue-300">Update your artifact below to prepare version {latestSubmission.version + 1}.</p>}
+              {artifactFormSource(draft, latestSubmission) === latestSubmission && <p className="mt-2 text-xs text-muted-foreground">The form starts with this version's links and release notes.</p>}
+            </div>
+          )}
+          {submit.isSuccess && <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100"><CheckCircle2 className="size-4" /><AlertTitle>Version {submit.data.version} submitted</AlertTitle><AlertDescription>The version has been received. See the review status above for the evaluation outcome.</AlertDescription></Alert>}
+          {saveSuccessTime && <p role="status" className="text-sm text-blue-700">Draft saved at {saveSuccessTime}.</p>}
 
         {/* Artifact Form Card (Fix Bug #23) */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Thông tin sản phẩm nộp</CardTitle>
+        <Card className="min-w-0 gap-5 overflow-hidden py-0">
+          <CardHeader className="gap-2 border-b bg-muted/20 px-5 py-5">
+            <CardTitle className="text-base">Submission details <span className="text-blue-600">(Version {latestSubmission ? latestSubmission.version + 1 : 1})</span></CardTitle>
             <CardDescription>
-              Cung cấp đường dẫn mã nguồn, môi trường triển khai và ghi chú phiên bản.
+              Add repository and deployment links, then describe this release.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-5">
+          <CardContent className="grid gap-5 px-5 pb-5">
             {/* Repository URL */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium flex items-center justify-between">
+              <label htmlFor="artifact-repository" className="flex flex-wrap items-center justify-between gap-1 text-sm font-medium">
                 <span>Repository URL</span>
-                <span className="text-xs text-muted-foreground font-normal">Git repository (GitHub, GitLab, ...)</span>
+                <span className="text-xs text-muted-foreground font-normal">Git repository (GitHub, GitLab, etc.)</span>
               </label>
               <Input
+                id="artifact-repository"
+                disabled={save.isPending || submit.isPending}
+                aria-invalid={Boolean(clientValidationError && repositoryUrl.trim() && !isValidHttpUrl(repositoryUrl))}
                 placeholder="https://github.com/organization/repository"
                 value={repositoryUrl}
                 onChange={(e) => {
@@ -430,17 +344,20 @@ export default function TeamArtifactSubmissionPage() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                Hệ thống chỉ kiểm tra định dạng URL HTTP(S); reviewer cần xác nhận repository tồn tại và có đúng nội dung.
+                HTTP(S) links only. Your reviewer verifies repository access and content.
               </p>
             </div>
 
             {/* Deployment URL */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium flex items-center justify-between">
+              <label htmlFor="artifact-deployment" className="flex flex-wrap items-center justify-between gap-1 text-sm font-medium">
                 <span>Deployment URL</span>
-                <span className="text-xs text-muted-foreground font-normal">Môi trường chạy thử / Demo trực tiếp</span>
+                <span className="text-xs text-muted-foreground font-normal">Live demo or staging environment</span>
               </label>
               <Input
+                id="artifact-deployment"
+                disabled={save.isPending || submit.isPending}
+                aria-invalid={Boolean(clientValidationError && deploymentUrl.trim() && !isValidHttpUrl(deploymentUrl))}
                 placeholder="https://my-app.vercel.app"
                 value={deploymentUrl}
                 onChange={(e) => {
@@ -449,42 +366,45 @@ export default function TeamArtifactSubmissionPage() {
                 }}
               />
               <p className="text-xs text-muted-foreground">
-                Nhập URL HTTP(S) của bản demo hoặc staging. Hệ thống kiểm tra định dạng, không tự truy cập URL này.
+                Use an HTTP(S) demo or staging URL. Access is not verified automatically.
               </p>
             </div>
 
             {/* Validation Rule Notice */}
             <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-              <strong>Yêu cầu hợp lệ:</strong> Cần cung cấp ít nhất một đường dẫn (Repository URL hoặc Deployment URL) trước khi nộp chính thức. Bạn vẫn có thể lưu nháp nếu chưa hoàn thiện.
+              <strong className="text-foreground">Required: at least one link.</strong> Add a repository or deployment URL before submitting. Both fields may be left empty when saving a draft.
             </div>
 
             {/* Release notes */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Ghi chú phát hành (Release Notes)</label>
+              <label htmlFor="artifact-release-notes" className="text-sm font-medium">Release notes</label>
               <Textarea
-                placeholder="Mô tả tóm tắt các tính năng đã hoàn thiện trong đợt bàn giao này..."
+                maxLength={RELEASE_NOTES_MAX_CHARACTERS}
+                id="artifact-release-notes"
+                disabled={save.isPending || submit.isPending}
+                placeholder="Summarize the changes included in this version..."
                 value={releaseNotes}
-                rows={4}
-                className="max-h-40 resize-none overflow-y-auto"
+                rows={7}
+                className="h-44 min-h-44 max-h-44 resize-none overflow-y-auto overscroll-contain text-sm leading-relaxed"
                 onChange={(e) => {
                   edited();
-                  if (!releaseNotesWithinLimit(e.target.value) && countReleaseNoteWords(e.target.value) > countReleaseNoteWords(releaseNotes)) {
-                    setClientValidationError(`Release notes tối đa ${RELEASE_NOTES_MAX_WORDS} từ (${countReleaseNoteWords(releaseNotes)}/${RELEASE_NOTES_MAX_WORDS} đang dùng).`);
+                  if (!releaseNotesWithinLimit(e.target.value) && countReleaseNoteCharacters(e.target.value) > countReleaseNoteCharacters(releaseNotes)) {
+                    setClientValidationError(`Release notes are limited to ${RELEASE_NOTES_MAX_CHARACTERS} characters (${countReleaseNoteCharacters(releaseNotes)}/${RELEASE_NOTES_MAX_CHARACTERS} used).`);
                     return;
                   }
                   setReleaseNotes(e.target.value);
                 }}
               />
-              <p className="text-xs text-muted-foreground">{countReleaseNoteWords(releaseNotes)}/{RELEASE_NOTES_MAX_WORDS} từ</p>
+              <p className="text-xs text-muted-foreground">{countReleaseNoteCharacters(releaseNotes)}/{RELEASE_NOTES_MAX_CHARACTERS} characters</p>
             </div>
 
             {/* Rejected Alert (Fix Bug #31) */}
             {latestSubmission?.status === "REJECTED" && (
               <Alert variant="destructive">
                 <AlertCircle className="size-4" />
-                <AlertTitle>Bài nộp đã bị từ chối (REJECTED - 0 điểm)</AlertTitle>
+              <AlertTitle>Submission rejected (REJECTED — 0 points)</AlertTitle>
                 <AlertDescription className="text-xs mt-1">
-                  Bài nộp cho milestone này đã bị reviewer đánh giá REJECTED (0 điểm). Nhóm không được phép nộp lại hoặc chỉnh sửa bản nháp.
+                  The reviewer rejected this milestone submission (0 points). The team cannot resubmit or edit its draft.
                 </AlertDescription>
               </Alert>
             )}
@@ -493,8 +413,8 @@ export default function TeamArtifactSubmissionPage() {
             {!canSubmit && !latestSubmission && (
               <Alert className="border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                 <AlertCircle className="size-4" />
-                <AlertTitle>Chưa mở nộp bài chính thức</AlertTitle>
-                <AlertDescription className="text-xs mt-1">{query.data.submissionBlockReason ?? "Chức năng nộp bài chỉ khả dụng khi milestone đang thực hiện hoặc reviewer yêu cầu nộp lại, trong thời hạn cho phép."}</AlertDescription>
+              <AlertTitle>Submissions are not open</AlertTitle>
+              <AlertDescription className="text-xs mt-1">{query.data.submissionBlockReason ?? "Submission is available while the milestone is in progress or when a reviewer requests changes within the allowed submission window."}</AlertDescription>
               </Alert>
             )}
 
@@ -502,7 +422,7 @@ export default function TeamArtifactSubmissionPage() {
             {clientValidationError && (
               <Alert variant="destructive">
                 <AlertCircle className="size-4" />
-                <AlertTitle>Thông tin chưa hợp lệ</AlertTitle>
+                <AlertTitle>Check the submission details</AlertTitle>
                 <AlertDescription className="text-xs mt-1">
                   {clientValidationError}
                 </AlertDescription>
@@ -513,126 +433,68 @@ export default function TeamArtifactSubmissionPage() {
             {submit.isError && (
               <Alert variant="destructive">
                 <AlertCircle className="size-4" />
-                <AlertTitle>Nộp bài không thành công</AlertTitle>
+                <AlertTitle>Submission failed</AlertTitle>
                 <AlertDescription className="text-xs mt-1">
                   {submissionErrorMessage(submit.error)}
                 </AlertDescription>
               </Alert>
             )}
 
+            {save.isError && <Alert variant="destructive"><AlertCircle className="size-4" /><AlertTitle>Draft could not be saved</AlertTitle><AlertDescription>{submissionErrorMessage(save.error)}</AlertDescription></Alert>}
+
             {/* Action buttons */}
-            <div className="flex flex-wrap items-center gap-3 pt-2">
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-4">
               <Button
                 variant="outline"
-                disabled={save.isPending || submit.isPending || !canSubmit || !releaseNotesWithinLimit(releaseNotes) || latestSubmission?.status === "REJECTED"}
+                disabled={save.isPending || submit.isPending || !canSaveDraft || !releaseNotesWithinLimit(releaseNotes) || latestSubmission?.status === "REJECTED"}
                 onClick={() => save.mutate()}
               >
                 {save.isPending ? (
                   <>
-                    <RotateCw className="mr-2 size-4 animate-spin" /> Đang lưu...
+                    <RotateCw className="mr-2 size-4 animate-spin" /> Saving...
                   </>
                 ) : (
                   <>
-                    <Save className="mr-2 size-4" /> Lưu bản nháp
+                    <Save className="mr-2 size-4" /> Save draft
                   </>
                 )}
               </Button>
 
               <Button
+                ref={previewTriggerRef}
                 disabled={submit.isPending || save.isPending || !canSubmit || !releaseNotesWithinLimit(releaseNotes) || latestSubmission?.status === "REJECTED"}
                 onClick={handleValidateAndOpenPreview}
               >
-                <Eye className="mr-2 size-4" /> Xem trước & Nộp bài
+                <Eye className="mr-2 size-4" /> {latestSubmission ? "Submit new version (v" + (latestSubmission.version + 1) + ")" : "Preview & submit"}
               </Button>
 
               <Button variant="ghost" onClick={handleBack}>
-                Hủy
+                Cancel
               </Button>
             </div>
           </CardContent>
         </Card>
+        </div>
+        <ArtifactSubmissionReference checklist={m.checklist} rubric={m.rubric} />
+        </div>
 
-        {/* Preview & Confirm Submission Dialog (Fix Bug #24) */}
-        <Dialog open={previewOpen} onOpenChange={(open) => { if (!submit.isPending) setPreviewOpen(open); }}>
-          <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-xl sm:max-w-2xl" showCloseButton={!submit.isPending}>
-            <DialogHeader className="shrink-0 border-b bg-muted/30 px-5 py-5 pr-12 sm:px-6 sm:pr-12">
-              <div className="flex min-w-0 items-start gap-3">
-                <div className="rounded-xl border bg-background p-2.5 text-primary shadow-sm"><FileCheck2 className="size-5" /></div>
-                <div className="min-w-0 space-y-2">
-                  <DialogTitle className="text-lg font-semibold leading-snug">Xác nhận nộp sản phẩm</DialogTitle>
-                  <Badge variant="secondary" className="w-fit">Phiên bản v{latestSubmission ? latestSubmission.version + 1 : 1}</Badge>
-                </div>
-              </div>
-              <DialogDescription className="mt-2 leading-relaxed">Kiểm tra nội dung bên dưới trước khi gửi cho reviewer.</DialogDescription>
-            </DialogHeader>
-
-            <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-5 text-sm sm:px-6">
-              <section className="min-w-0 rounded-xl border bg-muted/20 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Milestone</p>
-                <h3 className="mt-1 break-words font-semibold [overflow-wrap:anywhere]">{m.title}</h3>
-                <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><Clock className="size-3.5" /> Hạn nộp: {deadlineDate.toLocaleString("vi-VN")}</p>
-              </section>
-
-              <section className="min-w-0 rounded-xl border p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-semibold">Tiêu chí nghiệm thu</h3>
-                  <Badge variant="outline">{m.checklist.length} tiêu chí</Badge>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">Reviewer sẽ đánh giá các tiêu chí này sau khi nộp.</p>
-                {m.checklist.length > 0 ? <ul className="mt-3 space-y-2">{m.checklist.map((item) => <li key={item.id} className="flex min-w-0 items-start gap-2.5 rounded-lg bg-muted/40 p-2.5"><span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary/60" /><span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere]">{item.content}{item.mandatory && <span className="ml-2 inline-block text-xs font-medium text-amber-700 dark:text-amber-300">Bắt buộc</span>}</span></li>)}</ul> : <p className="mt-3 text-sm text-muted-foreground">Không có tiêu chí.</p>}
-              </section>
-
-              <section className="min-w-0 rounded-xl border p-4">
-                <h3 className="font-semibold">Liên kết sản phẩm</h3>
-                <div className="mt-3 grid min-w-0 gap-3">
-                  {[
-                    { label: "Repository URL", url: repositoryUrl.trim() },
-                    { label: "Deployment URL", url: deploymentUrl.trim() },
-                  ].map(({ label, url }) => (
-                    <div key={label} className="min-w-0 rounded-lg bg-muted/40 p-3">
-                      <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>
-                      {url ? <a href={url} target="_blank" rel="noreferrer" className="flex min-w-0 items-start gap-2 text-primary hover:underline"><span className="min-w-0 flex-1 break-all">{url}</span><ExternalLink className="mt-0.5 size-3.5 shrink-0" /></a> : <p className="text-muted-foreground">Chưa cung cấp</p>}
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="min-w-0 rounded-xl border p-4">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Release notes</h3><span className="text-xs text-muted-foreground">{countReleaseNoteWords(releaseNotes)}/{RELEASE_NOTES_MAX_WORDS} từ</span></div>
-                <div tabIndex={0} aria-label="Nội dung Release notes" className="max-h-40 min-w-0 overflow-y-auto overscroll-contain whitespace-pre-wrap break-words rounded-lg bg-muted/40 p-3 leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
-                  {releaseNotes.trim() || "Không có ghi chú phát hành"}
-                </div>
-              </section>
-
-              {isPastDeadline && (
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
-                  <strong>Chú ý:</strong> Đã qua thời hạn deadline của milestone. Bài nộp sẽ được tính là Nộp muộn (Late) theo quy định.
-                </div>
-              )}
-            </div>
-
-            <DialogFooter className="m-0 shrink-0 gap-2 rounded-none border-t px-5 py-4 sm:px-6">
-              <Button className="w-full sm:w-auto" variant="outline" disabled={submit.isPending} onClick={() => setPreviewOpen(false)}>
-                Chỉnh sửa lại
-              </Button>
-              <Button
-                className="w-full sm:w-auto"
-                disabled={submit.isPending}
-                onClick={handleConfirmSubmit}
-              >
-                {submit.isPending ? (
-                  <>
-                    <RotateCw className="mr-2 size-4 animate-spin" /> Đang nộp...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 size-4" /> Xác nhận nộp bài
-                  </>
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <ArtifactSubmissionPreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          onConfirm={handleConfirmSubmit}
+          triggerRef={previewTriggerRef}
+          fallbackFocusRef={previewHeadingRef}
+          version={latestSubmission ? latestSubmission.version + 1 : 1}
+          milestoneTitle={m.title}
+          deadline={deadlineDate.toLocaleString()}
+          checklist={m.checklist}
+          repositoryUrl={repositoryUrl}
+          deploymentUrl={deploymentUrl}
+          releaseNotes={releaseNotes}
+          pastDeadline={isPastDeadline}
+          pending={submit.isPending}
+          error={submit.isError ? submissionErrorMessage(submit.error) : null}
+        />
       </main>
     </MainLayout>
   );

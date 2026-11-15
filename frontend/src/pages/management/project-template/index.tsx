@@ -7,10 +7,11 @@ import { useProTable } from "@/components/datatable/hook/useProTable";
 import { ProTable } from "@/components/datatable/ProTable";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { ProjectTemplateFilter, ProjectTemplateListItem } from "@/types/features/project-template";
 import type { Pagination } from "@/types";
-import { Eye, Files, Pen, Plus, RefreshCw, Rocket, Trash2 } from "lucide-react";
-import { useMemo } from "react";
+import { Eye, Files, FolderTree, Pen, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ProjectTemplateCard } from "./components/ProjectTemplateCard";
 import { ProjectTemplateError, ProjectTemplateLoading } from "./components/ProjectTemplateState";
@@ -23,30 +24,31 @@ export default function ProjectTemplateListPage() {
   const navigate = useNavigate();
   const options = useProjectTemplateOptions();
   const canReadVersions = options.hasPermission("PROJECT_TEMPLATE_VERSION_READ");
+  const [showModules, setShowModules] = useState(false);
   const listApi = useMemo(() => ({
     ...projectTemplateApi,
     getPage: async (pagination: Pagination, search?: string, filter?: ProjectTemplateFilter) => {
-      if (canReadVersions) return projectTemplateApi.getVersionPage(pagination, search, filter);
-      const page = await projectTemplateApi.getPage(pagination, search, filter);
+      const filters = { ...filter, includeModules: showModules };
+      if (canReadVersions) return projectTemplateApi.getVersionPage(pagination, search, filters);
+      const page = await projectTemplateApi.getPage(pagination, search, filters);
       const content = (page.content ?? page.items ?? []).map(template => ({ ...template, rowId: `template-${template.id}`,
         versionId: null, versionLabel: `v${template.templateVersion}.0`, latestVersion: true, templateStatus: template.status }));
       return { ...page, content, items: content };
     },
-  }), [canReadVersions]);
+  }), [canReadVersions, showModules]);
   const schema = useMemo(() => ({
     ...projectTemplateSchema,
     idField: "rowId",
-    fields: projectTemplateSchema.fields.map((field) => field.name === "category" ? {
-      ...field,
-      filterable: true,
-      filterType: "select" as const,
-      filterMultiple: false,
-      filterOptions: (options.data?.categories ?? []).map((value) => ({ value, label: value })),
-    } : field),
-  }), [options.data?.categories]);
+    fields: projectTemplateSchema.fields.map((field) => {
+      if (field.name === "category") return { ...field,
+        filterOptions: (options.data?.categories ?? []).map((value) => ({ value, label: value })) };
+      if (field.name === "level") return { ...field, filterOptions: options.data?.levels ?? [] };
+      return field;
+    }),
+  }), [options.data?.categories, options.data?.levels]);
   const table = useProTable(listApi, schema, {
     queryKeyRoot: "project-templates",
-    queryKeyParts: [options.user.email, options.activeRole, "list", canReadVersions ? "versions" : "templates"],
+    queryKeyParts: [options.user.email, options.activeRole, "list", canReadVersions ? "versions" : "templates", showModules],
     enabled: options.isSuccess,
     searchDebounceMs: 300,
     retry: false,
@@ -60,19 +62,13 @@ export default function ProjectTemplateListPage() {
     },
   });
   const versionPath = (template: ProjectTemplateListItem) => `/project-templates/${template.id}/detail?tab=versions&version=${template.versionId}`;
-  const view = (template: ProjectTemplateListItem) => navigate(template.versionId == null ? `/project-templates/${template.id}/detail` : versionPath(template));
+  const view = (template: ProjectTemplateListItem) => navigate(`/project-templates/${template.id}/detail`);
   const edit = (template: ProjectTemplateListItem) => navigate(template.versionId == null ? `/project-templates/${template.id}/edit` : `${versionPath(template)}&edit=overview`);
 
   return (
     <MainLayout pathName={{ "project-templates": "Project Templates" }}>
       <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-5">
-        <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Project Templates</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Manage project template versions. Each new version starts as an editable draft.</p>
-          </div>
-          {options.data && <Badge variant="outline">{options.data.tenantName}</Badge>}
-        </header>
+        <h1 className="sr-only">Project Templates</h1>
         {!options.canRead ? <ProjectTemplateError denied />
           : options.isLoading ? <ProjectTemplateLoading />
           : options.isError ? <ProjectTemplateError error={options.error} onRetry={() => void options.refetch()} />
@@ -88,28 +84,29 @@ export default function ProjectTemplateListPage() {
               onEdit={edit}
               onRowClick={view}
               renderFormModal={() => null}
-              renderCard={(props) => <ProjectTemplateCard {...props} />}
+              renderCard={(props) => <ProjectTemplateCard {...props} levels={options.data?.levels} />}
               renderCell={(template, field) => {
                 if (field.name === "status") return <ProjectTemplateStatusBadge status={template.status} />;
-                if (field.name === "level") return templateLevelLabel(template.level);
+                if (field.name === "level") return templateLevelLabel(template.level, options.data?.levels);
                 if (field.name === "estimatedDurationWeeks") return template.estimatedDurationWeeks == null ? "—" : `${template.estimatedDurationWeeks} weeks`;
                 if (field.name === "code") return <span className="font-mono text-xs">{template.code}</span>;
-                if (field.name === "templateVersion") return (
-                  <button className="font-medium underline-offset-4 hover:text-primary hover:underline"
-                    aria-label={`View version history for ${template.code}`}
-                    onClick={() => view(template)}>
-                    {template.versionLabel}
-                  </button>
-                );
+                if (field.name === "templateVersion") return <span className="font-medium">{template.versionLabel}</span>;
                 if (field.name === "name") return (
-                  <button className="block w-full truncate text-left font-medium hover:text-primary hover:underline" onClick={() => view(template)}>
-                    {template.name}
-                  </button>
+                  <div className={`flex min-w-0 items-center gap-2 ${template.parentTemplateId != null ? "border-l-2 pl-3" : ""}`}>
+                    {template.parentTemplateId != null && <Badge variant="outline" className="shrink-0 border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">Module</Badge>}
+                    <button className="min-w-0 truncate text-left font-medium hover:text-primary hover:underline" onClick={() => view(template)}>
+                      {template.name}
+                    </button>
+                  </div>
                 );
                 return undefined;
               }}
               headerActions={(
                 <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" aria-pressed={showModules}
+                    className="aria-pressed:border-indigo-200 aria-pressed:bg-indigo-50 aria-pressed:text-indigo-700 dark:aria-pressed:border-indigo-800 dark:aria-pressed:bg-indigo-950 dark:aria-pressed:text-indigo-300" onClick={() => {
+                    table.setPage(0); setShowModules(value => !value);
+                  }}><FolderTree className="size-4" />{showModules ? "Hide modules" : "Show modules"}</Button>
                   <ActionButton tooltip="Refresh templates" disabled={table.isFetching} onClick={() => void table.refetch()}
                     icon={<RefreshCw className={`size-4 ${table.isFetching ? "animate-spin" : ""}`} />} />
                   {table.permission.canCreate && <ActionButton title="Create" tooltip="Create project template" variant="default"
@@ -121,9 +118,6 @@ export default function ProjectTemplateListPage() {
                   <ActionButton tooltip={`View template ${template.code} ${template.versionLabel}`} onClick={() => view(template)} icon={<Eye className="size-4 text-muted-foreground" />} />
                   {template.editable && table.permission.canUpdate && (template.versionId == null || options.hasPermission("PROJECT_TEMPLATE_VERSION_UPDATE")) && <ActionButton tooltip={`Edit draft ${template.code} ${template.versionLabel}`}
                     onClick={() => edit(template)} icon={<Pen className="size-4 text-muted-foreground" />} />}
-                  {template.versionId != null && template.editable && options.data?.canActivate && options.hasPermission("PROJECT_TEMPLATE_ACTIVATE")
-                    && options.hasPermission("PROJECT_TEMPLATE_VERSION_UPDATE") && <ActionButton tooltip={`Publish draft ${template.versionLabel}`}
-                      onClick={() => view(template)} icon={<Rocket className="size-4 text-muted-foreground" />} />}
                   {template.versionId == null && !template.readOnly && template.status === "DRAFT" && options.data?.canActivate && options.hasPermission("PROJECT_TEMPLATE_ACTIVATE") &&
                     <TemplateActivationDialog compact template={template} onActivated={() => void table.refetch()}
                       onOpenSection={section => navigate(`/project-templates/${template.id}/detail?tab=${section}`)} />}
