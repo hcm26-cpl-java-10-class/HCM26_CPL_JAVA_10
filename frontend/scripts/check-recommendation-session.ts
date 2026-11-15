@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import { RecommendationRequest, recommendationHistoryKey, readRecommendationHistory } from "../src/utils/recommendation-session.ts";
+assert.notEqual(recommendationHistoryKey("a@example.com"), recommendationHistoryKey("b@example.com"));
+assert.deepEqual(readRecommendationHistory("malformed"), []);
+assert.deepEqual(readRecommendationHistory('{"role":"user"}'), []);
+assert.deepEqual(readRecommendationHistory('[null,{"role":"system","content":"bad"}]'), []);
+assert.equal(readRecommendationHistory(JSON.stringify(Array.from({length:20},()=>({role:"user",content:"hi"})))).length,8);
+assert.equal(readRecommendationHistory(JSON.stringify([{role:"user",content:"x".repeat(2001)}])).length,0);
+const guard=new RecommendationRequest();
+const oldAccount=guard.next();assert.ok(oldAccount.current());
+guard.cancel();assert.ok(oldAccount.signal.aborted);assert.ok(!oldAccount.current());
+const clearedChat=guard.next();const newChat=guard.next();assert.ok(!clearedChat.current());assert.ok(newChat.current());
+guard.cancel();assert.ok(!newChat.current());
+console.log("Recommendation account isolation, bounded history, cancellation and stale response checks passed.");
