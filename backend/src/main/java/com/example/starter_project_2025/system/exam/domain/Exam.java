@@ -146,6 +146,32 @@ public class Exam extends BaseEntity {
     @ColumnDefault("false")
     private Boolean notifyOnViolation = false;
 
+    // ===== Tu danh gia / danh gia cheo (UFR-EXM-012) =====
+    /** Bat tinh nang tu danh gia (chinh nguoi lam bai cham lai bai cua minh). */
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private Boolean selfReviewEnabled = false;
+
+    /** Bat tinh nang danh gia cheo (sinh vien cung ky thi cham bai cua nhau). */
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private Boolean peerReviewEnabled = false;
+
+    /** So nguoi danh gia cheo cho moi bai lam. */
+    @Column(nullable = false)
+    @ColumnDefault("2")
+    private Integer peerReviewCount = 2;
+
+    /** An danh reviewer khi xem bai lam duoc cham. */
+    @Column(nullable = false)
+    @ColumnDefault("true")
+    private Boolean peerReviewAnonymous = true;
+
+    /** Cho reviewer xem dap an mau / rubric mo ta khi cham. */
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private Boolean peerReviewShowReference = false;
+
     /** Course / section / lesson ma bai thi thuoc ve (co the de trong). Xoa course/section/lesson thi chi go lien ket. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id")
