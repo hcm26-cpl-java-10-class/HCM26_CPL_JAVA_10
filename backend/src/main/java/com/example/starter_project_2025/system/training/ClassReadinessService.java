@@ -22,6 +22,7 @@ public class ClassReadinessService {
     private final ClassTrainingProgramRepository programs;
     private final TeachingAssignmentRepository assignments;
     private final ExternalApiService directory;
+    private final com.example.starter_project_2025.system.trainer.TrainerRepository internalTrainers;
     private final EntityManager entityManager;
     private final Clock trainingClassClock;
 
@@ -114,6 +115,15 @@ public class ClassReadinessService {
         if (main.isEmpty()) return new Check("trainer", "Trainer Assignment", State.UNKNOWN,
             "No active MAIN assignment for internal class " + item.getId() + " and linked program "
                 + link.get().getProgram().getCode() + " covers " + item.getStartDate() + " through " + item.getEndDate() + ".", "setup");
+        if (item.getMasterTrainerId() != null) {
+            var trainer = internalTrainers.findByIdAndIsActiveTrue(item.getMasterTrainerId());
+            boolean valid = trainer.filter(t -> t.getStatus() == com.example.starter_project_2025.system.trainer.TrainerStatus.ACTIVE)
+                .filter(t -> main.stream().allMatch(a -> "INTERNAL".equals(a.getTrainerSource()) && Objects.equals(a.getTrainerId(), t.getId())
+                    && t.getTeachingTopics().stream().anyMatch(s -> Objects.equals(s.getId(), a.getProgramSubject().getSubject().getId())))).isPresent();
+            return new Check("trainer", "Trainer Assignment", valid ? State.READY : State.NOT_READY,
+                valid ? "Internal trainer identity, ACTIVE status and teaching topic eligibility are verified."
+                    : "An internal trainer is inactive, ineligible, mismatched or an assignment still uses an external identity.", "setup");
+        }
         if (directory.isSampleData()) return new Check("trainer", "Trainer Assignment", State.BLOCKED,
             "The local sample directory cannot verify real trainer eligibility.", "setup");
         try {

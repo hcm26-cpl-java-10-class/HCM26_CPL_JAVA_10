@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.demo.session.Session;
 import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import com.example.starter_project_2025.system.subject.Subject;
@@ -23,6 +25,7 @@ import java.time.LocalDateTime;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@StartupMutation
 public class CalendarSessionDataInitializer implements CommandLineRunner {
 
     SessionRepository sessionRepository;

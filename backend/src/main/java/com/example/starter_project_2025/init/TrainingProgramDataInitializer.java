@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.subject.Subject;
 import com.example.starter_project_2025.system.subject.SubjectRepository;
 import com.example.starter_project_2025.system.trainingprogram.*;
@@ -20,6 +22,7 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@StartupMutation
 public class TrainingProgramDataInitializer implements CommandLineRunner {
 
     TrainingProgramRepository programRepository;

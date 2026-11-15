@@ -183,6 +183,7 @@ export interface ExternalClass {
     classAdmin?: string;
     enrolledTrainees?: number;
     masterTrainer?: string;
+    masterTrainerId?: number | null;
     deliveryType?: string;
     formatType?: string;
     skills?: string;

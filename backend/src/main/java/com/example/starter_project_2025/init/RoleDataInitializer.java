@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -25,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@StartupMutation
 public class RoleDataInitializer implements CommandLineRunner {
 
     private static final String ADMIN_ROLE = "ADMIN";

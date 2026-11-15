@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.milestone.domain.MilestoneLifecycleStatus;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.milestone.submission.repository.MilestoneSubmissionRepository;
@@ -12,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 /** Idempotent state backfill for milestones created before execution status existed. */
 @Component
 @RequiredArgsConstructor
+@StartupMutation
 public class MilestoneExecutionBackfill implements ApplicationRunner {
     private final MilestoneRepository milestones;
     private final MilestoneSubmissionRepository submissions;

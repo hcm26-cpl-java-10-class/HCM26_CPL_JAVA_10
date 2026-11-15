@@ -14,13 +14,13 @@ public class TrainingCalendar extends BaseEntity {
     @Column(nullable = false, length = 100) private String name;
     @Column(nullable = false, length = 200) private String historyChange;
     @Column(nullable = false) private String modifiedBy;
-    @Lob @Column(nullable = false, columnDefinition = "LONGTEXT") private String schedule;
+    @Column(nullable = false, columnDefinition = "LONGTEXT") private String schedule;
     // Keep the established table contract for existing calendars and required legacy columns.
     @Column(nullable = false) private LocalDate classStartDate;
     @Column(nullable = false) private LocalDate actualLearningStartDate;
     @Column(nullable = false) private LocalDateTime lastModifiedDate;
     @Column(nullable = false) private String lastModifiedBy;
-    @Lob @Column(nullable = false, columnDefinition = "LONGTEXT") private String topicsJson;
+    @Column(nullable = false, columnDefinition = "LONGTEXT") private String topicsJson;
 
     @PrePersist @PreUpdate
     void updateLegacyAudit() {

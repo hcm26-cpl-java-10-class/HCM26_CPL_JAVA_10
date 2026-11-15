@@ -11,7 +11,7 @@ vi.mock("@/api/axios", () => import("@/test/mocks").then(m => m.axiosModule()));
 vi.mock("@/hooks/usePermissions", () => import("@/test/mocks").then(m => m.permissionsModule()));
 vi.mock("@/components/layout/MainLayout", () => import("@/test/mocks").then(m => m.layoutModule()));
 const rights = ["CLASS_READ", "CLASS_UPDATE", "PROGRAM_READ", "ASSIGNMENT_READ", "ASSIGNMENT_CREATE", "ASSIGNMENT_UPDATE"];
-const profile = { id: 42, code: "INTERNAL_42", name: "Internal class", status: "planning", program: "REAL_JAVA", masterTrainer: "Real Trainer",
+const profile = { id: 42, code: "INTERNAL_42", name: "Internal class", status: "planning", program: "REAL_JAVA", masterTrainer: "Real Trainer", masterTrainerId: 90,
     startDate: "2030-06-01", endDate: "2030-09-01", plannedSize: 20, classAdmin: "Admin", site: "HCM" };
 const program = { id: 7, code: "REAL_JAVA", name: "Real Java Curriculum", version: "2", status: "ACTIVE", isActive: true, subjects: [], totalDurationHours: 40 };
 const link = { id: 5, programId: 7, code: program.code, name: program.name, version: program.version, status: "ACTIVE" as const, active: true, matchesClassProgram: true };
@@ -21,14 +21,14 @@ let saved: ClassSetup;
 
 beforeEach(() => {
     grant(...rights); fakeHttp.reset();
-    saved = { classId: 42, classCode: profile.code, savedProgram: profile.program, masterTrainer: profile.masterTrainer,
+    saved = { classId: 42, classCode: profile.code, savedProgram: profile.program, masterTrainer: profile.masterTrainer, masterTrainerId: 90,
         startDate: profile.startDate, endDate: profile.endDate, programLink: null, subjects: [], assignments: [] };
     fakeHttp.on("get", "/classes/42/setup", () => structuredClone(saved));
     fakeHttp.on("get", "/classes/42", profile);
     fakeHttp.on("get", "/classes", [profile]);
     fakeHttp.on("get", "/programs", pageOf([program, { ...program, id: 8, status: "INACTIVE" }, { ...program, id: 9, isActive: false }]));
-    fakeHttp.on("get", "/external/trainers", [trainer]);
-    fakeHttp.on("get", "/external/data-source", { sampleData: false });
+    fakeHttp.on("get", "/trainers/options", pageOf([{ ...trainer, fullName: trainer.name, source: "INTERNAL", status: "ACTIVE" }]));
+    fakeHttp.on("get", "/trainers/data-source", { source: "INTERNAL", approved: true, sampleData: false });
     fakeHttp.on("get", "/classes/42/readiness", () => ({ classId: 42,
         ready: Number(!!saved.programLink) + Number(!!saved.assignments.length), unknown: 0, blocked: 0, verified: 5, notReady: 5, enrolledTrainees: 0, evaluatedAt: "2030-01-01T00:00:00Z",
         checks: [{ key: "basic", label: "Basic Information", status: saved.programLink ? "READY" : "UNKNOWN", reason: saved.programLink ? "Program link verified by API" : "No link", target: "setup" },
@@ -72,7 +72,7 @@ it("creates and updates MAIN with class dates, and reloads saved assignments thr
     expect(screen.getByLabelText("Effective From")).toHaveValue("2030-06-01");
     await view.user.click(screen.getByRole("button", { name: "Create MAIN Assignment" }));
     expect(await screen.findByText(/Assignment verified by API/)).toBeInTheDocument();
-    expect(fakeHttp.callsTo("post", "/classes/42/teaching-assignments")[0].data).toEqual({ classId: 42, programSubjectId: 101, trainerId: 90, role: "MAIN", effectiveFrom: "2030-06-01", effectiveTo: "2030-09-01" });
+    expect(fakeHttp.callsTo("post", "/classes/42/teaching-assignments")[0].data).toEqual({ classId: 42, programSubjectId: 101, trainerId: 90, trainerSource: "INTERNAL", role: "MAIN", effectiveFrom: "2030-06-01", effectiveTo: "2030-09-01" });
     await view.user.click(await screen.findByRole("button", { name: "Edit assignment 11" }));
     fireEvent.change(screen.getByLabelText("Effective From"), { target: { value: "2030-05-30" } });
     fireEvent.change(screen.getByLabelText("Effective To (blank = open-ended)"), { target: { value: "" } });
@@ -107,8 +107,8 @@ it("reports DOTNET/Java mismatch without automatically changing Class Info", asy
 
 it.each(["sample", "unreachable"])("blocks %s Trainer API without sample fallback or an enabled save", async kind => {
     linked();
-    if (kind === "sample") fakeHttp.on("get", "/external/data-source", { sampleData: true });
-    else fakeHttp.on("get", "/external/trainers", () => { throw httpError(503, { message: "Master unavailable" }); });
+    if (kind === "sample") fakeHttp.on("get", "/trainers/data-source", { source: "INTERNAL", approved: true, sampleData: true });
+    else fakeHttp.on("get", "/trainers/options", () => { throw httpError(503, { message: "Master unavailable" }); });
     renderAt(<ClassSetupForm classId={42} />, { route: "/" });
     expect(await screen.findByText(/BLOCKED: Real Master Trainer directory could not be verified/)).toBeInTheDocument();
     expect(screen.getByLabelText("Verified Trainer")).toBeDisabled();

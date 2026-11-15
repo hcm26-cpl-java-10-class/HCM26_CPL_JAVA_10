@@ -35,7 +35,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
     });
 
     const trainersQuery = useQuery({
-        queryKey: ["class-setup", "verified-trainers"],
+        queryKey: ["class-setup", "verified-trainers", "INTERNAL"],
         queryFn: classSetupApi.verifiedTrainers,
         enabled: open,
         retry: false,
@@ -52,6 +52,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
     const [skills, setSkills] = useState("Java");
     const [classAdmin, setClassAdmin] = useState("");
     const [masterTrainer, setMasterTrainer] = useState("");
+    const [masterTrainerId, setMasterTrainerId] = useState<number | null>(null);
     const [location, setLocation] = useState("");
     const [plannedSize, setPlannedSize] = useState<number>(20);
     const [startDate, setStartDate] = useState("");
@@ -68,8 +69,8 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
     }, [usersQuery.data]);
 
     const trainerCandidates = useMemo(() => {
-        return trainersQuery.data || [];
-    }, [trainersQuery.data]);
+        return trainersQuery.isError ? [] : trainersQuery.data || [];
+    }, [trainersQuery.data, trainersQuery.isError]);
 
     const getAdminValue = (u: UserDTO): string => {
         const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ") || (u as any).name;
@@ -84,7 +85,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
     };
 
     const getTrainerValue = (t: ExternalTrainer): string => {
-        return t.name || t.email || String(t.id);
+        return String(t.id);
     };
 
     const getTrainerLabel = (t: ExternalTrainer): string => {
@@ -132,6 +133,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                 setSkills(classItem.skills || "Java");
                 setClassAdmin(classItem.classAdmin || "");
                 setMasterTrainer(classItem.masterTrainer || "");
+                setMasterTrainerId(classItem.masterTrainerId ?? null);
                 setLocation(classItem.location || "");
                 setPlannedSize(classItem.plannedSize || 20);
                 setStartDate(classItem.startDate || "");
@@ -149,6 +151,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                 setSkills("Java");
                 setClassAdmin("");
                 setMasterTrainer("");
+                setMasterTrainerId(null);
                 setLocation("");
                 setPlannedSize(20);
                 const today = new Date().toISOString().split("T")[0];
@@ -216,6 +219,11 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
             setErrorMsg("Quy tắc 4: Danh mục Master Trainer đang bị khóa (BLOCKED). Không thể đổi Master Trainer sang người chưa được xác minh.");
             return;
         }
+        const trainerChanged = !isEdit || masterTrainerId !== (classItem?.masterTrainerId ?? null) || masterTrainer !== classItem?.masterTrainer;
+        if (trainerChanged && (trainersQuery.isError || !masterTrainerId || !trainerCandidates.some(t => t.id === masterTrainerId))) {
+            setErrorMsg("BLOCKED: Vui lòng chọn giảng viên ACTIVE đã được xác minh từ danh mục nội bộ.");
+            return;
+        }
 
         setIsSubmitting(true);
         try {
@@ -231,6 +239,7 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                 skills,
                 classAdmin: classAdmin.trim(),
                 masterTrainer: masterTrainer.trim(),
+                masterTrainerId,
                 location: location.trim(),
                 plannedSize: Number(plannedSize),
                 startDate,
@@ -491,12 +500,15 @@ export function ClassModal({ open, onOpenChange, classItem, onSuccess, existingC
                             </Label>
                             <NativeSelect
                                 id="class-trainer"
-                                value={masterTrainer}
-                                onChange={(e) => setMasterTrainer(e.target.value)}
-                                disabled={!isEdit && isMasterTrainerBlocked}
+                                value={masterTrainerId != null ? String(masterTrainerId) : masterTrainer ? "legacy" : ""}
+                                onChange={(e) => {
+                                    const trainer = trainerCandidates.find(t => String(t.id) === e.target.value);
+                                    if (trainer) { setMasterTrainerId(trainer.id ?? null); setMasterTrainer(trainer.name ?? ""); }
+                                }}
+                                disabled={trainersQuery.isLoading || isMasterTrainerBlocked}
                             >
-                                {masterTrainer && !trainerCandidates.some(t => getTrainerValue(t) === masterTrainer) && (
-                                    <option value={masterTrainer}>{masterTrainer} (Đã lưu)</option>
+                                {masterTrainer && (masterTrainerId == null || !trainerCandidates.some(t => t.id === masterTrainerId)) && (
+                                    <option value={masterTrainerId != null ? String(masterTrainerId) : "legacy"}>{masterTrainer} (Đã lưu{masterTrainerId == null ? "; chưa có ID nội bộ" : ""})</option>
                                 )}
                                 {!masterTrainer && (
                                     <option value="">

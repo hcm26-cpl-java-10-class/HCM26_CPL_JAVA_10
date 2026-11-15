@@ -26,6 +26,7 @@ export interface TrainingClass {
     program: string;
     classAdmin: string;
     masterTrainer: string;
+    masterTrainerId?: number | null;
     deliveryType?: string;
     formatType?: string;
     skills?: string;
@@ -100,6 +101,7 @@ export interface CreateTrainingClassInput {
     program: string;
     classAdmin: string;
     masterTrainer: string;
+    masterTrainerId?: number | null;
     deliveryType?: string;
     formatType?: string;
     skills?: string;

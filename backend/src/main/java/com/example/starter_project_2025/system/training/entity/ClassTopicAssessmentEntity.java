@@ -24,7 +24,6 @@ public class ClassTopicAssessmentEntity {
     @Column(name = "title", length = 500)
     private String title;
 
-    @Lob
     @Column(name = "assessments_json", columnDefinition = "TEXT")
     private String assessmentsJson;
 }

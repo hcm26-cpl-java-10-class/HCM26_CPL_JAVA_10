@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fakeHttp } from "@/test/fake-http";
+import { fakeHttp, pageOf } from "@/test/fake-http";
 import { renderAt } from "@/test/render";
 import { ClassModal } from "./ClassModal";
 
@@ -27,8 +27,8 @@ const item = {
 describe("ClassModal", () => {
     it("saves user-entered delivery, blended format and exact room name to the internal class endpoint", async () => {
         fakeHttp.on("get", "/users", { content: [{ id: 1, name: "Admin", email: "admin@test.com" }] });
-        fakeHttp.on("get", "/external/trainers", [{ id: 10, name: "Trainer", status: "active" }]);
-        fakeHttp.on("get", "/external/data-source", { sampleData: false });
+        fakeHttp.on("get", "/trainers/options", pageOf([{ id: 10, fullName: "Trainer", status: "ACTIVE", source: "INTERNAL" }]));
+        fakeHttp.on("get", "/trainers/data-source", { source: "INTERNAL", approved: true, sampleData: false });
         fakeHttp.on("put", "/classes/42", item);
         const done = vi.fn();
         const { user } = renderAt(<ClassModal open onOpenChange={done} classItem={item} />, { route: "/classes/42" });
@@ -63,13 +63,13 @@ describe("ClassModal", () => {
         const adminSelect = document.querySelector<HTMLSelectElement>("#class-admin");
         const trainerSelect = document.querySelector<HTMLSelectElement>("#class-trainer");
         expect(adminSelect?.value).toBe("Admin");
-        expect(trainerSelect?.value).toBe("Trainer");
+        expect(trainerSelect?.value).toBe("legacy");
     });
 
     it("displays BLOCKED alert when Master Trainer API returns sample or unverified data (Yêu cầu 3)", async () => {
         fakeHttp.on("get", "/users", { content: [{ id: 1, name: "Admin", email: "admin@test.com" }] });
-        fakeHttp.on("get", "/external/trainers", [{ id: 10, name: "Sample Trainer", status: "active" }]);
-        fakeHttp.on("get", "/external/data-source", { sampleData: true });
+        fakeHttp.on("get", "/trainers/options", pageOf([{ id: 10, fullName: "Sample Trainer", status: "ACTIVE", source: "INTERNAL" }]));
+        fakeHttp.on("get", "/trainers/data-source", { source: "INTERNAL", approved: true, sampleData: true });
         renderAt(<ClassModal open onOpenChange={vi.fn()} />, { route: "/classes" });
         const alerts = await screen.findAllByRole("alert");
         const blockedAlert = alerts.find(a => a.textContent?.includes("BLOCKED"));
@@ -84,10 +84,10 @@ describe("ClassModal", () => {
                 { id: 1, name: "Nguyen Van Admin", email: "admin@corp.com" },
             ],
         });
-        fakeHttp.on("get", "/external/trainers", [
-            { id: 201, name: "Tran Van Trainer", status: "active", email: "trainer@corp.com" },
-        ]);
-        fakeHttp.on("get", "/external/data-source", { sampleData: false });
+        fakeHttp.on("get", "/trainers/options", pageOf([
+            { id: 201, fullName: "Tran Van Trainer", status: "ACTIVE", email: "trainer@corp.com", source: "INTERNAL" },
+        ]));
+        fakeHttp.on("get", "/trainers/data-source", { source: "INTERNAL", approved: true, sampleData: false });
 
         renderAt(<ClassModal open onOpenChange={vi.fn()} />, { route: "/classes" });
 

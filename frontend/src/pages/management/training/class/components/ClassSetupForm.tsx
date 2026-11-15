@@ -21,7 +21,7 @@ export function ClassSetupForm({ classId }: { classId: number }) {
     const canRead = ["CLASS_READ", "PROGRAM_READ", "ASSIGNMENT_READ"].every(hasPermission);
     const query = useQuery({ queryKey: classSetupKey(classId), queryFn: () => classSetupApi.get(classId), enabled: canRead, retry: false });
     const programs = useQuery({ queryKey: ["class-setup", "active-programs"], queryFn: classSetupApi.activePrograms, enabled: canRead, retry: false });
-    const trainers = useQuery({ queryKey: ["class-setup", "verified-trainers"], queryFn: classSetupApi.verifiedTrainers, enabled: canRead, retry: false, staleTime: 0 });
+    const trainers = useQuery({ queryKey: ["class-setup", "verified-trainers", "INTERNAL"], queryFn: classSetupApi.verifiedTrainers, enabled: canRead, retry: false, staleTime: 0 });
     const profile = useQuery({ queryKey: ["classes", "setup-profile", classId], queryFn: async () => (await clsApi.getClassById(classId)).data, enabled: canRead, retry: false });
     const readiness = useQuery({ queryKey: classReadinessKey(classId), queryFn: () => clsApi.getReadiness(classId), enabled: canRead, retry: false });
     const [programId, setProgramId] = useState("");
@@ -64,8 +64,7 @@ export function ClassSetupForm({ classId }: { classId: number }) {
     const canAssign = hasPermission(editingId == null ? "ASSIGNMENT_CREATE" : "ASSIGNMENT_UPDATE");
     const linkValid = !!data.programLink && data.programLink.active && data.programLink.status === "ACTIVE" && data.programLink.matchesClassProgram;
     const selectedTrainer = trainers.data?.find(t => t.id === Number(trainerId));
-    const matchesMaster = !!selectedTrainer && [selectedTrainer.name, selectedTrainer.email]
-        .some(value => value?.trim().toLowerCase() === data.masterTrainer?.trim().toLowerCase());
+    const matchesMaster = !!selectedTrainer && data.masterTrainerId === selectedTrainer.id;
     const submitAssignment = (event: FormEvent) => {
         event.preventDefault(); setNotice(""); setValidation("");
         if (!from || from > data.startDate || (to && (to < data.endDate || to < from))) {
@@ -74,10 +73,10 @@ export function ClassSetupForm({ classId }: { classId: number }) {
         if (!eligible.some(s => s.id === Number(subjectId)) || !trainers.data?.some(t => t.id === Number(trainerId))) {
             setValidation("Select an eligible Program Subject and a verified active trainer."); return;
         }
-        assignment.mutate({ classId, programSubjectId: Number(subjectId), trainerId: Number(trainerId), role: "MAIN", effectiveFrom: from, effectiveTo: to || null });
+        assignment.mutate({ classId, programSubjectId: Number(subjectId), trainerId: Number(trainerId), trainerSource: "INTERNAL", role: "MAIN", effectiveFrom: from, effectiveTo: to || null });
     };
     const edit = (item: MainAssignment) => {
-        setEditingId(item.id); setSubjectId(String(item.programSubjectId)); setTrainerId(String(item.trainerId));
+        setEditingId(item.id); setSubjectId(String(item.programSubjectId)); setTrainerId(item.trainerSource === "INTERNAL" ? String(item.trainerId) : "");
         setFrom(item.effectiveFrom); setTo(item.effectiveTo || ""); setNotice(""); setValidation(""); assignment.reset();
     };
     return <div className="space-y-6">
@@ -119,7 +118,7 @@ export function ClassSetupForm({ classId }: { classId: number }) {
             {trainers.isPending ? <p role="status">Verifying Master Trainer directory…</p>
                 : trainers.isError ? <div role="alert" className="space-y-2"><p>BLOCKED: Real Master Trainer directory could not be verified. {errorMessage(trainers.error)}</p><Button variant="outline" type="button" onClick={() => void trainers.refetch()}>Retry Trainer Directory</Button></div>
                 : trainers.data?.length === 0 && <p role="alert">BLOCKED: The real directory returned no eligible active trainers.</p>}
-            <p className="text-sm text-muted-foreground">Trainer must match Master Trainer in Class Info by directory name or email. MAIN dates must cover {data.startDate} through {data.endDate}. Saving uses server-side validation again.</p>
+            <p className="text-sm text-muted-foreground">Select the same internal trainer saved in Class Info. Review legacy selections in Class Info first. MAIN dates must cover {data.startDate} through {data.endDate}. The server verifies the trainer and teaching topic again when saving.</p>
             {selectedTrainer && !matchesMaster && <p role="alert">Selected trainer does not match saved Master Trainer. Review Class Info explicitly; it will not be changed automatically.</p>}
             <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitAssignment}>
                 <div className="space-y-1"><Label htmlFor={`setup-subject-${classId}`}>Program Subject</Label>
@@ -138,7 +137,7 @@ export function ClassSetupForm({ classId }: { classId: number }) {
             </form>
             {(validation || assignment.isError) && <p role="alert">{validation || errorMessage(assignment.error)}</p>}
             <ul className="space-y-2 text-sm" aria-label="Saved assignments">{data.assignments.map(a => <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
-                <span>{a.subjectCode} · {a.role} · Trainer ID {a.trainerId} · {a.effectiveFrom} – {a.effectiveTo || "Open-ended"}</span>
+                <span>{a.subjectCode} · {a.role} · Trainer ID {a.trainerId} ({a.trainerSource ?? "EXTERNAL"}) · {a.effectiveFrom} – {a.effectiveTo || "Open-ended"}</span>
                 {a.role === "MAIN" && hasPermission("ASSIGNMENT_UPDATE") && <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => edit(a)}>Edit assignment {a.id}</Button>}
             </li>)}</ul>
         </section>

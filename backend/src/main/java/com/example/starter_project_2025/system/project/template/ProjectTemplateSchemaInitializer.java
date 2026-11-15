@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.template;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(5)
 @RequiredArgsConstructor
+@StartupMutation
 public class ProjectTemplateSchemaInitializer implements CommandLineRunner {
     private final DataSource dataSource;
 

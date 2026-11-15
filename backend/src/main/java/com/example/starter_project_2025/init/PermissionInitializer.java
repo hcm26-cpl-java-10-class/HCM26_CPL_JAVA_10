@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.base.crud.CrudAction;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import com.example.starter_project_2025.system.rbac.permission.Permission;
@@ -24,6 +26,7 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@StartupMutation
 public class PermissionInitializer implements CommandLineRunner {
 
     PermissionRepository permissionRepository;

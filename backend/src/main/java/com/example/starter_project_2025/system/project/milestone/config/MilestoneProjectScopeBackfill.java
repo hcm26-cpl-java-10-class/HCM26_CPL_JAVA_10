@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @Order(Ordered.LOWEST_PRECEDENCE)
 @RequiredArgsConstructor
+@StartupMutation
 public class MilestoneProjectScopeBackfill implements ApplicationRunner {
 
     private final MilestoneRepository milestones;

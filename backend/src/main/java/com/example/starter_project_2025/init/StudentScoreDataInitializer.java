@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.demo.student_score.StudentScore;
 import com.example.starter_project_2025.system.demo.student_score.StudentScoreRepository;
 import lombok.AccessLevel;
@@ -22,6 +24,7 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@StartupMutation
 public class StudentScoreDataInitializer implements CommandLineRunner {
 
     StudentScoreRepository studentScoreRepository;
