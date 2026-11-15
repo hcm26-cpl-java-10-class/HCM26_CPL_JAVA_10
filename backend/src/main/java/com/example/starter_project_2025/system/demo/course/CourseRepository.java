@@ -14,6 +14,10 @@ public interface CourseRepository extends BaseCrudRepository<Course, Long> {
     @Query("select c from Course c where c.id = :id")
     Optional<Course> findLockedForAssessment(Long id);
 
+    @Query("select distinct c from Course c left join fetch c.categories where c.isActive = true "
+            + "and c.status = com.example.starter_project_2025.system.demo.course.CourseStatus.PUBLISHED")
+    List<Course> findRecommendationCatalog();
+
     boolean existsByName(String name);
 
     boolean existsBySyllabus_Id(Long syllabusId);
