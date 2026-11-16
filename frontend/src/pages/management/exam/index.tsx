@@ -386,6 +386,7 @@ export default function ExamManagementPage() {
               <DialogTitle>Create Exam</DialogTitle>
               <DialogDescription>Configure exam title, duration, and rules.</DialogDescription>
             </DialogHeader>
+
             <div className="min-h-0 flex-1 overflow-y-auto py-5 pr-1">
               <ExamConfigFields
                 title={newTitle}

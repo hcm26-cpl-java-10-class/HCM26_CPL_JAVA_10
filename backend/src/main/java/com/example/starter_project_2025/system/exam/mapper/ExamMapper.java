@@ -4,6 +4,7 @@ import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.domain.ExamType;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.service.ExamScoring;
 import com.example.starter_project_2025.system.exam.service.ExamTypePolicy;
@@ -61,7 +62,9 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setLatePenaltyPercent(e.getLatePenaltyPercent());
         d.setLateGraceMinutes(e.getLateGraceMinutes());
         d.setResultVisibility(e.getResultVisibility());
-        d.setExamType(ExamTypePolicy.effective(e.getExamType()));
+        ExamType effType = ExamTypePolicy.determineEffective(e);
+        d.setExamType(effType);
+        d.setAllowedQuestionTypes(ExamTypePolicy.allowedTypes(effType));
         d.setCategory(e.getCategory() == null ? ExamCategory.ASSIGNMENT : e.getCategory());
         if (e.getCourse() != null) {
             d.setCourseId(e.getCourse().getId());

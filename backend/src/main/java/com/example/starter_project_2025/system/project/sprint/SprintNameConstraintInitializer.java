@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.sprint;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,6 +30,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(3)
 @RequiredArgsConstructor
+@StartupMutation
 public class SprintNameConstraintInitializer implements CommandLineRunner {
 
     static final String TABLE = "sprint";

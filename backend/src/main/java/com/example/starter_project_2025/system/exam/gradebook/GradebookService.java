@@ -24,7 +24,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
 
-/** Bang diem (gradebook) cua tung course: cot diem, ti trong, nhap tay, lay diem tu bai thi. */
+/**
+ * Bang diem (gradebook) cua tung course: cot diem, ti trong, nhap tay, lay diem
+ * tu bai thi.
+ */
 @Service
 @RequiredArgsConstructor
 public class GradebookService {
@@ -40,6 +43,8 @@ public class GradebookService {
     private final ExamAttemptRepository attemptRepository;
     private final ExamAccessGuard accessGuard;
     private final GradebookStateRepository stateRepository;
+    private final GradebookSaveLogRepository saveLogRepository;
+    private final com.example.starter_project_2025.system.notification.NotificationService notificationService;
     private final GradebookPublishedItemRepository publishedRepository;
     private final com.example.starter_project_2025.system.demo.course.CourseAssessmentCompletionService courseCompletion;
 
@@ -55,8 +60,8 @@ public class GradebookService {
             courses = em.createQuery("select c from Course c order by c.name", Course.class).getResultList();
         } else {
             courses = em.createQuery("select c from Course c where c.instructorUser.id = :uid "
-                            + "or exists (select e.id from Exam e where e.course.id = c.id and e.createdBy = :uid) "
-                            + "order by c.name", Course.class)
+                    + "or exists (select e.id from Exam e where e.course.id = c.id and e.createdBy = :uid) "
+                    + "order by c.name", Course.class)
                     .setParameter("uid", principal.getUser().getId()).getResultList();
         }
         List<CourseItem> out = new ArrayList<>();
@@ -68,6 +73,20 @@ public class GradebookService {
         return out;
     }
 
+    /**
+     * Courses the principal may manage (admin = all). Used by the class-level
+     * aggregation.
+     */
+    List<Course> managedCourses(UserPrincipal principal) {
+        if (accessGuard.isAdmin(principal)) {
+            return em.createQuery("select c from Course c order by c.name", Course.class).getResultList();
+        }
+        return em.createQuery("select c from Course c where c.instructorUser.id = :uid "
+                + "or exists (select e.id from Exam e where e.course.id = c.id and e.createdBy = :uid) "
+                + "order by c.name", Course.class)
+                .setParameter("uid", principal.getUser().getId()).getResultList();
+    }
+
     @Transactional(readOnly = true)
     public Gradebook getGradebook(Long courseId, UserPrincipal principal) {
         Course course = checkCourse(courseId, principal);
@@ -75,7 +94,8 @@ public class GradebookService {
     }
 
     private static int typeRank(String type) {
-        if (type == null) return 4;
+        if (type == null)
+            return 4;
         return switch (type) {
             case "QUIZ" -> 0;
             case "ASSIGNMENT" -> 1;
@@ -86,19 +106,22 @@ public class GradebookService {
     }
 
     private static String snapshotKey(Long studentId, int pos, String type, String name, Long examId,
-                                      BigDecimal weight, BigDecimal score) {
+            BigDecimal weight, BigDecimal score) {
         return studentId + "|" + pos + "|" + type + "|" + name + "|" + examId + "|"
                 + (weight == null ? "" : weight.stripTrailingZeros().toPlainString()) + "|"
                 + (score == null ? "" : score.stripTrailingZeros().toPlainString());
     }
 
     private Gradebook buildGradebook(Course course) {
-        // thu tu hien thi: Quiz, Assignment, Midterm, Final test (cung loai theo thu tu tao)
-        List<GradebookColumn> columns = new ArrayList<>(columnRepository.findByCourse_IdOrderByPositionAscIdAsc(course.getId()));
+        // thu tu hien thi: Quiz, Assignment, Midterm, Final test (cung loai theo thu tu
+        // tao)
+        List<GradebookColumn> columns = new ArrayList<>(
+                columnRepository.findByCourse_IdOrderByPositionAscIdAsc(course.getId()));
         columns.sort(Comparator.comparingInt((GradebookColumn c) -> typeRank(c.getType())));
         Map<Long, Map<Long, BigDecimal>> byStudent = new HashMap<>();
         for (GradebookScore s : scoreRepository.findAllByCourse(course.getId())) {
-            if (s.getScore() == null) continue;
+            if (s.getScore() == null)
+                continue;
             byStudent.computeIfAbsent(s.getStudent().getId(), k -> new HashMap<>())
                     .put(s.getColumn().getId(), s.getScore());
         }
@@ -117,15 +140,17 @@ public class GradebookService {
             BigDecimal sum = BigDecimal.ZERO;
             for (GradebookColumn c : columns) {
                 BigDecimal sc = scores.get(c.getId());
-                if (sc != null) sum = sum.add(sc.multiply(c.getWeightPercent()));
+                if (sc != null)
+                    sum = sum.add(sc.multiply(c.getWeightPercent()));
             }
             BigDecimal finalScore = columns.isEmpty() ? null
-                    : sum.divide(HUNDRED, 2, RoundingMode.HALF_UP);
+                    : sum.divide(HUNDRED, 2, RoundingMode.HALF_UP).min(TEN);
             rows.add(new StudentRow(u.getId(), u.getFullName(), u.getEmail(), u.getUserCode(), scores, finalScore));
         }
         java.time.LocalDateTime savedAt = stateRepository.findByCourse_Id(course.getId())
                 .map(GradebookState::getSavedAt).orElse(null);
-        // chua luu = bang diem hien tai khac voi ban da Save gan nhat (hoac chua Save lan nao ma da co cot)
+        // chua luu = bang diem hien tai khac voi ban da Save gan nhat (hoac chua Save
+        // lan nao ma da co cot)
         List<GradebookPublishedItem> published = publishedRepository.findByCourse_Id(course.getId());
         boolean unsaved;
         if (published.isEmpty()) {
@@ -135,7 +160,8 @@ public class GradebookService {
             for (StudentRow s : rows) {
                 int pos = 0;
                 for (ColumnDto c : colDtos) {
-                    current.add(snapshotKey(s.id(), pos++, c.type(), c.name(), c.examId(), c.weightPercent(), s.scores().get(c.id())));
+                    current.add(snapshotKey(s.id(), pos++, c.type(), c.name(), c.examId(), c.weightPercent(),
+                            s.scores().get(c.id())));
                 }
             }
             Set<String> saved = new HashSet<>();
@@ -148,20 +174,48 @@ public class GradebookService {
         return new Gradebook(course.getId(), course.getName(), colDtos, totalWeight, rows, savedAt, unsaved);
     }
 
-    /** Giang vien xac nhan luu bang diem (du lieu van duoc luu ngay khi sua; day la moc xac nhan). */
+    /**
+     * Giang vien xac nhan luu bang diem (du lieu van duoc luu ngay khi sua; day la
+     * moc xac nhan).
+     */
     @Transactional
     public Gradebook save(Long courseId, UserPrincipal principal) {
         Course course = checkCourse(courseId, principal);
+        BigDecimal total = columnRepository.findByCourse_IdOrderByPositionAscIdAsc(courseId).stream()
+                .map(GradebookColumn::getWeightPercent).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (total.compareTo(HUNDRED) > 0) {
+            throw new BadRequestException("Total weight exceeds 100% (currently " + total.stripTrailingZeros().toPlainString() + "%). Reduce column weights before saving.");
+        }
         GradebookState st = stateRepository.findByCourse_Id(courseId)
                 .orElseGet(() -> GradebookState.builder().course(course).build());
         st.setSavedAt(java.time.LocalDateTime.now());
         st.setSavedByUser(principal.getUser().getId());
         stateRepository.save(st);
         publish(course);
-        return buildGradebook(course);
+        Gradebook result = buildGradebook(course);
+        saveLogRepository.save(GradebookSaveLog.builder().course(course).savedBy(principal.getUser().getId())
+                .savedByName(principal.getUser().getFullName()).savedAt(st.getSavedAt())
+                .columnCount(result.columns().size()).studentCount(result.students().size())
+                .totalWeight(result.totalWeight()).build());
+        String stamp = st.getSavedAt().toString();
+        for (StudentRow s : result.students()) {
+            notificationService.createOnce(s.id(), "gradebook.saved." + courseId + "." + s.id() + "." + stamp,
+                    "Scores updated",
+                    "Your scores for \"" + course.getName() + "\" have been updated.", "/my-scores");
+        }
+        return result;
     }
 
-    /** Chup bang diem hien tai thanh ban "da luu" de trang My Scores cua sinh vien doc. */
+    @Transactional(readOnly = true)
+    public List<GradebookSaveLog> history(Long courseId, UserPrincipal principal) {
+        checkCourse(courseId, principal);
+        return saveLogRepository.findByCourse_IdOrderBySavedAtDesc(courseId);
+    }
+
+    /**
+     * Chup bang diem hien tai thanh ban "da luu" de trang My Scores cua sinh vien
+     * doc.
+     */
     private void publish(Course course) {
         publishedRepository.deleteByCourse(course.getId());
         publishedRepository.flush();
@@ -188,9 +242,12 @@ public class GradebookService {
     }
 
     /**
-     * Quet bai thi dang hoat dong gan voi course: bai nao chua co cot thi tao cot (loai theo category cua bai thi)
-     * va lay diem; cot da co bai thi thi chi cap nhat lai diem. Bang diem rong -> ti trong mac dinh theo loai
-     * (Assignment 20, Quiz 10, Midterm 30, Final 40, quy ve tong 100); bang diem da co cot -> cot moi 0%.
+     * Quet bai thi dang hoat dong gan voi course: bai nao chua co cot thi tao cot
+     * (loai theo category cua bai thi)
+     * va lay diem; cot da co bai thi thi chi cap nhat lai diem. Bang diem rong ->
+     * ti trong mac dinh theo loai
+     * (Assignment 20, Quiz 10, Midterm 30, Final 40, quy ve tong 100); bang diem da
+     * co cot -> cot moi 0%.
      */
     @Transactional
     public ScanResult autoScan(Long courseId, UserPrincipal principal) {
@@ -198,7 +255,9 @@ public class GradebookService {
         List<GradebookColumn> existing = columnRepository.findByCourse_IdOrderByPositionAscIdAsc(courseId);
         boolean fresh = existing.isEmpty();
         Set<Long> linked = new HashSet<>();
-        for (GradebookColumn c : existing) if (c.getSourceExam() != null) linked.add(c.getSourceExam().getId());
+        for (GradebookColumn c : existing)
+            if (c.getSourceExam() != null)
+                linked.add(c.getSourceExam().getId());
 
         List<com.example.starter_project_2025.system.exam.domain.ExamCategory> order = List.of(
                 com.example.starter_project_2025.system.exam.domain.ExamCategory.ASSIGNMENT,
@@ -209,7 +268,8 @@ public class GradebookService {
         exams.sort(Comparator.comparingInt((Exam e) -> order.indexOf(e.getCategory())).thenComparing(Exam::getId));
         List<Exam> toCreate = new ArrayList<>();
         for (Exam e : exams) {
-            if (e.getCategory() != null && !linked.contains(e.getId())) toCreate.add(e);
+            if (e.getCategory() != null && !linked.contains(e.getId()))
+                toCreate.add(e);
         }
 
         // ti trong mac dinh khi bang diem rong
@@ -218,7 +278,8 @@ public class GradebookService {
             Map<String, BigDecimal> base = Map.of("ASSIGNMENT", BigDecimal.valueOf(20), "QUIZ", BigDecimal.TEN,
                     "MIDTERM", BigDecimal.valueOf(30), "FINAL_TEST", BigDecimal.valueOf(40));
             Map<String, Integer> count = new HashMap<>();
-            for (Exam e : toCreate) count.merge(e.getCategory().name(), 1, Integer::sum);
+            for (Exam e : toCreate)
+                count.merge(e.getCategory().name(), 1, Integer::sum);
             BigDecimal sumBase = count.keySet().stream().map(base::get).reduce(BigDecimal.ZERO, BigDecimal::add);
             BigDecimal assigned = BigDecimal.ZERO;
             String lastKey = null;
@@ -235,10 +296,12 @@ public class GradebookService {
         }
 
         // Respect explicit course assessment weights when initializing a complete plan.
-        if (fresh && !toCreate.isEmpty() && toCreate.stream().allMatch(e->e.getCourseWeight()!=null
-                && e.getCourseWeight().signum()>=0 && e.getCourseWeight().compareTo(HUNDRED)<=0)
-                && toCreate.stream().map(Exam::getCourseWeight).reduce(BigDecimal.ZERO,BigDecimal::add).compareTo(HUNDRED)==0) {
-            for (Exam exam:toCreate) weightOf.put(exam.getId().toString(),exam.getCourseWeight());
+        if (fresh && !toCreate.isEmpty() && toCreate.stream().allMatch(e -> e.getCourseWeight() != null
+                && e.getCourseWeight().signum() >= 0 && e.getCourseWeight().compareTo(HUNDRED) <= 0)
+                && toCreate.stream().map(Exam::getCourseWeight).reduce(BigDecimal.ZERO, BigDecimal::add)
+                        .compareTo(HUNDRED) == 0) {
+            for (Exam exam : toCreate)
+                weightOf.put(exam.getId().toString(), exam.getCourseWeight());
         }
 
         int pos = existing.size();
@@ -248,7 +311,8 @@ public class GradebookService {
                     .course(course)
                     .name("-")
                     .type(e.getCategory().name())
-                    .weightPercent(weightOf.getOrDefault(e.getId().toString(), BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP))
+                    .weightPercent(weightOf.getOrDefault(e.getId().toString(), BigDecimal.ZERO).setScale(2,
+                            RoundingMode.HALF_UP))
                     .position(pos++)
                     .sourceExam(e)
                     .build();
@@ -260,12 +324,14 @@ public class GradebookService {
         List<ImportReport> reports = new ArrayList<>();
         int refreshed = 0;
         for (GradebookColumn c : existing) {
-            if (c.getSourceExam() != null && exams.stream().anyMatch(x -> x.getId().equals(c.getSourceExam().getId()))) {
+            if (c.getSourceExam() != null
+                    && exams.stream().anyMatch(x -> x.getId().equals(c.getSourceExam().getId()))) {
                 reports.add(compute(c, c.getSourceExam(), true, true));
                 refreshed++;
             }
         }
-        for (GradebookColumn c : created) reports.add(compute(c, c.getSourceExam(), true));
+        for (GradebookColumn c : created)
+            reports.add(compute(c, c.getSourceExam(), true));
         return new ScanResult(buildGradebook(course), created.size(), refreshed, reports);
     }
 
@@ -293,7 +359,8 @@ public class GradebookService {
         checkCourse(c.getCourse().getId(), principal);
         validateColumn(req);
         String type = normalizeType(req.type(), false);
-        if (type != null) c.setType(type);
+        if (type != null)
+            c.setType(type);
         c.setWeightPercent(req.weightPercent().setScale(2, RoundingMode.HALF_UP));
         columnRepository.save(c);
         columnRepository.flush();
@@ -316,22 +383,30 @@ public class GradebookService {
 
     private String normalizeType(String type, boolean required) {
         if (type == null || type.isBlank()) {
-            if (required) throw new BadRequestException("Select a score column type (Assignment, Quiz, Midterm or Final)");
+            if (required)
+                throw new BadRequestException("Select a score column type (Assignment, Quiz, Midterm or Final)");
             return null;
         }
         String t = type.trim().toUpperCase();
-        if (!TYPES.contains(t)) throw new BadRequestException("Unknown score column type: " + type);
+        if (!TYPES.contains(t))
+            throw new BadRequestException("Unknown score column type: " + type);
         return t;
     }
 
-    /** Ten cot tu dong theo loai: chi 1 cot thi "Quiz", nhieu cot cung loai thi "Quiz 1", "Quiz 2"... */
+    /**
+     * Ten cot tu dong theo loai: chi 1 cot thi "Quiz", nhieu cot cung loai thi
+     * "Quiz 1", "Quiz 2"...
+     */
     private void renameColumns(Long courseId) {
         List<GradebookColumn> cols = columnRepository.findByCourse_IdOrderByPositionAscIdAsc(courseId);
         Map<String, Integer> total = new HashMap<>();
-        for (GradebookColumn c : cols) if (c.getType() != null) total.merge(c.getType(), 1, Integer::sum);
+        for (GradebookColumn c : cols)
+            if (c.getType() != null)
+                total.merge(c.getType(), 1, Integer::sum);
         Map<String, Integer> seen = new HashMap<>();
         for (GradebookColumn c : cols) {
-            if (c.getType() == null) continue;
+            if (c.getType() == null)
+                continue;
             String label = typeLabel(c.getType());
             int n = seen.merge(c.getType(), 1, Integer::sum);
             c.setName(total.get(c.getType()) > 1 ? label + " " + n : label);
@@ -350,43 +425,16 @@ public class GradebookService {
     }
 
     private void validateColumn(ColumnRequest req) {
-        if (req == null) throw new BadRequestException("Invalid request");
+        if (req == null)
+            throw new BadRequestException("Invalid request");
         if (req.weightPercent() == null || req.weightPercent().signum() < 0
                 || req.weightPercent().compareTo(HUNDRED) > 0) {
             throw new BadRequestException("Weight must be between 0 and 100 (%)");
         }
     }
 
-    // ------------------------------------------------------------------ cells
-
-    @Transactional
-    public Gradebook setCell(Long courseId, CellRequest req, UserPrincipal principal) {
-        Course course = checkCourse(courseId, principal);
-        GradebookColumn c = column(req.columnId());
-        if (!c.getCourse().getId().equals(courseId)) {
-            throw new BadRequestException("Column does not belong to this course");
-        }
-        if (enrollmentRepository.findActiveStudentsByCourse(courseId).stream()
-                .noneMatch(e -> e.getUser().getId().equals(req.studentId()))) {
-            throw new BadRequestException("Student is not enrolled in this course");
-        }
-        if (req.score() != null && (req.score().signum() < 0 || req.score().compareTo(TEN) > 0)) {
-            throw new BadRequestException("Score must be between 0 and 10");
-        }
-        Optional<GradebookScore> existing = scoreRepository.findByColumn_IdAndStudent_Id(c.getId(), req.studentId());
-        if (req.score() == null) {
-            existing.ifPresent(scoreRepository::delete);
-        } else {
-            GradebookScore s = existing.orElseGet(() -> GradebookScore.builder()
-                    .column(c).student(em.getReference(User.class, req.studentId())).build());
-            s.setScore(req.score().setScale(2, RoundingMode.HALF_UP));
-            s.setSource("MANUAL");
-            scoreRepository.save(s);
-        }
-        return buildGradebook(course);
-    }
-
-    // ------------------------------------------------------------------ exams / import
+    // ------------------------------------------------------------------ exams /
+    // import
 
     @Transactional(readOnly = true)
     public List<AvailableExam> availableExams(Long courseId, String type, UserPrincipal principal) {
@@ -397,7 +445,8 @@ public class GradebookService {
                 + "where (e.course.id = :cid or e.createdBy = :uid)"
                 + (cat != null ? " and e.category = :cat" : "") + " order by e.id desc", Exam.class)
                 .setParameter("cid", courseId).setParameter("uid", uid);
-        if (cat != null) query.setParameter("cat", com.example.starter_project_2025.system.exam.domain.ExamCategory.valueOf(cat));
+        if (cat != null)
+            query.setParameter("cat", com.example.starter_project_2025.system.exam.domain.ExamCategory.valueOf(cat));
         List<Exam> exams = query.getResultList();
         List<AvailableExam> out = new ArrayList<>();
         for (Exam e : exams) {
@@ -436,12 +485,18 @@ public class GradebookService {
         return compute(c, c.getSourceExam(), false);
     }
 
-    /** So khop theo user id: co diem + co trong lop -> add; co diem nhung khong trong lop -> thua; trong lop khong co diem -> thieu. */
+    /**
+     * So khop theo user id: co diem + co trong lop -> add; co diem nhung khong
+     * trong lop -> thua; trong lop khong co diem -> thieu.
+     */
     private ImportReport compute(GradebookColumn c, Exam exam, boolean apply) {
         return compute(c, exam, apply, false);
     }
 
-    /** keepManual = khong ghi de o diem giang vien da nhap tay (dung khi Scan lam moi cot co san). */
+    /**
+     * keepManual = khong ghi de o diem giang vien da nhap tay (dung khi Scan lam
+     * moi cot co san).
+     */
     private ImportReport compute(GradebookColumn c, Exam exam, boolean apply, boolean keepManual) {
         Map<Long, User> enrolled = new LinkedHashMap<>();
         for (CourseEnrollment en : enrollmentRepository.findActiveStudentsByCourse(c.getCourse().getId())) {
@@ -451,7 +506,8 @@ public class GradebookService {
         Map<Long, BigDecimal> best = new LinkedHashMap<>();
         Map<Long, User> examUsers = new HashMap<>();
         for (ExamAttempt a : attemptRepository.findAllByExam_Id(exam.getId())) {
-            if (a.getFinalScore() == null || a.getStudent() == null) continue;
+            if (a.getFinalScore() == null || a.getStudent() == null)
+                continue;
             BigDecimal max = a.getMaxScore() != null && a.getMaxScore().signum() > 0 ? a.getMaxScore()
                     : (exam.getMaxScore() != null && exam.getMaxScore().signum() > 0 ? exam.getMaxScore() : TEN);
             BigDecimal s10 = a.getFinalScore().multiply(TEN).divide(max, 2, RoundingMode.HALF_UP);
@@ -462,7 +518,7 @@ public class GradebookService {
         if (apply) {
             for (GradebookScore s : scoreRepository.findAllByCourse(c.getCourse().getId())) {
                 if (s.getColumn().getId().equals(c.getId()) && "EXAM".equals(s.getSource())) {
-                    scoreRepository.delete(s);   // bo diem cu lay tu bai thi truoc do
+                    scoreRepository.delete(s); // bo diem cu lay tu bai thi truoc do
                 }
             }
             scoreRepository.flush();
@@ -481,7 +537,7 @@ public class GradebookService {
                 GradebookScore s = scoreRepository.findByColumn_IdAndStudent_Id(c.getId(), u.getId())
                         .orElseGet(() -> GradebookScore.builder().column(c).student(u).build());
                 if (keepManual && "MANUAL".equals(s.getSource())) {
-                    continue;   // giu diem nhap tay
+                    continue; // giu diem nhap tay
                 }
                 s.setScore(e.getValue());
                 s.setSource("EXAM");
@@ -510,22 +566,28 @@ public class GradebookService {
     private Course checkCourse(Long courseId, UserPrincipal principal) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Course not found"));
-        if (accessGuard.isAdmin(principal)) return course;
+        if (accessGuard.isAdmin(principal))
+            return course;
         Long uid = principal.getUser().getId();
         boolean owner = course.getInstructorUser() != null && uid.equals(course.getInstructorUser().getId());
         if (!owner) {
-            Long n = em.createQuery("select count(e) from Exam e where e.course.id = :cid and e.createdBy = :uid", Long.class)
+            Long n = em
+                    .createQuery("select count(e) from Exam e where e.course.id = :cid and e.createdBy = :uid",
+                            Long.class)
                     .setParameter("cid", courseId).setParameter("uid", uid).getSingleResult();
             owner = n != null && n > 0;
         }
-        if (!owner) throw new BadRequestException("You do not manage this course");
+        if (!owner)
+            throw new BadRequestException("You do not manage this course");
         return course;
     }
 
     private void checkExamUsable(Exam exam, Long courseId, UserPrincipal principal) {
-        if (accessGuard.isAdmin(principal)) return;
+        if (accessGuard.isAdmin(principal))
+            return;
         boolean inCourse = exam.getCourse() != null && courseId.equals(exam.getCourse().getId());
         boolean mine = Objects.equals(exam.getCreatedBy(), principal.getUser().getId());
-        if (!inCourse && !mine) throw new BadRequestException("You cannot use this assessment");
+        if (!inCourse && !mine)
+            throw new BadRequestException("You cannot use this assessment");
     }
 }

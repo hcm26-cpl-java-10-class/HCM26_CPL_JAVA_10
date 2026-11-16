@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.exam.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import com.example.starter_project_2025.system.exam.domain.ExamRepository;
@@ -34,6 +36,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@StartupMutation
 public class ExamDataInitializer {
 
     private final ExamRepository examRepository;

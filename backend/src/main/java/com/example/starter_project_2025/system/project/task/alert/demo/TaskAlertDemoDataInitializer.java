@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.task.alert.demo;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -12,6 +14,7 @@ import javax.sql.DataSource;
 @Slf4j @Component @Order(21) @Profile("!test & !prod")
 @ConditionalOnProperty(name = "app.task-alert.demo.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
+@StartupMutation
 public class TaskAlertDemoDataInitializer implements CommandLineRunner {
     private final TaskAlertDemoDataService demo;
     private final DataSource dataSource;

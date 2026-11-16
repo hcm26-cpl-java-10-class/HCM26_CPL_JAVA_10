@@ -1,6 +1,19 @@
 import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
 import ScoreManagementPage from "@/pages/management/exam/score-management";
 import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
+import WeeklyCalendarPage from "@/pages/management/calendar/WeeklyCalendarPage";
+import ScheduleVersionListPage from "@/pages/management/demo/schedule_version";
+import AuditPage from "@/pages/management/training/audit";
+import TraineePage from "@/pages/management/training/trainee";
+import LogWorkPage from "@/pages/management/training/log-work";
+import TopicManagementPage from "@/pages/management/training/topic/TopicManagementPage";
+import ProgramManagementPage from "@/pages/management/training/program/ProgramManagementPage";
+import ReportsPage from "@/pages/management/training/reports";
+import ClassListPage from "@/pages/management/training/class/ClassListPage";
+import ClassDetailPage from "@/pages/management/training/class/ClassDetailPage";
+import ClassSetupPage from "@/pages/management/training/class/ClassSetupPage";
+import SessionDetailPage from "@/pages/management/demo/session/SessionDetailPage";
+import SessionManagementPage from "@/pages/management/demo/session/SessionManagementPage";
 import { Logout } from "@/components/auth/Logout";
 import { OAuth2RedirectHandler } from "@/components/auth/OAuth2RedirectHandler";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
@@ -74,6 +87,7 @@ import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
+import TrainerManagementPage from "@/pages/management/training/trainer/TrainerManagementPage";
 import { Navigate } from "react-router-dom";
 
 import SyllabusesPage from "@/pages/management/demo/syllabus";
@@ -114,6 +128,28 @@ export const ROLE_HOME_PATHS = [
 ] as const;
 
 export const routes: RouteConfig[] = [
+  { path: "/trainers", component: TrainerManagementPage, requiredPermission: "TRAINER_READ" },
+  // TRAINING OPERATIONS & LMS
+  { path: "/training/audit", component: AuditPage, isModuleDriven: true },
+  { path: "/training/trainee", component: TraineePage, isModuleDriven: true },
+  { path: "/training/log-work", component: LogWorkPage, isModuleDriven: true },
+  { path: "/training/content", component: TopicManagementPage, isModuleDriven: true },
+  { path: "/subjects", component: TopicManagementPage, requiredPermission: "SUBJECT_READ", isModuleDriven: true },
+  { path: "/topics", component: TopicManagementPage, requiredPermission: "SUBJECT_READ" },
+  { path: "/training/topics", component: TopicManagementPage, requiredPermission: "SUBJECT_READ" },
+  { path: "/programs", component: ProgramManagementPage, requiredPermission: "PROGRAM_READ", isModuleDriven: true },
+  { path: "/training/programs", component: ProgramManagementPage, requiredPermission: "PROGRAM_READ" },
+  { path: "/class-setup", component: ClassSetupPage, requiredPermission: "CLASS_READ", isModuleDriven: true },
+  { path: "/training/reports", component: ReportsPage, isModuleDriven: true },
+  { path: "/classes", component: ClassListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/classes/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/training-operations/class-details/:classCode", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/class-details/:classId", component: ClassDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/sessions/:sessionId", component: SessionDetailPage, requiredPermission: "SESSION_READ" },
+  { path: "/sessions", component: SessionManagementPage, requiredPermission: "SESSION_READ" },
+  { path: "/calendar/preview", component: WeeklyCalendarPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/schedule-versions", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/calendar/adjust", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/courses/:id/grades", component: CourseLearnerGradesPage, requiredPermissions: ["COURSE_REPORT_READ", "EXAM_READ"] },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
@@ -283,6 +319,12 @@ export const routes: RouteConfig[] = [
     path: "/backlogs",
     component: BacklogPage,
     requiredPermission: "SPRINT_READ",
+    isModuleDriven: false,
+  },
+  {
+    path: "/topic-marks",
+    component: TopicMarkGradebookDemoPage,
+    requiredPermission: "SESSION_READ",
     isModuleDriven: false,
   },
   {

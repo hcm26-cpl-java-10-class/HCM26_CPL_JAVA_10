@@ -41,6 +41,9 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
         d.setTopic(q.getTopic());
         d.setPoints(q.getPoints());
         d.setSourceQuestionId(q.getSourceQuestionId());
+        d.setSource(q.getSource());
+        d.setExamId(q.getExamId());
+        d.setIsAiGenerated(q.getIsAiGenerated() != null ? q.getIsAiGenerated() : "AI_GENERATED".equalsIgnoreCase(q.getSource()));
         d.setCode(q.getType() == QuestionType.CODING ? CodeSpecSupport.forTeacher(q.getCodeSpec()) : null);
         d.setGradingCriteria(q.getGradingCriteria().stream().map(criterion -> {
             QuestionDTO.EssayCriterionDTO dto = new QuestionDTO.EssayCriterionDTO();
@@ -76,6 +79,9 @@ public class QuestionMapper implements BaseCrudMapper<Question, QuestionDTO> {
             q.setTopic(d.getTopic().isBlank() ? null : d.getTopic().trim().toLowerCase());
         }
         if (d.getPoints() != null) q.setPoints(d.getPoints());
+        if (d.getSource() != null) q.setSource(d.getSource());
+        if (d.getExamId() != null) q.setExamId(d.getExamId());
+        if (d.getIsAiGenerated() != null) q.setIsAiGenerated(d.getIsAiGenerated());
 
         if (d.getGradingCriteria() != null) {
             q.getGradingCriteria().clear();

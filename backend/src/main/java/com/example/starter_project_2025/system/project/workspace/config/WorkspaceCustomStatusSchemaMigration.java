@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.workspace.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -19,6 +21,7 @@ import java.sql.DatabaseMetaData;
 @Component
 @Order(19)
 @RequiredArgsConstructor
+@StartupMutation
 public class WorkspaceCustomStatusSchemaMigration implements CommandLineRunner {
     private final DataSource dataSource;
     private final JdbcTemplate jdbc;
