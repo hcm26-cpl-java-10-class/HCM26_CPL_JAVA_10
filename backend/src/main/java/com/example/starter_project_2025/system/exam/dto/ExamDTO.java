@@ -114,6 +114,15 @@ public class ExamDTO extends BaseDTO {
     private Integer headTurnSeconds;
     private Integer fastSubmitPercent;
 
+    // ---- Tu danh gia / danh gia cheo (UFR-EXM-012) ----
+    private Boolean selfReviewEnabled;
+    private Boolean peerReviewEnabled;
+    @Min(value = 1, groups = {OnCreate.class, OnUpdate.class}, message = "peerReviewCount phải >= 1")
+    @Max(value = 5, groups = {OnCreate.class, OnUpdate.class}, message = "peerReviewCount tối đa 5")
+    private Integer peerReviewCount;
+    private Boolean peerReviewAnonymous;
+    private Boolean peerReviewShowReference;
+
     // ---- Lien ket voi course / section / lesson (tuy chon) ----
     private Long courseId;
     private Long sectionId;

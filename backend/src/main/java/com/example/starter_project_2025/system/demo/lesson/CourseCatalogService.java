@@ -58,6 +58,16 @@ public class CourseCatalogService {
             return new PageImpl<>(List.of(), safePageable, page.getTotalElements());
         }
 
+        return mapCatalog(page, userId);
+    }
+
+    public List<CatalogCourseDTO> recommendationCatalog(Long userId) {
+        var courses = courseRepository.findRecommendationCatalog();
+        if (courses.isEmpty()) return List.of();
+        return mapCatalog(new PageImpl<>(courses), userId).getContent();
+    }
+
+    private Page<CatalogCourseDTO> mapCatalog(Page<Course> page, Long userId) {
         List<Long> courseIds = page.getContent().stream().map(Course::getId).toList();
         Map<Long, CourseLessonStats> stats = lessonRepository.findStatsByCourseIds(courseIds).stream()
                 .collect(Collectors.toMap(CourseLessonStats::courseId, s -> s));

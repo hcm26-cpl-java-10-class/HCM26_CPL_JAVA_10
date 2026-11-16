@@ -138,6 +138,12 @@ export interface ExamDTO {
   headTurnAngleDeg?: number | null;
   headTurnSeconds?: number | null;
   fastSubmitPercent?: number | null;
+  // Tu danh gia / danh gia cheo (UFR-EXM-012)
+  selfReviewEnabled?: boolean;
+  peerReviewEnabled?: boolean;
+  peerReviewCount?: number | null;
+  peerReviewAnonymous?: boolean;
+  peerReviewShowReference?: boolean;
   // Optional link to a course / section / lesson (null = not linked)
   courseId?: number | null;
   sectionId?: number | null;

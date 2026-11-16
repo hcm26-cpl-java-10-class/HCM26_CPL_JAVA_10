@@ -36,6 +36,12 @@ export interface ExamConfigForm {
   courseName?: string;
   sectionTitle?: string;
   lessonTitle?: string;
+  // Tu danh gia / danh gia cheo (UFR-EXM-012)
+  selfReviewEnabled: boolean;
+  peerReviewEnabled: boolean;
+  peerReviewCount: string;
+  peerReviewAnonymous: boolean;
+  peerReviewShowReference: boolean;
 }
 
 export const DEFAULT_CONFIG: ExamConfigForm = {
@@ -69,6 +75,11 @@ export const DEFAULT_CONFIG: ExamConfigForm = {
   courseName: "",
   sectionTitle: "",
   lessonTitle: "",
+  selfReviewEnabled: false,
+  peerReviewEnabled: false,
+  peerReviewCount: "2",
+  peerReviewAnonymous: true,
+  peerReviewShowReference: false,
 };
 
 export const LATE_POLICY_LABEL: Record<LatePolicy, string> = {
@@ -144,6 +155,11 @@ export const configFromExam = (exam: ExamDTO): ExamConfigForm => ({
   courseName: exam.courseName ?? "",
   sectionTitle: exam.sectionTitle ?? "",
   lessonTitle: exam.lessonTitle ?? "",
+  selfReviewEnabled: exam.selfReviewEnabled ?? false,
+  peerReviewEnabled: exam.peerReviewEnabled ?? false,
+  peerReviewCount: exam.peerReviewCount != null ? String(exam.peerReviewCount) : "2",
+  peerReviewAnonymous: exam.peerReviewAnonymous ?? true,
+  peerReviewShowReference: exam.peerReviewShowReference ?? false,
 });
 
 /** Required selects that must be chosen by the teacher (no default value). */
@@ -173,6 +189,10 @@ export function validateConfig(_duration: number, cfg: ExamConfigForm): string |
   }
   if (Number(cfg.lateGraceMinutes) < 0) return "Grace period minutes must be >= 0.";
   if (cfg.latePolicy === "NOT_ALLOWED" && Number(cfg.lateGraceMinutes) > 0) return "Grace period can only be set when late submissions are allowed.";
+  if (cfg.peerReviewEnabled && cfg.peerReviewCount.trim() !== "") {
+    const count = Number(cfg.peerReviewCount);
+    if (!Number.isInteger(count) || count < 1 || count > 5) return "Number of peer reviewers must be between 1 and 5.";
+  }
   return null;
 }
 
@@ -222,5 +242,11 @@ export function buildExamRequest(title: string, duration: string, cfg: ExamConfi
     courseId: cfg.courseId ? Number(cfg.courseId) : null,
     sectionId: cfg.sectionId ? Number(cfg.sectionId) : null,
     lessonId: cfg.lessonId ? Number(cfg.lessonId) : null,
+    // Tu danh gia / danh gia cheo
+    selfReviewEnabled: cfg.selfReviewEnabled,
+    peerReviewEnabled: cfg.peerReviewEnabled,
+    peerReviewCount: cfg.peerReviewCount.trim() === "" ? 2 : Number(cfg.peerReviewCount),
+    peerReviewAnonymous: cfg.peerReviewAnonymous,
+    peerReviewShowReference: cfg.peerReviewShowReference,
   };
 }

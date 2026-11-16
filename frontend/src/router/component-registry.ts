@@ -77,6 +77,10 @@ import StudentTeamMilestoneSubmissionsPage from "@/pages/student/StudentTeamMile
 import MyScoresPage from "@/pages/student/MyScoresPage";
 import MyAppealsPage from "@/pages/student/MyAppealsPage";
 import ExamReviewPage from "@/pages/student/ExamReviewPage";
+import PeerReviewListPage from "@/pages/student/PeerReviewListPage";
+import PeerReviewFormPage from "@/pages/student/PeerReviewFormPage";
+import PeerReviewFeedbackPage from "@/pages/student/PeerReviewFeedbackPage";
+import PeerReviewOverviewPage from "@/pages/management/exam/reviews/PeerReviewOverviewPage";
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
 import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
@@ -501,6 +505,35 @@ export const routes: RouteConfig[] = [
     path: "/student/exams/attempts/:attemptId/review",
     component: ExamReviewPage,
     requiredPermission: "EXAM_TAKE",
+  },
+
+  // PEER / SELF REVIEW (UFR-EXM-012)
+  {
+    path: "/student/reviews",
+    component: PeerReviewListPage,
+    requiredPermission: "EXAM_REVIEW_READ",
+    isModuleDriven: false,
+  },
+
+  {
+    path: "/student/reviews/:assignmentId",
+    component: PeerReviewFormPage,
+    requiredPermission: "EXAM_REVIEW_READ",
+    isModuleDriven: false,
+  },
+
+  {
+    path: "/student/feedback",
+    component: PeerReviewFeedbackPage,
+    requiredPermission: "EXAM_REVIEW_READ",
+    isModuleDriven: false,
+  },
+
+  {
+    path: "/exams/:examId/reviews",
+    component: PeerReviewOverviewPage,
+    requiredPermission: "EXAM_REVIEW_VIEW_ALL",
+    isModuleDriven: false,
   },
 
   // MY SCORES / MY APPEALS
