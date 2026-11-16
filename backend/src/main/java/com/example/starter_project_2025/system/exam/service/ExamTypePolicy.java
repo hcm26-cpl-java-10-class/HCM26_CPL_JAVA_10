@@ -1,7 +1,11 @@
 package com.example.starter_project_2025.system.exam.service;
 
+import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamType;
+import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.QuestionType;
+
+import java.util.List;
 
 public final class ExamTypePolicy {
 
@@ -9,7 +13,38 @@ public final class ExamTypePolicy {
     }
 
     public static ExamType effective(ExamType type) {
-        return type == null ? ExamType.MIXED : type;
+        return type == null ? ExamType.MULTIPLE_CHOICE : type;
+    }
+
+    public static ExamType determineEffective(Exam exam) {
+        if (exam == null) {
+            return ExamType.MULTIPLE_CHOICE;
+        }
+        if (exam.getExamType() != null) {
+            return exam.getExamType();
+        }
+        if (exam.getQuestions() != null && !exam.getQuestions().isEmpty()) {
+            boolean hasMc = exam.getQuestions().stream().anyMatch(q -> q.getType() == QuestionType.MULTIPLE_CHOICE);
+            boolean hasCoding = exam.getQuestions().stream().anyMatch(q -> q.getType() == QuestionType.CODING);
+            boolean hasEssay = exam.getQuestions().stream().anyMatch(q -> q.getType() == QuestionType.ESSAY);
+
+            if (hasMc && !hasCoding && !hasEssay) return ExamType.MULTIPLE_CHOICE;
+            if (hasCoding && !hasMc && !hasEssay) return ExamType.CODING;
+            if (hasEssay && !hasMc && !hasCoding) return ExamType.ESSAY;
+            if (hasMc && hasCoding && !hasEssay) return ExamType.MC_CODING;
+            return ExamType.MIXED;
+        }
+        return ExamType.MULTIPLE_CHOICE;
+    }
+
+    public static List<QuestionType> allowedTypes(ExamType examType) {
+        return switch (effective(examType)) {
+            case MULTIPLE_CHOICE -> List.of(QuestionType.MULTIPLE_CHOICE);
+            case CODING -> List.of(QuestionType.CODING);
+            case ESSAY -> List.of(QuestionType.ESSAY);
+            case MC_CODING -> List.of(QuestionType.MULTIPLE_CHOICE, QuestionType.CODING);
+            case MIXED -> List.of(QuestionType.MULTIPLE_CHOICE, QuestionType.ESSAY, QuestionType.CODING);
+        };
     }
 
     public static boolean allows(ExamType examType, QuestionType questionType) {

@@ -46,3 +46,4 @@ export * from "./features/demo/lesson-report";
 export * from "./features/demo/course_review";
 export * from "./features/demo/course-analytics";
 export * from "./features/demo/course-ai-comparison";
+export * from "./features/ai-question-generator";

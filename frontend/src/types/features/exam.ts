@@ -65,6 +65,8 @@ export interface QuestionDTO {
   options: QuestionOptionDTO[];
   imageUrl?: string | null;
   code?: CodeSpec | null;
+  source?: string | null;
+  isAiGenerated?: boolean | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   createdBy?: number | null;
@@ -122,6 +124,7 @@ export interface ExamDTO {
   resultVisibility?: ResultVisibility;
   category?: ExamCategory;
   examType?: ExamType;
+  allowedQuestionTypes?: QuestionType[];
   questionIds?: number[];
   questions?: QuestionDTO[];
   totalPoints?: number;
