@@ -43,6 +43,8 @@ public class GradebookService {
     private final ExamAttemptRepository attemptRepository;
     private final ExamAccessGuard accessGuard;
     private final GradebookStateRepository stateRepository;
+    private final GradebookSaveLogRepository saveLogRepository;
+    private final com.example.starter_project_2025.system.notification.NotificationService notificationService;
     private final GradebookPublishedItemRepository publishedRepository;
     private final com.example.starter_project_2025.system.demo.course.CourseAssessmentCompletionService courseCompletion;
 
@@ -142,7 +144,7 @@ public class GradebookService {
                     sum = sum.add(sc.multiply(c.getWeightPercent()));
             }
             BigDecimal finalScore = columns.isEmpty() ? null
-                    : sum.divide(HUNDRED, 2, RoundingMode.HALF_UP);
+                    : sum.divide(HUNDRED, 2, RoundingMode.HALF_UP).min(TEN);
             rows.add(new StudentRow(u.getId(), u.getFullName(), u.getEmail(), u.getUserCode(), scores, finalScore));
         }
         java.time.LocalDateTime savedAt = stateRepository.findByCourse_Id(course.getId())
@@ -179,13 +181,35 @@ public class GradebookService {
     @Transactional
     public Gradebook save(Long courseId, UserPrincipal principal) {
         Course course = checkCourse(courseId, principal);
+        BigDecimal total = columnRepository.findByCourse_IdOrderByPositionAscIdAsc(courseId).stream()
+                .map(GradebookColumn::getWeightPercent).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (total.compareTo(HUNDRED) > 0) {
+            throw new BadRequestException("Total weight exceeds 100% (currently " + total.stripTrailingZeros().toPlainString() + "%). Reduce column weights before saving.");
+        }
         GradebookState st = stateRepository.findByCourse_Id(courseId)
                 .orElseGet(() -> GradebookState.builder().course(course).build());
         st.setSavedAt(java.time.LocalDateTime.now());
         st.setSavedByUser(principal.getUser().getId());
         stateRepository.save(st);
         publish(course);
-        return buildGradebook(course);
+        Gradebook result = buildGradebook(course);
+        saveLogRepository.save(GradebookSaveLog.builder().course(course).savedBy(principal.getUser().getId())
+                .savedByName(principal.getUser().getFullName()).savedAt(st.getSavedAt())
+                .columnCount(result.columns().size()).studentCount(result.students().size())
+                .totalWeight(result.totalWeight()).build());
+        String stamp = st.getSavedAt().toString();
+        for (StudentRow s : result.students()) {
+            notificationService.createOnce(s.id(), "gradebook.saved." + courseId + "." + s.id() + "." + stamp,
+                    "Scores updated",
+                    "Your scores for \"" + course.getName() + "\" have been updated.", "/my-scores");
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public List<GradebookSaveLog> history(Long courseId, UserPrincipal principal) {
+        checkCourse(courseId, principal);
+        return saveLogRepository.findByCourse_IdOrderBySavedAtDesc(courseId);
     }
 
     /**
@@ -407,35 +431,6 @@ public class GradebookService {
                 || req.weightPercent().compareTo(HUNDRED) > 0) {
             throw new BadRequestException("Weight must be between 0 and 100 (%)");
         }
-    }
-
-    // ------------------------------------------------------------------ cells
-
-    @Transactional
-    public Gradebook setCell(Long courseId, CellRequest req, UserPrincipal principal) {
-        Course course = checkCourse(courseId, principal);
-        GradebookColumn c = column(req.columnId());
-        if (!c.getCourse().getId().equals(courseId)) {
-            throw new BadRequestException("Column does not belong to this course");
-        }
-        if (enrollmentRepository.findActiveStudentsByCourse(courseId).stream()
-                .noneMatch(e -> e.getUser().getId().equals(req.studentId()))) {
-            throw new BadRequestException("Student is not enrolled in this course");
-        }
-        if (req.score() != null && (req.score().signum() < 0 || req.score().compareTo(TEN) > 0)) {
-            throw new BadRequestException("Score must be between 0 and 10");
-        }
-        Optional<GradebookScore> existing = scoreRepository.findByColumn_IdAndStudent_Id(c.getId(), req.studentId());
-        if (req.score() == null) {
-            existing.ifPresent(scoreRepository::delete);
-        } else {
-            GradebookScore s = existing.orElseGet(() -> GradebookScore.builder()
-                    .column(c).student(em.getReference(User.class, req.studentId())).build());
-            s.setScore(req.score().setScale(2, RoundingMode.HALF_UP));
-            s.setSource("MANUAL");
-            scoreRepository.save(s);
-        }
-        return buildGradebook(course);
     }
 
     // ------------------------------------------------------------------ exams /

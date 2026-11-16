@@ -31,9 +31,6 @@ public final class GradebookDTOs {
         public record ColumnRequest(String name, BigDecimal weightPercent, String type) {
         }
 
-        public record CellRequest(Long columnId, Long studentId, BigDecimal score) {
-        }
-
         public record ImportRequest(Long examId) {
         }
 

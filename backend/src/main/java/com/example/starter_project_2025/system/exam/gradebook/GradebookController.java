@@ -73,10 +73,10 @@ public class GradebookController {
         return ResponseEntity.ok(service.deleteColumn(columnId, p));
     }
 
-    @PutMapping("/courses/{courseId}/cells")
-    public ResponseEntity<Gradebook> setCell(@PathVariable Long courseId, @RequestBody CellRequest req,
+    @GetMapping("/courses/{courseId}/history")
+    public ResponseEntity<java.util.List<GradebookSaveLog>> history(@PathVariable Long courseId,
             @AuthenticationPrincipal UserPrincipal p) {
-        return ResponseEntity.ok(service.setCell(courseId, req, p));
+        return ResponseEntity.ok(service.history(courseId, p));
     }
 
     @GetMapping("/courses/{courseId}/available-exams")

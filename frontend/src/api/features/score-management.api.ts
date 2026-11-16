@@ -46,6 +46,15 @@ export interface SmGradebook {
   unsaved: boolean;
 }
 
+export interface SmSaveLog {
+  id: number;
+  savedAt: string;
+  savedByName: string | null;
+  columnCount: number;
+  studentCount: number;
+  totalWeight: number;
+}
+
 export interface SmAvailableExam {
   id: number;
   title: string;
@@ -138,8 +147,8 @@ export const scoreManagementApi = {
     (await axiosInstance.put<SmGradebook>(`${base}/columns/${columnId}`, { weightPercent, type })).data,
   deleteColumn: async (columnId: number): Promise<SmGradebook> =>
     (await axiosInstance.delete<SmGradebook>(`${base}/columns/${columnId}`)).data,
-  setCell: async (courseId: number, columnId: number, studentId: number, score: number | null): Promise<SmGradebook> =>
-    (await axiosInstance.put<SmGradebook>(`${base}/courses/${courseId}/cells`, { columnId, studentId, score })).data,
+  history: async (courseId: number): Promise<SmSaveLog[]> =>
+    (await axiosInstance.get<SmSaveLog[]>(`${base}/courses/${courseId}/history`)).data,
   availableExams: async (courseId: number, type?: SmColumnType | null): Promise<SmAvailableExam[]> =>
     (await axiosInstance.get<SmAvailableExam[]>(`${base}/courses/${courseId}/available-exams`, { params: type ? { type } : {} })).data,
   importExam: async (columnId: number, examId: number): Promise<SmImportReport> =>
