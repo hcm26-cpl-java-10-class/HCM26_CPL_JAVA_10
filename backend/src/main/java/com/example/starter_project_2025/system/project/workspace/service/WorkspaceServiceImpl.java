@@ -56,9 +56,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
     private Specification<ProjectTeam> candidateScope(WorkspaceCandidateFilter filter, User user) {
         access.requireTenant(user, false);
         return WorkspaceCandidateSpec.forTeamList(filter)
-                .and((root, query, cb) ->
-                        cb.equal(root.get("trainingClass").get("tenantId"),
-                                user.getTenant().getId()));
+                .and(WorkspaceCandidateSpec.forScope(user.getId(), user.getTenant().getId()));
     }
 
     @Override
