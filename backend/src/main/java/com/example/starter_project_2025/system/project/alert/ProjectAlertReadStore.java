@@ -1,6 +1,9 @@
 package com.example.starter_project_2025.system.project.alert;
 
-import com.example.starter_project_2025.system.project.*;
+import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamMemberHistory;
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
 import com.example.starter_project_2025.system.project.activity.ProjectActivityLog;
 import com.example.starter_project_2025.system.project.sprint.Sprint;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;

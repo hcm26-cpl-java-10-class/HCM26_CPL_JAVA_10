@@ -2,7 +2,7 @@ package com.example.starter_project_2025.system.project;
 
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.project.template.assignment.hierarchy.ProjectAssignmentService;
+import com.example.starter_project_2025.system.project.template.service.assignment.ProjectAssignmentService;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
