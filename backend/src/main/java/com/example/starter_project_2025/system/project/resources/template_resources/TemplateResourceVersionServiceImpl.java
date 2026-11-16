@@ -2,9 +2,9 @@ package com.example.starter_project_2025.system.project.resources.template_resou
 
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
-import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.template.service.ProjectTemplateAccessService;
 import jakarta.persistence.EntityManager;
 import java.util.Objects;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
@@ -16,8 +16,8 @@ import com.example.starter_project_2025.system.project.resources.TemplateResourc
 import com.example.starter_project_2025.system.project.resources.TemplateResourceFileStorage.StoredTemplateFile;
 import com.example.starter_project_2025.system.project.resources.template_resource_files.TemplateResourceFile;
 import com.example.starter_project_2025.system.project.resources.template_resource_files.TemplateResourceFileRepository;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateException;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.exception.ProjectTemplateException;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplateStatus;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
