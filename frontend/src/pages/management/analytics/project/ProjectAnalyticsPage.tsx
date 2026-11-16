@@ -145,13 +145,19 @@ function WidgetCard({ widget }: { widget: ProjectAnalyticsWidget }) {
   </Card>;
 }
 
-export default function ProjectAnalyticsPage() {
+/**
+ * `projectId` can be passed explicitly when the page is embedded in another
+ * shell (e.g. the workspace analytics tab), where the URL only carries the
+ * workspace id. Standalone `/projects/:projectId/analytics` keeps using the
+ * route param.
+ */
+export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { projectId?: number } = {}) {
   const { projectId: rawProjectId } = useParams<{ projectId: string }>();
-  const projectId = Number(rawProjectId);
+  const projectId = projectIdProp ?? Number(rawProjectId);
   const validId = Number.isSafeInteger(projectId) && projectId > 0;
   const { activeRole, effectivePermissions } = usePermissions();
   const homePath = getHomePathByRole(activeRole, effectivePermissions);
-  const projectSegment = rawProjectId ? [rawProjectId] : undefined;
+  const projectSegment = projectIdProp != null ? undefined : rawProjectId ? [rawProjectId] : undefined;
   const query = useQuery({
     queryKey: ["project-analytics-shell", projectId],
     queryFn: ({ signal }) => projectAnalyticsApi.shell(projectId, signal),
