@@ -57,6 +57,7 @@ import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
 import ProjectReportsPage from "@/pages/management/project-reports";
 import ProjectTemplateListPage from "@/pages/management/project-template";
+import ExamSupervisorPage from "@/pages/management/exam/supervisor";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
 import ArtifactDraftPage from "@/pages/student/ArtifactDraftPage";
@@ -181,6 +182,11 @@ export const routes: RouteConfig[] = [
     path: "/exams",
     component: ExamManagementPage,
     isModuleDriven: true,
+  },
+
+  {
+    path: "/exams/supervisor",
+    component: ExamSupervisorPage,
   },
 
   {

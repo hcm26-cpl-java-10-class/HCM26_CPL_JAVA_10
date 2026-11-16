@@ -1,7 +1,7 @@
 package com.example.starter_project_2025.system.exam.domain;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-
+import java.util.Collection;
 import java.util.List;
 
 /** NEW (anti-cheat) */
@@ -12,4 +12,8 @@ public interface ExamIntegrityEventRepository extends JpaRepository<ExamIntegrit
     List<ExamIntegrityEvent> findAllByAttemptIdOrderByOccurredAtAsc(Long attemptId);
 
     long countByAttemptId(Long attemptId);
+
+    List<ExamIntegrityEvent> findAllByAttemptIdInOrderByOccurredAtDesc(
+            Collection<Long> attemptIds
+    );
 }

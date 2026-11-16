@@ -11,6 +11,8 @@ import { useActiveModuleGroups } from "@/hooks/useSidebarMenus";
 import { iconMap } from "@/components/datatable/iconMap";
 import { setLogout } from "@/store/slices/auth/authSlice";
 import { useQueryClient } from "@tanstack/react-query";
+import { usePermissions } from "@/hooks/usePermissions";
+import { ADMIN_ROLE, TEACHER_ROLE, normalizeRole } from "@/utils/rbac.utils";
 
 const SIDEBAR_SCROLL_KEY = "sidebar_scroll_top";
 
@@ -28,6 +30,9 @@ export function SidebarMenu() {
     const dispatch = useDispatch();
     const queryClient = useQueryClient();
     const { toggleSidebar, state } = useSidebar();
+    const { activeRole } = usePermissions();
+    // Exam Supervisor API chỉ cho phép ADMIN / TEACHER.
+    const canSupervise = [ADMIN_ROLE, TEACHER_ROLE].includes(normalizeRole(activeRole));
     const {
         data: moduleGroups = [],
         isPending: isMenuLoading,
@@ -88,7 +93,8 @@ export function SidebarMenu() {
                                 (location.pathname.startsWith(`${module.url}/`) &&
                                     (!isExamsRoot ||
                                         (!location.pathname.startsWith("/exams/curriculum") &&
-                                            !location.pathname.startsWith("/exams/score-management")))));
+                                            !location.pathname.startsWith("/exams/score-management") &&
+                                            !location.pathname.startsWith("/exams/supervisor")))));
 
                         return {
                             title: module.title ?? "Untitled",
@@ -135,6 +141,18 @@ export function SidebarMenu() {
                     ];
                 }
 
+                if (isAssessmentGroup && canSupervise && !items.some((i) => i.url === "/exams/supervisor")) {
+                    items = [
+                        ...items,
+                        {
+                            title: "Exam Supervisor",
+                            url: "/exams/supervisor",
+                            icon: resolveIcon("shield-check"),
+                            isActive: location.pathname.startsWith("/exams/supervisor"),
+                        },
+                    ];
+                }
+
                 return {
                     id: group.id ?? group.name ?? "group",
                     name: group.name ?? "Menu",
@@ -143,7 +161,7 @@ export function SidebarMenu() {
                 };
             })
             .filter((group) => !group.hiddenInMenu && group.items.length > 0);
-    }, [location.pathname, moduleGroups]);
+    }, [location.pathname, moduleGroups, canSupervise]);
 
     // Restore the menu scroll position after remounts (each page renders its own layout),
     // then make sure the active item is visible.
