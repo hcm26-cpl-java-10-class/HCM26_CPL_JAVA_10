@@ -294,6 +294,19 @@ export function useActiveModuleGroups(enabled = true) {
                 });
             }
 
+            // US-GIT-001: Git Integration hub (no Module row is seeded for it yet).
+            if (
+                !modules.some((module) => module.url === "/git-integration") &&
+                (hasPermission("GIT_INTEGRATION_READ") || hasPermission("GIT_INTEGRATION_MANAGE"))
+            ) {
+                groupedModules[projectGroupId].push({
+                    id: 100008, moduleGroupId: projectGroupId, title: "Git Integration", name: "Git Integration",
+                    url: "/git-integration", icon: "git-branch", displayOrder: 5.5,
+                    requiredPermission: hasPermission("GIT_INTEGRATION_READ") ? "GIT_INTEGRATION_READ" : "GIT_INTEGRATION_MANAGE",
+                    isActive: true,
+                });
+            }
+
             if (!modules.some((module) => module.url === "/project-board")) {
                 groupedModules[projectGroupId].push({
                     id: 100004,

@@ -1,11 +1,11 @@
 package com.example.starter_project_2025.system.git_integration.service;
 
 import com.example.starter_project_2025.system.git_integration.config.GitHubAppProperties;
-import com.example.starter_project_2025.system.git_integration.domain.GitIntegrationOAuthState;
 import com.example.starter_project_2025.system.git_integration.domain.GitOAuthOutcome;
+import com.example.starter_project_2025.system.git_integration.domain.GitOAuthState;
 import com.example.starter_project_2025.system.git_integration.domain.GitProvider;
 import com.example.starter_project_2025.system.git_integration.exception.GitIntegrationException;
-import com.example.starter_project_2025.system.git_integration.repository.GitIntegrationOAuthStateRepository;
+import com.example.starter_project_2025.system.git_integration.repository.GitOAuthStateRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -23,7 +23,7 @@ import java.util.HexFormat;
 
 /**
  * Issues and consumes the one-time {@code state} that ties a GitHub callback
- * to the user and project that started the flow. Each method commits in its
+ * to the user and tenant that started the flow. Each method commits in its
  * own transaction so a consumed state stays consumed even if a later step fails.
  */
 @Service
@@ -32,12 +32,12 @@ public class GitHubOAuthStateService {
     private static final int STATE_BYTES = 32;
     private static final int MAX_STATE_LENGTH = 128;
 
-    private final GitIntegrationOAuthStateRepository states;
+    private final GitOAuthStateRepository states;
     private final GitHubAppProperties properties;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
 
-    public GitHubOAuthStateService(GitIntegrationOAuthStateRepository states,
+    public GitHubOAuthStateService(GitOAuthStateRepository states,
                                    GitHubAppProperties properties,
                                    @Qualifier("gitIntegrationClock") Clock clock) {
         this.states = states;
@@ -52,19 +52,19 @@ public class GitHubOAuthStateService {
         }
     }
 
-    public record ConsumedState(Long id, Long userId, Long projectId) {
+    public record ConsumedState(Long id, Long userId, Long tenantId) {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public IssuedState issue(Long userId, Long projectId) {
+    public IssuedState issue(Long userId, Long tenantId) {
         byte[] bytes = new byte[STATE_BYTES];
         random.nextBytes(bytes);
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         LocalDateTime expiresAt = LocalDateTime.now(clock).plusSeconds(properties.getStateTtlSeconds());
-        states.save(GitIntegrationOAuthState.builder()
+        states.save(GitOAuthState.builder()
                 .stateHash(hash(raw))
                 .userId(userId)
-                .projectId(projectId)
+                .tenantId(tenantId)
                 .provider(GitProvider.GITHUB)
                 .expiresAt(expiresAt)
                 .build());
@@ -72,23 +72,24 @@ public class GitHubOAuthStateService {
     }
 
     /**
-     * Marks the state as used. Rejects unknown, expired, already used, or
-     * other users' states with the same error so nothing leaks to the caller.
+     * Marks the state as used. Unknown, expired, already used, foreign-user or
+     * foreign-tenant states all get the same error so nothing leaks.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = GitIntegrationException.class)
-    public ConsumedState consume(String rawState, Long userId) {
+    public ConsumedState consume(String rawState, Long userId, Long tenantId) {
         if (!StringUtils.hasText(rawState) || rawState.length() > MAX_STATE_LENGTH) {
             throw GitIntegrationException.stateInvalid();
         }
-        GitIntegrationOAuthState state = states.findByStateHashForUpdate(hash(rawState))
+        GitOAuthState state = states.findByStateHashForUpdate(hash(rawState))
                 .orElseThrow(GitIntegrationException::stateInvalid);
         LocalDateTime now = LocalDateTime.now(clock);
         // A foreign user must not be able to burn someone else's state, so check ownership first.
-        if (!state.getUserId().equals(userId) || state.getConsumedAt() != null || !state.getExpiresAt().isAfter(now)) {
+        if (!state.getUserId().equals(userId) || !state.getTenantId().equals(tenantId)
+                || state.getConsumedAt() != null || !state.getExpiresAt().isAfter(now)) {
             throw GitIntegrationException.stateInvalid();
         }
         state.setConsumedAt(now);
-        return new ConsumedState(state.getId(), state.getUserId(), state.getProjectId());
+        return new ConsumedState(state.getId(), state.getUserId(), state.getTenantId());
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

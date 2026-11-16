@@ -20,31 +20,30 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 
 /**
- * A GitHub App installation linked to a master project. Holds only public
- * installation metadata: no token, secret or key is ever stored here.
+ * GI-01: a GitHub App installation on a GitHub account or organization,
+ * owned by one tenant of the platform. It is deliberately not tied to a
+ * project: projects pick repositories from installations later (GI-02).
+ * Holds only public metadata — no token, secret or key.
  */
 @Entity
 @Table(
-        name = "git_integration_connections",
+        name = "git_installations",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_git_connection_provider_installation",
+                name = "uk_git_installation_provider_installation",
                 columnNames = {"provider", "installation_id"}),
         indexes = @Index(
-                name = "idx_git_connection_project",
-                columnList = "project_id, provider, is_active"))
+                name = "idx_git_installation_tenant",
+                columnList = "tenant_id, provider, is_active"))
 @Getter
 @Setter
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class GitIntegrationConnection extends BaseEntity {
+public class GitInstallation extends BaseEntity {
 
     @Column(name = "tenant_id", nullable = false)
     Long tenantId;
-
-    @Column(name = "project_id", nullable = false)
-    Long projectId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", nullable = false, length = 20)
@@ -67,7 +66,7 @@ public class GitIntegrationConnection extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    GitConnectionStatus status;
+    GitInstallationStatus status;
 
     @Column(name = "connected_by_user_id", nullable = false)
     Long connectedByUserId;

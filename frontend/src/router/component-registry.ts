@@ -52,6 +52,8 @@ import WorkspaceCandidatePage from "@/pages/management/workspace/WorkspaceCandid
 import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPage";
 import ProjectAnalyticsPage from "@/pages/management/analytics/project/ProjectAnalyticsPage";
 import ProjectAnalyticsIndexPage from "@/pages/management/analytics/project/ProjectAnalyticsIndexPage";
+import GitIntegrationIndexPage from "@/pages/management/git-integration/GitIntegrationIndexPage";
+import GitHubCallbackPage from "@/pages/management/git-integration/GitHubCallbackPage";
 import { createElement } from "react";
 import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
@@ -358,6 +360,13 @@ export const routes: RouteConfig[] = [
   { path: "/projects/:projectId/milestones", component: MilestoneListPage, requiredPermission: "MILESTONE_READ" },
   { path: "/projects/:projectId/analytics", component: ProjectAnalyticsPage, requiredPermission: "PROJECT_ANALYTICS_READ" },
   { path: "/analytics/projects", component: ProjectAnalyticsIndexPage, requiredPermission: "PROJECT_ANALYTICS_READ" },
+  // GI-01: GitHub App installations of the organization (not tied to a project).
+  { path: "/git-integration", component: GitIntegrationIndexPage, requiredPermissions: ["GIT_INTEGRATION_READ", "GIT_INTEGRATION_MANAGE"] },
+  // Former project-level page; installations are organization-wide now.
+  { path: "/projects/:projectId/git-integration", component: () => createElement(Navigate, { to: "/git-integration", replace: true }) },
+  // Must equal the GitHub App "Callback URL". Public so an ended session can be
+  // explained instead of silently dropping the one-time code; the page checks sign-in itself.
+  { path: "/git-integration/github/callback", component: GitHubCallbackPage, isPublic: true },
   { path: "/teams/:teamId/milestones/new", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
   { path: "/teams/:teamId/milestones/:milestoneId/edit", component: MilestoneCreatePage, requiredPermission: "MILESTONE_WRITE" },
   { path: "/teams/:teamId/milestones/:milestoneId", component: TeamMilestoneDetailPage, requiredPermission: "MILESTONE_READ" },

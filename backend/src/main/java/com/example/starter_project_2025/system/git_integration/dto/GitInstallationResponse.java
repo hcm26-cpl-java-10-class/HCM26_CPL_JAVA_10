@@ -1,14 +1,14 @@
 package com.example.starter_project_2025.system.git_integration.dto;
 
-import com.example.starter_project_2025.system.git_integration.domain.GitConnectionStatus;
+import com.example.starter_project_2025.system.git_integration.domain.GitInstallationStatus;
 
 import java.time.LocalDateTime;
 
-public record GitHubConnectionResponse(
+/** Public view of an installation; never carries tokens or secrets. */
+public record GitInstallationResponse(
         Long id,
-        Long projectId,
         Long installationId,
-        GitConnectionStatus status,
+        GitInstallationStatus status,
         String accountLogin,
         String accountType,
         String repositorySelection,

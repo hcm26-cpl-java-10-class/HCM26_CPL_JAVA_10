@@ -43,7 +43,7 @@ public class GitIntegrationException extends RuntimeException {
 
     public static GitIntegrationException linkedElsewhere() {
         return new GitIntegrationException(HttpStatus.CONFLICT, "GIT_INSTALLATION_LINKED_ELSEWHERE",
-                "Installation GitHub này đã được kết nối với một project khác");
+                "Installation GitHub này đã được một tổ chức khác trên hệ thống kết nối");
     }
 
     public static GitIntegrationException providerUnavailable() {

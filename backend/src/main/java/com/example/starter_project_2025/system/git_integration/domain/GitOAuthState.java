@@ -19,12 +19,12 @@ import java.time.LocalDateTime;
 
 /**
  * One-time anti-CSRF state issued when a user starts "Connect GitHub".
- * Only the SHA-256 hash of the state is stored; the raw value lives in the
- * user's browser for at most {@code app.github.state-ttl-seconds}.
+ * Only the SHA-256 hash is stored. Lifecycle: ISSUED (consumed_at null, not
+ * expired) → CONSUMED (consumed_at set, with outcome) or EXPIRED.
  */
 @Entity
 @Table(
-        name = "git_integration_oauth_states",
+        name = "git_oauth_states",
         indexes = @Index(name = "idx_git_oauth_state_expires", columnList = "expires_at"))
 @Getter
 @Setter
@@ -32,7 +32,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class GitIntegrationOAuthState extends BaseEntity {
+public class GitOAuthState extends BaseEntity {
 
     @Column(name = "state_hash", nullable = false, unique = true, length = 64)
     String stateHash;
@@ -40,8 +40,8 @@ public class GitIntegrationOAuthState extends BaseEntity {
     @Column(name = "user_id", nullable = false)
     Long userId;
 
-    @Column(name = "project_id", nullable = false)
-    Long projectId;
+    @Column(name = "tenant_id", nullable = false)
+    Long tenantId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", nullable = false, length = 20)

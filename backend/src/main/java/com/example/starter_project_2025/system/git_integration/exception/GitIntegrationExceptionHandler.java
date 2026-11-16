@@ -1,7 +1,6 @@
 package com.example.starter_project_2025.system.git_integration.exception;
 
-import com.example.starter_project_2025.system.git_integration.controller.GitHubCallbackController;
-import com.example.starter_project_2025.system.git_integration.controller.ProjectGitIntegrationController;
+import com.example.starter_project_2025.system.git_integration.controller.GitInstallationController;
 import com.example.starter_project_2025.system.git_integration.dto.GitIntegrationErrorResponse;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +24,7 @@ import java.time.LocalDateTime;
  * from secrets can leak through an unexpected error.
  */
 @Slf4j
-@RestControllerAdvice(assignableTypes = {ProjectGitIntegrationController.class, GitHubCallbackController.class})
+@RestControllerAdvice(assignableTypes = GitInstallationController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class GitIntegrationExceptionHandler {
 
@@ -51,8 +50,7 @@ public class GitIntegrationExceptionHandler {
         if (status == null) {
             status = HttpStatus.INTERNAL_SERVER_ERROR;
         }
-        String code = status == HttpStatus.NOT_FOUND ? "PROJECT_NOT_FOUND" : status.name();
-        return error(status, code, status == HttpStatus.NOT_FOUND ? "Không tìm thấy project" : status.getReasonPhrase());
+        return error(status, status.name(), status.getReasonPhrase());
     }
 
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
