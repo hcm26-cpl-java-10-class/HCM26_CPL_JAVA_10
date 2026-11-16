@@ -424,6 +424,22 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
         </table>
       </div>
 
+      {data.columns.some((c) => c.examId != null && !c.published) && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-950/20">
+          <p className="font-medium text-amber-700 dark:text-amber-400">Assessments whose scores are not published yet</p>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Only published scores are imported. Publish the results of these assessments, then scan again.
+          </p>
+          <ul className="list-disc space-y-0.5 pl-5">
+            {data.columns.filter((c) => c.examId != null && !c.published).map((c) => (
+              <li key={c.id}>
+                <span className="font-medium">{c.name}</span> ← {c.examTitle}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {reports.map((report) => (
         <div key={report.columnId} className="space-y-4">
           <div className="flex items-center justify-between">
@@ -432,6 +448,10 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
             </h3>
             <Button variant="ghost" size="sm" onClick={() => setReports((rs) => rs.filter((r) => r.columnId !== report.columnId))}>Hide</Button>
           </div>
+          {!report.published ? (
+            <p className="text-sm text-amber-700">Scores of this assessment are not published yet, so none were imported.</p>
+          ) : (
+            <>
           <p className="text-sm text-muted-foreground">{report.imported} student(s) matched by ID and received a score.</p>
           <PeopleTable
             title="Extra students"
@@ -444,6 +464,8 @@ function Gradebook({ courseId, onBack }: { courseId: number; onBack: () => void 
             description="Enrolled in this course but have no score in the assessment."
             rows={report.missing}
           />
+            </>
+          )}
         </div>
       ))}
 

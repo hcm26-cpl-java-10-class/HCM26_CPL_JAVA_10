@@ -43,6 +43,7 @@ public class GradebookService {
     private final ExamAttemptRepository attemptRepository;
     private final ExamAccessGuard accessGuard;
     private final GradebookStateRepository stateRepository;
+    private final com.example.starter_project_2025.system.exam.service.ExamResultAccessService resultAccess;
     private final GradebookSaveLogRepository saveLogRepository;
     private final com.example.starter_project_2025.system.notification.NotificationService notificationService;
     private final GradebookPublishedItemRepository publishedRepository;
@@ -131,7 +132,8 @@ public class GradebookService {
             totalWeight = totalWeight.add(c.getWeightPercent());
             Exam e = c.getSourceExam();
             colDtos.add(new ColumnDto(c.getId(), c.getName(), c.getType(), c.getWeightPercent(),
-                    e == null ? null : e.getId(), e == null ? null : e.getTitle()));
+                    e == null ? null : e.getId(), e == null ? null : e.getTitle(),
+                    e == null || resultAccess.canStudentSeeScoreOnMyScores(e)));
         }
         List<StudentRow> rows = new ArrayList<>();
         for (CourseEnrollment en : enrollmentRepository.findActiveStudentsByCourse(course.getId())) {
@@ -505,12 +507,14 @@ public class GradebookService {
         // diem cao nhat cua moi nguoi (quy ve thang 10)
         Map<Long, BigDecimal> best = new LinkedHashMap<>();
         Map<Long, User> examUsers = new HashMap<>();
-        for (ExamAttempt a : attemptRepository.findAllByExam_Id(exam.getId())) {
-            if (a.getFinalScore() == null || a.getStudent() == null)
+        // chi lay diem bai thi da public cho sinh vien va luot thi da cham xong
+        boolean published = resultAccess.canStudentSeeScoreOnMyScores(exam);
+        for (ExamAttempt a : published ? attemptRepository.findAllByExam_Id(exam.getId()) : List.<ExamAttempt>of()) {
+            if (!com.example.starter_project_2025.system.demo.course.CourseAssessmentService.fullyGraded(a)
+                    || a.getStudent() == null)
                 continue;
-            BigDecimal max = a.getMaxScore() != null && a.getMaxScore().signum() > 0 ? a.getMaxScore()
-                    : (exam.getMaxScore() != null && exam.getMaxScore().signum() > 0 ? exam.getMaxScore() : TEN);
-            BigDecimal s10 = a.getFinalScore().multiply(TEN).divide(max, 2, RoundingMode.HALF_UP);
+            BigDecimal s10 = com.example.starter_project_2025.system.demo.course.CourseAssessmentService
+                    .normalized(a).setScale(2, RoundingMode.HALF_UP);
             Long sid = a.getStudent().getId();
             examUsers.put(sid, a.getStudent());
             best.merge(sid, s10, BigDecimal::max);
@@ -545,12 +549,12 @@ public class GradebookService {
             }
         }
         List<PersonItem> missing = new ArrayList<>();
-        for (User u : enrolled.values()) {
+        for (User u : published ? enrolled.values() : List.<User>of()) {
             if (!best.containsKey(u.getId())) {
                 missing.add(person(u, null, "Enrolled but has no score in this assessment"));
             }
         }
-        return new ImportReport(c.getId(), c.getName(), exam.getId(), exam.getTitle(), imported, extra, missing);
+        return new ImportReport(c.getId(), c.getName(), exam.getId(), exam.getTitle(), imported, extra, missing, published);
     }
 
     private PersonItem person(User u, BigDecimal score, String reason) {
