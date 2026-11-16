@@ -40,6 +40,9 @@ class ExamResultStatisticsServiceTest {
     private ExamResultReadinessService readinessService;
 
     @Mock
+    private ExamGradeScaleService gradeScaleService;
+
+    @Mock
     private ExamIntegrityEventRepository integrityEventRepository;
 
     @Mock

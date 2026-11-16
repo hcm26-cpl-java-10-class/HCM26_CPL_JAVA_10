@@ -949,7 +949,7 @@ function AssessmentOutlineRow({ assessment, enrolled, canManage }: {
           {assessment.durationMinutes != null ? ` · ${assessment.durationMinutes} min` : ""}</p></div>
     </div>
     {canManage ? <Button asChild variant="outline" size="sm"><Link to={`/exams/${assessment.id}${returnQuery}`}>Manage assessment</Link></Button> :
-      enrolled ? <Button asChild variant="outline" size="sm"><Link to={`/student/exams/${assessment.id}/take`}>Open assessment</Link></Button> :
+      enrolled ? <Button asChild variant="outline" size="sm"><Link to={`/student/exams/${assessment.id}/prepare?returnTo=${encodeURIComponent(location.pathname + location.search + "#course-assessments")}`}>Open assessment</Link></Button> :
       <span className="text-xs text-muted-foreground">Enroll to take this assessment</span>}
   </li>;
 }

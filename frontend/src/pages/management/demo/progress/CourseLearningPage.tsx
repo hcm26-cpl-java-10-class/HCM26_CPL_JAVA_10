@@ -1,3 +1,4 @@
+import { assessmentPreparationPath } from "@/utils/assessment-navigation";
 import { COURSE_GRADE_STATUS_LABEL } from "@/types/features/course-my-scores";
 
 import { certificateApi, examApi, progressApi } from "@/api";
@@ -69,16 +70,9 @@ export function CourseLearningPage() {
   });
 
   const openExam = (exam: CourseExam) => {
-    if (exam.locked) {
-      toast.error(
-          exam.lockReason ?? "Complete the required lessons to unlock this exam."
-      );
-      return;
-    }
-
-    navigate(`/student/exams/${exam.id}/take`, {
+    navigate(assessmentPreparationPath(exam.id, `/enrollments/${enrollmentId}/learn${activeLessonId ? `?lessonId=${activeLessonId}` : ""}`), {
       state: {
-        returnTo: `/enrollments/${enrollmentId}/learn`,
+        returnTo: `/enrollments/${enrollmentId}/learn${activeLessonId ? `?lessonId=${activeLessonId}` : ""}`,
       },
     });
   };
