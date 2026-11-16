@@ -41,6 +41,7 @@ import TeamAllocationSetupPage from "@/pages/management/team-allocation/setup";
 import TeamAllocationClassListPage from "@/pages/management/team-allocation/class-list";
 import ProjectAssignmentPage from "@/pages/management/team-allocation/ProjectAssignmentPage";
 import StudentExamList from "@/pages/student/StudentExamList";
+import StudentExamPreparationPage from "@/pages/student/StudentExamPreparationPage";
 import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import ExploreProjectsPage from "@/pages/student/projects/explore";
@@ -217,6 +218,7 @@ export const routes: RouteConfig[] = [
   {
     path: "/exams",
     component: ExamManagementPage,
+    requiredPermission: "EXAM_READ",
     isModuleDriven: true,
   },
 
@@ -499,6 +501,12 @@ export const routes: RouteConfig[] = [
     component: StudentExamList,
     requiredPermission: "EXAM_READ",
     isModuleDriven: true,
+  },
+
+  {
+    path: "/student/exams/:examId/prepare",
+    component: StudentExamPreparationPage,
+    requiredPermission: "EXAM_TAKE",
   },
 
   {

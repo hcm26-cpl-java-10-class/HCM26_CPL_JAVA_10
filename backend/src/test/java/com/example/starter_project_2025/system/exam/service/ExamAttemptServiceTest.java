@@ -49,6 +49,9 @@ class ExamAttemptServiceTest {
     private ExamAttemptRepository attemptRepository;
 
     @Mock
+    private ExamQuestionPoolVersionRepository poolVersionRepository;
+
+    @Mock
     private com.example.starter_project_2025.system.rbac.user.UserRepository userRepository;
 
     @Mock

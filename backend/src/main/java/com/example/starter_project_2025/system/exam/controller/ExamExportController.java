@@ -26,7 +26,7 @@ public class ExamExportController {
     private final ExamExportService exportService;
 
     @GetMapping("/xlsx")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     @Operation(summary = "Export assessments to Excel (.xlsx)")
     public ResponseEntity<byte[]> exportExcel(
             @ModelAttribute ExamFilter filter,
@@ -40,7 +40,7 @@ public class ExamExportController {
     }
 
     @GetMapping("/csv")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     @Operation(summary = "Export assessments to CSV (.csv)")
     public ResponseEntity<byte[]> exportCsv(
             @ModelAttribute ExamFilter filter,
@@ -54,7 +54,7 @@ public class ExamExportController {
     }
 
     @GetMapping("/pdf")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     @Operation(summary = "Export assessments to PDF (.pdf)")
     public ResponseEntity<byte[]> exportPdf(
             @ModelAttribute ExamFilter filter,
@@ -68,7 +68,7 @@ public class ExamExportController {
     }
 
     @GetMapping("/template")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     @Operation(summary = "Download sample template for importing assessments")
     public ResponseEntity<byte[]> downloadTemplate(
             @RequestParam(defaultValue = "xlsx") String format

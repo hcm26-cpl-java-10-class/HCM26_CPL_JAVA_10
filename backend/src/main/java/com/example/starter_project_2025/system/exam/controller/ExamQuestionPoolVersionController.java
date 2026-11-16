@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.exam.dto.ExamQuestionPoolVersionH
 import com.example.starter_project_2025.system.exam.service.ExamQuestionPoolVersionService;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +15,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/exams")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_UPDATE')")
 public class ExamQuestionPoolVersionController {
 
     private final ExamQuestionPoolVersionService poolVersionService;

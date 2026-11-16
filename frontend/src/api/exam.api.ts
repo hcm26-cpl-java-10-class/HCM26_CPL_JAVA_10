@@ -213,7 +213,7 @@ export interface PageResponse<T> {
 }
 
 export const getStudentExams = async (page = 0, size = 10) => {
-    const response = await api.get<PageResponse<Exam>>('/exams', {
+    const response = await api.get<PageResponse<Exam>>('/exams/learner', {
         params: { page, size, isActive: true, status: 'PUBLISHED' }
     });
     return response.data;
@@ -501,3 +501,20 @@ export const getIntegrityEvents = async (examId: number, attemptId: number) => {
     );
     return response.data;
 };
+
+export interface ExamPreparation {
+  exam: Exam;
+  questionCount: number;
+  passScore: number | null;
+  attemptsUsed: number;
+  attemptsRemaining: number;
+  canStart: boolean;
+  canResume: boolean;
+  unavailableReason: string | null;
+  antiCheatEnabled: boolean;
+  requireFullscreen: boolean;
+  cameraProctoring: boolean;
+  attempts: { summary: ExamAttemptSummary; canReview: boolean }[];
+}
+export const getExamPreparation = async (id: number) => (await api.get<ExamPreparation>(`/exams/${id}/preparation`)).data;
+export const getCurrentExamAttempt = async (id: number) => (await api.get<ExamAttempt>(`/exams/${id}/attempt/current`)).data;

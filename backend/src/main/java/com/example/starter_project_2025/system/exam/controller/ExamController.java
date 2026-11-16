@@ -4,6 +4,7 @@ import com.example.starter_project_2025.init.annotation.ResourceMenu;
 import com.example.starter_project_2025.base.crud.controller.BaseCrudController;
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
 import com.example.starter_project_2025.base.crud.dto.OnUpdate;
+import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
 import org.springframework.data.domain.Page;
@@ -34,12 +35,48 @@ import java.util.List;
         order = 2,
         permission = "EXAM_READ"
 )
+@PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
 public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter> {
 
     private final ExamServiceImpl service;
 
     @Override
     protected BaseCrudService<Long, ExamDTO, ExamFilter> getService() { return service; }
+
+    // Redeclare inherited CRUD methods: method security on this subclass does not
+    // protect methods declared only on the generic controller superclass.
+    @Override
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    public ResponseEntity<Page<ExamDTO>> getAll(
+            @org.springframework.data.web.PageableDefault Pageable pageable,
+            @RequestParam(required = false) String search, @ModelAttribute ExamFilter filter) {
+        return super.getAll(pageable, search, filter);
+    }
+
+    @Override
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    public ResponseEntity<ExamDTO> getById(@PathVariable Long id) { return super.getById(id); }
+
+    @Override
+    @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    public ResponseEntity<ExamDTO> create(@Validated(OnCreate.class) @RequestBody ExamDTO request) {
+        return super.create(request);
+    }
+
+    @Override
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    public ResponseEntity<ExamDTO> update(@PathVariable Long id, @Validated(OnUpdate.class) @RequestBody ExamDTO request) {
+        return super.update(id, request);
+    }
+
+    @Override
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
+    public ResponseEntity<Void> delete(@PathVariable Long id) { return super.delete(id); }
 
     public record AddQuestionsRequest(@NotEmpty List<Long> questionIds) {}
 
@@ -50,7 +87,7 @@ public class ExamController extends BaseCrudController<Long, ExamDTO, ExamFilter
     }
 
     @GetMapping("/invitations/overview")
-    @PreAuthorize("hasAuthority('INVITATION_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('INVITATION_READ')")
     public ResponseEntity<List<ExamInvitationOverviewDTO>> listInvitationOverviews(
             @AuthenticationPrincipal UserPrincipal principal
     ) {
