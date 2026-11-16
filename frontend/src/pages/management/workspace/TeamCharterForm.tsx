@@ -1,46 +1,23 @@
+import { useQuery } from "@tanstack/react-query";
 import { projectHubApi } from "@/api/features/project-hub.api";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/usePermissions";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { TeamCharter } from "@/types/features/project-hub";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Loader2, Save } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { toast } from "sonner";
-import { sectionForbidden } from "./WorkspaceSectionState";
+import { CharterContent } from "./TeamCharterPage";
 import { getWorkspaceError } from "./workspace.shared";
+import { isAxiosError } from "axios";
 
-export function TeamCharterForm({ teamId, initial, canManage = false, onAccessChanged }: { teamId: number; initial: TeamCharter; canManage?: boolean; onAccessChanged?: () => void }) {
-  const { hasPermission } = usePermissions();
-  const queryClient = useQueryClient();
-  const [form, setForm] = useState<TeamCharter>({ mission: initial.mission ?? "", definitionOfDone: initial.definitionOfDone ?? "", primaryChannel: initial.primaryChannel ?? "", coreHours: initial.coreHours ?? "", conflictResolution: initial.conflictResolution ?? "" });
-  const canEdit = canManage && hasPermission("TEAM_UPDATE");
-  const channels = ["Microsoft Teams", "Slack", "Discord", "Google Chat", "Email"];
-  const channel = form.primaryChannel === "Teams" ? "Microsoft Teams" : form.primaryChannel;
-  const save = useMutation({
-    mutationFn: () => projectHubApi.saveCharter(teamId, form),
-    onError: error => { if (sectionForbidden(error)) onAccessChanged?.(); },
-    onSuccess: async () => {
-      await Promise.all([queryClient.invalidateQueries({ queryKey: ["workspace-detail"] }), queryClient.invalidateQueries({ queryKey: ["project-teams"] })]);
-      toast.success("Team charter saved");
-    },
-  });
-  function submit(event: FormEvent) { event.preventDefault(); if (canEdit && !save.isPending && !sectionForbidden(save.error)) save.mutate(); }
-  return (
-    <form onSubmit={submit} className="space-y-4">
-      <fieldset disabled={!canEdit || save.isPending || sectionForbidden(save.error)} className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2"><Label htmlFor="team-mission">Team mission</Label><Textarea id="team-mission" maxLength={2000} rows={4} value={form.mission} placeholder="The team's shared goals and intended value..." onChange={event => setForm({ ...form, mission: event.target.value })} /></div>
-        <div className="space-y-2"><Label htmlFor="team-done">Definition of done</Label><Textarea id="team-done" maxLength={2000} rows={4} value={form.definitionOfDone} placeholder="Conditions a task must meet to be considered complete..." onChange={event => setForm({ ...form, definitionOfDone: event.target.value })} /></div>
-        <div className="space-y-2"><Label htmlFor="team-channel">Primary channel</Label><Select value={channel || "__none__"} onValueChange={value => setForm({ ...form, primaryChannel: value === "__none__" ? "" : value })} disabled={!canEdit || save.isPending}><SelectTrigger id="team-channel" className="w-full"><SelectValue placeholder="Select a channel" /></SelectTrigger><SelectContent><SelectItem value="__none__">Not selected</SelectItem>{channel && !channels.includes(channel) && <SelectItem value={channel}>{channel}</SelectItem>}{channels.map(value => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select></div>
-        <div className="space-y-2"><Label htmlFor="team-hours">Core hours</Label><Input id="team-hours" maxLength={255} value={form.coreHours} placeholder="For example: Monday–Friday, 19:00–21:00" onChange={event => setForm({ ...form, coreHours: event.target.value })} /></div>
-        <div className="space-y-2 sm:col-span-2"><Label htmlFor="team-conflict">Conflict resolution</Label><Textarea id="team-conflict" maxLength={2000} rows={3} value={form.conflictResolution} placeholder="How the team discusses issues, reaches agreement and involves the mentor..." onChange={event => setForm({ ...form, conflictResolution: event.target.value })} /></div>
-      </fieldset>
-      {save.isError && <Alert variant="destructive"><AlertCircle /><AlertDescription>{getWorkspaceError(save.error)}</AlertDescription></Alert>}
-      {canEdit && <div className="flex justify-end"><Button type="submit" disabled={save.isPending || sectionForbidden(save.error)}>{save.isPending ? <Loader2 className="animate-spin" /> : <Save />}Save charter</Button></div>}
-    </form>
-  );
+/** Compatibility entry for existing embeds: use the same live contract and workflow as the full page. */
+export function TeamCharterForm({teamId, canManage, onAccessChanged}: {
+  teamId: number; initial?: TeamCharter; canManage?: boolean; onAccessChanged?: () => void;
+}) {
+  const {user, activeRole} = usePermissions();
+  const query = useQuery({queryKey: ["team-charter", teamId, user.email, activeRole],
+    queryFn: () => projectHubApi.getCharter(teamId), refetchOnWindowFocus: false, retry: false});
+  if (query.isPending) return <p role="status">Loading team charter...</p>;
+  const denied = isAxiosError(query.error) && [401, 403, 404].includes(query.error.response?.status ?? 0);
+  if (!query.data || denied) return <Alert variant="destructive"><AlertDescription>{getWorkspaceError(query.error)}<Button variant="outline" onClick={() => { onAccessChanged?.(); void query.refetch(); }}>Try again</Button></AlertDescription></Alert>;
+  return <CharterContent key={`${teamId}:${user.email}:${activeRole}`} view={{...query.data, canEdit: canManage !== false && query.data.canEdit}}
+    onRefresh={async () => { await query.refetch(); }} />;
 }

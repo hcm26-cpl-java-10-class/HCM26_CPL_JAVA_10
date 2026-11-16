@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatWorkspaceDate, WorkspaceStatusBadge } from "./workspace.shared";
 import { WorkspaceGitRepositoryPanel } from "./WorkspaceGitRepositoryPanel";
+import { WorkspaceCharterCard } from "./WorkspaceCharterCard";
 import type { WorkspaceProjectNode } from "@/types/features/project-assignment";
 
 function information(value?: string | null) {
@@ -34,6 +35,7 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
   const labelClass = "text-[10px] font-semibold uppercase tracking-wide text-muted-foreground";
 
   return <div className="min-w-0 space-y-5">
+    <WorkspaceCharterCard teamId={workspace.teamId} workspaceId={workspace.id} />
     <section aria-label="Project and workspace information" className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <Card className={cardClass}>
         <CardHeader className="grid-rows-1 gap-0 border-b bg-slate-50/40 px-4 py-3.5 [.border-b]:pb-3.5 dark:bg-muted/20 sm:px-5">

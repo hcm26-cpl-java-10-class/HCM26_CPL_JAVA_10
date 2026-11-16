@@ -31,6 +31,7 @@ import StudentLandingPage from "@/pages/student/StudentLandingPage";
 import ExploreProjectsPage from "@/pages/student/projects/explore";
 import StudentProjectDetailPage from "@/pages/student/projects/detail";
 import StudentDraftTeamPage from "@/pages/student/draft-team";
+import TeamCharterPage from "@/pages/management/workspace/TeamCharterPage";
 import ProjectTemplateVersionPage from "@/pages/management/project-template-version";
 import TeacherLandingPage from "@/pages/teacher/TeacherLandingPage";
 import { MilestoneCreatePage } from "@/pages/management/project/milestone/pages/MilestoneCreatePage";
@@ -95,7 +96,7 @@ import CourseGradeDetailPage from "@/pages/student/CourseGradeDetailPage";
 
 export interface RouteConfig {
   path: string;
-  component: ComponentType<any>;
+  component: ComponentType;
   requiredPermission?: string;
   requiredPermissions?: string[];
   isPublic?: boolean;
@@ -348,6 +349,8 @@ export const routes: RouteConfig[] = [
     isModuleDriven: true,
   },
   { path: "/project-board", component: ProjectBoardPage },
+  { path: "/student/team/charter", component: TeamCharterPage, requiredPermissions: ["TEAM_READ", "WORKSPACE_READ", "VIEW_PROJECT_WORKSPACE"] },
+  { path: "/mentor/teams", component: TeamCharterPage, requiredPermissions: ["TEAM_READ", "WORKSPACE_READ", "VIEW_PROJECT_WORKSPACE"] },
   { path: "/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
   { path: "/management/workspaces/candidates", component: WorkspaceCandidatePage, requiredPermission: "WORKSPACE_READ" },
