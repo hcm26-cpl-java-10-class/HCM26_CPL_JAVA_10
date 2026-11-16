@@ -29,6 +29,8 @@ interface Props {
   editingExam?: ExamDTO | null;
   /** Show red errors under required fields (set after a failed save attempt). */
   showErrors?: boolean;
+  showCourseLink?: boolean;
+  categoryOptions?: ExamCategory[];
 }
 
 function SectionTitle({ children }: { children: string }) {
@@ -38,7 +40,7 @@ function SectionTitle({ children }: { children: string }) {
 }
 
 /** All fields of the exam form (shared by the Create dialog and the Edit tab). */
-export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, duration: newDuration, setDuration: setNewDuration, cfg, setCfg, editingExam, showErrors = false }: Props) {
+export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, duration: newDuration, setDuration: setNewDuration, cfg, setCfg, editingExam, showErrors = false, showCourseLink = true, categoryOptions = EXAM_CATEGORY_OPTIONS }: Props) {
   const locked = !!editingExam?.hasAttempts;
   const fieldErrors = showErrors ? getRequiredFieldErrors(cfg) : {};
   const invalidClass = "border-destructive focus:ring-destructive focus-visible:ring-destructive";
@@ -47,6 +49,12 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
   return (
     <div className="grid min-w-0 max-w-full gap-4 sm:grid-cols-2">
       <SectionTitle>Basic</SectionTitle>
+      <label className="grid gap-2 text-sm font-medium sm:col-span-2">
+        Course grade weight (%)
+        <Input type="number" min={0} max={100} step="0.01" placeholder="e.g. 15"
+          value={cfg.courseWeight} onChange={event => setCfg(c => ({ ...c, courseWeight: event.target.value }))} />
+        <span className="text-xs font-normal text-muted-foreground">This assessment's share of the final course grade. Set 0 for practice; leave blank if not configured. Linked assessments together must total 100% when the plan is complete.</span>
+      </label>
       <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium sm:col-span-2">
         Exam Title
         <Input required maxLength={200} className="w-full min-w-0 max-w-full" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} />
@@ -105,7 +113,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
             <SelectValue placeholder="Select category" />
           </SelectTrigger>
           <SelectContent>
-            {EXAM_CATEGORY_OPTIONS.map((category) => (
+            {categoryOptions.map((category) => (
               <SelectItem key={category} value={category}>{EXAM_CATEGORY_LABEL[category]}</SelectItem>
             ))}
           </SelectContent>
@@ -119,7 +127,7 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
         )}
       </label>
 
-      <ExamLinkFields cfg={cfg} setCfg={setCfg} />
+      {showCourseLink && <ExamLinkFields cfg={cfg} setCfg={setCfg} />}
 
       <div className="grid min-w-0 max-w-full gap-4 border-t pt-4 sm:col-span-2 sm:grid-cols-2">
         <SectionTitle>Attempts</SectionTitle>
@@ -266,6 +274,57 @@ export function ExamConfigFields({ title: newTitle, setTitle: setNewTitle, durat
               ))}
             </div>
           </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tu danh gia / danh gia cheo (UFR-EXM-012) */}
+      <div className="grid min-w-0 max-w-full gap-3 border-t pt-4 sm:col-span-2">
+        <SectionTitle>Self / Peer review</SectionTitle>
+        <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+          <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.selfReviewEnabled} onChange={(event) => setCfg((c) => ({ ...c, selfReviewEnabled: event.target.checked }))} />
+          Enable self assessment (Tự đánh giá)
+        </label>
+        <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+          <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.peerReviewEnabled} onChange={(event) => setCfg((c) => ({ ...c, peerReviewEnabled: event.target.checked }))} />
+          Enable peer review (Đánh giá chéo)
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Students review essay answers of other students in the same exam, following the question rubric.
+          Reviews are stored separately and never change the official score. Use "Assign reviewers" in the
+          Peer review screen after students submit.
+        </p>
+        {locked && (
+          <p className="text-xs text-amber-700">Students have already started this assessment. Review settings are locked to protect student results.</p>
+        )}
+        {(cfg.selfReviewEnabled || cfg.peerReviewEnabled) && (
+          <div className="grid min-w-0 max-w-full gap-6 sm:col-span-2 lg:grid-cols-2">
+            <div className="grid min-w-0 max-w-full gap-3 pl-6 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.peerReviewAnonymous} onChange={(event) => setCfg((c) => ({ ...c, peerReviewAnonymous: event.target.checked }))} />
+                Hide reviewer identity (ẩn danh)
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" disabled={locked} className="size-4 accent-primary cursor-pointer" checked={cfg.peerReviewShowReference} onChange={(event) => setCfg((c) => ({ ...c, peerReviewShowReference: event.target.checked }))} />
+                Show reference answer / rubric to reviewers
+              </label>
+            </div>
+            <label className="grid min-w-0 max-w-full gap-2 text-sm font-medium">
+              Number of peer reviewers per submission
+              <Input
+                type="number"
+                min={1}
+                max={5}
+                step={1}
+                placeholder="2"
+                disabled={locked || !cfg.peerReviewEnabled}
+                value={cfg.peerReviewCount}
+                onChange={(event) => setCfg((c) => ({ ...c, peerReviewCount: event.target.value }))}
+              />
+              <span className="text-xs font-normal text-muted-foreground">
+                Allowed 1–5. Each reviewer must have submitted this exam to be eligible.
+              </span>
+            </label>
           </div>
         )}
       </div>

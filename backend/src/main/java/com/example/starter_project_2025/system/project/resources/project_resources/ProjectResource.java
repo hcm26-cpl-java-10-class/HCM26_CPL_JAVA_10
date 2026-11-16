@@ -74,7 +74,7 @@ public class ProjectResource extends BaseEntity {
     @ExportField(name = "Title")
     String title;
 
-    @Column(length = 1000)
+    @Column(length = 4000)
     @ImportField(name = "Description")
     @ExportField(name = "Description")
     String description;
@@ -87,18 +87,13 @@ public class ProjectResource extends BaseEntity {
     ResourceKind kind = ResourceKind.LINK;
 
     /** External link / repository URL; required for {@link ResourceKind#LINK}. */
-    @Column(length = 1000)
+    @Column(length = 2000)
     @ImportField(name = "Url")
     @ExportField(name = "Url")
     String url;
 
-    @Column(length = 50)
-    @ImportField(name = "Category")
-    @ExportField(name = "Category")
-    String category;
-
     @Builder.Default
-    @Column(name = "order_index", nullable = false)
+    @Column(name = "order_index", nullable = false, columnDefinition = "integer default 0")
     @ImportField(name = "Order Index")
     @ExportField(name = "Order Index")
     Integer orderIndex = 0;
@@ -112,6 +107,15 @@ public class ProjectResource extends BaseEntity {
     @Column(name = "source_template_resource_id", updatable = false)
     @ExportField(name = "Source Template Resource Id")
     Long sourceTemplateResourceId;
+
+    @Column(name = "source_template_id", updatable = false)
+    Long sourceTemplateId;
+
+    @Column(name = "source_template_name", length = 255, updatable = false)
+    String sourceTemplateName;
+
+    @Column(name = "source_origin", length = 20, updatable = false)
+    String sourceOrigin;
 
     /**
      * Import hook (bulk file import bypasses the service): applies the same
@@ -130,10 +134,6 @@ public class ProjectResource extends BaseEntity {
 
         if (url != null) {
             url = url.trim();
-        }
-
-        if (category != null) {
-            category = category.trim();
         }
 
         if (kind == null) {

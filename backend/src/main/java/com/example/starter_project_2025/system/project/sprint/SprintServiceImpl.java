@@ -44,7 +44,8 @@ import java.util.stream.Collectors;
  *     <li>an existing Planned sprint can only move to Active or Cancelled; an
  *     Active sprint can only move to Completed or Cancelled (422 otherwise)</li>
  *     <li>a sprint can only be started (Active) when it holds at least one
- *     Sprint Backlog item (422 otherwise)</li>
+ *     Sprint Backlog item, and only one sprint of a project may be Active at a
+ *     time (422 otherwise)</li>
  *     <li>a sprint can only move to Completed once every Sprint Backlog item of
  *     that sprint is Done and every subtask of those items is Done too
  *     (422 otherwise)</li>
@@ -79,12 +80,15 @@ public class SprintServiceImpl
     static final String BACKLOG_IDS_FIELD = "taskIds";
     static final String SCOPE_LOCKED_MESSAGE =
             "Không thể thay đổi phạm vi công việc do Sprint đã hoàn thành/đã đóng";
+    static final String ACTIVE_SPRINT_CONFLICT_MESSAGE =
+            "Dự án đã có Sprint đang Active. Hãy hoàn thành hoặc hủy Sprint đó trước khi bắt đầu Sprint khác";
 
     /** How many unfinished backlog titles are quoted in the completion error. */
     static final int MAX_UNFINISHED_TITLES_IN_MESSAGE = 5;
 
     SprintMapper sprintMapper;
     SprintRepository sprintRepository;
+    com.example.starter_project_2025.system.project.template.assignment.hierarchy.AssignedProjectAccess assignmentAccess;
     SprintAuditService sprintAuditService;
     SprintOutboxService sprintOutboxService;
     SprintBacklogRepository sprintBacklogRepository;
@@ -114,6 +118,9 @@ public class SprintServiceImpl
     protected void beforeCreate(Sprint sprint, SprintDTO request, ValidationContext ctx) {
 
         normalize(sprint);
+        if (sprint.getProjectId() == null) sprint.setProjectId(assignmentAccess.currentProject(sprint.getTeamId()));
+        assignmentAccess.requireProject(sprint.getProjectId(), true);
+        assignmentAccess.requireTeam(sprint.getProjectId(), sprint.getTeamId());
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
@@ -160,6 +167,12 @@ public class SprintServiceImpl
 
         Sprint sprint = sprintRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Sprint", "id", id));
+        requireWritable(sprint);
+
+        Long destinationProject = request.getProjectId() != null ? request.getProjectId() : sprint.getProjectId();
+        Long destinationTeam = request.getTeamId() != null ? request.getTeamId() : sprint.getTeamId();
+        assignmentAccess.requireProject(destinationProject, true);
+        assignmentAccess.requireTeam(destinationProject, destinationTeam);
 
         String name = request.getName() != null ? request.getName().trim() : sprint.getName();
         String goal = request.getSprintGoal() != null ? request.getSprintGoal().trim() : sprint.getSprintGoal();
@@ -174,7 +187,8 @@ public class SprintServiceImpl
         validateGoal(goal, errors);
         validateDates(startDate, endDate, errors);
         validateStatusTransition(currentStatus, targetStatus, errors);
-        validateActivation(sprint.getId(), currentStatus, targetStatus, errors);
+        validateActivation(sprint.getId(), destinationProject, destinationTeam,
+                currentStatus, targetStatus, errors);
         validateCompletion(sprint.getId(), currentStatus, targetStatus, errors);
 
         throwIfInvalid(errors);
@@ -214,6 +228,7 @@ public class SprintServiceImpl
 
         Sprint sprint = sprintRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Sprint", "id", id));
+        requireWritable(sprint);
 
         Map<String, Object> before = snapshot(sprint);
         Long projectId = sprint.getProjectId();
@@ -288,6 +303,7 @@ public class SprintServiceImpl
         check("SPRINT_UPDATE");
 
         Sprint sprint = findSprint(sprintId);
+        requireWritable(sprint);
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
 
@@ -322,9 +338,34 @@ public class SprintServiceImpl
     }
 
     private Sprint findSprint(Long sprintId) {
-
-        return sprintRepository.findById(sprintId)
+        Sprint sprint = sprintRepository.findById(sprintId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sprint", "id", sprintId));
+        assignmentAccess.requireProject(sprint.getProjectId(), false);
+        return sprint;
+    }
+
+    private void requireWritable(Sprint sprint) {
+        assignmentAccess.requireProject(sprint.getProjectId(), true);
+        if (sprint.getProjectId() == null) assignmentAccess.requireTeamOnlyWrite(sprint.getTeamId());
+    }
+
+    @Override
+    public SprintDTO getById(Long id) {
+        assignmentAccess.requireProject(findSprint(id).getProjectId(), false);
+        return super.getById(id);
+    }
+
+    @Override
+    public org.springframework.data.domain.Page<SprintDTO> getAll(org.springframework.data.domain.Pageable pageable, String search, SprintFilter filter) {
+        checkPermission(CrudAction.READ);
+        org.springframework.data.jpa.domain.Specification<Sprint> spec = assignmentAccess.visibility();
+        org.springframework.data.jpa.domain.Specification<Sprint> filters = autoSpecBuilder.build(filter);
+        if (filters != null) spec = spec.and(filters);
+        if (search != null && !search.isBlank()) {
+            String keyword = "%" + search.toLowerCase(java.util.Locale.ROOT) + "%";
+            spec = spec.and((root, query, cb) -> cb.or(cb.like(cb.lower(root.get("name")), keyword), cb.like(cb.lower(root.get("sprintGoal")), keyword)));
+        }
+        return sprintRepository.findAll(spec, pageable).map(sprintMapper::toResponse);
     }
 
     private boolean isScopeEditable(Sprint sprint) {
@@ -605,9 +646,12 @@ public class SprintServiceImpl
     /**
      * A sprint can only be started once it holds at least one Sprint Backlog
      * item; an empty sprint stays Planned so the team plans work before the
-     * sprint begins.
+     * sprint begins. Only one sprint of a project (or, for team-only
+     * workspaces, of a team) may be Active at a time.
      */
     private void validateActivation(Long sprintId,
+                                    Long projectId,
+                                    Long teamId,
                                     SprintStatus currentStatus,
                                     SprintStatus targetStatus,
                                     Map<String, List<String>> errors) {
@@ -617,12 +661,21 @@ public class SprintServiceImpl
             return;
         }
 
-        if (sprintBacklogRepository.countBySprintId(sprintId) > 0) {
+        if (sprintBacklogRepository.countBySprintId(sprintId) == 0) {
+            addError(errors, STATUS_FIELD,
+                    "Không thể bắt đầu Sprint vì Sprint Backlog chưa có Backlog item nào");
             return;
         }
 
-        addError(errors, STATUS_FIELD,
-                "Không thể bắt đầu Sprint vì Sprint Backlog chưa có Backlog item nào");
+        boolean anotherActiveSprint = projectId != null
+                ? sprintRepository.existsByProjectIdAndStatusAndIdNot(
+                        projectId, SprintStatus.ACTIVE, sprintId)
+                : teamId != null && sprintRepository.existsByTeamIdAndStatusAndIdNot(
+                        teamId, SprintStatus.ACTIVE, sprintId);
+
+        if (anotherActiveSprint) {
+            addError(errors, STATUS_FIELD, ACTIVE_SPRINT_CONFLICT_MESSAGE);
+        }
     }
 
     private String statusLabel(SprintStatus status) {

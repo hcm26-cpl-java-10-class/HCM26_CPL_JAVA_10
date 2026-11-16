@@ -10,6 +10,7 @@ import com.example.starter_project_2025.system.project.template.milestone.Templa
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneChecklistItem;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneRepository;
 import com.example.starter_project_2025.system.project.template.milestone.TemplateRubricCriterion;
+import com.example.starter_project_2025.system.project.template.TemplateHierarchyService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
@@ -17,9 +18,11 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * US-13 step 1 — "chụp snapshot đề bài".
@@ -49,15 +52,20 @@ public class TemplateBriefSnapshotWriter {
     private final TemplateMilestoneRepository templateMilestones;
     private final TemplateBacklogItemRepository templateBacklogItems;
     private final ObjectMapper objectMapper;
+    private final TemplateHierarchyService hierarchy;
 
     /**
      * Copies the active version of {@code template} (or the template itself when
      * no version exists yet) into a fresh, immutable assignment snapshot.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public ProjectTemplateSnapshot snapshotForAssignment(ProjectTemplate template, Long teamId) {
+    public ProjectTemplateSnapshot snapshotForAssignment(ProjectTemplate template, Long teamId, Long versionId) {
 
         ProjectTemplateSnapshot source = resolveActiveVersion(template.getId());
+        if (versionId != null && (source == null || !versionId.equals(source.getId()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Đề bài đã có phiên bản khác. Lưu lại phân công trước khi công bố.");
+        }
 
         ProjectTemplateSnapshot snapshot = ProjectTemplateSnapshot.builder()
                 .templateId(template.getId())
@@ -132,14 +140,22 @@ public class TemplateBriefSnapshotWriter {
         content.put("code", template.getCode());
         content.put("name", template.getName());
         content.put("context", template.getDescription());
+        content.put("technologyStack", template.getTechnologyStack());
+        content.put("parentTemplateId", template.getParentTemplateId());
         content.put("category", template.getCategory());
-        content.put("level", template.getLevel() == null ? null : template.getLevel().name());
+        content.put("level", template.getLevel());
         content.put("estimatedDurationWeeks", template.getEstimatedDurationWeeks());
         content.put("sourceSnapshotId", source == null ? null : source.getId());
         content.put("sourceVersion", source == null ? null : source.getVersion());
         content.put("constraints", readJsonOrNull(template.getConstraintsJson()));
         content.put("milestones", milestones.stream().map(this::milestone).toList());
         content.put("backlogItems", backlog.stream().map(this::backlogItem).toList());
+        Object sourceContent = source == null ? null : readJsonOrNull(source.getContentJson());
+        if (sourceContent instanceof com.fasterxml.jackson.databind.JsonNode published) {
+            content.put("modules", published.path("modules").isArray() ? published.path("modules") : List.of());
+        } else if (source == null) {
+            content.put("modules", hierarchy.captureModules(template));
+        }
 
         try {
             return objectMapper.writeValueAsString(content);

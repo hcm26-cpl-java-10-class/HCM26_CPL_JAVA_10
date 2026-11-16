@@ -11,6 +11,8 @@ import java.util.List;
 @Repository
 public interface SprintRepository extends BaseCrudRepository<Sprint, Long> {
 
+    List<Sprint> findAllByProjectIdInAndIsActiveTrueOrderByIdAsc(java.util.Collection<Long> projectIds);
+
     /**
      * Sprint names are unique inside the project workspace (UFR-PRJ-003-01,
      * AC03), not across the whole tenant: two different projects may both run a
@@ -32,6 +34,19 @@ public interface SprintRepository extends BaseCrudRepository<Sprint, Long> {
     boolean existsByName(String name);
 
     boolean existsByNameAndIdNot(String name, Long id);
+
+    /**
+     * Only one sprint of a project may be {@code ACTIVE} at a time; these
+     * lookups ignore the sprint being started ({@code idNot}).
+     */
+    boolean existsByProjectIdAndStatusAndIdNot(Long projectId, SprintStatus status, Long id);
+
+    boolean existsByTeamIdAndStatusAndIdNot(Long teamId, SprintStatus status, Long id);
+
+    /** Same rule for a sprint that is about to be created. */
+    boolean existsByProjectIdAndStatus(Long projectId, SprintStatus status);
+
+    boolean existsByTeamIdAndStatus(Long teamId, SprintStatus status);
 
     /** Seeding lookup: the first sprint of one project with that name. */
     Optional<Sprint> findFirstByProjectIdAndNameOrderByIdAsc(Long projectId, String name);

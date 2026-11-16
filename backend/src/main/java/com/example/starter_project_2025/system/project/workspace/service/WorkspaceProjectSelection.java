@@ -36,7 +36,7 @@ public class WorkspaceProjectSelection {
     public List<Option> options(User user, Long teamId) {
         access.requireTenant(user, false);
         ProjectTeam team = access.requireTeam(user, teamId, false);
-        if (workspaces.findFirstByTeamIdOrderByIdAsc(teamId).isPresent()) return List.of();
+        if (workspaces.findCurrentByTeamId(teamId).isPresent()) return List.of();
         return List.of();
     }
 
@@ -50,7 +50,7 @@ public class WorkspaceProjectSelection {
         validate(request);
         // Always lock team before project. Competing selections for one team serialize here.
         ProjectTeam team = access.requireTeam(user, request.getTeamId(), lock);
-        Workspace existing = workspaces.findFirstByTeamIdOrderByIdAsc(team.getId()).orElse(null);
+        Workspace existing = workspaces.findCurrentByTeamId(team.getId()).orElse(null);
         if (existing != null) throw new WorkspaceConflictException("This team already has a workspace", access.canRead(user) ? existing.getId() : null);
         if (!access.hasMembers(team)) throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Add at least one active member to this team before creating a workspace.");
         Project project = team.getProject();

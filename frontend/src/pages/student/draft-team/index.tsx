@@ -228,7 +228,7 @@ export default function StudentDraftTeamPage() {
               <ClipboardList className="mx-auto size-9 text-muted-foreground" />
               <p className="mt-3 font-medium">Bạn chưa có nhóm nháp nào</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Bạn chỉ thấy nhóm ở trạng thái DRAFT mà bạn là Trưởng nhóm (vai trò PM).
+                Quyền Trưởng nhóm có hiệu lực sau khi nhóm được công bố.
               </p>
             </CardContent>
           </Card>

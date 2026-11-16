@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.template;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.rbac.permission.Permission;
 import com.example.starter_project_2025.system.rbac.permission.PermissionRepository;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @Order(4)
 @RequiredArgsConstructor
+@StartupMutation
 public class ProjectTemplateAccessInitializer implements CommandLineRunner {
     private final PermissionRepository permissions;
     private final RoleRepository roles;
@@ -33,6 +36,13 @@ public class ProjectTemplateAccessInitializer implements CommandLineRunner {
         for (String name : List.of("ADMIN", "PROGRAM_MANAGER")) {
             roles.findByName(name).ifPresent(role -> {
                 role.getPermissions().addAll(templatePermissions);
+                roles.save(role);
+            });
+        }
+        for (String name : List.of("MENTOR", "TEACHER", "TRAINER")) {
+            roles.findByName(name).ifPresent(role -> {
+                templatePermissions.stream().filter(permission -> !"ACTIVATE".equals(permission.getAction()))
+                        .forEach(role.getPermissions()::add);
                 roles.save(role);
             });
         }

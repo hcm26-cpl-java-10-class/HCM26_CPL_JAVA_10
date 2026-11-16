@@ -42,6 +42,9 @@ class LessonProgressServiceTest {
     @Mock
     StudentLearningActivityRepository activityRepository;
 
+    @Mock com.example.starter_project_2025.system.demo.course.CourseAssessmentService assessments;
+    @Mock com.example.starter_project_2025.system.demo.course.CourseAssessmentCompletionService completion;
+
     @InjectMocks
     LessonProgressService service;
 
@@ -50,6 +53,8 @@ class LessonProgressServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(assessments.grade(anyLong(),anyLong())).thenReturn(new com.example.starter_project_2025.system.demo.course.CourseAssessmentService.Grade(null,"NO_ASSESSMENTS",List.of()));
+        lenient().when(assessments.canComplete(anyLong(),anyLong())).thenReturn(true);
         Course course = Course.builder().id(10L).name("Java 21").build();
         Section section = Section.builder()
                 .id(20L)
@@ -65,7 +70,7 @@ class LessonProgressServiceTest {
                 .textContent("Hello")
                 .orderIndex(0)
                 .build();
-        enrollment = CourseEnrollment.builder().id(40L).course(course).build();
+        enrollment = CourseEnrollment.builder().id(40L).course(course).user(com.example.starter_project_2025.system.rbac.user.User.builder().id(7L).build()).build();
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import com.example.starter_project_2025.system.exam.domain.ExamType;
 import com.example.starter_project_2025.system.exam.domain.LatePolicy;
 import com.example.starter_project_2025.system.exam.domain.ResultVisibility;
+import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -61,6 +62,16 @@ public class ExamDTO extends BaseDTO {
     @DecimalMin(value = "0", groups = {OnCreate.class, OnUpdate.class}, message = "passScore phải >= 0")
     private BigDecimal passScore;
 
+    @DecimalMin(value="0", groups={OnCreate.class,OnUpdate.class})
+    @DecimalMax(value="100", groups={OnCreate.class,OnUpdate.class})
+    @jakarta.validation.constraints.Digits(integer=3,fraction=2,groups={OnCreate.class,OnUpdate.class})
+    private BigDecimal courseWeight;
+    @JsonIgnore private boolean courseWeightProvided;
+    public void setCourseWeight(BigDecimal weight) {
+        this.courseWeight=weight;
+        this.courseWeightProvided=true;
+    }
+
     @DecimalMin(value = "0.01", groups = {OnCreate.class, OnUpdate.class}, message = "maxScore phải > 0")
     @DecimalMax(value = "1000", groups = {OnCreate.class, OnUpdate.class}, message = "maxScore tối đa 1000")
     private BigDecimal maxScore;
@@ -77,6 +88,9 @@ public class ExamDTO extends BaseDTO {
     private ResultVisibility resultVisibility;
 
     private ExamType examType;
+
+    @JsonProperty(access = READ_ONLY)
+    private List<QuestionType> allowedQuestionTypes;
 
     private ExamCategory category;
 
@@ -103,6 +117,15 @@ public class ExamDTO extends BaseDTO {
     private Integer headTurnAngleDeg;
     private Integer headTurnSeconds;
     private Integer fastSubmitPercent;
+
+    // ---- Tu danh gia / danh gia cheo (UFR-EXM-012) ----
+    private Boolean selfReviewEnabled;
+    private Boolean peerReviewEnabled;
+    @Min(value = 1, groups = {OnCreate.class, OnUpdate.class}, message = "peerReviewCount phải >= 1")
+    @Max(value = 5, groups = {OnCreate.class, OnUpdate.class}, message = "peerReviewCount tối đa 5")
+    private Integer peerReviewCount;
+    private Boolean peerReviewAnonymous;
+    private Boolean peerReviewShowReference;
 
     // ---- Lien ket voi course / section / lesson (tuy chon) ----
     private Long courseId;

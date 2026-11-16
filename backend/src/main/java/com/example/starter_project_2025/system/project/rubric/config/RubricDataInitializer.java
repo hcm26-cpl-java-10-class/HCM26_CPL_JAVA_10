@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.rubric.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.milestone.integration.mock.MockMilestoneData;
 import com.example.starter_project_2025.system.project.rubric.domain.*;
 import com.example.starter_project_2025.system.project.rubric.repository.RubricRepository;
@@ -22,6 +24,7 @@ import java.util.*;
 @Profile("!milestone-real-integrations")
 @Order(11)
 @RequiredArgsConstructor
+@StartupMutation
 public class RubricDataInitializer implements CommandLineRunner {
     private static final UUID ACTOR_ID = UUID.nameUUIDFromBytes("teacher@example.com".getBytes(StandardCharsets.UTF_8));
     private final RubricRepository repository;

@@ -39,22 +39,27 @@ public class TemplateConfigurationService {
     private final RubricCatalogService rubrics;
     private final ProjectTemplateValidator validator;
     private final ObjectMapper json;
+    private final TemplateHierarchyService hierarchy;
 
     public String capture(ProjectTemplate template) {
         var plan = milestones.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId());
         if (!plan.isEmpty()) milestones.findWithRubricCriteria(template.getId());
         Map<String, Object> content = new LinkedHashMap<>();
         content.put("templateId", template.getId());
+        content.put("templateVersion", template.getTemplateVersion());
         content.put("code", template.getCode());
         content.put("name", template.getName());
         content.put("description", template.getDescription());
-        content.put("category", template.getCategory());
+        content.put("technologyStack", template.getTechnologyStack());
+        content.put("parentTemplateId", template.getParentTemplateId());
+        content.put("category", hierarchy.masterCategory(template));
         content.put("level", template.getLevel());
         content.put("estimatedDurationWeeks", template.getEstimatedDurationWeeks());
         content.put("constraints", parse(template.getConstraintsJson()));
         content.put("milestones", plan.stream().map(this::milestoneData).toList());
         content.put("backlogItems", backlog.findAllByTemplate_IdOrderByOrderIndexAscIdAsc(template.getId()).stream()
                 .map(item -> new BacklogData(item.getId(), item.getTitle(), item.getDescription(), item.getSuggestedRole())).toList());
+        content.put("modules", hierarchy.captureModules(template));
         return write(content);
     }
 
@@ -77,9 +82,14 @@ public class TemplateConfigurationService {
     public ProjectTemplate view(ProjectTemplate owner, ProjectTemplateSnapshot version) {
         var content = read(version.getContentJson());
         var configuration = configuration(content);
+        String category = owner.getParentTemplateId() != null && version.getStatus() == ProjectTemplateVersionStatus.DRAFT
+                ? hierarchy.masterCategory(owner) : configuration.category();
         return ProjectTemplate.builder().id(owner.getId()).tenantId(owner.getTenantId())
+                .isActive(owner.getIsActive())
+                .parentTemplate(owner.getParentTemplate()).codeScopeId(owner.getCodeScopeId())
+                .technologyStack(content.path("technologyStack").isTextual() ? content.path("technologyStack").asText() : null)
                 .code(content.path("code").asText(owner.getCode())).name(content.path("name").asText(owner.getName()))
-                .description(configuration.description()).category(configuration.category()).level(configuration.level())
+                .description(configuration.description()).category(category).level(configuration.level())
                 .estimatedDurationWeeks(configuration.estimatedDurationWeeks()).templateVersion(majorVersion(version.getVersion(), owner.getTemplateVersion()))
                 .status(version.getStatus() == ProjectTemplateVersionStatus.DRAFT ? ProjectTemplateStatus.DRAFT
                         : version.getStatus() == ProjectTemplateVersionStatus.ARCHIVED ? ProjectTemplateStatus.ARCHIVED : ProjectTemplateStatus.ACTIVE)
@@ -126,7 +136,14 @@ public class TemplateConfigurationService {
         template.setCode(content.path("code").asText(template.getCode()));
         template.setName(content.path("name").asText(template.getName()));
         template.setDescription(configuration.description());
-        template.setCategory(configuration.category());
+        if (content.has("technologyStack")) {
+            template.setTechnologyStack(content.path("technologyStack").isTextual() ? content.path("technologyStack").asText() : null);
+        }
+        boolean module = template.getParentTemplateId() != null;
+        String category = module ? hierarchy.masterCategory(template) : configuration.category();
+        boolean categoryChanged = !java.util.Objects.equals(template.getCategory(), category);
+        template.setCategory(category);
+        if (!module && categoryChanged) hierarchy.inheritCategory(template);
         template.setLevel(configuration.level());
         template.setEstimatedDurationWeeks(configuration.estimatedDurationWeeks());
         template.setConstraintsJson(write(configuration.constraints() == null ? Map.of() : configuration.constraints()));
@@ -183,6 +200,8 @@ public class TemplateConfigurationService {
     }
 
     public ProjectTemplate duplicate(ProjectTemplate source, ProjectTemplateSnapshot version, String name, Long tenantId) {
+        ProjectTemplate parent = java.util.Objects.equals(source.getTenantId(), tenantId) ? source.getParentTemplate() : null;
+        validator.validateModuleParent(parent);
         ObjectNode content = parse(version.getContentJson());
         ObjectNode fallback = parse(capture(source));
         fallback.fieldNames().forEachRemaining(field -> {
@@ -205,6 +224,8 @@ public class TemplateConfigurationService {
                 configuration.level(), configuration.estimatedDurationWeeks() == null ? null
                         : BigDecimal.valueOf(configuration.estimatedDurationWeeks()), null), false);
         var template = templates.saveAndFlush(ProjectTemplate.builder().tenantId(tenantId).code(code).name(name)
+                .parentTemplate(parent)
+                .technologyStack(content.path("technologyStack").isTextual() ? content.path("technologyStack").asText() : null)
                 .description(configuration.description()).category(configuration.category()).level(configuration.level())
                 .estimatedDurationWeeks(configuration.estimatedDurationWeeks())
                 .constraintsJson(write(configuration.constraints() == null ? Map.of() : configuration.constraints()))
@@ -230,7 +251,8 @@ public class TemplateConfigurationService {
         var policy = item.getAllowLateSubmission() == null ? null : new LatePolicyData(item.getAllowLateSubmission(),
                 item.getMaxLateDays(), item.getPenaltyPerDayPercent());
         return new MilestoneData(item.getId(), item.getTitle(), item.getDescription(), item.getDueAfter(), item.getDueUnit(),
-                item.getWeight(), item.isMandatory(), item.getRubricVersion() == null ? null : item.getRubricVersion().getId(),
+                item.getTemplate().getParentTemplateId() == null ? item.getWeight() : null,
+                item.isMandatory(), item.getRubricVersion() == null ? null : item.getRubricVersion().getId(),
                 item.getChecklistItems().stream().map(check -> new ChecklistData(check.getId(), check.getContent(), check.isMandatory())).toList(),
                 item.getRubricCriteria().stream().map(criterion -> new CriterionData(criterion.getId(), criterion.getName(),
                         criterion.getDescription(), criterion.getMaxScore())).toList(), policy);
@@ -238,7 +260,8 @@ public class TemplateConfigurationService {
 
     private void copyMilestone(MilestoneData input, ProjectTemplate template, int index) {
         if (input.title() == null || input.title().isBlank() || input.title().length() > 120
-                || input.dueAfter() == null || input.dueAfter() <= 0 || input.dueUnit() == null || input.weight() == null) {
+                || input.dueAfter() == null || input.dueAfter() <= 0 || input.dueUnit() == null
+                || template.getParentTemplateId() == null && input.weight() == null) {
             throw invalidContent();
         }
         var copy = new TemplateMilestone();
@@ -252,7 +275,7 @@ public class TemplateConfigurationService {
         copy.setDescription(input.description());
         copy.setDueAfter(input.dueAfter());
         copy.setDueUnit(input.dueUnit());
-        copy.setWeight(input.weight());
+        copy.setWeight(template.getParentTemplateId() == null ? input.weight() : BigDecimal.ZERO);
         copy.setMandatory(input.mandatory() == null || input.mandatory());
         copy.setOrderIndex(index);
         copy.setRubricVersion(input.rubricVersionId() == null || template.getTenantId() == null ? null
@@ -323,7 +346,7 @@ public class TemplateConfigurationService {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record Configuration(String description, String category, ProjectTemplateLevel level, Integer estimatedDurationWeeks,
+    private record Configuration(String description, String category, String level, Integer estimatedDurationWeeks,
                                  JsonNode constraints, List<MilestoneData> milestones, List<BacklogData> backlogItems) { }
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record MilestoneData(Long id, String title, String description, Integer dueAfter, TemplateMilestoneTimeUnit dueUnit,

@@ -92,7 +92,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 : template == null ? null
                 : template.getCode() != null && !template.getCode().isBlank() ? template.getCode()
                 : "Template #" + template.getId();
-        Workspace existing = workspaceRepository.findFirstByTeamIdOrderByIdAsc(team.getId()).orElse(null);
+        Workspace existing = workspaceRepository.findCurrentByTeamId(team.getId()).orElse(null);
         long memberCount = roster.current(team).size();
         boolean eligible = Boolean.TRUE.equals(team.getIsActive()) && team.getStatus() == ProjectTeamStatus.ACTIVE
                 && existing == null && memberCount > 0
@@ -116,6 +116,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
                 .classId(trainingClass.getId())
                 .classCode(trainingClass.getCode())
                 .className(trainingClass.getName())
+                .allocationSessionId(team.getAllocationSession().getId())
                 .workspaceId(existing != null ? existing.getId() : null)
                 .workspaceStatus(existing != null ? existing.getStatus() : null)
                 .eligibleForWorkspace(eligible)

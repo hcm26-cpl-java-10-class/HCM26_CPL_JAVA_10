@@ -1,6 +1,9 @@
 import type {
   TemplateSampleContent, TemplateSampleContentPayload, TemplateSuggestedRole,
 } from "@/types/features/project-template";
+import { maxDescriptionLength } from "./project-template.utils";
+
+export const maxBacklogTitleLength = 100;
 
 export interface BacklogItemValues {
   key: string;
@@ -30,8 +33,13 @@ export function validateSampleContent(values: SampleContentValues, content: Temp
   if (values.backlogItems.length > content.maxItems) errors.backlogItems = [`A template can contain at most ${content.maxItems} backlog items`];
   values.backlogItems.forEach((item, i) => {
     const path = `backlogItems[${i}]`;
-    if (!item.title.trim() || item.title.trim().length > 200) errors[`${path}.title`] = ["Backlog title must contain 1 to 200 characters"];
-    if (item.description.trim().length > 2000) errors[`${path}.description`] = ["Description must not exceed 2000 characters"];
+    const title = item.title.trim();
+    if (!title || title.length > maxBacklogTitleLength) {
+      errors[`${path}.title`] = [`Backlog title must contain 1 to ${maxBacklogTitleLength} characters`];
+    }
+    if (item.description.trim().length > maxDescriptionLength) {
+      errors[`${path}.description`] = [`Description must not exceed ${maxDescriptionLength} characters`];
+    }
     if (item.suggestedRole && !content.roles.includes(item.suggestedRole)) errors[`${path}.suggestedRole`] = ["Select PM, BA, DEV or QA"];
   });
   return errors;

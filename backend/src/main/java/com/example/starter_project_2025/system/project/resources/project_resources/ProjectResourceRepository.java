@@ -12,5 +12,7 @@ public interface ProjectResourceRepository extends BaseCrudRepository<ProjectRes
 
     List<ProjectResource> findAllByProjectIdAndIsActiveTrueOrderByOrderIndexAscIdAsc(Long projectId);
 
+    List<ProjectResource> findAllByProjectIdInOrderByOrderIndexAscIdAsc(java.util.Collection<Long> projectIds);
+
     long countByProjectId(Long projectId);
 }

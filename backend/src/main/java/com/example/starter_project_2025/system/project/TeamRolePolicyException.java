@@ -54,12 +54,4 @@ public class TeamRolePolicyException extends RuntimeException {
                 List.of());
     }
 
-    public static TeamRolePolicyException leaderRoleRequired(Long memberId) {
-        return new TeamRolePolicyException(
-                "ERR_TEAM_LEADER_ROLE_REQUIRED",
-                "Trưởng nhóm phải giữ vai trò PM để tiếp tục quản lý nhóm.",
-                List.of(memberId),
-                List.of(),
-                List.of());
-    }
 }

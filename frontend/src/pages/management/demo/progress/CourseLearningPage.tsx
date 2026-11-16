@@ -1,3 +1,4 @@
+import { COURSE_GRADE_STATUS_LABEL } from "@/types/features/course-my-scores";
 
 import { certificateApi, examApi, progressApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -93,7 +94,7 @@ export function CourseLearningPage() {
           (certificate) => certificate.courseId === progressQuery.data?.courseId
       );
     },
-    enabled: progressQuery.data?.progressPercentage === 100,
+    enabled: progressQuery.data?.courseCompleted === true,
     retry: false,
   });
 
@@ -293,7 +294,13 @@ export function CourseLearningPage() {
                     {progressQuery.data.courseName}
                   </p>
 
-                  {progressQuery.data.progressPercentage === 100 &&
+                  <div className="mt-3 rounded border p-3 text-sm" role="status">
+                    <p>{progressQuery.data.courseCompleted ? "Course completed" : "Course in progress"} · {COURSE_GRADE_STATUS_LABEL[progressQuery.data.assessmentStatus] || progressQuery.data.assessmentStatus}</p>
+                    {progressQuery.data.overallScore != null && <p>Final course grade: {progressQuery.data.overallScore.toFixed(2)} / 10</p>}
+                    {!progressQuery.data.courseCompleted && <p className="text-muted-foreground">Complete the lessons and meet the course assessment requirements to earn your certificate.</p>}
+                  </div>
+
+                  {progressQuery.data.courseCompleted === true &&
                       courseCertificate?.verificationToken && (
                           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/50 bg-amber-50 p-4 text-amber-950 dark:bg-amber-950/20 dark:text-amber-100">
                             <div>
@@ -315,7 +322,7 @@ export function CourseLearningPage() {
                           </div>
                       )}
                       
-                  {progressQuery.data.progressPercentage === 100 &&
+                  {progressQuery.data.courseCompleted === true &&
                       <CourseReviewPrompt
                         courseId={progressQuery.data.courseId}
                       />
@@ -405,6 +412,7 @@ export function CourseLearningPage() {
                             <Button
                                 disabled={
                                     currentLesson.completed ||
+                                    ["QUIZ", "EXAM", "ASSIGNMENT"].includes(currentLesson.contentType) ||
                                     updateMutation.isPending
                                 }
                                 onClick={() =>
@@ -420,7 +428,7 @@ export function CourseLearningPage() {
                                   ? "Lesson completed"
                                   : updateMutation.isPending
                                       ? "Saving..."
-                                      : "Mark lesson complete"}
+                                      : ["QUIZ", "EXAM", "ASSIGNMENT"].includes(currentLesson.contentType) ? "Completes after graded results are published" : "Mark lesson complete"}
                             </Button>
 
                             <Button

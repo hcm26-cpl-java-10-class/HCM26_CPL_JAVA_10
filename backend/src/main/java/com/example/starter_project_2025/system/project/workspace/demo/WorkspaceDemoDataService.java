@@ -143,24 +143,24 @@ public class WorkspaceDemoDataService {
         String slug = project.getCode().toLowerCase(Locale.ROOT);
 
         linkResource(project, "Git Repository",
-                "Source code repository for the team.", "https://github.com/example/" + slug, "GIT", 0);
+                "Source code repository for the team.", "https://github.com/example/" + slug, 0);
         linkResource(project, "Google Docs - Project Brief",
                 "Shared brief, meeting notes and the requirement checklist.",
-                "https://docs.google.com/document/d/" + slug, "DOCS", 1);
+                "https://docs.google.com/document/d/" + slug, 1);
 
         ProjectResource dataset = fileResource(project, "Sample Dataset",
-                "Sample CSV data the team can use for the first sprint.", "DOCUMENT", 2);
+                "Sample CSV data the team can use for the first sprint.", 2);
         attachDocument(dataset, "sample-dataset.csv",
                 "id,name,score\n1,Nguyen Van A,8.5\n2,Tran Thi B,9.0\n");
 
         ProjectResource guide = fileResource(project, "Project Guide",
-                "Starter guide for the project workspace.", "DOCUMENT", 3);
+                "Starter guide for the project workspace.", 3);
         attachDocument(guide, "project-guide.md",
                 "# Project guide\n\nUse this workspace to plan milestones, sprints and deliverables.\n");
     }
 
     private void linkResource(Project project, String title, String description,
-                              String url, String category, int orderIndex) {
+                              String url, int orderIndex) {
 
         ProjectResource resource = new ProjectResource();
         resource.setProjectId(project.getId());
@@ -169,14 +169,13 @@ public class WorkspaceDemoDataService {
         resource.setDescription(description);
         resource.setKind(ResourceKind.LINK);
         resource.setUrl(url);
-        resource.setCategory(category);
         resource.setOrderIndex(orderIndex);
         resource.setIsActive(true);
         projectResources.save(resource);
     }
 
     private ProjectResource fileResource(Project project, String title, String description,
-                                         String category, int orderIndex) {
+                                         int orderIndex) {
 
         ProjectResource resource = new ProjectResource();
         resource.setProjectId(project.getId());
@@ -184,7 +183,6 @@ public class WorkspaceDemoDataService {
         resource.setTitle(title);
         resource.setDescription(description);
         resource.setKind(ResourceKind.FILE);
-        resource.setCategory(category);
         resource.setOrderIndex(orderIndex);
         resource.setIsActive(true);
         return projectResources.save(resource);

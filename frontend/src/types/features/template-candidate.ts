@@ -6,7 +6,7 @@ export interface TemplateCandidate {
   name: string;
   description: string | null;
   category: string | null;
-  level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | null;
+  level: string | null;
   durationWeeks: number | null;
   minMembers: number;
   maxMembers: number;

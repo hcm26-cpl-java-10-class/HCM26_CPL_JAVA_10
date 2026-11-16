@@ -15,6 +15,7 @@ public record CourseExamDTO(
         Integer maxAttempts,
         BigDecimal maxScore,
         BigDecimal passScore,
+        BigDecimal courseWeight,
         Boolean isActive,
         Long courseId,
         Long sectionId,

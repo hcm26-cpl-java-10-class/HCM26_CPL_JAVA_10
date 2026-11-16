@@ -4,6 +4,7 @@ import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.system.exam.domain.Exam;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
 import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.domain.ExamType;
 import com.example.starter_project_2025.system.exam.dto.ExamDTO;
 import com.example.starter_project_2025.system.exam.service.ExamScoring;
 import com.example.starter_project_2025.system.exam.service.ExamTypePolicy;
@@ -55,12 +56,15 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setShuffleOptions(e.getShuffleOptions());
         d.setShowAnswersAfterExam(e.getShowAnswersAfterExam());
         d.setPassScore(e.getPassScore());
+        d.setCourseWeight(e.getCourseWeight());
         d.setMaxScore(ExamScoring.effectiveMax(e.getMaxScore()));
         d.setLatePolicy(e.getLatePolicy());
         d.setLatePenaltyPercent(e.getLatePenaltyPercent());
         d.setLateGraceMinutes(e.getLateGraceMinutes());
         d.setResultVisibility(e.getResultVisibility());
-        d.setExamType(ExamTypePolicy.effective(e.getExamType()));
+        ExamType effType = ExamTypePolicy.determineEffective(e);
+        d.setExamType(effType);
+        d.setAllowedQuestionTypes(ExamTypePolicy.allowedTypes(effType));
         d.setCategory(e.getCategory() == null ? ExamCategory.ASSIGNMENT : e.getCategory());
         if (e.getCourse() != null) {
             d.setCourseId(e.getCourse().getId());
@@ -94,6 +98,12 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setHeadTurnSeconds(e.headTurnSecondsOrDefault());
         d.setFastSubmitPercent(e.fastSubmitPercentOrDefault());
         d.setHasPassword(e.getAccessCode() != null && !e.getAccessCode().trim().isEmpty());
+        // Tu danh gia / danh gia cheo
+        d.setSelfReviewEnabled(Boolean.TRUE.equals(e.getSelfReviewEnabled()));
+        d.setPeerReviewEnabled(Boolean.TRUE.equals(e.getPeerReviewEnabled()));
+        d.setPeerReviewCount(e.getPeerReviewCount() == null ? 2 : e.getPeerReviewCount());
+        d.setPeerReviewAnonymous(!Boolean.FALSE.equals(e.getPeerReviewAnonymous()));
+        d.setPeerReviewShowReference(Boolean.TRUE.equals(e.getPeerReviewShowReference()));
         return d;
     }
 
@@ -137,6 +147,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
     }
 
     private void apply(Exam e, ExamDTO d) {
+        if (d.isCourseWeightProvided()) e.setCourseWeight(d.getCourseWeight());
         if (d.getTitle() != null) e.setTitle(d.getTitle().trim());
         if (d.getDurationMinutes() != null) e.setDurationMinutes(d.getDurationMinutes());
 
@@ -171,6 +182,15 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
             e.setHeadTurnAngleDeg(d.getHeadTurnAngleDeg());
             e.setHeadTurnSeconds(d.getHeadTurnSeconds());
             e.setFastSubmitPercent(d.getFastSubmitPercent());
+        }
+        // Cau hinh tu danh gia / danh gia cheo chi sua duoc khi chua co sinh vien nao lam bai,
+        // tuong tu cau hinh chong gian lan (neu sua sau khi da phan cong se lam lech du lieu cham).
+        if (antiCheatEditable) {
+            if (d.getSelfReviewEnabled() != null) e.setSelfReviewEnabled(d.getSelfReviewEnabled());
+            if (d.getPeerReviewEnabled() != null) e.setPeerReviewEnabled(d.getPeerReviewEnabled());
+            if (d.getPeerReviewCount() != null) e.setPeerReviewCount(d.getPeerReviewCount());
+            if (d.getPeerReviewAnonymous() != null) e.setPeerReviewAnonymous(d.getPeerReviewAnonymous());
+            if (d.getPeerReviewShowReference() != null) e.setPeerReviewShowReference(d.getPeerReviewShowReference());
         }
         if (d.getAccessCode() != null) {
             String trimmed = d.getAccessCode().trim();

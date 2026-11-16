@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.alert;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import java.util.*;
 
 /** Move unambiguous old alert selections to the canonical relation once, without overwriting an existing link. */
 @Slf4j @Component @Order(100) @RequiredArgsConstructor
+@StartupMutation
 public class LegacyMilestoneBacklogMigration implements ApplicationRunner {
     private final AlertMilestoneConfigRepository configs;
     private final MilestoneRepository milestones;

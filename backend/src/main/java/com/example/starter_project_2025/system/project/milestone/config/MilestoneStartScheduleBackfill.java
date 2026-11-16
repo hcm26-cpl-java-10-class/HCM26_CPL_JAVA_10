@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.milestone.integration.port.TenantSettingsPort;
 import com.example.starter_project_2025.system.project.milestone.repository.MilestoneRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +18,7 @@ import java.time.LocalDate;
 @Component
 @Order(-90)
 @RequiredArgsConstructor
+@StartupMutation
 public class MilestoneStartScheduleBackfill implements ApplicationRunner {
     private final MilestoneRepository milestones;
     private final TenantSettingsPort tenantSettings;

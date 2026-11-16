@@ -1,3 +1,4 @@
+import { COURSE_GRADE_STATUS_LABEL } from "@/types/features/course-my-scores";
 
 import { courseApi } from "@/api/features/demo/course.api";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -162,10 +163,10 @@ export default function MyScoresPage() {
                                     variant={
                                       course.resultStatus === "PASSED"
                                           ? "default"
-                                          : "destructive"
+                                          : course.resultStatus === "FAILED" ? "destructive" : "outline"
                                     }
                                 >
-                                  {course.resultStatus}
+                                  {COURSE_GRADE_STATUS_LABEL[course.resultStatus] || course.resultStatus}
                                 </Badge>
                             )}
                           </div>

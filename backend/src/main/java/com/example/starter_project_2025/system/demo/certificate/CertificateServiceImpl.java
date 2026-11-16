@@ -42,6 +42,7 @@ public class CertificateServiceImpl
     LessonRepository lessonRepository;
     LessonProgressRepository lessonProgressRepository;
     CourseEnrollmentRepository courseEnrollmentRepository;
+    com.example.starter_project_2025.system.demo.course.CourseAssessmentService assessments;
 
     @Override
     protected BaseCrudRepository<Certificate, Long> getRepository() {
@@ -78,6 +79,9 @@ public class CertificateServiceImpl
         User user = userRepository.findById(request.getUserId())
                         .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
+        var enrollment=courseEnrollmentRepository.findByUser_IdAndCourse_Id(user.getId(),course.getId())
+                .orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Student must be enrolled before receiving a certificate"));
+        if (!eligible(enrollment)) throw new ResponseStatusException(HttpStatus.CONFLICT,"Complete the course lessons and pass all required course grading checks first");
         certificate.setCourse(course);
         certificate.setUser(user);
     }
@@ -88,29 +92,12 @@ public class CertificateServiceImpl
         Long userId = courseEnrollment.getUser().getId();
         Long courseId = courseEnrollment.getCourse().getId();
 
+        if (!eligible(courseEnrollment)) return;
+
         if(certificateRepository.existsByUser_IdAndCourse_Id(userId, courseId)) {
             return;
         }
 
-        List<Lesson> lessons = lessonRepository.findByCourseIdOrdered(courseId);
-
-        if(lessons.isEmpty()) {
-            return;
-        }
-
-        Set<Long> completedLessonIds = lessonProgressRepository
-                .findAllByEnrollment_Id(courseEnrollment.getId())
-                .stream()
-                .filter(LessonProgress::isCompleted)
-                .map(progress -> progress.getLesson().getId())
-                .collect(Collectors.toSet());
-
-        boolean allCompleted = lessons.stream()
-                .allMatch(lesson -> completedLessonIds.contains(lesson.getId()));
-
-        if (!allCompleted) {
-            return;
-        }
         Certificate certificate = Certificate.builder()
                 .user(courseEnrollment.getUser())
                 .course(courseEnrollment.getCourse())
@@ -134,7 +121,7 @@ public class CertificateServiceImpl
                 certificate.getCourse().getName(),
                 certificate.getUser().getFullName(),
                 certificate.getIssuedAt(),
-                true
+                currentlyEligible(certificate)
         );
     }
 
@@ -143,6 +130,7 @@ public class CertificateServiceImpl
     public List<CertificateDTO> getMyCertificates(Long userId) {
         return certificateRepository.findAllByUser_Id(userId)
                 .stream()
+                .filter(this::currentlyEligible)
                 .map(certificateMapper::toResponse)
                 .toList();
     }
@@ -152,10 +140,24 @@ public class CertificateServiceImpl
     public CertificateDTO getByEnrollment(Long enrollmentId) {
         CourseEnrollment enrollment = courseEnrollmentRepository.findById(enrollmentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Enrollment not found"));
+        if (!eligible(enrollment)) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"Course completion requirements have not been met");
         return certificateRepository.findByUser_IdAndCourse_Id(
                         enrollment.getUser().getId(), enrollment.getCourse().getId()
                 )
                 .map(certificateMapper::toResponse)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Certificate not found"));
     }
+    private boolean currentlyEligible(Certificate certificate) {
+        return courseEnrollmentRepository.findByUser_IdAndCourse_Id(certificate.getUser().getId(),certificate.getCourse().getId())
+                .map(this::eligible).orElse(false);
+    }
+    private boolean eligible(CourseEnrollment enrollment) {
+        var active=lessonRepository.findByCourseIdOrdered(enrollment.getCourse().getId()).stream()
+                .filter(com.example.starter_project_2025.system.demo.course.CourseAssessmentService::activeLesson).toList();
+        var completed=lessonProgressRepository.findAllByEnrollment_Id(enrollment.getId()).stream()
+                .filter(LessonProgress::isCompleted).map(p->p.getLesson().getId()).toList();
+        return !active.isEmpty() && active.stream().allMatch(l->completed.contains(l.getId()))
+                && assessments.canComplete(enrollment.getCourse().getId(),enrollment.getUser().getId());
+    }
+
 }

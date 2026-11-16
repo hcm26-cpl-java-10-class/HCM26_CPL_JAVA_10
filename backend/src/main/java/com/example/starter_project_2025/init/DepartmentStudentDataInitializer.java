@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.system.demo.course.CourseStatus;
@@ -23,6 +25,7 @@ import java.util.List;
 @Component
 @Order(20)
 @RequiredArgsConstructor
+@StartupMutation
 public class DepartmentStudentDataInitializer
         implements CommandLineRunner {
 

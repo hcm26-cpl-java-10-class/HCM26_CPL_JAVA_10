@@ -22,6 +22,7 @@ import java.util.*;
 @RequiredArgsConstructor
 public class SubmissionReviewService {
     private final SubmissionQueryService queryService;
+    private final SubmissionReviewAccess reviewAccess;
     private final MilestoneSubmissionRepository submissions;
     private final SubmissionVersionRepository versions;
     private final RubricVersionRepository rubrics;
@@ -31,11 +32,14 @@ public class SubmissionReviewService {
     private final CurrentActorProvider actorProvider;
     private final Clock milestoneClock;
     private final ProjectCompletionService projectCompletionService;
+    private final com.example.starter_project_2025.system.project.milestone.submission.integration.ProjectCompletionPort completionPort;
     private final com.example.starter_project_2025.system.project.milestone.outbox.OutboxEventWriter milestoneOutbox;
 
     @Transactional
     public SubmissionDtos.Detail review(UUID submissionId, String idempotencyKey,
                                         SubmissionDtos.ReviewRequest request) {
+        MilestoneSubmission submission = queryService.require(submissionId);
+        reviewAccess.require(submission);
         validateKey(idempotencyKey);
         UUID actorId = actorProvider.requireCurrentActorId();
         String action = "SUBMISSION_" + request.decision().name();
@@ -44,7 +48,10 @@ public class SubmissionReviewService {
             return queryService.getDetail(submissionId);
         }
 
-        MilestoneSubmission submission = queryService.require(submissionId);
+
+        if (submission.getTeamId() == null)
+            completionPort.lockHierarchy(submission.getProjectId(), submission.getTenantId(), null);
+        projectCompletionService.requireActive(submission.getTenantId(), submission.getProjectId());
         if (submission.getLockVersion() != request.expectedVersion()) {
             throw new MilestoneConflictException("Submission was changed by another request; reload and try again");
         }
@@ -62,7 +69,7 @@ public class SubmissionReviewService {
             throw validation("overallFeedback", "Revision instructions are required and must not exceed 500 characters");
         }
         if (request.decision() == ReviewDecision.REQUEST_CHANGES && !queryService.canRequestChanges(submission)) {
-            throw validation("decision", "Không thể yêu cầu nộp lại do Milestone đã hết hạn theo Late Policy");
+            throw validation("decision", "Cannot request changes: " + queryService.resubmissionBlockMessage(submission));
         }
 
         SubmissionVersion version = versions.findBySubmissionIdAndVersionNumber(
@@ -113,6 +120,8 @@ public class SubmissionReviewService {
         }
         reviews.save(review);
         version.applyChecklistReview(checklist);
+        // Keep the milestone's acceptance checklist in step with the reviewer's assessment of this version.
+        submission.getMilestone().applyChecklistAssessment(version.checklistAssessmentBySourceItem());
         version.applyDecision(request.decision());
         submission.reviewed(request.decision(), now);
         if (submission.getMilestone().lifecycleStatus()

@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.workspace.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
+@StartupMutation
 public class WorkspaceTeamOnlySchemaMigration {
     private final JdbcTemplate jdbc;
 

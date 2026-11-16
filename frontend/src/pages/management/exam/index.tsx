@@ -351,6 +351,7 @@ export default function ExamManagementPage() {
                     <InfoRow icon={BookOpen} label="Course" value={courseLabel(exam)} multiline />
                     <InfoRow icon={Clock} label="Duration" value={`${exam.durationMinutes} mins`} />
                     <InfoRow icon={ListChecks} label="Questions" value={exam.questionIds?.length ?? exam.questions?.length ?? 0} />
+                    <InfoRow icon={Trophy} label="Course weight" value={exam.courseWeight != null ? `${exam.courseWeight}%` : "Not set"} />
                     <InfoRow icon={Trophy} label="Max score" value={exam.maxScore ?? 10} />
                   </div>
                 </a>
@@ -385,6 +386,7 @@ export default function ExamManagementPage() {
               <DialogTitle>Create Exam</DialogTitle>
               <DialogDescription>Configure exam title, duration, and rules.</DialogDescription>
             </DialogHeader>
+
             <div className="min-h-0 flex-1 overflow-y-auto py-5 pr-1">
               <ExamConfigFields
                 title={newTitle}

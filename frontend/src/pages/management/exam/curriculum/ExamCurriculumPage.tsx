@@ -1,3 +1,4 @@
+import { CourseAssessmentPanel } from "@/pages/management/demo/course/components/CourseAssessmentPanel";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -347,6 +348,7 @@ export default function ExamCurriculumPage() {
           ) : (
             /* ----------------- When Course IS Selected: Full Screen Section & Assessment View ----------------- */
             <div className="space-y-5">
+              <CourseAssessmentPanel courseId={courseId} />
               {/* Top Bar with Course Switcher */}
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/80 bg-card/70 backdrop-blur-xs p-4 shadow-xs">
                 <div className="flex items-center gap-3">

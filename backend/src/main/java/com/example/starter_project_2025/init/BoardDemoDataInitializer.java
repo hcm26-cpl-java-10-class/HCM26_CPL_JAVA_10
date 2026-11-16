@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.BoardProjectMember;
 import com.example.starter_project_2025.system.project.BoardProjectMemberRepository;
@@ -40,6 +42,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @ConditionalOnProperty(name = "app.seed.board.enabled", havingValue = "true")
+@StartupMutation
 public class BoardDemoDataInitializer implements CommandLineRunner {
 
     private static final String STUDENT_EMAIL = "student@example.com";

@@ -1,3 +1,4 @@
+import { AssessmentLessonDialog } from "./AssessmentLessonDialog";
 import { lessonApi } from "@/api";
 import { aiCourseBuilderApi } from "@/api/features/demo/ai-course-builder.api";
 import { Button } from "@/components/ui/button";
@@ -52,13 +53,16 @@ const LESSON_CONTENT_TYPE_OPTIONS: { value: LessonContentType; label: string }[]
   { value: "VIDEO", label: "Video" },
   { value: "AUDIO", label: "Audio" },
   { value: "TEXT", label: "Text" },
+  { value: "QUIZ", label: "Quiz" },
+  { value: "EXAM", label: "Exam" },
+  { value: "ASSIGNMENT", label: "Assignment" },
   { value: "DOCUMENT", label: "Document" },
   { value: "LINK", label: "Link" },
 ];
 
 type FieldErrors = Partial<Record<keyof FormState, string>>;
 
-const needsUrl = (type: LessonContentType) => type !== "TEXT";
+const needsUrl = (type: LessonContentType) => ["VIDEO", "AUDIO", "DOCUMENT", "LINK"].includes(type);
 
 function buildInitialState(lesson?: LessonDTO | null, defaultOrderIndex = 0): FormState {
   return {
@@ -94,7 +98,7 @@ function validate(form: FormState, outlineEditable: boolean): FieldErrors {
     else if (url.length > 500) errors.contentUrl = "Content URL must not exceed 500 characters";
     else if (!isHttpUrl(url)) errors.contentUrl = "Content URL must start with http:// or https://";
   } else if (!form.textContent.trim() && !outlineEditable) {
-    errors.textContent = "Text content is required for TEXT lessons";
+    errors.textContent = "Lesson content or assessment instructions are required";
   }
 
   if (form.duration !== "") {
@@ -326,6 +330,12 @@ export function LessonFormModal({
 
   const isBusy = mutation.isPending || audioUploadStatus === "uploading" || documentUploadStatus === "uploading";
 
+  if (!isEdit && (form.contentType === "QUIZ" || form.contentType === "EXAM" || form.contentType === "ASSIGNMENT")) {
+    return <AssessmentLessonDialog key={`${open}-${sectionId}-${form.contentType}`} open={open} onOpenChange={onOpenChange}
+      sectionId={sectionId} type={form.contentType} initialTitle={form.title} initialInstructions={form.textContent}
+      initialOrder={form.orderIndex} onBack={() => setField("contentType", "TEXT")} onSuccess={onSuccess} />;
+  }
+
   return (
     <Dialog open={open} onOpenChange={(next) => !isBusy && onOpenChange(next)}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -533,12 +543,12 @@ export function LessonFormModal({
           ) : (
             <div className="grid gap-1.5">
               <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="lesson-text">Text content</Label>
+                <Label htmlFor="lesson-text">{form.contentType === "TEXT" ? "Text content" : "Assessment instructions"}</Label>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={aiLoading}
+                  disabled={aiLoading || form.contentType !== "TEXT"}
                   onClick={handleGenerateWithAi}
                 >
                   {aiLoading ? (
@@ -560,7 +570,7 @@ export function LessonFormModal({
               <p className="text-xs text-muted-foreground">
                 {lesson?.outlineEditable
                   ? "You can save this outline while the course is Draft. Add content before publishing."
-                  : "Required for Text lessons"}
+                  : "Enter lesson content or assessment instructions. Attach the assessment through Exam Management using this lesson."}
               </p>
               <FieldMessage message={errors.textContent} />
             </div>

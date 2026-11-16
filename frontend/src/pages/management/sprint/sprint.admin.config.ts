@@ -85,6 +85,11 @@ export const sprintAdminSchema: EntitySchema = {
             createOptions: sprintCreateStatusOptions,
             editOptions: sprintEditStatusOptions,
             defaultValue: "PLANNED",
+            /**
+             * A new sprint is always created as Planned, so the field is not
+             * shown when creating and only appears when editing.
+             */
+            hideOnCreate: true,
             required: true,
             requiredMessage: "Vui lòng chọn trạng thái Sprint",
             filterable: true,

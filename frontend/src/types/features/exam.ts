@@ -65,6 +65,8 @@ export interface QuestionDTO {
   options: QuestionOptionDTO[];
   imageUrl?: string | null;
   code?: CodeSpec | null;
+  source?: string | null;
+  isAiGenerated?: boolean | null;
   createdAt?: string | null;
   updatedAt?: string | null;
   createdBy?: number | null;
@@ -114,6 +116,7 @@ export interface ExamDTO {
   shuffleOptions?: boolean;
   showAnswersAfterExam?: boolean;
   passScore?: number | null;
+  courseWeight?: number | null;
   maxScore?: number | null;
   latePolicy?: LatePolicy;
   latePenaltyPercent?: number | null;
@@ -121,6 +124,7 @@ export interface ExamDTO {
   resultVisibility?: ResultVisibility;
   category?: ExamCategory;
   examType?: ExamType;
+  allowedQuestionTypes?: QuestionType[];
   questionIds?: number[];
   questions?: QuestionDTO[];
   totalPoints?: number;
@@ -137,6 +141,12 @@ export interface ExamDTO {
   headTurnAngleDeg?: number | null;
   headTurnSeconds?: number | null;
   fastSubmitPercent?: number | null;
+  // Tu danh gia / danh gia cheo (UFR-EXM-012)
+  selfReviewEnabled?: boolean;
+  peerReviewEnabled?: boolean;
+  peerReviewCount?: number | null;
+  peerReviewAnonymous?: boolean;
+  peerReviewShowReference?: boolean;
   // Optional link to a course / section / lesson (null = not linked)
   courseId?: number | null;
   sectionId?: number | null;
@@ -169,6 +179,7 @@ export interface CourseExam {
   examType: ExamType;
   durationMinutes: number;
   maxAttempts: number | null;
+  courseWeight?: number | null;
   maxScore: number | null;
   passScore: number | null;
   isActive: boolean;

@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.project_template_version;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import java.sql.Connection;
 import javax.sql.DataSource;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(6)
 @RequiredArgsConstructor
+@StartupMutation
 public class ProjectTemplateVersionSchemaInitializer implements CommandLineRunner {
 
     static final String AUDIT_TABLE = "project_template_version_audit_log";

@@ -170,10 +170,11 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 			exam.setShowAnswersAfterExam(exam.getCategory().isShowAnswersByDefault());
 		}
 		if (request.getQuestionIds() != null) {
-			ExamType examType = request.getExamType() != null ? request.getExamType() : exam.getExamType();
+			ExamType examType = request.getExamType() != null ? request.getExamType() : ExamTypePolicy.determineEffective(exam);
 			exam.setQuestions(resolveQuestions(exam, request.getQuestionIds(), context, examType));
 		}
 		courseLinkService.apply(exam, request, context);
+		courseLinkService.validateWeight(exam, request.isCourseWeightProvided() ? request.getCourseWeight() : exam.getCourseWeight(), context);
 		configValidator.validate(null, request, totalPoints(exam.getQuestions()), context);
 	}
 
@@ -183,7 +184,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 			validateTypes(request.getExamType(), exam.getQuestions(), context);
 		}
 		if (request.getQuestionIds() != null) {
-			ExamType examType = request.getExamType() != null ? request.getExamType() : exam.getExamType();
+			ExamType examType = request.getExamType() != null ? request.getExamType() : ExamTypePolicy.determineEffective(exam);
 			Set<Question> before = new LinkedHashSet<>(exam.getQuestions());
 			Set<Question> after = resolveQuestions(exam, request.getQuestionIds(), context, examType);
 			if (!context.hasErrors()) {
@@ -192,6 +193,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 			}
 		}
 		courseLinkService.apply(exam, request, context);
+		courseLinkService.validateWeight(exam, request.isCourseWeightProvided() ? request.getCourseWeight() : exam.getCourseWeight(), context);
 		configValidator.validate(exam, request, totalPoints(exam.getQuestions()), context);
 	}
 
@@ -207,7 +209,8 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 		if (examAttemptRepository.existsByExam_Id(exam.getId())) {
 			throw new BadRequestException("Đề thi đã có sinh viên làm bài, không thể thêm câu hỏi");
 		}
-		Set<Question> questions = resolveQuestions(exam, questionIds, context, exam.getExamType());
+		ExamType effType = ExamTypePolicy.determineEffective(exam);
+		Set<Question> questions = resolveQuestions(exam, questionIds, context, effType);
 		context.throwIfErrors();
 
 		exam.getQuestions().addAll(questions);
@@ -234,7 +237,7 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 				.filter(q -> q.getId().equals(questionId))
 				.findFirst()
 				.orElseThrow(() -> new ResourceNotFoundException("Câu hỏi không thuộc đề thi này"));
-		if (copy.getSourceQuestionId() == null) {
+		if (copy.getSourceQuestionId() == null && !"AI_GENERATED".equalsIgnoreCase(copy.getSource()) && !Boolean.TRUE.equals(copy.getIsAiGenerated())) {
 			throw new BadRequestException("Đây không phải bản sao của đề thi, không thể sửa trong đề");
 		}
 		if (examAttemptRepository.existsByExam_Id(exam.getId())) {
@@ -447,6 +450,16 @@ public class ExamServiceImpl extends BaseCrudServiceImpl<Exam, Long, ExamDTO, Ex
 			Question source = found.get(id);
 			if (source == null) {
 				context.add("questionIds", "Không tìm thấy câu hỏi: " + id);
+			} else if ("AI_GENERATED".equalsIgnoreCase(source.getSource()) || Boolean.TRUE.equals(source.getIsAiGenerated())) {
+				if (exam == null || !Objects.equals(source.getExamId(), exam.getId())) {
+					context.add("questionIds", "Câu hỏi AI " + id + " thuộc về một đề thi khác, không thể sử dụng!");
+				} else if (!ExamTypePolicy.allows(examType, source.getType())) {
+					context.add("questionIds", "Câu hỏi " + id + " không hợp với kiểu bài thi "
+							+ ExamTypePolicy.describe(examType) + " (loại câu: " + source.getType() + ")");
+				} else {
+					keptIds.add(id);
+					inExam.put(id, source);
+				}
 			} else if (source.getSourceQuestionId() != null) {
 				context.add("questionIds", "Câu hỏi " + id + " là bản sao của một đề thi, hãy chọn câu hỏi trong ngân hàng");
 			} else if (!Boolean.TRUE.equals(source.getIsActive())) {

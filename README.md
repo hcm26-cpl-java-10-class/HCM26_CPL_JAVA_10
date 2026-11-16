@@ -23,7 +23,7 @@ cd frontend && npm install && npm run dev
 Đăng nhập: `teacher@example.com` / `password123` (hoặc `admin@example.com` / `password123`).
 
 📖 **Hướng dẫn đầy đủ (bảng yêu cầu, xử lý lỗi, tài khoản test, endpoint API):**
-👉 [docs/COURSE_ANALYTICS_SETUP.md](docs/COURSE_ANALYTICS_SETUP.md)
+👉 [docs/01-getting-started/COURSE_ANALYTICS_SETUP.md](docs/01-getting-started/COURSE_ANALYTICS_SETUP.md)
 
 ---
 

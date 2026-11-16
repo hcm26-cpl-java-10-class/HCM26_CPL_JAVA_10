@@ -76,7 +76,7 @@ class WorkspaceDemoIntegrationTest {
         String description = jdbc.queryForObject("SELECT description FROM project_topic_snapshots WHERE project_id = ?", String.class, projectId);
         String objectives = jdbc.queryForObject("SELECT objectives FROM project_topic_snapshots WHERE project_id = ?", String.class, projectId);
         java.util.function.Consumer<String> run = name -> new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(
-                new org.springframework.core.io.FileSystemResource(java.nio.file.Path.of("../docs/us-prj-001-02", name)))
+                new org.springframework.core.io.FileSystemResource(java.nio.file.Path.of("../docs/06-testing-verification/workspace-overview-acceptance", name)))
                 .execute(dataSource);
         run.accept("AC02_SOURCE_SETUP.sql");
         assertThat(jdbc.queryForObject("SELECT version FROM us02_source_topics WHERE project_id = ?", String.class, projectId)).isEqualTo("v2.0.0");

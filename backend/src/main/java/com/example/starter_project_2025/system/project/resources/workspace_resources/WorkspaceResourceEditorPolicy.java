@@ -1,6 +1,9 @@
 package com.example.starter_project_2025.system.project.resources.workspace_resources;
 
 import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.domain.Project;
+import com.example.starter_project_2025.system.project.domain.ProjectStatus;
+import com.example.starter_project_2025.system.project.workspace.service.WorkspaceProjectScope;
 import com.example.starter_project_2025.system.project.workspace.domain.Workspace;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.AccessLevel;
@@ -29,7 +32,12 @@ public class WorkspaceResourceEditorPolicy {
             "SUPER_ADMIN", "ADMIN", "PO", "PM", "PROGRAM_MANAGER"
     );
 
-    public boolean canManage(User user, Workspace workspace) {
+    WorkspaceProjectScope scope;
+
+    public boolean canManage(User user, Workspace workspace, Project project) {
+        if (project == null || workspace == null || scope.readOnly(workspace)
+                || !Boolean.TRUE.equals(project.getIsActive())
+                || Set.of(ProjectStatus.COMPLETED, ProjectStatus.CANCELLED).contains(project.getStatus())) return false;
 
         if (user == null || workspace == null || workspace.getTeam() == null) {
             return false;
@@ -54,9 +62,9 @@ public class WorkspaceResourceEditorPolicy {
         return team.getAssignedMentorId() == null && userId != null && userId.equals(classMentorId);
     }
 
-    public void requireManage(User user, Workspace workspace) {
+    public void requireManage(User user, Workspace workspace, Project project) {
 
-        if (!canManage(user, workspace)) {
+        if (!canManage(user, workspace, project)) {
             throw new AccessDeniedException(
                     "Only the mentor in charge of this team or an administrator/program manager can change its resources");
         }

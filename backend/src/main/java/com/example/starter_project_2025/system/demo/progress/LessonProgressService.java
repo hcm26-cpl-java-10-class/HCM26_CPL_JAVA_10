@@ -39,10 +39,13 @@ public class LessonProgressService {
     private final NotificationService notificationService;
     private final CertificateService certificateService;
     private final StudentLearningActivityRepository activityRepository;
+    private final com.example.starter_project_2025.system.demo.course.CourseAssessmentService assessments;
+    private final com.example.starter_project_2025.system.demo.course.CourseAssessmentCompletionService completion;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public LessonProgressDTO getProgress(Long userId, Long enrollmentId) {
         CourseEnrollment enrollment = getOwnedEnrollment(userId, enrollmentId);
+        completion.refresh(enrollment);
         return buildProgress(enrollment);
     }
 
@@ -55,6 +58,10 @@ public class LessonProgressService {
     ) {
         CourseEnrollment enrollment = getOwnedEnrollmentForUpdate(userId, enrollmentId);
         Lesson lesson = getCourseLesson(enrollment, lessonId);
+        if (completed && com.example.starter_project_2025.system.demo.course.CourseAssessmentService.isAssessment(lesson)
+                && !assessments.lessonFinished(lesson,userId))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"Finish the linked assessment and wait for its graded results to be published");
+
 
         LessonProgress progress = progressRepository
                 .findByEnrollment_IdAndLesson_Id(enrollmentId, lessonId)
@@ -77,7 +84,7 @@ public class LessonProgressService {
         }
 
         LessonProgressDTO result = buildProgress(enrollment);
-        if (result.progressPercentage() == 100) {
+        if (result.courseCompleted()) {
             notificationService.createOnce(
                     userId,
                     "course-completed:" + enrollmentId,
@@ -221,7 +228,7 @@ public class LessonProgressService {
     }
 
     private LessonProgressDTO buildProgress(CourseEnrollment enrollment) {
-        List<Lesson> lessons = lessonRepository.findByCourseIdOrdered(enrollment.getCourse().getId());
+        List<Lesson> lessons = lessonRepository.findByCourseIdOrdered(enrollment.getCourse().getId()).stream().filter(com.example.starter_project_2025.system.demo.course.CourseAssessmentService::activeLesson).toList();
         Map<Long, LessonProgress> progressByLesson = progressRepository
                 .findAllByEnrollment_Id(enrollment.getId())
                 .stream()
@@ -233,6 +240,7 @@ public class LessonProgressService {
         int completedLessons = (int) items.stream().filter(LessonProgressDTO.LessonItem::completed).count();
         int percentage = items.isEmpty() ? 0 : completedLessons * 100 / items.size();
 
+        var grade=assessments.grade(enrollment.getCourse().getId(),enrollment.getUser().getId());
         return new LessonProgressDTO(
                 enrollment.getId(),
                 enrollment.getCourse().getId(),
@@ -242,7 +250,10 @@ public class LessonProgressService {
                 percentage,
                 enrollment.getLastLessonId(),
                 enrollment.getLastAccessedAt(),
-                items
+                items,
+                percentage==100 && assessments.canComplete(enrollment.getCourse().getId(),enrollment.getUser().getId()),
+                grade.status(),
+                grade.overallScore()
         );
     }
 
