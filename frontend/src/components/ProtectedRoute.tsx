@@ -4,6 +4,7 @@ import { Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/store/store";
 import { usePermissions } from "@/hooks/usePermissions";
+import { isAuditAdmin } from "@/components/audit/auditAccess";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -19,7 +20,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAll = false,
 }) => {
   const { isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const { hasPermission, hasAnyPermission, hasAllPermissions } = usePermissions();
+  const { hasPermission, hasAnyPermission, hasAllPermissions, user } = usePermissions();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -37,6 +38,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     if (!hasAccess) {
       return <Navigate to="/unauthorized" replace />;
     }
+  }
+
+  if (
+    window.location.pathname === "/admin/audit-log" &&
+    !isAuditAdmin(user.roles)
+  ) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return <>{children}</>;

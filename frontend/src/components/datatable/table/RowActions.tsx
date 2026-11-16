@@ -1,4 +1,4 @@
-import { Eye, Pen, Trash2 } from "lucide-react";
+import { Eye, History, Pen, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import ActionButton from "../common/ActionButton";
 import { PermissionGate } from "@/components/PermissionGate";
@@ -8,6 +8,8 @@ interface RowActionsProps {
   onView: (row: any) => void;
   onEdit: (row: any) => void;
   onDelete: (row: any) => void;
+  /** Optional: opens the audit history of the row (shown only when provided). */
+  onHistory?: (row: any) => void;
   viewPermission?: string;
   editPermission?: string;
   deletePermission?: string;
@@ -20,6 +22,7 @@ export function RowActions({
   onView,
   onEdit,
   onDelete,
+  onHistory,
   viewPermission,
   editPermission,
   deletePermission,
@@ -34,6 +37,13 @@ export function RowActions({
           icon={<Eye size={10} className="text-gray-500" />}
         />
       </PermissionGate>
+      {onHistory && (
+        <ActionButton
+          onClick={() => onHistory(row)}
+          tooltip="History"
+          icon={<History size={10} className="text-gray-500" />}
+        />
+      )}
       <PermissionGate permission={editPermission}>
         <ActionButton
           onClick={() => onEdit(row)}

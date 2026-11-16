@@ -157,4 +157,17 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
             order by u.email asc
             """)
     List<User> findActiveUsersByRoleName(@Param("roleName") String roleName);
+
+    @Query("""
+    SELECT u.id
+    FROM User u
+    WHERE LOWER(CONCAT(
+        COALESCE(u.firstName, ''), ' ',
+        COALESCE(u.lastName, '')
+    )) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+       OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+    """)
+    List<Long> findIdsByActorName(@Param("keyword") String keyword);
 }

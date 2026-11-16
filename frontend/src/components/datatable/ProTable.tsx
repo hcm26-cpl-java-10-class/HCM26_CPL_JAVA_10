@@ -2,6 +2,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAutoPageSize } from "@/components/datatable/hook/useAutoPageSize";
 import type { EntityCardLayout, EntityCardRendererProps, FieldSchema } from "@/types";
 import { ChevronRight } from "lucide-react";
+import { EntityHistoryDialog } from "@/components/audit/EntityHistoryDialog";
+import { isAuditAdmin } from "@/components/audit/auditAccess";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Loading from "./common/Loading";
 import NoResult from "./common/NoResult";
@@ -157,6 +160,7 @@ export function ProTable<TData = any>({
     expandable,
 }: ProTableProps<TData>) {
     const { schema } = table;
+    const { user } = usePermissions();
     const isBrowseMode = mode === "browse";
     /** Browse mode normally hides row actions; entities can opt back in. */
     const allowBrowseRowActions = isBrowseMode && browseRowActions;
@@ -187,6 +191,7 @@ export function ProTable<TData = any>({
     const [deleteItem, setDeleteItem] = useState<TData | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [detailRow, setDetailRow] = useState<TData | null>(null);
+    const [historyRow, setHistoryRow] = useState<TData | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>(() =>
         isBrowseMode || (responsiveCards && window.matchMedia("(max-width: 640px)").matches)
             ? "card"
@@ -278,7 +283,12 @@ export function ProTable<TData = any>({
     // Entities that add their own row buttons (e.g. Project Template Versions
     // with "Create new version" + "Clone") need a wider action column, otherwise
     // the trailing icon button is clipped by the cell's overflow-hidden.
-    const ACTION_COLUMN_WIDTH = actionsColumnWidth ?? (renderExtraRowActions ? 236 : 152);
+    // Audit history is only available to real ADMIN accounts (the audit API is admin-only)
+    const canViewHistory =
+        isAuditAdmin(user.roles) && !!table.permission?.resource;
+    const ACTION_COLUMN_WIDTH =
+        actionsColumnWidth ??
+        ((renderExtraRowActions ? 236 : 152) + (canViewHistory ? 40 : 0));
 
     const defaultRenderRowActions = (row: TData) => (
         <RowActions
@@ -288,6 +298,7 @@ export function ProTable<TData = any>({
             onDelete={onDelete || setDeleteItem}
             viewPermission={table.permission?.keys?.read}
             editPermission={table.permission?.keys?.update}
+            onHistory={canViewHistory ? setHistoryRow : undefined}
             deletePermission={table.permission?.keys?.delete}
             extra={renderExtraRowActions?.(row)}
         />
@@ -670,6 +681,15 @@ export function ProTable<TData = any>({
                 onConfirm={handleDeleteConfirm}
                 loading={deleteLoading}
             />
+
+            {canViewHistory && (
+                <EntityHistoryDialog
+                    open={!!historyRow}
+                    entityType={String(table.permission?.resource ?? "")}
+                    entityId={historyRow ? ((historyRow as any)[schema.idField] ?? null) : null}
+                    onClose={() => setHistoryRow(null)}
+                />
+            )}
 
             <DetailModal
                 open={!!detailRow}

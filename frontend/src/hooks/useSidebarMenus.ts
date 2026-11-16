@@ -1,5 +1,6 @@
 import { moduleApi, moduleGroupApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
+import { isAuditAdmin } from "@/components/audit/auditAccess";
 import type { ModuleDTO, ModuleGroupDTO, Pagination } from "@/types";
 import {
     canAccessByPermission,
@@ -49,7 +50,7 @@ const modulePagination: Pagination = {
 };
 
 export function useActiveModuleGroups(enabled = true) {
-    const { activeRole, effectivePermissions, hasPermission } = usePermissions();
+    const { activeRole, effectivePermissions, hasPermission, user } = usePermissions();
     const permissionCacheKey = useMemo(
         () => [...effectivePermissions].sort().join("|"),
         [effectivePermissions],
@@ -74,6 +75,12 @@ export function useActiveModuleGroups(enabled = true) {
             const groups = groupPage.content ?? groupPage.items ?? [];
             const modules = (modulePage.content ?? modulePage.items ?? []).filter((module) => {
                 const url = module.url ?? "";
+
+                // Audit Log is only for users who really have the ADMIN role
+                if (url === "/admin/audit-log") {
+                    return isAuditAdmin(user.roles);
+                }
+
                 const isExcludedPath = [
                     "/management/project-templates",
                     "/management/project-teams",
@@ -384,6 +391,46 @@ export function useActiveModuleGroups(enabled = true) {
                     icon: "folder",
                     displayOrder: 999,
                     requiredPermission: "WORKSPACE_READ",
+                    isActive: true,
+                });
+            }
+
+            // Ensure the Audit Log menu exists under RBAC Management when the menu table was seeded before the
+            // @ResourceMenu of the audit module existed (same reason as the project menus above)
+            const hasAuditLogInDb = modules.some((m) => m.url === "/admin/audit-log");
+
+            if (!hasAuditLogInDb && isAuditAdmin(user.roles)) {
+                let rbacGroup = groups.find(
+                    (g) => (g.name || "").toLowerCase() === "rbac management",
+                );
+
+                if (!rbacGroup) {
+                    const fallbackGroup: ModuleGroupDTO = {
+                        id: 10000,
+                        name: "RBAC Management",
+                        description: "Role-Based Access Control",
+                        displayOrder: 5,
+                        isActive: true,
+                    };
+
+                    groups.push(fallbackGroup);
+                    rbacGroup = fallbackGroup;
+                }
+
+                const rbacGroupId = String(rbacGroup.id ?? 10000);
+
+                if (!groupedModules[rbacGroupId]) {
+                    groupedModules[rbacGroupId] = [];
+                }
+
+                groupedModules[rbacGroupId].push({
+                    id: 100008,
+                    moduleGroupId: rbacGroupId,
+                    title: "Audit Log",
+                    name: "Audit Log",
+                    url: "/admin/audit-log",
+                    icon: "history",
+                    displayOrder: 4,
                     isActive: true,
                 });
             }

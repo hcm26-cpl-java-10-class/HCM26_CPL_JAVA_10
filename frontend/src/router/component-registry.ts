@@ -91,6 +91,7 @@ import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
 import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage.tsx";
 import DepartmentManagementPage from "@/pages/management/demo/department";
 import CourseGradeDetailPage from "@/pages/student/CourseGradeDetailPage";
+import AuditLogPage from "@/pages/management/audit-log";
 
 export interface RouteConfig {
   path: string;
@@ -525,6 +526,13 @@ export const routes: RouteConfig[] = [
     path: "/unauthorized",
     component: Unauthorized,
     isPublic: true,
+  },
+
+  // AUDIT LOG (ADMIN only)
+  {
+    path: "/admin/audit-log",
+    component: AuditLogPage,
+    isModuleDriven: true,
   },
 
   // CURRICULUM
