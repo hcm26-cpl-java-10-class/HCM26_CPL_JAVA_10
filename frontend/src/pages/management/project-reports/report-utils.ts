@@ -8,7 +8,9 @@ export const statusColors: Record<ReportStatus, string> = {
   DRAFT: "bg-slate-400", PLANNING: "bg-violet-400", ACTIVE: "bg-blue-500", COMPLETED: "bg-emerald-500", CANCELLED: "bg-rose-400",
 };
 export function reportStatuses(additional: ReportStatus[] = []): ReportStatus[] {
-  return (Object.keys(statusLabels) as ReportStatus[]).filter(status => status === "PLANNING" || status === "ACTIVE" || status === "COMPLETED"
+  // Pending team assignments do not create PLANNING projects in the current publication flow.
+  // Show that status only when actual data or an existing filter explicitly includes it.
+  return (Object.keys(statusLabels) as ReportStatus[]).filter(status => status === "ACTIVE" || status === "COMPLETED"
     || status !== "CANCELLED" && additional.includes(status));
 }
 export function reportDate(value: string | null, timeZone: string) {

@@ -45,17 +45,15 @@ public class ProjectReportExcelWriter {
             layout.values(overview, "Sub-project", projects.stream().filter(row -> row.parentProjectId() != null).count());
             layout.values(overview, "Task quá hạn", k.overdueTasks());
             layout.values(overview, "Backlog quá hạn", k.overdueBacklogItems());
-            layout.values(overview, "Task con quá hạn", k.overdueSubtasks());
+            layout.values(overview, "Subtask quá hạn", k.overdueSubtasks());
             layout.values(overview, "Rủi ro cần xử lý", k.riskCount());
-            layout.values(overview, "Milestone rủi ro", k.milestoneRisks());
-            layout.values(overview, "Thành viên không hoạt động", k.inactiveMembers());
             k.milestoneStatuses().forEach((status, count) -> layout.values(overview, "Milestone · " + label(status), count));
             k.artifactStatuses().forEach((status, count) -> layout.values(overview, "Bài nộp · " + label(status), count));
-            var counts = data.work().backlog();
-            layout.values(overview, "Công việc · Todo", counts.todo());
-            layout.values(overview, "Công việc · In progress", counts.inProgress());
-            layout.values(overview, "Công việc · Review", counts.review());
-            layout.values(overview, "Công việc · Done", counts.done());
+            var totals = data.workTotals();
+            layout.values(overview, "Công việc · Todo", totals.todo());
+            layout.values(overview, "Công việc · In progress", totals.inProgress());
+            layout.values(overview, "Công việc · Review", totals.review());
+            layout.values(overview, "Công việc · Done", totals.done());
             layout.finish(overview);
 
             var work = layout.extra("Trạng thái công việc", "PHÂN BỐ CÔNG VIỆC THEO SPRINT", "Project", "Team", "Sprint", "Trạng thái Sprint",
@@ -65,6 +63,7 @@ public class ProjectReportExcelWriter {
                             sprint.startAt(), sprint.endAt(), sprint.backlog().todo(), sprint.backlog().inProgress(), sprint.backlog().review(),
                             sprint.backlog().done(), sprint.backlog().total()));
             if (data.work().selectedSprintId() == null) {
+                var counts = data.work().backlog();
                 var planned = data.work().sprints().stream().map(SprintRow::backlog).reduce(BacklogCounts.empty(), BacklogCounts::plus);
                 if (counts.total() > planned.total()) layout.values(work, "Theo bộ lọc", null, "Chưa gán Sprint", null, null, null,
                         counts.todo() - planned.todo(), counts.inProgress() - planned.inProgress(), counts.review() - planned.review(),
@@ -75,10 +74,10 @@ public class ProjectReportExcelWriter {
                     "Deadline", "Trạng thái milestone", "Trạng thái bài nộp", "Phiên bản", "Thời điểm nộp", "Người duyệt", "Checklist đạt", "Tổng checklist", "Cảnh báo");
             data.deliveries().forEach(row -> layout.values(deliveries, row.masterName(), row.projectName(), row.teamName(), row.title(), row.mandatory() ? "Có" : "Không",
                     row.deadline(), label(row.milestoneStatus()), row.artifactStatus() == null ? "Chưa có bài nộp" : label(row.artifactStatus()), row.version(),
-                    row.submittedAt(), row.reviewerName(), row.checklistCompleted(), row.checklistTotal(), label(row.attention())));
+                    row.submittedAt(), row.reviewerName(), row.checklistCompleted(), row.checklistTotal(), riskReason(row.attention())));
             layout.finish(deliveries);
             var risks = layout.extra("Cảnh báo", "CẢNH BÁO HIỆN TẠI", "Loại", "Project", "Team", "Đối tượng", "Deadline", "Lý do");
-            data.risks().forEach(row -> layout.values(risks, label(row.kind()), row.projectName(), row.teamName(), row.subject(), row.deadline(), label(row.reason())));
+            data.risks().forEach(row -> layout.values(risks, label(row.kind()), row.projectName(), row.teamName(), row.subject(), row.deadline(), riskReason(row.reason())));
             layout.finish(risks);
             var activity = layout.extra("Hoạt động", "HOẠT ĐỘNG TRONG PHẠM VI BÁO CÁO", "Thời gian", "Master", "Mã Project", "Project", "Team",
                     "Người thực hiện", "Đối tượng", "Hành động", "Trạng thái trước", "Trạng thái sau");
@@ -86,8 +85,9 @@ public class ProjectReportExcelWriter {
                     row.actorName(), row.subject(), action(row.action()), label(row.beforeStatus()), label(row.afterStatus())));
             layout.finish(activity);
             for (int index = 0; index < book.getNumberOfSheets(); index++) {
-                var context = book.getSheetAt(index).getRow(3).getCell(0);
-                context.setCellValue("Theo bộ lọc: " + filterText(data));
+                var sheet = book.getSheetAt(index);
+                var context = sheet.getRow(3).getCell(0);
+                context.setCellValue("Theo bộ lọc: " + filterText(data, sheet.getSheetName().equals("Trạng thái công việc")));
             }
             book.setActiveSheet(0);
             book.write(output);
@@ -103,7 +103,7 @@ public class ProjectReportExcelWriter {
     private static String mentor(SubProject project) {
         return project.mentorName() != null ? project.mentorName() : project.teamId() == null ? "Theo từng Sub-project" : "Chưa phân công";
     }
-    private String filterText(ProjectReportService.ExportData data) {
+    private String filterText(ProjectReportService.ExportData data, boolean includeSprint) {
         var filter = data.snapshot().filter();
         var rows = data.snapshot().all();
         var parts = new java.util.ArrayList<String>();
@@ -118,10 +118,10 @@ public class ProjectReportExcelWriter {
         if (filter.sourceVersionId() != null) parts.add("Phiên bản: " + rows.stream().filter(row -> filter.sourceVersionId().equals(row.sourceVersionId())).map(SubProject::sourceVersion).findFirst().orElse("#" + filter.sourceVersionId()));
         if (filter.masterStatus() != null) parts.add("Trạng thái Master: " + projectStatus(filter.masterStatus()));
         if (filter.status() != null) parts.add("Trạng thái Project con: " + projectStatus(filter.status()));
-        if (filter.risk() != Risk.ALL) parts.add("Cảnh báo: " + switch (filter.risk()) { case OVERDUE -> "Quá hạn"; case INACTIVE_MEMBERS -> "Thành viên không hoạt động"; case NEEDS_ATTENTION -> "Đang cần xử lý"; case LATE_SUBMISSION -> "Lịch sử nộp trễ"; default -> "Tất cả"; });
+        if (filter.risk() != Risk.ALL) parts.add("Cảnh báo: " + switch (filter.risk()) { case OVERDUE -> "Quá hạn"; case NEEDS_ATTENTION -> "Đang cần xử lý"; case LATE_SUBMISSION -> "Lịch sử nộp trễ"; default -> "Tất cả"; });
         if (filter.createdFrom() != null) parts.add("Ngày tạo từ " + filter.createdFrom());
         if (filter.createdTo() != null) parts.add("Ngày tạo đến " + filter.createdTo());
-        if (filter.workSprintId() != null) parts.add("Công việc trong Sprint: " + data.work().sprints().stream().filter(row -> filter.workSprintId().equals(row.id())).map(SprintRow::name).findFirst().orElse("#" + filter.workSprintId()));
+        if (includeSprint && filter.workSprintId() != null) parts.add("Công việc trong Sprint: " + data.work().sprints().stream().filter(row -> filter.workSprintId().equals(row.id())).map(SprintRow::name).findFirst().orElse("#" + filter.workSprintId()));
         if (!filter.q().isBlank()) parts.add("Tìm kiếm: " + filter.q());
         if (filter.includeCancelled()) parts.add("Bao gồm dự án đã hủy");
         return parts.isEmpty() ? "Tất cả dữ liệu trong phạm vi được phép xem" : String.join(" · ", parts);
@@ -134,10 +134,14 @@ public class ProjectReportExcelWriter {
             case "SUBMITTED" -> "Chờ duyệt"; case "ACCEPTED" -> "Đã chấp nhận"; case "CHANGES_REQUESTED" -> "Cần chỉnh sửa";
             case "REJECTED" -> "Bị từ chối"; case "WAIVED" -> "Được miễn"; case "COMPLETED" -> "Hoàn thành";
             case "CANCELLED" -> "Đã hủy"; case "OVERDUE" -> "Quá hạn"; case "DUE_SOON" -> "Sắp hạn chưa nộp";
-            case "REVISION" -> "Bài nộp cần xử lý"; case "INACTIVE" -> "Không có hoạt động trong cửa sổ theo dõi";
-            case "MILESTONE" -> "Milestone"; case "TASK" -> "Công việc"; case "MEMBER" -> "Thành viên";
+            case "MILESTONE" -> "Milestone"; case "BACKLOG" -> "Backlog item"; case "SUBTASK" -> "Subtask"; case "TASK" -> "Task";
             default -> status;
         };
+    }
+    private static String riskReason(String reason) {
+        if ("CHANGES_REQUESTED".equals(reason)) return "Bài nộp cần chỉnh sửa";
+        if ("REJECTED".equals(reason)) return "Bài nộp bị từ chối";
+        return label(reason);
     }
     static String action(String value) {
         if (value == null) return "Cập nhật";

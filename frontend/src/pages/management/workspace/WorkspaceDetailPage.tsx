@@ -95,7 +95,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
     await Promise.all(["workspace-detail", "workspace-members", "workspace-section", "workspace-resources"].map(key =>
       queryClient.invalidateQueries({ queryKey: [key, workspaceId] })));
   }
-  return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background" pathName={{ management: "Management", workspaces: "Workspace",
+  return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background" ignorePaths={["management", "workspaces"]} pathName={{
     [String(workspaceId)]: navigation.isError ? "Workspace details" : context?.projectName ?? context?.teamName ?? "Workspace details" }}>
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">

@@ -25,10 +25,10 @@ Dashboard bật tùy chọn compactHeader của MainLayout: header cao 56px, bre
 - Milestone và artifact: lấy trên Project ACTIVE dưới Master ACTIVE trong Workspace ACTIVE/current, có kiểm tenant và scope. Với Master dùng chung, chỉ lấy phần việc trực tiếp được phép xem khi có Workspace tham gia đang hoạt động. Số liệu tính theo các dòng khớp bộ lọc trước phân trang, không mở rộng sang module bị lọc ẩn. Project đang ACTIVE nhưng chưa có Workspace vẫn có thể góp vào số Master/team; chưa góp vào các thẻ nghiệp vụ.
 - Milestone: PLANNED, IN_PROGRESS, SUBMITTED, ACCEPTED, CHANGES_REQUESTED, REJECTED. Quyết định review hiện tại được phản ánh vào trạng thái; WAIVED được hiển thị riêng khi có dữ liệu và không bị tính là rủi ro.
 - Artifact: DRAFT, SUBMITTED, ACCEPTED, CHANGES_REQUESTED, REJECTED. Chỉ tính một bản hiện tại cho mỗi milestone/team. Đọc trạng thái review từ MilestoneSubmission/currentVersionNumber, không cộng các SubmissionVersion hoặc bản sao immutable vào tổng. Bản nháp workspace mới hơn vòng review được tính là DRAFT; bản nháp cũ không ghi đè kết quả review. Draft lưu theo tenant/project/milestone của writer cũ có thể không có team_id. Không tạo trạng thái APPROVED trong database; nhãn Đã chấp nhận dùng ACCEPTED hiện có.
-- Task quá hạn: backlog item và task con active, TODO hoặc IN_PROGRESS, deadline trước thời điểm thống kê. REVIEW/DONE, thiếu deadline, deadline bằng hiện tại không bị tính. Nếu thuộc sprint thì sprint phải ACTIVE. Task con kế thừa scope/sprint của backlog cha và được kiểm alias Project/tenant. Backlog và task con là các bản ghi công việc riêng, mỗi bản ghi chỉ đếm một lần; không yêu cầu assignee để tính tổng Project.
+- Task quá hạn: backlog item và subtask active, TODO hoặc IN_PROGRESS, deadline trước thời điểm thống kê. REVIEW/DONE, thiếu deadline, deadline bằng hiện tại không bị tính. Nếu thuộc sprint thì sprint phải ACTIVE. Subtask kế thừa scope/sprint của backlog cha và được kiểm alias Project/tenant. Backlog và subtask là các bản ghi công việc riêng, mỗi bản ghi chỉ đếm một lần; không yêu cầu assignee để tính tổng Project.
 - Rủi ro milestone: chưa ACCEPTED/WAIVED và đã quá deadline, hoặc còn tối đa 48 giờ chưa nộp (kể cả draft), hoặc hiện bị REJECTED/CHANGES_REQUESTED. Mỗi milestone chỉ đếm một lần dù có nhiều lý do. Nộp rồi nhưng đã quá hạn và chưa được chấp nhận vẫn thuộc KPI rủi ro; không thay đổi định nghĩa bộ lọc OVERDUE lịch sử bên dưới.
-- Không hoạt động: thành viên học viên hiện tại không có hoạt động nghiệp vụ được ghi nhận trong cửa sổ cấu hình (mặc định 7 ngày), kể từ lúc tham gia/chuyển nhóm. Không bắt buộc có việc Todo. Credit cho actor của thay đổi backlog, task, hoạt động Project, nộp/chỉnh artifact/milestone và contribution từ integration; không credit cho assignee chỉ vì người khác sửa task. Một người trong nhiều module chỉ đếm một lần trong scope đang xem.
-- Tổng rủi ro = số milestone rủi ro + số backlog/task con quá hạn + số thành viên không hoạt động. Không đếm log gửi thông báo, không gửi cảnh báo khi đọc Dashboard; không đổi chính sách gửi của module Alerts.
+- Theo điều chỉnh ngày 14/11/2026, thẻ Rủi ro cần xử lý chỉ đếm milestone rủi ro; `riskCount = milestoneRisks`. Dòng mô tả chỉ có số milestone. API `risks` và sheet Cảnh báo trong Excel chỉ liệt kê các milestone tương ứng. Backlog/subtask quá hạn được thống kê ở thẻ Task quá hạn và các dòng riêng trong sheet Tổng quan, không cộng vào thẻ rủi ro. Thành viên không hoạt động đã được bỏ khỏi phạm vi Dashboard.
+- Không đếm log gửi thông báo, không gửi cảnh báo khi đọc Dashboard; không đổi chính sách gửi của module Alerts.
 - Chi tiết Master/Sub-project không hiển thị cột Cần theo dõi, danh sách thành viên rủi ro hoặc nhãn quá hạn/lịch sử trễ trong hộp thoại milestone. Rủi ro hiển thị ở KPI tổng quan; trạng thái nghiệp vụ Project/milestone vẫn hiển thị trong chi tiết.
 
 ### AC02 tạm giữ hành vi cũ
@@ -80,6 +80,8 @@ Template/phiên bản là nguồn đề bài, không phải Master và không c�
 
 ## Trạng thái và backlog
 
+Điều chỉnh bố cục ngày 16/11/2026: bảng Sub-project dùng năm cột khi vùng chi tiết Master rộng từ 760px, để desktop ở zoom 100% vẫn giữ cách trình bày như 90%; vùng hẹp hơn dùng thẻ. Bỏ khối đề bài và tổng backlog lặp lại trong phần mở rộng. Phần việc trực tiếp của Master dùng chung các mốc căn cột với bảng con: thông tin/Workspace ở cột đầu, nhóm và mentor ở khu vực kế tiếp; backlog và milestone thẳng với hai cột tương ứng bên dưới. Phân bố công việc luôn có hai hàng Todo/In progress và Review/Done; số backlog và số milestone căn cùng mép trên. Không thay đổi dữ liệu hoặc cách tính tổng backlog Master.
+
 Reports đọc trực tiếp Project.status: DRAFT, PLANNING, ACTIVE, COMPLETED, CANCELLED. Biểu đồ đếm mỗi Master trong kết quả một lần theo trạng thái thực tế của Master; trạng thái từng Sub-project nằm ở bảng chi tiết.
 
 Milestone có lifecycle riêng: PLANNED, IN_PROGRESS, SUBMITTED, CHANGES_REQUESTED, ACCEPTED, REJECTED. Milestone ERD có thể được nộp/chấp nhận khi không có backlog. Reports hiển thị 0 backlog và lifecycle milestone, không quy đổi thành phần trăm hoặc tự hoàn thành Project.
@@ -104,6 +106,7 @@ Mỗi backlog item được đếm một lần theo trạng thái. Nhiều bản
 - Bộ lọc thêm Master Project thực tế (`masterId`) và phần việc Project cụ thể (`projectId`), tách biệt với template. Chọn Master lấy các Project con được phép đọc trong Master đó; chọn Project cụ thể lấy đúng phần việc ấy. Đổi chương trình/cohort/lớp/Master/team xóa các lựa chọn con không còn phù hợp.
 - Query params giữ bộ lọc, tab và nhóm trạng thái bài nộp. Các đường dẫn review/milestone nhận `returnTo` của Dashboard để quay lại đúng ngữ cảnh. Request cũ bị hủy khi đổi điều kiện; không giữ kết quả của scope trước trong lúc tải scope mới.
 - Khối công việc thống kê bốn trạng thái từ backlog chính của Workspace và các công việc chính của Kanban cũ, mỗi bản ghi nguồn tính một lần; không cộng task con UUID. Tổng này khác tổng backlog thuần ở tab Tổng quan khi hệ thống có công việc Kanban cũ. Các Sprint không có công việc vẫn xuất hiện nếu thuộc Project/team được đọc.
+- Bảng Các Sprint trong phạm vi phân trang tại giao diện, 10 Sprint/trang, có số trang, khoảng dòng và nút Trước/Sau. Khi mở khối với một Sprint đã chọn, hiển thị trang chứa Sprint đó; số trang được giới hạn lại nếu danh sách ngắn đi khi làm mới. Dropdown chọn Sprint vẫn lấy toàn bộ danh sách trong phạm vi; chuyển trang bảng không đổi lựa chọn Sprint, biểu đồ, KPI, Activity hay phạm vi xuất Excel.
 - `workSprintId` là lựa chọn riêng của khối công việc và sheet công việc trong Excel. Không làm thay đổi phạm vi Project/team của KPI hoặc Activity; giao diện giải thích rõ điều này. Bộ lọc ngày chung tiếp tục là ngày tạo Project, chưa có Tuần/Tháng hoặc số liệu lịch sử Burndown/Velocity.
 - Dashboard tự tải lại mỗi 30 giây khi trang đang mở. Feed tải thêm từng 10 dòng, sắp thời gian giảm dần rồi ID ổn định. Các trang tiếp theo dùng mốc `asOf` của trang đầu để hoạt động mới không làm dịch trang; không lặp sự kiện có cùng đối tượng/hành động/correlation.
 - Feed đọc metadata từ ProjectActivityLog, audit backlog/task con, audit milestone/submission và bản nộp legacy. Không trả raw before/after JSON, nội dung notes hoặc feedback riêng. Bản sao artifact được version audit đại diện không xuất hiện lần nữa. Mọi nguồn đều đối chiếu tuple tenant/project/team/milestone hoặc liên kết Project thực tế trước khi tổng hợp.
@@ -121,8 +124,7 @@ Mỗi backlog item được đếm một lần theo trạng thái. Nhiều bản
 ## Cảnh báo
 
 - OVERDUE: deadline trước hiện tại, milestone chưa SUBMITTED/ACCEPTED, Project chưa COMPLETED/CANCELLED.
-- INACTIVE_MEMBERS: Project ACTIVE có thành viên với việc Todo chờ, đã tham gia và không bắt đầu task trong khoảng thời gian cấu hình. Dùng lại quy tắc hoạt động của Alerts cho từng Project được giao; mặc định 7 ngày. Không có việc chờ thì không tự bị kết luận không hoạt động.
-- NEEDS_ATTENTION: quá hạn hiện tại hoặc thành viên không hoạt động.
+- NEEDS_ATTENTION: Project có milestone quá hạn theo quy tắc lọc hiện tại; không xét thành viên không hoạt động.
 - LATE_SUBMISSION: lịch sử nộp sau deadline hoặc submittedLate. Hiển thị riêng, kể cả milestone đã ACCEPTED.
 - Đang chờ chấm không phải quá hạn hiện tại. Lịch sử nộp trễ không lọt vào OVERDUE.
 - Không dùng ngưỡng phần trăm để suy cảnh báo sắp hạn trong Reports. Không sửa chính sách module Alerts.
@@ -151,7 +153,13 @@ Yêu cầu PROJECT_REPORT_READ; tạo/tải file cần thêm PROJECT_REPORT_EXPO
 
 Giữ job nền, idempotency, audit, thời hạn tải mặc định 24 giờ và kiểm tra lại quyền/scope lúc tải. Xuất tất cả dòng khớp bộ lọc, không giới hạn theo trang.
 
+Phần xuất báo cáo hiển thị gọn trên một hàng: tiêu đề, số file sẵn sàng/đang tạo, dropdown Chọn file tải và nút Export Excel. Dropdown hiển thị các file gần đây theo thứ tự mới nhất trước; chỉ file READY được chọn tải. Giữ thông tin thời điểm tạo, số dòng, hạn tải và trạng thái trong dropdown; trạng thái tải dữ liệu/lỗi nằm ngay trên hàng này.
+
+Worker mặc định kiểm tra hàng đợi và dọn file hết hạn mỗi 2 giây (khởi chạy lần đầu sau 5 giây); chu kỳ thực tế còn phụ thuộc worker đang bận. Ngưỡng 10 phút dùng để chuyển job RUNNING bị treo sang FAILED, không phải chu kỳ quét hạn tải. Frontend làm mới danh sách mỗi 2 giây khi còn job đang tạo, còn lại mỗi 30 giây; kiểm tra lại khi mở dropdown. Hạn 24 giờ tính từ lúc file tạo thành công là cấu hình lưu file tạm, không được quy định trong AC xuất báo cáo gốc. Backend cũng kiểm tra hạn ngay khi trả trạng thái và khi tải; file hết hạn bị xóa nội dung đã lưu, nên cần xuất lại.
+
 Giữ sheet Tiến độ dự án với 7 cột đã có. Bổ sung Tổng quan, Trạng thái công việc, Milestone và bài nộp, Cảnh báo và Hoạt động: tổng cộng 6 sheet. Các số lượng là ô số, ngày theo múi giờ báo cáo; mỗi sheet có thời điểm dữ liệu và mô tả bộ lọc. Toàn bộ hoạt động khớp scope được xuất, không chỉ 10 dòng preview hoặc trang Master hiện tại.
+
+Điều chỉnh ngày 14/11/2026 theo US-RPT-07/AC04: lựa chọn Sprint riêng chỉ áp dụng cho dữ liệu và mô tả bộ lọc của sheet Trạng thái công việc. Bốn dòng Công việc trong sheet Tổng quan luôn tính toàn bộ công việc khớp bộ lọc chung, gồm công việc của các Sprint khác và công việc chưa gán Sprint; không cộng subtask. Lọc riêng module vẫn giữ quan hệ với Master cha và chỉ tổng hợp công việc khớp module đó. Các sheet còn lại không thay đổi khi chỉ đổi Sprint.
 
 Kiểm tra lại tất cả Project đóng góp vào tổng Master, kể cả module bị ẩn bởi bộ lọc chi tiết. Mất quyền đọc Project đóng góp dữ liệu thì không được tải file cũ. Giữ giá trị dạng công thức trong tên dưới dạng ô văn bản. Khi file tạo thành công, ghi thêm action EXPORT_MOCK_PROJECT_DASHBOARD cùng actor, tenant, thời gian và correlation ID, bên cạnh audit vòng đời job. Đợt này chỉ mở rộng Excel hiện có; không bổ sung CSV/PDF.
 

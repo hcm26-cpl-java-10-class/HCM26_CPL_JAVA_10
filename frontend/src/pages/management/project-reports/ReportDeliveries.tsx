@@ -30,7 +30,8 @@ export function ReportDeliveries({ rows, bucket, onBucket, timeZone }: {
   function attention(row: ReportDelivery) {
     if (row.attention === "OVERDUE") return row.artifactStatus && row.artifactStatus !== "DRAFT" ? "Quá hạn · chưa nghiệm thu" : "Quá hạn · chưa nộp";
     if (row.attention === "DUE_SOON") return "Sắp hạn · chưa nộp";
-    if (row.attention === "REVISION") return "Bài nộp cần xử lý";
+    if (row.attention === "CHANGES_REQUESTED" || row.attention === "REVISION" && row.milestoneStatus === "CHANGES_REQUESTED") return "Bài nộp cần chỉnh sửa";
+    if (row.attention === "REJECTED" || row.attention === "REVISION" && row.milestoneStatus === "REJECTED") return "Bài nộp bị từ chối";
     return null;
   }
   return <section data-report-deliveries aria-label="Milestone và bài nộp" className="overflow-hidden rounded-lg border bg-card shadow-xs">

@@ -561,7 +561,7 @@ class ProjectReportIntegrationTest {
             assertThat(text.toString()).doesNotContain("Payment");
         }
     }
-    @Test void unassignedDirectBacklogWithTeamMembersDoesNotBreakDashboardOrCreateInactivity() throws Exception {
+    @Test void unassignedDirectBacklogWithTeamMembersDoesNotExposeRemovedInactivityFields() throws Exception {
         tx.executeWithoutResult(status->{
             var team=em.find(ProjectTeam.class,teamA);
             var learner=user(em.find(Tenant.class,tenantId),roles.findByName("STUDENT").orElseThrow(),"Learner");
@@ -573,9 +573,10 @@ class ProjectReportIntegrationTest {
         mvc.perform(get("/api/project-reports/options").header("Authorization","Bearer "+mentor)).andExpect(status().isOk());
         report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.summary.backlog.total").value(4))
                 .andExpect(jsonPath("$.summary.backlog.todo").value(2)).andExpect(jsonPath("$.summary.backlog.review").value(1))
-                .andExpect(jsonPath("$.summary.inactiveMembers").value(0));
+                .andExpect(jsonPath("$.summary.inactiveMembers").doesNotExist())
+                .andExpect(jsonPath("$.summary.inactiveProjects").doesNotExist());
     }
-    @Test void inactivityIsScopedToAssignedModuleAndReadsDoNotChangeTeamsOrSendAlerts() throws Exception {
+    @Test void quietMembersDoNotAppearInDashboardRisksOrExcelAndReadsRemainSideEffectFree() throws Exception {
         Long[] ids=tx.execute(status->{
             var team=em.find(ProjectTeam.class,teamA);var project=module(team.getProject(),team,"Quiet module",ProjectStatus.ACTIVE);
             var user=user(em.find(Tenant.class,tenantId),roles.findByName("STUDENT").orElseThrow(),"Quiet student");
@@ -589,11 +590,20 @@ class ProjectReportIntegrationTest {
             return new Long[]{project.getId(),user.getId()};
         });
         Long before=tx.execute(status->em.createQuery("select count(b) from ProjectAlertBatch b",Long.class).getSingleResult());
-        mvc.perform(get("/api/project-reports").header("Authorization","Bearer "+mentor).param("risk","INACTIVE_MEMBERS"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.summary.inactiveMembers").value(1))
+        report(mentor)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.summary.inactiveMembers").doesNotExist())
                 .andExpect(jsonPath("$.content[0].projects[0].id").value(ids[0]))
                 .andExpect(jsonPath("$.content[0].projects[0].backlog.total").value(2))
-                .andExpect(jsonPath("$.content[0].projects[0].inactiveMembers[0].userId").value(ids[1]));
+                .andExpect(jsonPath("$.content[0].projects[0].inactiveMembers").doesNotExist())
+                .andExpect(jsonPath("$.risks[?(@.kind == 'MEMBER')]").isEmpty());
+        UUID exportId=export("EXCEL",UUID.randomUUID());exports.process(exportId);
+        byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",exportId).header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try(var workbook=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
+            StringBuilder text=new StringBuilder();
+            workbook.forEach(sheet->sheet.forEach(row->row.forEach(cell->text.append(cell.toString()).append("|"))));
+            assertThat(text.toString()).doesNotContain("Thành viên không hoạt động","Không có hoạt động trong cửa sổ theo dõi");
+        }
         tx.executeWithoutResult(status->{
             assertThat(em.find(ProjectTeam.class,teamA).getProjectId()).isEqualTo(projectA);
             assertThat(em.createQuery("select count(b) from ProjectAlertBatch b",Long.class).getSingleResult()).isEqualTo(before);
@@ -653,7 +663,26 @@ class ProjectReportIntegrationTest {
                 .andExpect(jsonPath("$.overview.artifactStatuses.CHANGES_REQUESTED").value(1))
                 .andExpect(jsonPath("$.overview.artifactStatuses.REJECTED").value(1))
                 .andExpect(jsonPath("$.overview.artifactStatuses.SUBMITTED").value(1))
-                .andExpect(jsonPath("$.overview.milestoneRisks").value(2));
+                .andExpect(jsonPath("$.overview.milestoneRisks").value(2))
+                .andExpect(jsonPath("$.deliveries[?(@.attention == 'CHANGES_REQUESTED')]").isNotEmpty())
+                .andExpect(jsonPath("$.deliveries[?(@.attention == 'REJECTED')]").isNotEmpty())
+                .andExpect(jsonPath("$.risks[?(@.reason == 'CHANGES_REQUESTED')]").isNotEmpty())
+                .andExpect(jsonPath("$.risks[?(@.reason == 'REJECTED')]").isNotEmpty());
+        UUID id=export("EXCEL",UUID.randomUUID());exports.process(id);
+        byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try(var book=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
+            var riskSheet=book.getSheet("Cảnh báo");
+            List<String> reasons=new ArrayList<>();
+            for(int index=ProjectReportExcelWriter.HEADER_ROW+1;index<=riskSheet.getLastRowNum();index++)
+                reasons.add(riskSheet.getRow(index).getCell(5).getStringCellValue());
+            assertThat(reasons).containsExactlyInAnyOrder("Bài nộp cần chỉnh sửa","Bài nộp bị từ chối");
+            var deliveries=book.getSheet("Milestone và bài nộp");
+            List<String> attention=new ArrayList<>();
+            for(int index=ProjectReportExcelWriter.HEADER_ROW+1;index<=deliveries.getLastRowNum();index++)
+                attention.add(deliveries.getRow(index).getCell(13).getStringCellValue());
+            assertThat(attention).contains("Bài nộp cần chỉnh sửa","Bài nộp bị từ chối").doesNotContain("Bài nộp cần xử lý");
+        }
     }
 
     @Test void kpiWorkspaceDraftsWithLegacyNullTeamAreCountedAndAnOlderSavedDraftDoesNotOverrideReview() throws Exception {
@@ -688,7 +717,7 @@ class ProjectReportIntegrationTest {
                 .title("KPI subtask").status(state).deadline(due).createdBy(adminId).updatedBy(adminId).build());
     }
 
-    @Test void kpiOverdueIncludesUnassignedBacklogAndSubtasksButExcludesReviewAndInactiveSprints() throws Exception {
+    @Test void kpiKeepsOverdueWorkSeparateFromMilestoneRisksAndExcludesReviewAndInactiveSprints() throws Exception {
         tx.executeWithoutResult(status->{
             var team=em.find(ProjectTeam.class,teamA);workspace(team);
             var active=kpiSprint(team,com.example.starter_project_2025.system.project.sprint.SprintStatus.ACTIVE);
@@ -711,7 +740,44 @@ class ProjectReportIntegrationTest {
         });
         report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.overdueBacklogItems").value(2))
                 .andExpect(jsonPath("$.overview.overdueSubtasks").value(2)).andExpect(jsonPath("$.overview.overdueTasks").value(4))
-                .andExpect(jsonPath("$.overview.milestoneRisks").value(1)).andExpect(jsonPath("$.overview.riskCount").value(5));
+                .andExpect(jsonPath("$.overview.milestoneRisks").value(1)).andExpect(jsonPath("$.overview.riskCount").value(1))
+                .andExpect(jsonPath("$.risks.length()").value(1))
+                .andExpect(jsonPath("$.risks[0].kind").value("MILESTONE"));
+        UUID id=export("EXCEL",UUID.randomUUID());exports.process(id);
+        byte[] bytes=mvc.perform(get("/api/project-reports/exports/{id}/download",id).header("Authorization","Bearer "+admin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try(var book=WorkbookFactory.create(new ByteArrayInputStream(bytes))){
+            var sheet=book.getSheet("Cảnh báo");
+            List<String> kinds=new ArrayList<>();
+            for(int index=ProjectReportExcelWriter.HEADER_ROW+1;index<=sheet.getLastRowNum();index++)
+                kinds.add(sheet.getRow(index).getCell(0).getStringCellValue());
+            assertThat(kinds).containsExactly("Milestone");
+            var overview=book.getSheet("Tổng quan");
+            Map<String,Double> metrics=new HashMap<>();
+            for(int index=ProjectReportExcelWriter.HEADER_ROW+1;index<=overview.getLastRowNum();index++) {
+                var row=overview.getRow(index);
+                metrics.put(row.getCell(0).getStringCellValue(),row.getCell(1).getNumericCellValue());
+            }
+            assertThat(metrics).containsEntry("Task quá hạn",4d).containsEntry("Rủi ro cần xử lý",1d);
+        }
+    }
+
+    @Test void overdueBacklogAndSubtasksDoNotCreateRisksWhenMilestonesAreAccepted() throws Exception {
+        tx.executeWithoutResult(status->{
+            var team=em.find(ProjectTeam.class,teamA);workspace(team);
+            var stage=em.find(Milestone.class,milestoneA);
+            stage.setExecutionStatus(MilestoneExecutionStatus.REVIEW,UUID.randomUUID(),now);
+            stage.setExecutionStatus(MilestoneExecutionStatus.DONE,UUID.randomUUID(),now);
+            var parent=kpiItem(team,SprintBacklogStatus.TODO,now.minusSeconds(1),null);
+            kpiSubtask(team,parent,com.example.starter_project_2025.system.project.task.TaskStatus.TODO,now.minusSeconds(1));
+        });
+        report(mentor).andExpect(status().isOk())
+                .andExpect(jsonPath("$.overview.overdueBacklogItems").value(1))
+                .andExpect(jsonPath("$.overview.overdueSubtasks").value(1))
+                .andExpect(jsonPath("$.overview.overdueTasks").value(2))
+                .andExpect(jsonPath("$.overview.milestoneRisks").value(0))
+                .andExpect(jsonPath("$.overview.riskCount").value(0))
+                .andExpect(jsonPath("$.risks").isEmpty());
     }
 
     @Test void kpiMilestoneRiskCountsCurrentObjectsOnceAndExcludesWaiversAndAccepted() throws Exception {
@@ -755,7 +821,7 @@ class ProjectReportIntegrationTest {
                 .andExpect(jsonPath("$.overview.artifactStatuses.SUBMITTED").value(0));
     }
 
-    @Test void kpiInactivityUsesActorContributionsWithoutRequiringPendingTasks() throws Exception {
+    @Test void kpiRiskCountExcludesQuietMembersBeforeAndAfterArtifactSubmission() throws Exception {
         Long[] people=tx.execute(status->{
             var team=em.find(ProjectTeam.class,teamA);workspace(team);var result=new ArrayList<Long>();
             for(int index=0;index<2;index++) {
@@ -775,13 +841,16 @@ class ProjectReportIntegrationTest {
                     .setParameter("id",action.getId()).executeUpdate();
             return result.toArray(Long[]::new);
         });
-        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.inactiveMembers").value(1));
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.inactiveMembers").doesNotExist())
+                .andExpect(jsonPath("$.overview.milestoneRisks").value(1))
+                .andExpect(jsonPath("$.overview.riskCount").value(1));
         tx.executeWithoutResult(status->{
             var user=em.find(User.class,people[1]);
             em.persist(MilestoneArtifactSubmission.submit(tenantId,projectA,teamA,milestoneA,
                     UUID.nameUUIDFromBytes(user.getEmail().getBytes(StandardCharsets.UTF_8)),1,"https://example.test",null,null,"{}","[]",now,false,BigDecimal.ZERO));
         });
-        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.inactiveMembers").value(0));
+        report(mentor).andExpect(status().isOk()).andExpect(jsonPath("$.overview.inactiveMembers").doesNotExist())
+                .andExpect(jsonPath("$.overview.riskCount").value(0));
     }
 
     @Test void kpiSplitCountsTheMasterOnceAndHonorsTeamFilterWithoutSiblingMilestones() throws Exception {
@@ -847,6 +916,110 @@ class ProjectReportIntegrationTest {
         mvc.perform(post("/api/project-reports/exports").header("Authorization","Bearer "+admin).header("Idempotency-Key",UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON).content("{\"filters\":{\"teamId\":"+teamB+",\"workSprintId\":"+ids[0]+"}}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test void sprintRowsIncludeTheirClassAcrossClassesAndMasterPages() throws Exception {
+        Long[] ids = tx.execute(status -> {
+            var first = kpiSprint(em.find(ProjectTeam.class, teamA), com.example.starter_project_2025.system.project.sprint.SprintStatus.ACTIVE);
+            var otherClass = school(em.find(Tenant.class, tenantId), 804L);
+            var otherTeam = team(otherClass, mentorId, ProjectStatus.ACTIVE, sourceId);
+            var second = kpiSprint(otherTeam, com.example.starter_project_2025.system.project.sprint.SprintStatus.ACTIVE);
+            second.setProjectId(null); // Team-owned Sprints also resolve their class through the owning Project.
+            return new Long[]{first.getId(), second.getId(), otherClass.getId()};
+        });
+        var dashboard = body(mvc.perform(get("/api/project-reports").header("Authorization", "Bearer " + admin)
+                .param("size", "1")).andExpect(status().isOk()));
+        assertThat(dashboard.get("content")).hasSize(1);
+        var sprints = dashboard.get("work").get("sprints");
+        assertThat(sprints).hasSize(2);
+        for (JsonNode sprint : sprints) {
+            boolean first = sprint.get("id").asLong() == ids[0];
+            assertThat(sprint.get("classId").asLong()).isEqualTo(first ? classId : ids[2]);
+            assertThat(sprint.get("className").asText()).isEqualTo(first ? "Class 801" : "Class 804");
+        }
+        report(admin).andExpect(status().isOk()).andExpect(jsonPath("$.work.sprints.length()").value(1))
+                .andExpect(jsonPath("$.work.sprints[0].id").value(ids[0]))
+                .andExpect(jsonPath("$.work.sprints[0].classId").value(classId))
+                .andExpect(jsonPath("$.work.sprints[0].className").value("Class 801"));
+    }
+
+    @Test void excelSprintSelectionOnlyChangesWorkSheetAndKeepsOverviewWithinCommonMasterOrModuleFilter() throws Exception {
+        Long master = splitHierarchy();
+        Long sprintId = tx.execute(status -> {
+            var team = em.find(ProjectTeam.class, teamA);
+            var selected = kpiSprint(team, com.example.starter_project_2025.system.project.sprint.SprintStatus.ACTIVE);
+            var other = kpiSprint(team, com.example.starter_project_2025.system.project.sprint.SprintStatus.PLANNED);
+            var todo = em.createQuery("select b from SprintBacklog b where b.projectId=:id and b.status=:state", SprintBacklog.class)
+                    .setParameter("id", projectA).setParameter("state", SprintBacklogStatus.TODO).getSingleResult();
+            todo.setSprint(selected);
+            kpiItem(team, SprintBacklogStatus.IN_PROGRESS, null, other);
+            kpiItem(team, SprintBacklogStatus.TODO, null, null);
+            kpiItem(em.find(ProjectTeam.class, teamB), SprintBacklogStatus.DONE, null, null);
+            kpiSubtask(team, todo, com.example.starter_project_2025.system.project.task.TaskStatus.TODO, now.plusSeconds(60));
+            var legacy = new com.example.starter_project_2025.system.project.sprint.Task();
+            legacy.setProjectId(projectA);legacy.setTeamId(teamA);legacy.setSprintId(selected.getId());
+            legacy.setTitle("Sprint review task");legacy.setCode("RPT-EXPORT-SPRINT");
+            legacy.setStatus(com.example.starter_project_2025.system.project.sprint.TaskStatus.REVIEW);em.persist(legacy);
+            return selected.getId();
+        });
+        for (boolean moduleOnly : List.of(false, true)) {
+            String common = moduleOnly ? "\"projectId\":" + projectA : "\"masterId\":" + master;
+            byte[][] files = new byte[2][];
+            for (int index = 0; index < files.length; index++) {
+                String filters = common + (index == 0 ? "" : ",\"workSprintId\":" + sprintId);
+                var response = mvc.perform(post("/api/project-reports/exports").header("Authorization", "Bearer " + admin)
+                        .header("Idempotency-Key", UUID.randomUUID().toString()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"format\":\"EXCEL\",\"filters\":{" + filters + "}}"));
+                UUID id = UUID.fromString(body(response.andExpect(status().isAccepted())).get("id").asText());
+                exports.process(id);
+                files[index] = mvc.perform(get("/api/project-reports/exports/{id}/download", id)
+                        .header("Authorization", "Bearer " + admin)).andExpect(status().isOk())
+                        .andReturn().getResponse().getContentAsByteArray();
+            }
+            try (var all = WorkbookFactory.create(new ByteArrayInputStream(files[0]));
+                 var selected = WorkbookFactory.create(new ByteArrayInputStream(files[1]))) {
+                Map<String,Double> metrics = new HashMap<>();
+                var overview = selected.getSheet("Tổng quan");
+                for (int index = ProjectReportExcelWriter.HEADER_ROW + 1; index <= overview.getLastRowNum(); index++) {
+                    var row = overview.getRow(index);
+                    metrics.put(row.getCell(0).getStringCellValue(), row.getCell(1).getNumericCellValue());
+                }
+                assertThat(metrics).containsEntry("Công việc · Todo", 2d)
+                        .containsEntry("Công việc · In progress", moduleOnly ? 1d : 2d)
+                        .containsEntry("Công việc · Review", moduleOnly ? 1d : 2d)
+                        .containsEntry("Công việc · Done", moduleOnly ? 1d : 2d);
+                for (String sheet : List.of("Tiến độ dự án", "Tổng quan", "Milestone và bài nộp", "Cảnh báo", "Hoạt động")) {
+                    assertThat(excelDataRows(selected.getSheet(sheet))).as("%s, moduleOnly=%s", sheet, moduleOnly)
+                            .isEqualTo(excelDataRows(all.getSheet(sheet)));
+                    assertThat(selected.getSheet(sheet).getRow(3).getCell(0).getStringCellValue())
+                            .isEqualTo(all.getSheet(sheet).getRow(3).getCell(0).getStringCellValue());
+                }
+                var work = selected.getSheet("Trạng thái công việc");
+                assertThat(work.getRow(3).getCell(0).getStringCellValue()).contains("Công việc trong Sprint:");
+                assertThat(work.getLastRowNum() - ProjectReportExcelWriter.HEADER_ROW).isEqualTo(1);
+                var sprint = work.getRow(ProjectReportExcelWriter.HEADER_ROW + 1);
+                assertThat(sprint.getCell(6).getNumericCellValue()).isEqualTo(1d);
+                assertThat(sprint.getCell(7).getNumericCellValue()).isZero();
+                assertThat(sprint.getCell(8).getNumericCellValue()).isEqualTo(1d);
+                assertThat(sprint.getCell(9).getNumericCellValue()).isZero();
+                assertThat(sprint.getCell(10).getNumericCellValue()).isEqualTo(2d);
+                assertThat(all.getSheet("Trạng thái công việc").getLastRowNum() - ProjectReportExcelWriter.HEADER_ROW)
+                        .isEqualTo(3); // Two Sprints and work that has no Sprint.
+                String masterCode = tx.execute(status -> em.find(Project.class, master).getCode());
+                assertThat(selected.getSheet("Tiến độ dự án").getRow(ProjectReportExcelWriter.HEADER_ROW + 1)
+                        .getCell(2).getStringCellValue()).contains(masterCode);
+            }
+        }
+    }
+
+    List<List<String>> excelDataRows(org.apache.poi.ss.usermodel.Sheet sheet) {
+        List<List<String>> rows = new ArrayList<>();
+        for (int index = ProjectReportExcelWriter.HEADER_ROW + 1; index <= sheet.getLastRowNum(); index++) {
+            List<String> values = new ArrayList<>();
+            sheet.getRow(index).forEach(cell -> values.add(cell.toString()));
+            rows.add(values);
+        }
+        return rows;
     }
 
     @Test void activityFeedAggregatesAllMatchingMastersBeforePaginationDeduplicatesAndDoesNotExposeRawNotes() throws Exception {

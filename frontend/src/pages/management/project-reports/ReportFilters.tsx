@@ -51,7 +51,7 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
     + Number(!!applied.risk && applied.risk !== "ALL");
 
   const name = (label: string, id: number | undefined, values: ReportOption[]) => id === undefined ? "" : `${label}: ${values.find(item => item.id === id)?.name ?? `#${id}`}`;
-  const riskLabels: Record<ReportRisk, string> = { ALL: "", OVERDUE: "Đang quá hạn", INACTIVE_MEMBERS: "Thành viên không hoạt động", NEEDS_ATTENTION: "Đang cần xử lý", LATE_SUBMISSION: "Lịch sử nộp trễ" };
+  const riskLabels: Record<ReportRisk, string> = { ALL: "", OVERDUE: "Đang quá hạn", NEEDS_ATTENTION: "Đang cần xử lý", LATE_SUBMISSION: "Lịch sử nộp trễ" };
   const appliedLabels = [name("Chương trình", applied.programId, options.programs), name("Cohort", applied.cohortId, options.cohorts),
     name("Lớp", applied.classId, options.classes), name("Team", applied.teamId, options.teams), name("Mentor", applied.mentorId, options.mentors),
     name("Đề bài", applied.templateId, options.templates), name("Phiên bản", applied.sourceVersionId, options.versions),
@@ -105,7 +105,7 @@ export function ReportFilterToolbar({ options, value, applied, onChange, onApply
               <Select value={value.risk ?? "ALL"} onValueChange={risk => update({ risk: risk as ReportRisk })}>
                 <SelectTrigger className="w-full" aria-label="Cảnh báo Project"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="ALL">Tất cả</SelectItem><SelectItem value="OVERDUE">Đang quá hạn</SelectItem>
-                  <SelectItem value="INACTIVE_MEMBERS">Thành viên không hoạt động</SelectItem><SelectItem value="NEEDS_ATTENTION">Đang cần xử lý</SelectItem><SelectItem value="LATE_SUBMISSION">Lịch sử nộp trễ</SelectItem>
+                  <SelectItem value="NEEDS_ATTENTION">Đang cần xử lý</SelectItem><SelectItem value="LATE_SUBMISSION">Lịch sử nộp trễ</SelectItem>
                 </SelectContent>
               </Select>
             </div>

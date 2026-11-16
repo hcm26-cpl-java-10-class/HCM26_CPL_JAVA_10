@@ -25,8 +25,8 @@ export function ReportOverview({ data, onFilter, onViewProjects }: {
     { title: "Lớp có dự án", value: s.classes, note: s.cohorts + " cohort trong kết quả", icon: Building2, tone: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300" },
     { title: "Team đang tham gia", value: k.activeTeams, note: "Team có Project hoạt động, đếm một lần", icon: Users, tone: "bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300" },
     { title: "Sub-project", value: s.subProjects, note: "Project con khớp bộ lọc", icon: FolderKanban, tone: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300" },
-    { title: "Task quá hạn", value: k.overdueTasks, note: `${k.overdueBacklogItems} backlog · ${k.overdueSubtasks} task con`, icon: ClockAlert, tone: "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300" },
-    { title: "Rủi ro cần xử lý", value: k.riskCount, note: `${k.milestoneRisks} milestone · ${k.overdueTasks} task · ${k.inactiveMembers} thành viên`, icon: ShieldAlert, tone: "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300" },
+    { title: "Task quá hạn", value: k.overdueTasks, note: `${k.overdueBacklogItems} backlog · ${k.overdueSubtasks} subtask`, icon: ClockAlert, tone: "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300" },
+    { title: "Rủi ro cần xử lý", value: k.riskCount, note: `${k.milestoneRisks} milestone`, icon: ShieldAlert, tone: "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300" },
   ];
   return <div data-report-overview className="space-y-3.5">
     <section aria-label="Thống kê tổng quan" className="grid grid-cols-2 gap-3 @[600px]/reports:grid-cols-3 @[960px]/reports:grid-cols-6">{metrics.map(metric => <div data-report-metric key={metric.title} className="flex min-w-0 flex-col rounded-lg border border-slate-200/80 bg-card p-3.5 shadow-xs dark:border-border">

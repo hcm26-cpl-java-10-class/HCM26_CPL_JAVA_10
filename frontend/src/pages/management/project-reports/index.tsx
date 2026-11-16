@@ -129,5 +129,5 @@ export default function ProjectReportsPage() {
   const owner = `${user.email}:${activeRole}`;
   // The core layout owns scrolling. Normal block flow keeps a tall report from
   // shrinking inside its flex column; page padding is applied only by ReportContent.
-  return <MainLayout compactHeader mainClassName="block p-0"><ReportContent key={owner} owner={owner} /></MainLayout>;
+  return <MainLayout compactHeader ignorePaths={["management", "reports"]} pathName={{ projects: "Project Dashboard" }} mainClassName="block p-0"><ReportContent key={owner} owner={owner} /></MainLayout>;
 }

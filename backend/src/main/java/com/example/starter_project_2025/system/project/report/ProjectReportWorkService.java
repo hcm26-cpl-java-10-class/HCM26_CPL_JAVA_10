@@ -17,14 +17,19 @@ import static com.example.starter_project_2025.system.project.report.ProjectRepo
 @Service
 @RequiredArgsConstructor
 public class ProjectReportWorkService {
+    public record Result(BacklogCounts totals, WorkReport report) { }
     private final EntityManager em;
     private final ProjectReportSettings settings;
 
     public WorkReport load(ProjectReportService.Snapshot snapshot) {
+        return evaluate(snapshot).report();
+    }
+
+    public Result evaluate(ProjectReportService.Snapshot snapshot) {
         Map<Long,SubProject> rows = snapshot.matching().stream().collect(Collectors.toMap(SubProject::id, row -> row));
         if (rows.isEmpty()) {
             if (snapshot.filter().workSprintId() != null) throw new AccessDeniedException("Sprint nằm ngoài kết quả báo cáo");
-            return new WorkReport(BacklogCounts.empty(), List.of(), null);
+            return new Result(BacklogCounts.empty(), new WorkReport(BacklogCounts.empty(), List.of(), null));
         }
         Set<Long> teams = rows.values().stream().map(SubProject::teamId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long,Sprint> sprints = new HashMap<>();
@@ -71,16 +76,17 @@ public class ProjectReportWorkService {
             var row = scope.getFirst();
             return new SprintRow(sprint.getId(), sprint.getName(), sprint.getStatus().name(), scope.size() == 1 ? row.id() : null,
                     scope.size() == 1 ? row.code() : null, scope.stream().map(SubProject::name).distinct().collect(Collectors.joining(", ")),
-                    sprint.getTeamId() == null ? row.teamId() : sprint.getTeamId(), row.teamName(), instant(sprint.getStartDate()),
+                    row.classId(), row.className(), sprint.getTeamId() == null ? row.teamId() : sprint.getTeamId(), row.teamName(), instant(sprint.getStartDate()),
                     instant(sprint.getEndDate()), counts.getOrDefault(sprint.getId(), BacklogCounts.empty()));
         }).sorted(Comparator.comparing(SprintRow::startAt, Comparator.nullsLast(Comparator.naturalOrder())).thenComparing(SprintRow::id)).toList();
         Long selected = snapshot.filter().workSprintId();
+        BacklogCounts selectedCounts = all;
         if (selected != null) {
             var chosen = result.stream().filter(row -> selected.equals(row.id())).findFirst()
                     .orElseThrow(() -> new AccessDeniedException("Sprint nằm ngoài kết quả báo cáo"));
-            all = chosen.backlog();
+            selectedCounts = chosen.backlog();
         }
-        return new WorkReport(all, result, selected);
+        return new Result(all, new WorkReport(selectedCounts, result, selected));
     }
 
     static SubProject context(ProjectReportService.Snapshot snapshot, Map<Long,SubProject> rows, Long project, Long team) {
