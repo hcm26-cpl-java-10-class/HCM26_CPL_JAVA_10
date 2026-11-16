@@ -75,38 +75,37 @@ export const entityConfig: EntityConfig = {
 
 export function LocationPage() {
   const table = useProTable(entityConfig.api, entityConfig.schema);
-  const [viewMode, setViewMode] = useState<"table" | "tree">("table");
+  const [viewMode, setViewMode] = useState<"tree" | "table">("tree");
 
   return (
     <MainLayout pathName={{ locations: "Location" }}>
       <div className="space-y-4">
-        {/* Nút Toggle chuyển đổi giữa Table và Tree View */}
+        {/* Nút Toggle chuyển đổi giữa Tree View (Mặc định) và Table View */}
         <div className="flex justify-end">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setViewMode(viewMode === "table" ? "tree" : "table")}
+            onClick={() => setViewMode(viewMode === "tree" ? "table" : "tree")}
             className="flex items-center gap-1.5 text-xs font-medium"
           >
-            {viewMode === "table" ? (
-              <>
-                <FolderTree className="size-4 text-primary" />
-                <span>Tree View</span>
-              </>
-            ) : (
+            {viewMode === "tree" ? (
               <>
                 <TableIcon className="size-4 text-primary" />
                 <span>Table View</span>
+              </>
+            ) : (
+              <>
+                <FolderTree className="size-4 text-primary" />
+                <span>Tree View</span>
               </>
             )}
           </Button>
         </div>
 
-        {/* Render theo chế độ View được chọn */}
-        {viewMode === "table" ? (
-          <ProTable table={table} />
-        ) : (
+        {viewMode === "tree" ? (
           <LocationTree />
+        ) : (
+          <ProTable table={table} />
         )}
       </div>
     </MainLayout>
