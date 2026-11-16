@@ -2,6 +2,8 @@
 
 Owner: Tran Trong Hoa (DEV 4). Implementation: `feature/team-charter`, based on `1429b4def`.
 
+Synchronization on 16 November 2026: merged `origin/feature/project` at `379e0ff44` into this branch (`40cb75cd1`). The single conflict was the Allocation lifecycle test's Mentor fixture; both sides supplied the same Mentor, and the group's formatting was retained. The group's Project Template package moves and publish changes remain intact. Feature commits before synchronization are `400cb9e15` (Workspace scope), `394e05ffe` (backend), `b1a88223b` (frontend) and `05f3d1d4a` (documentation).
+
 This completes the six working User Stories in v1.1: view, compose/preview/save, self-confirm, renew consent, track progress and read history. The detailed draft/confirmation policies follow the implementation decisions documented at checkpoint 1; they are not presented as verbatim rules from the original unified SRS. No automatic Start Sprint gate, Mentor approval flow, email campaign or extra project-role catalogue is introduced.
 
 ## Where to open it

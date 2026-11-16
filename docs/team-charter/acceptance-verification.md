@@ -6,6 +6,19 @@ All six stories have implementation paths below. **API** means executed Spring/H
 
 ## Executed checks
 
+### Post-merge verification — 16 November 2026
+
+Merged the fetched group branch `origin/feature/project` (`379e0ff44`) in `40cb75cd1`. Resolved one equivalent Mentor-fixture conflict in `TeamAllocationLifecycleIntegrationTest`; retained the group's Project Template package refactor and publish behavior.
+
+- Re-ran all four Charter/Allocation/persistence suites below: **50/50 passed**.
+- Additional regression suites: `ProjectBoardServiceImplTest` (5), `TaskStatusWorkflowTest` (2), `MilestoneSubmissionIntegrationTest` (18), `MockArtifactSubmissionScopeAdapterTest` (3), `SubmissionSummaryLimitTest` (1), `GitConfigSchemaTest` (2), `GitRepositoryValidatorTest` (52), `WorkspaceGitIntegrationTest` (19): **102/102 passed**.
+- Combined post-merge result: **152 tests, zero failures/errors**. Both Maven commands exited 0; these are selected suites, not a claim that every repository test was run.
+- Production frontend build and ESLint on the nine changed frontend files passed after merge. Bundle-size/dependency-annotation warnings remain non-blocking.
+- Browser checks described below were performed before merge. The group's merge changed no Team Charter frontend files; a new live-backend/browser acceptance run was not performed.
+- The six pre-existing pending files in the original application directory were verified against their SHA-256 baseline and remain unchanged. No original database was used by these tests.
+
+### Feature verification before synchronization
+
 - `ProjectHubIntegrationTest`: 35 tests passed (canonical fixtures, charter API, scope, edits, snapshots, confirmations, role/member integration, 35 students / 5 teams, history, concurrency and rollback).
 - `ProjectTeamRoleServiceTest`: 4 tests passed.
 - `TeamAllocationLifecycleIntegrationTest`: 10 tests passed after updating the test fixture to supply the Mentor now required by the group's publish policy. Production publish rules were not weakened.
