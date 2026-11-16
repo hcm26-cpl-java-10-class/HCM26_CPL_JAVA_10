@@ -69,7 +69,7 @@ class TeamAllocationLifecycleIntegrationTest {
             var session=new TeamAllocationSession();session.setTrainingClass(school);session.setProjectTemplate(template);
             session.setStatus(TeamAllocationSessionStatus.OPEN);session.setMaxMembers(5);em.persist(session);em.flush();sessionId=session.getId();
             var team=new ProjectTeam();team.setTrainingClass(school);team.setAllocationSession(session);team.setTeamName("Draft team");
-            team.setStatus(ProjectTeamStatus.DRAFT);team.setMaxMembers(5);team.setProjectTemplate(template);em.persist(team);em.flush();teamId=team.getId();
+            team.setStatus(ProjectTeamStatus.DRAFT);team.setMaxMembers(5);team.setProjectTemplate(template);team.setAssignedMentorId(mentor.getId());em.persist(team);em.flush();teamId=team.getId();
             var cm=new ClassMember();cm.setTrainingClass(school);cm.setUser(learner);cm.setStatus(ClassMemberStatus.ACTIVE);em.persist(cm);em.flush();leaderId=cm.getId();
             var member=new ProjectMember();member.setTeam(team);member.setClassMember(cm);member.setRole("PM");em.persist(member);em.flush();memberId=member.getId();team.setLeaderMemberId(cm.getId());
             var project=new Project();project.setTenantId(tenantId);project.setClassId(classId);project.setTeamId(teamId);
