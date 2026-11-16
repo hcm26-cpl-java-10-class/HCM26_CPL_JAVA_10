@@ -7,19 +7,37 @@ import com.example.starter_project_2025.base.dataio.importer.annotation.ImportFi
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
 import com.example.starter_project_2025.exception.ConflictException;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import java.time.LocalDateTime;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
-import java.time.LocalDateTime;
 
 @Entity
-@Getter
-@Setter
+@Data
+@ToString(callSuper = true)
+@EqualsAndHashCode(callSuper = false)
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "sessions")
+@Table(name = "sessions", indexes = {
+        @Index(name = "idx_sessions_class_start", columnList = "class_id, start_time"),
+        @Index(name = "idx_sessions_trainer_start", columnList = "trainer_id, start_time"),
+        @Index(name = "idx_sessions_status_end", columnList = "status, end_time")
+})
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ImportEntity("session")
 @ExportEntity(fileName = "class_sessions", sheetName = "Class Sessions")
@@ -41,7 +59,7 @@ public class Session extends BaseEntity {
     @ExportField(name = "Trainer ID")
     Long trainerId;
 
-    @Column(nullable = false, length = 150)
+    @Column(name = "title", nullable = false, length = 150)
     @ImportField(name = "Session Title", required = true)
     @ExportField(name = "Session Title")
     String title;
@@ -56,17 +74,18 @@ public class Session extends BaseEntity {
     @ExportField(name = "End Time")
     LocalDateTime endTime;
 
-    @Column(length = 150)
+    @Column(name = "location", length = 150)
     @ImportField(name = "Location / Room")
     @ExportField(name = "Location / Room")
     String location;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
+    @Column(name = "status", nullable = false, length = 30)
     @ExportField(name = "Status")
-    SessionStatus status;
+    SessionStatus status = SessionStatus.SCHEDULED;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "note", columnDefinition = "TEXT")
     @ExportField(name = "Note")
     String note;
 
@@ -75,8 +94,11 @@ public class Session extends BaseEntity {
     String cancelReason;
 
     /**
-     * Last line of defence for writers that bypass the service layer (e.g. the generic file import):
-     * a row never reaches the database without a status or with an end before its start.
+     * Last line of defence for writers that bypass the service layer (e.g. the
+     * generic file
+     * import): a row never reaches the database without a status, with an end
+     * before its start,
+     * or cancelled without a reason.
      */
     @PrePersist
     @PreUpdate
@@ -86,6 +108,9 @@ public class Session extends BaseEntity {
         }
         if (startTime != null && endTime != null && !endTime.isAfter(startTime)) {
             throw new IllegalStateException("End time must be after start time");
+        }
+        if (status == SessionStatus.CANCELLED && (cancelReason == null || cancelReason.isBlank())) {
+            throw new IllegalStateException("Cancel reason is required for a cancelled session");
         }
     }
 
