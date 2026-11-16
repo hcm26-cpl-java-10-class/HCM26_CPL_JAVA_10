@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlignLeft, CalendarDays, ChevronDown, Download, Eye, Loader2, MoreVertical, Pencil, Save, Settings, X } from "lucide-react";
+import { AlignLeft, CalendarDays, ChevronDown, Download, Eye, Loader2, MoreVertical, Pencil, Save, Settings, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { utils, writeFile } from "xlsx";
@@ -8,7 +8,7 @@ import { externalApi } from "@/api/features/external.api";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -54,6 +54,22 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
     const [mode, setMode] = useState<"detail" | "overview" | "adjust">("detail");
     const [pending, setPending] = useState<Record<number, ClassCalendarVersion>>({});
     const [editingIds, setEditingIds] = useState<number[]>([]);
+    const [deleting, setDeleting] = useState<ClassCalendarVersion | null>(null);
+    const remove = useMutation({
+        mutationFn: (item: ClassCalendarVersion) => externalApi.deleteCalendarVersion(classItem.id, item.id),
+        onSuccess: async (_data, item) => {
+            await queryClient.invalidateQueries({ queryKey: ["session", "class-calendars", classItem.id] });
+            await queryClient.invalidateQueries({ queryKey: ["classes", "readiness", String(classItem.id)] });
+            setPending((prev) => { const next = { ...prev }; delete next[item.id]; return next; });
+            setEditingIds((prev) => prev.filter((value) => value !== item.id));
+            setDeleting(null);
+            toast.success(`Calendar ${item.name} was deleted.`);
+        },
+        onError: (error: unknown) => {
+            const message = (error as { response?: { data?: { message?: string } } })?.response?.data?.message;
+            toast.error(message || "Could not delete the calendar. Please try again.");
+        },
+    });
     const cancelEdit = (id: number) => {
         setPending((prev) => {
             const next = { ...prev };
@@ -206,10 +222,6 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            {dataSource.data?.sampleData && <div role="status" className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                Sample data mode is active. Calendar data from the external training system is not available in this environment.
-            </div>}
-
             <div role="region" aria-label="Calendar history" tabIndex={0}
                 className="max-h-[55dvh] w-full min-w-0 overflow-x-hidden overflow-y-auto border-y focus-visible:outline-2 focus-visible:outline-blue-800">
                 <table aria-label="Calendar version history" className="w-full max-w-full table-fixed caption-bottom text-xs lg:text-sm [&_td]:box-border [&_td]:whitespace-normal [&_td]:[overflow-wrap:anywhere] [&_td]:px-1.5 [&_td]:py-3 [&_th]:box-border [&_th]:whitespace-normal [&_th]:[overflow-wrap:anywhere] [&_th]:px-1.5 [&_th]:py-3">
@@ -303,6 +315,7 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
                                             <DropdownMenuItem className="gap-3 px-3 py-3" onSelect={() => download(item, true)}><Download /> Download with detailed time</DropdownMenuItem>
                                             <DropdownMenuItem className="gap-3 px-3 py-3" onSelect={() => open(item, "overview")}><AlignLeft /> Overview</DropdownMenuItem>
                                             <DropdownMenuItem disabled={!canUpdate || save.isPending || pendingCount > 0} className="gap-3 px-3 py-3 text-amber-600 focus:text-amber-700 [&>svg]:text-amber-500" onSelect={() => open(item, "adjust")}><Settings /> Adjust</DropdownMenuItem>
+                                            {item.id > 0 && <DropdownMenuItem disabled={!canUpdate || save.isPending || remove.isPending} className="gap-3 px-3 py-3 text-red-600 focus:text-red-700 [&>svg]:text-red-500" onSelect={() => setDeleting(item)}><Trash2 /> Delete</DropdownMenuItem>}
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                     </div>
@@ -328,6 +341,22 @@ export function ClassCalendarTab({ classItem, onDirtyChange }: { classItem: Exte
                 </div>
             </footer>
 
+            <Dialog open={!!deleting} onOpenChange={(open) => { if (!open && !remove.isPending) setDeleting(null); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete calendar</DialogTitle>
+                        <DialogDescription>
+                            Delete <strong>{deleting?.name}</strong> (version {deleting?.version})? This permanently removes this draft calendar version. Sessions that were already published are not affected.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" disabled={remove.isPending} onClick={() => setDeleting(null)}>Cancel</Button>
+                        <Button type="button" variant="destructive" disabled={remove.isPending} onClick={() => deleting && remove.mutate(deleting)}>
+                            {remove.isPending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />} Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
             <Dialog open={!!detail} onOpenChange={(open) => { if (!open) setDetail(null); }}>
                 {detail && mode === "overview" && <CalendarOverviewChart calendar={detail} onDownload={() => download(detail, true)} />}
             </Dialog>

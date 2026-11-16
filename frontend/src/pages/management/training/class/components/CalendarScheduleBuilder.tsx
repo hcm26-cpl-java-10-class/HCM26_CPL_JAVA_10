@@ -131,7 +131,7 @@ function conflictReason(lesson: CalendarLesson, topic: CalendarTopic, current: C
 }
 
 export function CalendarScheduleBuilder({
-    calendar, topic, classItem, sessions, sessionsLoading, sessionsError, canManage, onCalendarSaved, onSessionsReload,
+    calendar, topic: topicProp, classItem, sessions, sessionsLoading, sessionsError, canManage, onCalendarSaved, onSessionsReload,
 }: {
     calendar: ClassCalendarVersion;
     topic: CalendarTopic;
@@ -144,6 +144,20 @@ export function CalendarScheduleBuilder({
     onSessionsReload: () => Promise<unknown>;
 }) {
     const [learningStart, setLearningStart] = useState(calendar.actualLearningStartDate || "");
+    const [rangeFrom, setRangeFrom] = useState(() => {
+        if (topicProp.lessons?.length) return topicProp.startDate;
+        // New topic: start the day after the latest lesson of the topics already scheduled, so topics run in sequence.
+        const lastEnd = (calendar.overviewItems ?? []).filter((item) => item.id !== topicProp.id)
+            .flatMap((item) => (item.lessons ?? []).map((lesson) => lesson.to)).filter((value) => !!parseDate(value)).sort().at(-1);
+        const next = lastEnd ? parseDate(lastEnd) : undefined;
+        if (next) next.setUTCDate(next.getUTCDate() + 1);
+        const nextIso = next ? isoDate(next) : "";
+        // Only use that default when it still leaves room inside the topic range; otherwise start at the topic start
+        // (the grey cells in the preview already show which slots the previous topics occupy).
+        return nextIso && nextIso > (topicProp.startDate || "") && nextIso <= (topicProp.endDate || "") ? nextIso : topicProp.startDate;
+    });
+    const [rangeTo, setRangeTo] = useState(topicProp.endDate);
+    const topic = useMemo<CalendarTopic>(() => ({ ...topicProp, startDate: rangeFrom, endDate: rangeTo }), [topicProp, rangeFrom, rangeTo]);
     const [config, setConfig] = useState(() => initialConfig(topic.lessons ?? []));
     const [plan, setPlan] = useState<PlannedLesson[]>(() => topic.lessons ?? []);
     const [setupOpen, setSetupOpen] = useState(!topic.lessons?.length);
@@ -185,7 +199,30 @@ export function CalendarScheduleBuilder({
         const time = config.times[period]; return !!time.start && !!time.end && time.start < time.end;
     });
     const canSaveSlotTime = canManage && validLearningStart && validRange && settingsValid && !saving;
-    const conflictById = useMemo(() => new Map(plan.map((lesson) => [lesson.id, conflictReason(lesson, topic, sessions, plan)])), [plan, topic, sessions]);
+    // Lessons already scheduled for the other topics in this calendar: a slot can only belong to one topic.
+    const otherTopicLessons = useMemo(() => (calendar.overviewItems ?? [])
+        .filter((item) => item.id !== topic.id && normalized(item.label) !== normalized(topic.label))
+        .flatMap((item) => (item.lessons ?? []).map((lesson) => ({ lesson, label: item.label }))), [calendar.overviewItems, topic.id, topic.label]);
+    const otherLessons = useMemo(() => otherTopicLessons.map((item) => item.lesson), [otherTopicLessons]);
+    const findOtherTopicConflict = (lesson: CalendarLesson) => otherTopicLessons.find((item) =>
+        item.lesson.from === lesson.from && overlaps(item.lesson.slot, lesson.slot));
+    const conflictById = useMemo(() => new Map(plan.map((lesson) => [lesson.id, conflictReason(lesson, topic, sessions, [...plan, ...otherLessons])])), [plan, topic, sessions, otherLessons]);
+    const previewConflicts = useMemo(() => {
+        if (!setupOpen && plan.length) return [];
+        return buildLessons(topic, config, learningStart).flatMap((lesson) => {
+            const other = otherTopicLessons.find((item) => item.lesson.from === lesson.from && overlaps(item.lesson.slot, lesson.slot));
+            return other ? [{ lesson, label: other.label }] : [];
+        });
+    }, [setupOpen, plan.length, topic, config, learningStart, otherTopicLessons]);
+    const slotClash = previewConflicts[0];
+    // Which other topics already occupy a weekday + period (within this topic's date range), shown in the setup preview.
+    const takenBy = (weekday: number, period: Period) => {
+        const range = `${config.times[period].start}-${config.times[period].end}`;
+        return [...new Set(otherTopicLessons.filter((other) => {
+            const date = parseDate(other.lesson.from);
+            return !!date && date.getUTCDay() === weekday && overlaps(other.lesson.slot, range);
+        }).map((other) => other.label))];
+    };
     const unresolvedCount = plan.filter((lesson) => !lesson.venue || !lesson.trainer).length;
     const conflictCount = [...conflictById.values()].filter(Boolean).length;
     const canPublish = canManage && hasPlan && !saving && !sessionsLoading && !sessionsError
@@ -254,6 +291,10 @@ export function CalendarScheduleBuilder({
                 };
             });
             if (!generated.length) throw new Error("No study slots fall within the topic date range.");
+            const clash = generated.map((lesson) => ({ lesson, other: findOtherTopicConflict(lesson) })).find((item) => item.other);
+            if (clash?.other) {
+                throw new Error(`Slot ${clash.lesson.slot} on ${formatDate(clash.lesson.from)} is already used by ${clash.other.label}. Choose different days or sessions.`);
+            }
             await persistDraft(generated, "Slot time saved");
             setPlan(generated); setSetupOpen(false); setDirty(false); setPublished(false); setActiveWeek(0);
         } catch (cause) {
@@ -364,7 +405,15 @@ export function CalendarScheduleBuilder({
                 <Input type="date" value={learningStart} min={classItem.startDate || calendar.classStartDate} max={classItem.endDate || calendar.classEndDate}
                     onChange={(event) => setLearningStart(event.target.value)} aria-label="Actual Learning Start Date" />
             </label>
-            <div className="flex items-end gap-2 sm:col-span-2">
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">Topic from
+                <Input type="date" value={rangeFrom} min={classItem.startDate || calendar.classStartDate} max={rangeTo || classItem.endDate || calendar.classEndDate}
+                    onChange={(event) => setRangeFrom(event.target.value)} aria-label="Topic start date" />
+            </label>
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">Topic to
+                <Input type="date" value={rangeTo} min={rangeFrom} max={classItem.endDate || calendar.classEndDate}
+                    onChange={(event) => setRangeTo(event.target.value)} aria-label="Topic end date" />
+            </label>
+            <div className="flex items-end gap-2 sm:col-span-3">
                 <button type="button" aria-pressed={config.periods.length === 2} onClick={() => setConfig((current) => ({ ...current, periods: ["morning", "afternoon"] }))}
                     className={`flex-1 rounded-lg border p-3 text-left ${config.periods.length === 2 ? "border-blue-600 bg-blue-50 dark:bg-blue-950/40" : "hover:bg-muted/50"}`}>
                     <strong className="block text-sm">{config.periods.length === 2 ? "●" : "○"} Full time</strong><span className="text-xs text-muted-foreground">Morning + Afternoon</span>
@@ -398,16 +447,26 @@ export function CalendarScheduleBuilder({
             <div className="grid grid-cols-[auto_repeat(7,minmax(0,1fr))] gap-1 text-center text-[11px] sm:gap-1.5">
                 <span />{WEEKDAYS.map((day) => <span key={day.value} className="text-muted-foreground">{day.short}</span>)}
                 {(["morning", "afternoon"] as const).map((period) => <div key={period} className="contents"><span className="flex items-center pr-1 text-left font-medium">{period === "morning" ? "AM" : "PM"} {config.times[period].start}–{config.times[period].end}</span>
-                    {WEEKDAYS.map((day) => <span key={day.value} className={`h-8 rounded-md ${config.weekdays.includes(day.value) && config.periods.includes(period) ? "bg-blue-700" : "border border-dashed bg-muted/20"}`} />)}</div>)}
+                    {WEEKDAYS.map((day) => {
+                        const taken = takenBy(day.value, period);
+                        const selected = config.weekdays.includes(day.value) && config.periods.includes(period);
+                        if (taken.length) return <span key={day.value} title={`Already used by ${taken.join(", ")}`}
+                            className={`flex h-8 items-center justify-center overflow-hidden rounded-md border px-0.5 text-[9px] font-semibold leading-tight ${selected ? "border-red-500 bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200" : "border-slate-400 bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}>
+                            <span className="truncate">{selected && "⚠ "}{taken.join(", ")}</span></span>;
+                        return <span key={day.value} className={`h-8 rounded-md ${selected ? "bg-blue-700" : "border border-dashed bg-muted/20"}`} />;
+                    })}</div>)}
             </div>
         </div>
         <div className="flex flex-wrap items-end justify-between gap-3">
             <p className="text-sm text-muted-foreground"><strong className="text-foreground">{config.weekdays.length * config.periods.length} slots / week</strong>
-                {validRange && scheduleStart && topicEnd ? <> · {daysCount} study days · {totalSlots} slots before holiday exclusions · {formatDate(isoDate(scheduleStart))}–{formatDate(isoDate(topicEnd))}</> : <> · Enter a valid actual learning start date within the class/topic range</>}</p>
-            <Button type="button" disabled={!canSaveSlotTime} onClick={() => void handleSaveSlotTime()} className="ml-auto bg-blue-700 hover:bg-blue-800">
+                {validRange && scheduleStart && topicEnd ? <> · {daysCount} study days · {totalSlots} slots before holiday exclusions · {formatDate(isoDate(scheduleStart))}–{formatDate(isoDate(topicEnd))}</> : <> · {validLearningStart ? "Topic to must be on or after Topic from (and Topic from must not be after the class end)" : "Enter a valid actual learning start date within the class range"}</>}</p>
+            <Button type="button" disabled={!canSaveSlotTime || !!slotClash} onClick={() => void handleSaveSlotTime()} className="ml-auto bg-blue-700 hover:bg-blue-800">
                 {saving === "slot" ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}{saving === "slot" ? "Saving…" : "Save slot time"}
             </Button>
         </div>
+        {slotClash && <p role="alert" className="flex items-start gap-1.5 text-sm text-red-700 dark:text-red-300"><AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            {previewConflicts.length} slot{previewConflicts.length === 1 ? "" : "s"} overlap with {[...new Set(previewConflicts.map((item) => item.label))].join(", ")} (first: {formatDate(slotClash.lesson.from)} · {slotClash.lesson.slot}). Choose different study days or sessions.</p>}
+        {error && !hasPlan && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{error}</p>}
         <p className="text-xs text-muted-foreground">Holiday dates are not excluded because the upstream system has no holiday API. This schedule is saved as a new draft version. The actual learning start date is required by the calendar API.</p>
     </section>;
 
@@ -437,7 +496,12 @@ export function CalendarScheduleBuilder({
                         date.setUTCDate(date.getUTCDate() + ((day.value + 6) % 7));
                         const dateKey = isoDate(date);
                         const item = weekLessons.find((lesson) => lesson.from === dateKey && periodOf(lesson.slot) === period);
-                        if (!item) return <div key={day.value} className="min-h-16 rounded-lg border border-dashed bg-muted/10 sm:min-h-[72px]" />;
+                        if (!item) {
+                            const busy = [...new Set(otherTopicLessons.filter((other) => other.lesson.from === dateKey && overlaps(other.lesson.slot, `${config.times[period].start}-${config.times[period].end}`)).map((other) => other.label))];
+                            return busy.length
+                                ? <div key={day.value} title={`Already used by ${busy.join(", ")}`} className="flex min-h-16 items-center justify-center overflow-hidden rounded-lg border border-slate-400 bg-slate-200 p-1 text-center text-[10px] font-semibold text-slate-700 sm:min-h-[72px] dark:bg-slate-800 dark:text-slate-200"><span className="break-words">{busy.join(", ")}</span></div>
+                                : <div key={day.value} className="min-h-16 rounded-lg border border-dashed bg-muted/10 sm:min-h-[72px]" />;
+                        }
                         const conflict = conflictById.get(item.id);
                         const canAssign = !isPublished && canManage && !saving;
                         return <div key={day.value} className={`min-w-0 rounded-lg border p-1.5 sm:p-2 ${conflict ? "border-red-500 bg-red-50 text-red-900 dark:bg-red-950/30 dark:text-red-200" : item.venue && item.trainer ? "border-blue-600 bg-blue-700 text-white" : "border-dashed border-blue-400 bg-blue-50/60 text-blue-900 dark:bg-blue-950/30 dark:text-blue-200"}`}>

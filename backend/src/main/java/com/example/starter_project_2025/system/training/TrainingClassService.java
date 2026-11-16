@@ -22,6 +22,7 @@ public class TrainingClassService {
     private final SessionRepository sessions;
     private final Validator validator;
     private final ClassEnrollmentRepository enrollments;
+    private final com.example.starter_project_2025.system.trainer.TrainerRepository trainers;
     private static final Map<String, List<String>> TRANSITIONS = Map.of(
         "planning", List.of("assigned", "cancelled"),
         "assigned", List.of("active", "cancelled", "planning"),
@@ -120,6 +121,8 @@ public class TrainingClassService {
     @Transactional
     public TrainingClassDTO update(Long id, TrainingClassDTO input) {
         TrainingClass entity = repository.findForUpdate(id).orElseThrow(() -> new ResourceNotFoundException("Class not found"));
+        if (entity.getMasterTrainerId() != null && input.getMasterTrainerId() == null)
+            throw new BadRequestException("Select a verified internal Master Trainer; its identity cannot be cleared.");
         if (input.getPlannedSize() < enrollments.occupiedSeats(id))
             throw new ConflictException("Planned capacity cannot be lower than the current enrollment.");
         validate(input, id);
@@ -177,6 +180,18 @@ public class TrainingClassService {
     }
 
     private void validate(TrainingClassDTO input, Long id) {
+        if (input.getMasterTrainerId() != null) {
+            var previous = id == null ? Optional.<TrainingClass>empty() : repository.findById(id);
+            boolean unchanged = previous.filter(c -> Objects.equals(c.getMasterTrainerId(), input.getMasterTrainerId())
+                && Objects.equals(c.getMasterTrainer(), input.getMasterTrainer())).isPresent();
+            if (!unchanged) {
+            var trainer = trainers.findForUpdate(input.getMasterTrainerId())
+                .filter(t -> t.getStatus() == com.example.starter_project_2025.system.trainer.TrainerStatus.ACTIVE)
+                .orElseThrow(() -> new BadRequestException("Master Trainer must be an ACTIVE internal trainer."));
+            if (!trainer.getFullName().equals(input.getMasterTrainer()))
+                throw new BadRequestException("Master Trainer name does not match the selected internal ID. Reload the directory.");
+            }
+        }
         if (!input.getEndDate().isAfter(input.getStartDate())) throw new BadRequestException("End date must be after start date");
         if (repository.existsByCodeIgnoreCaseAndIdNot(input.getCode(), id)) throw new ConflictException("Class code already exists");
     }

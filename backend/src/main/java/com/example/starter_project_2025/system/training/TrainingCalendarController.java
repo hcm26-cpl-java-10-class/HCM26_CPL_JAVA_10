@@ -24,6 +24,9 @@ public class TrainingCalendarController {
     }
     @PutMapping @PreAuthorize("hasAuthority('CLASS_READ') and hasAuthority('SESSION_UPDATE')")
     public void update(@PathVariable Long classId, @RequestBody JsonNode body) { service.update(classId, body); }
+    @DeleteMapping("/{calendarId}") @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('CLASS_READ') and hasAuthority('SESSION_UPDATE')")
+    public void delete(@PathVariable Long classId, @PathVariable Long calendarId) { service.delete(classId, calendarId); }
     @GetMapping("/{calendarId}/export") @PreAuthorize("hasAuthority('CLASS_READ') and hasAuthority('SESSION_READ')")
     public ResponseEntity<byte[]> export(@PathVariable Long classId, @PathVariable Long calendarId) throws java.io.IOException {
         return ResponseEntity.ok().header("Content-Disposition", "attachment; filename=training-calendar-" + calendarId + ".xlsx")

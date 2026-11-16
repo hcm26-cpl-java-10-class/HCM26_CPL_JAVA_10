@@ -156,6 +156,9 @@ public interface ExternalApiService {
     /** Create a session for a class. */
     default Object createClassSession(Long classId, Object body) { return Map.of(); }
 
+    /** Update a session for a class. */
+    default Object updateClassSession(Long classId, Long sessionId, Object body) { return Map.of(); }
+
     /** Delete a session. */
     default void deleteClassSession(Long classId, Long sessionId) {}
 

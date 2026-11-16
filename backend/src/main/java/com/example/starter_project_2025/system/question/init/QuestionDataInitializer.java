@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.question.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.question.domain.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
@@ -14,6 +16,7 @@ import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
+@StartupMutation
 public class QuestionDataInitializer implements CommandLineRunner {
 
     private final QuestionRepository repository;

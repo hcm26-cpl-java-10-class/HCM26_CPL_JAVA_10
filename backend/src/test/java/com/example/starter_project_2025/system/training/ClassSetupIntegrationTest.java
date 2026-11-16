@@ -29,7 +29,9 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:class_setup_tests;DB_CLOSE_DELAY=-1", "GOOGLE_CLIENT_ID=test", "GOOGLE_CLIENT_SECRET=test"})
+@SpringBootTest(properties = {"spring.datasource.url=jdbc:h2:mem:class_setup_tests;DB_CLOSE_DELAY=-1", "GOOGLE_CLIENT_ID=test", "GOOGLE_CLIENT_SECRET=test",
+    "app.startup.mutations-enabled=false", "app.scheduling.enabled=false"})
+@org.springframework.test.context.ActiveProfiles("test")
 @AutoConfigureMockMvc
 @Transactional
 class ClassSetupIntegrationTest {
@@ -55,6 +57,8 @@ class ClassSetupIntegrationTest {
     String admin;
 
     @BeforeEach void fixture() {
+        com.example.starter_project_2025.support.TrainingTestFixtures.create(em,
+            "CLASS_READ", "CLASS_UPDATE", "PROGRAM_READ", "ASSIGNMENT_READ", "ASSIGNMENT_CREATE", "ASSIGNMENT_UPDATE");
         cls = addClass("SETUP_TEST");
         program = addProgram("SETUP_PROGRAM");
         subject = addSubject(program);

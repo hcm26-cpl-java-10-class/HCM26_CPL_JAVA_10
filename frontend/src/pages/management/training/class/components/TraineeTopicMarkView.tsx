@@ -254,7 +254,11 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
         ]);
 
         const worksheet = utils.aoa_to_sheet([headers, ...dataRows]);
-        autoFitWorksheetColumns(worksheet);
+        autoFitWorksheetColumns(worksheet, {
+            No: 6, "Full Name": 25, "Personal Email": 30, Account: 16,
+            "Topic Code": 16, Quiz: 12, Assignment: 14,
+            "Practice / Final": 18, "Total Topic GPA": 16,
+        });
         const workbook = utils.book_new();
         utils.book_append_sheet(workbook, worksheet, "Topic Mark Template");
         writeFile(workbook, `${classCodeLabel}_${selectedTopicCode}_Mark_Template.xlsx`);
@@ -290,7 +294,15 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
         ]);
 
         const worksheet = utils.aoa_to_sheet([headers, ...dataRows]);
-        autoFitWorksheetColumns(worksheet);
+        autoFitWorksheetColumns(
+            worksheet,
+            {
+                No: 6, "Full Name": 25, "Personal Email": 30, Account: 16,
+                Status: 12, "Topic Code": 16, "Quiz (20%)": 14,
+                "Assignment (30%)": 16, "Practice / Final (50%)": 20,
+                "Total Topic GPA": 16, Evaluation: 24,
+            },
+        );
         const workbook = utils.book_new();
         utils.book_append_sheet(workbook, worksheet, "Topic Marks");
         writeFile(workbook, `${classCodeLabel}_${selectedTopicCode}_Topic_Marks.xlsx`);

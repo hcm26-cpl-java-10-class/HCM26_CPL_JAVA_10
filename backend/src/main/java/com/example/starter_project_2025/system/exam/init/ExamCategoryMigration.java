@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.exam.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +22,7 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 @DependsOn("entityManagerFactory")
+@StartupMutation
 public class ExamCategoryMigration {
 
     private final DataSource dataSource;

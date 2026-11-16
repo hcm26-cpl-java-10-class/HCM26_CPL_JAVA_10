@@ -1,4 +1,6 @@
 package com.example.starter_project_2025.system.project.task.reminder;
+
+import com.example.starter_project_2025.config.startup.StartupMutation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -9,6 +11,7 @@ import org.springframework.stereotype.Component;
 import javax.sql.DataSource;
 @Slf4j @Component @Order(23) @Profile("!test & !prod") @RequiredArgsConstructor
 @ConditionalOnProperty(name="app.member-reminder.demo.enabled",havingValue="true",matchIfMissing=true)
+@StartupMutation
 public class MemberReminderDemoInitializer implements CommandLineRunner {
     private final MemberReminderDemoDataService demo;
     private final DataSource dataSource;

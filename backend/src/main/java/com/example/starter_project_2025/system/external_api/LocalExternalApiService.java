@@ -5,12 +5,16 @@ import com.example.starter_project_2025.system.external_api.dto.ExternalRoomDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalTrainerDTO;
 import com.example.starter_project_2025.system.external_api.dto.ExternalClassRequest;
 import com.example.starter_project_2025.system.external_api.exception.ExternalApiException;
+import com.example.starter_project_2025.system.demo.session.Session;
 import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import com.example.starter_project_2025.exception.ConflictException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -26,6 +30,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @Profile("local")
 public class LocalExternalApiService implements ExternalApiService {
     private final ConcurrentHashMap<Long, ExternalClassDTO> classes = new ConcurrentHashMap<>();
+    private static final String TRAINER_NOTE_PREFIX = "Trainer: ";
     private final AtomicLong classIds = new AtomicLong(3);
 
     @Autowired(required = false)
@@ -96,13 +101,27 @@ public class LocalExternalApiService implements ExternalApiService {
 
     @Override
     public List<ExternalTrainerDTO> fetchTrainers(String status) {
+        return trainerDirectory().stream().filter(item -> matchesStatus(status, item.getStatus())).toList();
+    }
+
+    private List<ExternalTrainerDTO> trainerDirectory() {
         return List.of(
                 new ExternalTrainerDTO(1L, "Nguyễn Ngọc Tân (Trainer)", "trainer.tan@example.com", "active"),
                 new ExternalTrainerDTO(2L, "Nguyễn Mạnh Hoàng (Trainer)", "trainer.hoang@example.com", "active"),
                 new ExternalTrainerDTO(3L, "Nguyễn Văn Thắng (Trainer)", "trainer.thang@example.com", "active"),
                 new ExternalTrainerDTO(4L, "Nguyễn Tuấn Danh (Trainer)", "trainer.danh@example.com", "active"),
                 new ExternalTrainerDTO(5L, "Huỳnh Tấn Phát (Trainer)", "trainer.phat@example.com", "active")
-        ).stream().filter(item -> matchesStatus(status, item.getStatus())).toList();
+        );
+    }
+
+    private Long trainerIdByName(String name) {
+        if (name == null || name.isBlank()) return null;
+        return trainerDirectory().stream().filter(t -> name.trim().equalsIgnoreCase(t.getName())).map(ExternalTrainerDTO::getId).findFirst().orElse(null);
+    }
+
+    private String trainerNameById(Long id) {
+        if (id == null) return "";
+        return trainerDirectory().stream().filter(t -> id.equals(t.getId())).map(ExternalTrainerDTO::getName).findFirst().orElse(String.valueOf(id));
     }
 
     @Override
@@ -122,22 +141,121 @@ public class LocalExternalApiService implements ExternalApiService {
         if (sessionRepository == null) return List.of();
         return sessionRepository.findByClassId(classId).stream()
                 .filter(s -> Boolean.TRUE.equals(s.getIsActive()))
-                .map(s -> {
-                    Map<String, Object> map = new HashMap<>();
-                    map.put("id", s.getId());
-                    map.put("classId", s.getClassId());
-                    map.put("date", s.getStartTime() != null ? s.getStartTime().toLocalDate().toString() : "");
-                    map.put("slot", (s.getStartTime() != null ? s.getStartTime().toLocalTime() : "") + " - " + (s.getEndTime() != null ? s.getEndTime().toLocalTime() : ""));
-                    map.put("topic", s.getTitle());
-                    map.put("topicCode", s.getTitle() != null && s.getTitle().startsWith("[") && s.getTitle().contains("]") ? s.getTitle().substring(1, s.getTitle().indexOf("]")) : "");
-                    map.put("trainer", "Nguyễn Ngọc Tân (Trainer)");
-                    map.put("room", s.getLocation() != null ? s.getLocation() : "Phòng Lab 201 (F-Town 2)");
-                    map.put("status", s.getStatus() != null ? s.getStatus().name().toLowerCase() : "scheduled");
-                    map.put("type", "lecture");
-                    map.put("notes", s.getNote());
-                    return map;
-                })
+                .map(this::toSessionMap)
                 .toList();
+    }
+
+    @Override
+    public Object createClassSession(Long classId, Object body) {
+        if (sessionRepository == null || !(body instanceof Map<?, ?> map)) return Map.of();
+        Session session = new Session();
+        session.setClassId(classId);
+        session.setIsActive(true);
+        applySessionFields(session, map);
+        Session saved = sessionRepository.save(session);
+        return toSessionMap(saved);
+    }
+
+    @Override
+    public Object updateClassSession(Long classId, Long sessionId, Object body) {
+        if (sessionRepository == null || !(body instanceof Map<?, ?> map)) return Map.of();
+        Session session = sessionRepository.findById(sessionId).orElse(null);
+        if (session == null) {
+            return createClassSession(classId, body);
+        }
+        applySessionFields(session, map);
+        Session saved = sessionRepository.save(session);
+        return toSessionMap(saved);
+    }
+
+    @Override
+    public void deleteClassSession(Long classId, Long sessionId) {
+        if (sessionRepository != null) {
+            sessionRepository.findById(sessionId).ifPresent(s -> {
+                s.setIsActive(false);
+                sessionRepository.save(s);
+            });
+        }
+    }
+
+    private void applySessionFields(Session session, Map<?, ?> map) {
+        String topic = map.get("topic") != null ? map.get("topic").toString() : "Session";
+        session.setTitle(topic.length() > 150 ? topic.substring(0, 150) : topic);
+
+        session.setTopicId(1L);
+        session.setTrainerId(1L);
+        if (map.get("trainerId") instanceof Number n) {
+            session.setTrainerId(n.longValue());
+        } else if (map.get("trainer") != null) {
+            Long byName = trainerIdByName(map.get("trainer").toString());
+            if (byName != null) {
+                session.setTrainerId(byName);
+                if (session.getNote() != null && session.getNote().startsWith(TRAINER_NOTE_PREFIX)) session.setNote(null);
+            } else if (!map.get("trainer").toString().isBlank() && map.get("notes") == null) {
+                // Trainer is not in the local directory (e.g. the class master trainer): keep the name so it round-trips.
+                session.setNote(TRAINER_NOTE_PREFIX + map.get("trainer").toString().trim());
+            }
+        }
+
+        String location = map.get("room") != null ? map.get("room").toString() : (map.get("venue") != null ? map.get("venue").toString() : "Room A101");
+        session.setLocation(location.length() > 150 ? location.substring(0, 150) : location);
+
+        session.setStatus(Session.SessionStatus.SCHEDULED);
+        if (map.get("notes") != null) {
+            session.setNote(map.get("notes").toString());
+        }
+
+        String dateStr = map.get("date") != null ? map.get("date").toString() : null;
+        String slotStr = map.get("slot") != null ? map.get("slot").toString() : null;
+
+        LocalDate date = LocalDate.now();
+        if (dateStr != null && !dateStr.isBlank()) {
+            try { date = LocalDate.parse(dateStr.trim()); } catch (Exception ignored) {}
+        }
+
+        LocalTime startTime = LocalTime.of(8, 0);
+        LocalTime endTime = LocalTime.of(12, 0);
+
+        if (slotStr != null && !slotStr.isBlank()) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d{1,2}:\\d{2})").matcher(slotStr);
+            if (m.find()) {
+                try {
+                    String[] parts = m.group(1).split(":");
+                    startTime = LocalTime.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
+                } catch (Exception ignored) {}
+                if (m.find()) {
+                    try {
+                        String[] parts = m.group(1).split(":");
+                        endTime = LocalTime.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
+                    } catch (Exception ignored) {}
+                } else {
+                    endTime = startTime.plusHours(4);
+                }
+            }
+        }
+        if (!endTime.isAfter(startTime)) {
+            endTime = startTime.plusHours(2);
+        }
+
+        session.setStartTime(LocalDateTime.of(date, startTime));
+        session.setEndTime(LocalDateTime.of(date, endTime));
+    }
+
+    private Map<String, Object> toSessionMap(Session s) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", s.getId());
+        map.put("classId", s.getClassId());
+        map.put("date", s.getStartTime() != null ? s.getStartTime().toLocalDate().toString() : "");
+        map.put("slot", (s.getStartTime() != null ? s.getStartTime().toLocalTime() : "") + " - " + (s.getEndTime() != null ? s.getEndTime().toLocalTime() : ""));
+        map.put("topic", s.getTitle());
+        map.put("topicCode", s.getTitle() != null && s.getTitle().startsWith("[") && s.getTitle().contains("]") ? s.getTitle().substring(1, s.getTitle().indexOf("]")) : "");
+        boolean noteIsTrainer = s.getNote() != null && s.getNote().startsWith(TRAINER_NOTE_PREFIX);
+        map.put("trainer", noteIsTrainer ? s.getNote().substring(TRAINER_NOTE_PREFIX.length()) : trainerNameById(s.getTrainerId()));
+        map.put("room", s.getLocation() != null ? s.getLocation() : "Room A101");
+        map.put("status", s.getStatus() != null ? s.getStatus().name().toLowerCase() : "scheduled");
+        map.put("type", "lecture");
+        map.put("notes", s.getNote() != null && s.getNote().startsWith(TRAINER_NOTE_PREFIX) ? "" : s.getNote());
+        return map;
     }
 
     private ExternalClassDTO toClass(Long id, ExternalClassRequest request, Long programId, Integer enrolledCount) {

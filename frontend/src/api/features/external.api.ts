@@ -56,6 +56,9 @@ export const externalApi = {
     saveClassCalendars: async (classId: number, updates: Array<{ id: number; name: string; historyChange: string }>): Promise<void> => {
         await axiosInstance.put(`/classes/${classId}/calendars`, { updates });
     },
+    deleteCalendarVersion: async (classId: number, calendarId: number): Promise<void> => {
+        await axiosInstance.delete(`/classes/${classId}/calendars/${calendarId}`);
+    },
     getClassCalendars: async (classId: number): Promise<ClassCalendarVersion[]> => {
         return (await axiosInstance.get<ClassCalendarVersion[]>(`/classes/${classId}/calendars`)).data;
     },

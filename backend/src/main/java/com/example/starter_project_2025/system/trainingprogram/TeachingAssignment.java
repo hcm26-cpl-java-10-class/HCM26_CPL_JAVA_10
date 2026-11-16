@@ -44,6 +44,9 @@ public class TeachingAssignment extends BaseEntity {
     /** ID of the trainer in the shared system; trainer profile data stays there. */
     @Column(name = "trainer_id", nullable = false)
     Long trainerId;
+    /** Null on legacy rows means EXTERNAL. INTERNAL is written only after explicit identity verification. */
+    @Column(name = "trainer_source", length = 20)
+    String trainerSource;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

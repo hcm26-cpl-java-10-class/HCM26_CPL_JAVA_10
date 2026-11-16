@@ -172,6 +172,12 @@ public class ExternalApiController {
         return ResponseEntity.status(HttpStatus.CREATED).body(externalApiService.createClassSession(id, body));
     }
 
+    @PutMapping("/classes/{classId}/sessions/{sessionId}")
+    @Operation(summary = "Update session for class")
+    public ResponseEntity<Object> updateClassSession(@PathVariable Long classId, @PathVariable Long sessionId, @RequestBody Object body) {
+        return ResponseEntity.ok(externalApiService.updateClassSession(classId, sessionId, body));
+    }
+
     @DeleteMapping("/classes/{classId}/sessions/{sessionId}")
     @Operation(summary = "Delete session")
     public ResponseEntity<Void> deleteClassSession(@PathVariable Long classId, @PathVariable Long sessionId) {

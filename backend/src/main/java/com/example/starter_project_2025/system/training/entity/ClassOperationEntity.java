@@ -42,7 +42,8 @@ public class ClassOperationEntity {
     @Column(name = "has_no_allocation_needs")
     private Boolean hasNoAllocationNeeds;
 
-    @Lob
+    // TEXT is a character column in the existing schema (VARCHAR in H2).
+    // @Lob would instead make schema validation require a JDBC CLOB.
     @Column(name = "milestones_json", columnDefinition = "TEXT")
     private String milestonesJson;
 

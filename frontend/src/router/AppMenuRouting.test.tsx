@@ -17,7 +17,8 @@ vi.mock("@/hooks/useSidebarMenus", () => ({ useActiveModuleGroups: () => ({
     data: menuState.hide ? [] : [
         { id: 1, name: "Training Management", modules: [
             { id: 1, title: "Training Programs", url: "/programs", requiredPermission: "PROGRAM_READ" },
-            { id: 2, title: "Kế hoạch môn học lớp", url: "/class-setup", requiredPermission: "CLASS_READ" }] },
+            { id: 2, title: "Kế hoạch môn học lớp", url: "/class-setup", requiredPermission: "CLASS_READ" },
+            { id: 7, title: "Trainers", url: "/trainers", requiredPermission: "TRAINER_READ" }] },
         { id: 2, name: "Subject Management", modules: [{ id: 3, title: "Subjects", url: "/subjects", requiredPermission: "SUBJECT_READ" }] },
         { id: 3, name: "Training Operations", modules: [{ id: 4, title: "Class List", url: "/classes", requiredPermission: "SESSION_READ" }] },
         { id: 4, name: "System Management", modules: [
@@ -32,7 +33,7 @@ vi.mock("@/components/layout/MainLayout", async () => {
     return { MainLayout: ({ children }: { children: ReactNode }) => <SidebarProvider><SidebarMenu /><main>{children}</main></SidebarProvider> };
 });
 
-const rights = ["USER_READ", "MENU_READ", "CLASS_READ", "CLASS_UPDATE", "SESSION_READ", "PROGRAM_READ", "SUBJECT_READ", "ASSIGNMENT_READ", "ENROLLMENT_READ", "AUDIT_READ"];
+const rights = ["USER_READ", "MENU_READ", "CLASS_READ", "CLASS_UPDATE", "SESSION_READ", "PROGRAM_READ", "SUBJECT_READ", "ASSIGNMENT_READ", "ENROLLMENT_READ", "AUDIT_READ", "TRAINER_READ"];
 const cls = { id: 4, code: "INTERNAL_4", name: "Internal test class", traineeSource: "internal", status: "planning", program: "PROGRAM_4",
     startDate: "2030-06-01", endDate: "2030-09-01", plannedSize: 20, site: "HCM", classAdmin: "Admin", masterTrainer: "Trainer" };
 beforeEach(() => {
@@ -63,11 +64,13 @@ function renderApp(path: string, permissions = rights, role = "ADMIN") {
 }
 
 it.each([
+    ["/trainers", "Trainers"],
     ["/programs", "Training Programs"], ["/subjects", "Topics & Syllabus"],
     ["/classes", "Class"], ["/classes/4?tab=info", "Class"],
 ])("direct entry and refresh of %s renders the actual registered page instead of 404", async (path, label) => {
     const first = renderApp(path);
     expect(await screen.findByRole("link", { name: label })).toBeInTheDocument();
+    if (path === "/trainers") expect(await screen.findByRole("heading", { name: "Trainer Management" })).toBeInTheDocument();
     expect(window.location.pathname + window.location.search).toBe(path);
     expect(screen.queryByText("Page Not Found")).not.toBeInTheDocument();
     first.unmount();

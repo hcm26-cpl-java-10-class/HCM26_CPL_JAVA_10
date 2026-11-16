@@ -25,13 +25,14 @@ public class ClassSetupService {
     private final ProgramSubjectRepository subjects;
     private final TeachingAssignmentRepository assignments;
     private final ExternalApiService directory;
+    private final com.example.starter_project_2025.system.trainer.TrainerRepository internalTrainers;
 
     public record ProgramLink(Long id, Long programId, String code, String name, String version,
                               ProgramStatus status, boolean active, boolean matchesClassProgram) {}
     public record SubjectOption(Long id, Long subjectId, String code, String name, boolean eligible) {}
     public record Setup(Long classId, String classCode, String savedProgram, String masterTrainer,
                         LocalDate startDate, LocalDate endDate, ProgramLink programLink,
-                        List<SubjectOption> subjects, List<TeachingAssignmentResponse> assignments) {}
+                        List<SubjectOption> subjects, List<TeachingAssignmentResponse> assignments, Long masterTrainerId) {}
 
     public Setup get(Long classId) {
         var cls = requireClass(classId, false);
@@ -42,7 +43,7 @@ public class ClassSetupService {
         return new Setup(cls.getId(), cls.getCode(), cls.getProgram(), cls.getMasterTrainer(), cls.getStartDate(), cls.getEndDate(),
             link.map(l -> view(l, cls)).orElse(null), options,
             assignments.findByClassIdOrderByEffectiveFromAscIdAsc(classId).stream()
-                .filter(a -> Boolean.TRUE.equals(a.getIsActive())).map(a -> view(a, cls, null)).toList());
+                .filter(a -> Boolean.TRUE.equals(a.getIsActive())).map(a -> view(a, cls, null)).toList(), cls.getMasterTrainerId());
     }
 
     @Transactional
@@ -86,10 +87,24 @@ public class ClassSetupService {
                 && (a.getEffectiveTo() == null || !a.getEffectiveTo().isBefore(input.effectiveFrom())))
             .anyMatch(a -> a.getRole() == AssignmentRole.MAIN || Objects.equals(a.getTrainerId(), input.trainerId()));
         if (existing) throw new ConflictException("An overlapping MAIN or duplicate trainer assignment already exists for this class and Program Subject. Update that assignment instead.");
-        var trainer = verifyTrainer(input.trainerId());
-        if (!same(cls.getMasterTrainer(), trainer.getName()) && !same(cls.getMasterTrainer(), trainer.getEmail()))
+        boolean internal = "INTERNAL".equals(input.trainerSource());
+        if (cls.getMasterTrainerId() != null && !internal)
+            throw new ConflictException("This class uses an internal Master Trainer. Select the INTERNAL directory explicitly.");
+        ExternalTrainerDTO trainer;
+        if (internal) {
+            if (!Objects.equals(cls.getMasterTrainerId(), input.trainerId()))
+                throw new ConflictException("Select this internal trainer in Class Info first. Legacy IDs are never converted automatically.");
+            var record = internalTrainers.findForUpdate(input.trainerId())
+                .filter(t -> t.getStatus() == com.example.starter_project_2025.system.trainer.TrainerStatus.ACTIVE)
+                .orElseThrow(() -> new BadRequestException("Trainer must be ACTIVE in the internal directory."));
+            if (!record.getTeachingTopics().stream().anyMatch(t -> Objects.equals(t.getId(), subject.getSubject().getId())))
+                throw new BadRequestException("Trainer is not eligible for this Teaching Topic.");
+            trainer = new ExternalTrainerDTO(record.getId(), record.getFullName(), record.getEmail(), "active");
+        } else trainer = verifyTrainer(input.trainerId());
+        if (!internal && !same(cls.getMasterTrainer(), trainer.getName()) && !same(cls.getMasterTrainer(), trainer.getEmail()))
             throw new ConflictException("Selected trainer does not match Master Trainer in Class Info. Review and explicitly update Class Info first.");
         assignment.setClassId(classId); assignment.setProgramSubject(subject); assignment.setTrainerId(trainer.getId());
+        assignment.setTrainerSource(internal ? "INTERNAL" : "EXTERNAL");
         assignment.setRole(AssignmentRole.MAIN); assignment.setEffectiveFrom(input.effectiveFrom()); assignment.setEffectiveTo(input.effectiveTo());
         assignments.saveAndFlush(assignment);
         return view(assignment, cls, trainer.getName());
@@ -133,7 +148,10 @@ public class ClassSetupService {
     }
     private TeachingAssignmentResponse view(TeachingAssignment a, TrainingClass cls, String trainerName) {
         var ps = a.getProgramSubject();
+        if (trainerName == null && "INTERNAL".equals(a.getTrainerSource()))
+            trainerName = internalTrainers.findById(a.getTrainerId()).map(com.example.starter_project_2025.system.trainer.Trainer::getFullName).orElse(null);
         return new TeachingAssignmentResponse(a.getId(), cls.getId(), cls.getCode(), ps.getId(), ps.getSubject().getId(),
-            ps.resolveCode(), ps.resolveName(), a.getTrainerId(), trainerName, a.getRole(), a.getEffectiveFrom(), a.getEffectiveTo());
+            ps.resolveCode(), ps.resolveName(), a.getTrainerId(), trainerName, a.getRole(), a.getEffectiveFrom(), a.getEffectiveTo(),
+            a.getTrainerSource() == null ? "EXTERNAL" : a.getTrainerSource());
     }
 }

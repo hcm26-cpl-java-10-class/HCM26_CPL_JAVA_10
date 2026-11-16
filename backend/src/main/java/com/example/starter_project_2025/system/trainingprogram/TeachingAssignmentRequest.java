@@ -10,5 +10,11 @@ public record TeachingAssignmentRequest(
         @NotNull @jakarta.validation.constraints.Positive Long trainerId,
         @NotNull AssignmentRole role,
         @NotNull LocalDate effectiveFrom,
-        LocalDate effectiveTo
-) {}
+        LocalDate effectiveTo,
+        @jakarta.validation.constraints.Pattern(regexp = "INTERNAL|EXTERNAL") String trainerSource
+) {
+    public TeachingAssignmentRequest(Long classId, Long programSubjectId, Long trainerId, AssignmentRole role,
+                                     LocalDate effectiveFrom, LocalDate effectiveTo) {
+        this(classId, programSubjectId, trainerId, role, effectiveFrom, effectiveTo, null);
+    }
+}

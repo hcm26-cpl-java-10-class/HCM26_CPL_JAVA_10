@@ -1,5 +1,5 @@
 import axiosInstance from "../axios";
-import { externalApi } from "./external.api";
+import { trainerApi } from "./trainer.api";
 import { programApi } from "./program.api";
 import type { ExternalTrainer } from "@/types";
 import type { TrainingProgramItem } from "@/types/features/content";
@@ -14,16 +14,19 @@ export interface MainAssignment {
     id: number; classId: number; classCode: string; programSubjectId: number; subjectId: number;
     subjectCode: string; subjectName: string; trainerId: number; trainerName: string | null;
     role: "MAIN" | "ASSISTANT"; effectiveFrom: string; effectiveTo: string | null;
+    trainerSource?: "INTERNAL" | "EXTERNAL";
 }
 export interface ClassSetup {
     classId: number; classCode: string; savedProgram: string; masterTrainer: string;
     startDate: string; endDate: string; programLink: ProgramLink | null;
     subjects: Array<{ id: number; subjectId: number; code: string; name: string; eligible: boolean }>;
     assignments: MainAssignment[];
+    masterTrainerId?: number | null;
 }
 export interface AssignmentInput {
     classId: number; programSubjectId: number; trainerId: number; role: "MAIN";
     effectiveFrom: string; effectiveTo: string | null;
+    trainerSource?: "INTERNAL" | "EXTERNAL";
 }
 export const classSetupKey = (id: number) => ["classes", "setup", id] as const;
 
@@ -398,10 +401,8 @@ export const classSetupApi = {
     }
   },
   verifiedTrainers: async (): Promise<ExternalTrainer[]> => {
-    const trainers = await externalApi.getTrainers("active");
-    const provenance = (await axiosInstance.get<{ sampleData: boolean }>("/external/data-source")).data;
-    if (provenance.sampleData !== false) throw new Error("BLOCKED: Master Trainer API is sample or unverified. Configure the real directory; no sample trainers can be selected.");
-    return trainers.filter(t => t.id != null && t.status?.toLowerCase() === "active" && t.name?.trim());
+    const trainers = await trainerApi.verifiedOptions();
+    return trainers.map(t => ({ id: t.id, name: t.fullName, email: t.email, status: "active" }));
   },
   createAssignmentWithDetails: async (request: AssignmentCreationRequest) =>
     (await axiosInstance.post<TeachingAssignment>("/teaching-assignments/create-with-details", request)).data,

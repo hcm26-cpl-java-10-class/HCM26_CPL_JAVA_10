@@ -33,6 +33,8 @@ public class TrainingClass extends BaseEntity {
     private String classAdmin;
     @Column(length = 255)
     private String masterTrainer;
+    /** Explicit internal identity; null means legacy text/external identity, never inferred by name. */
+    private Long masterTrainerId;
     @Column(length = 255)
     private String deliveryType;
     @Column(length = 255)

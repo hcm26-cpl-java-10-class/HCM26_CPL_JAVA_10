@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.training.ClassOperationDatabaseService;
 import com.example.starter_project_2025.system.training.TrainingClassRepository;
 import com.example.starter_project_2025.system.training.entity.TrainingClass;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Order(30)
 @Component
 @RequiredArgsConstructor
+@StartupMutation
 public class ClassOperationDataInitializer implements CommandLineRunner {
 
     private final ClassOperationDatabaseService databaseService;

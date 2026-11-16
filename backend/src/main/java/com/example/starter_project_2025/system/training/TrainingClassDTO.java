@@ -33,6 +33,8 @@ public class TrainingClassDTO {
     private String classAdmin;
     @NotBlank @Size(max = 255)
     private String masterTrainer;
+    @Positive
+    private Long masterTrainerId;
     @Size(max = 255)
     private String deliveryType;
     @Size(max = 255)
