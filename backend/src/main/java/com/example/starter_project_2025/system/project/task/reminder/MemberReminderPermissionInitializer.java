@@ -1,4 +1,6 @@
 package com.example.starter_project_2025.system.project.task.reminder;
+
+import com.example.starter_project_2025.config.startup.StartupMutation;
 import com.example.starter_project_2025.system.rbac.permission.*;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -8,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 @Component @Order(7) @RequiredArgsConstructor
+@StartupMutation
 public class MemberReminderPermissionInitializer implements CommandLineRunner{
     private final PermissionRepository permissions;
     private final RoleRepository roles;

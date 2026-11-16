@@ -5,6 +5,7 @@ import com.example.starter_project_2025.base.crud.dto.OnCreate;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -25,6 +26,7 @@ public class SessionDTO extends BaseDTO {
     Long classId;
 
     @NotNull(groups = OnCreate.class, message = "Topic ID is required")
+    @Positive(message = "Topic ID must be positive")
     Long topicId;
 
     @NotNull(groups = OnCreate.class, message = "Trainer ID is required")

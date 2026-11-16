@@ -1,0 +1,55 @@
+﻿,,,,,,,,
+,,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,REACT 19 STATE MANAGEMENT & PERFORMANCE OPTIMIZATION SYLLABUS,,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,SYL-CPL10_REACT_ADV
+,,,,,Version,,,1.0
+,,,,,Effective Date,,,11/11/2026
+React 19 State Management & Performance Optimization Syllabus,,,,,,,,
+1,Technical Group,Frontend,,,,,,
+2,Topic Name,React 19 State Management & Performance Optimization,,,,,,
+3,Topic Code,CPL10_REACT_ADV,,,,,,
+4,Version,1.0,,,,,,
+5,Training Audience,Frontend Engineers with basic React and TypeScript experience,,,,,,
+6,Course Objectives,"Master React 19 concurrent features, TanStack Query caching, Zustand stores, render profiling, and accessible component design.",,,,,,
+7,Topic Outline,"- Unit 1: Modern React Rendering & Concurrent Features
+- Unit 2: Server State & Client State Architecture
+- Unit 3: Reusable UI Systems & Frontend Testing
+- Unit 4: Frontend Assessment & Defense",,,,,,
+8,Time Allocation,Concept/Lecture,0.21,"Theory, architecture concepts",9 Sessions,,,
+,,Assignment/Lab,0.39,Hands-on coding & exercises,,,,
+,,Guides/Review,0.07,Code walkthrough & Q&A,,,,
+,,Seminar/Workshop,0.11,Interactive seminar & debugging,,,,
+,,Exam,0.21,Quizzes & practical defense exam,,,,
+9,Training Materials & Environments,Text book,Official Frontend Documentation & FAMS Guides,,,,,
+,,References,FAMS Internal LMS Knowledge Base,,,,,
+,,Technical requirements,"Modern IDE, Docker, Git, Browser DevTools",,,,,
+10,Assessment Scheme,Quizzes & Knowledge Tests,2,20,Short quizzes checking core theory (>= 6.0 / 10),,,
+,,Practical Lab Test,2,30,Hands-on lab assignments & Git code quality (>= 6.0 / 10),,,
+,,Final Practical Test,1,50,Capstone implementation & live defense (>= 6.0 / 10),,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% quizzes and final practical test,,,,
+11,Training Delivery Principles,Trainees,Completed prerequisite track; Active participation in daily labs,,,,,
+,Training Delivery Principles,Trainer,Senior Frontend Engineer / Technical Mentor,,,,,
+,Training Delivery Principles,Training,"- Concept lectures in morning or online
+- Hands-on lab exercises & reviews in afternoon
+- Max 4h (240 mins) per session",,,,,
+,Training Delivery Principles,Re-Test,2 - Allow up to 2 re-takes with different exam variants,,,,,
+,Training Delivery Principles,Marking,Evaluated by trainer against official FAMS rubric,,,,,
+,Training Delivery Principles,Waiver Criteria,Fast-track entry exam score >= 8.5 / 10,,,,,
+,,,,,,,,
+React 19 State Management & Performance Optimization - Training Schedule,,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,Modern React Rendering & Concurrent Features,1,"React Fiber, Reconciliation & Profiler Deep Dive",Identify unnecessary re-renders using React DevTools Profiler,Concept/Lecture,180,Offline - Sáng (Morning),Slide-React-Fiber-Profiler.pdf
+,,2,"Memoization, useTransition & Virtualized Lists Lab","Optimize large 10,000-row tables with virtualization and deferred updates",Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-01-React-Performance.zip
+2,Server State & Client State Architecture,3,TanStack Query v5 Caching & Optimistic Updates,"Implement stale-while-revalidate, prefetching, and optimistic mutations",Concept/Lecture,180,Online - Sáng (Morning),Slide-TanStack-Query.pdf
+,,4,Zustand Global Store & Multi-Step Form Validation Lab,Combine Zustand state slices with React Hook Form and Zod schemas,Assignment/Lab,240,Offline - Chiều (Afternoon),Lab-02-Zustand-Zod.zip
+3,Reusable UI Systems & Frontend Testing,5,Compound Components & Accessibility (ARIA),"Build keyboard-navigable dialogs, comboboxes, and data grids",Seminar/Workshop,180,Offline - Sáng (Morning),Workshop-Accessible-UI.pdf
+,,6,Component Testing with Vitest & Testing Library,Write integration tests mocking network responses with MSW,Assignment/Lab,180,Offline - Chiều (Afternoon),Lab-03-Vitest-MSW.zip
+,,7,Bundle Splitting & Lighthouse Audit Review,"Inspect Vite chunks, lazy routes, and Core Web Vitals",Guides/Review,120,Online - Sáng (Morning),Checklist-Web-Vitals.pdf
+4,Frontend Assessment & Defense,8,React Hooks & Caching Theory Quiz,"Test lifecycle edge cases, query keys, and TypeScript generics",Test/Quiz,120,Offline - Sáng (Morning),Quiz-React-Adv.pdf
+,,9,Practical Dashboard Optimization Exam,Deliver zero-warning TypeScript build with optimized dashboard UX,Exam,240,Offline - Chiều (Afternoon),Exam-React-Rubric.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10,,,

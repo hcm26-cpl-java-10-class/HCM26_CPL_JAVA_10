@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.workspace.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.workspace.domain.MeetingNoteAttendee;
 import com.example.starter_project_2025.system.project.workspace.domain.ProjectLog;
 import com.example.starter_project_2025.system.project.workspace.repository.MeetingNoteAttendeeRepository;
@@ -21,6 +23,7 @@ import java.util.Map;
 @Component
 @Order(5)
 @RequiredArgsConstructor
+@StartupMutation
 public class MeetingNoteAttendeeMigration implements CommandLineRunner {
     private final JdbcTemplate jdbc;
     private final ProjectLogRepository logs;
