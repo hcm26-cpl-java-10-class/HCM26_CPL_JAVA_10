@@ -18,9 +18,9 @@ const scopes: ProjectAnalyticsScope[] = ["ALL", "BACKLOG", "SPRINT"];
 const itemTypes: ProjectAnalyticsItemType[] = ["ALL", "STORY", "BUG", "TASK"];
 
 export const scopeLabels: Record<ProjectAnalyticsScope, string> = {
-  ALL: "All project work items",
-  BACKLOG: "Product backlog only",
-  SPRINT: "Specific sprint",
+  ALL: "All work items",
+  BACKLOG: "Product backlog",
+  SPRINT: "Sprint scope",
 };
 
 export const itemTypeLabels: Record<ProjectAnalyticsItemType, string> = {

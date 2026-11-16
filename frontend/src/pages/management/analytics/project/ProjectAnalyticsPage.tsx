@@ -5,19 +5,19 @@ import {
   ArrowLeft,
   BarChart3,
   Filter,
-  Loader2,
   LockKeyhole,
   RefreshCw,
   SearchX,
+  Share2,
   ShieldAlert,
   X,
   type LucideIcon,
 } from "lucide-react";
 import { useCallback, type ReactNode } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { projectAnalyticsApi } from "@/api/features/project-analytics.api";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,9 +27,10 @@ import { getHomePathByRole } from "@/utils/rbac.utils";
 import { AnalyticsFilterBar } from "./AnalyticsFilterBar";
 import { AnalyticsKpiCards } from "./AnalyticsKpiCards";
 import { AnalyticsTrendCharts } from "./AnalyticsTrendCharts";
+import { CurrentWindowWorkItems } from "./CurrentWindowWorkItems";
 import {
+  analyticsFilterKeys,
   clearAnalyticsFilters,
-  hasAnalyticsFilters,
   readAnalyticsFilters,
   writeAnalyticsFilters,
 } from "./analytics-filters";
@@ -49,6 +50,15 @@ function filterFieldErrors(error: unknown): Record<string, string> {
     if (message) errors[field] = message;
   }
   return errors;
+}
+
+function formatUtcTime(value: number) {
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  }).format(new Date(value));
 }
 
 function PageState({ icon: Icon, title, description, ignorePaths, children }: {
@@ -89,36 +99,62 @@ function ProjectNotFound({ homePath, ignorePaths }: { homePath: string; ignorePa
 }
 
 function ShellLoading() {
-  return <div role="status" aria-label="Loading project analytics" className="space-y-4">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="space-y-2"><Skeleton className="h-3 w-40" /><Skeleton className="h-7 w-56" /><Skeleton className="h-3 w-80" /></div>
-      <Skeleton className="h-6 w-32 rounded-full" />
+  return <div role="status" aria-label="Loading project analytics" className="rounded-2xl border bg-card p-4 shadow-xs sm:p-5">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <Skeleton className="size-9 rounded-lg" />
+          <div className="space-y-2"><Skeleton className="h-5 w-40" /><Skeleton className="h-3 w-24" /><Skeleton className="h-3 w-44" /></div>
+        </div>
+        <div className="flex gap-2"><Skeleton className="h-8 w-20" /><Skeleton className="h-8 w-20" /></div>
+      </div>
+      <Skeleton className="h-12 w-full rounded-xl" />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[0, 1, 2, 3, 4].map(key =>
+        <Skeleton key={key} className="h-[104px] rounded-xl" />)}</div>
+      <div className="grid gap-4 xl:grid-cols-2">{[0, 1, 2, 3].map(key =>
+        <Skeleton key={key} className="h-64 rounded-xl" />)}</div>
+      <Skeleton className="h-28 w-full rounded-xl" />
     </div>
-    <Skeleton className="h-32 w-full rounded-xl" />
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[0, 1, 2, 3, 4].map(key =>
-      <Skeleton key={key} className="h-24 rounded-xl" />)}</div>
-    <div className="grid gap-4 xl:grid-cols-2">{[0, 1, 2, 3].map(key =>
-      <Skeleton key={key} className="h-72 rounded-xl" />)}</div>
   </div>;
 }
 
-function AnalyticsHeader({ code, name, status }: { code?: string | null; name?: string | null; status?: string | null }) {
+function AnalyticsHeader({ sprintLabel, updatedLabel, projectName }: {
+  sprintLabel: string;
+  updatedLabel: string;
+  projectName?: string | null;
+}) {
+  async function share() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Analytics link copied.");
+    } catch {
+      toast.error("Could not copy the analytics link.");
+    }
+  }
+
   return <header className="flex flex-wrap items-start justify-between gap-3">
     <div className="flex min-w-0 items-start gap-3">
-      <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-600 shadow-xs dark:border-blue-900 dark:bg-blue-950 dark:text-blue-300">
-        <BarChart3 className="size-5" />
+      <span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900">
+        <BarChart3 className="size-4" strokeWidth={2} />
       </span>
       <div className="min-w-0">
-        <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Project Management · Analytics</p>
-        <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">Project Analytics</h1>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">Sprint and Backlog insights for your authorized project. This view is read-only.</p>
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h1 className="truncate text-lg font-semibold leading-tight tracking-tight" title={projectName ?? undefined}>
+            Project Analytics
+          </h1>
+          <span className="shrink-0 text-[11px] font-semibold text-foreground/80">{sprintLabel}</span>
+        </div>
+        <p className="mt-0.5 text-[10px] text-muted-foreground">{updatedLabel}</p>
       </div>
     </div>
-    <div className="flex flex-wrap items-center gap-2 pt-1">
-      {code && <Badge variant="outline" className="gap-1 border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400">{code}</Badge>}
-      {name && <span className="max-w-64 truncate text-xs font-medium text-foreground" title={name}>{name}</span>}
-      {status && <Badge variant="secondary" className="uppercase">{status}</Badge>}
-      <Badge variant="outline" className="gap-1 text-[10px]"><LockKeyhole className="size-3" />Read only</Badge>
+    <div className="flex flex-wrap items-center gap-2 pt-0.5">
+      <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => void share()}>
+        <Share2 className="size-3.5" />Share
+      </Button>
+      <Button type="button" size="sm" className="h-8 gap-1.5 bg-slate-900 text-xs text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+        onClick={() => window.print()}>
+        Export
+      </Button>
     </div>
   </header>;
 }
@@ -130,7 +166,8 @@ function AnalyticsHeader({ code, name, status }: { code?: string | null; name?: 
  * route param.
  */
 export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { projectId?: number } = {}) {
-  const { projectId: rawProjectId } = useParams<{ projectId: string }>();
+  const { projectId: rawProjectId, id: workspaceId } = useParams<{ projectId: string; id: string }>();
+  const location = useLocation();
   const projectId = projectIdProp ?? Number(rawProjectId);
   const validId = Number.isSafeInteger(projectId) && projectId > 0;
   const { activeRole, effectivePermissions } = usePermissions();
@@ -188,52 +225,67 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
     ? (query.error.response?.data as { message?: string } | undefined)?.message ?? "The analytics filters are not valid"
     : "The analytics filters are not valid";
 
+  const selectedSprint = shell
+    ? shell.filters.sprints.find(item =>
+      item.sprintId === (shell.filters.sprintId ?? shell.filters.defaultSprintId))
+    : undefined;
+  const sprintLabel = selectedSprint?.name ?? (shell?.filters.scope === "SPRINT" ? "Sprint scope" : "All work items");
+  const updatedLabel = query.dataUpdatedAt
+    ? `Updated today at ${formatUtcTime(query.dataUpdatedAt)} UTC`
+    : "Updated just now";
+
+  const backlogParams = new URLSearchParams(location.search);
+  analyticsFilterKeys.forEach(key => backlogParams.delete(key));
+  backlogParams.set("tab", "backlog");
+  const backlogHref = workspaceId ? `${location.pathname}?${backlogParams.toString()}` : "/backlogs";
+
   return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background"
     pathName={{ projects: "Project Management", [String(projectId)]: shell?.projectName ?? "Project analytics", analytics: "Analytics" }}>
-    <div className="space-y-4">
-      {query.isPending || !shell ? (
-        rejected ? (
-          <PageState icon={Filter} title="422 · Filters not accepted" ignorePaths={projectSegment}
-            description={rejectedMessage}>
-            <Button variant="outline" size="sm" onClick={reset}><X />Clear filters</Button>
-          </PageState>
-        ) : <ShellLoading />
-      ) : <>
-        <AnalyticsHeader code={shell.projectCode} name={shell.projectName} status={shell.projectStatus} />
+    {query.isPending || !shell ? (
+      rejected ? (
+        <PageState icon={Filter} title="422 · Filters not accepted" ignorePaths={projectSegment}
+          description={rejectedMessage}>
+          <Button variant="outline" size="sm" onClick={reset}><X />Clear filters</Button>
+        </PageState>
+      ) : <ShellLoading />
+    ) : (
+      <div className="rounded-2xl border bg-card p-4 shadow-xs sm:p-5">
+        <div className="space-y-4">
+          <AnalyticsHeader sprintLabel={sprintLabel} updatedLabel={updatedLabel} projectName={shell.projectName} />
 
-        <AnalyticsFilterBar
-          filters={shell.filters}
-          applied={applied}
-          fieldErrors={fieldErrors}
-          isFetching={query.isFetching}
-          onApply={apply}
-          onReset={reset}
-        />
+          <AnalyticsFilterBar
+            filters={shell.filters}
+            dateWindow={shell.window}
+            applied={applied}
+            fieldErrors={fieldErrors}
+            isFetching={query.isFetching}
+            onApply={apply}
+            onReset={reset}
+          />
 
-        {rejected && (
-          <p role="alert" className="flex items-start gap-1.5 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs leading-5 text-destructive">
-            <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-            <span>
-              {rejectedMessage}. The last valid charts are still shown — correct the highlighted filter and apply again.
-            </span>
-          </p>
-        )}
-
-        <AnalyticsKpiCards kpis={shell.kpis} />
-        <AnalyticsTrendCharts widgets={shell.widgets} granularity={shell.window.granularity} />
-
-        <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-          {query.isFetching ? <Loader2 className="size-3.5 animate-spin" /> : <LockKeyhole className="size-3.5" />}
-          {query.isFetching
-            ? "Refreshing the selected scope…"
-            : `Charts bucket ${shell.window.startDate} → ${shell.window.endDate} per ${shell.window.granularity.toLowerCase()}. Opening this view only reads project data.`}
-          {hasAnalyticsFilters(applied) && !query.isFetching && (
-            <button type="button" className="font-medium underline underline-offset-2" onClick={reset}>
-              Clear filters
-            </button>
+          {rejected && (
+            <p role="alert" className="flex items-start gap-1.5 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs leading-5 text-destructive">
+              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+              <span>
+                {rejectedMessage}. The last valid charts are still shown — correct the highlighted filter and apply again.
+              </span>
+            </p>
           )}
-        </p>
-      </>}
-    </div>
+
+          <AnalyticsKpiCards kpis={shell.kpis} windowStart={shell.window.startDate} />
+          <AnalyticsTrendCharts widgets={shell.widgets} granularity={shell.window.granularity} />
+          <CurrentWindowWorkItems
+            projectId={projectId}
+            projectCode={shell.projectCode}
+            projectName={shell.projectName}
+            scope={shell.filters.scope}
+            sprintId={shell.filters.sprintId}
+            itemType={shell.filters.itemType}
+            dateWindow={shell.window}
+            backlogHref={backlogHref}
+          />
+        </div>
+      </div>
+    )}
   </MainLayout>;
 }
