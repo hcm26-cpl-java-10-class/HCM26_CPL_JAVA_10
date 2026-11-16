@@ -1,44 +1,54 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import {
   AlertCircle,
   ArrowLeft,
   BarChart3,
-  Clock3,
   Filter,
-  Gauge,
-  Info,
-  Layers3,
-  LineChart,
   Loader2,
   LockKeyhole,
   RefreshCw,
   SearchX,
   ShieldAlert,
-  Users,
+  X,
   type LucideIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, type ReactNode } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { projectAnalyticsApi } from "@/api/features/project-analytics.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { ProjectAnalyticsWidget } from "@/types/features/project-analytics";
+import type { ProjectAnalyticsRequestFilters } from "@/types/features/project-analytics";
 import { getHomePathByRole } from "@/utils/rbac.utils";
-
-const WIDGET_ICONS: Record<string, LucideIcon> = {
-  "sprint-burndown": LineChart,
-  "sprint-velocity": Gauge,
-  "backlog-health": Layers3,
-  "team-workload": Users,
-};
+import { AnalyticsFilterBar } from "./AnalyticsFilterBar";
+import { AnalyticsKpiCards } from "./AnalyticsKpiCards";
+import { AnalyticsTrendCharts } from "./AnalyticsTrendCharts";
+import {
+  clearAnalyticsFilters,
+  hasAnalyticsFilters,
+  readAnalyticsFilters,
+  writeAnalyticsFilters,
+} from "./analytics-filters";
 
 function statusCode(error: unknown) {
   return isAxiosError(error) ? error.response?.status : undefined;
+}
+
+/** Reads the field keyed filter errors of an HTTP 422 answer (AC04). */
+function filterFieldErrors(error: unknown): Record<string, string> {
+  if (statusCode(error) !== 422) return {};
+  const body = (error as { response?: { data?: { errors?: Record<string, string[] | string> } } })
+    .response?.data;
+  const errors: Record<string, string> = {};
+  for (const [field, value] of Object.entries(body?.errors ?? {})) {
+    const message = Array.isArray(value) ? value[0] : value;
+    if (message) errors[field] = message;
+  }
+  return errors;
 }
 
 function PageState({ icon: Icon, title, description, ignorePaths, children }: {
@@ -84,9 +94,11 @@ function ShellLoading() {
       <div className="space-y-2"><Skeleton className="h-3 w-40" /><Skeleton className="h-7 w-56" /><Skeleton className="h-3 w-80" /></div>
       <Skeleton className="h-6 w-32 rounded-full" />
     </div>
-    <Skeleton className="h-24 w-full rounded-xl" />
-    <div className="grid gap-4 md:grid-cols-2">{[0, 1, 2, 3].map(key =>
-      <Skeleton key={key} className="h-56 rounded-xl" />)}</div>
+    <Skeleton className="h-32 w-full rounded-xl" />
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[0, 1, 2, 3, 4].map(key =>
+      <Skeleton key={key} className="h-24 rounded-xl" />)}</div>
+    <div className="grid gap-4 xl:grid-cols-2">{[0, 1, 2, 3].map(key =>
+      <Skeleton key={key} className="h-72 rounded-xl" />)}</div>
   </div>;
 }
 
@@ -111,40 +123,6 @@ function AnalyticsHeader({ code, name, status }: { code?: string | null; name?: 
   </header>;
 }
 
-function FilterBarPlaceholder({ planned }: { planned: string[] }) {
-  return <section aria-label="Analytics filters" className="rounded-xl border bg-card p-3.5 shadow-xs">
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground"><Filter className="size-3.5" />Filters</span>
-      {planned.map(label => <span key={label} className="rounded-md border border-dashed bg-muted/30 px-2.5 py-1 text-[11px] text-muted-foreground">{label}</span>)}
-      <Badge variant="outline" className="ml-auto text-[10px]">Coming soon</Badge>
-    </div>
-    <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-5 text-muted-foreground">
-      <Info className="mt-0.5 size-3.5 shrink-0" />
-      Filtering will be enabled in a later analytics release. For now this workspace only reads project, sprint and backlog data.
-    </p>
-  </section>;
-}
-
-function WidgetCard({ widget }: { widget: ProjectAnalyticsWidget }) {
-  const Icon = WIDGET_ICONS[widget.key] ?? BarChart3;
-  return <Card className="min-h-52 shadow-xs">
-    <CardHeader className="flex-row items-start gap-2.5">
-      <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-muted-foreground"><Icon className="size-4" /></span>
-      <div className="min-w-0 space-y-1">
-        <CardTitle className="text-sm">{widget.title}</CardTitle>
-        <CardDescription className="text-[11px] leading-5">{widget.description}</CardDescription>
-      </div>
-    </CardHeader>
-    <CardContent>
-      <div className="flex h-24 flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed bg-muted/20 text-center">
-        <Clock3 className="size-4 text-muted-foreground" aria-hidden="true" />
-        <p className="text-[11px] font-medium text-muted-foreground">Awaiting analytics data</p>
-        <p className="text-[10px] text-muted-foreground/80">This widget is part of the Analytics shell.</p>
-      </div>
-    </CardContent>
-  </Card>;
-}
-
 /**
  * `projectId` can be passed explicitly when the page is embedded in another
  * shell (e.g. the workspace analytics tab), where the URL only carries the
@@ -158,19 +136,36 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
   const { activeRole, effectivePermissions } = usePermissions();
   const homePath = getHomePathByRole(activeRole, effectivePermissions);
   const projectSegment = projectIdProp != null ? undefined : rawProjectId ? [rawProjectId] : undefined;
+
+  // US-ANL-002: the scope filter lives in the URL so it survives navigation.
+  const [params, setParams] = useSearchParams();
+  const applied = readAnalyticsFilters(params);
+
+  const apply = useCallback((next: ProjectAnalyticsRequestFilters) => {
+    setParams(current => writeAnalyticsFilters(current, next), { replace: true });
+  }, [setParams]);
+
+  const reset = useCallback(() => {
+    setParams(current => clearAnalyticsFilters(current), { replace: true });
+  }, [setParams]);
+
   const query = useQuery({
-    queryKey: ["project-analytics-shell", projectId],
-    queryFn: ({ signal }) => projectAnalyticsApi.shell(projectId, signal),
+    queryKey: ["project-analytics-shell", projectId, applied],
+    queryFn: ({ signal }) => projectAnalyticsApi.shell(projectId, applied, signal),
     enabled: validId,
     retry: false,
+    // AC04: a rejected filter must never blank the charts that are already shown.
+    placeholderData: keepPreviousData,
     // AC02: never keep analytics data around after the session is gone.
     staleTime: 0,
     gcTime: 0,
   });
 
   if (!validId) return <ProjectNotFound homePath={homePath} ignorePaths={projectSegment} />;
-  if (query.isError) {
-    const status = statusCode(query.error);
+
+  const status = statusCode(query.error);
+  const rejected = status === 422;
+  if (query.isError && !rejected) {
     if (status === 403) return <PermissionDenied homePath={homePath} ignorePaths={projectSegment} />;
     if (status === 404) return <ProjectNotFound homePath={homePath} ignorePaths={projectSegment} />;
     if (status === 401) {
@@ -188,18 +183,55 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
   }
 
   const shell = query.data;
+  const fieldErrors = filterFieldErrors(query.error);
+  const rejectedMessage = rejected && isAxiosError(query.error)
+    ? (query.error.response?.data as { message?: string } | undefined)?.message ?? "The analytics filters are not valid"
+    : "The analytics filters are not valid";
+
   return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background"
     pathName={{ projects: "Project Management", [String(projectId)]: shell?.projectName ?? "Project analytics", analytics: "Analytics" }}>
     <div className="space-y-4">
-      {query.isPending || !shell ? <ShellLoading /> : <>
+      {query.isPending || !shell ? (
+        rejected ? (
+          <PageState icon={Filter} title="422 · Filters not accepted" ignorePaths={projectSegment}
+            description={rejectedMessage}>
+            <Button variant="outline" size="sm" onClick={reset}><X />Clear filters</Button>
+          </PageState>
+        ) : <ShellLoading />
+      ) : <>
         <AnalyticsHeader code={shell.projectCode} name={shell.projectName} status={shell.projectStatus} />
-        <FilterBarPlaceholder planned={shell.filters?.planned ?? []} />
-        <section aria-label="Analytics widgets" className="grid gap-4 md:grid-cols-2">
-          {shell.widgets.map(widget => <WidgetCard key={widget.key} widget={widget} />)}
-        </section>
-        <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+
+        <AnalyticsFilterBar
+          filters={shell.filters}
+          applied={applied}
+          fieldErrors={fieldErrors}
+          isFetching={query.isFetching}
+          onApply={apply}
+          onReset={reset}
+        />
+
+        {rejected && (
+          <p role="alert" className="flex items-start gap-1.5 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs leading-5 text-destructive">
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+            <span>
+              {rejectedMessage}. The last valid charts are still shown — correct the highlighted filter and apply again.
+            </span>
+          </p>
+        )}
+
+        <AnalyticsKpiCards kpis={shell.kpis} />
+        <AnalyticsTrendCharts widgets={shell.widgets} granularity={shell.window.granularity} />
+
+        <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
           {query.isFetching ? <Loader2 className="size-3.5 animate-spin" /> : <LockKeyhole className="size-3.5" />}
-          Opening this view only reads project data; it never changes sprint or task state.
+          {query.isFetching
+            ? "Refreshing the selected scope…"
+            : `Charts bucket ${shell.window.startDate} → ${shell.window.endDate} per ${shell.window.granularity.toLowerCase()}. Opening this view only reads project data.`}
+          {hasAnalyticsFilters(applied) && !query.isFetching && (
+            <button type="button" className="font-medium underline underline-offset-2" onClick={reset}>
+              Clear filters
+            </button>
+          )}
         </p>
       </>}
     </div>

@@ -7,6 +7,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,12 +15,17 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * US-ANL-001: Analytics Workspace Navigation, Shell & RBAC Access Control.
+ * US-ANL-001: Analytics Workspace Navigation, Shell &amp; RBAC Access Control.
+ * US-ANL-002: Sprint &amp; Backlog Data Collection &amp; Scope Filter Controls.
  *
  * <p>Only GET endpoints exist by design: opening the Analytics route must never
  * mutate Sprint/Task state or write a mutation audit entry. Authorization is
  * applied twice — at the HTTP layer through {@code @PreAuthorize} and again in
  * {@link ProjectAnalyticsAccess}, which re-reads the persisted role grants.</p>
+ *
+ * <p>Invalid filters (unknown scope/type, inverted date range, sprint of
+ * another project) are answered with HTTP 422 by
+ * {@link ProjectAnalyticsErrors}.</p>
  */
 @RestController
 @RequiredArgsConstructor
@@ -40,11 +46,12 @@ public class ProjectAnalyticsController {
 
     @GetMapping("/{projectId}/analytics")
     @PreAuthorize("hasAuthority('PROJECT_ANALYTICS_READ')")
-    @Operation(summary = "Read the Analytics workspace shell for one project")
-    public ResponseEntity<ProjectAnalyticsResponse> shell(@PathVariable String projectId) {
+    @Operation(summary = "Read the filtered Analytics payload (KPIs and trend charts) for one project")
+    public ResponseEntity<ProjectAnalyticsResponse> shell(@PathVariable String projectId,
+                                                          @ModelAttribute ProjectAnalyticsFilter filter) {
         // AC02: analytics never survives in an HTTP cache after the session ends.
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(service.shell(projectId));
+                .body(service.shell(projectId, filter));
     }
 }
