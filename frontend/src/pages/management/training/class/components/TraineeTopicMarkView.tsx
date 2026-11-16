@@ -6,9 +6,11 @@ import {
     Download,
     Upload,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { read, utils, writeFile } from "xlsx";
+import { scoreManagementApi } from "@/api/features/score-management.api";
 import { NativeSelect } from "@/components/common/NativeSelect";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -99,66 +101,64 @@ export function resolveTraineeAccount(trainee: Trainee, rowIndex: number): strin
     return (trainee.fptAccount ?? trainee.code ?? `user${rowIndex + 1}`).toLowerCase();
 }
 
-const PRESET_SCORE_PROFILES: Array<{ quiz: number; assignment: number; practiceFinal: number }> = [
-    { quiz: 8.5, assignment: 8.0, practiceFinal: 8.2 }, // GPA: 8.2
-    { quiz: 5.0, assignment: 5.5, practiceFinal: 5.0 }, // GPA: 5.2 (< 6.0 Failure)
-    { quiz: 7.5, assignment: 8.0, practiceFinal: 7.8 }, // GPA: 7.8
-    { quiz: 9.0, assignment: 8.5, practiceFinal: 9.0 }, // GPA: 8.9
-    { quiz: 7.0, assignment: 7.5, practiceFinal: 7.2 }, // GPA: 7.3
-    { quiz: 4.5, assignment: 5.0, practiceFinal: 4.8 }, // GPA: 4.8 (< 6.0 Failure)
-    { quiz: 8.0, assignment: 7.5, practiceFinal: 8.0 }, // GPA: 7.9
-    { quiz: 6.5, assignment: 7.0, practiceFinal: 6.8 }, // GPA: 6.8
-    { quiz: 8.5, assignment: 9.0, practiceFinal: 8.6 }, // GPA: 8.7
-    { quiz: 5.5, assignment: 5.0, practiceFinal: 5.2 }, // GPA: 5.2 (< 6.0 Failure)
-];
-
-const TOPIC_SCORE_OFFSETS: Record<string, number> = {
-    L1_AL_PSE: 0,
-    L2_OOP_JAVA: 0.4,
-    L3_SPRING_BOOT: -0.3,
-    L4_DATABASE: 0.2,
-};
-
-function clampScore(value: number): number {
-    return Math.round(Math.min(10, Math.max(0, value)) * 10) / 10;
+/** Scores shown in the table. A component is undefined when the trainee has no score for it yet. */
+export interface DisplayScores {
+    quiz?: number;
+    assignment?: number;
+    practiceFinal?: number;
+    totalGpa?: number;
 }
 
-function buildDefaultScoresForTrainee(index: number, topicCode: string): TopicComponentScores {
-    const base = PRESET_SCORE_PROFILES[index % PRESET_SCORE_PROFILES.length];
-    const offset = TOPIC_SCORE_OFFSETS[topicCode] ?? 0;
-    const quiz = clampScore(base.quiz + offset);
-    const assignment = clampScore(base.assignment + offset);
-    const practiceFinal = clampScore(base.practiceFinal + offset);
+const COMPONENT_WEIGHTS = { quiz: 0.2, assignment: 0.3, practiceFinal: 0.5 } as const;
+
+const roundOneDecimal = (value: number) => Math.round(value * 10) / 10;
+
+/**
+ * Maps the Score Management class gradebook (type -> score on a 10-point scale) onto the three Topic Mark
+ * components: QUIZ -> Quiz, ASSIGNMENT -> Assignment, FINAL_TEST (or MIDTERM when there is no final) ->
+ * Practice / Final. The GPA uses the 20/30/50 weights, re-normalised over the components that have a score.
+ * Returns null when the trainee has no exam score at all.
+ */
+export function convertGradebookScores(scores: Record<string, number> | undefined | null): DisplayScores | null {
+    if (!scores) return null;
+    const quiz = scores.QUIZ;
+    const assignment = scores.ASSIGNMENT;
+    const practiceFinal = scores.FINAL_TEST ?? scores.MIDTERM;
+
+    let weighted = 0;
+    let weightSum = 0;
+    for (const [value, weight] of [
+        [quiz, COMPONENT_WEIGHTS.quiz],
+        [assignment, COMPONENT_WEIGHTS.assignment],
+        [practiceFinal, COMPONENT_WEIGHTS.practiceFinal],
+    ] as const) {
+        if (typeof value === "number" && Number.isFinite(value)) {
+            weighted += value * weight;
+            weightSum += weight;
+        }
+    }
+    if (weightSum === 0) return null;
+
     return {
-        quiz,
-        assignment,
-        practiceFinal,
-        totalGpa: calculateTopicGpa(quiz, assignment, practiceFinal),
+        quiz: quiz === undefined ? undefined : roundOneDecimal(quiz),
+        assignment: assignment === undefined ? undefined : roundOneDecimal(assignment),
+        practiceFinal: practiceFinal === undefined ? undefined : roundOneDecimal(practiceFinal),
+        totalGpa: roundOneDecimal(weighted / weightSum),
     };
 }
 
-function ensureTopicScoresForClass(
-    classKey: string,
-    topicCode: string,
-    trainees: Trainee[],
-): Record<number, TopicComponentScores> {
+const displayScore = (value?: number) => (value === undefined ? "—" : value.toFixed(1));
+const exportScore = (value?: number) => (value === undefined ? "" : value.toFixed(1));
+
+/** Marks imported from an Excel file (local overrides only). Scores from exams come from the API. */
+function getImportedScoresForClass(classKey: string, topicCode: string): Record<number, TopicComponentScores> {
     if (!classTopicMarkStore[classKey]) {
         classTopicMarkStore[classKey] = {};
     }
     if (!classTopicMarkStore[classKey][topicCode]) {
         classTopicMarkStore[classKey][topicCode] = {};
     }
-    const existing = classTopicMarkStore[classKey][topicCode];
-    const next: Record<number, TopicComponentScores> = { ...existing };
-
-    trainees.forEach((trainee, index) => {
-        if (!next[trainee.id]) {
-            next[trainee.id] = buildDefaultScoresForTrainee(index, topicCode);
-        }
-    });
-
-    classTopicMarkStore[classKey][topicCode] = next;
-    return next;
+    return classTopicMarkStore[classKey][topicCode];
 }
 
 const STICKY_HEADER_CELL_CLASS =
@@ -175,9 +175,9 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
     const classCodeLabel = (classItem.code || classItem.name || classKey).trim();
 
     const [selectedTopicCode, setSelectedTopicCode] = useState<string>(TOPIC_OPTIONS[0].code);
-    const [scoresByTraineeId, setScoresByTraineeId] = useState<Record<number, TopicComponentScores>>(() =>
-        ensureTopicScoresForClass(classKey, TOPIC_OPTIONS[0].code, trainees),
-    );
+    const [scoresByTraineeId, setScoresByTraineeId] = useState<Record<number, TopicComponentScores>>(() => ({
+        ...getImportedScoresForClass(classKey, TOPIC_OPTIONS[0].code),
+    }));
     const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
     const [importErrors, setImportErrors] = useState<string[]>([]);
     const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
@@ -185,19 +185,45 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        const synced = ensureTopicScoresForClass(classKey, selectedTopicCode, trainees);
-        setScoresByTraineeId({ ...synced });
-    }, [classKey, selectedTopicCode, trainees]);
+        setScoresByTraineeId({ ...getImportedScoresForClass(classKey, selectedTopicCode) });
+    }, [classKey, selectedTopicCode]);
+
+    // Real scores: exam results aggregated per class by Score Management (ExamAttempt -> class gradebook).
+    const numericClassId = Number(classItem.id);
+    const gradebookQuery = useQuery({
+        queryKey: ["class-gradebook", numericClassId],
+        queryFn: () => scoreManagementApi.classGradebook(numericClassId),
+        enabled: Number.isFinite(numericClassId),
+        retry: false,
+    });
+    const gradebookStudents = gradebookQuery.data?.students;
+
+    const realScoresByTraineeId = useMemo(() => {
+        const result = new Map<number, DisplayScores>();
+        if (!gradebookStudents) return result;
+        for (const trainee of trainees) {
+            const email = (trainee.personalEmail ?? trainee.email ?? "").trim().toLowerCase();
+            const code = (trainee.fptAccount ?? trainee.code ?? "").trim().toUpperCase();
+            const match = gradebookStudents.find(
+                (student) =>
+                    Number(student.id) === Number(trainee.id) ||
+                    (email && (student.email ?? "").trim().toLowerCase() === email) ||
+                    (code && (student.code ?? "").trim().toUpperCase() === code),
+            );
+            const converted = match ? convertGradebookScores(match.scores) : null;
+            if (converted) result.set(trainee.id, converted);
+        }
+        return result;
+    }, [gradebookStudents, trainees]);
 
     const rows = useMemo(() => {
         return trainees.map((trainee, index) => {
-            const scores =
-                scoresByTraineeId[trainee.id] ??
-                buildDefaultScoresForTrainee(index, selectedTopicCode);
+            const scores: DisplayScores =
+                scoresByTraineeId[trainee.id] ?? realScoresByTraineeId.get(trainee.id) ?? {};
             const account = resolveTraineeAccount(trainee, index);
             const email = (trainee.personalEmail ?? trainee.email ?? "").trim();
             const status = normalizeTraineeStatus(trainee.status);
-            const isFailed = scores.totalGpa < TOPIC_GPA_PASS_THRESHOLD;
+            const isFailed = scores.totalGpa !== undefined && scores.totalGpa < TOPIC_GPA_PASS_THRESHOLD;
 
             return {
                 no: index + 1,
@@ -209,12 +235,11 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
                 isFailed,
             };
         });
-    }, [trainees, scoresByTraineeId, selectedTopicCode]);
+    }, [trainees, scoresByTraineeId, realScoresByTraineeId]);
 
     const handleTopicChange = (nextTopic: string) => {
         setSelectedTopicCode(nextTopic);
-        const loaded = ensureTopicScoresForClass(classKey, nextTopic, trainees);
-        setScoresByTraineeId({ ...loaded });
+        setScoresByTraineeId({ ...getImportedScoresForClass(classKey, nextTopic) });
     };
 
     const toggleExpandDetail = (traineeId: number) => {
@@ -291,10 +316,10 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
             row.account,
             row.status,
             selectedTopicCode,
-            row.scores.quiz.toFixed(1),
-            row.scores.assignment.toFixed(1),
-            row.scores.practiceFinal.toFixed(1),
-            row.scores.totalGpa.toFixed(1),
+            exportScore(row.scores.quiz),
+            exportScore(row.scores.assignment),
+            exportScore(row.scores.practiceFinal),
+            exportScore(row.scores.totalGpa),
             row.isFailed ? "Topic GPA Failure (< 6.0)" : "Passed",
         ]);
 
@@ -429,9 +454,9 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
                 }
 
                 const existingScores = stagedUpdates[matchedRow.trainee.id] ?? matchedRow.scores;
-                let quiz = existingScores.quiz;
-                let assignment = existingScores.assignment;
-                let practiceFinal = existingScores.practiceFinal;
+                let quiz = existingScores.quiz ?? 0;
+                let assignment = existingScores.assignment ?? 0;
+                let practiceFinal = existingScores.practiceFinal ?? 0;
                 let rowValid = true;
 
                 if (quizIdx >= 0 && assignmentIdx >= 0 && practiceIdx >= 0) {
@@ -579,6 +604,17 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
                 </div>
             </div>
 
+            {gradebookQuery.isError && (
+                <p role="alert" className="shrink-0 text-xs text-red-600 dark:text-red-400">
+                    Could not load exam scores from Score Management for this class.
+                </p>
+            )}
+            {gradebookQuery.isSuccess && realScoresByTraineeId.size === 0 && (
+                <p className="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                    No graded exam results found for the trainees of this class yet.
+                </p>
+            )}
+
             {/* 3. Full-Width Sticky Header Table (No Horizontal Scrollbar) */}
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden rounded-lg border border-slate-200 bg-white fams-scrollbar dark:border-slate-800 dark:bg-slate-950">
                 <table
@@ -675,7 +711,7 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
                                                         : "font-medium text-slate-800 dark:text-slate-200",
                                                 )}
                                             >
-                                                <span>{row.scores.totalGpa.toFixed(1)}</span>
+                                                <span>{displayScore(row.scores.totalGpa)}</span>
                                             </TableCell>
                                             <TableCell className="px-3 py-2.5 text-center">
                                                 <button
@@ -715,7 +751,7 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
                                                                     Quiz (20%):
                                                                 </span>
                                                                 <span className="font-semibold text-slate-900 dark:text-slate-100">
-                                                                    {row.scores.quiz.toFixed(1)}
+                                                                    {displayScore(row.scores.quiz)}
                                                                 </span>
                                                             </div>
 
@@ -724,7 +760,7 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
                                                                     Assignment (30%):
                                                                 </span>
                                                                 <span className="font-semibold text-slate-900 dark:text-slate-100">
-                                                                    {row.scores.assignment.toFixed(1)}
+                                                                    {displayScore(row.scores.assignment)}
                                                                 </span>
                                                             </div>
 
@@ -733,7 +769,7 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
                                                                     Practice / Final (50%):
                                                                 </span>
                                                                 <span className="font-semibold text-slate-900 dark:text-slate-100">
-                                                                    {row.scores.practiceFinal.toFixed(1)}
+                                                                    {displayScore(row.scores.practiceFinal)}
                                                                 </span>
                                                             </div>
 
@@ -747,7 +783,7 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
                                                                             : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
                                                                     )}
                                                                 >
-                                                                    {row.scores.totalGpa.toFixed(1)}
+                                                                    {displayScore(row.scores.totalGpa)}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -808,4 +844,3 @@ export function TraineeTopicMarkView({ classItem, trainees, onBack }: TraineeTop
     );
 }
 export default TraineeTopicMarkView;
-

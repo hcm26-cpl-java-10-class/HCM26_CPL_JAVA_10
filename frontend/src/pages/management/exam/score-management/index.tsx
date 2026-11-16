@@ -465,8 +465,9 @@ function ClassList({ onOpen }: { onOpen: (id: number) => void }) {
         <Card key={c.id} className="cursor-pointer transition hover:border-primary" onClick={() => onOpen(c.id)}>
           <CardContent className="space-y-2 p-4">
             <p className="font-semibold">{c.name}</p>
+            <p className="text-xs text-muted-foreground">{c.code}</p>
             <p className="text-sm text-muted-foreground">
-              {c.studentCount} student{c.studentCount === 1 ? "" : "s"} · {c.assessmentCount} assessment{c.assessmentCount === 1 ? "" : "s"}
+              {c.studentCount} student{c.studentCount === 1 ? "" : "s"} · {c.assessmentCount} score source{c.assessmentCount === 1 ? "" : "s"}
             </p>
           </CardContent>
         </Card>
@@ -499,7 +500,7 @@ function ClassGradebook({ classId, onBack }: { classId: number; onBack: () => vo
           <div>
             <h2 className="text-lg font-semibold">{data.className}</h2>
             <p className="text-xs text-muted-foreground">
-              {data.students.length} student{data.students.length === 1 ? "" : "s"} · scores come from the assessments the students have taken (10-point scale)
+              {data.students.length} student{data.students.length === 1 ? "" : "s"} · scores come from course score tables and graded assessments (10-point scale)
             </p>
           </div>
         </div>
@@ -572,6 +573,12 @@ function ClassGradebook({ classId, onBack }: { classId: number; onBack: () => vo
           )}
         </Table>
       </div>
+      {data.columns.length === 0 && (
+        <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+          No scores yet for this class. Scores appear once its trainees (matched to accounts by personal email) have
+          scores in a course score table or a graded assessment.
+        </p>
+      )}
       <p className="text-xs text-muted-foreground">
         Each cell is the mean of the student's best score on every assessment of that type; Average is the mean of the types they have a score in. Hover a column header to see its assessments. Read-only: edit course scores in the Course tab.
       </p>
