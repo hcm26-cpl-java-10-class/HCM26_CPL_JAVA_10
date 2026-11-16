@@ -137,7 +137,7 @@ export const SystemChatbotWidget: React.FC = () => {
                                 size="icon"
                                 className="h-7 w-7 text-white hover:bg-primary-foreground/15"
                                 onClick={handleClearHistory}
-                                title="Xóa cuộc trò chuyện"
+                                title="Xóa cuộc trò chuyn"
                             >
                                 <Trash2 className="h-4 w-4" />
                             </Button>
