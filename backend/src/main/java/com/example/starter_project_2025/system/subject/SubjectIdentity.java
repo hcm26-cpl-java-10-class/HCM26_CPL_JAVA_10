@@ -1,0 +1,35 @@
+package com.example.starter_project_2025.system.subject;
+
+import java.util.List;
+import java.util.Locale;
+
+/** Shared identity rules for CRUD, imports and persistence. */
+public final class SubjectIdentity {
+    private SubjectIdentity() {}
+
+    public static String normalizeCode(String code) {
+        return code == null ? null : code.trim().toUpperCase(Locale.ROOT);
+    }
+
+    public static String normalizeVersion(String version) {
+        return version == null ? null
+                : version.trim().toLowerCase(Locale.ROOT).replaceFirst("^v(?=\\d)", "");
+    }
+
+    public static String identityKey(String code, String version) {
+        String normCode = normalizeCode(code);
+        String normVersion = normalizeVersion(version);
+        if (normCode == null || normCode.isBlank() || normVersion == null || normVersion.isBlank()) {
+            return null;
+        }
+        return normCode + "#" + normVersion;
+    }
+
+    public static List<String> versionAliases(String version) {
+        String normalized = normalizeVersion(version);
+        if (normalized == null || normalized.isBlank()) return List.of();
+        // Include legacy values such as v1.0 without rewriting existing records.
+        return normalized.matches("^[0-9].*")
+                ? List.of(normalized, "v" + normalized) : List.of(normalized);
+    }
+}

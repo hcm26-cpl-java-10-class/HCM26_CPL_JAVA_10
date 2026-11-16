@@ -1,3 +1,4 @@
+import { useAuth } from "@/contexts/AuthContext";
 import { certificateApi, courseApi } from "@/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,8 @@ import { useCourseEnrollment } from "../hooks/useCourseEnrollment.ts";
 import { useDebouncedValue } from "../hooks/useDebouncedValue.ts";
 import { CatalogPagination } from "./CatalogPagination.tsx";
 import { CourseCard, CourseCardSkeleton } from "./CourseCard.tsx";
+
+import { CourseRecommendations } from "./CourseRecommendations";
 
 const PAGE_SIZE = 12;
 const ALL = "all";
@@ -68,6 +71,7 @@ function flattenCategories(nodes: CategoryTreeDTO[], depth = 0): CategoryOption[
  * nên quay lại từ trang chi tiết vẫn giữ nguyên kết quả đang xem.
  */
 export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const urlSearch = searchParams.get("q") ?? "";
@@ -132,7 +136,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
   );
 
   const coursesQuery = useQuery({
-    queryKey: ["course-catalog", { search: urlSearch.trim(), categoryId, level, sort, page }],
+    queryKey: ["course-catalog", user?.email, { search: urlSearch.trim(), categoryId, level, sort, page }],
     queryFn: () =>
       courseApi.searchCatalog({
         search: urlSearch.trim() || undefined,
@@ -142,13 +146,13 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
         page,
         size: PAGE_SIZE,
       }),
-    placeholderData: keepPreviousData,
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[1] === user?.email ? keepPreviousData(previous) : undefined,
   });
 
   const { canEnroll, enrollmentsQuery, enrollmentByCourseId, enrollMutation } = useCourseEnrollment();
 
   const certificatesQuery = useQuery({
-    queryKey: ["my-certificates"],
+    queryKey: ["my-certificates", user?.email],
     queryFn: certificateApi.getMyCertificates,
     enabled: !embedded && enrollmentsQuery.isSuccess,
   });
@@ -205,6 +209,8 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
           <GraduationCap className="absolute bottom-6 right-10 hidden size-28 text-white/10 sm:block" />
         </section>
       )}
+
+      {!embedded && <CourseRecommendations search={urlSearch} />}
 
       <section className="space-y-1.5">
         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_200px_170px_170px]">
