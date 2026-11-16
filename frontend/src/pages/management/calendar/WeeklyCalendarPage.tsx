@@ -8,20 +8,10 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import type { CalendarSessionStatus } from "@/types/features/calendar";
 import { isAxiosError } from "axios";
 import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import timezone from "dayjs/plugin/timezone";
-import { useEffect, useState, useMemo, createContext, useContext } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { externalApi } from "@/api/features/external.api";
 import { topicApi } from "@/api/features/topic.api";
 import type { ExternalTrainer } from "@/types";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Calendar as CalendarIcon,
@@ -34,10 +24,8 @@ import {
   Search,
   Clock,
   MapPin,
-  User,
   UserCheck,
   Users,
-  GraduationCap,
   Eye,
   FileEdit,
 } from "lucide-react";
@@ -45,34 +33,25 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import {
+  CalendarLookupContext,
+  DEFAULT_TOPIC_ID_MAP,
+  DEFAULT_TOPIC_NAMES,
+  DEFAULT_TRAINER_NAMES,
+  STATUS_CLASSES,
+  STATUS_LABELS,
+  TIME_ZONE,
+  formatCalendarTime,
+} from "./components/calendarLookup";
+import { SessionCard } from "./components/SessionCard";
+import { SessionDetailModal } from "./components/SessionDetailModal";
 
-dayjs.extend(utc);
-dayjs.extend(timezone);
-
-const TIME_ZONE = "Asia/Ho_Chi_Minh";
 const PAGE_SIZE = 100;
-
-
-const statusLabels: Record<CalendarSessionStatus, string> = {
-  SCHEDULED: "Đã lên lịch",
-  COMPLETED: "Đã hoàn thành",
-  CANCELLED: "Đã hủy",
-};
-
-const statusClasses: Record<CalendarSessionStatus, string> = {
-  SCHEDULED: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300",
-  COMPLETED: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300",
-  CANCELLED: "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300",
-};
 
 function getCurrentWeekStart() {
   const today = dayjs().tz(TIME_ZONE).startOf("day");
   const daysSinceMonday = (today.day() + 6) % 7;
   return today.subtract(daysSinceMonday, "day");
-}
-
-function formatTime(value: string) {
-  return dayjs.tz(value, TIME_ZONE).format("DD/MM/YYYY HH:mm");
 }
 
 function getCalendarDate(value: string | null) {
@@ -85,259 +64,6 @@ function getCalendarDate(value: string | null) {
     return fallback;
   }
   return dayjs.tz(`${value}T00:00:00`, TIME_ZONE);
-}
-
-interface CalendarLookupContextType {
-  getClassName: (classId?: number) => string;
-  getClassCode: (classId?: number) => string;
-  getTrainerName: (trainerId?: number) => string;
-  getTopicName: (topicId?: number, sessionTitle?: string) => string;
-  getTopicCode: (topicId?: number, sessionTitle?: string) => string;
-}
-
-const DEFAULT_TRAINER_NAMES: Record<number, string> = {
-  1: "Nguyễn Ngọc Tân (Trainer)",
-  2: "Nguyễn Mạnh Hoàng (Trainer)",
-  3: "Nguyễn Văn Thắng (Trainer)",
-  4: "Nguyễn Tuấn Danh (Trainer)",
-  5: "Huỳnh Tấn Phát (Trainer)",
-};
-
-const DEFAULT_TOPIC_NAMES: Record<string, string> = {
-  JAVA_CORE: "Lập trình Java căn bản & OOP",
-  SPRING_BOOT: "Lập trình Web Backend với Spring Boot",
-  DATABASE_SQL: "Cơ sở dữ liệu & Thiết kế CSDL SQL",
-  REACT_FRONTEND: "Lập trình Giao diện Web với ReactJS",
-  DEVOPS_BASIC: "DevOps & CI/CD căn bản",
-  TESTING_QA: "Kiểm thử phần mềm & Đảm bảo chất lượng QA",
-};
-
-const DEFAULT_TOPIC_ID_MAP: Record<number, { code: string; name: string }> = {
-  1: { code: "JAVA_CORE", name: "Lập trình Java căn bản & OOP" },
-  2: { code: "SPRING_BOOT", name: "Lập trình Web Backend với Spring Boot" },
-  3: { code: "DATABASE_SQL", name: "Cơ sở dữ liệu & Thiết kế CSDL SQL" },
-  4: { code: "REACT_FRONTEND", name: "Lập trình Giao diện Web với ReactJS" },
-  5: { code: "DEVOPS_BASIC", name: "DevOps & CI/CD căn bản" },
-  6: { code: "TESTING_QA", name: "Kiểm thử phần mềm & Đảm bảo chất lượng QA" },
-};
-
-const CalendarLookupContext = createContext<CalendarLookupContextType>({
-  getClassName: (id) => (id === 1 ? "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)" : id === 2 ? "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)" : id ? `Lớp #${id}` : "—"),
-  getClassCode: (id) => (id === 1 ? "LOCAL_JAVA_01" : id === 2 ? "LOCAL_JAVA_02" : id ? `Lớp #${id}` : "—"),
-  getTrainerName: (id) => (id ? DEFAULT_TRAINER_NAMES[id] || `Trainer #${id}` : "Chưa phân công"),
-  getTopicName: (id, title) => {
-    if (title) {
-      const match = title.match(/^\[(.*?)\]/);
-      if (match && DEFAULT_TOPIC_NAMES[match[1]]) {
-        return `[${match[1]}] ${DEFAULT_TOPIC_NAMES[match[1]]}`;
-      }
-    }
-    if (id && DEFAULT_TOPIC_ID_MAP[id]) {
-      return `[${DEFAULT_TOPIC_ID_MAP[id].code}] ${DEFAULT_TOPIC_ID_MAP[id].name}`;
-    }
-    return id ? `Chủ đề #${id}` : "Chưa có";
-  },
-  getTopicCode: (id, title) => {
-    if (title) {
-      const match = title.match(/^\[(.*?)\]/);
-      if (match) return match[1];
-    }
-    if (id && DEFAULT_TOPIC_ID_MAP[id]) {
-      return DEFAULT_TOPIC_ID_MAP[id].code;
-    }
-    return id ? `Topic #${id}` : "—";
-  },
-});
-
-const useCalendarLookup = () => useContext(CalendarLookupContext);
-
-// Dialog chi tiết buổi học
-function SessionDetailModal({
-  session,
-  trigger,
-}: {
-  session: CalendarSessionResponse;
-  trigger: React.ReactNode;
-}) {
-  const { getClassName, getTrainerName, getTopicName } = useCalendarLookup();
-  const statusClass = statusClasses[session.status] || "bg-muted text-muted-foreground";
-
-  return (
-    <Dialog>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-block rounded-md border px-2 py-0.5 text-xs font-semibold ${statusClass}`}
-            >
-              {statusLabels[session.status] ?? session.status}
-            </span>
-            <span className="text-xs text-muted-foreground">ID: #{session.id}</span>
-          </div>
-          <DialogTitle className="mt-1 text-xl font-bold leading-tight">
-            {session.title || "Buổi học không có tiêu đề"}
-          </DialogTitle>
-          <DialogDescription>
-            Chi tiết thời gian và thông tin lớp học theo giờ Việt Nam.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="rounded-xl border bg-muted/30 p-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <MapPin className="h-4 w-4 text-primary" />
-            <span>Địa điểm / Phòng học:</span>
-          </div>
-          <p className="mt-1 text-lg font-bold text-foreground">
-            {session.location || "Chưa xếp phòng (Trực tuyến / TBA)"}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-lg border p-3 bg-card">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Clock className="h-3.5 w-3.5 text-blue-600" />
-              <span>Bắt đầu</span>
-            </div>
-            <p className="font-semibold text-foreground">
-              {formatTime(session.startTime)}
-            </p>
-          </div>
-          <div className="rounded-lg border p-3 bg-card">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Clock className="h-3.5 w-3.5 text-blue-600" />
-              <span>Kết thúc</span>
-            </div>
-            <p className="font-semibold text-foreground">
-              {formatTime(session.endTime)}
-            </p>
-          </div>
-        </div>
-
-        <dl className="divide-y rounded-lg border text-sm">
-          <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2 p-3">
-            <dt className="text-muted-foreground flex items-center gap-1.5">
-              <GraduationCap className="h-4 w-4" /> Mã lớp
-            </dt>
-            <dd className="font-medium text-foreground">
-              {getClassName(session.classId)}
-            </dd>
-          </div>
-
-          <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2 p-3">
-            <dt className="text-muted-foreground flex items-center gap-1.5">
-              <User className="h-4 w-4" /> Giảng viên
-            </dt>
-            <dd className="font-medium text-foreground">
-              {getTrainerName(session.trainerId)}
-            </dd>
-          </div>
-
-          <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2 p-3">
-            <dt className="text-muted-foreground">Chủ đề (Topic)</dt>
-            <dd className="font-medium text-foreground">
-              {getTopicName(session.topicId, session.title)}
-            </dd>
-          </div>
-
-          <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2 p-3">
-            <dt className="text-muted-foreground">Kích hoạt</dt>
-            <dd className="font-medium text-foreground">
-              {session.isActive ? "Đang hiệu lực" : "Ngừng hiệu lực"}
-            </dd>
-          </div>
-        </dl>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// Thẻ hiển thị buổi học trong lưới tuần (Dynamic Session Card)
-function SessionCard({
-  session,
-  sessionIndex,
-}: {
-  session: CalendarSessionResponse;
-  sessionIndex?: number;
-}) {
-  const start = dayjs.tz(session.startTime, TIME_ZONE);
-  const end = dayjs.tz(session.endTime, TIME_ZONE);
-  const sameDay = start.format("YYYY-MM-DD") === end.format("YYYY-MM-DD");
-  const timeLabel = sameDay
-    ? `${start.format("HH:mm")} – ${end.format("HH:mm")}`
-    : `${start.format("DD/MM HH:mm")} – ${end.format("DD/MM HH:mm")}`;
-
-  const durationHours = end.diff(start, "minute") / 60;
-  const durationText =
-    durationHours > 0
-      ? durationHours % 1 === 0
-        ? `${durationHours}h`
-        : `${durationHours.toFixed(1)}h`
-      : "";
-
-  const { getClassCode, getTrainerName, getTopicCode } = useCalendarLookup();
-  const statusClass = statusClasses[session.status] || "bg-muted text-muted-foreground";
-
-  return (
-    <SessionDetailModal
-      session={session}
-      trigger={
-        <article className="group relative cursor-pointer overflow-hidden rounded-xl border border-border/80 bg-card p-2.5 shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md text-left">
-          {/* Top header: Session index & Time Badge */}
-          <div className="flex items-center justify-between gap-1 pb-1.5 border-b border-border/60">
-            <div className="inline-flex items-center gap-1 text-[11px] font-bold text-primary">
-              <Clock className="h-3 w-3 shrink-0" />
-              <span>{timeLabel}</span>
-              {durationText && (
-                <span className="text-[10px] font-normal text-muted-foreground">({durationText})</span>
-              )}
-            </div>
-            {typeof sessionIndex === "number" && (
-              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary">
-                Ca {sessionIndex}
-              </span>
-            )}
-          </div>
-
-          {/* Main content */}
-          <div className="pt-2 space-y-1.5 text-xs">
-            <h4 className="font-bold text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-              {session.title || "Buổi học đào tạo"}
-            </h4>
-
-            <div className="space-y-0.5 text-[11px] text-muted-foreground">
-              <div className="flex items-center gap-1.5 truncate">
-                <GraduationCap className="h-3 w-3 shrink-0 text-muted-foreground/70" />
-                <span className="truncate">
-                  {getClassCode(session.classId)} · {getTopicCode(session.topicId, session.title)}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 truncate">
-                <User className="h-3 w-3 shrink-0 text-muted-foreground/70" />
-                <span className="truncate font-medium text-foreground/80">
-                  {getTrainerName(session.trainerId)}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 truncate">
-                <MapPin className="h-3 w-3 shrink-0 text-muted-foreground/70" />
-                <span className="truncate">{session.location || "Chưa xếp phòng"}</span>
-              </div>
-            </div>
-
-            {/* Bottom status */}
-            <div className="pt-1 flex items-center justify-between border-t border-border/40">
-              <span className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-semibold border ${statusClass}`}>
-                {statusLabels[session.status] ?? session.status}
-              </span>
-              <span className="text-[10px] text-primary/80 opacity-0 group-hover:opacity-100 transition-opacity font-medium flex items-center gap-0.5">
-                Chi tiết <ChevronRight className="h-3 w-3" />
-              </span>
-            </div>
-          </div>
-        </article>
-      }
-    />
-  );
 }
 
 export default function WeeklyCalendarPage() {
@@ -646,9 +372,9 @@ export default function WeeklyCalendarPage() {
       `"${getTopicCode(s.topicId, s.title)}"`,
       `"${getTrainerName(s.trainerId)}"`,
       `"${(s.location || "Chưa có").replace(/"/g, '""')}"`,
-      `"${formatTime(s.startTime)}"`,
-      `"${formatTime(s.endTime)}"`,
-      `"${statusLabels[s.status] || s.status}"`,
+      `"${formatCalendarTime(s.startTime)}"`,
+      `"${formatCalendarTime(s.endTime)}"`,
+      `"${STATUS_LABELS[s.status] || s.status}"`,
     ]);
 
     const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
@@ -969,9 +695,9 @@ export default function WeeklyCalendarPage() {
               className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-medium"
             >
               <option value="ALL">Tất cả trạng thái</option>
-              <option value="SCHEDULED">{statusLabels.SCHEDULED}</option>
-              <option value="COMPLETED">{statusLabels.COMPLETED}</option>
-              <option value="CANCELLED">{statusLabels.CANCELLED}</option>
+              <option value="SCHEDULED">{STATUS_LABELS.SCHEDULED}</option>
+              <option value="COMPLETED">{STATUS_LABELS.COMPLETED}</option>
+              <option value="CANCELLED">{STATUS_LABELS.CANCELLED}</option>
             </select>
           </div>
 
@@ -1164,7 +890,7 @@ export default function WeeklyCalendarPage() {
                               trigger={
                                 <div
                                   className={`cursor-pointer truncate rounded px-1.5 py-0.5 text-[10px] font-medium transition-all hover:scale-[1.02] ${
-                                    statusClasses[s.status] || "bg-muted"
+                                    STATUS_CLASSES[s.status] || "bg-muted"
                                   }`}
                                   title={`${s.title} (${dayjs.tz(s.startTime, TIME_ZONE).format("HH:mm")})`}
                                 >
@@ -1215,7 +941,7 @@ export default function WeeklyCalendarPage() {
                           <td className="px-4 py-3 font-medium whitespace-nowrap">
                             <div className="flex items-center gap-1.5 text-xs text-foreground font-semibold">
                               <Clock className="h-3.5 w-3.5 text-primary" />
-                              {formatTime(s.startTime)}
+                              {formatCalendarTime(s.startTime)}
                             </div>
                             <span className="text-[11px] text-muted-foreground">
                               đến {dayjs.tz(s.endTime, TIME_ZONE).format("HH:mm")}
@@ -1244,10 +970,10 @@ export default function WeeklyCalendarPage() {
                           <td className="px-4 py-3 whitespace-nowrap">
                             <span
                               className={`inline-block rounded-md border px-2 py-0.5 text-xs font-semibold ${
-                                statusClasses[s.status] || "bg-muted"
+                                STATUS_CLASSES[s.status] || "bg-muted"
                               }`}
                             >
-                              {statusLabels[s.status] ?? s.status}
+                              {STATUS_LABELS[s.status] ?? s.status}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-right whitespace-nowrap">

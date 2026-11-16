@@ -15,6 +15,8 @@ public interface SessionService extends BaseCrudService<Long, SessionDTO, Sessio
 
     List<SessionDTO> createValidatedBatch(List<SessionDTO> requests);
 
+    void deleteByClassId(Long classId);
+
     /**
      * Validates one row of a file import like a newly created session and normalises it in place
      * (status SCHEDULED, trimmed text). Throws when the row must be rejected.

@@ -71,14 +71,11 @@ public class SessionServiceImpl
         }
 
         // 3. Class / trainer / room must be free for the whole slot
-        session.setTitle(session.getTitle().trim());
-        session.setLocation(normalizeLocation(request.getLocation()));
+        String trimmedTitle = session.getTitle().trim();
+        String normalizedRoom = normalizeLocation(request.getLocation());
+        session.initializeForSchedule(trimmedTitle, normalizedRoom);
         ensureNoScheduleConflict(NO_SESSION, session.getClassId(), session.getTrainerId(),
                 session.getLocation(), session.getStartTime(), session.getEndTime());
-
-        // 4. Máº·c Ä‘á»‹nh tráº¡ng thÃ¡i khi táº¡o má»›i lÃ  SCHEDULED
-        session.setStatus(Session.SessionStatus.SCHEDULED);
-        session.setCancelReason(null);
     }
 
     @Override
@@ -116,17 +113,19 @@ public class SessionServiceImpl
             return;
         }
 
+        String trimmedTitle = null;
         if (request.getTitle() != null) {
             // the mapper copies the request over the entity afterwards, so the trimmed value goes on both
-            request.setTitle(request.getTitle().trim());
-            session.setTitle(request.getTitle());
+            trimmedTitle = request.getTitle().trim();
+            request.setTitle(trimmedTitle);
         }
+        String nextLocation = session.getLocation();
         if (request.getLocation() != null) {
             // the mapper ignores nulls, so a cleared room is applied here to keep the check and the row consistent
-            String normalized = normalizeLocation(request.getLocation());
-            session.setLocation(normalized);
-            request.setLocation(normalized);
+            nextLocation = normalizeLocation(request.getLocation());
+            request.setLocation(nextLocation);
         }
+        session.updateScheduleDetails(trimmedTitle, nextLocation);
 
         ensureNoScheduleConflict(session.getId(), session.getClassId(), newTrainerId,
                 session.getLocation(), newStart, newEnd);
@@ -140,17 +139,7 @@ public class SessionServiceImpl
         Session session = findSession(id);
 
         // Kiá»ƒm tra Ä‘iá»u kiá»‡n nghiá»‡p vá»¥: KhÃ´ng há»§y buá»•i há»c Ä‘Ã£ hoÃ n thÃ nh
-        if (session.getStatus() == Session.SessionStatus.COMPLETED) {
-            throw new ConflictException("Cannot cancel an already completed session");
-        }
-
-        if (session.getStatus() == Session.SessionStatus.CANCELLED) {
-            throw new ConflictException("Session is already cancelled");
-        }
-
-        // Cáº­p nháº­t tráº¡ng thÃ¡i vÃ  lÃ½ do há»§y (Soft cancel theo BR-03)
-        session.setStatus(Session.SessionStatus.CANCELLED);
-        session.setCancelReason(cancelDTO.getCancelReason().trim());
+        session.cancel(cancelDTO.cancelReason());
 
         Session updatedSession = sessionRepository.save(session);
         return sessionMapper.toDto(updatedSession);
@@ -161,15 +150,7 @@ public class SessionServiceImpl
         checkPermission(CrudAction.UPDATE);
 
         Session session = findSession(id);
-
-        if (session.getStatus() == Session.SessionStatus.COMPLETED) {
-            throw new ConflictException("Session is already completed");
-        }
-        if (session.getStatus() == Session.SessionStatus.CANCELLED) {
-            throw new ConflictException("Cannot complete a cancelled session");
-        }
-
-        session.setStatus(Session.SessionStatus.COMPLETED);
+        session.complete();
         return sessionMapper.toDto(sessionRepository.save(session));
     }
 
@@ -178,23 +159,21 @@ public class SessionServiceImpl
         checkPermission(CrudAction.UPDATE);
 
         Session session = findSession(id);
-        requireScheduled(session, "rescheduled");
+        session.requireScheduled("rescheduled");
 
         ValidationContext ctx = new ValidationContext();
-        validateSessionTime(rescheduleDTO.getStartTime(), rescheduleDTO.getEndTime(), ctx);
+        validateSessionTime(rescheduleDTO.startTime(), rescheduleDTO.endTime(), ctx);
         ctx.throwIfErrors();
 
-        String location = rescheduleDTO.getLocation() != null
-                ? normalizeLocation(rescheduleDTO.getLocation())
+        String location = rescheduleDTO.location() != null
+                ? normalizeLocation(rescheduleDTO.location())
                 : session.getLocation();
 
         // Class, topic and trainer are untouched, so only the slot and the room can collide with something else
         ensureNoScheduleConflict(session.getId(), session.getClassId(), session.getTrainerId(),
-                location, rescheduleDTO.getStartTime(), rescheduleDTO.getEndTime());
+                location, rescheduleDTO.startTime(), rescheduleDTO.endTime());
 
-        session.setStartTime(rescheduleDTO.getStartTime());
-        session.setEndTime(rescheduleDTO.getEndTime());
-        session.setLocation(location);
+        session.rescheduleTo(rescheduleDTO.startTime(), rescheduleDTO.endTime(), location);
         return sessionMapper.toDto(sessionRepository.save(session));
     }
 
@@ -205,30 +184,20 @@ public class SessionServiceImpl
         Session source = findSession(id);
 
         ValidationContext ctx = new ValidationContext();
-        validateSessionTime(duplicateDTO.getStartTime(), duplicateDTO.getEndTime(), ctx);
+        validateSessionTime(duplicateDTO.startTime(), duplicateDTO.endTime(), ctx);
         contextVerifier.verifyClass(source.getClassId(), ctx);
         contextVerifier.verifyTrainer(source.getTrainerId(), ctx);
         ctx.throwIfErrors();
 
-        String location = duplicateDTO.getLocation() != null
-                ? normalizeLocation(duplicateDTO.getLocation())
+        String location = duplicateDTO.location() != null
+                ? normalizeLocation(duplicateDTO.location())
                 : source.getLocation();
 
         ensureNoScheduleConflict(NO_SESSION, source.getClassId(), source.getTrainerId(),
-                location, duplicateDTO.getStartTime(), duplicateDTO.getEndTime());
+                location, duplicateDTO.startTime(), duplicateDTO.endTime());
 
         // A copy is always a fresh SCHEDULED session: the outcome of the source (completed/cancelled) is not inherited
-        Session copy = Session.builder()
-                .classId(source.getClassId())
-                .topicId(source.getTopicId())
-                .trainerId(source.getTrainerId())
-                .title(source.getTitle())
-                .startTime(duplicateDTO.getStartTime())
-                .endTime(duplicateDTO.getEndTime())
-                .location(location)
-                .note(source.getNote())
-                .status(Session.SessionStatus.SCHEDULED)
-                .build();
+        Session copy = source.duplicateTo(duplicateDTO.startTime(), duplicateDTO.endTime(), location);
 
         return sessionMapper.toDto(sessionRepository.save(copy));
     }
@@ -259,20 +228,10 @@ public class SessionServiceImpl
                     .collect(Collectors.joining("; ")));
         }
 
-        session.setTitle(session.getTitle().trim());
-        session.setLocation(normalizeLocation(session.getLocation()));
-        session.setStatus(Session.SessionStatus.SCHEDULED);
-        session.setCancelReason(null);
+        session.initializeForSchedule(session.getTitle().trim(), normalizeLocation(session.getLocation()));
 
         ensureNoScheduleConflict(NO_SESSION, session.getClassId(), session.getTrainerId(),
                 session.getLocation(), session.getStartTime(), session.getEndTime());
-    }
-
-    private void requireScheduled(Session session, String action) {
-        if (session.getStatus() != Session.SessionStatus.SCHEDULED) {
-            throw new ConflictException("Only scheduled sessions can be " + action
-                    + " (current status: " + session.getStatus() + ")");
-        }
     }
 
     /**
@@ -364,17 +323,75 @@ public class SessionServiceImpl
     }
 
     @Override
-    public java.util.List<SessionDTO> createValidatedBatch(java.util.List<SessionDTO> requests) {
-        return requests.stream().map(r -> {
+    public List<SessionDTO> createValidatedBatch(List<SessionDTO> requests) {
+        checkPermission(CrudAction.CREATE);
+        if (requests == null || requests.isEmpty()) {
+            return List.of();
+        }
+
+        List<Session> toSave = new java.util.ArrayList<>(requests.size());
+        for (SessionDTO r : requests) {
+            ValidationContext ctx = new ValidationContext();
+            if (r.getClassId() == null) {
+                ctx.add("classId", "Class ID is required");
+            }
+            if (r.getTopicId() == null) {
+                ctx.add("topicId", "Topic ID is required");
+            }
+            if (r.getTrainerId() == null) {
+                ctx.add("trainerId", "Trainer ID is required");
+            }
+            if (r.getTitle() == null || r.getTitle().isBlank()) {
+                ctx.add("title", "Title is required");
+            }
+            validateSessionTime(r.getStartTime(), r.getEndTime(), ctx);
+            validateText(r.getTitle(), r.getLocation(), ctx);
+            validateTopic(r.getTopicId(), ctx);
+            ctx.throwIfErrors();
+
             Session entity = sessionMapper.toEntity(r);
-            if (entity.getStatus() == null) {
-                entity.setStatus(Session.SessionStatus.SCHEDULED);
+            entity.initializeForSchedule(r.getTitle().trim(), normalizeLocation(r.getLocation()));
+
+            ensureNoBatchOverlap(entity, toSave);
+            ensureNoScheduleConflict(NO_SESSION, entity.getClassId(), entity.getTrainerId(),
+                    entity.getLocation(), entity.getStartTime(), entity.getEndTime());
+
+            toSave.add(entity);
+        }
+        return sessionRepository.saveAll(toSave).stream()
+                .map(sessionMapper::toDto)
+                .toList();
+    }
+
+    private static void ensureNoBatchOverlap(Session candidate, List<Session> earlier) {
+        for (Session other : earlier) {
+            boolean overlaps = candidate.getStartTime().isBefore(other.getEndTime())
+                    && candidate.getEndTime().isAfter(other.getStartTime());
+            if (!overlaps) {
+                continue;
             }
-            if (entity.getIsActive() == null) {
-                entity.setIsActive(true);
+            if (Objects.equals(candidate.getClassId(), other.getClassId())) {
+                throw new ConflictException("Schedule conflict within batch: Class #" + candidate.getClassId()
+                        + " already has '" + other.getTitle() + "' in this time slot.");
             }
-            Session saved = sessionRepository.save(entity);
-            return sessionMapper.toDto(saved);
-        }).toList();
+            if (Objects.equals(candidate.getTrainerId(), other.getTrainerId())) {
+                throw new ConflictException("Schedule conflict within batch: Trainer #" + candidate.getTrainerId()
+                        + " is already assigned to '" + other.getTitle() + "' in this time slot.");
+            }
+            if (candidate.getLocation() != null && candidate.getLocation().equalsIgnoreCase(other.getLocation())) {
+                throw new ConflictException("Schedule conflict within batch: Room '" + candidate.getLocation()
+                        + "' is already used by '" + other.getTitle() + "' in this time slot.");
+            }
+        }
+    }
+
+    @Override
+    public void deleteByClassId(Long classId) {
+        checkPermission(CrudAction.DELETE);
+        List<Session> sessions = sessionRepository.findByClassId(classId);
+        if (!sessions.isEmpty()) {
+            sessionRepository.deleteAll(sessions);
+            sessionRepository.flush();
+        }
     }
 }

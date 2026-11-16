@@ -1,5 +1,9 @@
 import axiosInstance from "@/api/axios";
-import type { CalendarSessionStatus } from "@/types/features/calendar";
+import type {
+  CalendarSessionStatus,
+  CalendarValidateRequest,
+  CalendarValidationResult,
+} from "@/types/features/calendar";
 
 // Cấu trúc backend hiện tại, tách riêng với kiểu dữ liệu hiển thị.
 export interface CalendarSessionResponse {
@@ -62,6 +66,19 @@ export async function getMyCalendarSessions(
       params,
       signal,
     },
+  );
+
+  return response.data;
+}
+
+export async function validateCalendarSchedule(
+  payload: CalendarValidateRequest,
+  signal?: AbortSignal,
+): Promise<CalendarValidationResult> {
+  const response = await axiosInstance.post<CalendarValidationResult>(
+    "/calendar/validate",
+    payload,
+    { signal },
   );
 
   return response.data;

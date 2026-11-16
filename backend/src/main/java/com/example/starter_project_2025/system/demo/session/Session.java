@@ -5,14 +5,13 @@ import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportEn
 import com.example.starter_project_2025.base.dataio.exporter.annotation.ExportField;
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportField;
 import com.example.starter_project_2025.base.dataio.template.annotation.ImportEntity;
-import com.example.starter_project_2025.init.annotation.ResourceMenu;
+import com.example.starter_project_2025.exception.ConflictException;
 import com.example.starter_project_2025.init.annotation.ResourcePermission;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
-import lombok.experimental.SuperBuilder;
 
 @Entity
 @Getter
@@ -87,6 +86,73 @@ public class Session extends BaseEntity {
         }
         if (startTime != null && endTime != null && !endTime.isAfter(startTime)) {
             throw new IllegalStateException("End time must be after start time");
+        }
+    }
+
+    public void initializeForSchedule(String trimmedTitle, String normalizedLocation) {
+        this.title = trimmedTitle;
+        this.location = normalizedLocation;
+        this.status = SessionStatus.SCHEDULED;
+        this.isActive = true;
+        this.cancelReason = null;
+    }
+
+    public void updateScheduleDetails(String trimmedTitle, String normalizedLocation) {
+        if (trimmedTitle != null) {
+            this.title = trimmedTitle;
+        }
+        if (normalizedLocation != null || this.location != null) {
+            this.location = normalizedLocation;
+        }
+    }
+
+    public void cancel(String reason) {
+        if (this.status == SessionStatus.COMPLETED) {
+            throw new ConflictException("Cannot cancel an already completed session");
+        }
+        if (this.status == SessionStatus.CANCELLED) {
+            throw new ConflictException("Session is already cancelled");
+        }
+        this.status = SessionStatus.CANCELLED;
+        this.cancelReason = reason.trim();
+    }
+
+    public void complete() {
+        if (this.status == SessionStatus.COMPLETED) {
+            throw new ConflictException("Session is already completed");
+        }
+        if (this.status == SessionStatus.CANCELLED) {
+            throw new ConflictException("Cannot complete a cancelled session");
+        }
+        this.status = SessionStatus.COMPLETED;
+    }
+
+    public void rescheduleTo(LocalDateTime newStartTime, LocalDateTime newEndTime, String newLocation) {
+        requireScheduled("rescheduled");
+        this.startTime = newStartTime;
+        this.endTime = newEndTime;
+        this.location = newLocation;
+    }
+
+    public Session duplicateTo(LocalDateTime newStartTime, LocalDateTime newEndTime, String newLocation) {
+        return Session.builder()
+                .classId(this.classId)
+                .topicId(this.topicId)
+                .trainerId(this.trainerId)
+                .title(this.title)
+                .startTime(newStartTime)
+                .endTime(newEndTime)
+                .location(newLocation)
+                .note(this.note)
+                .status(SessionStatus.SCHEDULED)
+                .isActive(true)
+                .build();
+    }
+
+    void requireScheduled(String action) {
+        if (this.status != SessionStatus.SCHEDULED) {
+            throw new ConflictException("Only scheduled sessions can be " + action
+                    + " (current status: " + this.status + ")");
         }
     }
 

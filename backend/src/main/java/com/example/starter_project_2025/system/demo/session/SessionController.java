@@ -119,10 +119,7 @@ public class SessionController
     @PreAuthorize("hasAuthority('SESSION_DELETE')")
     @Operation(summary = "Clear all sessions of a class to allow rescheduling")
     public ResponseEntity<Void> deleteByClassId(@PathVariable Long classId) {
-        List<Session> sessions = sessionRepository.findByClassId(classId);
-        if (!sessions.isEmpty()) {
-            sessionRepository.deleteAll(sessions);
-        }
+        sessionService.deleteByClassId(classId);
         return ResponseEntity.noContent().build();
     }
 }

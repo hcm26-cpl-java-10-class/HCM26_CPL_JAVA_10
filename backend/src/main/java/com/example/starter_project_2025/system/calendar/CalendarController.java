@@ -5,15 +5,20 @@ import com.example.starter_project_2025.system.demo.session.Session;
 import com.example.starter_project_2025.system.demo.session.SessionDTO;
 import com.example.starter_project_2025.system.demo.session.SessionFilter;
 import com.example.starter_project_2025.system.demo.session.SessionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,9 +31,11 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/calendar")
+@Tag(name = "Training Calendar", description = "APIs for weekly timetable queries and schedule conflict validation")
 public class CalendarController {
 
     private final SessionService sessionService;
+    private final CalendarValidationService calendarValidationService;
 
     private void validateDateRange(LocalDateTime from, LocalDateTime to, int page, int size) {
         if (!from.isBefore(to)) {
@@ -97,34 +104,9 @@ public class CalendarController {
     ) {
         validateDateRange(from, to, page, size);
 
-        SessionFilter filter = new SessionFilter();
-        filter.setFromDate(from);
-        filter.setToDate(to);
-        if (status != null && !status.isBlank()) {
-            try {
-                filter.setStatus(List.of(Session.SessionStatus.valueOf(status.trim().toUpperCase())));
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
-        if (classId != null) {
-            filter.setClassId(List.of(classId));
-        }
-        if (trainerId != null) {
-            filter.setTrainerId(List.of(trainerId));
-        }
-        filter.setTopicId(topicId);
-        filter.setLocation(location);
-
-        PageRequest pageable = PageRequest.of(
-                page,
-                size,
-                Sort.by(
-                        Sort.Order.asc("startTime"),
-                        Sort.Order.asc("id")
-                )
-        );
-
-        return sessionService.getAll(pageable, null, filter);
+        SessionFilter filter = SessionFilter.forCalendarRange(
+                from, to, status, classId, trainerId, topicId, location);
+        return sessionService.getAll(sessionPage(page, size), null, filter);
     }
 
     @GetMapping("/my-sessions")
@@ -159,21 +141,13 @@ public class CalendarController {
             );
         }
 
-        SessionFilter filter = new SessionFilter();
-        filter.setFromDate(from);
-        filter.setToDate(to);
-        if (status != null && !status.isBlank()) {
-            try {
-                filter.setStatus(List.of(Session.SessionStatus.valueOf(status.trim().toUpperCase())));
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
-        if (classId != null) {
-            filter.setClassId(List.of(classId));
-        }
-        filter.setTrainerId(List.of(currentUserId));
+        SessionFilter filter = SessionFilter.forCalendarRange(
+                from, to, status, classId, currentUserId, null, null);
+        return sessionService.getAll(sessionPage(page, size), null, filter);
+    }
 
-        PageRequest pageable = PageRequest.of(
+    private static PageRequest sessionPage(int page, int size) {
+        return PageRequest.of(
                 page,
                 size,
                 Sort.by(
@@ -181,7 +155,12 @@ public class CalendarController {
                         Sort.Order.asc("id")
                 )
         );
+    }
 
-        return sessionService.getAll(pageable, null, filter);
+    @PostMapping("/validate")
+    @PreAuthorize("hasAuthority('SESSION_READ')")
+    @Operation(summary = "Validate a candidate class schedule against internal overlaps and other classes")
+    public CalendarValidationResult validateSchedule(@RequestBody CalendarValidateRequest request) {
+        return calendarValidationService.validate(request);
     }
 }

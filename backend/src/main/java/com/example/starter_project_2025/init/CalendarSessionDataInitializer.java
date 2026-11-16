@@ -41,6 +41,7 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         ensureTrainingClasses();
+        purgeOrphanedTestSessionIfNeeded();
 
         if (sessionRepository.count() > 0) {
             return;
@@ -160,45 +161,34 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
         log.info("Initialized comprehensive training calendar sessions matching SRS specification.");
     }
 
+    private void purgeOrphanedTestSessionIfNeeded() {
+        // Recover if an earlier test run without @ActiveProfiles("test") wiped sessions and left only classId=101 "Existing".
+        if (sessionRepository.count() == 1) {
+            java.util.List<Session> testArtifacts = sessionRepository.findByClassId(101L).stream()
+                    .filter(s -> Long.valueOf(500L).equals(s.getTopicId()) && "Existing".equals(s.getTitle()))
+                    .toList();
+            if (!testArtifacts.isEmpty()) {
+                sessionRepository.deleteAll(testArtifacts);
+                sessionRepository.flush();
+                log.warn("Removed orphaned test session artifact (classId=101) before calendar seed check.");
+            }
+        }
+    }
+
     private void ensureTrainingClasses() {
         if (trainingClassRepository != null && trainingClassRepository.count() == 0) {
-            TrainingClass c1 = new TrainingClass();
-            c1.setCode("LOCAL_JAVA_01");
-            c1.setName("Lớp Chuyên sâu Java Backend (K26)");
-            c1.setStartDate(LocalDate.of(2026, 10, 1));
-            c1.setEndDate(LocalDate.of(2027, 1, 31));
-            c1.setStatus("active");
-            c1.setPlannedSize(25);
-            c1.setSite("TP. Hồ Chí Minh");
-            c1.setTraineeType("Fresher");
-            c1.setProgram("BACKEND_JAVA");
-            c1.setClassAdmin("admin@example.com");
-            c1.setMasterTrainer("Nguyễn Ngọc Tân (Trainer)");
-            c1.setDeliveryType("Class");
-            c1.setFormatType("Offline");
-            c1.setSkills("Java, Spring Boot");
-            c1.setLocation("Phòng Lab 201 (F-Town 2)");
-            c1.setIsActive(true);
-            c1 = trainingClassRepository.save(c1);
-
-            TrainingClass c2 = new TrainingClass();
-            c2.setCode("LOCAL_JAVA_02");
-            c2.setName("Lớp Lập trình Fullstack Java Web (K26)");
-            c2.setStartDate(LocalDate.of(2026, 11, 15));
-            c2.setEndDate(LocalDate.of(2027, 3, 15));
-            c2.setStatus("active");
-            c2.setPlannedSize(30);
-            c2.setSite("TP. Hồ Chí Minh");
-            c2.setTraineeType("Fresher");
-            c2.setProgram("FULLSTACK_JAVA");
-            c2.setClassAdmin("admin@example.com");
-            c2.setMasterTrainer("Nguyễn Mạnh Hoàng (Trainer)");
-            c2.setDeliveryType("Class");
-            c2.setFormatType("Hybrid");
-            c2.setSkills("Java, React");
-            c2.setLocation("Phòng 304 (Innovation Hall)");
-            c2.setIsActive(true);
-            c2 = trainingClassRepository.save(c2);
+            TrainingClass c1 = trainingClassRepository.save(buildSampleClass(
+                    "LOCAL_JAVA_01", "Lớp Chuyên sâu Java Backend (K26)",
+                    LocalDate.of(2026, 10, 1), LocalDate.of(2027, 1, 31),
+                    25, "Fresher", "BACKEND_JAVA", "Nguyễn Ngọc Tân (Trainer)",
+                    "Offline", "Java, Spring Boot", "Phòng Lab 201 (F-Town 2)"
+            ));
+            TrainingClass c2 = trainingClassRepository.save(buildSampleClass(
+                    "LOCAL_JAVA_02", "Lớp Lập trình Fullstack Java Web (K26)",
+                    LocalDate.of(2026, 11, 15), LocalDate.of(2027, 3, 15),
+                    30, "Fresher", "FULLSTACK_JAVA", "Nguyễn Mạnh Hoàng (Trainer)",
+                    "Hybrid", "Java, React", "Phòng 304 (Innovation Hall)"
+            ));
 
             linkClassProgram(c1.getId(), "BACKEND_JAVA", "1.0");
             linkClassProgram(c2.getId(), "FULLSTACK_JAVA", "1.0");
@@ -218,6 +208,30 @@ public class CalendarSessionDataInitializer implements CommandLineRunner {
             link.setIsActive(true);
             classTrainingProgramRepository.save(link);
         });
+    }
+
+    private TrainingClass buildSampleClass(
+            String code, String name, LocalDate startDate, LocalDate endDate,
+            int plannedSize, String traineeType, String program, String masterTrainer,
+            String formatType, String skills, String location) {
+        TrainingClass clazz = new TrainingClass();
+        clazz.setCode(code);
+        clazz.setName(name);
+        clazz.setStartDate(startDate);
+        clazz.setEndDate(endDate);
+        clazz.setStatus("active");
+        clazz.setPlannedSize(plannedSize);
+        clazz.setSite("TP. Hồ Chí Minh");
+        clazz.setTraineeType(traineeType);
+        clazz.setProgram(program);
+        clazz.setClassAdmin("admin@example.com");
+        clazz.setMasterTrainer(masterTrainer);
+        clazz.setDeliveryType("Class");
+        clazz.setFormatType(formatType);
+        clazz.setSkills(skills);
+        clazz.setLocation(location);
+        clazz.setIsActive(true);
+        return clazz;
     }
 
     private void createSession(Long classId, Long topicId, Long trainerId, String title,

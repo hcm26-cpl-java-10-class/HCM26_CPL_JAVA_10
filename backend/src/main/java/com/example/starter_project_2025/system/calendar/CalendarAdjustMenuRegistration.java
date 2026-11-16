@@ -1,10 +1,9 @@
-package com.example.starter_project_2025.system.demo.session;
+package com.example.starter_project_2025.system.calendar;
 
 import com.example.starter_project_2025.init.annotation.ResourceMenu;
 
 /**
  * Marker class for AutoMenuInitializer to register the "Training Calendar" sidebar entry.
- * Created for Nguyen Ngoc Tan's Training Calendar module.
  */
 @ResourceMenu(
         title = "Training Calendar",

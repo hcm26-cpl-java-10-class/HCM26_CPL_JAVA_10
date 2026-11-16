@@ -48,4 +48,34 @@ public class SessionFilter extends BaseFilter {
 
     @FilterField(entityField = "endTime", operator = FilterOperator.LESS_OR_EQUAL)
     LocalDateTime toDate;
+
+    /**
+     * Build a calendar query filter without mutating fields through setters.
+     */
+    public static SessionFilter forCalendarRange(
+            LocalDateTime from,
+            LocalDateTime to,
+            String status,
+            Long classId,
+            Long trainerId,
+            Long topicId,
+            String location
+    ) {
+        List<Session.SessionStatus> statuses = null;
+        if (status != null && !status.isBlank()) {
+            try {
+                statuses = List.of(Session.SessionStatus.valueOf(status.trim().toUpperCase()));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        return SessionFilter.builder()
+                .fromDate(from)
+                .toDate(to)
+                .status(statuses)
+                .classId(classId != null ? List.of(classId) : null)
+                .trainerId(trainerId != null ? List.of(trainerId) : null)
+                .topicId(topicId)
+                .location(location)
+                .build();
+    }
 }

@@ -27,7 +27,6 @@ export * from "./features/rbac/role.api";
 export * from "./features/rbac/user.api";
 export * from "./features/cls.api";
 export * from "./features/calendar.api";
-export * from "./features/demo/schedule_version.api";
 export * from "./features/workspace.api";
 export * from "./features/rubric.api";
 export * from "./features/team-allocation.api";
