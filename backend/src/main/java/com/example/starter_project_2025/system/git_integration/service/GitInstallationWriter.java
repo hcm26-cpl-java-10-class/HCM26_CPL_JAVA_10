@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Set;
 
 /**
  * The only writer of {@code git_installations}: every status transition goes
@@ -91,6 +92,41 @@ public class GitInstallationWriter {
             row.setLastVerifiedAt(LocalDateTime.now(clock));
             log.info("GitHub installation transition: installationId={}, tenantId={}, {} -> {}, trigger={}, actor=system",
                     row.getInstallationId(), row.getTenantId(), from, to, trigger);
+        });
+    }
+
+    /**
+     * SY-03: a webhook-driven transition, applied only from the allowed states (GitHub does
+     * not guarantee delivery order, e.g. a late "unsuspend" must not revive a removed installation).
+     * Returns true when the status changed.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean transition(Long installationRowId, Set<GitInstallationStatus> from, GitInstallationStatus to, String trigger) {
+        return installations.findById(installationRowId).map(row -> {
+            GitInstallationStatus current = row.getStatus();
+            if (current == to || !from.contains(current)) {
+                return false;
+            }
+            row.setStatus(to);
+            row.setLastVerifiedAt(LocalDateTime.now(clock));
+            log.info("GitHub installation transition: installationId={}, tenantId={}, {} -> {}, trigger={}, actor=github",
+                    row.getInstallationId(), row.getTenantId(), current, to, trigger);
+            return true;
+        }).orElse(false);
+    }
+
+    /** SY-03: GitHub confirmed the installation (e.g. new permissions accepted) without a status change. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void touchVerified(Long installationRowId) {
+        installations.findById(installationRowId).ifPresent(row -> row.setLastVerifiedAt(LocalDateTime.now(clock)));
+    }
+
+    /** SY-03: {@code installation_repositories} changed which repositories the app may access. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateRepositorySelection(Long installationRowId, String repositorySelection) {
+        installations.findById(installationRowId).ifPresent(row -> {
+            if (repositorySelection != null) row.setRepositorySelection(repositorySelection);
+            row.setLastVerifiedAt(LocalDateTime.now(clock));
         });
     }
 }

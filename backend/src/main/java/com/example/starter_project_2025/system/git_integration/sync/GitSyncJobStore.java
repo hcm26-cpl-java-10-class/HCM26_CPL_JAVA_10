@@ -11,6 +11,7 @@ import com.example.starter_project_2025.system.git_integration.github.dto.GitHub
 import com.example.starter_project_2025.system.git_integration.repository.GitInstallationRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitSyncJobRepository;
+import com.example.starter_project_2025.system.git_integration.service.GitRepositoryConnectionWriter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -42,16 +43,18 @@ public class GitSyncJobStore {
     private final GitSyncJobRepository jobs;
     private final GitRepositoryRepository connections;
     private final GitInstallationRepository installations;
+    private final GitRepositoryConnectionWriter connectionWriter;
     private final GitHubAppProperties properties;
     private final ObjectMapper json;
     private final Clock clock;
 
     public GitSyncJobStore(GitSyncJobRepository jobs, GitRepositoryRepository connections,
-                           GitInstallationRepository installations, GitHubAppProperties properties,
-                           ObjectMapper json, @Qualifier("gitIntegrationClock") Clock clock) {
+                           GitInstallationRepository installations, GitRepositoryConnectionWriter connectionWriter,
+                           GitHubAppProperties properties, ObjectMapper json, @Qualifier("gitIntegrationClock") Clock clock) {
         this.jobs = jobs;
         this.connections = connections;
         this.installations = installations;
+        this.connectionWriter = connectionWriter;
         this.properties = properties;
         this.json = json;
         this.clock = clock;
@@ -113,13 +116,7 @@ public class GitSyncJobStore {
     /** The installation lost access to the repository: the connection becomes UNAVAILABLE (frees the master). */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void repositoryLost(ClaimedJob claimed, String errorCode, String message) {
-        connections.findById(claimed.repositoryId())
-                .filter(row -> row.getStatus() == GitRepositoryStatus.ACTIVE)
-                .ifPresent(row -> {
-                    row.setStatus(GitRepositoryStatus.UNAVAILABLE);
-                    log.info("Repository connection unavailable: repositoryId={}, externalId={}, reason={}",
-                            row.getId(), row.getExternalId(), errorCode);
-                });
+        connectionWriter.markUnavailable(claimed.repositoryId(), errorCode);
         jobs.findById(claimed.jobId()).ifPresent(job -> finish(job, GitSyncJobStatus.FAILED, errorCode, message));
     }
 

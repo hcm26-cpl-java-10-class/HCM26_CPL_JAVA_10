@@ -87,9 +87,32 @@ public class GitHubAppProperties {
     /** GI-04: background poller for due/abandoned jobs (tests turn this off). */
     private boolean syncPollerEnabled = true;
 
+    /** SY-03: processing attempts per webhook event before it is marked DEAD. */
+    private int webhookMaxAttempts = 5;
+
+    /**
+     * SY-03: days the raw payload of a finished webhook event is kept before it is purged
+     * (the event row stays). 15 days for the H2 + mock-project setup (decided 16/11/2026).
+     */
+    private int webhookPayloadRetentionDays = 15;
+
+    /** SY-03: a PROCESSING event older than this is considered abandoned and is queued again. */
+    private long webhookStuckAfterMinutes = 10;
+
+    /** SY-03: process an event right after it is stored (tests turn this off). */
+    private boolean webhookDispatchEnabled = true;
+
+    /** SY-03: background poller for due/abandoned events (tests turn this off). */
+    private boolean webhookPollerEnabled = true;
+
     private int connectTimeoutMillis = 5000;
 
     private int readTimeoutMillis = 10000;
+
+    /** SY-03: webhooks are accepted only when the integration is on and a secret is configured (fail closed). */
+    public boolean webhooksEnabled() {
+        return enabled && StringUtils.hasText(webhookSecret);
+    }
 
     public String installUrl() {
         return trimTrailingSlash(webBaseUrl) + "/apps/" + appSlug + "/installations/new";
@@ -115,6 +138,12 @@ public class GitHubAppProperties {
         }
         if (jwtTtlSeconds <= 0 || jwtTtlSeconds > 600) {
             missing.add("app.github.jwt-ttl-seconds must be between 1 and 600");
+        }
+        if (webhookPayloadRetentionDays < 1) {
+            missing.add("app.github.webhook-payload-retention-days must be at least 1");
+        }
+        if (webhookMaxAttempts < 1) {
+            missing.add("app.github.webhook-max-attempts must be at least 1");
         }
         return missing;
     }

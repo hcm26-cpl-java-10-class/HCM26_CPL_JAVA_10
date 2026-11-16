@@ -22,6 +22,9 @@ public interface GitRepositoryRepository extends JpaRepository<GitRepository, Lo
     Optional<GitRepository> findFirstByProviderAndExternalIdAndStatus(
             GitProvider provider, Long externalId, GitRepositoryStatus status);
 
+    /** SY-03: connections reached through an installation (e.g. ACTIVE ones when it is uninstalled). */
+    List<GitRepository> findByInstallationRefAndStatus(Long installationRef, GitRepositoryStatus status);
+
     /** GI-04: most recent connection of a project in any status (to show an UNAVAILABLE one). */
     Optional<GitRepository> findFirstByProjectIdOrderByIdDesc(Long projectId);
 }
