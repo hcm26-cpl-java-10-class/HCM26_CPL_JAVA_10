@@ -59,3 +59,6 @@ backend/portability-test.log
 
 # === Runtime uploaded files (khong commit) ===
 uploads/
+
+# === GitHub App private keys ===
+*.pem
