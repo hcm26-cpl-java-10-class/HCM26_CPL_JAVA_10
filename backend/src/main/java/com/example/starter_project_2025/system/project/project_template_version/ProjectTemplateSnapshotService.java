@@ -1,7 +1,7 @@
 package com.example.starter_project_2025.system.project.project_template_version;
 
 import com.example.starter_project_2025.base.crud.service.BaseCrudService;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.system.project.project_template_version.audit.ProjectTemplateSnapshotAuditLogDTO;
 
 import java.util.List;

@@ -1,7 +1,8 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.project.template.assignment.hierarchy.ProjectAssignmentService;
+import com.example.starter_project_2025.system.project.template.service.assignment.ProjectAssignmentService;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;

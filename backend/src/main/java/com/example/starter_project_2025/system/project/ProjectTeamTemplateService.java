@@ -1,12 +1,14 @@
 package com.example.starter_project_2025.system.project;
 
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
 import com.example.starter_project_2025.system.project.trainingclass.ScopeAuthorizationService;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateStatus;
-import com.example.starter_project_2025.system.project.template.assignment.hierarchy.ProjectAssignmentService;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplateStatus;
+import com.example.starter_project_2025.system.project.template.service.assignment.ProjectAssignmentService;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshotRepository;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateVersionStatus;
 import com.example.starter_project_2025.web.CorrelationIdFilter;

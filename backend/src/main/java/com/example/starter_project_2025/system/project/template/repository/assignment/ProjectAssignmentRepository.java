@@ -1,0 +1,43 @@
+package com.example.starter_project_2025.system.project.template.repository.assignment;
+
+import com.example.starter_project_2025.system.project.TeamAllocationSessionStatus;
+import com.example.starter_project_2025.system.project.template.domain.assignment.ProjectAssignment;
+import com.example.starter_project_2025.system.project.template.dto.assignment.AssignmentDtos;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+public interface ProjectAssignmentRepository extends JpaRepository<ProjectAssignment, Long> {
+    Optional<ProjectAssignment> findByTenantIdAndClassIdAndIdempotencyKey(Long tenantId, Long classId, String key);
+    List<ProjectAssignment> findAllBySessionIdAndMasterProjectIdIsNullAndIsActiveTrueOrderByIdAsc(Long sessionId);
+    List<ProjectAssignment> findAllByTenantIdAndClassIdAndSessionIdAndModeAndIsActiveTrueOrderByAssignedAtDesc(
+            Long tenantId, Long classId, Long sessionId, AssignmentDtos.Mode mode);
+
+    @Query("""
+            select a from ProjectAssignment a
+            where a.tenantId = :tenantId and a.classId = :classId and a.isActive = true and a.masterProjectId is null
+              and a.sourceVersionId in (select v.id from ProjectTemplateSnapshot v where v.templateId = :templateId)
+              and a.sessionId in (select s.id from TeamAllocationSession s where s.status <> :cancelled)
+            """)
+    List<ProjectAssignment> findPendingForMaster(Long tenantId, Long classId, Long templateId,
+                                                TeamAllocationSessionStatus cancelled);
+
+    @Query("""
+            select snapshot.templateId as templateId, project.teamId as teamId
+            from Project project, ProjectTemplateSnapshot snapshot, ProjectAssignment assignment
+            where project.templateSnapshotId = snapshot.id and project.assignmentId = assignment.id
+              and project.tenantId = :tenantId and project.isActive = true and project.teamId is not null
+              and assignment.classId = :classId and assignment.isActive = true
+              and snapshot.templateId in :templateIds
+              and assignment.sessionId in (select s.id from TeamAllocationSession s where s.status <> :cancelled)
+            """)
+    List<PublishedOwner> findPublishedOwners(Long tenantId, Long classId, Collection<Long> templateIds,
+                                             TeamAllocationSessionStatus cancelled);
+
+    interface PublishedOwner {
+        Long getTemplateId();
+        Long getTeamId();
+    }
+}

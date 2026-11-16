@@ -1,7 +1,9 @@
 package com.example.starter_project_2025.system.project.alert;
 
+import com.example.starter_project_2025.system.project.ProjectRepository;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamRepository;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.project.*;
 import com.example.starter_project_2025.system.project.milestone.domain.*;
 import com.example.starter_project_2025.system.project.milestone.outbox.*;
 import com.example.starter_project_2025.system.project.sprint_backlog.*;

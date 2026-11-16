@@ -1,0 +1,106 @@
+package com.example.starter_project_2025.system.project.template.domain;
+
+import com.example.starter_project_2025.base.crud.domain.BaseEntity;
+import com.example.starter_project_2025.init.annotation.ResourceMenu;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.experimental.FieldDefaults;
+import lombok.experimental.SuperBuilder;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+
+@Entity
+@Table(name = "project_templates", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_template_code_scope_version", columnNames = {"tenant_id", "code_scope_id", "code", "template_version"}),
+        @UniqueConstraint(name = "uk_template_module_code", columnNames = {"tenant_id", "parent_template_id", "code"})
+})
+@Data
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
+@SuperBuilder
+@NoArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+@ResourceMenu(title = "Project Templates", group = "Project Management", icon = "book-open",
+        url = "/project-templates", order = 8, permission = "PROJECT_TEMPLATE_READ")
+public class ProjectTemplate extends BaseEntity {
+
+    @Column(name = "tenant_id", updatable = false)
+    Long tenantId;
+
+    /** Optional business code; US-08 duplication no longer asks for one. */
+    @Column(length = 100)
+    String code;
+
+    @Column(nullable = false, length = 255)
+    String name;
+
+    @Column(columnDefinition = "TEXT")
+    String description;
+
+    @Column(name = "technology_stack", length = 2000)
+    String technologyStack;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_template_id")
+    ProjectTemplate parentTemplate;
+
+    @Builder.Default
+    @Column(name = "code_scope_id", nullable = false, columnDefinition = "bigint default 0")
+    Long codeScopeId = 0L;
+
+    @Column(length = 255)
+    String category;
+
+    @Column(name = "difficulty_level", length = 20)
+    String level;
+
+    @Column(name = "estimated_duration_weeks")
+    Integer estimatedDurationWeeks;
+
+    @Builder.Default
+    @Column(name = "template_version", nullable = false, columnDefinition = "integer default 1")
+    Integer templateVersion = 1;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "varchar(20) default 'DRAFT'")
+    ProjectTemplateStatus status = ProjectTemplateStatus.DRAFT;
+
+    @Version
+    @Column(name = "lock_version", nullable = false, columnDefinition = "bigint default 0")
+    Long lockVersion;
+
+    @Builder.Default
+    @Column(name = "constraints_json", nullable = false, columnDefinition = "TEXT")
+    String constraintsJson = "{}";
+
+    public void syncVersion(Integer major) {
+        if (major != null && major > 0) {
+            this.templateVersion = major;
+        }
+    }
+
+    public Long getParentTemplateId() {
+        return parentTemplate == null ? null : parentTemplate.getId();
+    }
+
+    @PrePersist
+    @PreUpdate
+    private void initializeCodeScope() {
+        codeScopeId = parentTemplate == null ? 0L : parentTemplate.getId();
+    }
+}
