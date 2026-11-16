@@ -1,6 +1,8 @@
 
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.demo.syllabus.SyllabusCloService;
 import com.example.starter_project_2025.system.demo.syllabus.SyllabusMaterialService;
 import com.example.starter_project_2025.system.demo.syllabus.SyllabusModels;
@@ -25,6 +27,7 @@ import java.util.List;
         name = "app.seed.syllabuses.enabled",
         havingValue = "true"
 )
+@StartupMutation
 public class SyllabusDataInitializer implements CommandLineRunner {
 
     private final SyllabusRepository repository;

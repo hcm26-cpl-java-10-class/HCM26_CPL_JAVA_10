@@ -25,6 +25,10 @@ import { toast } from "sonner";
 const DYNAMIC_FIELD_PREFIX = "__dynamic__";
 
 interface UseProTableOptions {
+  /** Filters applied from the very first request (e.g. a class chosen on another page). */
+  initialFilters?: Record<string, unknown>;
+  /** Extra query-key segment so the same schema can be cached per scope (e.g. per class). */
+  queryScope?: string | number;
   permissionOverrides?: Partial<{
     canRead: boolean;
     canCreate: boolean;
@@ -172,7 +176,7 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
 
   const [internalPagination, setInternalPagination] = useState<Pagination>(DefaultPagination);
   const [sortState, setSortState] = useState<SortEntry[]>([]);
-  const [internalFilters, setInternalFilters] = useState<any>({});
+  const [internalFilters, setInternalFilters] = useState<any>(options.initialFilters ?? {});
   const [internalSearch, setInternalSearch] = useState<string>("");
   const queryKeyRoot = options.queryKeyRoot ?? schema.entityName;
   const pagination = options.state?.pagination ?? internalPagination;
@@ -356,6 +360,7 @@ export function useProTable(api: any, schema: EntitySchema, options: UseProTable
   const queryKey = [
     queryKeyRoot,
     ...(options.queryKeyParts ?? []),
+    ...(options.queryScope !== undefined ? [options.queryScope] : []),
     pagination.page,
     pagination.size,
     currentSort,

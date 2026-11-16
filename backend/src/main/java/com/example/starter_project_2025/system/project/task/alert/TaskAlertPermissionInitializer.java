@@ -1,4 +1,6 @@
 package com.example.starter_project_2025.system.project.task.alert;
+
+import com.example.starter_project_2025.config.startup.StartupMutation;
 import com.example.starter_project_2025.system.rbac.permission.*;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 @Component @Order(5) @RequiredArgsConstructor
+@StartupMutation
 public class TaskAlertPermissionInitializer implements CommandLineRunner {
     private final PermissionRepository permissions;
     private final RoleRepository roles;

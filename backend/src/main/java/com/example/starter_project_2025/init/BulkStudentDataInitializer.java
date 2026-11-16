@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.init;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
@@ -19,6 +21,7 @@ import java.util.List;
 @Order(4)
 @Component
 @RequiredArgsConstructor
+@StartupMutation
 public class BulkStudentDataInitializer implements CommandLineRunner {
 
     private static final List<String[]> STUDENT_NAMES = List.of(
