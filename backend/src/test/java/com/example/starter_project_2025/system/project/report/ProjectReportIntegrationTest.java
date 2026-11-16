@@ -1,11 +1,16 @@
 package com.example.starter_project_2025.system.project.report;
 
+import com.example.starter_project_2025.system.project.ProjectMember;
+import com.example.starter_project_2025.system.project.ProjectTeam;
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
+import com.example.starter_project_2025.system.project.TeamAllocationSession;
+import com.example.starter_project_2025.system.project.TeamAllocationSessionStatus;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.init.SprintBacklogDataInitializer;
 import com.example.starter_project_2025.init.AutoMenuInitializer;
 import com.example.starter_project_2025.system.menu.module.Module;
 import com.example.starter_project_2025.system.menu.module_groups.ModuleGroup;
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
-import com.example.starter_project_2025.system.project.*;
 import com.example.starter_project_2025.system.project.domain.*;
 import com.example.starter_project_2025.system.project.milestone.domain.*;
 import com.example.starter_project_2025.system.project.milestone.submission.domain.*;

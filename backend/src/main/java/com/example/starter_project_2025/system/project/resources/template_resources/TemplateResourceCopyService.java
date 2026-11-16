@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.project.resources.template_resources;
 
-import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
 import com.example.starter_project_2025.system.project.resources.template_resource_files.TemplateResourceFile;
 import com.example.starter_project_2025.system.project.resources.template_resource_files.TemplateResourceFileRepository;
 import lombok.AccessLevel;

@@ -40,7 +40,7 @@ public class SubmissionQueryService {
     private final Clock milestoneClock;
     private final MilestoneSubmissionWindow submissionWindow;
     private final ObjectMapper objectMapper;
-    private final com.example.starter_project_2025.system.project.template.assignment.hierarchy.MasterProjectAccess masterAccess;
+    private final com.example.starter_project_2025.system.project.template.service.assignment.MasterProjectAccess masterAccess;
 
     @Transactional(readOnly = true)
     public SubmissionDtos.PageResponse getPage(Long projectId, int page, int size, String search,

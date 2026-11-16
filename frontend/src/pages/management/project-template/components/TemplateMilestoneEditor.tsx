@@ -110,9 +110,9 @@ export function TemplateMilestoneEditor({ milestone, index, count, disabled, edi
                 onChange={(event) => onChange({ weight: event.target.value })} placeholder="E.g. 25" />
             </MilestoneField>}
           </div>
-          <p className="text-xs text-muted-foreground">{weighted
-            ? "Due after the project start date. One week equals 7 days."
-            : "Due after the project is assigned. One week equals 7 days."}</p>
+          <p className="text-xs text-muted-foreground">
+            The milestone starts at official publication. The due date is calculated from that time. One week equals 7 days.
+          </p>
           <div className="flex items-center gap-2">
             <Checkbox {...fieldProps("mandatory")} checked={milestone.mandatory} disabled={disabled}
               onCheckedChange={(checked) => onChange({ mandatory: checked === true })} />

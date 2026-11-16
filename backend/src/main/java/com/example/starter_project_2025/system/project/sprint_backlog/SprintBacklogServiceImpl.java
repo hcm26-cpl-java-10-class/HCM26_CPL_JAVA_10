@@ -21,7 +21,7 @@ import com.example.starter_project_2025.system.project.sprint_backlog.audit.Spri
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditService;
 import com.example.starter_project_2025.system.project.sprint_backlog.event.SprintBacklogOutboxService;
 import com.example.starter_project_2025.system.project.task.TaskRepository;
-import com.example.starter_project_2025.system.project.template.assignment.hierarchy.AssignedProjectAccess;
+import com.example.starter_project_2025.system.project.template.service.assignment.AssignedProjectAccess;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
