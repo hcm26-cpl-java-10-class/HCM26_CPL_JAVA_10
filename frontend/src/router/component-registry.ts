@@ -95,6 +95,7 @@ import CertificateDetailPage from "@/pages/management/demo/certificate/pages/Cer
 import VerifyCertificatePage from "@/pages/student/VerifyCertificatePage";
 import EnrollmentLogPage from "@/pages/management/demo/enrollment/EnrollmentLogPage.tsx";
 import DepartmentManagementPage from "@/pages/management/demo/department";
+import LocationPage from "@/pages/management/rbac/location";
 import CourseGradeDetailPage from "@/pages/student/CourseGradeDetailPage";
 
 export interface RouteConfig {
@@ -624,6 +625,12 @@ export const routes: RouteConfig[] = [
     path: "/manage-students",
     component: DepartmentManagementPage,
     requiredPermission: "DEPARTMENT_READ",
+    isModuleDriven: true,
+  },
+  {
+    path: "/locations", 
+    component: LocationPage,
+    requiredPermission: "LOCATION_READ", 
     isModuleDriven: true,
   },
 ];
