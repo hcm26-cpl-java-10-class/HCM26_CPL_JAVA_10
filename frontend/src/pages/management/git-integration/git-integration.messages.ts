@@ -88,6 +88,24 @@ const ERRORS: Record<string, GitIntegrationMessage> = {
     description: "An administrator needs to configure the GitHub App on the server first.",
     action: "dashboard",
   },
+  GIT_INSTALLATION_NOT_FOUND: {
+    tone: "neutral",
+    title: "GitHub connection not found",
+    description: "It may have been removed. Reload Git Integration to see the current connections.",
+    action: "integration",
+  },
+  GIT_INSTALLATION_NOT_ACTIVE: {
+    tone: "warning",
+    title: "This GitHub connection is not active",
+    description: "The app was suspended or uninstalled on GitHub. Check the connection status, then try again.",
+    action: "integration",
+  },
+  GIT_RATE_LIMITED: {
+    tone: "warning",
+    title: "GitHub rate limit reached",
+    description: "GitHub is limiting requests for this connection. Please try again in a few minutes.",
+    action: "retry",
+  },
   UNAUTHENTICATED: {
     tone: "neutral",
     title: "Your session has ended",

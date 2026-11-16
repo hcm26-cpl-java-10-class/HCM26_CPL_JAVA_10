@@ -30,7 +30,12 @@ public class GitIntegrationExceptionHandler {
 
     @ExceptionHandler(GitIntegrationException.class)
     public ResponseEntity<GitIntegrationErrorResponse> business(GitIntegrationException ex) {
-        return error(ex.getStatus(), ex.getCode(), ex.getMessage());
+        var builder = ResponseEntity.status(ex.getStatus());
+        if (ex.getRetryAfterSeconds() != null) {
+            builder.header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()));
+        }
+        return builder.body(new GitIntegrationErrorResponse(ex.getStatus().value(), ex.getCode(), ex.getMessage(),
+                LocalDateTime.now(), CorrelationIdFilter.currentId(), ex.getRetryAfterSeconds(), ex.getInstallationStatus()));
     }
 
     @ExceptionHandler(AuthenticationException.class)
@@ -41,7 +46,7 @@ public class GitIntegrationExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<GitIntegrationErrorResponse> forbidden(AccessDeniedException ex) {
         return error(HttpStatus.FORBIDDEN, "GIT_INTEGRATION_FORBIDDEN",
-                "Bạn không có quyền quản lý Git Integration của project này");
+                "Bạn không có quyền truy cập Git Integration");
     }
 
     @ExceptionHandler(ResponseStatusException.class)

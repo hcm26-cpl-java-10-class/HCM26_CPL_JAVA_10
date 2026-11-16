@@ -69,6 +69,9 @@ export type GitIntegrationErrorCode =
   | "GIT_INSTALLATION_NOT_OWNED"
   | "GIT_INSTALLATION_LINKED_ELSEWHERE"
   | "GIT_PROVIDER_UNAVAILABLE"
+  | "GIT_INSTALLATION_NOT_FOUND"
+  | "GIT_INSTALLATION_NOT_ACTIVE"
+  | "GIT_RATE_LIMITED"
   | "UNAUTHENTICATED";
 
 export interface GitIntegrationErrorBody {
@@ -76,4 +79,55 @@ export interface GitIntegrationErrorBody {
   code: GitIntegrationErrorCode | string;
   message: string;
   correlationId?: string;
+  /** GIT_RATE_LIMITED */
+  retryAfterSeconds?: number;
+  /** GIT_INSTALLATION_NOT_ACTIVE */
+  installationStatus?: GitInstallationStatus;
+}
+
+// ---- US-GI-03 · Browse repositories --------------------------------------------------------------
+
+export type GitRepositoryFilter = "all" | "available" | "linked";
+
+export type GitRepositoryUnavailableReason =
+  | "LINKED_TO_OTHER_PROJECT"
+  | "LINKED_TO_THIS_PROJECT"
+  | "ARCHIVED"
+  | "DISABLED";
+
+export interface GitRepositoryItem {
+  externalId: number;
+  name: string;
+  owner: string;
+  fullName: string;
+  htmlUrl: string;
+  visibility: "public" | "private" | "internal" | string;
+  defaultBranch?: string | null;
+  archived: boolean;
+  /** Project the repository is actively linked to; code/name are null outside your organization. */
+  linkedProject: { id: number; code?: string | null; name?: string | null } | null;
+  selectable: boolean;
+  unavailableReason: GitRepositoryUnavailableReason | null;
+}
+
+export interface GitRepositoryPage {
+  installation: { id: number; accountLogin: string; accountType: string; status: GitInstallationStatus };
+  items: GitRepositoryItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  counts: { all: number; available: number; linked: number };
+  fetchedAt: string;
+  fromCache: boolean;
+  truncated: boolean;
+}
+
+export interface GitRepositoryQuery {
+  q?: string;
+  filter?: GitRepositoryFilter;
+  page?: number;
+  size?: number;
+  refresh?: boolean;
+  projectId?: number;
 }

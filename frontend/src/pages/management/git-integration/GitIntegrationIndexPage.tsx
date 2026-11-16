@@ -1,14 +1,14 @@
-import { AlertCircle, ArrowLeft, LockKeyhole, PlugZap, RefreshCw, ShieldAlert, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, FolderGit2, LockKeyhole, PlugZap, RefreshCw, ShieldAlert, X } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { FaGithub } from "react-icons/fa6";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { gitIntegrationHttpStatus } from "@/api/features/git-integration.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { GitInstallationListResponse } from "@/types/features/git-integration";
+import type { GitInstallation, GitInstallationListResponse } from "@/types/features/git-integration";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { ConnectGitHubButton } from "./components/ConnectGitHubButton";
 import { ConnectStepsInfo } from "./components/ConnectStepsInfo";
@@ -16,6 +16,7 @@ import { GitHubStatusBadge } from "./components/GitHubStatusBadge";
 import { GitInstallationCard } from "./components/GitInstallationCard";
 import { GitIntegrationHeader } from "./components/GitIntegrationHeader";
 import { GitIntegrationStateCard } from "./components/GitIntegrationPageState";
+import { RepositoryBrowserSheet } from "./components/RepositoryBrowserSheet";
 import { clearPendingConnect, readPendingConnect } from "./git-integration.storage";
 import { useGitInstallations } from "./useGitIntegration";
 
@@ -116,6 +117,19 @@ export default function GitIntegrationIndexPage() {
     setPending(undefined);
   }
 
+  // US-GI-03: the repository browser opens from ?repos=<installation id> so the panel can be linked and survives F5.
+  const [params, setParams] = useSearchParams();
+  const connected = useMemo(() => (query.data?.installations ?? []).filter(item => item.status === "CONNECTED"), [query.data]);
+  const reposParam = Number(params.get("repos"));
+  const browsingId = connected.some(item => item.id === reposParam) ? reposParam : undefined;
+
+  function openRepositories(id: number) {
+    setParams(previous => { const next = new URLSearchParams(previous); next.set("repos", String(id)); return next; });
+  }
+  function closeRepositories() {
+    setParams(previous => { const next = new URLSearchParams(previous); next.delete("repos"); return next; }, { replace: true });
+  }
+
   const header = <GitIntegrationHeader eyebrow="Project Management · Integrations" title="Git Integration"
     description="GitHub accounts and organizations your team has authorized. No passwords or personal access tokens."
     actions={<Button variant="outline" size="sm" asChild><Link to={homePath}><ArrowLeft />Back to dashboard</Link></Button>} />;
@@ -153,7 +167,8 @@ export default function GitIntegrationIndexPage() {
           <h2 id="git-installations" className="text-sm font-semibold">Connected accounts</h2>
           <div className="space-y-3">
             {data.installations.map(installation => <GitInstallationCard key={installation.id} installation={installation}
-              actions={data.canManage ? <ConnectGitHubButton label="Reconnect" variant="secondary" size="sm" /> : undefined} />)}
+              actions={<InstallationActions installation={installation} canManage={data.canManage}
+                onBrowse={() => openRepositories(installation.id)} />} />)}
           </div>
         </section>}
 
@@ -165,7 +180,25 @@ export default function GitIntegrationIndexPage() {
             </summary>
             <ConnectStepsInfo className="mt-3" />
           </details>)}
+
+        {browsingId !== undefined && <RepositoryBrowserSheet open onOpenChange={open => { if (!open) closeRepositories(); }}
+          installations={connected} installationId={browsingId} onInstallationChange={openRepositories} />}
       </>}
     </div>
   </Shell>;
+}
+
+/**
+ * Actions that make sense for each installation state: browsing for a working
+ * connection, reconnecting only when the connection is suspended or removed.
+ */
+function InstallationActions({ installation, canManage, onBrowse }: {
+  installation: GitInstallation;
+  canManage: boolean;
+  onBrowse: () => void;
+}) {
+  if (installation.status === "CONNECTED") {
+    return <Button size="sm" onClick={onBrowse}><FolderGit2 />View repositories</Button>;
+  }
+  return canManage ? <ConnectGitHubButton label="Reconnect" variant="secondary" size="sm" /> : null;
 }

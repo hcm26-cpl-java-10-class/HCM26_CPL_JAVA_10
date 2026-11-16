@@ -125,7 +125,7 @@ public class GitInstallationService {
                 throw GitIntegrationException.installationNotOwned();
             }
         } catch (GitHubApiException e) {
-            boolean unavailable = e.getKind() == GitHubApiException.Kind.UNAVAILABLE;
+            boolean unavailable = e.isTransient();
             stateService.recordOutcome(state.id(), unavailable ? GitOAuthOutcome.PROVIDER_ERROR : GitOAuthOutcome.INVALID_CALLBACK);
             log.warn("GitHub verification failed: tenantId={}, userId={}, installationId={}, reason={}",
                     tenantId, user.getId(), installationId, e.getMessage());

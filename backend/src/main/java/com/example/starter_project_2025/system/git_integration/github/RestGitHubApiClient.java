@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.git_integration.github;
 
 import com.example.starter_project_2025.system.git_integration.config.GitHubAppProperties;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallation;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationRepositoriesPage;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationToken;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubOAuthTokenResponse;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubUser;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubUserInstallationsPage;
@@ -18,6 +20,9 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.net.URI;
+import java.time.Instant;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -119,6 +124,54 @@ public class RestGitHubApiClient implements GitHubApiClient {
         }
     }
 
+    @Override
+    public GitHubInstallationToken createInstallationToken(long installationId) {
+        String operation = "create installation token";
+        GitHubInstallationToken token;
+        try {
+            token = restClient.post()
+                    .uri("/app/installations/{id}/access_tokens", installationId)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtFactory.createAppJwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    // Least privilege: listing repositories only needs read-only metadata.
+                    .body(Map.of("permissions", Map.of("metadata", "read")))
+                    .retrieve()
+                    .body(GitHubInstallationToken.class);
+        } catch (RestClientResponseException e) {
+            int status = e.getStatusCode().value();
+            if (status == 404) {
+                throw new GitHubApiException(GitHubApiException.Kind.GONE, operation, status);
+            }
+            // The body is inspected, never copied into the exception.
+            if (status == 403 && e.getResponseBodyAsString().toLowerCase(Locale.ROOT).contains("suspended")) {
+                throw new GitHubApiException(GitHubApiException.Kind.SUSPENDED, operation, status);
+            }
+            throw toApiException(operation, e);
+        } catch (RestClientException e) {
+            throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE, operation, 0);
+        }
+        if (token == null || !StringUtils.hasText(token.token()) || token.expiresAt() == null) {
+            throw new GitHubApiException(GitHubApiException.Kind.REJECTED, operation, 200);
+        }
+        return token;
+    }
+
+    @Override
+    public GitHubInstallationRepositoriesPage listInstallationRepositories(String installationToken, int page) {
+        GitHubInstallationRepositoriesPage result = call("list installation repositories", () -> restClient.get()
+                .uri(uri -> uri.path("/installation/repositories")
+                        .queryParam("per_page", PAGE_SIZE)
+                        .queryParam("page", page)
+                        .build())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationToken)
+                .retrieve()
+                .body(GitHubInstallationRepositoriesPage.class));
+        if (result == null) {
+            throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE, "list installation repositories", 200);
+        }
+        return result;
+    }
+
     /**
      * Runs a GitHub call and maps every failure to {@link GitHubApiException}
      * without copying response bodies or URLs into the message.
@@ -127,14 +180,43 @@ public class RestGitHubApiClient implements GitHubApiClient {
         try {
             return request.get();
         } catch (RestClientResponseException e) {
-            HttpStatusCode status = e.getStatusCode();
-            GitHubApiException.Kind kind = status.is5xxServerError()
-                    ? GitHubApiException.Kind.UNAVAILABLE
-                    : GitHubApiException.Kind.REJECTED;
-            throw new GitHubApiException(kind, operation, status.value());
+            throw toApiException(operation, e);
         } catch (RestClientException e) {
             throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE, operation, 0);
         }
+    }
+
+    private static GitHubApiException toApiException(String operation, RestClientResponseException e) {
+        HttpStatusCode status = e.getStatusCode();
+        Long retryAfter = rateLimitRetryAfter(e);
+        if (retryAfter != null) {
+            return new GitHubApiException(GitHubApiException.Kind.RATE_LIMITED, operation, status.value(), retryAfter);
+        }
+        GitHubApiException.Kind kind = status.is5xxServerError()
+                ? GitHubApiException.Kind.UNAVAILABLE
+                : GitHubApiException.Kind.REJECTED;
+        return new GitHubApiException(kind, operation, status.value());
+    }
+
+    /**
+     * Seconds to wait when GitHub reports a primary (x-ratelimit-remaining: 0)
+     * or secondary (retry-after) rate limit; null when the error is not a rate limit.
+     */
+    private static Long rateLimitRetryAfter(RestClientResponseException e) {
+        int status = e.getStatusCode().value();
+        if (status != 403 && status != 429) return null;
+        HttpHeaders headers = e.getResponseHeaders();
+        if (headers == null) return status == 429 ? 60L : null;
+        String retryAfter = headers.getFirst("retry-after");
+        if (retryAfter != null && retryAfter.matches("\\d+")) return Long.parseLong(retryAfter);
+        if ("0".equals(headers.getFirst("x-ratelimit-remaining"))) {
+            String reset = headers.getFirst("x-ratelimit-reset");
+            if (reset != null && reset.matches("\\d+")) {
+                return Math.max(1L, Long.parseLong(reset) - Instant.now().getEpochSecond());
+            }
+            return 60L;
+        }
+        return status == 429 ? 60L : null;
     }
 
     private static String trimTrailingSlash(String url) {

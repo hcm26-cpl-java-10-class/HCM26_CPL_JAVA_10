@@ -75,4 +75,22 @@ public class GitInstallationWriter {
                 verified.id(), tenantId, from == null ? "NONE" : from, to, userId);
         return new UpsertResult(saved, existing.isPresent() ? GitOAuthOutcome.RECONNECTED : GitOAuthOutcome.CONNECTED);
     }
+
+    /**
+     * T5 (→ SUSPENDED) / T6 (→ DISCONNECTED) detected by the system, e.g. when
+     * GitHub refuses an installation token. No-op when already in that status.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markStatus(Long installationRowId, GitInstallationStatus to, String trigger) {
+        installations.findById(installationRowId).ifPresent(row -> {
+            GitInstallationStatus from = row.getStatus();
+            if (from == to) {
+                return;
+            }
+            row.setStatus(to);
+            row.setLastVerifiedAt(LocalDateTime.now(clock));
+            log.info("GitHub installation transition: installationId={}, tenantId={}, {} -> {}, trigger={}, actor=system",
+                    row.getInstallationId(), row.getTenantId(), from, to, trigger);
+        });
+    }
 }

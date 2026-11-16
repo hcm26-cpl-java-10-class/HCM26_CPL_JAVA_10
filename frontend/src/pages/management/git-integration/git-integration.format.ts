@@ -27,3 +27,10 @@ export function formatDateTime(value?: string | null) {
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
+
+/** GitHub settings page where the owner manages repository access (or uninstalls) for an installation. */
+export function installationManageUrl(installation: { accountType: string; accountLogin: string; installationId: number }) {
+  return installation.accountType === "Organization"
+    ? `https://github.com/organizations/${encodeURIComponent(installation.accountLogin)}/settings/installations/${installation.installationId}`
+    : `https://github.com/settings/installations/${installation.installationId}`;
+}

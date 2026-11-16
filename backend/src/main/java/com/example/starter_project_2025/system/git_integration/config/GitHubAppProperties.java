@@ -66,6 +66,12 @@ public class GitHubAppProperties {
     /** GitHub caps App JWTs at 10 minutes; keep a margin for clock drift. */
     private long jwtTtlSeconds = 540;
 
+    /** GI-03: how long the repository list of an installation is cached in memory. */
+    private long repositoryCacheTtlSeconds = 300;
+
+    /** GI-03: safety cap on GitHub pages (100 repositories each) fetched per installation. */
+    private int repositoryMaxPages = 10;
+
     private int connectTimeoutMillis = 5000;
 
     private int readTimeoutMillis = 10000;

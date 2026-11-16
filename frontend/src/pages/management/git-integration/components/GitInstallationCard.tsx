@@ -3,16 +3,9 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { GitInstallation } from "@/types/features/git-integration";
-import { formatDateTime, formatRelative } from "../git-integration.format";
+import { formatDateTime, formatRelative, installationManageUrl } from "../git-integration.format";
 import { GitHubStatusBadge } from "./GitHubStatusBadge";
 import { STATUS_STYLES } from "./git-integration.styles";
-
-/** GitHub settings page where the owner manages (or uninstalls) this installation. */
-function manageUrl(connection: GitInstallation) {
-  return connection.accountType === "Organization"
-    ? `https://github.com/organizations/${encodeURIComponent(connection.accountLogin)}/settings/installations/${connection.installationId}`
-    : `https://github.com/settings/installations/${connection.installationId}`;
-}
 
 function repositoryLabel(selection?: string | null) {
   if (selection === "all") return "All repositories";
@@ -62,7 +55,7 @@ export function GitInstallationCard({ installation: connection, actions }: {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" asChild>
-          <a href={manageUrl(connection)} target="_blank" rel="noreferrer">
+          <a href={installationManageUrl(connection)} target="_blank" rel="noreferrer">
             Manage on GitHub<ExternalLink className="size-3.5" aria-hidden="true" />
             <span className="sr-only">(opens in a new tab)</span>
           </a>

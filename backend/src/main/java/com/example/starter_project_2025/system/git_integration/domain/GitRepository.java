@@ -1,0 +1,103 @@
+package com.example.starter_project_2025.system.git_integration.domain;
+
+import com.example.starter_project_2025.base.crud.domain.BaseEntity;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.FieldDefaults;
+import lombok.experimental.SuperBuilder;
+
+import java.time.LocalDateTime;
+
+/**
+ * Repository connection: a GitHub repository linked to a project, reached
+ * through one of the tenant's installations. Keyed by GitHub's numeric
+ * repository id ({@code external_id}), which survives renames and transfers.
+ * <p>
+ * GI-03 only reads this table (to mark repositories already linked); GI-04
+ * writes it. Rows are never deleted: unlinking or losing access changes
+ * {@code status} so history stays available.
+ */
+@Entity
+@Table(
+        name = "git_repositories",
+        indexes = {
+                @Index(name = "idx_git_repo_provider_external_status", columnList = "provider, external_id, status"),
+                @Index(name = "idx_git_repo_project", columnList = "project_id, status"),
+                @Index(name = "idx_git_repo_installation", columnList = "installation_ref, status")
+        })
+@Getter
+@Setter
+@SuperBuilder
+@NoArgsConstructor
+@AllArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class GitRepository extends BaseEntity {
+
+    @Column(name = "tenant_id", nullable = false)
+    Long tenantId;
+
+    @Column(name = "project_id", nullable = false)
+    Long projectId;
+
+    /** {@code git_installations.id} the repository is accessed through. */
+    @Column(name = "installation_ref", nullable = false)
+    Long installationRef;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "provider", nullable = false, length = 20)
+    GitProvider provider;
+
+    @Column(name = "external_id", nullable = false)
+    Long externalId;
+
+    @Column(name = "owner_login", nullable = false, length = 100)
+    String ownerLogin;
+
+    @Column(name = "name", nullable = false, length = 100)
+    String name;
+
+    @Column(name = "full_name", nullable = false, length = 200)
+    String fullName;
+
+    @Column(name = "html_url", nullable = false, length = 500)
+    String htmlUrl;
+
+    @Column(name = "visibility", nullable = false, length = 20)
+    String visibility;
+
+    @Column(name = "default_branch", length = 100)
+    String defaultBranch;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    GitRepositoryStatus status;
+
+    @Column(name = "linked_by_user_id", nullable = false)
+    Long linkedByUserId;
+
+    @Column(name = "linked_at", nullable = false)
+    LocalDateTime linkedAt;
+
+    @Column(name = "unlinked_by_user_id")
+    Long unlinkedByUserId;
+
+    @Column(name = "unlinked_at")
+    LocalDateTime unlinkedAt;
+
+    @Column(name = "last_synced_at")
+    LocalDateTime lastSyncedAt;
+
+    @Version
+    @Column(name = "version")
+    Long version;
+}

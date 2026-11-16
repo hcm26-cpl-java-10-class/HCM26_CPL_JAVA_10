@@ -149,4 +149,90 @@ class RestGitHubApiClientTest {
                 .hasMessageNotContaining("internal secret detail")
                 .hasMessageNotContaining("ghu_x");
     }
+
+    // ---- US-GI-03 ------------------------------------------------------------------------------------
+
+    @Test
+    void createsReadOnlyInstallationTokenWithAppJwt() {
+        server.expect(requestTo("https://api.github.com/app/installations/555/access_tokens"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(request -> assertThat(request.getHeaders().getFirst("Authorization")).startsWith("Bearer ey"))
+                .andExpect(content().json("{\"permissions\":{\"metadata\":\"read\"}}"))
+                .andRespond(withStatus(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"token\":\"ghs_secret\",\"expires_at\":\"2030-01-01T00:00:00Z\"}"));
+
+        var token = client.createInstallationToken(555L);
+        assertThat(token.token()).isEqualTo("ghs_secret");
+        assertThat(token.toString()).doesNotContain("ghs_secret");
+        server.verify();
+    }
+
+    @Test
+    void uninstalledInstallationIsGone() {
+        server.expect(requestTo("https://api.github.com/app/installations/555/access_tokens"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).body("{\"message\":\"Not Found\"}"));
+
+        assertThatThrownBy(() -> client.createInstallationToken(555L))
+                .isInstanceOf(GitHubApiException.class)
+                .satisfies(e -> assertThat(((GitHubApiException) e).getKind()).isEqualTo(GitHubApiException.Kind.GONE));
+    }
+
+    @Test
+    void suspendedInstallationIsReportedWithoutLeakingBody() {
+        server.expect(requestTo("https://api.github.com/app/installations/555/access_tokens"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"message\":\"This installation has been suspended\"}"));
+
+        assertThatThrownBy(() -> client.createInstallationToken(555L))
+                .isInstanceOf(GitHubApiException.class)
+                .satisfies(e -> assertThat(((GitHubApiException) e).getKind()).isEqualTo(GitHubApiException.Kind.SUSPENDED))
+                .hasMessageNotContaining("suspended\"");
+    }
+
+    @Test
+    void listsInstallationRepositoriesWithInstallationToken() {
+        server.expect(requestTo("https://api.github.com/installation/repositories?per_page=100&page=2"))
+                .andExpect(header("Authorization", "Bearer ghs_secret"))
+                .andRespond(withSuccess("""
+                        {"total_count":101,"repositories":[{"id":9,"name":"api","full_name":"org/api",
+                         "owner":{"login":"org"},"html_url":"https://github.com/org/api","private":true,
+                         "visibility":"private","default_branch":"main","archived":false,"disabled":false}]}""",
+                        MediaType.APPLICATION_JSON));
+
+        var page = client.listInstallationRepositories("ghs_secret", 2);
+        assertThat(page.totalCount()).isEqualTo(101);
+        assertThat(page.repositories()).singleElement().satisfies(repo -> {
+            assertThat(repo.fullName()).isEqualTo("org/api");
+            assertThat(repo.ownerLogin()).isEqualTo("org");
+            assertThat(repo.resolvedVisibility()).isEqualTo("private");
+            assertThat(repo.defaultBranch()).isEqualTo("main");
+        });
+    }
+
+    @Test
+    void primaryRateLimitCarriesRetryAfter() {
+        long reset = java.time.Instant.now().getEpochSecond() + 120;
+        server.expect(requestTo("https://api.github.com/installation/repositories?per_page=100&page=1"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .header("x-ratelimit-remaining", "0")
+                        .header("x-ratelimit-reset", String.valueOf(reset)));
+
+        assertThatThrownBy(() -> client.listInstallationRepositories("ghs_secret", 1))
+                .isInstanceOf(GitHubApiException.class)
+                .satisfies(e -> {
+                    GitHubApiException api = (GitHubApiException) e;
+                    assertThat(api.getKind()).isEqualTo(GitHubApiException.Kind.RATE_LIMITED);
+                    assertThat(api.getRetryAfterSeconds()).isBetween(100L, 121L);
+                })
+                .hasMessageNotContaining("ghs_secret");
+    }
+
+    @Test
+    void secondaryRateLimitUsesRetryAfterHeader() {
+        server.expect(requestTo("https://api.github.com/installation/repositories?per_page=100&page=1"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).header("retry-after", "30"));
+
+        assertThatThrownBy(() -> client.listInstallationRepositories("ghs_secret", 1))
+                .satisfies(e -> assertThat(((GitHubApiException) e).getRetryAfterSeconds()).isEqualTo(30L));
+    }
 }

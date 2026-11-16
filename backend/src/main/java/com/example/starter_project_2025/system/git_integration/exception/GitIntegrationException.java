@@ -9,11 +9,37 @@ public class GitIntegrationException extends RuntimeException {
 
     private final HttpStatus status;
     private final String code;
+    /** GIT_RATE_LIMITED: seconds until GitHub accepts requests again. */
+    private final Long retryAfterSeconds;
+    /** GIT_INSTALLATION_NOT_ACTIVE: the installation's current status. */
+    private final String installationStatus;
 
     public GitIntegrationException(HttpStatus status, String code, String message) {
+        this(status, code, message, null, null);
+    }
+
+    private GitIntegrationException(HttpStatus status, String code, String message,
+                                    Long retryAfterSeconds, String installationStatus) {
         super(message);
         this.status = status;
         this.code = code;
+        this.retryAfterSeconds = retryAfterSeconds;
+        this.installationStatus = installationStatus;
+    }
+
+    public static GitIntegrationException installationNotFound() {
+        return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_INSTALLATION_NOT_FOUND",
+                "Không tìm thấy kết nối GitHub");
+    }
+
+    public static GitIntegrationException installationNotActive(String installationStatus) {
+        return new GitIntegrationException(HttpStatus.CONFLICT, "GIT_INSTALLATION_NOT_ACTIVE",
+                "Kết nối GitHub hiện không hoạt động", null, installationStatus);
+    }
+
+    public static GitIntegrationException rateLimited(Long retryAfterSeconds) {
+        return new GitIntegrationException(HttpStatus.TOO_MANY_REQUESTS, "GIT_RATE_LIMITED",
+                "GitHub đang giới hạn số lượt gọi. Vui lòng thử lại sau", retryAfterSeconds, null);
     }
 
     public static GitIntegrationException disabled() {
