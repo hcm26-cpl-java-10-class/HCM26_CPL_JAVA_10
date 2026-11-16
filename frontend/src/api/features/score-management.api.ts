@@ -23,6 +23,8 @@ export interface SmColumn {
   weightPercent: number;
   examId: number | null;
   examTitle: string | null;
+  /** False when the linked assessment's scores are not published to students yet. */
+  published: boolean;
 }
 
 export interface SmStudentRow {
@@ -80,6 +82,7 @@ export interface SmImportReport {
   imported: number;
   extra: SmPerson[];
   missing: SmPerson[];
+  published: boolean;
 }
 
 export interface SmScanResult {

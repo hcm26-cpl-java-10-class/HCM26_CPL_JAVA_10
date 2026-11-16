@@ -13,7 +13,7 @@ public final class GradebookDTOs {
         }
 
         public record ColumnDto(Long id, String name, String type, BigDecimal weightPercent, Long examId,
-                        String examTitle) {
+                        String examTitle, boolean published) {
         }
 
         public record StudentRow(Long id, String name, String email, String code,
@@ -45,7 +45,7 @@ public final class GradebookDTOs {
          * khong co diem bai thi.
          */
         public record ImportReport(Long columnId, String columnName, Long examId, String examTitle,
-                        int imported, List<PersonItem> extra, List<PersonItem> missing) {
+                        int imported, List<PersonItem> extra, List<PersonItem> missing, boolean published) {
         }
 
         // ---------------------------------------------------------------- class
