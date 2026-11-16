@@ -80,9 +80,51 @@ export interface SmScanResult {
   reports: SmImportReport[];
 }
 
+export interface SmClass {
+  id: number;
+  code: string;
+  name: string;
+  studentCount: number;
+  /** Number of distinct assessments the class members have taken. */
+  assessmentCount: number;
+}
+
+export interface SmClassTypeColumn {
+  type: SmColumnType;
+  label: string;
+  examCount: number;
+  /** How many class members have a score in this type. */
+  scoredCount: number;
+  examTitles: string[];
+}
+
+export interface SmClassStudentRow {
+  id: number;
+  name: string;
+  email: string;
+  code: string | null;
+  /** type -> mean of the student's best score per assessment of that type (10-point scale). */
+  scores: Record<string, number>;
+  averageScore: number | null;
+  examCount: number;
+}
+
+export interface SmClassGradebook {
+  classId: number;
+  classCode: string;
+  className: string;
+  columns: SmClassTypeColumn[];
+  students: SmClassStudentRow[];
+  columnAverages: Record<string, number | null>;
+  classAverage: number | null;
+}
+
 const base = "/score-management";
 
 export const scoreManagementApi = {
+  classes: async (): Promise<SmClass[]> => (await axiosInstance.get<SmClass[]>(`${base}/classes`)).data,
+  classGradebook: async (classId: number): Promise<SmClassGradebook> =>
+    (await axiosInstance.get<SmClassGradebook>(`${base}/classes/${classId}`)).data,
   courses: async (): Promise<SmCourse[]> => (await axiosInstance.get<SmCourse[]>(`${base}/courses`)).data,
   gradebook: async (courseId: number): Promise<SmGradebook> =>
     (await axiosInstance.get<SmGradebook>(`${base}/courses/${courseId}`)).data,
