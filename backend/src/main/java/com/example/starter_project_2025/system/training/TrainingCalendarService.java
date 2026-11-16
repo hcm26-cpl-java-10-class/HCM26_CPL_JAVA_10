@@ -93,6 +93,14 @@ public class TrainingCalendarService {
         }
     }
 
+    /** Deletes a draft calendar version. The live calendar (ID 0) is derived from sessions and cannot be deleted. */
+    @Transactional
+    public void delete(Long classId, Long calendarId) {
+        requireClass(classId);
+        if (calendarId == null || calendarId == 0) throw new BadRequestException("The live calendar cannot be deleted");
+        calendars.delete(owned(classId, calendarId));
+    }
+
     private ObjectNode view(TrainingCalendar c, TrainingClass cls) {
         try {
             var node = c.getSchedule() == null || c.getSchedule().isBlank()

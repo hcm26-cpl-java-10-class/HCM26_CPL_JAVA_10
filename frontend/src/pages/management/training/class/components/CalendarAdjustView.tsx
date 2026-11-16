@@ -28,6 +28,44 @@ function shortDate(value: string) {
     return validDate(value) ? new Date(`${value}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" }).replace(" ", "-") : "—";
 }
 
+function addDays(dateStr: string, days: number): string {
+    if (!validDate(dateStr)) return dateStr;
+    const d = new Date(`${dateStr}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+}
+
+function daysDiff(d1: string, d2: string): number {
+    const t1 = Date.parse(`${d1}T00:00:00Z`);
+    const t2 = Date.parse(`${d2}T00:00:00Z`);
+    return Math.round((t1 - t2) / (1000 * 60 * 60 * 24));
+}
+
+function shiftTopic(topic: CalendarTopic, diff: number, minStart?: string): CalendarTopic {
+    const nextStart = addDays(topic.startDate, diff);
+    const nextEnd = addDays(topic.endDate, diff);
+    const nextTopicStart = minStart && nextStart < minStart ? minStart : nextStart;
+    const extra = daysDiff(nextTopicStart, nextStart);
+    const finalEnd = addDays(nextEnd, extra);
+
+    return {
+        ...topic,
+        startDate: nextTopicStart,
+        endDate: finalEnd >= nextTopicStart ? finalEnd : nextTopicStart,
+        lessons: topic.lessons?.map(lesson => {
+            const nextFrom = addDays(lesson.from, diff + extra);
+            const nextTo = addDays(lesson.to, diff + extra);
+            const clampedFrom = nextFrom < nextTopicStart ? nextTopicStart : nextFrom;
+            const clampedTo = nextTo < clampedFrom ? clampedFrom : (finalEnd && nextTo > finalEnd ? finalEnd : nextTo);
+            return {
+                ...lesson,
+                from: clampedFrom,
+                to: clampedTo,
+            };
+        }) ?? [],
+    };
+}
+
 export function CalendarAdjustView({ calendar, classItem, onBack }: {
     calendar: ClassCalendarVersion; classItem: ExternalClass; onBack: () => void;
 }) {
@@ -44,8 +82,8 @@ export function CalendarAdjustView({ calendar, classItem, onBack }: {
     const [error, setError] = useState("");
     const client = useQueryClient();
     const save = useMutation({
-        mutationFn: () => externalApi.createCalendarVersion(classItem.id, calendar.id, {
-            classStartDate: classStart, actualLearningStartDate: learningStart, overviewItems: topics,
+        mutationFn: (topicsToSave?: CalendarTopic[]) => externalApi.createCalendarVersion(classItem.id, calendar.id, {
+            classStartDate: classStart, actualLearningStartDate: learningStart, overviewItems: topicsToSave || topics,
         }),
         onSuccess: async () => {
             await client.invalidateQueries({ queryKey: ["session", "class-calendars", classItem.id] });
@@ -64,16 +102,65 @@ export function CalendarAdjustView({ calendar, classItem, onBack }: {
         if (from < 0 || target < 0 || target >= current.length) return current;
         const next = [...current]; next.splice(target, 0, next.splice(from, 1)[0]); return next;
     });
+
+    const handleLearningStartChange = (newStart: string) => {
+        const oldStart = learningStart;
+        setLearningStart(newStart);
+        if (!validDate(newStart)) return;
+
+        setTopics(current => {
+            if (validDate(oldStart)) {
+                const diff = daysDiff(newStart, oldStart);
+                if (diff !== 0) {
+                    return current.map(topic => shiftTopic(topic, diff, newStart));
+                }
+            }
+            return current.map(topic => {
+                if (validDate(topic.startDate) && topic.startDate < newStart) {
+                    const diff = daysDiff(newStart, topic.startDate);
+                    return shiftTopic(topic, diff, newStart);
+                }
+                return topic;
+            });
+        });
+
+        setNewFrom(newStart);
+        setNewTo(newStart);
+    };
+
     const submit = () => {
         setError("");
         if (!validDate(classStart) || !validDate(learningStart) || learningStart < classStart) {
             setError("Actual Learning Start Date must be on or after Class Start Date."); return;
         }
         if (!topics.length) { setError("Add at least one topic or activity."); return; }
-        if (classItem.endDate && (learningStart > classItem.endDate || topics.some(topic => topic.endDate > classItem.endDate!))) {
+
+        const normalizedTopics = topics.map(topic => {
+            let sDate = topic.startDate;
+            let eDate = topic.endDate;
+            if (validDate(sDate) && sDate < learningStart) {
+                const shift = daysDiff(learningStart, sDate);
+                sDate = learningStart;
+                eDate = addDays(eDate, shift);
+            }
+            if (validDate(sDate) && validDate(eDate) && eDate < sDate) {
+                eDate = sDate;
+            }
+            const lessons = topic.lessons?.map(l => {
+                let lFrom = l.from;
+                let lTo = l.to;
+                if (validDate(lFrom) && lFrom < sDate) lFrom = sDate;
+                if (validDate(lTo) && lTo < lFrom) lTo = lFrom;
+                if (validDate(lTo) && lTo > eDate) eDate = lTo;
+                return { ...l, from: lFrom, to: lTo };
+            }) ?? [];
+            return { ...topic, startDate: sDate, endDate: eDate, lessons };
+        });
+
+        if (classItem.endDate && (learningStart > classItem.endDate || normalizedTopics.some(topic => topic.endDate > classItem.endDate!))) {
             setError("Calendar dates must be within the class date range."); return;
         }
-        for (const topic of topics) {
+        for (const topic of normalizedTopics) {
             if (!topic.label.trim() || !validDate(topic.startDate) || !validDate(topic.endDate) || topic.startDate < learningStart || topic.endDate < topic.startDate) {
                 setError(`Check the name and date range for ${topic.label || "this topic"}. Topics must start on or after Actual Learning Start Date.`); return;
             }
@@ -81,7 +168,8 @@ export function CalendarAdjustView({ calendar, classItem, onBack }: {
                 setError(`Lesson dates must be within the date range for ${topic.label}.`); return;
             }
         }
-        save.mutate();
+        setTopics(normalizedTopics);
+        save.mutate(normalizedTopics);
     };
     return (
         <section aria-label="Adjust calendar" className="overflow-hidden rounded-xl border bg-card shadow-sm">
@@ -101,7 +189,7 @@ export function CalendarAdjustView({ calendar, classItem, onBack }: {
             <fieldset disabled={save.isPending} className="max-h-[62dvh] space-y-5 overflow-y-auto p-4 sm:p-5">
                 <div className="flex flex-wrap items-end gap-4">
                     <label className="min-w-52 flex-1 space-y-2 text-sm font-medium">Class Start Date<span className="text-red-600"> *</span><Input aria-label="Class Start Date" type="date" required readOnly value={classStart} /></label>
-                    <label className="min-w-52 flex-1 space-y-2 text-sm font-medium">Actual Learning Start Date<span className="text-red-600"> *</span><Input aria-label="Actual Learning Start Date" type="date" required min={classStart} value={learningStart} onChange={event => setLearningStart(event.target.value)} /></label>
+                    <label className="min-w-52 flex-1 space-y-2 text-sm font-medium">Actual Learning Start Date<span className="text-red-600"> *</span><Input aria-label="Actual Learning Start Date" type="date" required min={classStart} value={learningStart} onChange={event => handleLearningStartChange(event.target.value)} /></label>
                     <Button className="ml-auto bg-blue-800 hover:bg-blue-900" onClick={() => { setNewFrom(learningStart); setNewTo(learningStart); setAdding(true); }}><Plus className="size-4" /> Add New Topic & Activities</Button>
                 </div>
                 <div className="space-y-2">
@@ -120,7 +208,14 @@ export function CalendarAdjustView({ calendar, classItem, onBack }: {
                                 <label className="space-y-1 text-xs">Topic Code<Input value={topic.label} maxLength={100} onChange={event => patch(topic.id, { label: event.target.value })} /></label>
                                 <label className="space-y-1 text-xs">Topic Name<Input value={topic.name ?? ""} maxLength={255} onChange={event => patch(topic.id, { name: event.target.value })} /></label>
                                 <label className="space-y-1 text-xs">Topic Version<Input value={topic.version ?? ""} maxLength={30} onChange={event => patch(topic.id, { version: event.target.value })} /></label>
-                                <label className="space-y-1 text-xs">From<Input type="date" min={learningStart} value={topic.startDate} onChange={event => patch(topic.id, { startDate: event.target.value })} /></label>
+                                <label className="space-y-1 text-xs">From<Input type="date" min={learningStart} value={topic.startDate} onChange={event => {
+                                    const nextStart = event.target.value;
+                                    const updates: Partial<CalendarTopic> = { startDate: nextStart };
+                                    if (topic.endDate && nextStart > topic.endDate) {
+                                        updates.endDate = nextStart;
+                                    }
+                                    patch(topic.id, updates);
+                                }} /></label>
                                 <label className="space-y-1 text-xs">To<Input type="date" min={topic.startDate} value={topic.endDate} onChange={event => patch(topic.id, { endDate: event.target.value })} /></label>
                             </div>
                             <label className="block space-y-1 text-xs">Slot time<Input value={topic.slot ?? ""} onChange={event => patch(topic.id, { slot: event.target.value })} /></label>

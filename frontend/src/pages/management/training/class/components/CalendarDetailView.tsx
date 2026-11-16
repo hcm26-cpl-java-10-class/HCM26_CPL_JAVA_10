@@ -94,14 +94,17 @@ export function CalendarDetailView({ calendar, classItem, onBack, sourceVerified
     calendar: ClassCalendarVersion;
     classItem: ExternalClass;
     onBack: () => void;
-    sourceVerified: boolean;
-    sampleData: boolean;
+    sourceVerified?: boolean;
+    sampleData?: boolean;
     onCalendarSaved: (calendar: ClassCalendarVersion) => void;
 }) {
+    void sourceVerified;
+    void sampleData;
     const classSessionsQuery = useClassSessions(String(classItem.id));
     const { hasPermission } = usePermissions();
-    const canManageSchedule = sourceVerified && !sampleData && hasPermission("SESSION_UPDATE");
-    const [selectedTopicId, setSelectedTopicId] = useState("");
+    const canManageSchedule = hasPermission("SESSION_UPDATE");
+    const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
+    const [pickerValue, setPickerValue] = useState("");
     const activeTopicsQuery = useQuery({
         queryKey: ["topics", "active", "calendar-selector"],
         queryFn: topicApi.getActive,
@@ -156,25 +159,26 @@ export function CalendarDetailView({ calendar, classItem, onBack, sourceVerified
     }, [calendar, classSessionsQuery.data]);
 
     const actualLessons = groups.flatMap((topic) => topic.lessons ?? []);
-    const selectedCatalogTopic: TopicItem | undefined = activeTopicsQuery.data?.find((topic) => String(topic.id) === selectedTopicId);
     const classStartDate = calendar.classStartDate || classItem.startDate || "";
     const classEndDate = calendar.classEndDate || classItem.endDate || "";
-    const selectedScheduleTopic: CalendarTopic | undefined = selectedCatalogTopic ? {
-        id: String(selectedCatalogTopic.id),
-        label: selectedCatalogTopic.code,
-        name: selectedCatalogTopic.name,
-        version: selectedCatalogTopic.version,
-        startDate: classStartDate,
-        endDate: classEndDate,
-        lessons: [],
-    } : undefined;
+    const scheduledKeys = new Set(groups.flatMap((topic) => [topic.id, normalized(topic.label)]));
+    const isScheduled = (item: TopicItem) => scheduledKeys.has(String(item.id)) || scheduledKeys.has(normalized(item.code));
+    const availableTopics = (activeTopicsQuery.data ?? []).filter((item) => !isScheduled(item) && !selectedTopicIds.includes(String(item.id)));
+    const pendingTopics = selectedTopicIds
+        .map((id) => (activeTopicsQuery.data ?? []).find((item) => String(item.id) === id))
+        .filter((item): item is TopicItem => !!item && !isScheduled(item))
+        .map((item) => ({
+            catalog: item,
+            schedule: {
+                id: String(item.id), label: item.code, name: item.name, version: item.version,
+                startDate: classStartDate, endDate: classEndDate, lessons: [],
+            } as CalendarTopic,
+        }));
     const isLiveWithoutSessions = calendar.version === "Live" && !calendar.actualLearningStartDate && actualLessons.length === 0;
     const statusLabel = calendar.status === "active" ? "Active" : calendar.status === "draft" ? "Draft" : "Inactive";
 
     return (
         <section aria-label="Calendar Detail" className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
-            {sampleData && <div role="status" className="border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">Đang dùng chế độ dữ liệu mẫu. Không thể tạo buổi học upstream trong môi trường này.</div>}
-            {!sampleData && !sourceVerified && <div role="status" className="border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">Chưa xác minh được nguồn dữ liệu upstream; thao tác lưu lịch đang bị khóa.</div>}
             <header className="space-y-4 border-b border-blue-100 bg-gradient-to-r from-blue-50/50 via-background to-indigo-50/40 px-4 py-4 sm:px-6 sm:py-5 dark:border-blue-950 dark:from-blue-950/20 dark:via-background dark:to-indigo-950/20">
                 <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
                     <div className="flex min-w-0 flex-1 items-center gap-3 pt-1 sm:gap-4">
@@ -253,30 +257,35 @@ export function CalendarDetailView({ calendar, classItem, onBack, sourceVerified
                                 </div>
                             </CollapsibleContent>
                         </Collapsible>;
-                    }) : <section className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-4 sm:p-5 dark:border-blue-950 dark:bg-blue-950/10">
-                        <div><h4 className="font-semibold">Choose a topic to schedule</h4><p className="text-sm text-muted-foreground">Danh sách lấy trực tiếp từ Topics &amp; Syllabus (chỉ topic đang active).</p></div>
+                    }) : null}
+
+                    <section aria-label="Add topics to schedule" className="space-y-4 rounded-xl border border-blue-100 bg-blue-50/30 p-4 sm:p-5 dark:border-blue-950 dark:bg-blue-950/10">
+                        <div><h4 className="font-semibold">Choose topics to schedule</h4><p className="text-sm text-muted-foreground">Chọn nhiều topic (chỉ topic đang active). Mỗi topic xếp lịch theo slot riêng; slot đã dùng cho topic trước sẽ không được trùng ở topic sau.</p></div>
                         {activeTopicsQuery.isPending ? <p role="status" className="text-sm text-muted-foreground">Loading active topics…</p>
                             : activeTopicsQuery.isError ? <p role="alert" className="text-sm text-red-700">Không tải được topic từ API. Hãy thử tải lại; không có topic mẫu được tự thêm.</p>
-                            : <Select value={selectedTopicId} onValueChange={setSelectedTopicId}>
-                                <SelectTrigger aria-label="Select topic for calendar" className="max-w-xl bg-background"><SelectValue placeholder="Select topic (code · name)" /></SelectTrigger>
-                                <SelectContent>{(activeTopicsQuery.data ?? []).map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.code} · {item.name} · v{item.version} ({item.durationHours}h)</SelectItem>)}</SelectContent>
+                            : <Select value={pickerValue} onValueChange={(value) => { setSelectedTopicIds((current) => current.includes(value) ? current : [...current, value]); setPickerValue(""); }}>
+                                <SelectTrigger aria-label="Select topic for calendar" className="max-w-xl bg-background" disabled={!canManageSchedule || !availableTopics.length}><SelectValue placeholder={availableTopics.length ? "Add a topic (code · name)" : "No more topics to add"} /></SelectTrigger>
+                                <SelectContent>{availableTopics.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.code} · {item.name} · v{item.version} ({item.durationHours}h)</SelectItem>)}</SelectContent>
                             </Select>}
-                        {selectedScheduleTopic && <>
-                            <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-3"><p><strong className="text-foreground">Topic:</strong> {selectedScheduleTopic.label} · {selectedScheduleTopic.name}</p><p><strong className="text-foreground">Class range:</strong> {displayDate(classStartDate, true)} – {displayDate(classEndDate, true)}</p><p><strong className="text-foreground">Topic duration:</strong> {selectedCatalogTopic?.durationHours} hours</p></div>
+                        {pendingTopics.map(({ catalog, schedule }) => <div key={schedule.id} className="space-y-3 rounded-xl border bg-background p-3 sm:p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-3 sm:gap-4"><p><strong className="text-foreground">Topic:</strong> {schedule.label} · {schedule.name}</p><p><strong className="text-foreground">Class range:</strong> {displayDate(classStartDate, true)} – {displayDate(classEndDate, true)}</p><p><strong className="text-foreground">Duration:</strong> {catalog.durationHours} hours</p></div>
+                                <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedTopicIds((current) => current.filter((id) => id !== schedule.id))}>Remove</Button>
+                            </div>
                             <CalendarScheduleBuilder
                                 calendar={calendar}
-                                topic={selectedScheduleTopic}
+                                topic={schedule}
                                 classItem={classItem}
                                 sessions={classSessionsQuery.data ?? []}
                                 sessionsLoading={classSessionsQuery.isPending}
                                 sessionsError={classSessionsQuery.isError}
                                 canManage={canManageSchedule}
-                                onCalendarSaved={(updated) => { setSelectedTopicId(""); onCalendarSaved(updated); }}
+                                onCalendarSaved={(updated) => { setSelectedTopicIds((current) => current.filter((id) => id !== schedule.id)); onCalendarSaved(updated); }}
                                 onSessionsReload={async () => classSessionsQuery.refetch()}
                             />
-                        </>}
+                        </div>)}
                         {!activeTopicsQuery.isPending && !activeTopicsQuery.isError && !activeTopicsQuery.data?.length && <p className="text-sm text-muted-foreground">API hiện không có topic active để xếp lịch.</p>}
-                    </section>}
+                    </section>
                 </section>
             </div>
 
