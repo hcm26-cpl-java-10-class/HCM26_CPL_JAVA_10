@@ -1,13 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useDebounce } from "@uidotdev/usehooks";
-import { ChevronLeft, ChevronRight, ExternalLink, RefreshCw, Search, TriangleAlert, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, Link2, RefreshCw, Search, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { gitIntegrationErrorBody } from "@/api/features/git-integration.api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import type { GitInstallation, GitRepositoryFilter } from "@/types/features/git-integration";
+import type { GitInstallation, GitRepositoryFilter, GitRepositoryItem } from "@/types/features/git-integration";
 import { formatDateTime, formatRelative, installationManageUrl } from "../git-integration.format";
 import { gitIntegrationKeys, useInstallationRepositories } from "../useGitIntegration";
 import { GitHubTile } from "./GitIntegrationHeader";
@@ -33,10 +33,11 @@ const FILTERS: Array<{ id: GitRepositoryFilter; label: string; count: "all" | "a
 
 /**
  * US-GI-03: repositories a GitHub App installation can access, with server-side
- * search, filter and paging. Read-only here; GI-04 reuses it to pick a repository
- * for a project (pass `projectId` so "linked to this project" is recognised).
+ * search, filter and paging. Read-only by default; GI-04 passes `onSelect` to pick
+ * a repository for a project (and `projectId` so "linked to this project" is recognised).
  */
-export function RepositoryBrowserSheet({ open, onOpenChange, installations, installationId, onInstallationChange, projectId }: {
+export function RepositoryBrowserSheet({ open, onOpenChange, installations, installationId, onInstallationChange, projectId,
+  onSelect, selectLabel = "Select" }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Connected installations the user can switch between. */
@@ -44,12 +45,17 @@ export function RepositoryBrowserSheet({ open, onOpenChange, installations, inst
   installationId: number;
   onInstallationChange: (id: number) => void;
   projectId?: number;
+  /** GI-04 select mode: each selectable repository gets a button calling this. */
+  onSelect?: (repository: GitRepositoryItem) => void;
+  selectLabel?: string;
 }) {
+  const selecting = onSelect !== undefined;
   const queryClient = useQueryClient();
   const searchRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
-  const [filter, setFilter] = useState<GitRepositoryFilter>("all");
+  // Picking a repository starts on the ones that can actually be chosen.
+  const [filter, setFilter] = useState<GitRepositoryFilter>(selecting ? "available" : "all");
   const [coolingDown, setCoolingDown] = useState(false);
 
   // Paging belongs to one result set: a new search, filter or installation starts again at page 0.
@@ -118,7 +124,11 @@ export function RepositoryBrowserSheet({ open, onOpenChange, installations, inst
     body = <p className="px-6 py-12 text-center text-sm text-muted-foreground">No repositories in this tab.</p>;
   } else if (data) {
     body = <ul aria-label="Repositories" className={cn("divide-y transition-opacity", busy && "opacity-70")}>
-      {data.items.map(item => <RepositoryRow key={item.externalId} repository={item} />)}
+      {data.items.map(item => <RepositoryRow key={item.externalId} repository={item}
+        action={onSelect && item.selectable
+          ? <Button size="sm" variant="outline" className="h-8" onClick={() => onSelect(item)}
+            aria-label={`${selectLabel} ${item.fullName}`}><Link2 />{selectLabel}</Button>
+          : undefined} />)}
     </ul>;
   }
 
@@ -128,8 +138,11 @@ export function RepositoryBrowserSheet({ open, onOpenChange, installations, inst
         <div className="flex items-center gap-3 pr-8">
           <GitHubTile size="sm" />
           <div className="min-w-0">
-            <SheetTitle className="text-base">Repositories</SheetTitle>
-            <SheetDescription className="text-xs">Repositories the GitHub App can access, public and private.</SheetDescription>
+            <SheetTitle className="text-base">{selecting ? "Choose a repository" : "Repositories"}</SheetTitle>
+            <SheetDescription className="text-xs">
+              {selecting ? "Only repositories the GitHub App can access and that aren't linked to another project can be chosen."
+                : "Repositories the GitHub App can access, public and private."}
+            </SheetDescription>
           </div>
         </div>
         <InstallationSwitcher installations={installations} selectedId={installationId} onSelect={onInstallationChange} />

@@ -1,10 +1,13 @@
 package com.example.starter_project_2025.system.git_integration.github;
 
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranch;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallation;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationRepositoriesPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationToken;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubRepository;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubUser;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -34,4 +37,14 @@ public interface GitHubApiClient {
 
     /** One page (max 100) of the repositories the installation can access, public and private. */
     GitHubInstallationRepositoriesPage listInstallationRepositories(String installationToken, int page);
+
+    /**
+     * GI-04: a repository by GitHub's numeric id (stable across renames and transfers), read
+     * with an installation token. Empty when the installation cannot access it (GitHub answers
+     * 404 both for "not granted" and "deleted"), or when access is refused (403, not a rate limit).
+     */
+    Optional<GitHubRepository> getRepository(String installationToken, long repositoryId);
+
+    /** GI-04: one page (max 100) of a repository's branches. */
+    List<GitHubBranch> listBranches(String installationToken, String owner, String repository, int page);
 }

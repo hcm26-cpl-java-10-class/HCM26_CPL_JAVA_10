@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatWorkspaceDate, WorkspaceStatusBadge } from "./workspace.shared";
 import { WorkspaceGitRepositoryPanel } from "./WorkspaceGitRepositoryPanel";
+import { ProjectRepositoryCard } from "@/pages/management/git-integration/components/ProjectRepositoryCard";
 import type { WorkspaceProjectNode } from "@/types/features/project-assignment";
 
 function information(value?: string | null) {
@@ -28,6 +29,8 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
   const projectStatus = selectedProject?.status ?? workspace.projectStatus;
   const projectDescription = selectedProject?.description ?? workspace.topic_snapshot?.description ?? workspace.projectDescription;
   const mentor = workspace.mentorName?.trim();
+  // US-GI-04: the GitHub repository belongs to the master project; a module shows its master's.
+  const repositoryProjectId = selectedProject?.id ?? workspace.projectId ?? undefined;
 
   const cardClass = "min-w-0 gap-0 overflow-hidden border-slate-200/80 py-0 shadow-none dark:border-border";
   const fieldClass = "min-w-0 space-y-1.5 rounded-lg border border-slate-100 bg-slate-50/70 p-3 dark:border-border dark:bg-muted/20";
@@ -118,6 +121,9 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
         </div>
       </Card>
     </section>
+    {repositoryProjectId != null && <Card className={cardClass}>
+      <ProjectRepositoryCard key={repositoryProjectId} projectId={repositoryProjectId} />
+    </Card>}
     <Card className={cardClass}>
       <WorkspaceGitRepositoryPanel key={workspace.id} workspaceId={workspace.id} />
     </Card>

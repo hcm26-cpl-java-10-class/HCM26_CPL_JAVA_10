@@ -72,6 +72,21 @@ public class GitHubAppProperties {
     /** GI-03: safety cap on GitHub pages (100 repositories each) fetched per installation. */
     private int repositoryMaxPages = 10;
 
+    /** GI-04: attempts per synchronization job before it is marked FAILED. */
+    private int syncMaxAttempts = 3;
+
+    /** GI-04: a RUNNING job older than this is considered abandoned and is queued again. */
+    private long syncStuckAfterMinutes = 10;
+
+    /** GI-04: safety cap on branch pages (100 each) read by a synchronization. */
+    private int syncMaxBranchPages = 10;
+
+    /** GI-04: run a job right after the transaction that queued it commits (tests turn this off). */
+    private boolean syncDispatchEnabled = true;
+
+    /** GI-04: background poller for due/abandoned jobs (tests turn this off). */
+    private boolean syncPollerEnabled = true;
+
     private int connectTimeoutMillis = 5000;
 
     private int readTimeoutMillis = 10000;

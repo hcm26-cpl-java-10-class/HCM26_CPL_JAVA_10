@@ -235,4 +235,56 @@ class RestGitHubApiClientTest {
         assertThatThrownBy(() -> client.listInstallationRepositories("ghs_secret", 1))
                 .satisfies(e -> assertThat(((GitHubApiException) e).getRetryAfterSeconds()).isEqualTo(30L));
     }
+
+    // ---- GI-04 -------------------------------------------------------------------------------------
+
+    @Test
+    void getsRepositoryByStableNumericId() {
+        server.expect(requestTo("https://api.github.com/repositories/812345678"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("Authorization", "Bearer ghs_secret"))
+                .andRespond(withSuccess("""
+                        {"id":812345678,"name":"ecommerce","full_name":"hcm26-java-team/ecommerce",
+                         "owner":{"login":"hcm26-java-team"},"html_url":"https://github.com/hcm26-java-team/ecommerce",
+                         "private":true,"visibility":"private","default_branch":"main","archived":false,"disabled":false}
+                        """, MediaType.APPLICATION_JSON));
+
+        var repository = client.getRepository("ghs_secret", 812345678L).orElseThrow();
+        assertThat(repository.fullName()).isEqualTo("hcm26-java-team/ecommerce");
+        assertThat(repository.ownerLogin()).isEqualTo("hcm26-java-team");
+        assertThat(repository.defaultBranch()).isEqualTo("main");
+        server.verify();
+    }
+
+    @Test
+    void repositoryTheInstallationCannotSeeIsEmpty() {
+        server.expect(requestTo("https://api.github.com/repositories/1"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND).body("{\"message\":\"Not Found\"}"));
+        server.expect(requestTo("https://api.github.com/repositories/2"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).body("{\"message\":\"Resource not accessible by integration\"}"));
+
+        assertThat(client.getRepository("ghs_secret", 1L)).isEmpty();
+        assertThat(client.getRepository("ghs_secret", 2L)).isEmpty();
+    }
+
+    @Test
+    void rateLimitedRepositoryReadIsNotMistakenForNoAccess() {
+        server.expect(requestTo("https://api.github.com/repositories/1"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).header("x-ratelimit-remaining", "0"));
+
+        assertThatThrownBy(() -> client.getRepository("ghs_secret", 1L))
+                .satisfies(e -> assertThat(((GitHubApiException) e).getKind()).isEqualTo(GitHubApiException.Kind.RATE_LIMITED));
+    }
+
+    @Test
+    void listsBranchesPage() {
+        server.expect(requestTo("https://api.github.com/repos/hcm26-java-team/ecommerce/branches?per_page=100&page=1"))
+                .andExpect(header("Authorization", "Bearer ghs_secret"))
+                .andRespond(withSuccess("[{\"name\":\"main\",\"protected\":true},{\"name\":\"develop\",\"protected\":false}]",
+                        MediaType.APPLICATION_JSON));
+
+        var branches = client.listBranches("ghs_secret", "hcm26-java-team", "ecommerce", 1);
+        assertThat(branches).extracting("name").containsExactly("main", "develop");
+        assertThat(branches.get(0).protectedBranch()).isTrue();
+    }
 }

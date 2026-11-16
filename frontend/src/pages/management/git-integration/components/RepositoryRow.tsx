@@ -1,4 +1,5 @@
 import { Ban, CheckCircle2, ExternalLink, GitBranch, Link2 } from "lucide-react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { GitRepositoryItem } from "@/types/features/git-integration";
 import { RepositoryArchivedBadge, RepositoryVisibilityBadge, RepositoryVisibilityIcon } from "./RepositoryVisibilityBadge";
@@ -27,7 +28,8 @@ function UnavailableNote({ repository }: { repository: GitRepositoryItem }) {
   }
 }
 
-export function RepositoryRow({ repository }: { repository: GitRepositoryItem }) {
+/** `action` (GI-04): e.g. the "Select" button when the browser is used to pick a repository. */
+export function RepositoryRow({ repository, action }: { repository: GitRepositoryItem; action?: ReactNode }) {
   const dimmed = !repository.selectable && repository.unavailableReason !== "LINKED_TO_THIS_PROJECT";
   return <li className={cn("group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/60",
     dimmed && "opacity-60")}>
@@ -49,6 +51,7 @@ export function RepositoryRow({ repository }: { repository: GitRepositoryItem })
       </div>
       <UnavailableNote repository={repository} />
     </div>
+    {action && <div className="shrink-0 self-center">{action}</div>}
     <a href={repository.htmlUrl} target="_blank" rel="noreferrer"
       className="mt-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
       aria-label={`Open ${repository.fullName} on GitHub (new tab)`}>

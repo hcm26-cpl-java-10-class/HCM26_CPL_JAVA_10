@@ -106,6 +106,61 @@ const ERRORS: Record<string, GitIntegrationMessage> = {
     description: "GitHub is limiting requests for this connection. Please try again in a few minutes.",
     action: "retry",
   },
+  // ---- US-GI-04 · link a repository ----
+  GIT_PROJECT_NOT_FOUND: {
+    tone: "neutral",
+    title: "Project not found",
+    description: "The project may have been removed or is outside your organization.",
+    action: "dashboard",
+  },
+  GIT_PROJECT_NOT_MASTER: {
+    tone: "warning",
+    title: "Modules share the master project's repository",
+    description: "Link the repository from the master project. Every module uses it automatically.",
+    action: "integration",
+  },
+  GIT_PROJECT_NOT_LINKABLE: {
+    tone: "neutral",
+    title: "This project has ended",
+    description: "Completed or cancelled projects can't be linked to a repository.",
+    action: "integration",
+  },
+  GIT_PROJECT_ALREADY_LINKED: {
+    tone: "warning",
+    title: "This project already has a linked repository",
+    description: "A master project can have only one active repository.",
+    action: "integration",
+  },
+  GIT_REPOSITORY_IN_USE: {
+    tone: "warning",
+    title: "This repository is already in use",
+    description: "Each repository can be linked to only one master project.",
+    action: "integration",
+  },
+  GIT_REPOSITORY_NOT_ACCESSIBLE: {
+    tone: "error",
+    title: "No access to this repository",
+    description: "The GitHub App no longer has access to it. Grant access on GitHub, refresh the list, then try again.",
+    action: "integration",
+  },
+  GIT_REPOSITORY_ARCHIVED: {
+    tone: "neutral",
+    title: "Archived repositories can't be linked",
+    description: "Unarchive it on GitHub or choose another repository.",
+    action: "integration",
+  },
+  GIT_REPOSITORY_NOT_LINKED: {
+    tone: "neutral",
+    title: "No repository linked",
+    description: "Link a repository to this project first.",
+    action: "integration",
+  },
+  GIT_REQUEST_INVALID: {
+    tone: "error",
+    title: "The request is incomplete",
+    description: "Choose a GitHub account and a repository, then try again.",
+    action: "retry",
+  },
   UNAUTHENTICATED: {
     tone: "neutral",
     title: "Your session has ended",
@@ -130,4 +185,21 @@ export function errorMessage(code?: string, httpStatus?: number): GitIntegration
   if (httpStatus === 401) return ERRORS.UNAUTHENTICATED;
   if (httpStatus === 403) return ERRORS.GIT_INTEGRATION_FORBIDDEN;
   return FALLBACK;
+}
+
+/** US-GI-04: why the last synchronization failed, in words. */
+const SYNC_ERRORS: Record<string, string> = {
+  REPOSITORY_NOT_ACCESSIBLE: "The GitHub App can no longer access this repository.",
+  INSTALLATION_DISCONNECTED: "The GitHub App was uninstalled from this account.",
+  INSTALLATION_SUSPENDED: "The GitHub App installation is suspended.",
+  INSTALLATION_NOT_ACTIVE: "The GitHub connection is not active.",
+  REPOSITORY_NOT_ACTIVE: "The repository is no longer linked.",
+  PROVIDER_UNAVAILABLE: "GitHub could not be reached.",
+  RATE_LIMITED: "GitHub rate limit reached; it will retry automatically.",
+  WORKER_LOST: "The previous attempt did not finish.",
+  SYNC_ERROR: "An unexpected error occurred while synchronizing.",
+};
+
+export function syncErrorMessage(code?: string | null) {
+  return (code && SYNC_ERRORS[code]) || "The synchronization could not be completed.";
 }

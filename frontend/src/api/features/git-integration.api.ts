@@ -8,9 +8,13 @@ import type {
   GitIntegrationErrorBody,
   GitRepositoryPage,
   GitRepositoryQuery,
+  GitSyncJob,
+  LinkRepositoryRequest,
+  ProjectRepositoryView,
 } from "@/types/features/git-integration";
 
 const BASE = "/v1/git-integration/github";
+const PROJECTS = "/v1/git-integration/projects";
 
 /** GI-01: install the authorized GitHub App on a GitHub account or organization. */
 export const gitIntegrationApi = {
@@ -37,6 +41,18 @@ export const gitIntegrationApi = {
 
   /** Issues a one-time state and returns the GitHub App install URL to send the browser to. */
   connect: async () => (await axiosInstance.post<GitHubConnectStartResponse>(`${BASE}/connect`)).data,
+
+  /** US-GI-04: repository of a project; a module returns its master project's repository. */
+  projectRepository: async (projectId: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<ProjectRepositoryView>(`${PROJECTS}/${projectId}/repository`, { signal })).data,
+
+  /** US-GI-04: link a repository to a master project (201 created, 200 already linked) and start the initial sync. */
+  linkRepository: async (projectId: number, body: LinkRepositoryRequest) =>
+    (await axiosInstance.post<ProjectRepositoryView>(`${PROJECTS}/${projectId}/repository`, body)).data,
+
+  /** US-GI-04: queue the synchronization again after it failed. */
+  retrySync: async (projectId: number) =>
+    (await axiosInstance.post<GitSyncJob>(`${PROJECTS}/${projectId}/repository/sync`)).data,
 
   /** Completes the flow; HTTP 202 means the install waits for an organization owner's approval. */
   callback: async (body: GitHubCallbackRequest) => {

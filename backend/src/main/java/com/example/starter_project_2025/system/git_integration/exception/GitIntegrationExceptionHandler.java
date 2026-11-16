@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.git_integration.exception;
 
 import com.example.starter_project_2025.system.git_integration.controller.GitInstallationController;
+import com.example.starter_project_2025.system.git_integration.controller.ProjectRepositoryController;
 import com.example.starter_project_2025.system.git_integration.dto.GitIntegrationErrorResponse;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import lombok.extern.slf4j.Slf4j;
@@ -14,9 +15,12 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Error mapping for Git Integration endpoints. Runs before the global handler,
@@ -24,7 +28,7 @@ import java.time.LocalDateTime;
  * from secrets can leak through an unexpected error.
  */
 @Slf4j
-@RestControllerAdvice(assignableTypes = GitInstallationController.class)
+@RestControllerAdvice(assignableTypes = {GitInstallationController.class, ProjectRepositoryController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class GitIntegrationExceptionHandler {
 
@@ -35,7 +39,8 @@ public class GitIntegrationExceptionHandler {
             builder.header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()));
         }
         return builder.body(new GitIntegrationErrorResponse(ex.getStatus().value(), ex.getCode(), ex.getMessage(),
-                LocalDateTime.now(), CorrelationIdFilter.currentId(), ex.getRetryAfterSeconds(), ex.getInstallationStatus()));
+                LocalDateTime.now(), CorrelationIdFilter.currentId(), ex.getRetryAfterSeconds(), ex.getInstallationStatus(),
+                ex.getDetails(), null));
     }
 
     @ExceptionHandler(AuthenticationException.class)
@@ -59,7 +64,18 @@ public class GitIntegrationExceptionHandler {
     }
 
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
-    public ResponseEntity<GitIntegrationErrorResponse> invalidBody(Exception ex) {
+    public ResponseEntity<GitIntegrationErrorResponse> invalidBody(Exception ex, HandlerMethod handler) {
+        if (handler != null && ProjectRepositoryController.class.isAssignableFrom(handler.getBeanType())) {
+            // GI-04: field-keyed messages so the frontend can show them next to the field.
+            Map<String, String> errors = new LinkedHashMap<>();
+            if (ex instanceof MethodArgumentNotValidException invalid) {
+                invalid.getBindingResult().getFieldErrors()
+                        .forEach(field -> errors.putIfAbsent(field.getField(), field.getDefaultMessage()));
+            }
+            return ResponseEntity.badRequest().body(new GitIntegrationErrorResponse(HttpStatus.BAD_REQUEST.value(),
+                    "GIT_REQUEST_INVALID", "Dữ liệu yêu cầu không hợp lệ", LocalDateTime.now(),
+                    CorrelationIdFilter.currentId(), null, null, null, errors.isEmpty() ? null : errors));
+        }
         return error(HttpStatus.BAD_REQUEST, "GIT_CALLBACK_INVALID", "Dữ liệu callback không hợp lệ");
     }
 

@@ -1,13 +1,16 @@
 package com.example.starter_project_2025.system.git_integration.github;
 
 import com.example.starter_project_2025.system.git_integration.config.GitHubAppProperties;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranch;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallation;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationRepositoriesPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationToken;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubOAuthTokenResponse;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubRepository;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubUser;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubUserInstallationsPage;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -21,6 +24,7 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -170,6 +174,40 @@ public class RestGitHubApiClient implements GitHubApiClient {
             throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE, "list installation repositories", 200);
         }
         return result;
+    }
+
+    @Override
+    public Optional<GitHubRepository> getRepository(String installationToken, long repositoryId) {
+        try {
+            GitHubRepository repository = call("get repository", () -> restClient.get()
+                    .uri("/repositories/{id}", repositoryId)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationToken)
+                    .retrieve()
+                    .body(GitHubRepository.class));
+            if (repository == null || repository.id() == null) {
+                throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE, "get repository", 200);
+            }
+            return Optional.of(repository);
+        } catch (GitHubApiException e) {
+            // Rate limits were already classified as RATE_LIMITED; a plain 403/404 means "no access".
+            if (e.getKind() == GitHubApiException.Kind.REJECTED && (e.getHttpStatus() == 404 || e.getHttpStatus() == 403)) {
+                return Optional.empty();
+            }
+            throw e;
+        }
+    }
+
+    @Override
+    public List<GitHubBranch> listBranches(String installationToken, String owner, String repository, int page) {
+        List<GitHubBranch> branches = call("list branches", () -> restClient.get()
+                .uri(uri -> uri.path("/repos/{owner}/{repo}/branches")
+                        .queryParam("per_page", PAGE_SIZE)
+                        .queryParam("page", page)
+                        .build(owner, repository))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationToken)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<GitHubBranch>>() { }));
+        return branches == null ? List.of() : branches;
     }
 
     /**

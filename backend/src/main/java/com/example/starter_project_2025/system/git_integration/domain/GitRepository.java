@@ -6,7 +6,10 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -26,10 +29,21 @@ import java.time.LocalDateTime;
  * GI-03 only reads this table (to mark repositories already linked); GI-04
  * writes it. Rows are never deleted: unlinking or losing access changes
  * {@code status} so history stays available.
+ * <p>
+ * GI-04: {@code active_project_id} / {@code active_external_id} mirror
+ * {@code project_id} / {@code external_id} only while the row is ACTIVE and are
+ * NULL otherwise. Their unique constraints enforce, in the database and under
+ * concurrency, "at most one ACTIVE repository per master project" and "a
+ * repository is ACTIVE in at most one project" (H2 and MySQL have no partial
+ * unique indexes; unique columns accept many NULLs).
  */
 @Entity
 @Table(
         name = "git_repositories",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_git_repo_active_project", columnNames = "active_project_id"),
+                @UniqueConstraint(name = "uk_git_repo_active_external", columnNames = {"provider", "active_external_id"})
+        },
         indexes = {
                 @Index(name = "idx_git_repo_provider_external_status", columnList = "provider, external_id, status"),
                 @Index(name = "idx_git_repo_project", columnList = "project_id, status"),
@@ -97,7 +111,23 @@ public class GitRepository extends BaseEntity {
     @Column(name = "last_synced_at")
     LocalDateTime lastSyncedAt;
 
+    /** = {@code project_id} while ACTIVE, NULL otherwise. Maintained by {@link #syncActiveKeys()}. */
+    @Column(name = "active_project_id")
+    Long activeProjectId;
+
+    /** = {@code external_id} while ACTIVE, NULL otherwise. Maintained by {@link #syncActiveKeys()}. */
+    @Column(name = "active_external_id")
+    Long activeExternalId;
+
     @Version
     @Column(name = "version")
     Long version;
+
+    @PrePersist
+    @PreUpdate
+    void syncActiveKeys() {
+        boolean active = status == GitRepositoryStatus.ACTIVE;
+        activeProjectId = active ? projectId : null;
+        activeExternalId = active ? externalId : null;
+    }
 }
