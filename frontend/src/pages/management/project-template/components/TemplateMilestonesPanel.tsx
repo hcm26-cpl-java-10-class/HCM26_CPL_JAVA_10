@@ -37,6 +37,7 @@ export function TemplateMilestonesPanel({ templateId, editable }: { templateId: 
     onSaved={(saved) => {
       queryClient.setQueryData(queryKey, saved);
       void queryClient.invalidateQueries({ queryKey: ["project-templates"] });
+      void queryClient.invalidateQueries({ queryKey: ["project-template-versions"] });
     }}
   />;
 }

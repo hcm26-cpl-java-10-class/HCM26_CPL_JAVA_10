@@ -49,6 +49,11 @@ public class RoleDataInitializer implements CommandLineRunner {
         ensurePermission("SCORE_APPEAL", "VIEW_OWN");
         ensurePermission("SCORE_APPEAL", "READ");
         ensurePermission("SCORE_APPEAL", "REVIEW");
+        // Tu danh gia / danh gia cheo (UFR-EXM-012)
+        ensurePermission("EXAM_REVIEW", "READ");
+        ensurePermission("EXAM_REVIEW", "CREATE");
+        ensurePermission("EXAM_REVIEW", "ASSIGN");
+        ensurePermission("EXAM_REVIEW", "VIEW_ALL");
         List<Permission> allPermissions = permissionRepository.findAll();
 
         upsertRole(ADMIN_ROLE, "Administrator with full system access", permissionRepository.findAll());
@@ -77,6 +82,8 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "STUDENT_SCORE_VIEW_OWN",
                         "SCORE_APPEAL_CREATE",
                         "SCORE_APPEAL_VIEW_OWN",
+                        "EXAM_REVIEW_READ",
+                        "EXAM_REVIEW_CREATE",
                         "WORKSPACE_READ", "WORKSPACE_MEMBER_READ",
                         "MILESTONE_READ", "SPRINT_READ", "TASK_WRITE", "ARTIFACT_READ", "ARTIFACT_SUBMIT",
                         "ARTIFACT_DRAFT_WRITE",
@@ -109,6 +116,9 @@ public class RoleDataInitializer implements CommandLineRunner {
                         "INVITATION_DELETE",
                         "SCORE_APPEAL_READ",
                         "SCORE_APPEAL_REVIEW",
+                        "EXAM_REVIEW_READ",
+                        "EXAM_REVIEW_ASSIGN",
+                        "EXAM_REVIEW_VIEW_ALL",
                         "USER_READ",
                         "DEPARTMENT_READ",
                         "DEPARTMENT_UPDATE",

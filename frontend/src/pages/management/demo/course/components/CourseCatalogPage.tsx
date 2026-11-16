@@ -346,7 +346,7 @@ export function CourseCatalogPage({ embedded = false }: { embedded?: boolean }) 
                 isEnrolling={enrollingCourseId === course.id}
                 canAssign={embedded}
                 showEnrollmentAction={!embedded}
-                showDetailAction={embedded}
+                showDetailAction
                 onEnroll={(courseId) => enrollMutation.mutate(courseId)}
                 disableNavigation={embedded}
                 onSelect={embedded ? (selected) => navigate(`/course-enrollments/${selected.id}`) : undefined}

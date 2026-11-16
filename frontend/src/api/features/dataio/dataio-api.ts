@@ -14,7 +14,8 @@ export const downloadTemplate = async (entity: string, format: "xlsx" | "csv" = 
     const contentDisposition = res.headers["content-disposition"];
     const filename = getFilenameFromHeader(contentDisposition);
 
-    const isCsv = format === "csv" || filename?.endsWith(".csv") || res.headers["content-type"]?.includes("csv");
+    const isCsv = format === "csv" || (filename?.endsWith(".csv") ?? false) ||
+        String(res.headers["content-type"] ?? "").includes("csv");
     const blob = new Blob([res.data], {
         type: isCsv
             ? "text/csv;charset=utf-8"

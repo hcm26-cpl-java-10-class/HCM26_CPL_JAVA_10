@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+
+<html class="h-full bg-slate-50" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Quản lý phân nhóm - Lập trình Java 2026</title>
+<!-- Tailwind CSS CDN with Forms & Container Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<style data-purpose="typography">
+    body {
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+  </style>
+<style data-purpose="custom-scroll">
+    /* Tùy chỉnh thanh cuộn nhẹ nhàng, tinh tế */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="min-h-full flex flex-col text-slate-800 antialiased selection:bg-indigo-100 selection:text-indigo-900 pb-20">
+<!-- BEGIN: NavigationBar -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs" data-purpose="top-navigation">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex items-center justify-between h-16">
+<!-- Breadcrumb / Back button -->
+<div class="flex items-center space-x-3">
+<a class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors" href="#">
+<svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+            Quay lại danh sách lớp
+          </a>
+<span class="text-slate-300">/</span>
+<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Phân nhóm học viên</span>
+</div>
+<!-- Navigation Tabs -->
+<nav aria-label="Tabs" class="flex space-x-2">
+<a aria-current="page" class="px-4 py-2 text-sm font-semibold text-indigo-600 bg-indigo-50/70 border border-indigo-100 rounded-lg shadow-xs" href="#">
+            Nhóm &amp; thành viên
+          </a>
+<a class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition-colors" href="#">
+            Lịch sử thành viên / Vai trò
+          </a>
+</nav>
+</div>
+</div>
+</header>
+<!-- END: NavigationBar -->
+<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+<!-- BEGIN: HeaderSection -->
+<section class="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm" data-purpose="class-and-session-control">
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+<!-- Class Meta -->
+<div>
+<div class="flex items-center gap-3">
+<h1 class="text-2xl font-bold tracking-tight text-slate-900">Lập trình Java 2026 - Lớp 02</h1>
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Đang hoạt động
+            </span>
+</div>
+<div class="flex items-center gap-4 mt-1.5 text-sm text-slate-500 font-medium">
+<span class="flex items-center gap-1.5">
+<svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+              Mã: <span class="font-mono text-slate-700 font-semibold">DEMO-JAVA-26-02</span>
+</span>
+<span class="text-slate-300">•</span>
+<span class="flex items-center gap-1.5">
+<svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+              Sĩ số: <span class="text-slate-700 font-semibold">35 học viên</span>
+</span>
+</div>
+</div>
+<!-- Session Selector & New Session CTA -->
+<div class="flex flex-wrap items-center gap-3">
+<div class="relative min-w-[280px]">
+<label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1" for="session-select">Phiên phân nhóm</label>
+<div class="relative">
+<select class="w-full pl-3 pr-10 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer appearance-none transition-all" id="session-select">
+<option selected="">Phiên #2 - OPEN - tối đa 5/nhóm</option>
+<option>Phiên #1 - CLOSED - tối đa 4/nhóm</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+</div>
+<div class="pt-5">
+<button class="inline-flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl border border-slate-200 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400" type="button">
+<svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+              Tạo phiên mới
+            </button>
+</div>
+</div>
+</div>
+<!-- Current Session Status Bar -->
+<div class="mt-4 pt-2 flex flex-wrap items-center justify-between gap-4">
+<div class="flex items-center gap-3">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-600 text-white shadow-xs">
+<span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+            OPEN
+          </span>
+<span class="text-sm font-semibold text-slate-800">Phiên #2 <span class="text-slate-400 font-normal">| Lớp #2</span></span>
+<span class="text-slate-300">|</span>
+<p class="text-sm text-slate-600">
+            Sức chứa hiện tại: <strong class="text-slate-900 font-semibold">5 học viên/nhóm</strong>
+</p>
+</div>
+<button class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-lg transition-colors" type="button">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          Hủy phiên
+        </button>
+</div>
+</section>
+<!-- END: HeaderSection -->
+<!-- BEGIN: StrictRuleWarning -->
+<section class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 rounded-2xl p-5 shadow-xs" data-purpose="rule-validation-banner">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div class="flex items-start gap-3.5">
+<div class="p-2 bg-amber-100/80 rounded-xl text-amber-700 mt-0.5">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<div class="space-y-1">
+<div class="flex items-center gap-2">
+<h3 class="text-sm font-bold text-amber-950">Kiểm tra điều kiện công bố toàn lớp</h3>
+<span class="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-200/70 text-amber-800 font-semibold">BR-UNI-10</span>
+</div>
+<p class="text-xs text-amber-900/90 leading-relaxed font-medium">
+<span class="font-semibold text-amber-950">Strict mode:</span> 100% học viên phải có nhóm, mọi nhóm phải được gán đề tài hợp lệ và đáp ứng đủ định suất vai trò trước khi công bố phiên.
+            </p>
+<p class="text-[11px] text-amber-800/80 italic">
+              * Còn thay đổi nhóm chưa lưu. Hãy lưu nháp trước khi kiểm tra hoặc công bố chính thức.
+            </p>
+</div>
+</div>
+<div class="flex-shrink-0 self-end md:self-center">
+<button class="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-amber-100 text-amber-900 text-xs font-bold rounded-xl border border-amber-300 shadow-xs hover:border-amber-400 transition-all focus:ring-2 focus:ring-amber-500" type="button">
+<svg class="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+            Kiểm tra điều kiện công bố
+          </button>
+</div>
+</div>
+</section>
+<!-- END: StrictRuleWarning -->
+<!-- BEGIN: MetricDashboard -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-4" data-purpose="status-kpis">
+<!-- Metric 1: Chưa vào nhóm -->
+<div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all flex items-center justify-between">
+<div>
+<p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Chưa vào nhóm ACTIVE</p>
+<div class="flex items-baseline gap-2 mt-2">
+<span class="text-3xl font-extrabold text-slate-900">35</span>
+<span class="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">Cần phân nhóm</span>
+</div>
+<p class="text-xs text-slate-400 mt-1">Tổng cộng 35 học viên trong danh sách</p>
+</div>
+<div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100/60">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+<!-- Metric 2: Nhóm đã lưu -->
+<div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all flex items-center justify-between">
+<div>
+<p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nhóm đã lưu</p>
+<div class="flex items-baseline gap-2 mt-2">
+<span class="text-3xl font-extrabold text-slate-900">0</span>
+<span class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Bản ghi</span>
+</div>
+<p class="text-xs text-slate-400 mt-1">Chưa có nhóm nào hoàn tất lưu</p>
+</div>
+<div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100/60">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+<!-- Metric 3: Chờ publish -->
+<div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:border-slate-300 transition-all flex items-center justify-between">
+<div>
+<p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nhóm chờ Publish</p>
+<div class="flex items-baseline gap-2 mt-2">
+<span class="text-3xl font-extrabold text-slate-900">0</span>
+<span class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">Sẵn sàng</span>
+</div>
+<p class="text-xs text-slate-400 mt-1">Đáp ứng đủ điều kiện công bố</p>
+</div>
+<div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center border border-slate-200">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+</section>
+<!-- END: MetricDashboard -->
+<!-- BEGIN: GroupCreationWorkspace -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start" data-purpose="group-builder-and-saved-view">
+<!-- CỘT TRÁI & GIỮA: CẤU HÌNH TẠO NHÓM NHÁP & STUDENT PICKER (8 Cột) -->
+<div class="lg:col-span-8 space-y-6">
+<!-- Box cấu hình tạo nhóm nhanh -->
+<div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+<div>
+<h2 class="text-base font-bold text-slate-900">Tạo nhóm nháp</h2>
+<p class="text-xs text-slate-500 mt-0.5">Cấu hình sức chứa và thêm nhóm vào phiên nháp để phân bổ học viên.</p>
+</div>
+<!-- Capacity Control & Add Button -->
+<div class="flex items-center gap-3">
+<div class="flex items-center border border-slate-300 rounded-xl bg-slate-50 px-3 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 focus-within:bg-white">
+<label class="text-xs font-semibold text-slate-500 whitespace-nowrap mr-2" for="capacity-input">Sức chứa tối đa / nhóm:</label>
+<input class="w-12 p-0 text-center font-bold text-slate-900 bg-transparent border-0 focus:ring-0 text-sm" id="capacity-input" max="20" min="1" type="number" value="5"/>
+</div>
+<button class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors" type="button">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+                Thêm nhóm
+              </button>
+</div>
+</div>
+</div>
+<!-- Thẻ Nhóm 1 (Khu vực soạn thảo nhóm) -->
+<div class="bg-white border-2 border-indigo-200/90 rounded-2xl shadow-sm overflow-hidden" data-purpose="group-draft-item">
+<!-- Header Thẻ Nhóm -->
+<div class="bg-indigo-50/50 px-5 py-3.5 border-b border-indigo-100 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="flex h-2.5 w-2.5 rounded-full bg-indigo-600"></span>
+<span class="text-sm font-bold text-slate-900">Nhóm 1</span>
+<span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-white text-indigo-700 border border-indigo-200">
+                0/5 thành viên
+              </span>
+</div>
+<button class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors" type="button">
+              Thu gọn
+            </button>
+</div>
+<!-- Nội dung cấu hình nhóm & Danh sách chọn học viên -->
+<div class="p-5 grid grid-cols-1 md:grid-cols-12 gap-5">
+<!-- Thuộc tính nhóm bên trái (5 Cột) -->
+<div class="md:col-span-5 space-y-4">
+<!-- Nhập tên nhóm -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1" for="group-name-input">Tên nhóm</label>
+<div class="relative">
+<input class="w-full text-sm font-semibold rounded-xl border-slate-300 focus:border-indigo-500 focus:ring-indigo-500 shadow-xs" id="group-name-input" type="text" value="Nhóm 1"/>
+<div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs font-medium">
+                    0/5
+                  </div>
+</div>
+</div>
+<!-- Mentor phụ trách -->
+<div>
+<label class="block text-xs font-semibold text-slate-700 mb-1" for="mentor-select">Mentor phụ trách</label>
+<div class="relative">
+<select class="w-full text-sm rounded-xl border-slate-300 bg-white focus:border-indigo-500 focus:ring-indigo-500 shadow-xs pr-8" id="mentor-select">
+<option selected="">Chưa chọn Mentor</option>
+<option>ThS. Nguyễn Văn A</option>
+<option>TS. Trần Thị B</option>
+</select>
+</div>
+</div>
+<!-- Action buttons nhóm -->
+<div class="flex items-center gap-2 pt-1">
+<button class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl border border-rose-200 transition-colors" type="button">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+                  Xóa nhóm
+                </button>
+<button class="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors flex-1" type="button">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+                  Đang chọn học viên
+                </button>
+</div>
+<!-- Học viên đã chọn box -->
+<div class="pt-2">
+<p class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Học viên đã gán vào nhóm</p>
+<div class="border border-dashed border-slate-300 rounded-xl p-3 text-center bg-slate-50/50">
+<span class="text-xs text-slate-400 italic">Chưa chọn học viên</span>
+</div>
+</div>
+</div>
+<!-- Bảng chọn học viên bên phải (7 Cột) -->
+<div class="md:col-span-7 bg-slate-50 rounded-xl p-4 border border-slate-200/90 flex flex-col h-[420px]" data-purpose="student-picker">
+<!-- Search & Subheader -->
+<div class="space-y-2 pb-3 border-b border-slate-200">
+<div class="flex items-center justify-between">
+<h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">Chọn học viên cho Nhóm 1</h4>
+<span class="text-[11px] text-slate-500 font-medium">Đã chọn: <span class="font-bold text-slate-900">0/5</span></span>
+</div>
+<p class="text-[11px] text-slate-500 leading-snug">
+                  Một học viên có thể ở nhiều nhóm DRAFT; hệ thống sẽ cảnh báo khi lưu.
+                </p>
+<!-- Search Input -->
+<div class="relative mt-2">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+<input class="w-full pl-9 pr-3 py-1.5 text-xs bg-white rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500" placeholder="Tìm tên hoặc mã học viên..." type="text"/>
+</div>
+</div>
+<!-- Student List Scrollable -->
+<div class="flex-1 overflow-y-auto custom-scrollbar divide-y divide-slate-100 pr-1 py-1 space-y-1">
+<!-- Học viên 1 -->
+<label class="flex items-center justify-between p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-200">
+<div class="flex items-center gap-3">
+<input class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" type="checkbox"/>
+<div class="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 font-semibold text-xs flex items-center justify-center">HA</div>
+<div>
+<p class="text-xs font-bold text-slate-800">Hồ Minh Anh</p>
+<p class="text-[10px] font-mono text-slate-500">SE198901</p>
+</div>
+</div>
+<span class="text-[11px] font-mono text-slate-400">#36</span>
+</label>
+<!-- Học viên 2 -->
+<label class="flex items-center justify-between p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-200">
+<div class="flex items-center gap-3">
+<input class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" type="checkbox"/>
+<div class="w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-semibold text-xs flex items-center justify-center">QB</div>
+<div>
+<p class="text-xs font-bold text-slate-800">Nguyễn Quốc Bảo</p>
+<p class="text-[10px] font-mono text-slate-500">SE178536</p>
+</div>
+</div>
+<span class="text-[11px] font-mono text-slate-400">#37</span>
+</label>
+<!-- Học viên 3 -->
+<label class="flex items-center justify-between p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-200">
+<div class="flex items-center gap-3">
+<input class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" type="checkbox"/>
+<div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 font-semibold text-xs flex items-center justify-center">TV</div>
+<div>
+<p class="text-xs font-bold text-slate-800">Võ Thảo Vy</p>
+<p class="text-[10px] font-mono text-slate-500">SE178627</p>
+</div>
+</div>
+<span class="text-[11px] font-mono text-slate-400">#38</span>
+</label>
+<!-- Học viên 4 -->
+<label class="flex items-center justify-between p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-200">
+<div class="flex items-center gap-3">
+<input class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" type="checkbox"/>
+<div class="w-7 h-7 rounded-full bg-amber-100 text-amber-700 font-semibold text-xs flex items-center justify-center">GH</div>
+<div>
+<p class="text-xs font-bold text-slate-800">Lý Gia Huy</p>
+<p class="text-[10px] font-mono text-slate-500">SE1415009</p>
+</div>
+</div>
+<span class="text-[11px] font-mono text-slate-400">#39</span>
+</label>
+<!-- Học viên 5 -->
+<label class="flex items-center justify-between p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-200">
+<div class="flex items-center gap-3">
+<input class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" type="checkbox"/>
+<div class="w-7 h-7 rounded-full bg-purple-100 text-purple-700 font-semibold text-xs flex items-center justify-center">KL</div>
+<div>
+<p class="text-xs font-bold text-slate-800">Phạm Khánh Linh</p>
+<p class="text-[10px] font-mono text-slate-500">SE1711625</p>
+</div>
+</div>
+<span class="text-[11px] font-mono text-slate-400">#40</span>
+</label>
+<!-- Học viên 6 -->
+<label class="flex items-center justify-between p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-200">
+<div class="flex items-center gap-3">
+<input class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" type="checkbox"/>
+<div class="w-7 h-7 rounded-full bg-pink-100 text-pink-700 font-semibold text-xs flex items-center justify-center">TK</div>
+<div>
+<p class="text-xs font-bold text-slate-800">Đỗ Tuấn Kiệt</p>
+<p class="text-[10px] font-mono text-slate-500">SE1709473</p>
+</div>
+</div>
+<span class="text-[11px] font-mono text-slate-400">#41</span>
+</label>
+<!-- Học viên 7 -->
+<label class="flex items-center justify-between p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-200">
+<div class="flex items-center gap-3">
+<input class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" type="checkbox"/>
+<div class="w-7 h-7 rounded-full bg-cyan-100 text-cyan-700 font-semibold text-xs flex items-center justify-center">NH</div>
+<div>
+<p class="text-xs font-bold text-slate-800">Cao Ngọc Hân</p>
+<p class="text-[10px] font-mono text-slate-500">SE1552311</p>
+</div>
+</div>
+<span class="text-[11px] font-mono text-slate-400">#42</span>
+</label>
+<!-- Học viên 8 -->
+<label class="flex items-center justify-between p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-200">
+<div class="flex items-center gap-3">
+<input class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" type="checkbox"/>
+<div class="w-7 h-7 rounded-full bg-slate-200 text-slate-700 font-semibold text-xs flex items-center justify-center">DA</div>
+<div>
+<p class="text-xs font-bold text-slate-800">Vũ Đức Anh</p>
+<p class="text-[10px] font-mono text-slate-500">SE178814</p>
+</div>
+</div>
+<span class="text-[11px] font-mono text-slate-400">#43</span>
+</label>
+<!-- Học viên 9 -->
+<label class="flex items-center justify-between p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-slate-200">
+<div class="flex items-center gap-3">
+<input class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" type="checkbox"/>
+<div class="w-7 h-7 rounded-full bg-rose-100 text-rose-700 font-semibold text-xs flex items-center justify-center">PT</div>
+<div>
+<p class="text-xs font-bold text-slate-800">Dương Phương Thảo</p>
+<p class="text-[10px] font-mono text-slate-500">SE243250</p>
+</div>
+</div>
+<span class="text-[11px] font-mono text-slate-400">#44</span>
+</label>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- CỘT PHẢI: DANH SÁCH NHÓM ĐÃ LƯU (4 Cột) -->
+<aside class="lg:col-span-4 space-y-4" data-purpose="saved-groups-panel">
+<div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+<div class="flex items-center justify-between border-b border-slate-100 pb-3">
+<div class="flex items-center gap-2">
+<svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+<h3 class="text-sm font-bold text-slate-900">Nhóm đã lưu</h3>
+</div>
+<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">0 nhóm</span>
+</div>
+<p class="text-xs text-slate-500 mt-2">
+            Các nhóm DRAFT chưa giữ chỗ học viên. Công bố chính thức sẽ kiểm tra lại trạng thái thành viên.
+          </p>
+<!-- Empty State Box -->
+<div class="mt-6 border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center text-center bg-slate-50/50">
+<div class="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400 mb-3">
+<svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path></svg>
+</div>
+<h4 class="text-xs font-bold text-slate-800">Chưa có nhóm đã lưu</h4>
+<p class="text-[11px] text-slate-400 mt-1 max-w-[200px]">
+              Lưu nhóm nháp để chúng xuất hiện ở đây và sẵn sàng kiểm tra điều kiện công bố.
+            </p>
+</div>
+</div>
+<!-- Tip Box -->
+<div class="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-4">
+<div class="flex items-start gap-2.5">
+<svg class="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+<p class="text-xs text-indigo-900 leading-relaxed font-medium">
+              Bạn có thể tạo nhiều nhóm nháp cùng lúc và chọn danh sách sinh viên tương ứng trước khi ấn <span class="font-bold">Lưu nhóm DRAFT</span>.
+            </p>
+</div>
+</div>
+</aside>
+</div>
+<!-- END: GroupCreationWorkspace -->
+</main>
+<!-- BEGIN: StickyBottomBar -->
+<footer class="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 py-3 shadow-lg" data-purpose="actions-footer">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+<!-- Hệ thống ghi chú trạng thái -->
+<div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
+<svg class="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+<span>Nhóm vượt giới hạn sẽ được backend kiểm tra; form không bị xóa nếu phát sinh lỗi.</span>
+</div>
+<!-- Action buttons chính -->
+<div class="flex items-center gap-3">
+<button class="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 active:bg-black text-white text-xs font-bold rounded-xl shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          Lưu nhóm DRAFT
+        </button>
+<button class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-400 text-xs font-bold rounded-xl cursor-not-allowed border border-slate-200" disabled="" type="button">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+          Công bố chính thức
+        </button>
+</div>
+</div>
+</footer>
+<!-- END: StickyBottomBar -->
+</body></html>

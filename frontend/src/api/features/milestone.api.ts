@@ -47,9 +47,18 @@ export const milestoneApi = {
   },
 
   async getTeamList(teamId: number, params: MilestoneListParams): Promise<MilestonePageResponse> {
+    const query = new URLSearchParams({ page: String(params.page), size: String(params.size) });
+    const sort = Array.isArray(params.sort) ? params.sort : params.sort ? [params.sort] : [];
+    sort.forEach((item) => query.append("sort", item.replace(",", ":")));
+    if (params.search) query.set("search", params.search);
+    params.status?.forEach((status) => query.append("lifecycleStatus", status));
+    if (params.mandatory !== undefined) query.set("mandatory", String(params.mandatory));
+    params.latePolicyType?.forEach((type) => query.append("latePolicyType", type));
+    if (params.deadlineFrom) query.set("deadlineFrom", params.deadlineFrom);
+    if (params.deadlineTo) query.set("deadlineTo", params.deadlineTo);
     const response = await axiosInstance.get<MilestonePageResponse>(
       `/teams/${teamId}/milestones`,
-      { params: { page: params.page, size: params.size, lifecycleStatus: params.status } },
+      { params: query },
     );
     return response.data;
   },

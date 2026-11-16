@@ -72,6 +72,7 @@ public class TaskAccessService {
     }
 
     public boolean canUpdate(Task task, Long actorId) {
+        if (task.getBacklogItem() != null && !backlogContext.writable(task.getBacklogItem().getId(), actorId)) return false;
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getAuthorities().stream()
                 .noneMatch(authority -> "TASK_UPDATE".equals(authority.getAuthority()))) {
@@ -96,6 +97,7 @@ public class TaskAccessService {
     }
 
     public boolean canDelete(Task task, Long actorId) {
+        if (task.getBacklogItem() != null && !backlogContext.writable(task.getBacklogItem().getId(), actorId)) return false;
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getAuthorities().stream()
                 .noneMatch(authority -> "TASK_DELETE".equals(authority.getAuthority()))) {

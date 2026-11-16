@@ -55,6 +55,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setShuffleOptions(e.getShuffleOptions());
         d.setShowAnswersAfterExam(e.getShowAnswersAfterExam());
         d.setPassScore(e.getPassScore());
+        d.setCourseWeight(e.getCourseWeight());
         d.setMaxScore(ExamScoring.effectiveMax(e.getMaxScore()));
         d.setLatePolicy(e.getLatePolicy());
         d.setLatePenaltyPercent(e.getLatePenaltyPercent());
@@ -90,7 +91,16 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         d.setSingleSession(Boolean.TRUE.equals(e.getSingleSession()));
         d.setCameraProctoring(Boolean.TRUE.equals(e.getCameraProctoring()));
         d.setNotifyOnViolation(Boolean.TRUE.equals(e.getNotifyOnViolation()));
+        d.setHeadTurnAngleDeg(e.headTurnAngleOrDefault());
+        d.setHeadTurnSeconds(e.headTurnSecondsOrDefault());
+        d.setFastSubmitPercent(e.fastSubmitPercentOrDefault());
         d.setHasPassword(e.getAccessCode() != null && !e.getAccessCode().trim().isEmpty());
+        // Tu danh gia / danh gia cheo
+        d.setSelfReviewEnabled(Boolean.TRUE.equals(e.getSelfReviewEnabled()));
+        d.setPeerReviewEnabled(Boolean.TRUE.equals(e.getPeerReviewEnabled()));
+        d.setPeerReviewCount(e.getPeerReviewCount() == null ? 2 : e.getPeerReviewCount());
+        d.setPeerReviewAnonymous(!Boolean.FALSE.equals(e.getPeerReviewAnonymous()));
+        d.setPeerReviewShowReference(Boolean.TRUE.equals(e.getPeerReviewShowReference()));
         return d;
     }
 
@@ -134,6 +144,7 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
     }
 
     private void apply(Exam e, ExamDTO d) {
+        if (d.isCourseWeightProvided()) e.setCourseWeight(d.getCourseWeight());
         if (d.getTitle() != null) e.setTitle(d.getTitle().trim());
         if (d.getDurationMinutes() != null) e.setDurationMinutes(d.getDurationMinutes());
 
@@ -151,13 +162,33 @@ public class ExamMapper implements BaseCrudMapper<Exam, ExamDTO> {
         if (d.getExamType() != null) e.setExamType(d.getExamType());
         if (d.getCategory() != null) e.setCategory(d.getCategory());
         // NEW (anti-cheat)
-        if (d.getAntiCheatEnabled() != null) e.setAntiCheatEnabled(d.getAntiCheatEnabled());
-        if (d.getDetectTabSwitch() != null) e.setDetectTabSwitch(d.getDetectTabSwitch());
-        if (d.getBlockCopyPaste() != null) e.setBlockCopyPaste(d.getBlockCopyPaste());
-        if (d.getRequireFullscreen() != null) e.setRequireFullscreen(d.getRequireFullscreen());
-        if (d.getSingleSession() != null) e.setSingleSession(d.getSingleSession());
-        if (d.getCameraProctoring() != null) e.setCameraProctoring(d.getCameraProctoring());
-        if (d.getNotifyOnViolation() != null) e.setNotifyOnViolation(d.getNotifyOnViolation());
+        // cau hinh chong gian lan chi sua duoc khi tao de thi hoac khi chua co sinh vien nao thi
+        boolean antiCheatEditable = e.getId() == null || !attemptRepository.existsByExam_Id(e.getId());
+        if (antiCheatEditable) {
+            if (d.getAntiCheatEnabled() != null) e.setAntiCheatEnabled(d.getAntiCheatEnabled());
+            if (d.getDetectTabSwitch() != null) e.setDetectTabSwitch(d.getDetectTabSwitch());
+            if (d.getBlockCopyPaste() != null) e.setBlockCopyPaste(d.getBlockCopyPaste());
+            if (d.getRequireFullscreen() != null) e.setRequireFullscreen(d.getRequireFullscreen());
+            if (d.getSingleSession() != null) e.setSingleSession(d.getSingleSession());
+            if (d.getCameraProctoring() != null) e.setCameraProctoring(d.getCameraProctoring());
+            if (d.getNotifyOnViolation() != null) e.setNotifyOnViolation(d.getNotifyOnViolation());
+        }
+        // cac he so chong gian lan: sua duoc khi tao de thi hoac khi chua co sinh vien nao thi
+        // (sau do bi khoa de thong ke dong nhat)
+        if (antiCheatEditable) {
+            e.setHeadTurnAngleDeg(d.getHeadTurnAngleDeg());
+            e.setHeadTurnSeconds(d.getHeadTurnSeconds());
+            e.setFastSubmitPercent(d.getFastSubmitPercent());
+        }
+        // Cau hinh tu danh gia / danh gia cheo chi sua duoc khi chua co sinh vien nao lam bai,
+        // tuong tu cau hinh chong gian lan (neu sua sau khi da phan cong se lam lech du lieu cham).
+        if (antiCheatEditable) {
+            if (d.getSelfReviewEnabled() != null) e.setSelfReviewEnabled(d.getSelfReviewEnabled());
+            if (d.getPeerReviewEnabled() != null) e.setPeerReviewEnabled(d.getPeerReviewEnabled());
+            if (d.getPeerReviewCount() != null) e.setPeerReviewCount(d.getPeerReviewCount());
+            if (d.getPeerReviewAnonymous() != null) e.setPeerReviewAnonymous(d.getPeerReviewAnonymous());
+            if (d.getPeerReviewShowReference() != null) e.setPeerReviewShowReference(d.getPeerReviewShowReference());
+        }
         if (d.getAccessCode() != null) {
             String trimmed = d.getAccessCode().trim();
             e.setAccessCode(trimmed.isEmpty() ? null : trimmed);

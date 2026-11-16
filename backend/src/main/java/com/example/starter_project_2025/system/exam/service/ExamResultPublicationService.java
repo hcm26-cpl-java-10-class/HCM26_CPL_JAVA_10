@@ -23,6 +23,7 @@ public class ExamResultPublicationService {
     private final ExamResultPublicationRepository publicationRepository;
     private final ExamResultEmailDispatcher emailDispatcher;
     private final ExamResultReadinessService readinessService;
+    private final com.example.starter_project_2025.system.demo.course.CourseAssessmentCompletionService completion;
 
     @Transactional(readOnly = true)
     public ExamResultPublicationDTO getStatus(Long examId) {
@@ -74,6 +75,7 @@ public class ExamResultPublicationService {
             emailDispatcher.dispatch(exam);
         }
 
+        if (exam.getCourse()!=null) completion.refreshCourse(exam.getCourse().getId());
         return toDTO(publication);
     }
 

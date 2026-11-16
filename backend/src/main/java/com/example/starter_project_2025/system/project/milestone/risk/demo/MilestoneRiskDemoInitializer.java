@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import javax.sql.DataSource;
-@Component @Order(22) @Profile("!test & !prod") @RequiredArgsConstructor
+@Component @Order(41) @Profile("!test & !prod") @RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.task-alert.demo.enabled", havingValue = "true", matchIfMissing = true)
 public class MilestoneRiskDemoInitializer implements CommandLineRunner {
     private final MilestoneRiskDemoDataService demo;

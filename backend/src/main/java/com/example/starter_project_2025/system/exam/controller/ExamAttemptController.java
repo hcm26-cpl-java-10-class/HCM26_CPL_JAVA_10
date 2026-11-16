@@ -14,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/exams")
@@ -37,6 +38,13 @@ public class ExamAttemptController {
             @AuthenticationPrincipal UserPrincipal principal
     ) {
         return ResponseEntity.ok(service.findStudentAttempts(principal.getUser().getId()));
+    }
+
+    @GetMapping("/my-locks")
+    public ResponseEntity<Map<Long, String>> getMyLocks(
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return ResponseEntity.ok(service.findLockedExamReasons(principal.getUser().getId()));
     }
 
     @GetMapping("/attempts/{attemptId}/review")

@@ -37,7 +37,5 @@ public class TemplateResourceDTO extends BaseDTO {
 
     String url;
 
-    String category;
-
     Integer orderIndex;
 }

@@ -31,7 +31,19 @@ import java.util.Map;
 @Slf4j
 public class AiTextClient {
 
-    private static final int MIN_TIMEOUT_SECONDS = 60;
+    /**
+     * Timeout tối thiểu cho một request AI.
+     *
+     * <p>Phân tích so sánh gửi payload khá lớn (1 target + tối đa 15 peers + toàn bộ
+     * peerStats), nên cần nhiều thời gian hơn so với việc viết nội dung bài học.
+     */
+    private static final int MIN_TIMEOUT_SECONDS = 90;
+
+    /** Nhiệt độ mặc định: dành cho việc viết nội dung sáng tạo. */
+    public static final double DEFAULT_TEMPERATURE = 0.7;
+
+    /** Nhiệt độ cho phân tích số liệu: gần như tất định, tránh bịa số. */
+    public static final double ANALYSIS_TEMPERATURE = 0.2;
 
     private final AiGradingProperties properties;
     private final ObjectMapper objectMapper;
@@ -47,6 +59,13 @@ public class AiTextClient {
     }
 
     public JsonNode generateJson(String systemInstruction, List<Turn> turns) {
+        return generateJson(systemInstruction, turns, DEFAULT_TEMPERATURE);
+    }
+
+    /**
+     * @param temperature 0 = deterministic (phân tích số liệu), 0.7 = sáng tạo (viết nội dung).
+     */
+    public JsonNode generateJson(String systemInstruction, List<Turn> turns, double temperature) {
         if (!isConfigured()) {
             throw new BadRequestException(
                     "Gemini API key is not configured. Set GEMINI_API_KEY in backend/.env to use the AI course builder.");
@@ -65,7 +84,7 @@ public class AiTextClient {
                 "contents", contents,
                 "generationConfig", Map.of(
                         "responseMimeType", "application/json",
-                        "temperature", 0.7,
+                        "temperature", temperature,
                         "maxOutputTokens", 8192
                 )
         );

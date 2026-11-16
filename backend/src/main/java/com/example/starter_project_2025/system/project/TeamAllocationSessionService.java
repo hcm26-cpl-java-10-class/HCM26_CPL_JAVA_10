@@ -242,12 +242,17 @@ public class TeamAllocationSessionService {
         }
 
         int requestedCapacity = request.maxMembers();
+        int previousCapacity = session.getMaxMembers();
         List<ProjectTeam> draftTeams =
                 teamRepository.findAllByAllocationSession_IdAndStatus(
                         sessionId, ProjectTeamStatus.DRAFT);
         for (ProjectTeam team : draftTeams) {
-            if (projectMemberRepository.countByTeam_Id(team.getId()) > requestedCapacity) {
-                throw new TeamCapacityExceededException(requestedCapacity);
+            if (team.getProjectTemplateId() != null) {
+                continue;
+            }
+            int allowed = capacityForUntemplatedDraft(team, previousCapacity, requestedCapacity);
+            if (projectMemberRepository.countByTeam_Id(team.getId()) > allowed) {
+                throw new TeamCapacityExceededException(allowed);
             }
         }
 
@@ -256,7 +261,8 @@ public class TeamAllocationSessionService {
         // window of that template; only untemplated drafts follow the session.
         draftTeams.stream()
                 .filter(team -> team.getProjectTemplateId() == null)
-                .forEach(team -> team.setMaxMembers(requestedCapacity));
+                .forEach(team -> team.setMaxMembers(
+                        capacityForUntemplatedDraft(team, previousCapacity, requestedCapacity)));
         teamRepository.saveAllAndFlush(draftTeams);
         TeamAllocationSession saved = sessionRepository.saveAndFlush(session);
         return responseFor(saved);
@@ -272,6 +278,15 @@ public class TeamAllocationSessionService {
                 .orElseThrow(() -> new IllegalStateException(
                         "Saved allocation session was not found in its class session list"));
         return AllocationSessionResponse.from(session, sessions.size() - index);
+    }
+
+    private int capacityForUntemplatedDraft(ProjectTeam team, int previousCapacity, int requestedCapacity) {
+        // Existing AUTO drafts may have been saved with one extra seat. New
+        // AUTO drafts use the session capacity, just like manual drafts.
+        boolean legacyExtraSeat = team.getAllocationSource() == TeamAllocationSource.AUTO
+                && team.getMaxMembers() != null
+                && team.getMaxMembers() > previousCapacity;
+        return legacyExtraSeat ? Math.addExact(requestedCapacity, 1) : requestedCapacity;
     }
 
     private int readMaxMembers(ProjectTemplate template) {

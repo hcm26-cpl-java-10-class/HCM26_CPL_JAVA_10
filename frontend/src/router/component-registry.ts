@@ -1,3 +1,5 @@
+import CourseLearnerGradesPage from "@/pages/management/demo/course/pages/CourseLearnerGradesPage";
+import ScoreManagementPage from "@/pages/management/exam/score-management";
 import ExamCurriculumPage from "@/pages/management/exam/curriculum/ExamCurriculumPage";
 import WeeklyCalendarPage from "@/pages/management/calendar/WeeklyCalendarPage";
 import ScheduleVersionListPage from "@/pages/management/demo/schedule_version";
@@ -33,7 +35,9 @@ import UnifiedInvitationsPage, {
 } from "@/pages/invitations/InvitationsPage";
 import TopicMarkGradebookDemoPage from "@/pages/management/demo/topic_mark_gradebook";
 import TeamAllocationPage from "@/pages/management/team-allocation";
+import TeamAllocationSetupPage from "@/pages/management/team-allocation/setup";
 import TeamAllocationClassListPage from "@/pages/management/team-allocation/class-list";
+import ProjectAssignmentPage from "@/pages/management/team-allocation/ProjectAssignmentPage";
 import StudentExamList from "@/pages/student/StudentExamList";
 import StudentExamTakingPage from "@/pages/student/StudentExamTakingPage";
 import StudentLandingPage from "@/pages/student/StudentLandingPage";
@@ -62,6 +66,7 @@ import WorkspaceDetailPage from "@/pages/management/workspace/WorkspaceDetailPag
 import { createElement } from "react";
 import TaskManagementPage from "@/pages/management/task";
 import ProjectAlertsPage from "@/pages/management/alerts";
+import ProjectReportsPage from "@/pages/management/project-reports";
 import ProjectTemplateListPage from "@/pages/management/project-template";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
@@ -70,6 +75,10 @@ import StudentTeamMilestoneSubmissionsPage from "@/pages/student/StudentTeamMile
 import MyScoresPage from "@/pages/student/MyScoresPage";
 import MyAppealsPage from "@/pages/student/MyAppealsPage";
 import ExamReviewPage from "@/pages/student/ExamReviewPage";
+import PeerReviewListPage from "@/pages/student/PeerReviewListPage";
+import PeerReviewFormPage from "@/pages/student/PeerReviewFormPage";
+import PeerReviewFeedbackPage from "@/pages/student/PeerReviewFeedbackPage";
+import PeerReviewOverviewPage from "@/pages/management/exam/reviews/PeerReviewOverviewPage";
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
 import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
@@ -157,8 +166,10 @@ export const routes: RouteConfig[] = [
   { path: "/calendar/preview", component: WeeklyCalendarPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/schedule-versions", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
   { path: "/calendar/adjust", component: ScheduleVersionListPage, requiredPermission: "SESSION_READ", isModuleDriven: true },
+  { path: "/courses/:id/grades", component: CourseLearnerGradesPage, requiredPermissions: ["COURSE_REPORT_READ", "EXAM_READ"] },
   { path: "/tasks", component: TaskManagementPage, requiredPermission: "TASK_READ" },
   { path: "/management/alerts", component: ProjectAlertsPage, requiredPermission: "PROJECT_ALERT_READ" },
+  { path: "/management/reports/projects", component: ProjectReportsPage, requiredPermission: "PROJECT_REPORT_READ" },
   { path: "/tasks/create", component: TaskManagementPage, requiredPermission: "TASK_CREATE" },
   { path: "/tasks/:id/edit", component: TaskManagementPage, requiredPermission: "TASK_UPDATE" },
   { path: "/tasks/:id/detail", component: TaskManagementPage, requiredPermission: "TASK_READ" },
@@ -209,6 +220,11 @@ export const routes: RouteConfig[] = [
   },
 
   // EXAMS
+  {
+    path: "/exams/score-management",
+    component: ScoreManagementPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
   {
     path: "/exams/curriculum",
     component: ExamCurriculumPage,
@@ -267,6 +283,11 @@ export const routes: RouteConfig[] = [
 
   {
     path: "/exams/:examId/similarity",
+    component: ExamSimilarityPage,
+    requiredPermission: "EXAM_UPDATE",
+  },
+  {
+    path: "/exams/:examId/grading/similarity",
     component: ExamSimilarityPage,
     requiredPermission: "EXAM_UPDATE",
   },
@@ -360,6 +381,17 @@ export const routes: RouteConfig[] = [
   {
     path: "/team-allocation/classes/:classId",
     component: TeamAllocationPage,
+    requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
+  },
+  {
+    // Allocation workspace of one session: "Allocate Teams" + "Set up Teams".
+    path: "/team-allocation/classes/:classId/setup",
+    component: TeamAllocationSetupPage,
+    requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
+  },
+  {
+    path: "/team-allocation/classes/:classId/assign",
+    component: ProjectAssignmentPage,
     requiredPermissions: ["PEO_TEAM_ALLOCATE", "PRJ_WORKSPACE_MANAGE"],
   },
   {
@@ -490,6 +522,35 @@ export const routes: RouteConfig[] = [
     path: "/student/exams/attempts/:attemptId/review",
     component: ExamReviewPage,
     requiredPermission: "EXAM_TAKE",
+  },
+
+  // PEER / SELF REVIEW (UFR-EXM-012)
+  {
+    path: "/student/reviews",
+    component: PeerReviewListPage,
+    requiredPermission: "EXAM_REVIEW_READ",
+    isModuleDriven: false,
+  },
+
+  {
+    path: "/student/reviews/:assignmentId",
+    component: PeerReviewFormPage,
+    requiredPermission: "EXAM_REVIEW_READ",
+    isModuleDriven: false,
+  },
+
+  {
+    path: "/student/feedback",
+    component: PeerReviewFeedbackPage,
+    requiredPermission: "EXAM_REVIEW_READ",
+    isModuleDriven: false,
+  },
+
+  {
+    path: "/exams/:examId/reviews",
+    component: PeerReviewOverviewPage,
+    requiredPermission: "EXAM_REVIEW_VIEW_ALL",
+    isModuleDriven: false,
   },
 
   // MY SCORES / MY APPEALS

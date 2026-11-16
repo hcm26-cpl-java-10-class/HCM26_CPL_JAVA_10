@@ -5,12 +5,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklog, Long> {
+    List<SprintBacklog> findAllByProjectIdInAndIsActiveTrueOrderByIdAsc(Collection<Long> projectIds);
     @Query("""
             select case when count(item) > 0 then true else false end
             from SprintBacklog item left join item.sprint sprint
@@ -21,6 +23,10 @@ public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklo
     boolean existsInWorkspaceStatus(@Param("teamId") Long teamId, @Param("projectId") Long projectId,
                                    @Param("status") SprintBacklogStatus status);
     boolean existsByMilestone_Id(java.util.UUID milestoneId);
+    long countByMilestone_IdAndIsActiveTrueAndStatusNotAndEndDateBefore(
+            java.util.UUID milestoneId, SprintBacklogStatus status, LocalDateTime deadline);
+    List<SprintBacklog> findAllByIsActiveTrueAndStatusInAndEndDateBeforeAndAssigneeProjectMemberIdIsNotNull(
+            Collection<SprintBacklogStatus> statuses, LocalDateTime deadline);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select item from SprintBacklog item where item.id = :id")

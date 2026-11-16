@@ -55,38 +55,56 @@ public class TeamBacklogService {
     WorkspaceAccessService workspaceAccess;
     ProjectMemberRepository projectMembers;
     SprintBacklogService sprintBacklogService;
+    com.example.starter_project_2025.system.project.workspace.repository.WorkspaceRepository workspaces;
+    com.example.starter_project_2025.system.project.workspace.service.WorkspaceContextService contexts;
+    com.example.starter_project_2025.system.project.workspace.service.WorkspaceProjectScope projectScope;
+    com.example.starter_project_2025.system.project.resources.TeamSubprojectAssignmentRepository projectAssignments;
 
     @Transactional(readOnly = true)
     public TeamBacklogBoard read(Long teamId) {
+        return read(teamId, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public TeamBacklogBoard read(Long teamId, Long requestedProjectId, Long workspaceId) {
         User actor = workspaceAccess.requireUser(false);
         ProjectTeam team = workspaceAccess.requireTeam(actor, teamId, false);
-
-        Long projectId = team.getProjectId();
-
-        List<Sprint> teamSprints = projectId == null
-                ? sprints.findActiveByTeamIdOrderByIdAsc(teamId)
-                : sprints.findActiveByTeamIdOrProjectIdOrderByIdAsc(teamId, projectId);
-
-        List<SprintBacklog> items = new ArrayList<>(projectId == null
-                ? backlogs.findActiveBySprintTeamId(teamId)
-                : backlogs.findActiveBySprintTeamIdOrProjectId(teamId, projectId));
-        if (projectId != null) {
+        var workspace = workspaceId == null ? workspaces.findCurrentByTeamId(teamId).orElse(null)
+                : contexts.require(actor, workspaceId);
+        if (workspace != null && !workspace.getTeam().getId().equals(teamId))
+            throw new org.springframework.security.access.AccessDeniedException("Workspace belongs to another team");
+        List<Long> allowedProjects = workspace == null ? team.getProjectId() == null ? List.of() : List.of(team.getProjectId())
+                : projectScope.projects(workspace).stream().map(com.example.starter_project_2025.system.project.domain.Project::getId).toList();
+        if (requestedProjectId != null && !allowedProjects.contains(requestedProjectId))
+            throw new org.springframework.security.access.AccessDeniedException("The selected project is outside this workspace");
+        List<Long> selectedProjects = requestedProjectId == null ? allowedProjects : List.of(requestedProjectId);
+        Long projectId = requestedProjectId != null ? requestedProjectId : workspace != null && workspace.getProject() != null
+                ? workspace.getProject().getId() : team.getProjectId();
+        boolean includeTeamOnly = workspace == null || workspace.getProject() == null || workspace.getProject().getAssignmentId() == null;
+        Map<Long, Sprint> sprintRows = new java.util.LinkedHashMap<>();
+        if (includeTeamOnly) sprints.findActiveByTeamIdOrderByIdAsc(teamId).stream()
+                .filter(sprint -> sprint.getProjectId() == null || selectedProjects.contains(sprint.getProjectId()))
+                .forEach(sprint -> sprintRows.put(sprint.getId(), sprint));
+        if (!selectedProjects.isEmpty()) sprints.findAllByProjectIdInAndIsActiveTrueOrderByIdAsc(selectedProjects)
+                .forEach(sprint -> sprintRows.put(sprint.getId(), sprint));
+        List<Sprint> teamSprints = new ArrayList<>(sprintRows.values());
+        Map<Long, SprintBacklog> itemRows = new java.util.LinkedHashMap<>();
+        if (includeTeamOnly) backlogs.findActiveBySprintTeamId(teamId).stream()
+                .filter(item -> item.getProjectId() == null && (item.getSprint() == null || item.getSprint().getProjectId() == null)
+                        || selectedProjects.contains(item.getProjectId()))
+                .forEach(item -> itemRows.put(item.getId(), item));
+        if (!selectedProjects.isEmpty()) backlogs.findAllByProjectIdInAndIsActiveTrueOrderByIdAsc(selectedProjects)
+                .forEach(item -> itemRows.put(item.getId(), item));
+        List<SprintBacklog> items = new ArrayList<>(itemRows.values());
+        // Legacy boards may contain duplicate sprint copies. Each hierarchy item has its own identity.
+        if (includeTeamOnly && !selectedProjects.isEmpty()) {
             Set<String> sprintItemKeys = items.stream()
                     .filter(item -> item.getSprint() != null)
                     .map(TeamBacklogService::workItemKey)
                     .collect(Collectors.toSet());
             Set<String> productItemKeys = new HashSet<>();
-            backlogs.findProductBacklogByProjectId(projectId).stream()
-                    // A product-backlog row can be left behind when its work
-                    // item was moved into a sprint. Prefer the sprint row,
-                    // which carries the current workflow state and history.
-                    .filter(item -> !sprintItemKeys.contains(workItemKey(item)))
-                    // Old demo databases may also contain duplicate product
-                    // backlog rows. Keep the first (lowest-id) copy returned
-                    // by the repository; exact title + description identity
-                    // avoids collapsing distinct work that merely shares a title.
-                    .filter(item -> productItemKeys.add(workItemKey(item)))
-                    .forEach(items::add);
+            items.removeIf(item -> item.getSprint() == null && sprintItemKeys.contains(workItemKey(item)));
+            items.removeIf(item -> item.getSprint() == null && !productItemKeys.add(workItemKey(item)));
         }
         items.sort(Comparator.comparing(SprintBacklog::getId));
 
@@ -128,10 +146,12 @@ public class TeamBacklogService {
                 .filter(row -> Boolean.TRUE.equals(row.getIsActive()))
                 .orElseThrow(() -> new com.example.starter_project_2025.exception.ResourceNotFoundException("Sprint Backlog", "id", itemId));
         Long teamProjectId = team.getProjectId();
-        boolean inTeamBoard = item.getSprint() != null
+        boolean assignedToTeam = item.getProjectId() != null && projectAssignments
+                .existsByTeam_IdAndProject_IdAndIsActiveTrue(teamId, item.getProjectId());
+        boolean inTeamBoard = assignedToTeam || (item.getSprint() != null
                 ? (teamId.equals(item.getSprint().getTeamId()))
                     || (teamProjectId != null && teamProjectId.equals(item.getProjectId()))
-                : teamProjectId != null && teamProjectId.equals(item.getProjectId());
+                : teamProjectId != null && teamProjectId.equals(item.getProjectId()));
         if (!inTeamBoard) {
             throw new org.springframework.security.access.AccessDeniedException("Work item is outside this workspace");
         }
@@ -156,7 +176,7 @@ public class TeamBacklogService {
     }
 
     private static String workItemKey(SprintBacklog item) {
-        return normalize(item.getTitle()) + "\u0000" + normalize(item.getDescription());
+        return item.getProjectId() + "\u0000" + normalize(item.getTitle()) + "\u0000" + normalize(item.getDescription());
     }
 
     private static String normalize(String value) {

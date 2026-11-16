@@ -25,7 +25,9 @@ public record BatchSaveDraftResponse(
             Integer memberCount,
             /** US-11: template role policy. */
             boolean allowMultiRole,
-            List<ProjectTemplateConstraints.RoleQuota> roleQuotas
+            List<ProjectTemplateConstraints.RoleQuota> roleQuotas,
+            Long leaderMemberId,
+            Long projectId
     ) {
     }
 

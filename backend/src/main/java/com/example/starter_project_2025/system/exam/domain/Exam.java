@@ -21,6 +21,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "exam")
 @ResourcePermission("EXAM")
@@ -58,6 +61,9 @@ public class Exam extends BaseEntity {
 
     @Column(precision = 8, scale = 2)
     private BigDecimal passScore;
+
+    @Column(precision = 5, scale = 2)
+    private BigDecimal courseWeight;
 
     @Column(nullable = false, precision = 8, scale = 2)
     private BigDecimal maxScore = BigDecimal.TEN;
@@ -111,10 +117,60 @@ public class Exam extends BaseEntity {
     @ColumnDefault("false")
     private Boolean cameraProctoring = false;
 
+    // ---- He so chong gian lan (chon luc tao de thi, khong sua duoc sau do; null = dung mac dinh) ----
+    public static final int DEFAULT_HEAD_TURN_ANGLE_DEG = 35;
+    public static final int DEFAULT_HEAD_TURN_SECONDS = 2;
+    public static final int DEFAULT_FAST_SUBMIT_PERCENT = 20;
+
+    /** Goc quay dau (do) tu day tro len bi tinh la vi pham HEAD_TURNED. */
+    private Integer headTurnAngleDeg;
+    /** Quay dau lien tuc bao nhieu giay thi bi tinh la vi pham. */
+    private Integer headTurnSeconds;
+    /** Nop bai nhanh hon bao nhieu % thoi luong bai thi thi bi canh bao. */
+    private Integer fastSubmitPercent;
+
+    public int headTurnAngleOrDefault() {
+        return headTurnAngleDeg != null ? headTurnAngleDeg : DEFAULT_HEAD_TURN_ANGLE_DEG;
+    }
+
+    public int headTurnSecondsOrDefault() {
+        return headTurnSeconds != null ? headTurnSeconds : DEFAULT_HEAD_TURN_SECONDS;
+    }
+
+    public int fastSubmitPercentOrDefault() {
+        return fastSubmitPercent != null ? fastSubmitPercent : DEFAULT_FAST_SUBMIT_PERCENT;
+    }
+
     /** Hien thong bao cho nguoi thi khi he thong ghi nhan vi pham. */
     @Column(nullable = false)
     @ColumnDefault("false")
     private Boolean notifyOnViolation = false;
+
+    // ===== Tu danh gia / danh gia cheo (UFR-EXM-012) =====
+    /** Bat tinh nang tu danh gia (chinh nguoi lam bai cham lai bai cua minh). */
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private Boolean selfReviewEnabled = false;
+
+    /** Bat tinh nang danh gia cheo (sinh vien cung ky thi cham bai cua nhau). */
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private Boolean peerReviewEnabled = false;
+
+    /** So nguoi danh gia cheo cho moi bai lam. */
+    @Column(nullable = false)
+    @ColumnDefault("2")
+    private Integer peerReviewCount = 2;
+
+    /** An danh reviewer khi xem bai lam duoc cham. */
+    @Column(nullable = false)
+    @ColumnDefault("true")
+    private Boolean peerReviewAnonymous = true;
+
+    /** Cho reviewer xem dap an mau / rubric mo ta khi cham. */
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private Boolean peerReviewShowReference = false;
 
     /** Course / section / lesson ma bai thi thuoc ve (co the de trong). Xoa course/section/lesson thi chi go lien ket. */
     @ManyToOne(fetch = FetchType.LAZY)
@@ -137,4 +193,12 @@ public class Exam extends BaseEntity {
             joinColumns = @JoinColumn(name = "exam_id"),
             inverseJoinColumns = @JoinColumn(name = "question_id"))
     private Set<Question> questions = new HashSet<>();
+
+    @OneToMany(
+            mappedBy = "exam",
+            cascade = CascadeType.ALL
+    )
+    @OrderBy("versionNumber ASC")
+    private List<ExamQuestionPoolVersion> questionPoolVersions =
+            new ArrayList<>();
 }

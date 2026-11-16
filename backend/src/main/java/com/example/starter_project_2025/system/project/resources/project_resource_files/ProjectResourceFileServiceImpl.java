@@ -114,6 +114,7 @@ public class ProjectResourceFileServiceImpl
         return projectResourceFileRepository.findAllByResourceIdOrderByIdAsc(resourceId)
                 .stream()
                 .map(projectResourceFileMapper::toResponse)
+                .map(this::hideStorageKey)
                 .toList();
     }
 
@@ -148,7 +149,7 @@ public class ProjectResourceFileServiceImpl
         scoped.setCreatedBy(safe.getCreatedBy());
         scoped.setUpdatedBy(safe.getUpdatedBy());
 
-        return super.getAll(pageable, search, scoped);
+        return super.getAll(pageable, search, scoped).map(this::hideStorageKey);
     }
 
     @Override
@@ -162,7 +163,12 @@ public class ProjectResourceFileServiceImpl
 
         requireResourceScope(entity.getResourceId());
 
-        return projectResourceFileMapper.toResponse(entity);
+        return hideStorageKey(projectResourceFileMapper.toResponse(entity));
+    }
+
+    private ProjectResourceFileDTO hideStorageKey(ProjectResourceFileDTO dto) {
+        if (!resourceAccessGuard.isPrivileged()) dto.setStorageKey(null);
+        return dto;
     }
 
     private void requireResourceScope(Long resourceId) {

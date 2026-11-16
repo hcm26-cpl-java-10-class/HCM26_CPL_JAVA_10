@@ -39,6 +39,11 @@ public class AutoMenuInitializer implements CommandLineRunner {
                 new ClassPathScanningCandidateComponentProvider(false);
 
         scanner.addIncludeFilter(new AnnotationTypeFilter(ResourceMenu.class));
+        // Retire the removed feature in databases that already contain its generated menu.
+        moduleRepository.findByUrl("/course-releases").ifPresent(module -> {
+            module.setIsActive(false);
+            moduleRepository.save(module);
+        });
 
         Set<BeanDefinition> candidates =
                 scanner.findCandidateComponents(BASE_PACKAGE);

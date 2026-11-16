@@ -114,6 +114,7 @@ export interface ExamDTO {
   shuffleOptions?: boolean;
   showAnswersAfterExam?: boolean;
   passScore?: number | null;
+  courseWeight?: number | null;
   maxScore?: number | null;
   latePolicy?: LatePolicy;
   latePenaltyPercent?: number | null;
@@ -134,6 +135,15 @@ export interface ExamDTO {
   singleSession?: boolean;
   cameraProctoring?: boolean;
   notifyOnViolation?: boolean;
+  headTurnAngleDeg?: number | null;
+  headTurnSeconds?: number | null;
+  fastSubmitPercent?: number | null;
+  // Tu danh gia / danh gia cheo (UFR-EXM-012)
+  selfReviewEnabled?: boolean;
+  peerReviewEnabled?: boolean;
+  peerReviewCount?: number | null;
+  peerReviewAnonymous?: boolean;
+  peerReviewShowReference?: boolean;
   // Optional link to a course / section / lesson (null = not linked)
   courseId?: number | null;
   sectionId?: number | null;
@@ -166,6 +176,7 @@ export interface CourseExam {
   examType: ExamType;
   durationMinutes: number;
   maxAttempts: number | null;
+  courseWeight?: number | null;
   maxScore: number | null;
   passScore: number | null;
   isActive: boolean;
@@ -177,7 +188,7 @@ export interface CourseExam {
   /** Only returned to the course teacher and admin. */
   questionCount: number | null;
   createdByName: string | null;
-  /** Student view: true while blocked by LessonProgress. Staff always get false. */
+  /** Student view: true while blocked by course or lesson progress. Staff always get false. */
   locked: boolean;
   lockReason: string | null;
 }

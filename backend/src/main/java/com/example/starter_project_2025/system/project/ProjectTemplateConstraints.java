@@ -45,6 +45,13 @@ public final class ProjectTemplateConstraints {
     private ProjectTemplateConstraints() {
     }
 
+    public static ProjectTemplate templateFor(ProjectTeam team) {
+        ProjectTemplate original = team.getProjectTemplate();
+        if (original == null || team.getAssignedConstraintsJson() == null) return original;
+        return ProjectTemplate.builder().id(original.getId()).code(original.getCode())
+                .name(team.getProjectTemplateName()).constraintsJson(team.getAssignedConstraintsJson()).build();
+    }
+
     public record Capacity(int minMembers, int maxMembers) {
 
         public boolean accepts(long memberCount) {

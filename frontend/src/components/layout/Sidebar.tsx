@@ -3,7 +3,7 @@ import { NavMain, type NavItem } from "@/components/layout/NavMain";
 import { TooltipWrapper } from "@/components/datatable/common/TooltipWrapper";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, LoaderCircle, LogOutIcon, RefreshCw } from "lucide-react";
-import { useMemo } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, type UIEvent } from "react";
 import { useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authApi } from "@/api/features/auth.api";
@@ -95,223 +95,267 @@ export function SidebarMenu({
 }: {
     collapsible?: "icon" | "offcanvas";
 } = {}) {
-    const location = useLocation();
-    const navigate = useNavigate();
-    const dispatch = useDispatch();
-    const queryClient = useQueryClient();
-    const { toggleSidebar, state } = useSidebar();
-    const {
-        data: moduleGroups = [],
-        isPending: isMenuLoading,
-        isError: isMenuError,
-        refetch: refetchMenu,
-    } = useActiveModuleGroups();
+    const SIDEBAR_SCROLL_KEY = "sidebar_scroll_top";
 
-    const handleLogout = async () => {
+    function readStoredScroll(): number {
         try {
-            await authApi.logout();
-        } finally {
-            queryClient.removeQueries({ queryKey: ["sidebar-menu"] });
-            dispatch(setLogout());
-            navigate("/login", { replace: true });
+            return Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY)) || 0;
+        } catch {
+            return 0;
         }
-    };
+    }
 
-    const navGroups = useMemo(() => {
-        const resolveIcon = (iconName?: string) => {
-            const key: keyof typeof iconMap =
-                iconName && iconName in iconMap
-                    ? (iconName as keyof typeof iconMap)
-                    : "menu";
+    export function SidebarMenu() {
+        const location = useLocation();
+        const navigate = useNavigate();
+        const dispatch = useDispatch();
+        const queryClient = useQueryClient();
+        const { toggleSidebar, state } = useSidebar();
+        const {
+            data: moduleGroups = [],
+            isPending: isMenuLoading,
+            isError: isMenuError,
+            refetch: refetchMenu,
+        } = useActiveModuleGroups();
 
-            return iconMap[key];
+        const contentRef = useRef<HTMLDivElement>(null);
+        const handleContentScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+            try {
+                sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(event.currentTarget.scrollTop));
+            } catch {
+                // storage unavailable; scroll position simply won't persist
+            }
+        }, []);
+
+        const handleLogout = async () => {
+            try {
+                await authApi.logout();
+            } finally {
+                queryClient.removeQueries({ queryKey: ["sidebar-menu"] });
+                dispatch(setLogout());
+                navigate("/login", { replace: true });
+            }
         };
 
-        // Consolidate any duplicate training groups into a single "Training Management" group
-        const consolidatedGroups: typeof moduleGroups = [];
-        let unifiedTrainingGroup: (typeof moduleGroups)[number] | null = null;
+        const navGroups = useMemo(() => {
+            const resolveIcon = (iconName?: string) => {
+                const key: keyof typeof iconMap =
+                    iconName && iconName in iconMap
+                        ? (iconName as keyof typeof iconMap)
+                        : "menu";
 
-        for (const group of moduleGroups) {
-            const groupNameLower = (group.name ?? "").toLowerCase();
-            const isTraining =
-                groupNameLower.includes("training") ||
-                groupNameLower.includes("lms") ||
-                group.modules.some((m) => m.url === "/subjects" || m.url === "/programs" || m.url === "/classes");
+                return iconMap[key];
+            };
 
-            if (isTraining) {
-                if (!unifiedTrainingGroup) {
-                    unifiedTrainingGroup = {
-                        ...group,
-                        id: group.id ?? 99999,
-                        name: "Training Management",
-                        modules: [...group.modules],
-                    };
-                    consolidatedGroups.push(unifiedTrainingGroup);
-                } else {
-                    const existingUrls = new Set(unifiedTrainingGroup.modules.map((m) => m.url));
-                    for (const mod of group.modules) {
-                        if (!existingUrls.has(mod.url)) {
-                            unifiedTrainingGroup.modules.push(mod);
-                            existingUrls.add(mod.url);
-                        }
-                    }
-                }
-            } else {
-                consolidatedGroups.push(group);
-            }
-        }
+            // Consolidate any duplicate training groups into a single "Training Management" group
+            const consolidatedGroups: typeof moduleGroups = [];
+            let unifiedTrainingGroup: (typeof moduleGroups)[number] | null = null;
 
-        return consolidatedGroups
-            .map((group) => {
+            for (const group of moduleGroups) {
                 const groupNameLower = (group.name ?? "").toLowerCase();
-                const isAssessmentGroup =
-                    groupNameLower.includes("assessment") ||
-                    group.modules.some((m) => m.url === "/exams");
-                const isTrainingGroup =
+                const isTraining =
                     groupNameLower.includes("training") ||
                     groupNameLower.includes("lms") ||
                     group.modules.some((m) => m.url === "/subjects" || m.url === "/programs" || m.url === "/classes");
 
-                const baseItems: NavItem[] = group.modules
-                    .filter((module) => {
-                        const url = module.url?.replace(/\/+$/, "") ?? "";
-                        return (
-                            !!module.url &&
-                            !module.hiddenInMenu &&
-                            url !== "/project-template-versions" &&
-                            url !== "/enrollments" &&
-                            url !== "/class-setup"
-                        );
-                    })
-                    .map((module) => {
-                        const isExamsRoot = module.url === "/exams";
-                        const isMatch =
-                            !!module.url &&
-                            (location.pathname === module.url ||
-                                (location.pathname.startsWith(`${module.url}/`) &&
-                                    (!isExamsRoot || !location.pathname.startsWith("/exams/curriculum"))));
-
-                        return {
-                            title: module.title ?? "Untitled",
-                            url: module.url ?? "#",
-                            icon: resolveIcon(module.icon),
-                            isActive: isMatch,
+                if (isTraining) {
+                    if (!unifiedTrainingGroup) {
+                        unifiedTrainingGroup = {
+                            ...group,
+                            id: group.id ?? 99999,
+                            name: "Training Management",
+                            modules: [...group.modules],
                         };
-                    });
-
-                let items = baseItems;
-                if (isAssessmentGroup) {
-                    const alreadyHas = items.some((i) => i.url === "/exams/curriculum");
-                    if (!alreadyHas) {
-                        const curriculumItem: NavItem = {
-                            title: "Curriculum Mapping",
-                            url: "/exams/curriculum",
-                            icon: resolveIcon("book-open"),
-                            isActive:
-                                location.pathname === "/exams/curriculum" ||
-                                location.pathname.startsWith("/exams/curriculum"),
-                        };
-                        const examsIndex = items.findIndex((i) => i.url === "/exams");
-                        if (examsIndex >= 0) {
-                            items = [
-                                ...items.slice(0, examsIndex + 1),
-                                curriculumItem,
-                                ...items.slice(examsIndex + 1),
-                            ];
-                        } else {
-                            items = [curriculumItem, ...items];
+                        consolidatedGroups.push(unifiedTrainingGroup);
+                    } else {
+                        const existingUrls = new Set(unifiedTrainingGroup.modules.map((m) => m.url));
+                        for (const mod of group.modules) {
+                            if (!existingUrls.has(mod.url)) {
+                                unifiedTrainingGroup.modules.push(mod);
+                                existingUrls.add(mod.url);
+                            }
                         }
                     }
+                } else {
+                    consolidatedGroups.push(group);
                 }
+            }
 
-                if (isTrainingGroup) {
-                    items = organizeTrainingItems(items, location.pathname);
-                }
+            return consolidatedGroups
+                .map((group) => {
+                    const groupNameLower = (group.name ?? "").toLowerCase();
+                    const isAssessmentGroup =
+                        groupNameLower.includes("assessment") ||
+                        group.modules.some((m) => m.url === "/exams");
+                    const isTrainingGroup =
+                        groupNameLower.includes("training") ||
+                        groupNameLower.includes("lms") ||
+                        group.modules.some((m) => m.url === "/subjects" || m.url === "/programs" || m.url === "/classes");
 
-                return {
-                    id: group.id ?? group.name ?? "group",
-                    name: group.name ?? "Menu",
-                    hiddenInMenu: group.hiddenInMenu,
-                    items,
-                };
-            })
-            .filter((group) => !group.hiddenInMenu && group.items.length > 0);
-    }, [location.pathname, moduleGroups]);
+                    const baseItems: NavItem[] = group.modules
+                        .filter((module) => {
+                            const url = module.url?.replace(/\/+$/, "") ?? "";
+                            return (
+                                !!module.url &&
+                                !module.hiddenInMenu &&
+                                url !== "/project-board" &&
+                                url !== "/project-template-versions" &&
+                                url !== "/enrollments" &&
+                                url !== "/class-setup"
+                            );
+                        })
+                        .map((module) => {
+                            const isExamsRoot = module.url === "/exams";
+                            const isMatch =
+                                !!module.url &&
+                                (location.pathname === module.url ||
+                                    (location.pathname.startsWith(`${module.url}/`) &&
+                                        (!isExamsRoot ||
+                                            (!location.pathname.startsWith("/exams/curriculum") &&
+                                                !location.pathname.startsWith("/exams/score-management")))));
 
-    return (
-        <Sidebar variant="inset" collapsible={collapsible}>
-            <SidebarHeader className="py-3 px-0">
-                <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={toggleSidebar}
-                    className="
+                            return {
+                                title: module.title ?? "Untitled",
+                                url: module.url ?? "#",
+                                icon: resolveIcon(module.icon),
+                                isActive: isMatch,
+                            };
+                        });
+
+                    let items = baseItems;
+                    if (isAssessmentGroup) {
+                        const alreadyHas = items.some((i) => i.url === "/exams/curriculum");
+                        if (!alreadyHas) {
+                            const curriculumItem: NavItem = {
+                                title: "Curriculum Mapping",
+                                url: "/exams/curriculum",
+                                icon: resolveIcon("book-open"),
+                                isActive:
+                                    location.pathname === "/exams/curriculum" ||
+                                    location.pathname.startsWith("/exams/curriculum"),
+                            };
+                            const examsIndex = items.findIndex((i) => i.url === "/exams");
+                            if (examsIndex >= 0) {
+                                items = [
+                                    ...items.slice(0, examsIndex + 1),
+                                    curriculumItem,
+                                    ...items.slice(examsIndex + 1),
+                                ];
+                            } else {
+                                items = [curriculumItem, ...items];
+                            }
+                        }
+                    }
+
+                    if (isTrainingGroup) {
+                        items = organizeTrainingItems(items, location.pathname);
+                        if (isAssessmentGroup && !items.some((i) => i.url === "/exams/score-management")) {
+                            items = [
+                                ...items,
+                                {
+                                    title: "Score Management",
+                                    url: "/exams/score-management",
+                                    icon: resolveIcon("graduation-cap"),
+                                    isActive: location.pathname.startsWith("/exams/score-management"),
+                                },
+                            ];
+                        }
+
+                        return {
+                            id: group.id ?? group.name ?? "group",
+                            name: group.name ?? "Menu",
+                            hiddenInMenu: group.hiddenInMenu,
+                            items,
+                        };
+                    })
+                .filter((group) => !group.hiddenInMenu && group.items.length > 0);
+        }, [location.pathname, moduleGroups]);
+
+        // Restore the menu scroll position after remounts (each page renders its own layout),
+        // then make sure the active item is visible.
+        const menuReady = !isMenuLoading && navGroups.length > 0;
+        useLayoutEffect(() => {
+            const el = contentRef.current;
+            if (!menuReady || !el) return;
+            el.scrollTop = readStoredScroll();
+            const active = el.querySelector<HTMLElement>('[data-active="true"][data-sidebar="menu-sub-button"], [data-active="true"][data-sidebar="menu-button"]');
+            active?.scrollIntoView({ block: "nearest" });
+        }, [menuReady, location.pathname, state]);
+
+        return (
+            <Sidebar variant="inset" collapsible={collapsible}>
+                <SidebarHeader className="py-3 px-0">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={toggleSidebar}
+                        className="
             flex h-auto w-full min-w-0 items-center justify-start gap-3
             group-data-[collapsible=icon]:justify-center
             group-data-[collapsible=icon]:px-0
           "
-                >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-blue-800 text-sm font-semibold text-white">
-                        RB
-                    </div>
-
-                    {state === "expanded" && (
-                        <span className="text-lg font-bold text-blue-800 truncate">
-                            RBAC System
-                        </span>
-                    )}
-                </Button>
-            </SidebarHeader>
-
-            <SidebarContent>
-                {isMenuLoading ? (
-                    <div className="flex items-center justify-center px-3 py-6 text-muted-foreground">
-                        <LoaderCircle className="size-5 animate-spin" />
-                        <span className="ml-2 text-sm group-data-[collapsible=icon]:hidden">Loading navigation...</span>
-                    </div>
-                ) : isMenuError ? (
-                    <div className="mx-2 rounded-md border border-destructive/30 p-3 text-destructive group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:p-1">
-                        <div className="flex items-center gap-2 text-sm group-data-[collapsible=icon]:justify-center">
-                            <AlertCircle className="size-4 shrink-0" />
-                            <span className="group-data-[collapsible=icon]:hidden">Navigation could not be loaded.</span>
-                        </div>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => void refetchMenu()}
-                            className="mt-2 w-full gap-2 group-data-[collapsible=icon]:mt-1 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
-                        >
-                            <RefreshCw className="size-4" />
-                            <span className="group-data-[collapsible=icon]:hidden">Retry</span>
-                        </Button>
-                    </div>
-                ) : navGroups.length === 0 ? (
-                    <p className="px-4 py-6 text-center text-sm text-muted-foreground group-data-[collapsible=icon]:hidden">
-                        No navigation items are available for this role.
-                    </p>
-                ) : (
-                    navGroups.map((group) => (
-                        <NavMain key={group.id} title={group.name} items={group.items} sidebarState={state} />
-                    ))
-                )}
-            </SidebarContent>
-
-            <SidebarFooter className="p-4 text-xs flex flex-row items-center gap-2 text-muted-foreground group-data-[collapsible=icon]:justify-center">
-                {state === "expanded" && (
-                    <span className="flex-1 truncate">RBAC System v1.0</span>
-                )}
-
-                <TooltipWrapper content="Logout">
-                    <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={handleLogout}
                     >
-                        <LogOutIcon className="size-4" />
+                        <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-blue-800 text-sm font-semibold text-white">
+                            RB
+                        </div>
+
+                        {state === "expanded" && (
+                            <span className="text-lg font-bold text-blue-800 truncate">
+                                RBAC System
+                            </span>
+                        )}
                     </Button>
-                </TooltipWrapper>
-            </SidebarFooter>
-        </Sidebar>
-    );
-}
+                </SidebarHeader>
+
+                <SidebarContent ref={contentRef} onScroll={handleContentScroll}>
+                    {isMenuLoading ? (
+                        <div className="flex items-center justify-center px-3 py-6 text-muted-foreground">
+                            <LoaderCircle className="size-5 animate-spin" />
+                            <span className="ml-2 text-sm group-data-[collapsible=icon]:hidden">Loading navigation...</span>
+                        </div>
+                    ) : isMenuError ? (
+                        <div className="mx-2 rounded-md border border-destructive/30 p-3 text-destructive group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:p-1">
+                            <div className="flex items-center gap-2 text-sm group-data-[collapsible=icon]:justify-center">
+                                <AlertCircle className="size-4 shrink-0" />
+                                <span className="group-data-[collapsible=icon]:hidden">Navigation could not be loaded.</span>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => void refetchMenu()}
+                                className="mt-2 w-full gap-2 group-data-[collapsible=icon]:mt-1 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
+                            >
+                                <RefreshCw className="size-4" />
+                                <span className="group-data-[collapsible=icon]:hidden">Retry</span>
+                            </Button>
+                        </div>
+                    ) : navGroups.length === 0 ? (
+                        <p className="px-4 py-6 text-center text-sm text-muted-foreground group-data-[collapsible=icon]:hidden">
+                            No navigation items are available for this role.
+                        </p>
+                    ) : (
+                        navGroups.map((group) => (
+                            <NavMain key={group.id} title={group.name} items={group.items} sidebarState={state} />
+                        ))
+                    )}
+                </SidebarContent>
+
+                <SidebarFooter className="p-4 text-xs flex flex-row items-center gap-2 text-muted-foreground group-data-[collapsible=icon]:justify-center">
+                    {state === "expanded" && (
+                        <span className="flex-1 truncate">RBAC System v1.0</span>
+                    )}
+
+                    <TooltipWrapper content="Logout">
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={handleLogout}
+                        >
+                            <LogOutIcon className="size-4" />
+                        </Button>
+                    </TooltipWrapper>
+                </SidebarFooter>
+            </Sidebar>
+        );
+    }

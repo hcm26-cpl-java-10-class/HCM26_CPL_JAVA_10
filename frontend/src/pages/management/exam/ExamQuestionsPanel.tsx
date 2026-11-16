@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { getErrorMessage } from "./examConfig";
 import { EditExamQuestionDialog, isExamStarted } from "./ExamQuestionParts";
+import axios from "axios";
 
 const PAGE_SIZE = 8;
 
@@ -205,11 +206,10 @@ function SelectedQuestionCard({
 }) {
   return (
     <div
-      className={`rounded-xl border p-4 shadow-xs transition-all ${
-        isStaged
+      className={`rounded-xl border p-4 shadow-xs transition-all ${isStaged
           ? "border-emerald-500/40 bg-emerald-500/[0.04] dark:bg-emerald-500/[0.06]"
           : "border-border bg-card hover:border-primary/40"
-      }`}
+        }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -316,6 +316,12 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   const setActiveExam = (exam: ExamDTO | null) => {
     if (exam) queryClient.setQueryData(["exam-detail", examId], exam);
   };
+  const poolConfigQuery = useQuery({
+    queryKey: ["exam-question-pool", examId],
+    queryFn: () => examApi.getQuestionPoolConfig(examId),
+    enabled: Boolean(activeExam?.id),
+    retry: false,
+  });
 
   // Filters
   const [search, setSearch] = useState("");
@@ -336,27 +342,37 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
   const [randomTopic, setRandomTopic] = useState<string>("");
   const [randomDifficulty, setRandomDifficulty] = useState<string>("ALL");
   const [randomQuestionType, setRandomQuestionType] = useState<string>("ALL");
+  // Question Pool configuration
+  const [poolRandomEnabled, setPoolRandomEnabled] = useState(true);
+  const [poolRandomCount, setPoolRandomCount] = useState(10);
+  const [poolShuffleOrder, setPoolShuffleOrder] = useState(true);
 
   const lockedQuestionType: QuestionType | null =
-      activeExam?.examType === "MULTIPLE_CHOICE" ? "MULTIPLE_CHOICE"
-          : activeExam?.examType === "ESSAY" ? "ESSAY"
-          : activeExam?.examType === "CODING" ? "CODING"
-              : null;
+    activeExam?.examType === "MULTIPLE_CHOICE" ? "MULTIPLE_CHOICE"
+      : activeExam?.examType === "ESSAY" ? "ESSAY"
+        : activeExam?.examType === "CODING" ? "CODING"
+          : null;
   const isPairExam = activeExam?.examType === "MC_CODING";
   const allowedTypes: QuestionType[] = lockedQuestionType
-      ? [lockedQuestionType]
-      : isPairExam ? ["MULTIPLE_CHOICE", "CODING"] : ["MULTIPLE_CHOICE", "ESSAY", "CODING"];
+    ? [lockedQuestionType]
+    : isPairExam ? ["MULTIPLE_CHOICE", "CODING"] : ["MULTIPLE_CHOICE", "ESSAY", "CODING"];
   const activeExamStarted = isExamStarted(activeExam);
+
+  const savedQuestions = activeExam?.questions ?? [];
+
+  const savedQuestionIds = savedQuestions
+    .map((question) => question.id)
+    .filter((id): id is number => id != null);
 
   const bankQuery = useQuery({
     queryKey: ["exam-question-all-bank", lockedQuestionType],
     enabled: Boolean(activeExam?.id),
     queryFn: () =>
-        questionApi.getPage(
-            { page: 0, size: 2000, sort: "id,desc" },
-            undefined,
-            { isActive: true, ...(lockedQuestionType ? { type: lockedQuestionType } : {}) },
-        ),
+      questionApi.getPage(
+        { page: 0, size: 2000, sort: "id,desc" },
+        undefined,
+        { isActive: true, ...(lockedQuestionType ? { type: lockedQuestionType } : {}) },
+      ),
     staleTime: 30_000,
   });
   const allBankQuestions = useMemo(
@@ -381,7 +397,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
 
   const removeQuestionMutation = useMutation({
     mutationFn: ({ examId: id, questionId }: { examId: number; questionId: number }) =>
-        examApi.removeQuestion(id, questionId),
+      examApi.removeQuestion(id, questionId),
     onSuccess: (exam) => {
       setActiveExam(exam);
       refreshExams();
@@ -460,7 +476,132 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
     });
   };
 
-  const savedQuestions = activeExam?.questions ?? [];
+  useEffect(() => {
+    const questionIds = savedQuestions
+      .map((q) => q.id)
+      .filter((id): id is number => id != null);
+
+    const config = poolConfigQuery.data;
+
+    if (config) {
+      // Chỉ giữ những câu hỏi vừa thuộc Exam vừa có trong Pool đã lưu.
+      const configuredIds = new Set(config.questionIds ?? []);
+      const validPoolIds = questionIds.filter((id) => configuredIds.has(id));
+
+      setPoolRandomEnabled(config.randomSelectionEnabled);
+      setPoolRandomCount(
+        Math.min(
+          validPoolIds.length,
+          Math.max(1, config.randomQuestionCount)
+        )
+      );
+      setPoolShuffleOrder(config.shuffleQuestionOrder);
+      return;
+    }
+
+    if (
+      poolConfigQuery.isError &&
+      axios.isAxiosError(poolConfigQuery.error) &&
+      poolConfigQuery.error.response?.status === 404
+    ) {
+      // Chưa có cấu hình: mặc định chọn toàn bộ câu hỏi đã lưu trong Exam.
+      setPoolRandomEnabled(true);
+      setPoolRandomCount(Math.min(10, Math.max(1, questionIds.length)));
+      setPoolShuffleOrder(true);
+    }
+  }, [
+    poolConfigQuery.data,
+    poolConfigQuery.isError,
+    poolConfigQuery.error,
+    savedQuestions,
+  ]);
+
+  const savePoolConfigMutation = useMutation({
+    mutationFn: (config: {
+      randomSelectionEnabled: boolean;
+      randomQuestionCount: number;
+      shuffleQuestionOrder: boolean;
+    }) =>
+      examApi.saveQuestionPoolConfig(examId, {
+        ...config,
+        questionIds: savedQuestionIds,
+      }),
+
+    onSuccess: (config) => {
+      setPoolRandomEnabled(config.randomSelectionEnabled);
+      setPoolRandomCount(config.randomQuestionCount);
+      setPoolShuffleOrder(config.shuffleQuestionOrder);
+
+      void queryClient.invalidateQueries({
+        queryKey: ["exam-question-pool", examId],
+      });
+
+      toast.success("Question Pool settings saved successfully.");
+    },
+
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Failed to save Question Pool configuration."));
+    },
+  });
+
+  const handlePoolRandomToggle = (enabled: boolean) => {
+    if (
+      savedQuestionIds.length === 0 ||
+      savePoolConfigMutation.isPending
+    ) return;
+
+    const nextCount = Math.min(
+      savedQuestionIds.length,
+      Math.max(1, poolRandomCount)
+    );
+
+    setPoolRandomEnabled(enabled);
+    setPoolRandomCount(nextCount);
+
+    savePoolConfigMutation.mutate({
+      randomSelectionEnabled: enabled,
+      randomQuestionCount: enabled ? nextCount : savedQuestionIds.length,
+      shuffleQuestionOrder: poolShuffleOrder,
+    });
+  };
+
+  const handlePoolCountChange = (value: number) => {
+    setPoolRandomCount(value);
+  };
+
+  const handlePoolCountSave = () => {
+    if (
+      !poolRandomEnabled ||
+      savePoolConfigMutation.isPending ||
+      !Number.isInteger(poolRandomCount) ||
+      poolRandomCount < 1 ||
+      poolRandomCount > savedQuestionIds.length
+    ) return;
+
+    savePoolConfigMutation.mutate({
+      randomSelectionEnabled: true,
+      randomQuestionCount: poolRandomCount,
+      shuffleQuestionOrder: poolShuffleOrder,
+    });
+  };
+
+  const handlePoolShuffleChange = (checked: boolean) => {
+    if (
+      savePoolConfigMutation.isPending ||
+      savedQuestionIds.length === 0
+    ) return;
+
+    setPoolShuffleOrder(checked);
+
+    savePoolConfigMutation.mutate({
+      randomSelectionEnabled: poolRandomEnabled,
+      randomQuestionCount: poolRandomEnabled
+        ? poolRandomCount
+        : savedQuestionIds.length,
+      shuffleQuestionOrder: checked,
+    });
+  };
+
   const selectedAll = useMemo(() => [...savedQuestions, ...stagedQuestions], [savedQuestions, stagedQuestions]);
 
   const isAllSelectedExpanded =
@@ -584,9 +725,8 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
         </div>
       )}
 
-      <div className={`grid gap-4 lg:h-[calc(100vh-12rem)] lg:min-h-[36rem] ${
-        filtersOpen ? "lg:grid-cols-[230px_minmax(0,1fr)_minmax(300px,0.75fr)]" : "lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.6fr)]"
-      }`}>
+      <div className={`grid gap-4 lg:h-[calc(100vh-12rem)] lg:min-h-[36rem] ${filtersOpen ? "lg:grid-cols-[230px_minmax(0,1fr)_minmax(300px,0.75fr)]" : "lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.6fr)]"
+        }`}>
         {/* ---------------- Filters ---------------- */}
         <aside className={`min-h-0 flex-col gap-4 overflow-y-auto rounded-md border p-4 ${filtersOpen ? "flex" : "hidden"}`}>
           <div className="flex items-center justify-between">
@@ -730,6 +870,105 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
             )}
           </div>
 
+          {/* Question Pool loading / error */}
+          {poolConfigQuery.isLoading && (
+            <p className="mx-3 text-xs text-muted-foreground">
+              Loading Question Pool configuration...
+            </p>
+          )}
+
+          {poolConfigQuery.isError &&
+            !(axios.isAxiosError(poolConfigQuery.error) &&
+              poolConfigQuery.error.response?.status === 404) && (
+              <p className="mx-3 text-xs text-destructive">
+                Failed to load Question Pool configuration. Please try again.
+              </p>
+            )}
+          {/* ---------------- Random Question Selection ---------------- */}
+          <div className="border-b bg-card/40 px-3.5 py-2.5 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  Pool: {savedQuestionIds.length} questions
+                </span>
+
+                {savePoolConfigMutation.isPending && (
+                  <span className="text-xs text-muted-foreground">
+                    Saving...
+                  </span>
+                )}
+              </div>
+
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={poolRandomEnabled}
+                  onChange={(e) => handlePoolRandomToggle(e.target.checked)}
+                  disabled={
+                    activeExamStarted ||
+                    savedQuestionIds.length === 0 ||
+                    poolConfigQuery.isLoading ||
+                    savePoolConfigMutation.isPending
+                  }
+                />
+                Randomly Select
+              </label>
+            </div>
+
+            {poolRandomEnabled && (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-2">
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="pool-random-count"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Number of random questions
+                  </label>
+
+                  <Input
+                    id="pool-random-count"
+                    type="number"
+                    min={1}
+                    max={savedQuestionIds.length}
+                    value={poolRandomCount}
+                    onChange={(e) =>
+                      handlePoolCountChange(Number(e.target.value))
+                    }
+                    onBlur={handlePoolCountSave}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    disabled={
+                      activeExamStarted ||
+                      savePoolConfigMutation.isPending ||
+                      savedQuestionIds.length === 0
+                    }
+                    className="h-8 w-20"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-primary"
+                    checked={poolShuffleOrder}
+                    onChange={(e) =>
+                      handlePoolShuffleChange(e.target.checked)
+                    }
+                    disabled={
+                      activeExamStarted ||
+                      savePoolConfigMutation.isPending
+                    }
+                  />
+                  Shuffle Question Order
+                </label>
+              </div>
+            )}
+          </div>
+
           {typeSummary.length > 0 && (
             <div className="flex flex-wrap gap-1.5 border-b bg-muted/20 px-3.5 py-2">
               {typeSummary.map((row) => (
@@ -818,16 +1057,16 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
               <label className="text-xs font-semibold text-muted-foreground">Quick Select Quantity</label>
               <div className="grid grid-cols-4 gap-2">
                 {[10, 20, 30, 50].map((num) => (
-                    <Button
-                        key={num}
-                        type="button"
-                        variant={randomCount === num ? "default" : "outline"}
-                        size="sm"
-                        className="text-xs h-8 font-medium"
-                        onClick={() => setRandomCount(num)}
-                    >
-                      {num} Questions
-                    </Button>
+                  <Button
+                    key={num}
+                    type="button"
+                    variant={randomCount === num ? "default" : "outline"}
+                    size="sm"
+                    className="text-xs h-8 font-medium"
+                    onClick={() => setRandomCount(num)}
+                  >
+                    {num} Questions
+                  </Button>
                 ))}
               </div>
             </div>
@@ -835,22 +1074,20 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">Or Enter Custom Number</label>
               <Input
-                  type="number"
-                  min={1}
-                  max={eligibleForRandom.length || 100}
-                  value={randomCount === 0 || (randomCount as any) === "" ? "" : randomCount}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === "") {
-                      setRandomCount("" as any);
-                    } else {
-                      const parsed = parseInt(val, 10);
-                      if (!isNaN(parsed)) {
-                        setRandomCount(Math.max(0, parsed));
-                      }
-                    }
-                  }}
-                  placeholder="e.g. 15, 25, 50"
+                type="number"
+                min={1}
+                max={eligibleForRandom.length || 100}
+                value={randomCount}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  setRandomCount(
+                    Math.min(
+                      eligibleForRandom.length,
+                      Math.max(1, Number.isFinite(value) ? value : 1)
+                    )
+                  );
+                }}
+                placeholder="e.g. 15, 25, 50"
               />
             </div>
 
@@ -866,12 +1103,12 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                   </SelectItem>
                   {topicList.map((t) => {
                     const count = allBankQuestions.filter(
-                        (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === t.toLowerCase()
+                      (q) => !sourceIdsInExam.has(q.id) && (q.topic || "").trim().toLowerCase() === t.toLowerCase()
                     ).length;
                     return (
-                        <SelectItem key={t} value={t} disabled={count === 0}>
-                          {t} ({count} available)
-                        </SelectItem>
+                      <SelectItem key={t} value={t} disabled={count === 0}>
+                        {t} ({count} available)
+                      </SelectItem>
                     );
                   })}
                 </SelectContent>
@@ -882,9 +1119,9 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground">Question Type</label>
                 <Select
-                    value={lockedQuestionType ?? randomQuestionType}
-                    disabled={lockedQuestionType !== null}
-                    onValueChange={setRandomQuestionType}
+                  value={lockedQuestionType ?? randomQuestionType}
+                  disabled={lockedQuestionType !== null}
+                  onValueChange={setRandomQuestionType}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="All Types" />
@@ -897,7 +1134,7 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                   </SelectContent>
                 </Select>
                 {lockedQuestionType && (
-                    <p className="text-[10px] text-muted-foreground">Locked by assessment type</p>
+                  <p className="text-[10px] text-muted-foreground">Locked by assessment type</p>
                 )}
               </div>
 
@@ -936,14 +1173,14 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
               Cancel
             </Button>
             <Button
-                type="button"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                disabled={eligibleForRandom.length === 0 || addQuestionsMutation.isPending}
-                onClick={handleConfirmRandomAdd}
+              type="button"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              disabled={eligibleForRandom.length === 0 || addQuestionsMutation.isPending}
+              onClick={handleConfirmRandomAdd}
             >
               {addQuestionsMutation.isPending
-                  ? "Adding..."
-                  : `Add ${Math.min(randomCount, eligibleForRandom.length)} Random Question(s)`}
+                ? "Adding..."
+                : `Add ${Math.min(randomCount, eligibleForRandom.length)} Random Question(s)`}
             </Button>
           </DialogFooter>
         </DialogContent>

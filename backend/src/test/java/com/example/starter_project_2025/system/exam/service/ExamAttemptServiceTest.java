@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.exam.service;
 
 import com.example.starter_project_2025.system.exam.domain.*;
 import com.example.starter_project_2025.exception.BadRequestException;
+import com.example.starter_project_2025.system.demo.course.Course;
 
 import com.example.starter_project_2025.system.question.domain.Question;
 import com.example.starter_project_2025.system.question.domain.EssayGradingCriterion;
@@ -15,6 +16,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -33,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -95,6 +98,18 @@ class ExamAttemptServiceTest {
     }
 
     @Test
+    void anonymousGuestCannotBypassCourseEnrollment() {
+        Exam exam=attempt.getExam();
+        exam.setCategory(ExamCategory.QUIZ);
+        exam.setCourse(com.example.starter_project_2025.system.demo.course.Course.builder().id(1L).build());
+        when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
+        when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L,40L)).thenReturn(List.of());
+        when(progressLockService.requiresCourseEnrollment(exam)).thenReturn(true);
+        doThrow(new AccessDeniedException("Enrollment required")).when(progressLockService).assertUnlocked(exam,40L);
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->service.startOrResumeForGuest(20L,40L));
+    }
+
+    @Test
     void startOrResumeRejectsStudentWithoutAcceptedInvitation() {
         Exam exam = attempt.getExam();
         exam.setIsActive(true);
@@ -116,6 +131,27 @@ class ExamAttemptServiceTest {
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> service.startOrResume(20L, 40L));
         assertEquals("Bạn cần chấp nhận lời mời trước khi làm bài", ex.getMessage());
+    }
+
+    @Test
+    void guestCannotBypassCourseAssessmentProgressLock() {
+        Exam exam = attempt.getExam();
+        exam.setIsActive(true);
+        exam.setCourse(Course.builder().name("Java").build());
+        exam.setCategory(ExamCategory.FINAL_TEST);
+        when(examRepository.lockForAttemptStart(20L)).thenReturn(Optional.of(exam));
+        when(attemptRepository.findAllByExam_IdAndStudent_IdOrderByAttemptNumberAsc(20L, 40L))
+                .thenReturn(List.of());
+        when(progressLockService.requiresCourseEnrollment(exam)).thenReturn(true);
+        doThrow(new AccessDeniedException("Course progress is incomplete"))
+                .when(progressLockService)
+                .assertUnlocked(exam, 40L);
+
+        assertThrows(
+                AccessDeniedException.class,
+                () -> service.startOrResumeForGuest(20L, 40L)
+        );
+        verify(progressLockService).assertUnlocked(exam, 40L);
     }
 
     @Test

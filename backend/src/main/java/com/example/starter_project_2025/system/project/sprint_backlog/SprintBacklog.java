@@ -92,7 +92,7 @@ public class SprintBacklog extends BaseEntity {
     static final int MAX_TITLE_LENGTH = 200;
 
     /** Same limit enforced by {@code SprintBacklogServiceImpl}. */
-    static final int MAX_DESCRIPTION_LENGTH = 2000;
+    static final int MAX_DESCRIPTION_LENGTH = 1000;
 
     /**
      * Owning sprint. Optional: when it is {@code null} the item is still in the
@@ -154,7 +154,7 @@ public class SprintBacklog extends BaseEntity {
     String title;
 
     /**
-     * Item description: optional, at most 2000 characters.
+     * Item description: optional, at most 1000 characters.
      */
     @Column(columnDefinition = "TEXT")
     @ImportField(name = "Description")

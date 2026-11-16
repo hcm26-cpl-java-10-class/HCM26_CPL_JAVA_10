@@ -25,6 +25,9 @@ export interface EnrollmentProgress {
   totalLessons: number;
   completedLessons: number;
   progressPercentage: number;
+  courseCompleted: boolean;
+  assessmentStatus: string;
+  overallScore: number | null;
   lastLessonId?: number | null;
   lastAccessedAt?: string | null;
   lessons: LessonProgressItem[];

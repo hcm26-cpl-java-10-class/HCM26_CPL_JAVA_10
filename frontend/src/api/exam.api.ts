@@ -31,7 +31,7 @@ export interface Exam {
 export type IntegrityEventType =
     | 'TAB_HIDDEN' | 'WINDOW_BLUR' | 'FULLSCREEN_EXIT' | 'COPY' | 'CUT' | 'PASTE'
     | 'CONTEXT_MENU' | 'DEVTOOLS_KEY' | 'PRINT_ATTEMPT' | 'MULTI_SESSION'
-    | 'CAMERA_OFF' | 'CAMERA_COVERED' | 'FACE_MISSING' | 'MULTIPLE_FACES' | 'HEAD_TURNED';
+    | 'CAMERA_OFF' | 'CAMERA_COVERED' | 'FACE_MISSING' | 'MULTIPLE_FACES' | 'HEAD_TURNED' | 'DIFFERENT_PERSON';
 
 export interface ExamIntegrityConfig {
     enabled: boolean;
@@ -41,6 +41,8 @@ export interface ExamIntegrityConfig {
     singleSession: boolean;
     cameraProctoring?: boolean;
     notifyOnViolation?: boolean;
+    headTurnAngleDeg?: number;
+    headTurnSeconds?: number;
     /** Entry photo already taken (questions stay hidden until then). */
     entryPhotoDone?: boolean;
 }
@@ -222,6 +224,12 @@ export const getMyExamAttempts = async () => {
     return response.data;
 };
 
+/** examId -> reason, only for exams locked by lesson/section progress. */
+export const getMyExamLocks = async () => {
+    const response = await api.get<Record<string, string>>('/exams/my-locks');
+    return response.data;
+};
+
 export const startOrResumeExam = async (examId: number, password?: string) => {
     const pass = password || sessionStorage.getItem(`exam_pass_${examId}`) || undefined;
     const response = await api.post<ExamAttempt>(`/exams/${examId}/attempt`, null, {
@@ -392,6 +400,16 @@ export const sendAnonymousIntegrityEvents = async (
     });
 };
 
+export interface DuplicateMatch {
+    questionId: number | null;
+    questionOrder: number;
+    otherAttemptId: number;
+    otherStudentName: string;
+    similarity: number;
+    matchType: string | null;
+    explanation: string | null;
+}
+
 export interface IntegrityReportRow {
     studentId: number;
     studentName: string;
@@ -422,6 +440,10 @@ export interface IntegrityReportRow {
     faceMissingCount: number;
     multipleFacesCount: number;
     headTurnedCount: number;
+    differentPersonCount: number;
+    extremeDuration: boolean;
+    duplicateContentCount: number;
+    duplicateMatches: DuplicateMatch[];
     hasEntryPhoto: boolean;
     totalAwaySeconds: number;
     lastViolationAt: string | null;
@@ -435,6 +457,10 @@ export interface IntegrityReport {
     antiCheatEnabled: boolean;
     totalAttempts: number;
     flaggedAttempts: number;
+    extremeDurationAttempts: number;
+    headTurnAngleDeg?: number;
+    headTurnSeconds?: number;
+    fastSubmitPercent?: number;
     totalViolations: number;
     totalsByType: Record<string, number>;
     rows: IntegrityReportRow[];
