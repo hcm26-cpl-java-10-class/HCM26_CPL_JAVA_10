@@ -1089,7 +1089,6 @@ export function ExamQuestionsPanel({ examId }: { examId: number }) {
                         )
                     );
                   }}
-                  }}
                   placeholder="e.g. 15, 25, 50"
               />
             </div>
