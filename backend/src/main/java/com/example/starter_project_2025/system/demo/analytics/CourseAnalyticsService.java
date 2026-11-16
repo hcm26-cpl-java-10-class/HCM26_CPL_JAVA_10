@@ -3,7 +3,6 @@ package com.example.starter_project_2025.system.demo.analytics;
 import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.demo.analytics.CourseAnalyticsDTO.*;
 import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course_review.CourseReviewRepository;
 import com.example.starter_project_2025.system.demo.department.Department;
@@ -12,9 +11,9 @@ import com.example.starter_project_2025.system.demo.lesson.Lesson;
 import com.example.starter_project_2025.system.demo.lesson.LessonRepository;
 import com.example.starter_project_2025.system.demo.qna.LessonQuestion;
 import com.example.starter_project_2025.system.demo.report.CourseReportRepository;
-import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
-import com.example.starter_project_2025.system.exam.service.ExamResultStatisticsService;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
+import com.example.starter_project_2025.system.exam.result.service.ExamResultStatisticsService;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -32,6 +31,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.example.starter_project_2025.system.demo.analytics.CourseAnalyticsDTO.*;
 
 @Service
 @RequiredArgsConstructor

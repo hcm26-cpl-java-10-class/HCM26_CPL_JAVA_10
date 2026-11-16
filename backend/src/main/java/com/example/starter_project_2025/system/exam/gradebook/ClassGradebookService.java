@@ -4,11 +4,10 @@ import com.example.starter_project_2025.exception.BadRequestException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.security.UserPrincipal;
 import com.example.starter_project_2025.system.demo.course.Course;
-import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
-import com.example.starter_project_2025.system.exam.domain.ExamCategory;
-import com.example.starter_project_2025.system.exam.gradebook.GradebookDTOs.*;
-import com.example.starter_project_2025.system.exam.service.ExamAccessGuard;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.core.domain.ExamCategory;
+import com.example.starter_project_2025.system.exam.core.service.ExamAccessGuard;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMember;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberRepository;
 import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
@@ -24,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import com.example.starter_project_2025.system.exam.gradebook.GradebookDTOs.*;
 
 /**
  * Score Management - tab Class: tong hop diem cua cac thanh vien trong lop tu

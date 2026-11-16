@@ -3,7 +3,6 @@ package com.example.starter_project_2025.system.demo.course;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
-import com.example.starter_project_2025.system.demo.course.CourseFromSyllabusModels.*;
 import com.example.starter_project_2025.system.demo.lesson.LessonContentType;
 import com.example.starter_project_2025.system.demo.lesson.LessonDTO;
 import com.example.starter_project_2025.system.demo.lesson.LessonService;
@@ -21,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import com.example.starter_project_2025.system.demo.course.CourseFromSyllabusModels.*;
 
 @Service
 @RequiredArgsConstructor

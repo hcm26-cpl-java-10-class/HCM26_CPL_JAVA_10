@@ -1,9 +1,9 @@
     package com.example.starter_project_2025.system.exam.supervisor.signaling;
 
     import com.example.starter_project_2025.security.UserPrincipal;
-    import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
-    import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
-    import com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus;
+    import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
+    import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
+    import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus;
     import lombok.RequiredArgsConstructor;
     import org.springframework.security.access.AccessDeniedException;
     import org.springframework.stereotype.Service;

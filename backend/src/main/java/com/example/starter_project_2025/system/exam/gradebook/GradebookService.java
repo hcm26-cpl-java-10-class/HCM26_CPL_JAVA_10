@@ -7,12 +7,11 @@ import com.example.starter_project_2025.system.demo.course.Course;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollment;
 import com.example.starter_project_2025.system.demo.enrollment.CourseEnrollmentRepository;
-import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
-import com.example.starter_project_2025.system.exam.domain.ExamAttemptRepository;
-import com.example.starter_project_2025.system.exam.domain.ExamRepository;
-import com.example.starter_project_2025.system.exam.gradebook.GradebookDTOs.*;
-import com.example.starter_project_2025.system.exam.service.ExamAccessGuard;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptRepository;
+import com.example.starter_project_2025.system.exam.core.domain.ExamRepository;
+import com.example.starter_project_2025.system.exam.core.service.ExamAccessGuard;
 import com.example.starter_project_2025.system.rbac.user.User;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -23,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import com.example.starter_project_2025.system.exam.gradebook.GradebookDTOs.*;
 
 /**
  * Bang diem (gradebook) cua tung course: cot diem, ti trong, nhap tay, lay diem
@@ -43,7 +43,7 @@ public class GradebookService {
     private final ExamAttemptRepository attemptRepository;
     private final ExamAccessGuard accessGuard;
     private final GradebookStateRepository stateRepository;
-    private final com.example.starter_project_2025.system.exam.service.ExamResultAccessService resultAccess;
+    private final com.example.starter_project_2025.system.exam.result.service.ExamResultAccessService resultAccess;
     private final GradebookSaveLogRepository saveLogRepository;
     private final com.example.starter_project_2025.system.notification.NotificationService notificationService;
     private final GradebookPublishedItemRepository publishedRepository;
@@ -261,11 +261,11 @@ public class GradebookService {
             if (c.getSourceExam() != null)
                 linked.add(c.getSourceExam().getId());
 
-        List<com.example.starter_project_2025.system.exam.domain.ExamCategory> order = List.of(
-                com.example.starter_project_2025.system.exam.domain.ExamCategory.ASSIGNMENT,
-                com.example.starter_project_2025.system.exam.domain.ExamCategory.QUIZ,
-                com.example.starter_project_2025.system.exam.domain.ExamCategory.MIDTERM,
-                com.example.starter_project_2025.system.exam.domain.ExamCategory.FINAL_TEST);
+        List<com.example.starter_project_2025.system.exam.core.domain.ExamCategory> order = List.of(
+                com.example.starter_project_2025.system.exam.core.domain.ExamCategory.ASSIGNMENT,
+                com.example.starter_project_2025.system.exam.core.domain.ExamCategory.QUIZ,
+                com.example.starter_project_2025.system.exam.core.domain.ExamCategory.MIDTERM,
+                com.example.starter_project_2025.system.exam.core.domain.ExamCategory.FINAL_TEST);
         List<Exam> exams = new ArrayList<>(examRepository.findByCourseLink(courseId, null, null, true));
         exams.sort(Comparator.comparingInt((Exam e) -> order.indexOf(e.getCategory())).thenComparing(Exam::getId));
         List<Exam> toCreate = new ArrayList<>();
@@ -448,7 +448,7 @@ public class GradebookService {
                 + (cat != null ? " and e.category = :cat" : "") + " order by e.id desc", Exam.class)
                 .setParameter("cid", courseId).setParameter("uid", uid);
         if (cat != null)
-            query.setParameter("cat", com.example.starter_project_2025.system.exam.domain.ExamCategory.valueOf(cat));
+            query.setParameter("cat", com.example.starter_project_2025.system.exam.core.domain.ExamCategory.valueOf(cat));
         List<Exam> exams = query.getResultList();
         List<AvailableExam> out = new ArrayList<>();
         for (Exam e : exams) {

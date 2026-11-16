@@ -1,7 +1,6 @@
 
 package com.example.starter_project_2025.system.demo.syllabus;
 
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusModels.*;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import com.example.starter_project_2025.system.demo.syllabus.SyllabusModels.*;
 
 @Service
 @RequiredArgsConstructor

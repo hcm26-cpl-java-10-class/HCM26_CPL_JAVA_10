@@ -8,8 +8,8 @@ import com.example.starter_project_2025.system.demo.lessonreport.LessonReport;
 import com.example.starter_project_2025.system.demo.progress.LessonProgress;
 import com.example.starter_project_2025.system.demo.qna.LessonAnswer;
 import com.example.starter_project_2025.system.demo.qna.LessonQuestion;
-import com.example.starter_project_2025.system.exam.domain.Exam;
-import com.example.starter_project_2025.system.exam.domain.ExamAttempt;
+import com.example.starter_project_2025.system.exam.core.domain.Exam;
+import com.example.starter_project_2025.system.exam.attempt.domain.ExamAttempt;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -185,8 +185,8 @@ public interface CourseAnalyticsRepository extends JpaRepository<CourseEnrollmen
               left join u.departments d
             where a.finalScore is not null
               and a.maxScore is not null and a.maxScore > 0
-              and a.status in (com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.SUBMITTED,
-                               com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.EXPIRED)
+              and a.status in (com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus.SUBMITTED,
+                               com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus.EXPIRED)
               and (:courseId is null or a.exam.course.id = :courseId)
             group by d.id
             """)
@@ -258,8 +258,8 @@ public interface CourseAnalyticsRepository extends JpaRepository<CourseEnrollmen
             from ExamAttempt a
             where a.finalScore is not null
               and a.maxScore is not null and a.maxScore > 0
-              and a.status in (com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.SUBMITTED,
-                               com.example.starter_project_2025.system.exam.domain.ExamAttemptStatus.EXPIRED)
+              and a.status in (com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus.SUBMITTED,
+                               com.example.starter_project_2025.system.exam.attempt.domain.ExamAttemptStatus.EXPIRED)
               and (:courseId is null or a.exam.course.id = :courseId)
             group by a.student.id
             """)

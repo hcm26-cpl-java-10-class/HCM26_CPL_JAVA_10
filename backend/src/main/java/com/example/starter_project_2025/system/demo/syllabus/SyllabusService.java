@@ -3,12 +3,12 @@ package com.example.starter_project_2025.system.demo.syllabus;
 import com.example.starter_project_2025.exception.BusinessValidationException;
 import com.example.starter_project_2025.exception.ResourceNotFoundException;
 import com.example.starter_project_2025.system.demo.course.CourseRepository;
-import com.example.starter_project_2025.system.demo.syllabus.SyllabusModels.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import com.example.starter_project_2025.system.demo.syllabus.SyllabusModels.*;
 
 @Service
 @RequiredArgsConstructor

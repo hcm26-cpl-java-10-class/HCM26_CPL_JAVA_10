@@ -1,7 +1,6 @@
 package com.example.starter_project_2025.system.exam.gradebook;
 
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.exam.gradebook.GradebookDTOs.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -9,6 +8,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.example.starter_project_2025.system.exam.gradebook.GradebookDTOs.*;
 
 /** Score Management: bang diem theo course (giang vien). */
 @RestController
