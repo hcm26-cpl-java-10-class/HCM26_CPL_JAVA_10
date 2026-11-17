@@ -1,11 +1,9 @@
 package com.example.starter_project_2025.system.calendar;
 
 import com.example.starter_project_2025.security.UserPrincipal;
-import com.example.starter_project_2025.system.demo.session.Session;
 import com.example.starter_project_2025.system.demo.session.SessionDTO;
 import com.example.starter_project_2025.system.demo.session.SessionFilter;
 import com.example.starter_project_2025.system.demo.session.SessionService;
-import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -13,12 +11,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,16 +21,14 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/calendar")
-@Tag(name = "Training Calendar", description = "APIs for weekly timetable queries and schedule conflict validation")
+@Tag(name = "Training Calendar", description = "APIs for weekly timetable queries")
 public class CalendarController {
 
     private final SessionService sessionService;
-    private final CalendarValidationService calendarValidationService;
 
     private void validateDateRange(LocalDateTime from, LocalDateTime to, int page, int size) {
         if (!from.isBefore(to)) {
@@ -156,11 +149,5 @@ public class CalendarController {
                 )
         );
     }
-
-    @PostMapping("/validate")
-    @PreAuthorize("hasAuthority('SESSION_READ')")
-    @Operation(summary = "Validate a candidate class schedule against internal overlaps and other classes")
-    public CalendarValidationResult validateSchedule(@RequestBody CalendarValidateRequest request) {
-        return calendarValidationService.validate(request);
-    }
 }
+

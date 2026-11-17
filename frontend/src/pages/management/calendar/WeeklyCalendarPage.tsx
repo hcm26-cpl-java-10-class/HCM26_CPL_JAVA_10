@@ -1,5 +1,6 @@
 import { getCalendarSessions, getMyCalendarSessions } from "@/api/features/calendar.api";
-import { classSetupApi, type SharedClass } from "@/api/features/class-setup.api";
+import { clsApi, type TrainingClass } from "@/api/features/cls.api";
+import { trainerApi, type Trainer } from "@/api/features/trainer.api";
 import type {
   CalendarSessionResponse,
   CalendarSessionsPage,
@@ -9,10 +10,8 @@ import type { CalendarSessionStatus } from "@/types/features/calendar";
 import { isAxiosError } from "axios";
 import dayjs from "dayjs";
 import { useEffect, useState, useMemo } from "react";
-import { externalApi } from "@/api/features/external.api";
 import { topicApi } from "@/api/features/topic.api";
-import type { ExternalTrainer } from "@/types";
-import { useSearchParams, Link } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import {
   Calendar as CalendarIcon,
   CalendarDays,
@@ -27,7 +26,6 @@ import {
   UserCheck,
   Users,
   Eye,
-  FileEdit,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,9 +33,6 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import {
   CalendarLookupContext,
-  DEFAULT_TOPIC_ID_MAP,
-  DEFAULT_TOPIC_NAMES,
-  DEFAULT_TRAINER_NAMES,
   STATUS_CLASSES,
   STATUS_LABELS,
   TIME_ZONE,
@@ -90,79 +85,55 @@ export default function WeeklyCalendarPage() {
   // Bộ lọc lớp học (classId)
   const classFilter = searchParams.get("classId") || "ALL";
 
-  const [systemClasses, setSystemClasses] = useState<SharedClass[]>([
-    { id: 1, code: "LOCAL_JAVA_01", name: "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)", status: "active", plannedSize: 30 },
-    { id: 2, code: "LOCAL_JAVA_02", name: "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)", status: "active", plannedSize: 30 },
-    { id: 26, code: "HCM26_FR_FU_KS_JAVA_01", name: "[HCM26_FR_FU_KS_JAVA_01] Lớp Java SE & Spring Boot", status: "active", plannedSize: 30 },
-  ]);
-
-  const [trainers, setTrainers] = useState<ExternalTrainer[]>([
-    { id: 1, name: "Nguyễn Ngọc Tân (Trainer)" },
-    { id: 2, name: "Nguyễn Mạnh Hoàng (Trainer)" },
-    { id: 3, name: "Nguyễn Văn Thắng (Trainer)" },
-    { id: 4, name: "Nguyễn Tuấn Danh (Trainer)" },
-    { id: 5, name: "Huỳnh Tấn Phát (Trainer)" },
-  ]);
-
-  const [systemSubjects, setSystemSubjects] = useState<Array<{ id: number; code: string; name: string }>>([
-    { id: 1, code: "JAVA_CORE", name: "Lập trình Java căn bản & OOP" },
-    { id: 2, code: "SPRING_BOOT", name: "Lập trình Web Backend với Spring Boot" },
-    { id: 3, code: "DATABASE_SQL", name: "Cơ sở dữ liệu & Thiết kế CSDL SQL" },
-    { id: 4, code: "REACT_FRONTEND", name: "Lập trình Giao diện Web với ReactJS" },
-    { id: 5, code: "DEVOPS_BASIC", name: "DevOps & CI/CD căn bản" },
-    { id: 6, code: "TESTING_QA", name: "Kiểm thử phần mềm & Đảm bảo chất lượng QA" },
-  ]);
+  const [systemClasses, setSystemClasses] = useState<TrainingClass[]>([]);
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
+  const [systemSubjects, setSystemSubjects] = useState<Array<{ id: number; code: string; name: string }>>([]);
 
   useEffect(() => {
-    classSetupApi.getActiveClasses().then((res: any) => {
-      if (res && res.length > 0) {
+    clsApi.getAllClasses().then((res) => {
+      if (Array.isArray(res)) {
         setSystemClasses(res);
       }
-    }).catch(() => {});
+    }).catch(() => { });
 
-    externalApi.getTrainers().then((res: any) => {
-      if (Array.isArray(res) && res.length > 0) {
-        setTrainers(res);
+    trainerApi.list({ page: 0, size: 200 }).then((res) => {
+      const list = res?.content || [];
+      if (Array.isArray(list)) {
+        setTrainers(list);
       }
-    }).catch(() => {});
+    }).catch(() => { });
 
     topicApi.getPage({ page: 0, size: 100 }).then((res) => {
       const list = res?.content || [];
-      if (Array.isArray(list) && list.length > 0) {
+      if (Array.isArray(list)) {
         setSystemSubjects(list.map((s) => ({
           id: s.id,
           code: s.code,
           name: s.name,
         })));
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const getClassName = (classId?: number): string => {
     if (!classId) return "—";
-    const found = systemClasses.find((c) => c.id === classId || c.code === "LOCAL_JAVA_" + String(classId).padStart(2, "0"));
+    const found = systemClasses.find((c) => c.id === classId);
     if (found) {
-      return found.name || "[" + found.code + "]";
+      return found.name ? `[${found.code}] ${found.name}` : `[${found.code}]`;
     }
-    if (classId === 1) return "[LOCAL_JAVA_01] Lớp Chuyên sâu Java Backend (K26)";
-    if (classId === 2) return "[LOCAL_JAVA_02] Lớp Lập trình Fullstack Java Web (K26)";
-    return "Lớp (ID: " + classId + ")";
+    return `Lớp #${classId}`;
   };
 
   const getClassCode = (classId?: number): string => {
     if (!classId) return "—";
     const found = systemClasses.find((c) => c.id === classId);
-    if (found?.code) return found.code;
-    if (classId === 1) return "LOCAL_JAVA_01";
-    if (classId === 2) return "LOCAL_JAVA_02";
-    return "CLASS-" + String(classId).padStart(2, "0");
+    return found?.code || `Lớp #${classId}`;
   };
 
   const getTrainerName = (trainerId?: number): string => {
     if (!trainerId) return "Chưa phân công";
     const found = trainers.find((t) => t.id === trainerId);
-    if (found?.name) return found.name;
-    return DEFAULT_TRAINER_NAMES[trainerId] || "Trainer #" + trainerId;
+    return found?.fullName || `Trainer #${trainerId}`;
   };
 
   const getTopicName = (topicId?: number, sessionTitle?: string): string => {
@@ -171,16 +142,12 @@ export default function WeeklyCalendarPage() {
       if (match) {
         const code = match[1];
         const sub = systemSubjects.find((s) => s.code === code);
-        if (sub) return "[" + sub.code + "] " + sub.name;
-        if (DEFAULT_TOPIC_NAMES[code]) return "[" + code + "] " + DEFAULT_TOPIC_NAMES[code];
-        return "[" + code + "]";
+        return sub ? `[${sub.code}] ${sub.name}` : `[${code}]`;
       }
     }
     if (topicId) {
       const sub = systemSubjects.find((s) => s.id === topicId);
-      if (sub) return "[" + sub.code + "] " + sub.name;
-      if (DEFAULT_TOPIC_ID_MAP[topicId]) return "[" + DEFAULT_TOPIC_ID_MAP[topicId].code + "] " + DEFAULT_TOPIC_ID_MAP[topicId].name;
-      return "Chủ đề #" + topicId;
+      return sub ? `[${sub.code}] ${sub.name}` : `Chủ đề #${topicId}`;
     }
     return "Chưa có";
   };
@@ -192,9 +159,7 @@ export default function WeeklyCalendarPage() {
     }
     if (topicId) {
       const sub = systemSubjects.find((s) => s.id === topicId);
-      if (sub) return sub.code;
-      if (DEFAULT_TOPIC_ID_MAP[topicId]) return DEFAULT_TOPIC_ID_MAP[topicId].code;
-      return "Topic #" + topicId;
+      return sub?.code || `Topic #${topicId}`;
     }
     return "—";
   };
@@ -335,7 +300,7 @@ export default function WeeklyCalendarPage() {
       }
       return true;
     });
-  }, [rawSessions, keyword, classFilter]);
+  }, [rawSessions, keyword, classFilter, systemClasses, trainers, systemSubjects]);
 
   // Danh sách các classId có trong dữ liệu để làm filter
   const availableClasses = useMemo(() => {
@@ -459,363 +424,345 @@ export default function WeeklyCalendarPage() {
       });
     }
 
+    // Ô trống đệm cuối tháng để đủ bội số 7 cột
+    const trailingSlots = (7 - (list.length % 7)) % 7;
+    const endOfMonth = startOfMonth.endOf("month");
+    for (let i = 1; i <= trailingSlots; i++) {
+      const nextDate = endOfMonth.add(i, "day");
+      list.push({
+        dateKey: nextDate.format("YYYY-MM-DD"),
+        dayNumber: nextDate.date(),
+        isCurrentMonth: false,
+        isToday: false,
+        sessions: [],
+      });
+    }
+
     return list;
   }, [viewMode, selectedDate, sessions]);
 
   return (
     <CalendarLookupContext.Provider value={{ getClassName, getClassCode, getTrainerName, getTopicName, getTopicCode }}>
       <MainLayout pathName={{ calendar: "Thời khoá biểu" }}>
-      <div className="space-y-5 pb-12">
-        {/* Header hàng đầu: Tiêu đề & Nút xuất file */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                Thời khóa biểu & Lịch học
-              </h1>
-              <Badge variant="outline" className="text-xs font-semibold text-primary">
-                FAMS Timetable
-              </Badge>
-              {scope === "mine" && (
-                <Badge className="bg-primary/15 text-primary border-primary/30 text-xs font-semibold">
-                  <UserCheck className="mr-1 h-3 w-3" /> Lịch cá nhân
+        <div className="w-full min-w-0 space-y-5 pb-16">
+          {/* Header hàng đầu: Tiêu đề & Nút xuất file */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                  Thời khóa biểu & Lịch học
+                </h1>
+                <Badge variant="outline" className="text-xs font-semibold text-primary">
+                  FAMS Timetable
                 </Badge>
-              )}
+                {scope === "mine" && (
+                  <Badge className="bg-primary/15 text-primary border-primary/30 text-xs font-semibold">
+                    <UserCheck className="mr-1 h-3 w-3" /> Lịch cá nhân
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground flex items-center gap-1.5">
+                <CalendarIcon className="h-4 w-4 text-primary" />
+                <span>{dateTitle}</span>
+              </p>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground flex items-center gap-1.5">
-              <CalendarIcon className="h-4 w-4 text-primary" />
-              <span>{dateTitle}</span>
-            </p>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <Link to="/calendar/adjust">
+            <div className="flex items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                onClick={handleExportCsv}
                 className="gap-1.5 text-xs font-medium"
+                title="Xuất danh sách buổi học ra file CSV"
               >
-                <FileEdit className="h-4 w-4 text-primary" />
-                Điều chỉnh lịch (Adjust Calendar)
+                <Download className="h-4 w-4 text-emerald-600" />
+                Xuất Excel (CSV)
               </Button>
-            </Link>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleExportCsv}
-              className="gap-1.5 text-xs font-medium"
-              title="Xuất danh sách buổi học ra file CSV"
-            >
-              <Download className="h-4 w-4 text-emerald-600" />
-              Xuất Excel (CSV)
-            </Button>
-          </div>
-        </div>
-
-        {/* Thanh điều khiển thứ 2: Phạm vi (Tất cả / Của tôi), Chuyển View Mode & Điều hướng ngày */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 shadow-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Tab chuyển phạm vi: Tất cả lịch | Lịch của tôi */}
-            <div className="inline-flex rounded-lg border bg-muted/40 p-1">
-              <button
-                type="button"
-                onClick={() => updateCalendarUrl({ scope: "all", page: "0" })}
-                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                  scope === "all"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Users className="h-3.5 w-3.5" />
-                Tất cả lịch
-              </button>
-              <button
-                type="button"
-                onClick={() => updateCalendarUrl({ scope: "mine", page: "0" })}
-                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                  scope === "mine"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <UserCheck className="h-3.5 w-3.5 text-primary" />
-                Lịch của tôi
-              </button>
-            </div>
-
-            {/* Tab chuyển chế độ xem: Tuần | Tháng | Danh sách */}
-            <div className="inline-flex rounded-lg border bg-muted/40 p-1">
-              <button
-                type="button"
-                onClick={() => updateCalendarUrl({ view: "week" })}
-                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                  viewMode === "week"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <CalendarDays className="h-4 w-4" />
-                Xem Tuần
-              </button>
-              <button
-                type="button"
-                onClick={() => updateCalendarUrl({ view: "month" })}
-                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                  viewMode === "month"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <CalendarIcon className="h-4 w-4" />
-                Xem Tháng
-              </button>
-              <button
-                type="button"
-                onClick={() => updateCalendarUrl({ view: "list" })}
-                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
-                  viewMode === "list"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <ListIcon className="h-4 w-4" />
-                Danh sách buổi
-              </button>
             </div>
           </div>
 
-          {/* Cụm điều hướng: Trước, Hôm nay, Sau, Chọn ngày */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => changePeriod(-1)}
-              className="h-8 gap-1 px-2.5 text-xs"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              {viewMode === "month" ? "Tháng trước" : "Tuần trước"}
-            </Button>
+          {/* Thanh điều khiển thứ 2: Phạm vi (Tất cả / Của tôi), Chuyển View Mode & Điều hướng ngày */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Tab chuyển phạm vi: Tất cả lịch | Lịch của tôi */}
+              <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+                <button
+                  type="button"
+                  onClick={() => updateCalendarUrl({ scope: "all", page: "0" })}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${scope === "all"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Tất cả lịch
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateCalendarUrl({ scope: "mine", page: "0" })}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${scope === "mine"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                  <UserCheck className="h-3.5 w-3.5 text-primary" />
+                  Lịch của tôi
+                </button>
+              </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                updateCalendarUrl({
-                  date: dayjs().tz(TIME_ZONE).format("YYYY-MM-DD"),
-                  page: "0",
-                });
-              }}
-              className="h-8 px-3 text-xs font-semibold"
-            >
-              Hôm nay
-            </Button>
+              {/* Tab chuyển chế độ xem: Tuần | Tháng | Danh sách */}
+              <div className="inline-flex rounded-lg border bg-muted/40 p-1">
+                <button
+                  type="button"
+                  onClick={() => updateCalendarUrl({ view: "week" })}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${viewMode === "week"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  Xem Tuần
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateCalendarUrl({ view: "month" })}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${viewMode === "month"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                  <CalendarIcon className="h-4 w-4" />
+                  Xem Tháng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateCalendarUrl({ view: "list" })}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${viewMode === "list"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                  <ListIcon className="h-4 w-4" />
+                  Danh sách buổi
+                </button>
+              </div>
+            </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => changePeriod(1)}
-              className="h-8 gap-1 px-2.5 text-xs"
-            >
-              {viewMode === "month" ? "Tháng sau" : "Tuần sau"}
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            {/* Cụm điều hướng: Trước, Hôm nay, Sau, Chọn ngày */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => changePeriod(-1)}
+                className="h-8 gap-1 px-2.5 text-xs"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                {viewMode === "month" ? "Tháng trước" : "Tuần trước"}
+              </Button>
 
-            <div className="relative">
-              <input
-                type="date"
-                value={selectedDate.format("YYYY-MM-DD")}
-                onChange={(event) => {
-                  const val = event.target.value;
-                  if (val) {
-                    updateCalendarUrl({ date: val, page: "0" });
-                  }
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  updateCalendarUrl({
+                    date: dayjs().tz(TIME_ZONE).format("YYYY-MM-DD"),
+                    page: "0",
+                  });
                 }}
-                className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="h-8 px-3 text-xs font-semibold"
+              >
+                Hôm nay
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => changePeriod(1)}
+                className="h-8 gap-1 px-2.5 text-xs"
+              >
+                {viewMode === "month" ? "Tháng sau" : "Tuần sau"}
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+
+              <div className="relative">
+                <input
+                  type="date"
+                  value={selectedDate.format("YYYY-MM-DD")}
+                  onChange={(event) => {
+                    const val = event.target.value;
+                    if (val) {
+                      updateCalendarUrl({ date: val, page: "0" });
+                    }
+                  }}
+                  className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Thanh Bộ lọc nâng cao & Tìm kiếm */}
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(240px,1.6fr)_minmax(180px,1fr)_minmax(170px,1fr)_auto] rounded-xl border bg-card p-3 shadow-sm">
+            {/* Tìm kiếm từ khóa */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Tìm theo tiêu đề, phòng học, giảng viên..."
+                maxLength={100}
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                className="h-8 pl-8 text-xs"
               />
             </div>
-          </div>
-        </div>
 
-        {/* Thanh Bộ lọc nâng cao & Tìm kiếm */}
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-4 rounded-xl border bg-card p-3 shadow-sm">
-          {/* Tìm kiếm từ khóa */}
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Tìm theo tiêu đề, phòng, GV..."
-              maxLength={100}
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              className="h-8 pl-8 text-xs"
-            />
-          </div>
-
-          {/* Lọc theo Lớp */}
-          <div className="flex items-center gap-1.5">
-            <label htmlFor="calendar-class" className="text-xs text-muted-foreground shrink-0 font-medium">
-              Lớp:
-            </label>
-            <select
-              id="calendar-class"
-              value={classFilter}
-              onChange={(e) => updateCalendarUrl({ classId: e.target.value === "ALL" ? "" : e.target.value, page: "0" })}
-              className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-medium"
-            >
-              <option value="ALL">Tất cả lớp học</option>
-              {systemClasses.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name ? c.name : `CLASS-${String(c.id).padStart(2, "0")}`}
-                </option>
-              ))}
-              {availableClasses
-                .filter((c) => !systemClasses.some((sc) => sc.id === c))
-                .map((c) => (
-                  <option key={c} value={String(c)}>
-                    {getClassName(c)}
+            {/* Lọc theo Lớp */}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <label htmlFor="calendar-class" className="text-xs text-muted-foreground shrink-0 font-medium">
+                Lớp:
+              </label>
+              <select
+                id="calendar-class"
+                value={classFilter}
+                onChange={(e) => updateCalendarUrl({ classId: e.target.value === "ALL" ? "" : e.target.value, page: "0" })}
+                className="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2 text-xs font-medium truncate"
+              >
+                <option value="ALL">Tất cả lớp học</option>
+                {systemClasses.map((c) => (
+                  <option key={c.id} value={String(c.id)}>
+                    {c.name ? `[${c.code}] ${c.name}` : c.code}
                   </option>
                 ))}
-            </select>
-          </div>
+                {availableClasses
+                  .filter((c) => !systemClasses.some((sc) => sc.id === c))
+                  .map((c) => (
+                    <option key={c} value={String(c)}>
+                      {getClassName(c)}
+                    </option>
+                  ))}
+              </select>
+            </div>
 
-          {/* Lọc theo Trạng thái */}
-          <div className="flex items-center gap-1.5">
-            <label htmlFor="calendar-status" className="text-xs text-muted-foreground shrink-0 font-medium">
-              Trạng thái:
-            </label>
-            <select
-              id="calendar-status"
-              value={statusFilter}
-              onChange={(e) => updateCalendarUrl({ status: e.target.value, page: "0" })}
-              className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs font-medium"
-            >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="SCHEDULED">{STATUS_LABELS.SCHEDULED}</option>
-              <option value="COMPLETED">{STATUS_LABELS.COMPLETED}</option>
-              <option value="CANCELLED">{STATUS_LABELS.CANCELLED}</option>
-            </select>
-          </div>
+            {/* Lọc theo Trạng thái */}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <label htmlFor="calendar-status" className="text-xs text-muted-foreground shrink-0 font-medium">
+                Trạng thái:
+              </label>
+              <select
+                id="calendar-status"
+                value={statusFilter}
+                onChange={(e) => updateCalendarUrl({ status: e.target.value, page: "0" })}
+                className="h-8 w-full min-w-0 rounded-md border border-input bg-background px-2 text-xs font-medium"
+              >
+                <option value="ALL">Tất cả trạng thái</option>
+                <option value="SCHEDULED">{STATUS_LABELS.SCHEDULED}</option>
+                <option value="COMPLETED">{STATUS_LABELS.COMPLETED}</option>
+                <option value="CANCELLED">{STATUS_LABELS.CANCELLED}</option>
+              </select>
+            </div>
 
-          {/* Nút Reset bộ lọc */}
-          <div className="flex items-center justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={resetFilters}
-              className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Đặt lại bộ lọc
-            </Button>
-          </div>
-        </div>
-
-        {/* Trạng thái Loading / Error */}
-        {loading && (
-          <div className="rounded-xl border bg-card p-12 text-center">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent align-[-0.125em]" />
-            <p className="mt-3 text-sm font-medium text-muted-foreground">
-              Đang tải dữ liệu thời khóa biểu...
-            </p>
-          </div>
-        )}
-
-        {!loading && error && (
-          <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center space-y-3">
-            <p className="text-sm font-semibold text-destructive">{error}</p>
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            {/* Nút Reset bộ lọc */}
+            <div className="flex items-center justify-end">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setReloadKey((p) => p + 1)}
-                className="h-8 text-xs"
+                onClick={resetFilters}
+                className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground whitespace-nowrap"
               >
-                Thử lại
+                <RotateCcw className="h-3.5 w-3.5" />
+                Đặt lại bộ lọc
               </Button>
-
             </div>
           </div>
-        )}
 
-        {/* NỘI DUNG CHÍNH THEO VIEW MODE */}
-        {!loading && !error && (
-          <>
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                Hiển thị <strong>{sessions.length}</strong> buổi học phù hợp{" "}
-                {keyword ? `(lọc theo "${keyword}")` : ""}
-              </span>
-              <span>Múi giờ chuẩn: <strong>Asia/Ho_Chi_Minh (UTC+7)</strong></span>
+          {/* Trạng thái Loading / Error */}
+          {loading && (
+            <div className="rounded-xl border bg-card p-12 text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent align-[-0.125em]" />
+              <p className="mt-3 text-sm font-medium text-muted-foreground">
+                Đang tải dữ liệu thời khóa biểu...
+              </p>
             </div>
+          )}
 
-            {/* 1. CHẾ ĐỘ XEM TUẦN (WEEK VIEW - DYNAMIC SESSIONS FLOW) */}
-            {viewMode === "week" && (
-              <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
-                <div className="min-w-[1100px]">
-                  {/* Header 7 ngày trong tuần */}
-                  <div className="grid grid-cols-7 border-b bg-muted/40 divide-x divide-border">
-                    {weekDays.map((day) => {
-                      const daySessionsCount = sessions.filter(
-                        (s) => s.startTime && s.startTime.substring(0, 10) === day.dateKey,
-                      ).length;
+          {!loading && error && (
+            <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center space-y-3">
+              <p className="text-sm font-semibold text-destructive">{error}</p>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReloadKey((p) => p + 1)}
+                  className="h-8 text-xs"
+                >
+                  Thử lại
+                </Button>
 
-                      return (
-                        <div
-                          key={day.dateKey}
-                          className={`p-3 text-center transition-colors ${
-                            day.isToday ? "bg-primary/10" : ""
+              </div>
+            </div>
+          )}
+
+          {/* NỘI DUNG CHÍNH THEO VIEW MODE */}
+          {!loading && !error && (
+            <>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  Hiển thị <strong>{sessions.length}</strong> buổi học phù hợp{" "}
+                  {keyword ? `(lọc theo "${keyword}")` : ""}
+                </span>
+                <span>Múi giờ chuẩn: <strong>Asia/Ho_Chi_Minh (UTC+7)</strong></span>
+              </div>
+
+              {sessions.length === 0 && viewMode !== "list" && (
+                <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+                  Chưa có buổi học nào trong khoảng thời gian này.
+                </div>
+              )}
+
+              {/* 1. CHẾ ĐỘ XEM TUẦN (WEEK VIEW - RESPONSIVE GRID, KHÔNG CẮT CHỦ NHẬT) */}
+              {viewMode === "week" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7 gap-3">
+                  {weekDays.map((day) => {
+                    const daySessions = sessions
+                      .filter((s) => s.startTime && s.startTime.substring(0, 10) === day.dateKey)
+                      .sort(
+                        (a, b) =>
+                          dayjs.tz(a.startTime, TIME_ZONE).valueOf() -
+                          dayjs.tz(b.startTime, TIME_ZONE).valueOf(),
+                      );
+
+                    return (
+                      <section
+                        key={day.dateKey}
+                        className={`flex flex-col overflow-hidden rounded-xl border bg-card shadow-xs ${day.isToday ? "border-primary/50 ring-1 ring-primary/20" : "border-border"
                           }`}
+                      >
+                        <header
+                          className={`border-b px-3 py-2.5 text-center ${day.isToday ? "bg-primary/10" : "bg-muted/40"
+                            }`}
                         >
                           <p className="text-xs font-semibold text-muted-foreground">{day.label}</p>
-                          <p
-                            className={`mt-0.5 text-base font-bold ${
-                              day.isToday ? "text-primary" : "text-foreground"
-                            }`}
-                          >
+                          <p className={`mt-0.5 text-base font-bold ${day.isToday ? "text-primary" : "text-foreground"}`}>
                             {day.dateLabel}
                           </p>
                           <div className="mt-1 flex items-center justify-center gap-1.5">
                             {day.isToday && (
-                              <span className="text-[10px] font-bold text-primary">● Hôm nay</span>
+                              <span className="text-[10px] font-bold text-primary whitespace-nowrap">● Hôm nay</span>
                             )}
-                            <span className="rounded-full bg-muted/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground border">
-                              {daySessionsCount} buổi
+                            <span className="rounded-full bg-background/80 px-2 py-0.5 text-[10px] font-medium text-muted-foreground border whitespace-nowrap">
+                              {daySessions.length} buổi
                             </span>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        </header>
 
-                  {/* Lưới 7 cột ngày - hiển thị các Sessions động theo thời gian thực */}
-                  <div className="grid grid-cols-7 divide-x divide-border min-h-[480px] bg-background">
-                    {weekDays.map((day) => {
-                      const daySessions = sessions
-                        .filter(
-                          (s) => s.startTime && s.startTime.substring(0, 10) === day.dateKey,
-                        )
-                        .sort(
-                          (a, b) =>
-                            dayjs.tz(a.startTime, TIME_ZONE).valueOf() -
-                            dayjs.tz(b.startTime, TIME_ZONE).valueOf(),
-                        );
-
-                      return (
-                        <div
-                          key={day.dateKey}
-                          className={`p-2 space-y-2 flex flex-col transition-colors ${
-                            day.isToday ? "bg-primary/[0.02]" : ""
-                          }`}
-                        >
+                        <div className={`flex-1 p-2.5 space-y-2.5 min-h-[240px] ${day.isToday ? "bg-primary/[0.02]" : "bg-background"}`}>
                           {daySessions.length === 0 ? (
-                            <div className="flex flex-1 flex-col items-center justify-center py-16 text-center text-muted-foreground/40">
+                            <div className="flex h-full min-h-[180px] flex-col items-center justify-center py-8 text-center text-muted-foreground/50">
                               <CalendarIcon className="h-6 w-6 stroke-1 mb-1.5 opacity-40" />
                               <span className="text-xs">Không có buổi học</span>
                             </div>
@@ -829,175 +776,178 @@ export default function WeeklyCalendarPage() {
                             ))
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 2. CHẾ ĐỘ XEM THÁNG (MONTH VIEW) */}
-            {viewMode === "month" && (
-              <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-                <div className="grid grid-cols-7 border-b bg-muted/40 text-center text-xs font-semibold text-muted-foreground">
-                  <div className="p-2.5 border-r">Thứ Hai</div>
-                  <div className="p-2.5 border-r">Thứ Ba</div>
-                  <div className="p-2.5 border-r">Thứ Tư</div>
-                  <div className="p-2.5 border-r">Thứ Năm</div>
-                  <div className="p-2.5 border-r">Thứ Sáu</div>
-                  <div className="p-2.5 border-r">Thứ Bảy</div>
-                  <div className="p-2.5">Chủ nhật</div>
-                </div>
-
-                <div className="grid grid-cols-7 auto-rows-fr">
-                  {monthDays.map((d, index) => {
-                    const isSunday = (index + 1) % 7 === 0;
-                    return (
-                      <div
-                        key={d.dateKey + index}
-                        className={`min-h-[110px] p-2 border-b border-r ${
-                          isSunday ? "border-r-0" : ""
-                        } ${
-                          !d.isCurrentMonth
-                            ? "bg-muted/10 opacity-40"
-                            : d.isToday
-                              ? "bg-primary/5"
-                              : "bg-card"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span
-                            className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                              d.isToday
-                                ? "bg-primary text-primary-foreground"
-                                : "text-foreground"
-                            }`}
-                          >
-                            {d.dayNumber}
-                          </span>
-                          {d.sessions.length > 0 && (
-                            <span className="text-[10px] font-bold text-muted-foreground">
-                              {d.sessions.length} buổi
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="space-y-1">
-                          {d.sessions.slice(0, 3).map((s) => (
-                            <SessionDetailModal
-                              key={s.id}
-                              session={s}
-                              trigger={
-                                <div
-                                  className={`cursor-pointer truncate rounded px-1.5 py-0.5 text-[10px] font-medium transition-all hover:scale-[1.02] ${
-                                    STATUS_CLASSES[s.status] || "bg-muted"
-                                  }`}
-                                  title={`${s.title} (${dayjs.tz(s.startTime, TIME_ZONE).format("HH:mm")})`}
-                                >
-                                  <strong>{dayjs.tz(s.startTime, TIME_ZONE).format("HH:mm")}</strong> {s.title}
-                                </div>
-                              }
-                            />
-                          ))}
-                          {d.sessions.length > 3 && (
-                            <p className="text-[9px] font-medium text-primary text-center">
-                              +{d.sessions.length - 3} buổi khác
-                            </p>
-                          )}
-                        </div>
-                      </div>
+                      </section>
                     );
                   })}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* 3. CHẾ ĐỘ XEM DANH SÁCH (LIST VIEW) */}
-            {viewMode === "list" && (
-              <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b bg-muted/40 text-xs font-semibold text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3">Thời gian</th>
-                      <th className="px-4 py-3">Tiêu đề buổi học</th>
-                      <th className="px-4 py-3">Lớp</th>
-                      <th className="px-4 py-3">Chủ đề (Topic)</th>
-                      <th className="px-4 py-3">Giảng viên</th>
-                      <th className="px-4 py-3">Phòng học</th>
-                      <th className="px-4 py-3">Trạng thái</th>
-                      <th className="px-4 py-3 text-right">Chi tiết</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {sessions.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="py-12 text-center text-muted-foreground">
-                          Không tìm thấy buổi học nào phù hợp với bộ lọc hiện tại.
-                        </td>
-                      </tr>
-                    ) : (
-                      sessions.map((s) => (
-                        <tr key={s.id} className="hover:bg-muted/20 transition-colors">
-                          <td className="px-4 py-3 font-medium whitespace-nowrap">
-                            <div className="flex items-center gap-1.5 text-xs text-foreground font-semibold">
-                              <Clock className="h-3.5 w-3.5 text-primary" />
-                              {formatCalendarTime(s.startTime)}
-                            </div>
-                            <span className="text-[11px] text-muted-foreground">
-                              đến {dayjs.tz(s.endTime, TIME_ZONE).format("HH:mm")}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="font-semibold text-foreground">{s.title || "Buổi học"}</span>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <Badge variant="outline" className="font-mono text-xs">
-                              {getClassCode(s.classId)}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground">
-                            {getTopicCode(s.topicId, s.title)}
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground">
-                            {getTrainerName(s.trainerId)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1 text-xs">
-                              <MapPin className="h-3 w-3 text-muted-foreground" />
-                              <span>{s.location || "Chưa có"}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <span
-                              className={`inline-block rounded-md border px-2 py-0.5 text-xs font-semibold ${
-                                STATUS_CLASSES[s.status] || "bg-muted"
+              {/* 2. CHẾ ĐỘ XEM THÁNG (MONTH VIEW) */}
+              {viewMode === "month" && (
+                <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+                  <div className="min-w-[760px]">
+                    <div className="grid grid-cols-7 border-b bg-muted/40 text-center text-xs font-semibold text-muted-foreground">
+                      <div className="p-2.5 border-r">Thứ Hai</div>
+                      <div className="p-2.5 border-r">Thứ Ba</div>
+                      <div className="p-2.5 border-r">Thứ Tư</div>
+                      <div className="p-2.5 border-r">Thứ Năm</div>
+                      <div className="p-2.5 border-r">Thứ Sáu</div>
+                      <div className="p-2.5 border-r">Thứ Bảy</div>
+                      <div className="p-2.5">Chủ nhật</div>
+                    </div>
+
+                    <div className="grid grid-cols-7 auto-rows-fr">
+                      {monthDays.map((d, index) => {
+                        const isSunday = (index + 1) % 7 === 0;
+                        return (
+                          <div
+                            key={d.dateKey + index}
+                            className={`min-h-[115px] p-2 border-b border-r ${isSunday ? "border-r-0" : ""
+                              } ${!d.isCurrentMonth
+                                ? "bg-muted/10 opacity-40"
+                                : d.isToday
+                                  ? "bg-primary/5"
+                                  : "bg-card"
                               }`}
-                            >
-                              {STATUS_LABELS[s.status] ?? s.status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right whitespace-nowrap">
-                            <SessionDetailModal
-                              session={s}
-                              trigger={
-                                <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-primary hover:text-primary">
-                                  <Eye className="h-3.5 w-3.5" />
-                                  Xem
-                                </Button>
-                              }
-                            />
+                          >
+                            <div className="flex items-center justify-between mb-1.5">
+                              <button
+                                type="button"
+                                onClick={() => updateCalendarUrl({ view: "week", date: d.dateKey, page: "0" })}
+                                title="Xem tuần của ngày này"
+                                className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold hover:ring-2 hover:ring-primary/40 transition-all ${d.isToday
+                                    ? "bg-primary text-primary-foreground"
+                                    : "text-foreground"
+                                  }`}
+                              >
+                                {d.dayNumber}
+                              </button>
+                              {d.sessions.length > 0 && (
+                                <span className="text-[10px] font-bold text-muted-foreground">
+                                  {d.sessions.length} buổi
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="space-y-1">
+                              {d.sessions.slice(0, 3).map((s) => (
+                                <SessionDetailModal
+                                  key={s.id}
+                                  session={s}
+                                  trigger={
+                                    <div
+                                      className={`cursor-pointer truncate rounded px-1.5 py-0.5 text-[10px] font-medium transition-all hover:scale-[1.02] ${STATUS_CLASSES[s.status] || "bg-muted"
+                                        }`}
+                                      title={`${s.title} (${dayjs.tz(s.startTime, TIME_ZONE).format("HH:mm")})`}
+                                    >
+                                      <strong>{dayjs.tz(s.startTime, TIME_ZONE).format("HH:mm")}</strong> {s.title}
+                                    </div>
+                                  }
+                                />
+                              ))}
+                              {d.sessions.length > 3 && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateCalendarUrl({ view: "week", date: d.dateKey, page: "0" })}
+                                  className="w-full text-[10px] font-semibold text-primary hover:underline text-center pt-0.5"
+                                >
+                                  +{d.sessions.length - 3} buổi khác
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. CHẾ ĐỘ XEM DANH SÁCH (LIST VIEW) */}
+              {viewMode === "list" && (
+                <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b bg-muted/40 text-xs font-semibold text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-3">Thời gian</th>
+                        <th className="px-4 py-3">Tiêu đề buổi học</th>
+                        <th className="px-4 py-3">Lớp</th>
+                        <th className="px-4 py-3">Chủ đề (Topic)</th>
+                        <th className="px-4 py-3">Giảng viên</th>
+                        <th className="px-4 py-3">Phòng học</th>
+                        <th className="px-4 py-3">Trạng thái</th>
+                        <th className="px-4 py-3 text-right">Chi tiết</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {sessions.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="py-12 text-center text-muted-foreground">
+                            Không tìm thấy buổi học nào phù hợp với bộ lọc hiện tại.
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </MainLayout>
+                      ) : (
+                        sessions.map((s) => (
+                          <tr key={s.id} className="hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-3 font-medium whitespace-nowrap">
+                              <div className="flex items-center gap-1.5 text-xs text-foreground font-semibold">
+                                <Clock className="h-3.5 w-3.5 text-primary" />
+                                {formatCalendarTime(s.startTime)}
+                              </div>
+                              <span className="text-[11px] text-muted-foreground">
+                                đến {dayjs.tz(s.endTime, TIME_ZONE).format("HH:mm")}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="font-semibold text-foreground">{s.title || "Buổi học"}</span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <Badge variant="outline" className="font-mono text-xs">
+                                {getClassCode(s.classId)}
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              {getTopicCode(s.topicId, s.title)}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              {getTrainerName(s.trainerId)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1 text-xs">
+                                <MapPin className="h-3 w-3 text-muted-foreground" />
+                                <span>{s.location || "Chưa có"}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span
+                                className={`inline-block rounded-md border px-2 py-0.5 text-xs font-semibold ${STATUS_CLASSES[s.status] || "bg-muted"
+                                  }`}
+                              >
+                                {STATUS_LABELS[s.status] ?? s.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right whitespace-nowrap">
+                              <SessionDetailModal
+                                session={s}
+                                trigger={
+                                  <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-primary hover:text-primary">
+                                    <Eye className="h-3.5 w-3.5" />
+                                    Xem
+                                  </Button>
+                                }
+                              />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </MainLayout>
     </CalendarLookupContext.Provider>
   );
 }

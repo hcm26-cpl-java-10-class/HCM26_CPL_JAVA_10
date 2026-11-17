@@ -74,7 +74,7 @@ export function SessionDetailModal({
         <dl className="divide-y rounded-lg border text-sm">
           <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2 p-3">
             <dt className="text-muted-foreground flex items-center gap-1.5">
-              <GraduationCap className="h-4 w-4" /> Mã lớp
+              <GraduationCap className="h-4 w-4" /> Lớp học
             </dt>
             <dd className="font-medium text-foreground">{getClassName(session.classId)}</dd>
           </div>
@@ -90,6 +90,20 @@ export function SessionDetailModal({
             <dt className="text-muted-foreground">Chủ đề (Topic)</dt>
             <dd className="font-medium text-foreground">{getTopicName(session.topicId, session.title)}</dd>
           </div>
+
+          {session.note && (
+            <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2 p-3">
+              <dt className="text-muted-foreground">Ghi chú</dt>
+              <dd className="font-medium text-foreground break-words">{session.note}</dd>
+            </div>
+          )}
+
+          {session.cancelReason && (
+            <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2 p-3 bg-red-50/50 dark:bg-red-950/20">
+              <dt className="text-red-600 dark:text-red-400 font-medium">Lý do hủy</dt>
+              <dd className="font-medium text-red-700 dark:text-red-300 break-words">{session.cancelReason}</dd>
+            </div>
+          )}
 
           <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2 p-3">
             <dt className="text-muted-foreground">Kích hoạt</dt>

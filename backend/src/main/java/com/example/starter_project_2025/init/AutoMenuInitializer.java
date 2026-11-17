@@ -47,6 +47,10 @@ public class AutoMenuInitializer implements CommandLineRunner {
             module.setIsActive(false);
             moduleRepository.save(module);
         });
+        moduleRepository.findByUrl("/calendar/adjust").ifPresent(module -> {
+            module.setIsActive(false);
+            moduleRepository.save(module);
+        });
 
         Set<BeanDefinition> candidates =
                 scanner.findCandidateComponents(BASE_PACKAGE);

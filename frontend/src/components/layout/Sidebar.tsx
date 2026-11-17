@@ -17,7 +17,11 @@ const CLASS_SECTION_URLS = ["/classes"];
 
 function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
     const withoutSessions = items.filter(
-        (item) => item.url !== "/sessions" && item.title.toLowerCase() !== "sessions"
+        (item) =>
+            item.url !== "/sessions" &&
+            item.title.toLowerCase() !== "sessions" &&
+            item.url !== "/calendar/adjust" &&
+            item.title.toLowerCase() !== "training calendar"
     );
     const hasClassAccess = withoutSessions.some((item) => item.url === "/classes");
     const remaining = withoutSessions.filter((item) => !CLASS_SECTION_URLS.includes(item.url));
@@ -28,7 +32,6 @@ function organizeTrainingItems(items: NavItem[], pathname: string): NavItem[] {
             icon: iconMap["graduation-cap"],
             disabled: !hasClassAccess,
         },
-        { title: "Training Calendar", url: "/calendar/adjust", icon: iconMap.calendar },
         { title: "Weekly Timetable", url: "/calendar/preview", icon: iconMap.calendar },
         { title: "Topics & Syllabus", url: "/subjects", icon: iconMap["book-open"] },
         { title: "Training Programs", url: "/programs", icon: iconMap.layers },

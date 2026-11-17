@@ -1,7 +1,6 @@
 package com.example.starter_project_2025.system.calendar;
 
 import com.example.starter_project_2025.system.auth.token.refresh.RefreshTokenService;
-import com.example.starter_project_2025.system.demo.session.Session;
 import com.example.starter_project_2025.system.demo.session.SessionDTO;
 import com.example.starter_project_2025.system.demo.session.SessionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,7 +18,6 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -77,43 +75,6 @@ class CalendarControllerIntegrationTest {
                         .param("from", "2026-10-10T00:00:00")
                         .param("to", "2026-10-01T00:00:00"))
                 .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void validateSchedule_detectsCrossClassTrainerAndRoomOverlap() throws Exception {
-        sessionRepository.saveAndFlush(Session.builder()
-                .classId(2L)
-                .topicId(2L)
-                .trainerId(3L)
-                .title("[SPRING_BOOT] Existing Class 2 Session")
-                .startTime(LocalDateTime.of(2028, 5, 10, 8, 0))
-                .endTime(LocalDateTime.of(2028, 5, 10, 12, 0))
-                .location("Room Lab 999")
-                .status(Session.SessionStatus.SCHEDULED)
-                .isActive(true)
-                .build());
-
-        var request = new CalendarValidateRequest(
-                1L,
-                LocalDate.of(2028, 5, 10),
-                List.of(new CalendarValidateRequest.CandidateSession(
-                        "cand-1",
-                        "[JAVA_CORE] Conflicting Session",
-                        1L,
-                        3L,
-                        "Room Lab 999",
-                        LocalDateTime.of(2028, 5, 10, 9, 0),
-                        LocalDateTime.of(2028, 5, 10, 11, 0)
-                ))
-        );
-
-        mockMvc.perform(post("/api/calendar/validate")
-                        .header("Authorization", "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.valid").value(false))
-                .andExpect(jsonPath("$.issues", hasSize(2)));
     }
 
     @Test
