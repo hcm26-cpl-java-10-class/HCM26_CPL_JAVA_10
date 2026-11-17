@@ -3,10 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Send, Loader2 } from "lucide-react";
+import { Sparkles, Send, Loader2, Square, RotateCcw, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { recommendationsApi, type Recommendation, type Turn } from "@/api/features/recommendations.api";
-import { courseReplyText, recommendationPage, RecommendationRequest, readRecommendationHistory, recommendationHistoryKey } from "@/utils/recommendation-session";
+import { recommendationsApi, type Recommendation } from "@/api/features/recommendations.api";
+import { recommendationContext, type RecommendationTurn, courseReplyText, recommendationPage, RecommendationRequest, readRecommendationHistory, recommendationHistoryKey } from "@/utils/recommendation-session";
 import { useCourseEnrollment } from "../hooks/useCourseEnrollment";
 import { CourseCard, CourseCardSkeleton } from "./CourseCard";
 
@@ -38,7 +38,12 @@ function AccountRecommendations({ account, search }: { account: string; search: 
   const [cards, setCards] = useState<Recommendation[] | null>(null);
   const [chatState, setChatState] = useState("");
   const [aiStatus, setAiStatus] = useState("");
-  const [messages, setMessages] = useState<Turn[]>(() => {
+  const [retryTurn, setRetryTurn] = useState<{message: string; history: RecommendationTurn[]} | null>(null);
+  const pendingTurn = useRef<{message: string; history: RecommendationTurn[]} | null>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+  const followLatest = useRef(true);
+  const [showLatest, setShowLatest] = useState(false);
+  const [messages, setMessages] = useState<RecommendationTurn[]>(() => {
     try { return readRecommendationHistory(sessionStorage.getItem(recommendationHistoryKey(account))); } catch { return []; }
   });
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -47,10 +52,23 @@ function AccountRecommendations({ account, search }: { account: string; search: 
     try { sessionStorage.setItem(recommendationHistoryKey(account), JSON.stringify(messages.slice(-8))); } catch { /* Storage can be unavailable. */ }
   }, [account, messages]);
   useEffect(() => { if (open) inputRef.current?.focus(); }, [open]);
+  useEffect(() => {
+    const log = logRef.current;
+    if (log && followLatest.current) log.scrollTop = log.scrollHeight;
+    if (log && !followLatest.current) setShowLatest(true);
+  }, [messages, pending, open]);
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (textarea) { textarea.style.height = "auto"; textarea.style.height = `${Math.min(textarea.scrollHeight || 48, 144)}px`; }
+  }, [input, open]);
   const vi = language === "vi";
   const text = (en: string, vn: string) => vi ? vn : en;
-  const cancelChat = () => { request.current.cancel(); locked.current = false; setPending(false); };
-  const clear = () => { setPage(1); cancelChat(); setMessages([]); setInput(""); setCards(null); setChatState(""); setAiStatus(""); setError(""); };
+  const cancelChat = () => {
+    const turn = pendingTurn.current;
+    request.current.cancel(); pendingTurn.current = null; locked.current = false; setPending(false); setRetryTurn(null);
+    if (turn) { setMessages(turn.history); setInput(current => current || turn.message); }
+  };
+  const clear = () => { setPage(1); cancelChat(); setRetryTurn(null); pendingTurn.current = null; setShowLatest(false); followLatest.current = true; setMessages([]); setInput(""); setCards(null); setChatState(""); setAiStatus(""); setError(""); };
   const refresh = async () => { cancelChat(); setPage(1); setCards(null); setChatState(""); await client.invalidateQueries({ queryKey }); };
   const update = async (kind: "save" | "reset" | "dismiss", id?: number) => {
     if (saving) return;
@@ -71,26 +89,28 @@ function AccountRecommendations({ account, search }: { account: string; search: 
     } catch { if (ticket.current()) setError(text("Could not save this change. Try again.", "Không lưu được thay đổi. Vui lòng thử lại.")); }
     finally { if (ticket.current()) setSaving(false); }
   };
-  const send = async () => {
-    const message = input.trim();
+  const send = async (retry = false) => {
+    const message = retry && retryTurn ? retryTurn.message : input.trim();
     if (!message || message.length > 1000 || locked.current || saving) return;
     locked.current = true;
     const ticket = request.current.next();
-    const history = messages.slice(-8);
+    const history = retry && retryTurn ? retryTurn.history : messages.slice(-8);
+    pendingTurn.current = { message, history }; setRetryTurn(null);
+    followLatest.current = true; setShowLatest(false);
     setMessages([...history, { role: "user" as const, content: message }].slice(-8));
     setInput(""); setPending(true); setError("");
     try {
       // History excludes the current message; the backend appends it exactly once.
-      const result = await recommendationsApi.ask(message, history, language, ticket.signal);
+      const result = await recommendationsApi.ask(message, recommendationContext(history), language, ticket.signal);
       if (!ticket.current()) return;
-      const listed = result.recommendations.map(i => i.course.name).join(", ");
-      const content = `${courseReplyText(result.reply)}${listed ? "\n" + listed : ""}`.slice(0, 2000);
-      setMessages(prev => [...prev, { role: "assistant" as const, content }].slice(-8));
+      const content = courseReplyText(result.reply).slice(0, 2000);
+      setMessages(prev => [...prev, { role: "assistant" as const, content, courseNames: result.recommendations.map(i => i.course.name) }].slice(-8));
       setPage(1); setCards(result.recommendations); setChatState(result.state); setAiStatus(result.aiStatus);
     } catch {
-      if (ticket.current()) { setError(text("Could not reach AI. Retry your question; automatic recommendations remain available.", "Không kết nối được AI. Hãy thử lại; các gợi ý tự động vẫn dùng được.")); setInput(message); }
-    } finally { if (ticket.current()) { setPending(false); locked.current = false; } }
+      if (ticket.current()) { setError(text("Could not reach AI. Retry your question; automatic recommendations remain available.", "Không kết nối được AI. Hãy thử lại; các gợi ý tự động vẫn dùng được.")); setMessages(history); setInput(current => current || message); setRetryTurn({message,history}); }
+    } finally { if (ticket.current()) { setPending(false); locked.current = false; pendingTurn.current = null; inputRef.current?.focus(); } }
   };
+  const stop = () => { cancelChat(); setError(""); inputRef.current?.focus(); };
   const enroll = (id: number) => {
     cancelChat();
     enrollMutation.mutate(id, { onSuccess: () => { void refresh(); } });
@@ -107,7 +127,7 @@ function AccountRecommendations({ account, search }: { account: string; search: 
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h2 id="recommendations-title" className="text-xl font-semibold">{text("Recommended for you", "Gợi ý dành cho bạn")}</h2>
         <p className="text-sm text-muted-foreground">{text("Based on your own interests and learning activity. Content duration is not guaranteed study time. Check course details for prerequisites.", "Dựa trên sở thích và hoạt động học của chính bạn. Thời lượng nội dung không phải thời gian học đảm bảo. Xem chi tiết để kiểm tra yêu cầu đầu vào.")}</p></div>
-      <label className="text-sm">{text("Language", "Ngôn ngữ")} <select aria-label="Recommendation language" className="rounded border bg-background p-1" value={language} onChange={e => setLanguage(e.target.value as "en" | "vi")}><option value="en">English</option><option value="vi">Tiếng Việt</option></select></label>
+      <label className="text-sm">{text("Language", "Ngôn ngữ")} <select aria-label="Recommendation language" className="rounded border bg-background p-1" value={language} onChange={e => { cancelChat(); setError(""); setLanguage(e.target.value as "en" | "vi"); }}><option value="en">English</option><option value="vi">Tiếng Việt</option></select></label>
     </div>
     <div className="flex flex-wrap gap-2">
       <Button variant="outline" aria-expanded={open} onClick={() => setOpen(!open)}>{text("Ask AI to help me choose", "Nhờ AI giúp chọn khóa học")}</Button>
@@ -121,19 +141,35 @@ function AccountRecommendations({ account, search }: { account: string; search: 
       <p className="text-xs text-muted-foreground">{text("Reset removes saved goals, interests and dismissals. Conversation is kept. Clear chat only removes the conversation.", "Đặt lại sẽ xóa mục tiêu, sở thích và các khóa đã ẩn; giữ cuộc trò chuyện. Xóa trò chuyện chỉ xóa nội dung trò chuyện.")}</p>
       <div className="flex flex-wrap gap-2"><Button disabled={saving} type="submit">{text("Save preferences", "Lưu sở thích")}</Button><Button disabled={saving} type="button" variant="outline" onClick={() => void update("reset")}>{text("Reset preferences and dismissals", "Đặt lại sở thích và khóa đã ẩn")}</Button></div>
     </form>}
-    {open && <div className="space-y-4 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-background to-sky-50 p-4 shadow-sm sm:p-5 dark:border-indigo-800 dark:from-indigo-950/60 dark:to-slate-900">
-      <div className="flex items-center justify-between gap-2"><h3 className="flex items-center gap-2 text-lg font-semibold text-indigo-900 dark:text-indigo-100"><Sparkles aria-hidden="true" className="size-5" />{text("Your AI course guide", "AI đồng hành chọn khóa học")}</h3><Button variant="ghost" onClick={clear}>{text("Clear chat", "Xóa trò chuyện")}</Button></div>
-      <p className="text-sm text-muted-foreground">{text("Tell me your goals, what you already know, preferred difficulty and content length. Try “something easier”, “shorter courses”, or “why this course?”", "Cho biết mục tiêu, kiến thức đã có, độ khó và thời lượng mong muốn. Thử “dễ hơn”, “ngắn hơn”, hoặc “tại sao chọn khóa này?”")}</p>
-      <div className="flex flex-wrap gap-2" aria-label={text("Suggested questions", "Câu hỏi gợi ý")}>
-        {[text("Help me choose a beginner course", "Giúp tôi chọn khóa học cơ bản"), text("Show me shorter courses", "Gợi ý khóa học ngắn hơn"), text("Why this course?", "Tại sao chọn khóa này?")].map(prompt => <Button key={prompt} type="button" variant="outline" size="sm" className="h-auto whitespace-normal rounded-full text-left" disabled={pending || saving} onClick={() => { setInput(prompt); inputRef.current?.focus(); }}>{prompt}</Button>)}
+    {open && <div className="overflow-hidden rounded-2xl border border-indigo-200 bg-background shadow-sm dark:border-indigo-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-indigo-50/70 px-4 py-3 dark:bg-indigo-950/40">
+        <div className="flex items-center gap-3"><span className="rounded-xl bg-indigo-600 p-2 text-white"><Sparkles aria-hidden="true" className="size-5" /></span><div><h3 className="font-semibold">{text("Your AI course guide", "AI đồng hành chọn khóa học")}</h3><p className="text-xs text-muted-foreground">{text("Find a course that fits your next step", "Chọn khóa học phù hợp với bước tiếp theo")}</p></div></div>
+        <Button size="sm" variant="ghost" onClick={clear}>{text("Clear chat", "Xóa trò chuyện")}</Button>
       </div>
-      <div role="log" aria-live="polite" aria-busy={pending} className="max-h-72 space-y-2 overflow-y-auto">
-        {messages.map((m,i) => <p key={i} className={`whitespace-pre-wrap break-words rounded-lg p-3 text-sm ${m.role === "user" ? "ml-6 border border-indigo-200 bg-indigo-100 text-indigo-950 dark:border-indigo-700 dark:bg-indigo-900 dark:text-indigo-50" : "mr-6 border bg-background shadow-sm"}`}><strong>{m.role === "user" ? text("You", "Bạn") : "AI"}: </strong>{m.role === "assistant" ? courseReplyText(m.content) : m.content}</p>)}
-        {pending && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 aria-hidden="true" className="size-4 animate-spin" />{text("Choosing courses…", "Đang chọn khóa học…")}</p>}
+      <div className="relative">
+        <div ref={logRef} role="log" aria-label={text("Course conversation", "Trò chuyện về khóa học")} aria-live="polite" aria-busy={pending} onScroll={() => { const log=logRef.current; if (log) { followLatest.current=log.scrollHeight-log.scrollTop-log.clientHeight < 48; if (followLatest.current) setShowLatest(false); } }} className="max-h-[26rem] min-h-48 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
+          {!messages.length && <div className="mx-auto max-w-lg space-y-2 py-5 text-center"><h4 className="font-medium">{text("What would you like to learn next?", "Bạn muốn học gì tiếp theo?")}</h4><p className="text-sm leading-relaxed text-muted-foreground">{text("Share your goal and experience. I'll help narrow the available courses using your saved learning preferences.", "Chia sẻ mục tiêu và kinh nghiệm. Tôi sẽ giúp chọn khóa học từ danh mục theo sở thích học tập đã lưu.")}</p></div>}
+          {messages.map((m,i) => <div key={i} className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            {m.role === "assistant" && <span aria-hidden="true" className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-100"><Sparkles className="size-4" /></span>}
+            <div className={`max-w-[90%] whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-sm leading-relaxed sm:max-w-[85%] ${m.role === "user" ? "rounded-br-sm bg-indigo-600 text-white" : "rounded-bl-sm bg-muted text-foreground"}`}><span className="mb-1 block text-xs font-semibold opacity-80">{m.role === "user" ? text("You", "Bạn") : "AI"}</span>{m.role === "assistant" ? courseReplyText(m.content) : m.content}</div>
+          </div>)}
+          {pending && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 aria-hidden="true" className="size-4 animate-spin" />{text("Choosing courses…", "Đang chọn khóa học…")}</p>}
+        </div>
+        {showLatest && <Button type="button" variant="secondary" size="sm" className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full shadow" onClick={() => { const log=logRef.current; if (log) log.scrollTop=log.scrollHeight; followLatest.current=true; setShowLatest(false); }}><ChevronDown className="mr-1 size-4" />{text("Latest message", "Tin nhắn mới nhất")}</Button>}
       </div>
-      <form className="flex flex-col items-end gap-2 sm:flex-row" onSubmit={e => { e.preventDefault(); void send(); }}><textarea rows={2} className="min-h-20 w-full resize-y rounded-xl border bg-background p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" ref={inputRef} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} aria-label={text("Your course question", "Câu hỏi về khóa học")} placeholder={text("What would you like to learn?", "Bạn muốn học gì?")} maxLength={1000} value={input} onChange={e => setInput(e.target.value)} /><Button disabled={pending || saving || !input.trim()} type="submit"><Send aria-hidden="true" className="mr-2 size-4" />{pending ? text("Choosing…", "Đang chọn…") : text("Send", "Gửi")}</Button></form>
-      <p className="text-xs text-muted-foreground">{text("Enter to send · Shift+Enter for a new line. AI suggestions may be imperfect; check course details.", "Enter để gửi · Shift+Enter để xuống dòng. Gợi ý AI có thể chưa chính xác; hãy xem chi tiết khóa học.")}</p>
-      {aiStatus && aiStatus !== "AVAILABLE" && aiStatus !== "NOT_NEEDED" && <p role="status" className="text-sm">{text("AI unavailable or request limit reached. Showing catalog-based suggestions.", "AI không khả dụng hoặc đã đạt giới hạn. Đang hiển thị gợi ý từ danh mục.")}</p>}
+      <div className="space-y-3 border-t bg-muted/20 p-3 sm:p-4">
+        <div className="flex flex-wrap gap-2" aria-label={text("Suggested questions", "Câu hỏi gợi ý")}>
+          {(messages.length ? [text("Something easier", "Dễ hơn"), text("Show me shorter courses", "Gợi ý khóa học ngắn hơn"), text("Why this course?", "Tại sao chọn khóa này?")] : [text("Help me choose a beginner course", "Giúp tôi chọn khóa học cơ bản"), text("Show me shorter courses", "Gợi ý khóa học ngắn hơn")]).map(prompt => <Button key={prompt} type="button" variant="outline" size="sm" className="h-auto max-w-full whitespace-normal rounded-full py-1.5 text-left text-xs" disabled={pending || saving} onClick={() => { setInput(prompt); inputRef.current?.focus(); }}>{prompt}</Button>)}
+        </div>
+        <form className="flex items-end gap-2 rounded-xl border bg-background p-2 focus-within:ring-2 focus-within:ring-ring" onSubmit={e => { e.preventDefault(); void send(); }}>
+          <textarea rows={1} className="min-h-12 max-h-36 min-w-0 flex-1 resize-none bg-transparent px-2 py-3 text-sm focus-visible:outline-none" ref={inputRef} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }} aria-label={text("Your course question", "Câu hỏi về khóa học")} placeholder={text("Describe your goal, experience, or preferred course length…", "Mô tả mục tiêu, kinh nghiệm hoặc thời lượng khóa học…")} maxLength={1000} value={input} onChange={e => setInput(e.target.value)} />
+          {pending ? <Button type="button" variant="outline" onClick={stop}><Square aria-hidden="true" className="mr-1 size-4" />{text("Stop", "Dừng")}</Button> : <Button disabled={saving || !input.trim()} type="submit"><Send aria-hidden="true" className="mr-1 size-4" />{text("Send", "Gửi")}</Button>}
+        </form>
+        <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground"><p>{text("Enter to send · Shift+Enter for a new line", "Enter để gửi · Shift+Enter để xuống dòng")}</p><span aria-live="off">{input.length}/1000</span></div>
+        {retryTurn && <Button type="button" size="sm" variant="outline" disabled={pending || saving} onClick={() => void send(true)}><RotateCcw className="mr-1 size-4" />{text("Retry message", "Gửi lại tin nhắn")}</Button>}
+        {cards && !pending && <p role="status" className="text-xs text-muted-foreground">{text(`${visible.length} matching courses below · Review course details before enrolling.`, `${visible.length} khóa học phù hợp bên dưới · Xem chi tiết trước khi đăng ký.`)}</p>}
+        {aiStatus && aiStatus !== "AVAILABLE" && aiStatus !== "NOT_NEEDED" && <p role="status" className="text-xs text-muted-foreground">{text("AI unavailable or request limit reached. Showing catalog-based suggestions.", "AI không khả dụng hoặc đã đạt giới hạn. Đang hiển thị gợi ý từ danh mục.")}</p>}
+      </div>
     </div>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {query.isError && <div role="alert"><p>{text("Could not load recommendations.", "Không tải được gợi ý.")}</p><Button variant="outline" onClick={() => void query.refetch()}>{text("Retry", "Thử lại")}</Button></div>}

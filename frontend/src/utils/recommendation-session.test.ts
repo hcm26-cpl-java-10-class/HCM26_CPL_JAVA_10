@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { courseReplyText, readRecommendationHistory, recommendationHistoryKey, recommendationPage, RecommendationRequest } from "./recommendation-session";
+import { recommendationContext, courseReplyText, readRecommendationHistory, recommendationHistoryKey, recommendationPage, RecommendationRequest } from "./recommendation-session";
 import { assessmentReturnPath, learnerAssessmentReturnPath, assessmentPreparationPath } from "./assessment-navigation";
 
 describe("learner presentation and navigation", () => {
@@ -28,4 +28,10 @@ describe("learner presentation and navigation", () => {
     for (const bad of ["/exams", "//evil.test", "/\\evil.test", "https://evil.test", "/courses/5/../exams", null]) expect(learnerAssessmentReturnPath(bad)).toBe("/student/exams");
     expect(assessmentReturnPath(null)).toBe("/exams");
   });
+});
+
+it("retains bounded course context in account history without displaying duplicate lists",()=>{
+ const turns=readRecommendationHistory(JSON.stringify([{role:"assistant",content:"Explore these",courseNames:["Java",4,"X".repeat(201)]}]));
+ expect(turns[0].content).toBe("Explore these");expect(turns[0].courseNames).toEqual(["Java"]);
+ expect(recommendationContext(turns)).toEqual([{role:"assistant",content:"Explore these\nSuggested courses: Java"}]);
 });

@@ -253,7 +253,8 @@ public class LessonProgressService {
                 items,
                 percentage==100 && assessments.canComplete(enrollment.getCourse().getId(),enrollment.getUser().getId()),
                 grade.status(),
-                grade.overallScore()
+                grade.overallScore(),
+                assessments.assessmentOutcomes(enrollment.getCourse().getId(), enrollment.getUser().getId())
         );
     }
 

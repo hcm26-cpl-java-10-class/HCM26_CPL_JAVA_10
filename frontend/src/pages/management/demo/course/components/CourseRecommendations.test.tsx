@@ -61,3 +61,27 @@ it("clear chat discards a provider response that arrives after cancellation",asy
  await act(async()=>finish({...result,reply:"STALE PROVIDER RESPONSE",aiStatus:"AVAILABLE"} as never));
  expect(screen.queryByText(/STALE PROVIDER RESPONSE/)).not.toBeInTheDocument();
 });
+
+it("retries a failed question once without duplicating it in provider history",async()=>{
+ vi.mocked(recommendationsApi.ask).mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({...result,reply:"A useful reply",aiStatus:"AVAILABLE"} as never);
+ const user=userEvent.setup();mount();await user.click(screen.getByRole("button",{name:"Ask AI to help me choose"}));
+ await user.type(screen.getByRole("textbox",{name:"Your course question"}),"Learn Java{Enter}");
+ await user.click(await screen.findByRole("button",{name:"Retry message"}));
+ expect(await screen.findByText("A useful reply")).toBeInTheDocument();
+ expect(vi.mocked(recommendationsApi.ask).mock.calls[1][1]).toEqual([]);
+ expect(screen.getAllByText("Learn Java",{exact:true})).toHaveLength(1);
+ expect(screen.getByRole("log")).not.toHaveTextContent("Course 13");
+});
+it("Stop restores the draft and ignores a late response",async()=>{
+ let finish!: (value:never)=>void;vi.mocked(recommendationsApi.ask).mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+ const user=userEvent.setup();mount();await user.click(screen.getByRole("button",{name:"Ask AI to help me choose"}));
+ await user.type(screen.getByRole("textbox",{name:"Your course question"}),"Java{Enter}");await user.click(await screen.findByRole("button",{name:"Stop"}));
+ expect(screen.getByRole("textbox",{name:"Your course question"})).toHaveValue("Java");
+ await act(async()=>finish({...result,reply:"CANCELLED REPLY",aiStatus:"AVAILABLE"} as never));expect(screen.queryByText("CANCELLED REPLY")).not.toBeInTheDocument();
+});
+it("keeps Shift+Enter as a newline and starter prompts as editable drafts",async()=>{
+ const user=userEvent.setup();mount();await user.click(screen.getByRole("button",{name:"Ask AI to help me choose"}));
+ await user.click(screen.getByRole("button",{name:"Help me choose a beginner course"}));
+ const input=screen.getByRole("textbox",{name:"Your course question"});expect(input).toHaveFocus();expect(input).toHaveValue("Help me choose a beginner course");
+ await user.type(input,"{Shift>}{Enter}{/Shift}More details");expect(input).toHaveValue("Help me choose a beginner course\nMore details");expect(recommendationsApi.ask).not.toHaveBeenCalled();
+});
