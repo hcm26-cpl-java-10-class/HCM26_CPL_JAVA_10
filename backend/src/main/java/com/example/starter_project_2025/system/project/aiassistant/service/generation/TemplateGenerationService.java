@@ -29,14 +29,18 @@ public class TemplateGenerationService {
         this.templateOutputValidator = templateOutputValidator;
     }
 
-    public TemplateGenerationResult generate(GenerateTemplateRequest request) {
+    public TemplateGenerationResult generate(
+            GenerateTemplateRequest request,
+            java.util.List<String> categories,
+            java.util.List<String> levels
+    ) {
 
         // 1. Build prompt
         String systemInstruction =
                 projectTemplatePrompt.buildSystemInstruction();
 
         String userPrompt =
-                projectTemplatePrompt.buildUserPrompt(request);
+                projectTemplatePrompt.buildUserPrompt(request, categories, levels);
 
         // 2. Create LLM request
         LlmRequest llmRequest =
@@ -51,7 +55,7 @@ public class TemplateGenerationService {
                 templateOutputParser.parse(llmResponse.content());
 
         // 5. Validate generated data
-        templateOutputValidator.validate(output);
+        templateOutputValidator.validate(output, categories, levels);
 
         // 6. Return both parsed output and original AI response
         return new TemplateGenerationResult(

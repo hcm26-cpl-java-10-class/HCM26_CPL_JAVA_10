@@ -14,14 +14,35 @@ import java.util.Set;
 public class TemplateOutputValidator {
 
     public void validate(GeneratedTemplateOutput output) {
-        validate(output, true);
+        validate(output, true, null, null);
     }
 
     public void validateForReview(GeneratedTemplateOutput output) {
-        validate(output, false);
+        validate(output, false, null, null);
     }
 
-    private void validate(GeneratedTemplateOutput output, boolean requireAllGeneratedSections) {
+    public void validate(
+            GeneratedTemplateOutput output,
+            List<String> categories,
+            List<String> levels
+    ) {
+        validate(output, true, categories, levels);
+    }
+
+    public void validateForReview(
+            GeneratedTemplateOutput output,
+            List<String> categories,
+            List<String> levels
+    ) {
+        validate(output, false, categories, levels);
+    }
+
+    private void validate(
+            GeneratedTemplateOutput output,
+            boolean requireAllGeneratedSections,
+            List<String> categories,
+            List<String> levels
+    ) {
 
         List<String> errors = new ArrayList<>();
 
@@ -60,7 +81,7 @@ public class TemplateOutputValidator {
         }
 
         if (output.projectTemplate() != null) {
-            validateProjectTemplate(output.projectTemplate(), errors);
+            validateProjectTemplate(output.projectTemplate(), categories, levels, errors);
         }
 
         if (output.teamConstraints() != null) {
@@ -84,6 +105,8 @@ public class TemplateOutputValidator {
 
     private void validateProjectTemplate(
             ProjectTemplateOutput projectTemplate,
+            List<String> categories,
+            List<String> levels,
             List<String> errors
     ) {
         if (projectTemplate.code() == null
@@ -105,14 +128,22 @@ public class TemplateOutputValidator {
             errors.add("Technology stack must not exceed 2000 characters");
         }
 
-        if (projectTemplate.category() != null
-                && projectTemplate.category().length() > 255) {
+        if (projectTemplate.category() == null || projectTemplate.category().isBlank()) {
+            errors.add("Project category is required");
+        } else if (projectTemplate.category().length() > 255) {
             errors.add("Project category must not exceed 255 characters");
+        } else if (categories != null && !categories.contains(projectTemplate.category().strip())) {
+            errors.add("Project category '" + projectTemplate.category()
+                    + "' must match one of the available categories: " + String.join(", ", categories));
         }
 
-        if (projectTemplate.level() != null
-                && projectTemplate.level().length() > 20) {
+        if (projectTemplate.level() == null || projectTemplate.level().isBlank()) {
+            errors.add("Project level is required");
+        } else if (projectTemplate.level().length() > 20) {
             errors.add("Project level must not exceed 20 characters");
+        } else if (levels != null && !levels.contains(projectTemplate.level().strip())) {
+            errors.add("Project level '" + projectTemplate.level()
+                    + "' must match one of the available levels: " + String.join(", ", levels));
         }
 
         if (projectTemplate.estimatedDurationWeeks() == null

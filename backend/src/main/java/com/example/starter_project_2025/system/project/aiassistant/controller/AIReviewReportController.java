@@ -1,9 +1,11 @@
 package com.example.starter_project_2025.system.project.aiassistant.controller;
 
 import com.example.starter_project_2025.system.project.aiassistant.dto.request.review.AIReviewRequest;
+import com.example.starter_project_2025.system.project.aiassistant.dto.response.output.review.AIReviewFindingDismissRequest;
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.output.review.AIReviewReportDetail;
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.output.review.AIReviewReportListItem;
 import com.example.starter_project_2025.system.project.aiassistant.entity.AIReviewReport;
+import com.example.starter_project_2025.system.project.aiassistant.service.review.AIReviewFindingManagementService;
 import com.example.starter_project_2025.system.project.aiassistant.service.review.AIReviewReportQueryService;
 import com.example.starter_project_2025.system.project.aiassistant.service.review.ReviewService;
 import jakarta.validation.Valid;
@@ -21,6 +23,7 @@ public class AIReviewReportController {
 
     private final AIReviewReportQueryService reportQueryService;
     private final ReviewService reviewService;
+    private final AIReviewFindingManagementService findingManagementService;
 
     @PostMapping
     @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_REVIEW')")
@@ -56,4 +59,47 @@ public class AIReviewReportController {
     ) {
         return reportQueryService.getReportDetail(templateId, reportId);
     }
+
+    @PatchMapping("/{reportId}/findings/{findingId}/accept")
+    @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_REVIEW')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void acceptFinding(
+            @PathVariable Long templateId,
+            @PathVariable Long reportId,
+            @PathVariable Long findingId
+    ) {
+        findingManagementService.accept(templateId, reportId, findingId);
+    }
+
+    @PatchMapping("/{reportId}/findings/{findingId}/dismiss")
+    @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_REVIEW')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void dismissFinding(
+            @PathVariable Long templateId,
+            @PathVariable Long reportId,
+            @PathVariable Long findingId,
+            @Valid @RequestBody AIReviewFindingDismissRequest request
+    ) {
+        findingManagementService.dismiss(
+                templateId,
+                reportId,
+                findingId,
+                request.reason()
+        );
+    }
+
+    @PatchMapping("/{reportId}/findings/{findingId}/resolve")
+    @PreAuthorize("hasAuthority('PROJECT_TEMPLATE_REVIEW')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resolveFinding(
+            @PathVariable Long templateId,
+            @PathVariable Long reportId,
+            @PathVariable Long findingId
+    ) {
+        findingManagementService.resolve(templateId, reportId, findingId);
+    }
 }
+
+
+
+

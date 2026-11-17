@@ -100,10 +100,12 @@ public class ReviewContextBuilder {
             Set<UUID> rubricVersionIds,
             Long tenantId
     ) {
-        Long rubricTenantId = tenantId == null ? 1L : tenantId;
+        if (tenantId == null) {
+            return List.of();
+        }
 
         return rubricVersionIds.stream()
-                .map(id -> rubricCatalogService.findByIdForTenant(id, rubricTenantId)
+                .map(id -> rubricCatalogService.findByIdForTenant(id, tenantId)
                         .orElseThrow(() -> new IllegalStateException(
                                 "Rubric version not found: " + id
                         )))

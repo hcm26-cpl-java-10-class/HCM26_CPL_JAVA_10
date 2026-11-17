@@ -4,7 +4,8 @@ public enum SuggestionStatus {
     PENDING,
     APPROVED,
     REJECTED,
-    APPLIED;
+    APPLIED,
+    INVALID;
 
     // Check whether this suggestion can be edited
     public boolean canEdit() {
@@ -25,7 +26,7 @@ public enum SuggestionStatus {
             case APPROVED ->
                     target == APPLIED;
 
-            case REJECTED, APPLIED -> false;
+            case REJECTED, APPLIED, INVALID -> false;
         };
     }
 }

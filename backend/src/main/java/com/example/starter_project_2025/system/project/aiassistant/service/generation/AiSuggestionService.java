@@ -11,6 +11,8 @@ import com.example.starter_project_2025.system.project.aiassistant.entity.AiSugg
 import com.example.starter_project_2025.system.project.aiassistant.enums.SuggestionStatus;
 import com.example.starter_project_2025.system.project.aiassistant.repository.AiSuggestionRepository;
 import com.example.starter_project_2025.system.project.aiassistant.validator.TemplateOutputValidator;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
+import com.example.starter_project_2025.system.project.template.ProjectTemplateCatalog;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
@@ -26,6 +28,8 @@ public class AiSuggestionService {
     private final AiSuggestionRepository aiSuggestionRepository;
     private final TemplateOutputParser templateOutputParser;
     private final TemplateOutputValidator templateOutputValidator;
+    private final ProjectTemplateAccessService templateAccess;
+    private final ProjectTemplateCatalog templateCatalog;
     private final ObjectMapper objectMapper;
 
     public AiSuggestionService(
@@ -33,21 +37,27 @@ public class AiSuggestionService {
             AiSuggestionRepository aiSuggestionRepository,
             TemplateOutputParser templateOutputParser,
             TemplateOutputValidator templateOutputValidator,
+            ProjectTemplateAccessService templateAccess,
+            ProjectTemplateCatalog templateCatalog,
             ObjectMapper objectMapper
     ) {
         this.templateGenerationService = templateGenerationService;
         this.aiSuggestionRepository = aiSuggestionRepository;
         this.templateOutputParser = templateOutputParser;
         this.templateOutputValidator = templateOutputValidator;
+        this.templateAccess = templateAccess;
+        this.templateCatalog = templateCatalog;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
     public GeneratedSuggestionResult generateAndSave(GenerateTemplateRequest request) {
 
+        var options = availableTemplateOptions();
+
         // 1. Generate AI content
         TemplateGenerationResult result =
-                templateGenerationService.generate(request);
+                templateGenerationService.generate(request, options.categories(), options.levels());
 
         // 2. Build AiSuggestion entity
         AiSuggestion suggestion = AiSuggestion.builder()
@@ -155,7 +165,8 @@ public class AiSuggestionService {
         }
 
         // 3. Validate edited output
-        templateOutputValidator.validateForReview(request.output());
+        var options = availableTemplateOptions();
+        templateOutputValidator.validateForReview(request.output(), options.categories(), options.levels());
 
         // 4. Convert output object to JSON
         String generatedContent;
@@ -206,17 +217,18 @@ public class AiSuggestionService {
             );
         }
 
+        GeneratedTemplateOutput output =
+                templateOutputParser.parse(suggestion.getGeneratedContent());
+        var options = availableTemplateOptions();
+        templateOutputValidator.validateForReview(output, options.categories(), options.levels());
+
         // 3. Change status
         suggestion.setStatus(SuggestionStatus.APPROVED);
 
         // 4. Save
         AiSuggestion approvedSuggestion = aiSuggestionRepository.save(suggestion);
 
-        // 5. Parse generated content
-        GeneratedTemplateOutput output =
-                templateOutputParser.parse(approvedSuggestion.getGeneratedContent());
-
-        // 6. Return detail
+        // 5. Return detail
         return new SuggestionDetailResponse(
                 approvedSuggestion.getId(),
                 approvedSuggestion.getProjectTitle(),
@@ -291,7 +303,10 @@ public class AiSuggestionService {
             );
         }
 
-        return templateOutputParser.parse(suggestion.getGeneratedContent());
+        GeneratedTemplateOutput output = templateOutputParser.parse(suggestion.getGeneratedContent());
+        var options = availableTemplateOptions();
+        templateOutputValidator.validateForReview(output, options.categories(), options.levels());
+        return output;
     }
 
     @Transactional
@@ -329,6 +344,20 @@ public class AiSuggestionService {
         }
 
         // 3. Parse AI generated content
-        return templateOutputParser.parse(suggestion.getGeneratedContent());
+        GeneratedTemplateOutput output = templateOutputParser.parse(suggestion.getGeneratedContent());
+        var options = availableTemplateOptions();
+        templateOutputValidator.validateForReview(output, options.categories(), options.levels());
+        return output;
     }
+
+    private TemplateOptionValues availableTemplateOptions() {
+        var user = templateAccess.requireUser("CREATE");
+        var categories = templateCatalog.domains(user.getTenantId());
+        var levels = templateCatalog.levels(user.getTenantId()).stream()
+                .map(com.example.starter_project_2025.system.project.template.ProjectTemplateOptions.Option::value)
+                .toList();
+        return new TemplateOptionValues(categories, levels);
+    }
+
+    private record TemplateOptionValues(List<String> categories, List<String> levels) {}
 }

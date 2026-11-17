@@ -44,4 +44,8 @@ public class ProjectTemplateReviewAccessService {
 
         return template;
     }
+
+    public User requireReviewUser() {
+        return projectTemplateAccessService.requireReviewUser();
+    }
 }

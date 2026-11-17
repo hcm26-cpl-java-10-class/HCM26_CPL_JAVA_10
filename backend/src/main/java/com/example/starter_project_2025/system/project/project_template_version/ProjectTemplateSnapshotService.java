@@ -88,4 +88,19 @@ public interface ProjectTemplateSnapshotService
      * Flattened rows for the Excel/CSV export.
      */
     List<ProjectTemplateSnapshotExportRow> getExportRows();
+
+    ProjectTemplateSnapshotDTO createNewVersionForSuggestion(Long sourceVersionId);
+
+    void recordSuggestionVersionCreated(
+            Long snapshotId,
+            Long sourceVersionId
+    );
+
+    /**
+     * Updates the content JSON of a snapshot created for an AI suggestion.
+     * Does not perform lifecycle transitions or write audit/outbox events.
+     * Those actions are handled after the suggestion is successfully applied.
+     */
+    void updateContentJsonForSuggestion(Long snapshotId, String contentJson);
 }
+

@@ -60,6 +60,7 @@ import AiSuggestionDetailPage from "@/pages/management/ai-assistant/pages/AiSugg
 import ProjectTemplateListPage from "@/pages/management/project-template";
 import { ProjectTemplateFormPage } from "@/pages/management/project-template/pages/ProjectTemplateFormPage";
 import { ProjectTemplateDetailPage } from "@/pages/management/project-template/pages/ProjectTemplateDetailPage";
+import ProjectTemplateReviewPage from "@/pages/management/project-template-review/ProjectTemplateReviewPage";
 import ArtifactDraftPage from "@/pages/student/ArtifactDraftPage";
 import StudentTeamMilestoneSubmissionsPage from "@/pages/student/StudentTeamMilestoneSubmissionsPage";
 import MyScoresPage from "@/pages/student/MyScoresPage";
@@ -124,6 +125,8 @@ export const routes: RouteConfig[] = [
   { path: "/project-templates/create", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_CREATE" },
   { path: "/project-templates/:id/edit", component: ProjectTemplateFormPage, requiredPermission: "PROJECT_TEMPLATE_UPDATE" },
   { path: "/project-templates/:id/detail", component: ProjectTemplateDetailPage, requiredPermission: "PROJECT_TEMPLATE_READ" },
+  { path: "/project-templates/:templateId/reviews", component: ProjectTemplateReviewPage, requiredPermission: "PROJECT_TEMPLATE_REVIEW" },
+  { path: "/project-templates/:templateId/reviews/:reportId", component: ProjectTemplateReviewPage, requiredPermission: "PROJECT_TEMPLATE_REVIEW" },
 
   // FAMS MODULE GROUP MODULE
   {

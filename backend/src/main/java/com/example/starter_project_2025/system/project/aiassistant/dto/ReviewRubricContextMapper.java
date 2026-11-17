@@ -16,6 +16,7 @@ public class ReviewRubricContextMapper {
                 version.getTotalMaxScore(),
                 version.getCriteria().stream()
                         .map(criterion -> new ReviewRubricCriterionContext(
+                                criterion.getId(),
                                 criterion.getCode(),
                                 criterion.getName(),
                                 criterion.getWeight(),

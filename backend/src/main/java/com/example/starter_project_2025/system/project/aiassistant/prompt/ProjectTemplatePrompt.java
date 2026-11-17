@@ -1,11 +1,16 @@
 package com.example.starter_project_2025.system.project.aiassistant.prompt;
 
 import com.example.starter_project_2025.system.project.aiassistant.dto.request.GenerateTemplateRequest;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class ProjectTemplatePrompt {
 
+    private final ObjectMapper objectMapper;
 
     public String buildSystemInstruction() {
         return """
@@ -81,12 +86,14 @@ public class ProjectTemplatePrompt {
                 - category:
                   A short category describing the project domain.
                   Maximum length: 255 characters.
+                  It MUST exactly match one of the allowed categories
+                  supplied in the user prompt. Never invent or paraphrase it.
                 
                 - level:
                   The project's difficulty level.
                   Maximum length: 20 characters.
-                  Use a meaningful value such as BEGINNER,
-                  INTERMEDIATE, or ADVANCED.
+                  It MUST exactly match one of the allowed levels
+                  supplied in the user prompt. Never invent or paraphrase it.
                 
                 - estimatedDurationWeeks:
                   The estimated project duration in weeks.
@@ -655,19 +662,38 @@ public class ProjectTemplatePrompt {
 
     }
 
-    public String buildUserPrompt(GenerateTemplateRequest request) {
-        return """
+    public String buildUserPrompt(
+            GenerateTemplateRequest request,
+            java.util.List<String> categories,
+            java.util.List<String> levels
+    ) {
+        try {
+            return """
                 Project title: %s
                 Project description: %s
                 Project type: %s
                 Additional requirements: %s
+
+                VALID PROJECT TEMPLATE OPTIONS:
+                Allowed categories (JSON array): %s
+                Allowed levels (JSON array): %s
+
+                The projectTemplate.category value MUST exactly equal one value
+                from Allowed categories. The projectTemplate.level value MUST
+                exactly equal one value from Allowed levels. Preserve spelling
+                and capitalization exactly. Do not generate any other values.
                 """.formatted(
-                request.projectTitle(),
-                request.projectDescription(),
-                request.projectType(),
-                request.additionalRequirements() == null
-                        ? "None"
-                        : request.additionalRequirements()
-        );
+                    request.projectTitle(),
+                    request.projectDescription(),
+                    request.projectType(),
+                    request.additionalRequirements() == null
+                            ? "None"
+                            : request.additionalRequirements(),
+                    objectMapper.writeValueAsString(categories),
+                    objectMapper.writeValueAsString(levels)
+            );
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Failed to serialize project template options for the AI prompt", exception);
+        }
     }
 }

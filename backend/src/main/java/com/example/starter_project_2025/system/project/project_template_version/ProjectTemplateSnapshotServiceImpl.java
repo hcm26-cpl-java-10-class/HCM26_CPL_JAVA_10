@@ -1153,4 +1153,111 @@ public class ProjectTemplateSnapshotServiceImpl
                 .collect(Collectors.toMap(
                         Project::getId, Project::getName, (left, right) -> left));
     }
+
+    @Override
+    public ProjectTemplateSnapshotDTO createNewVersionForSuggestion(Long sourceVersionId) {
+        checkPermission(CrudAction.CREATE);
+
+        ProjectTemplateSnapshot source = findSnapshot(sourceVersionId);
+        requireOwnedTemplate(source.getTemplateId());
+        requireTemplateVersion(source);
+
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+
+        validateTemplateId(source.getTemplateId(), errors);
+        validateContentJson(source.getContentJson(), errors);
+
+        throwIfInvalid(errors);
+
+        String nextVersion = nextVersionLabel(source.getTemplateId());
+
+        ProjectTemplateSnapshot created = ProjectTemplateSnapshot.builder()
+                .templateId(source.getTemplateId())
+                .projectId(null)
+                .parentTemplateId(source.getId())
+                .version(nextVersion)
+                .contentJson(source.getContentJson())
+                .status(ProjectTemplateVersionStatus.DRAFT)
+                .isActive(true)
+                .build();
+
+        ProjectTemplateSnapshot saved = snapshotRepository.save(created);
+
+        syncTemplateVersion(saved.getTemplateId(), nextVersion);
+        versionConfigurations.synchronizeDraft(saved);
+
+        templateResourceCopies.copy(
+                source.getId(),
+                saved.getId(),
+                saved.getTemplateId()
+        );
+
+        return toResponse(saved);
+    }
+
+    @Override
+    public void recordSuggestionVersionCreated(
+            Long snapshotId,
+            Long sourceVersionId
+    ) {
+        ProjectTemplateSnapshot saved = findSnapshot(snapshotId);
+        ProjectTemplateSnapshot source = findSnapshot(sourceVersionId);
+
+        Map<String, Object> after = snapshot(saved);
+
+        after.put("sourceVersionId", source.getId());
+        after.put("sourceVersion", source.getVersion());
+        after.put(
+                "sourceStatus",
+                source.getStatus() == null ? null : source.getStatus().name()
+        );
+
+        snapshotAuditService.record(
+                ACTION_NEW_VERSION,
+                saved.getId(),
+                saved.getTemplateId(),
+                saved.getProjectId(),
+                null,
+                after
+        );
+
+        snapshotOutboxService.enqueue(
+                EVENT_CREATED,
+                saved.getId(),
+                saved.getTemplateId(),
+                saved.getProjectId(),
+                currentActorEmail(),
+                after
+        );
+    }
+
+    @Override
+    public void updateContentJsonForSuggestion(
+            Long snapshotId,
+            String contentJson
+    ) {
+        checkPermission(CrudAction.UPDATE);
+
+        ProjectTemplateSnapshot snapshot = findSnapshot(snapshotId);
+
+        requireOwnedTemplate(snapshot.getTemplateId());
+        requireTemplateVersion(snapshot);
+
+        if (snapshot.getStatus() != ProjectTemplateVersionStatus.DRAFT) {
+            throw new IllegalStateException(
+                    "Only DRAFT snapshots can be updated by AI suggestions"
+            );
+        }
+
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+
+        validateContentJson(contentJson, errors);
+
+        throwIfInvalid(errors);
+
+        snapshot.setContentJson(contentJson);
+
+        snapshotRepository.saveAndFlush(snapshot);
+    }
+
 }
