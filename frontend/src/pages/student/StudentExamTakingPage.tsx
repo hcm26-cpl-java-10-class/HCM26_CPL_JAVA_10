@@ -160,6 +160,8 @@ export default function StudentExamTakingPage() {
             queryClient.invalidateQueries({ queryKey: ["my-exam-scores"] });
             queryClient.invalidateQueries({ queryKey: ["exam-preparation", examId] });
             queryClient.invalidateQueries({ queryKey: ["student-exam-attempts"] });
+            queryClient.invalidateQueries({ queryKey: ["lesson-progress"] });
+            queryClient.invalidateQueries({ queryKey: ["course-exams"] });
             if (attempt.status === 'EXPIRED') {
                 toast.warning('Time is up! Your exam has been automatically submitted.');
             } else {

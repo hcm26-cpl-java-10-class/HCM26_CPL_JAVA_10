@@ -62,6 +62,27 @@ public class CourseAssessmentService {
         return calculate(exams.findByCourseLink(courseId,null,null,false),
                 best(attempts.findAllByStudent_IdOrderByStartedAtDesc(studentId)),access::canStudentSeeScoreOnMyScores);
     }
+    /** Learner-only presentation states; no scores or unpublished pass/fail decisions. */
+    public Map<Long,String> assessmentOutcomes(Long courseId,Long studentId) {
+        var ownAttempts=attempts.findAllByStudent_IdOrderByStartedAtDesc(studentId);
+        var graded=best(ownAttempts);
+        Map<Long,String> states=new HashMap<>();
+        for (Exam exam:exams.findByCourseLink(courseId,null,null,true)) {
+            var attempt=graded.get(exam.getId());
+            String state="NOT_STARTED";
+            if (attempt!=null && access.canStudentViewScore(exam)) {
+                Boolean passed=com.example.starter_project_2025.system.exam.service.ExamScoring.passed(attempt);
+                state=passed==null?"COMPLETED":passed?"PASSED":"FAILED";
+            } else if (ownAttempts.stream().anyMatch(a->a.getExam()!=null && exam.getId().equals(a.getExam().getId()))) {
+                state=ownAttempts.stream().anyMatch(a->a.getExam()!=null && exam.getId().equals(a.getExam().getId())
+                        && a.getStatus()!=ExamAttemptStatus.IN_PROGRESS && a.getStatus()!=ExamAttemptStatus.NOT_STARTED)
+                        ?"AWAITING_RESULTS":"IN_PROGRESS";
+            }
+            states.put(exam.getId(),state);
+        }
+        return Map.copyOf(states);
+    }
+
     public boolean canComplete(Long courseId,Long studentId) {
         Grade grade=grade(courseId,studentId);
         return ("NO_ASSESSMENTS".equals(grade.status()) || "PASSED".equals(grade.status())) && plan(courseId).ready();

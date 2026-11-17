@@ -17,7 +17,8 @@ public record LessonProgressDTO(
         List<LessonItem> lessons,
         boolean courseCompleted,
         String assessmentStatus,
-        java.math.BigDecimal overallScore
+        java.math.BigDecimal overallScore,
+        java.util.Map<Long, String> assessmentOutcomes
 ) {
     public record LessonItem(
             Long lessonId,

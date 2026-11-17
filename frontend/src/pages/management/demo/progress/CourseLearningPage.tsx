@@ -27,7 +27,7 @@ import { LessonQnA } from "../lesson/components/LessonQnA";
 import { LessonReportDialog } from "../lesson/components/LessonReportDialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useStudyTimeTracker } from "@/hooks/useStudyTimeTracker";
-import { LessonProgressSidebar } from "./LessonProgressSidebar";
+import { AssessmentIndicator, lessonOutcome, LessonProgressSidebar } from "./LessonProgressSidebar";
 import { useAdminStudentPreview } from "@/pages/student/useAdminStudentPreview";
 import { CourseReviewPrompt } from "../course_review/components/CourseReviewPrompt";
 
@@ -164,6 +164,8 @@ export function CourseLearningPage() {
   const currentLessonExams = (examsQuery.data ?? []).filter(
       (exam) => exam.lessonId === activeLessonId
   );
+
+  const currentOutcome = lessonOutcome(currentLessonExams, progressQuery.data?.assessmentOutcomes ?? {});
 
   useEffect(() => {
     setAnswerDraft(currentLesson?.studentAnswer ?? "");
@@ -403,6 +405,10 @@ export function CourseLearningPage() {
                           </Button>
 
                           <div className="flex flex-wrap justify-end gap-3">
+                            {["QUIZ", "EXAM", "ASSIGNMENT"].includes(currentLesson.contentType) ? <div role="status" className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                              <AssessmentIndicator outcome={currentOutcome} />
+                              {({PASSED:"Assessment passed",FAILED:"Assessment failed",COMPLETED:"Assessment completed",AWAITING_RESULTS:"Awaiting graded, published results",IN_PROGRESS:"Assessment in progress",NOT_STARTED:"Complete the assessment to see your result"})[currentOutcome ?? "NOT_STARTED"]}
+                            </div> : <>
                             <Button
                                 disabled={
                                     currentLesson.completed ||
@@ -423,7 +429,7 @@ export function CourseLearningPage() {
                                   : updateMutation.isPending
                                       ? "Saving..."
                                       : ["QUIZ", "EXAM", "ASSIGNMENT"].includes(currentLesson.contentType) ? "Completes after graded results are published" : "Mark lesson complete"}
-                            </Button>
+                            </Button></>}
 
                             <Button
                                 variant="outline"
@@ -449,7 +455,7 @@ export function CourseLearningPage() {
                             >
                               <div className="min-w-0">
                                 <p className="flex items-center gap-2 font-medium">
-                                  {exam.locked ? (
+                                  {progressQuery.data.assessmentOutcomes?.[exam.id] ? <AssessmentIndicator outcome={progressQuery.data.assessmentOutcomes[exam.id]} /> : exam.locked ? (
                                       <Lock className="size-4" />
                                   ) : (
                                       <ClipboardList className="size-4" />
@@ -469,7 +475,7 @@ export function CourseLearningPage() {
                                   disabled={exam.locked}
                                   onClick={() => openExam(exam)}
                               >
-                                {exam.locked ? "Locked" : "Start exam"}
+                                {exam.locked ? "Locked" : "View assessment"}
                               </Button>
                             </section>
                         ))}
