@@ -13,6 +13,8 @@ import type { SprintBacklogDTO, SprintBacklogStatus, SprintDTO } from "@/types";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Check, ChevronLeft, ChevronRight, Circle, CircleDot, Clock3, History, LayoutGrid, List, Plus, RefreshCw, Search, UserRound } from "lucide-react";
 import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
+import { backlogItemKey } from "@/pages/management/backlog/backlog.constants";
+import { GitLinkBadge, GitLinkSummaryProvider } from "@/pages/management/backlog/components/GitLinkBadge";
 import type { BacklogPriority, SprintBacklogWorkType, SprintPlanningItem } from "@/types";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -210,6 +212,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     item.sprintId != null && item.sprintId === sprintId,
   ), [allItems, sprintId]);
   const allSprintItems = allItems.filter((item) => item.sprintId === sprintId);
+  const boardItemIds = useMemo(() => boardItems.map((item) => item.id).filter((id): id is number => id != null), [boardItems]);
   const memberIds = useMemo(() => [...new Set([
     ...(query.data?.members ?? []).map((member) => member.projectMemberId),
     ...boardItems.map((item) => item.assigneeProjectMemberId).filter((id): id is number => id != null),
@@ -349,6 +352,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
       startDate: item.startDate ?? null,
       endDate: item.endDate ?? null,
       estimatedHours: item.estimatedHours ?? null,
+      taskKey: item.taskKey ?? null,
     });
   };
 
@@ -359,7 +363,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
     setListPage(0);
   }
 
-  return <div className="space-y-3">
+  return <GitLinkSummaryProvider itemIds={boardItemIds}><div className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card px-3 py-2 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border bg-muted/30 p-0.5" role="group" aria-label="Display mode">
@@ -438,7 +442,10 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
                       tabIndex={0}
                       aria-label={`Open details for ${item.title ?? "work item"}`}
                       className={`flex shrink-0 cursor-pointer flex-col rounded-xl border bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${savingItemId === item.id ? "opacity-50" : ""}`}>
-                      <p className="text-xs text-muted-foreground">#{item.id ?? "—"}</p>
+                      <p className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
+                        {backlogItemKey({ id: item.id as number, taskKey: item.taskKey })}
+                        {item.id != null && <GitLinkBadge itemId={item.id} />}
+                      </p>
                       <div className="flex min-h-5 items-center gap-1.5 text-xs">
                         {item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : null}
                         {item.priority ? <Badge variant="outline" className={priorityStyle(item.priority)}>{priorityLabel(item.priority)}</Badge> : null}
@@ -469,7 +476,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Work item</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Priority</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Assignee</th><th className="px-4 py-3 text-right">Estimate</th><th className="px-4 py-3">Actions</th></tr></thead>
               <tbody className="divide-y">{listItems.map((item) => <tr key={item.id} className="hover:bg-slate-50/80">
-                <td className="max-w-md px-4 py-3"><p className="text-xs text-muted-foreground">#{item.id ?? "—"}</p><p className="font-medium text-slate-800">{item.title || "Untitled work item"}</p>{item.milestoneName ? <p className="mt-1 truncate text-xs text-muted-foreground">{item.milestoneName}</p> : null}</td>
+                <td className="max-w-md px-4 py-3"><p className="text-xs font-medium text-muted-foreground">{backlogItemKey({ id: item.id as number, taskKey: item.taskKey })}</p><p className="font-medium text-slate-800">{item.title || "Untitled work item"}</p>{item.milestoneName ? <p className="mt-1 truncate text-xs text-muted-foreground">{item.milestoneName}</p> : null}</td>
                 <td className="px-4 py-3">{item.workType ? <Badge variant="outline" className={workTypeStyle(item.workType)}>{workTypeLabel(item.workType)}</Badge> : "—"}</td>
                 <td className="px-4 py-3">{item.priority ? <Badge variant="outline" className={priorityStyle(item.priority)}>{priorityLabel(item.priority)}</Badge> : "—"}</td>
                 <td className="px-4 py-3">{canUpdate ? <select aria-label={`Status for ${item.title ?? "work item"}`} className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700" value={item.status ?? "TODO"} disabled={savingItemId === item.id || query.isFetching} onChange={(event) => void updateStatus(item, event.target.value as SprintBacklogStatus)}>{([...new Set([item.status ?? "TODO", ...transitionOptions(item.status ?? "TODO")])] as SprintBacklogStatus[]).map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select> : <Badge variant="outline" className={item.status === "DONE" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : item.status === "REVIEW" ? "border-amber-200 bg-amber-50 text-amber-800" : item.status === "IN_PROGRESS" ? "border-violet-200 bg-violet-50 text-violet-700" : "border-sky-200 bg-sky-50 text-sky-700"}>{statusLabel(item.status)}</Badge>}</td>
@@ -543,7 +550,7 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
       open={detailItem !== null}
       onClose={(open) => { if (!open) setDetailItem(null); }}
       item={detailItem}
-      itemKey={detailItem ? ("TASK-" + detailItem.id) : undefined}
+      itemKey={detailItem ? backlogItemKey(detailItem) : undefined}
       sprintName={sprints.find((sprint) => sprint.id === detailItem?.sprintId)?.name ?? null}
       sprints={sprints}
       milestones={milestonesQuery.data ?? []}
@@ -570,5 +577,5 @@ export function WorkspaceTeamBoardPanel({ workspaceId, teamId, projectId, readOn
         setDetailItem(null);
       }}
     />
-  </div>;
+  </div></GitLinkSummaryProvider>;
 }

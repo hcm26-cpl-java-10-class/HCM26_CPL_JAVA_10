@@ -1,19 +1,28 @@
 import { useDebounce } from "@uidotdev/usehooks";
-import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, GitCommitHorizontal, GitPullRequest, Loader2, RefreshCw, Search, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, GitCommitHorizontal, GitMerge, GitPullRequest, ListChecks, Loader2, RefreshCw, Search, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { GitCommitItem, GitPage, GitPullRequestItem, GitPullRequestState } from "@/types/features/git-integration";
+import { usePermissions } from "@/hooks/usePermissions";
+import type { GitCommitItem, GitPage, GitPullRequestItem, GitPullRequestState, GitTaskLinkFilter } from "@/types/features/git-integration";
 import { formatDateTime, formatRelative } from "../git-integration.format";
-import { usePullRequestDetail, useRepositoryCommits, useRepositoryPullRequests } from "../useGitIntegration";
+import { usePullRequestDetail, useRecheckTaskLinks, useRepositoryCommits, useRepositoryPullRequests } from "../useGitIntegration";
 import { GitHubTile } from "./GitIntegrationHeader";
 import { PullRequestStateBadge, ReviewStateBadge } from "./SyncDataBadges";
+import { TaskRefChips } from "./TaskRefChips";
 
 const PAGE_SIZE = 20;
 type Tab = "commits" | "pull-requests";
+
+/** US-SY-05: task link verdict filter; "Needs attention" = no Task ID, unknown, or another project's. */
+const LINK_FILTERS: Array<{ id: GitTaskLinkFilter | "ALL"; label: string }> = [
+  { id: "ALL", label: "All" },
+  { id: "LINKED", label: "Linked to tasks" },
+  { id: "NEEDS_ATTENTION", label: "Needs attention" },
+];
 
 const PR_FILTERS: Array<{ id: GitPullRequestState | "ALL"; label: string }> = [
   { id: "ALL", label: "All" },
@@ -70,8 +79,10 @@ function Pager<T>({ data, page, busy, onPage }: { data?: GitPage<T>; page: numbe
 function CommitRow({ commit, onAuthor }: { commit: GitCommitItem; onAuthor: (author: string) => void }) {
   const author = commit.authorLogin ?? commit.authorName;
   return <li className="flex items-start gap-3 px-5 py-3">
-    <GitCommitHorizontal className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-    <div className="min-w-0 flex-1 space-y-0.5">
+    {commit.merge
+      ? <GitMerge className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-label="Merge commit" />
+      : <GitCommitHorizontal className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+    <div className="min-w-0 flex-1 space-y-1">
       <p className="break-words text-sm font-medium leading-5" title={commit.message}>{commit.headline || "(no message)"}</p>
       <p className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
         {author ? <button type="button" className="font-medium hover:text-foreground hover:underline" onClick={() => onAuthor(author)}
@@ -80,6 +91,7 @@ function CommitRow({ commit, onAuthor }: { commit: GitCommitItem; onAuthor: (aut
         <span>· <time dateTime={commit.committedAt} title={formatDateTime(commit.committedAt)}>{formatRelative(commit.committedAt)}</time></span>
         {commit.filesChanged != null && <span>· {commit.filesChanged} {commit.filesChanged === 1 ? "file" : "files"}</span>}
       </p>
+      <TaskRefChips refs={commit.taskRefs ?? []} />
     </div>
     {commit.htmlUrl ? <a href={commit.htmlUrl} target="_blank" rel="noopener noreferrer" aria-label={`Open commit ${commit.shortSha} on GitHub (new tab)`}
       className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -91,11 +103,14 @@ function CommitRow({ commit, onAuthor }: { commit: GitCommitItem; onAuthor: (aut
 function CommitsTab({ projectId, active }: { projectId: number; active: boolean }) {
   const [search, setSearch] = useState("");
   const [author, setAuthor] = useState<string>();
+  const [link, setLink] = useState<GitTaskLinkFilter | "ALL">("ALL");
   const q = useDebounce(search, 300);
-  const resultKey = `${q}|${author ?? ""}`;
+  const resultKey = `${q}|${author ?? ""}|${link}`;
   const [paging, setPaging] = useState({ key: resultKey, page: 0 });
   const page = paging.key === resultKey ? paging.page : 0;
-  const query = useRepositoryCommits(projectId, { q, author, page, size: PAGE_SIZE }, active);
+  const query = useRepositoryCommits(projectId, { q, author, link: link === "ALL" ? undefined : link, page, size: PAGE_SIZE }, active);
+  const { hasPermission } = usePermissions();
+  const recheck = useRecheckTaskLinks(projectId);
   const data = query.data;
   const busy = query.isFetching && !query.isPending;
 
@@ -104,7 +119,8 @@ function CommitsTab({ projectId, active }: { projectId: number; active: boolean 
   else if (query.isError) body = <ErrorState retrying={query.isFetching} onRetry={() => void query.refetch()} />;
   else if (data && data.items.length === 0) {
     body = <p className="px-6 py-12 text-center text-sm text-muted-foreground">
-      {q || author ? "No commits match these filters." : "No commits yet. Push to the repository and they appear here within seconds."}
+      {link === "NEEDS_ATTENTION" && !q && !author ? "Every commit references a task of this project."
+        : q || author || link !== "ALL" ? "No commits match these filters." : "No commits yet. Push to the repository and they appear here within seconds."}
     </p>;
   } else if (data) {
     body = <ul aria-label="Commits" className={cn("divide-y transition-opacity", busy && "opacity-70")}>
@@ -115,6 +131,11 @@ function CommitsTab({ projectId, active }: { projectId: number; active: boolean 
   return <>
     <div className="flex flex-wrap items-center gap-2 border-b px-5 py-3">
       <SearchBox value={search} onChange={setSearch} placeholder="Search message or SHA" label="Search commits" />
+      <Segmented label="Filter commits by task link" value={link} onChange={setLink} options={LINK_FILTERS} />
+      {hasPermission("GIT_INTEGRATION_MANAGE") && <Button variant="outline" size="sm" className="h-8" disabled={recheck.isPending}
+        onClick={() => recheck.mutate()} title="Check unknown or other-project Task IDs again, e.g. after a task was restored or moved into this project">
+        {recheck.isPending ? <Loader2 className="animate-spin" /> : <ListChecks />}Re-check task links
+      </Button>}
       {author && <span className="inline-flex items-center gap-1 rounded-full border bg-muted px-2 py-0.5 text-xs">
         Author: <span className="font-medium">{author}</span>
         <button type="button" onClick={() => setAuthor(undefined)} aria-label="Clear author filter" className="rounded p-0.5 hover:bg-background"><X className="size-3" /></button>
@@ -170,6 +191,7 @@ function PullRequestRow({ projectId, pr, expanded, onToggle }: {
           <span>· updated <time dateTime={pr.updatedAt} title={formatDateTime(pr.updatedAt)}>{formatRelative(pr.updatedAt)}</time></span>
           {pr.additions != null && pr.deletions != null && <span>· <span className="text-emerald-700 dark:text-emerald-400">+{pr.additions}</span> <span className="text-red-700 dark:text-red-400">−{pr.deletions}</span></span>}
         </p>
+        <TaskRefChips refs={pr.taskRefs ?? []} />
         {(summary.approved > 0 || summary.changesRequested > 0 || summary.commented > 0) && <p className="flex flex-wrap gap-x-2 text-[11px]">
           {summary.approved > 0 && <span className="text-emerald-700 dark:text-emerald-400">✓ {summary.approved} approved</span>}
           {summary.changesRequested > 0 && <span className="text-red-700 dark:text-red-400">✗ {summary.changesRequested} changes requested</span>}

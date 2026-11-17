@@ -12,6 +12,7 @@ public record RepositoryActivityView(
         Long repositoryId,
         GitRepositoryStatus repositoryStatus,
         long commitCount,
+        long linkedCommitCount,
         GitCommitItem lastCommit,
         PullRequestCounts pullRequests,
         LocalDateTime lastEventAt,
@@ -23,6 +24,6 @@ public record RepositoryActivityView(
     }
 
     public static RepositoryActivityView none() {
-        return new RepositoryActivityView(null, null, 0, null, PullRequestCounts.NONE, null, 0, 0);
+        return new RepositoryActivityView(null, null, 0, 0, null, PullRequestCounts.NONE, null, 0, 0);
     }
 }

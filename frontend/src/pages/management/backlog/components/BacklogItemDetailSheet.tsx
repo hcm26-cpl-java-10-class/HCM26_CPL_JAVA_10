@@ -55,6 +55,7 @@ import {
   backlogWorkTypeMeta,
 } from "../backlog.constants";
 import { BacklogSubtasksPanel } from "./BacklogSubtasksPanel";
+import { BacklogDevelopmentSection } from "./BacklogDevelopmentSection";
 
 const NO_SPRINT = "none";
 const NO_MILESTONE = "none";
@@ -574,7 +575,7 @@ export function BacklogItemDetailSheet({
             {workType.label}
           </span>
           <span className="truncate font-mono text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {itemKey ?? `PRJ-${item.id}`}
+            {itemKey ?? item.taskKey ?? `#${item.id}`}
           </span>
 
           {saving && (
@@ -824,6 +825,11 @@ export function BacklogItemDetailSheet({
 
             <div className="px-5 pb-5">
               <BacklogSubtasksPanel key={item.id} backlogId={item.id} readOnly={readOnly} />
+            </div>
+
+            <div className="px-5 pb-5">
+              <BacklogDevelopmentSection key={item.id} itemId={item.id} taskKey={itemKey ?? item.taskKey}
+                title={draft.title || item.title} />
             </div>
 
             <div className="px-5 pb-8">

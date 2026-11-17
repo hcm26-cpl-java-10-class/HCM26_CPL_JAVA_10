@@ -31,6 +31,9 @@ export const gitIntegrationKeys = {
   pullRequests: (projectId: number, query: GitPullRequestQuery) =>
     ["git-integration", "pull-requests", projectId, query.state ?? "ALL", query.q ?? "", query.page ?? 0, query.size ?? 20] as const,
   pullRequest: (projectId: number, number: number) => ["git-integration", "pull-request", projectId, number] as const,
+  backlogLinks: (itemId: number, page: number) => ["git-integration", "backlog-links", itemId, page] as const,
+  backlogLinkSummary: (itemIds: number[]) => ["git-integration", "backlog-link-summary", itemIds] as const,
+  taskLinkStats: (projectId: number) => ["git-integration", "task-link-stats", projectId] as const,
   webhookEvents: (query: GitWebhookEventQuery) =>
     ["git-integration", "webhook-events", query.status ?? "ALL", query.eventType ?? "", query.projectId ?? null, query.page ?? 0, query.size ?? 20] as const,
 };
@@ -156,6 +159,63 @@ export function useWebhookEvents(query: GitWebhookEventQuery, enabled = true) {
 }
 
 /** US-SY-04: process a failed (or ignored activity) webhook event again. */
+/** US-SY-05 Task Detail: refreshed every 30 s while shown, so a push appears without reloading. */
+export function useBacklogGitLinks(itemId: number | undefined, page = 0, enabled = true) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.backlogLinks(itemId ?? 0, page),
+    queryFn: ({ signal }) => gitIntegrationApi.backlogItemGitLinks(itemId!, page, 5, signal),
+    enabled: enabled && itemId !== undefined,
+    placeholderData: keepPreviousData,
+    retry: false,
+    staleTime: 15_000,
+    refetchInterval: ACTIVITY_POLL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/** US-SY-05: badge data of the tasks shown on a board, one request for all of them. */
+export function useBacklogGitLinkSummary(itemIds: number[]) {
+  const ids = [...new Set(itemIds)].sort((a, b) => a - b).slice(0, 500);
+  return useQuery({
+    queryKey: gitIntegrationKeys.backlogLinkSummary(ids),
+    queryFn: ({ signal }) => gitIntegrationApi.backlogGitLinkSummary(ids, signal),
+    enabled: ids.length > 0,
+    retry: false,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+export function useTaskLinkStats(projectId: number | undefined, enabled = true) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.taskLinkStats(projectId ?? 0),
+    queryFn: ({ signal }) => gitIntegrationApi.taskLinkStats(projectId!, signal),
+    enabled: enabled && projectId !== undefined,
+    retry: false,
+    refetchInterval: ACTIVITY_POLL_MS,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/** US-SY-05: re-check unresolved Task IDs (a task restored or moved into the project gets linked). */
+export function useRecheckTaskLinks(projectId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => gitIntegrationApi.recheckTaskLinks(projectId),
+    onSuccess: result => toast.success(result.nowLinked > 0
+      ? `${result.nowLinked} more ${result.nowLinked === 1 ? "commit link" : "commit links"} created`
+      : "Nothing new to link", {
+      description: `${result.checked} unresolved Task ${result.checked === 1 ? "ID" : "IDs"} checked again.`,
+    }),
+    onError: error => toast.error("Re-check failed", {
+      description: errorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error)).description,
+    }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["git-integration"] }),
+  });
+}
+
 export function useReplayWebhookEvent() {
   const queryClient = useQueryClient();
   return useMutation({

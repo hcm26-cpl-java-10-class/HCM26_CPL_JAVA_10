@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -25,4 +27,8 @@ public interface GitProjectLookupRepository extends Repository<Project, Long> {
     /** Number of active modules (child projects) of a master project. */
     @Query("select count(p) from Project p where p.parentProject.id = :masterId and p.isActive = true")
     long countModules(@Param("masterId") Long masterId);
+
+    /** SY-05: direct children of the given projects (one level of the module tree). */
+    @Query("select p.id from Project p where p.parentProject.id in :parentIds")
+    List<Long> findChildIds(@Param("parentIds") Collection<Long> parentIds);
 }

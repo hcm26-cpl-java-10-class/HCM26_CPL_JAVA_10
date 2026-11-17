@@ -176,8 +176,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                     canDelete={!projectReadOnly && hasPermission("SPRINT_BACKLOG_DELETE")}
                     onCreateWorkItem={sections.find(item => item.key === "backlog")?.canRead ? () => changeTab("backlog") : undefined} />
                 : tab === "backlog" ? <WorkspaceBacklogPanel key={projectId} workspaceId={workspaceId} projectId={projectId}
-                    teamId={context.teamId} projectName={project?.name ?? context.projectName}
-                    taskKeyPrefix={context.taskKeyPrefix} readOnly={projectReadOnly} />
+                    teamId={context.teamId} readOnly={projectReadOnly} />
                 : tab === "activity" ? <WorkspaceProjectLogsPanel workspaceId={workspaceId} readOnly={projectReadOnly} />
                 : tab === "feedback" ? <WorkspaceAlertsPanel workspaceId={workspaceId} teamId={context.teamId} />
                 : <WorkspaceBusinessSectionPanel key={workspaceId + ":" + tab} workspaceId={workspaceId}

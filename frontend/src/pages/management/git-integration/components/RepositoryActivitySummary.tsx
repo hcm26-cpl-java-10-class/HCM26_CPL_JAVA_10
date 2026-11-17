@@ -1,4 +1,4 @@
-import { Activity, ChevronRight, GitCommitHorizontal, GitMerge, GitPullRequest, RefreshCw, TriangleAlert } from "lucide-react";
+import { Activity, ChevronRight, GitCommitHorizontal, GitMerge, GitPullRequest, Link2, RefreshCw, TriangleAlert } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -29,8 +29,8 @@ export function RepositoryActivitySummary({ projectId, repositoryName }: { proje
 
   if (query.isPending) {
     return <div role="status" aria-label="Loading repository activity" className="space-y-2">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {[0, 1, 2, 3].map(index => <Skeleton key={index} className="h-[62px] rounded-lg" />)}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {[0, 1, 2, 3, 4].map(index => <Skeleton key={index} className="h-[62px] rounded-lg" />)}
       </div>
       <Skeleton className="h-10 rounded-lg" />
     </div>;
@@ -50,8 +50,11 @@ export function RepositoryActivitySummary({ projectId, repositoryName }: { proje
   const empty = data.commitCount === 0 && data.pullRequests.open + data.pullRequests.merged + data.pullRequests.closed === 0;
 
   return <section aria-label="Repository activity" className="space-y-2">
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
       <Stat icon={<GitCommitHorizontal className="size-3.5" aria-hidden="true" />} label="Commits" value={data.commitCount} />
+      <Stat icon={<Link2 className="size-3.5" aria-hidden="true" />} label="Linked to tasks"
+        value={data.commitCount > 0 ? `${Math.round((data.linkedCommitCount / data.commitCount) * 100)}%` : <span className="text-sm text-muted-foreground">—</span>}
+        hint={`${data.linkedCommitCount} of ${data.commitCount} commits mention a Task ID of this project`} />
       <Stat icon={<GitPullRequest className="size-3.5" aria-hidden="true" />} label="Open PRs" value={data.pullRequests.open} />
       <Stat icon={<GitMerge className="size-3.5" aria-hidden="true" />} label="Merged PRs" value={data.pullRequests.merged} />
       <Stat icon={<Activity className="size-3.5" aria-hidden="true" />} label="Last activity"

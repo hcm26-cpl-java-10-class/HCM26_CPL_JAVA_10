@@ -147,4 +147,41 @@ public interface SprintBacklogRepository extends BaseCrudRepository<SprintBacklo
             order by backlog.id asc
             """)
     List<SprintBacklog> findProductBacklogByProjectId(@Param("projectId") Long projectId);
+
+    // ---------------------------------------------------------------------
+    // Task ID (key.BacklogTaskKeyService)
+    // ---------------------------------------------------------------------
+
+    /** An item still waiting for its Task ID, with what is needed to resolve the prefix. */
+    interface UnkeyedBacklog {
+        Long getId();
+        Long getProjectId();
+        Long getSprintTeamId();
+    }
+
+    @Query("""
+            select item.id as id, item.projectId as projectId, sprint.teamId as sprintTeamId
+            from SprintBacklog item left join item.sprint sprint
+            where item.taskKey is null and item.id > :afterId
+            order by item.id asc""")
+    List<UnkeyedBacklog> findUnkeyed(@Param("afterId") Long afterId, org.springframework.data.domain.Pageable page);
+
+    boolean existsByTaskKeyIsNotNull();
+
+    boolean existsByTenantIdAndTaskKey(Long tenantId, String taskKey);
+
+    List<SprintBacklog> findAllByTaskKey(String taskKey);
+
+    /**
+     * Stores the Task ID of an already persisted item. Native on purpose: the key
+     * columns are {@code updatable = false}, so no entity update can ever change them,
+     * and the item {@code version} is not bumped (the key is not a user edit).
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = """
+            UPDATE sprint_backlog
+               SET tenant_id = :tenantId, task_key = :taskKey, task_key_number = :number
+             WHERE sprint_backlog_id = :id AND task_key IS NULL""", nativeQuery = true)
+    int assignTaskKey(@Param("id") Long id, @Param("tenantId") Long tenantId,
+                      @Param("taskKey") String taskKey, @Param("number") Long number);
 }

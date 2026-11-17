@@ -85,6 +85,7 @@ export type GitIntegrationErrorCode =
   | "GIT_WEBHOOK_EVENT_NOT_FOUND"
   | "GIT_WEBHOOK_EVENT_NOT_REPLAYABLE"
   | "GIT_WEBHOOK_PAYLOAD_PURGED"
+  | "GIT_BACKLOG_ITEM_NOT_FOUND"
   | "UNAUTHENTICATED";
 
 export interface GitIntegrationErrorBody {
@@ -244,6 +245,73 @@ export interface GitCommitItem {
   /** Branch of the first push that brought the commit (refs/heads/ removed). */
   branch?: string | null;
   filesChanged?: number | null;
+  /** US-SY-05: a merge commit (several parents). */
+  merge: boolean;
+  /** US-SY-05: Task IDs mentioned by the message and their verdict. */
+  taskRefs: GitTaskRef[];
+}
+
+// ---- US-SY-05: commits / pull requests linked to tasks ------------------------------------------
+
+export type GitTaskRefStatus = "LINKED" | "INVALID" | "OUTSIDE_PROJECT" | "MISSING";
+export type GitTaskRefReason = "OK" | "NOT_FOUND" | "DELETED" | "OTHER_PROJECT" | "NO_TASK_ID";
+export type GitTaskRefField = "MESSAGE" | "TITLE" | "BRANCH" | "BODY" | "NONE";
+
+/** A Task ID found in a commit or pull request. `key` is null for MISSING; title only for LINKED. */
+export interface GitTaskRef {
+  key: string | null;
+  rawText?: string | null;
+  status: GitTaskRefStatus;
+  reason: GitTaskRefReason;
+  field: GitTaskRefField;
+  itemId?: number | null;
+  itemTitle?: string | null;
+  itemStatus?: string | null;
+}
+
+/** `NEEDS_ATTENTION` = no Task ID, an unknown one or one of another project. */
+export type GitTaskLinkFilter = "LINKED" | "NEEDS_ATTENTION" | "MISSING" | "INVALID" | "OUTSIDE_PROJECT";
+
+/** Task Detail: commits (paged, newest first) and pull requests linked to a task. */
+export interface BacklogGitLinks {
+  itemId: number;
+  taskKey: string | null;
+  repository: { id: number; fullName: string; htmlUrl: string; status: GitRepositoryConnectionStatus } | null;
+  pullRequests: GitPullRequestItem[];
+  commits: GitPage<GitCommitItem>;
+  commitCount: number;
+  pullRequestCount: number;
+}
+
+/** Board badge data of one task. */
+export interface BacklogGitLinkSummary {
+  itemId: number;
+  commitCount: number;
+  pullRequestCount: number;
+  latestPullRequestNumber?: number | null;
+  latestPullRequestState?: GitPullRequestState | null;
+}
+
+export interface GitTaskLinkCounts {
+  total: number;
+  processed: number;
+  linked: number;
+  missing: number;
+  invalid: number;
+  outsideProject: number;
+}
+
+export interface GitTaskLinkStats {
+  commits: GitTaskLinkCounts;
+  pullRequests: GitTaskLinkCounts;
+  tasksWithCommits: number;
+  inProgressTasksWithoutCommits: number;
+}
+
+export interface GitTaskLinkRecheckResult {
+  checked: number;
+  nowLinked: number;
+  newlyProcessed: number;
 }
 
 export type GitPullRequestState = "OPEN" | "CLOSED" | "MERGED";
@@ -274,6 +342,8 @@ export interface GitPullRequestItem {
   mergedAt?: string | null;
   closedAt?: string | null;
   reviewSummary: GitReviewSummary;
+  /** US-SY-05: Task IDs of the title, branch and body, and their verdict. */
+  taskRefs: GitTaskRef[];
 }
 
 export interface GitReviewItem {
@@ -300,6 +370,8 @@ export interface GitRepositoryActivity {
   repositoryId: number | null;
   repositoryStatus: GitRepositoryConnectionStatus | null;
   commitCount: number;
+  /** US-SY-05: commits with at least one linked task. */
+  linkedCommitCount: number;
   lastCommit: GitCommitItem | null;
   pullRequests: { open: number; merged: number; closed: number };
   /** Arrival of the newest processed webhook event. */
@@ -314,6 +386,7 @@ export interface GitCommitQuery {
   q?: string;
   author?: string;
   branch?: string;
+  link?: GitTaskLinkFilter;
   page?: number;
   size?: number;
 }
@@ -321,6 +394,7 @@ export interface GitCommitQuery {
 export interface GitPullRequestQuery {
   state?: GitPullRequestState;
   q?: string;
+  link?: GitTaskLinkFilter;
   page?: number;
   size?: number;
 }

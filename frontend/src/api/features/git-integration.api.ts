@@ -1,6 +1,8 @@
 import { isAxiosError } from "axios";
 import axiosInstance from "@/api/axios";
 import type {
+  BacklogGitLinks,
+  BacklogGitLinkSummary,
   GitHubCallbackRequest,
   GitHubCallbackResponse,
   GitHubConnectStartResponse,
@@ -16,6 +18,8 @@ import type {
   GitRepositoryPage,
   GitRepositoryQuery,
   GitSyncJob,
+  GitTaskLinkRecheckResult,
+  GitTaskLinkStats,
   GitWebhookEventItem,
   GitWebhookEventQuery,
   LinkRepositoryRequest,
@@ -74,6 +78,7 @@ export const gitIntegrationApi = {
         q: query.q?.trim() || undefined,
         author: query.author?.trim() || undefined,
         branch: query.branch?.trim() || undefined,
+        link: query.link,
         page: query.page ?? 0,
         size: query.size ?? 20,
       },
@@ -83,13 +88,35 @@ export const gitIntegrationApi = {
   /** US-SY-04: pull requests, most recently updated first, with each reviewer's current decision. */
   repositoryPullRequests: async (projectId: number, query: GitPullRequestQuery, signal?: AbortSignal) =>
     (await axiosInstance.get<GitPage<GitPullRequestItem>>(`${PROJECTS}/${projectId}/repository/pull-requests`, {
-      params: { state: query.state, q: query.q?.trim() || undefined, page: query.page ?? 0, size: query.size ?? 20 },
+      params: { state: query.state, q: query.q?.trim() || undefined, link: query.link, page: query.page ?? 0, size: query.size ?? 20 },
       signal,
     })).data,
 
   /** US-SY-04: one pull request with its reviews. */
   pullRequestDetail: async (projectId: number, number: number, signal?: AbortSignal) =>
     (await axiosInstance.get<GitPullRequestDetail>(`${PROJECTS}/${projectId}/repository/pull-requests/${number}`, { signal })).data,
+
+  /** US-SY-05: commits and pull requests linked to a task (anyone who can open the task). */
+  backlogItemGitLinks: async (itemId: number, page = 0, size = 20, signal?: AbortSignal) =>
+    (await axiosInstance.get<BacklogGitLinks>(`/v1/git-integration/backlog-items/${itemId}/git-links`, {
+      params: { page, size },
+      signal,
+    })).data,
+
+  /** US-SY-05: link counts of the tasks of a board (up to 500 ids). */
+  backlogGitLinkSummary: async (itemIds: number[], signal?: AbortSignal) =>
+    (await axiosInstance.get<BacklogGitLinkSummary[]>("/v1/git-integration/backlog-items/git-link-summary", {
+      params: { ids: itemIds.join(",") },
+      signal,
+    })).data,
+
+  /** US-SY-05: how well the repository's commits and pull requests reference tasks. */
+  taskLinkStats: async (projectId: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitTaskLinkStats>(`${PROJECTS}/${projectId}/repository/task-links/stats`, { signal })).data,
+
+  /** US-SY-05: judge unresolved Task IDs again (Git Integration managers). */
+  recheckTaskLinks: async (projectId: number) =>
+    (await axiosInstance.post<GitTaskLinkRecheckResult>(`${PROJECTS}/${projectId}/repository/task-links/recheck`)).data,
 
   /** US-SY-04: webhook deliveries of the organization (Git Integration managers only). */
   webhookEvents: async (query: GitWebhookEventQuery, signal?: AbortSignal) =>

@@ -1,5 +1,6 @@
 package com.example.starter_project_2025.system.git_integration.controller;
 
+import com.example.starter_project_2025.system.git_integration.dto.TaskLinkFilter;
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequestState;
 import com.example.starter_project_2025.system.git_integration.dto.GitCommitItem;
 import com.example.starter_project_2025.system.git_integration.dto.GitPage;
@@ -33,7 +34,7 @@ public class RepositoryActivityController {
         return queryService.activity(projectId);
     }
 
-    @Operation(summary = "Commits, newest first; q searches message and SHA, branch is the first branch a commit was pushed to")
+    @Operation(summary = "Commits, newest first, with the Task IDs they mention; q searches message and SHA, branch is the first branch a commit was pushed to, link filters by task link verdict")
     @GetMapping("/commits")
     public GitPage<GitCommitItem> commits(@PathVariable Long projectId,
                                           @RequestParam(required = false) String q,
@@ -41,9 +42,10 @@ public class RepositoryActivityController {
                                           @RequestParam(required = false) String branch,
                                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
                                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+                                          @RequestParam(required = false) TaskLinkFilter link,
                                           @RequestParam(defaultValue = "0") int page,
                                           @RequestParam(defaultValue = "20") int size) {
-        return queryService.commits(projectId, new RepositoryActivityQueryService.CommitQuery(q, author, branch, from, to, page, size));
+        return queryService.commits(projectId, new RepositoryActivityQueryService.CommitQuery(q, author, branch, from, to, link, page, size));
     }
 
     @Operation(summary = "Pull requests, most recently updated first, with each reviewer's current decision")
@@ -51,9 +53,10 @@ public class RepositoryActivityController {
     public GitPage<GitPullRequestItem> pullRequests(@PathVariable Long projectId,
                                                     @RequestParam(required = false) GitPullRequestState state,
                                                     @RequestParam(required = false) String q,
+                                                    @RequestParam(required = false) TaskLinkFilter link,
                                                     @RequestParam(defaultValue = "0") int page,
                                                     @RequestParam(defaultValue = "20") int size) {
-        return queryService.pullRequests(projectId, new RepositoryActivityQueryService.PullRequestQuery(state, q, page, size));
+        return queryService.pullRequests(projectId, new RepositoryActivityQueryService.PullRequestQuery(state, q, link, page, size));
     }
 
     @Operation(summary = "A pull request with its reviews")

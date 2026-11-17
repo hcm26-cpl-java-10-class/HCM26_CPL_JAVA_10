@@ -64,6 +64,11 @@ public class GitIntegrationException extends RuntimeException {
                 "Không tìm thấy pull request");
     }
 
+    public static GitIntegrationException backlogItemNotFound() {
+        return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_BACKLOG_ITEM_NOT_FOUND",
+                "Không tìm thấy task");
+    }
+
     public static GitIntegrationException projectNotFound() {
         return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_PROJECT_NOT_FOUND",
                 "Không tìm thấy project");
