@@ -81,6 +81,10 @@ export type GitIntegrationErrorCode =
   | "GIT_REPOSITORY_ARCHIVED"
   | "GIT_REPOSITORY_NOT_LINKED"
   | "GIT_REQUEST_INVALID"
+  | "GIT_PULL_REQUEST_NOT_FOUND"
+  | "GIT_WEBHOOK_EVENT_NOT_FOUND"
+  | "GIT_WEBHOOK_EVENT_NOT_REPLAYABLE"
+  | "GIT_WEBHOOK_PAYLOAD_PURGED"
   | "UNAUTHENTICATED";
 
 export interface GitIntegrationErrorBody {
@@ -213,4 +217,140 @@ export interface LinkRepositoryRequest {
   installationId: number;
   /** GitHub's numeric repository id */
   externalId: number;
+}
+
+// ---- US-SY-04 · Data synchronized from GitHub webhooks --------------------------------------------
+
+export interface GitPage<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+export interface GitCommitItem {
+  id: number;
+  sha: string;
+  shortSha: string;
+  /** First line of the message. */
+  headline: string;
+  message: string;
+  authorName?: string | null;
+  /** GitHub login; null when the commit e-mail is not linked to a GitHub account. */
+  authorLogin?: string | null;
+  committedAt: string;
+  htmlUrl?: string | null;
+  /** Branch of the first push that brought the commit (refs/heads/ removed). */
+  branch?: string | null;
+  filesChanged?: number | null;
+}
+
+export type GitPullRequestState = "OPEN" | "CLOSED" | "MERGED";
+
+export type GitReviewState = "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED" | "PENDING";
+
+export interface GitReviewSummary {
+  approved: number;
+  changesRequested: number;
+  commented: number;
+}
+
+export interface GitPullRequestItem {
+  id: number;
+  number: number;
+  title: string;
+  state: GitPullRequestState;
+  draft: boolean;
+  authorLogin?: string | null;
+  headRef?: string | null;
+  baseRef?: string | null;
+  htmlUrl?: string | null;
+  additions?: number | null;
+  deletions?: number | null;
+  changedFiles?: number | null;
+  createdAt: string;
+  updatedAt: string;
+  mergedAt?: string | null;
+  closedAt?: string | null;
+  reviewSummary: GitReviewSummary;
+}
+
+export interface GitReviewItem {
+  id: number;
+  reviewerLogin?: string | null;
+  state: GitReviewState;
+  body?: string | null;
+  commitSha?: string | null;
+  submittedAt?: string | null;
+  dismissedAt?: string | null;
+  htmlUrl?: string | null;
+}
+
+export interface GitPullRequestDetail {
+  pullRequest: GitPullRequestItem;
+  body?: string | null;
+  mergedByLogin?: string | null;
+  commitsCount?: number | null;
+  reviews: GitReviewItem[];
+}
+
+export interface GitRepositoryActivity {
+  /** Null (and every count 0) when no repository is linked. */
+  repositoryId: number | null;
+  repositoryStatus: GitRepositoryConnectionStatus | null;
+  commitCount: number;
+  lastCommit: GitCommitItem | null;
+  pullRequests: { open: number; merged: number; closed: number };
+  /** Arrival of the newest processed webhook event. */
+  lastEventAt?: string | null;
+  /** Webhook events waiting, running or retrying. */
+  pendingEvents: number;
+  /** Webhook events that failed for good (can be replayed). */
+  failedEvents: number;
+}
+
+export interface GitCommitQuery {
+  q?: string;
+  author?: string;
+  branch?: string;
+  page?: number;
+  size?: number;
+}
+
+export interface GitPullRequestQuery {
+  state?: GitPullRequestState;
+  q?: string;
+  page?: number;
+  size?: number;
+}
+
+export type GitWebhookEventStatus = "RECEIVED" | "PROCESSING" | "PROCESSED" | "IGNORED" | "FAILED_RETRYABLE" | "FAILED";
+
+export interface GitWebhookEventItem {
+  id: number;
+  deliveryId: string;
+  eventType: string;
+  action?: string | null;
+  repoFullName?: string | null;
+  senderLogin?: string | null;
+  status: GitWebhookEventStatus;
+  retryCount: number;
+  maxRetries: number;
+  /** Only while FAILED_RETRYABLE. */
+  nextRetryAt?: string | null;
+  /** Last error, why it was ignored, or what was stored. */
+  note?: string | null;
+  receivedAt: string;
+  processedAt?: string | null;
+  latencyMs?: number | null;
+  replayable: boolean;
+}
+
+export interface GitWebhookEventQuery {
+  status?: GitWebhookEventStatus;
+  eventType?: string;
+  projectId?: number;
+  page?: number;
+  size?: number;
 }

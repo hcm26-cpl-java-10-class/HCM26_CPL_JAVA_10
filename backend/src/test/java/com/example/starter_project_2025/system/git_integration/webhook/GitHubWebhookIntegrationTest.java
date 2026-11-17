@@ -193,20 +193,6 @@ class GitHubWebhookIntegrationTest {
     }
 
     @Test
-    void activityEventsWithoutAHandlerYetWaitAsReceived() throws Exception {
-        deliver("push", "delivery-push-wait", "{\"repository\":{\"id\":9001}}").andExpect(status().isAccepted());
-        Long id = events.findByProviderAndDeliveryId(GitProvider.GITHUB, "delivery-push-wait").orElseThrow().getId();
-
-        assertThat(registry.handles("push")).isFalse(); // SY-04 adds it
-        assertThat(store.dueIds(registry.handledTypes(), 50)).doesNotContain(id);
-        processor.process(id);
-
-        GitWebhookEvent event = events.findById(id).orElseThrow();
-        assertThat(event.getStatus()).isEqualTo(GitWebhookEventStatus.RECEIVED);
-        assertThat(event.getAttempts()).isZero();
-    }
-
-    @Test
     void noJwtIsNeededButOtherEndpointsStayProtected() throws Exception {
         deliver("ping", "delivery-ping", "{\"zen\":\"Keep it logically awesome.\",\"hook_id\":42}")
                 .andExpect(status().isAccepted());
@@ -341,7 +327,7 @@ class GitHubWebhookIntegrationTest {
         processor.process(id);
 
         GitWebhookEvent failed = events.findById(id).orElseThrow();
-        assertThat(failed.getStatus()).isEqualTo(GitWebhookEventStatus.FAILED);
+        assertThat(failed.getStatus()).isEqualTo(GitWebhookEventStatus.FAILED_RETRYABLE);
         assertThat(failed.getAttempts()).isEqualTo(1);
         assertThat(failed.getLastError()).contains("database is busy");
         assertThat(failed.getNextAttemptAt()).isAfter(LocalDateTime.now());
@@ -363,25 +349,29 @@ class GitHubWebhookIntegrationTest {
     }
 
     @Test
-    void ac06EventBecomesDeadAfterTheLastAttempt() throws Exception {
+    void ac06EventFailsForGoodAfterTheLastRetry() throws Exception {
         deliver("installation", "delivery-dead", "{\"action\":\"suspend\",\"installation\":{\"id\":556677}}")
                 .andExpect(status().isAccepted());
         Long id = events.findByProviderAndDeliveryId(GitProvider.GITHUB, "delivery-dead").orElseThrow().getId();
         doThrow(new IllegalStateException("still failing"))
                 .when(installationWriter).transition(anyLong(), any(), any(), anyString());
 
-        for (int attempt = 1; attempt <= properties.getWebhookMaxAttempts(); attempt++) {
+        int runs = properties.getWebhookMaxRetries() + 1; // first run + 5 retries
+        for (int attempt = 1; attempt <= runs; attempt++) {
             makeDue(id);
             processor.process(id);
+            if (attempt < runs) {
+                assertThat(events.findById(id).orElseThrow().getStatus()).isEqualTo(GitWebhookEventStatus.FAILED_RETRYABLE);
+            }
         }
 
-        GitWebhookEvent dead = events.findById(id).orElseThrow();
-        assertThat(dead.getStatus()).isEqualTo(GitWebhookEventStatus.DEAD);
-        assertThat(dead.getAttempts()).isEqualTo(properties.getWebhookMaxAttempts());
-        assertThat(dead.getPayload()).isNotNull();
+        GitWebhookEvent failed = events.findById(id).orElseThrow();
+        assertThat(failed.getStatus()).isEqualTo(GitWebhookEventStatus.FAILED);
+        assertThat(failed.getAttempts()).isEqualTo(runs);
+        assertThat(failed.getPayload()).isNotNull();
         makeDue(id);
         processor.process(id);
-        assertThat(events.findById(id).orElseThrow().getAttempts()).isEqualTo(properties.getWebhookMaxAttempts());
+        assertThat(events.findById(id).orElseThrow().getAttempts()).isEqualTo(runs);
     }
 
     // ---- AC07: app permission events ----------------------------------------------------------------
@@ -467,7 +457,7 @@ class GitHubWebhookIntegrationTest {
     @Test
     void retentionPurgesOnlyOldPayloadsOfFinishedEvents() {
         Long oldProcessed = storedEvent("old-processed", GitWebhookEventStatus.PROCESSED, 20);
-        Long oldFailed = storedEvent("old-failed", GitWebhookEventStatus.FAILED, 20);
+        Long oldFailed = storedEvent("old-failed", GitWebhookEventStatus.FAILED_RETRYABLE, 20);
         Long recentProcessed = storedEvent("recent-processed", GitWebhookEventStatus.PROCESSED, 3);
 
         retention.purge();

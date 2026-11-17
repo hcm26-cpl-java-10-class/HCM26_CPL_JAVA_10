@@ -7,8 +7,15 @@ import {
   gitIntegrationHttpStatus,
 } from "@/api/features/git-integration.api";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { GitRepositoryQuery, LinkRepositoryRequest, ProjectRepositoryView } from "@/types/features/git-integration";
-import { errorMessage } from "./git-integration.messages";
+import type {
+  GitCommitQuery,
+  GitPullRequestQuery,
+  GitRepositoryQuery,
+  GitWebhookEventQuery,
+  LinkRepositoryRequest,
+  ProjectRepositoryView,
+} from "@/types/features/git-integration";
+import { errorMessage, replayErrorMessage } from "./git-integration.messages";
 import { savePendingConnect } from "./git-integration.storage";
 
 export const gitIntegrationKeys = {
@@ -18,7 +25,22 @@ export const gitIntegrationKeys = {
     ["git-integration", "repositories", installationId, query.q ?? "", query.filter ?? "all",
       query.page ?? 0, query.size ?? 20, query.projectId ?? null] as const,
   projectRepository: (projectId: number) => ["git-integration", "project-repository", projectId] as const,
+  activity: (projectId: number) => ["git-integration", "activity", projectId] as const,
+  commits: (projectId: number, query: GitCommitQuery) =>
+    ["git-integration", "commits", projectId, query.q ?? "", query.author ?? "", query.branch ?? "", query.page ?? 0, query.size ?? 20] as const,
+  pullRequests: (projectId: number, query: GitPullRequestQuery) =>
+    ["git-integration", "pull-requests", projectId, query.state ?? "ALL", query.q ?? "", query.page ?? 0, query.size ?? 20] as const,
+  pullRequest: (projectId: number, number: number) => ["git-integration", "pull-request", projectId, number] as const,
+  webhookEvents: (query: GitWebhookEventQuery) =>
+    ["git-integration", "webhook-events", query.status ?? "ALL", query.eventType ?? "", query.projectId ?? null, query.page ?? 0, query.size ?? 20] as const,
 };
+
+/**
+ * US-SY-04: webhooks update the data within milliseconds; the screen refreshes this
+ * often while it is visible (and on window focus), never in a background tab.
+ */
+const ACTIVITY_POLL_MS = 30_000;
+const WEBHOOK_LOG_POLL_MS = 15_000;
 
 /** Poll while a synchronization is waiting or running, so the card moves from "Pending" to "Synced" by itself. */
 const SYNC_POLL_MS = 3000;
@@ -68,6 +90,82 @@ export function useRetrySync(projectId: number) {
       toast.error(message.title, { description: message.description });
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["git-integration", "project-repository"] }),
+  });
+}
+
+/** US-SY-04: counts, latest commit and webhook health of a project's repository. */
+export function useRepositoryActivity(projectId: number | undefined, enabled = true) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.activity(projectId ?? 0),
+    queryFn: ({ signal }) => gitIntegrationApi.repositoryActivity(projectId!, signal),
+    enabled: enabled && projectId !== undefined,
+    retry: false,
+    refetchInterval: ACTIVITY_POLL_MS,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useRepositoryCommits(projectId: number | undefined, query: GitCommitQuery, enabled = true) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.commits(projectId ?? 0, query),
+    queryFn: ({ signal }) => gitIntegrationApi.repositoryCommits(projectId!, query, signal),
+    enabled: enabled && projectId !== undefined,
+    placeholderData: keepPreviousData,
+    retry: false,
+    refetchInterval: ACTIVITY_POLL_MS,
+    refetchIntervalInBackground: false,
+  });
+}
+
+export function useRepositoryPullRequests(projectId: number | undefined, query: GitPullRequestQuery, enabled = true) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.pullRequests(projectId ?? 0, query),
+    queryFn: ({ signal }) => gitIntegrationApi.repositoryPullRequests(projectId!, query, signal),
+    enabled: enabled && projectId !== undefined,
+    placeholderData: keepPreviousData,
+    retry: false,
+    refetchInterval: ACTIVITY_POLL_MS,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/** Loaded only when a pull request is expanded. */
+export function usePullRequestDetail(projectId: number, number: number | undefined) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.pullRequest(projectId, number ?? 0),
+    queryFn: ({ signal }) => gitIntegrationApi.pullRequestDetail(projectId, number!, signal),
+    enabled: number !== undefined,
+    retry: false,
+  });
+}
+
+/** US-SY-04: webhook delivery log; refreshes while something is still waiting or retrying. */
+export function useWebhookEvents(query: GitWebhookEventQuery, enabled = true) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.webhookEvents(query),
+    queryFn: ({ signal }) => gitIntegrationApi.webhookEvents(query, signal),
+    enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+    refetchInterval: result => result.state.data?.items.some(item =>
+      item.status === "RECEIVED" || item.status === "PROCESSING" || item.status === "FAILED_RETRYABLE")
+      ? WEBHOOK_LOG_POLL_MS : false,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/** US-SY-04: process a failed (or ignored activity) webhook event again. */
+export function useReplayWebhookEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => gitIntegrationApi.replayWebhookEvent(id),
+    onSuccess: () => toast.success("Event queued", { description: "It will be processed again in a moment." }),
+    onError: error => toast.error("Replay failed", { description: replayErrorMessage(gitIntegrationErrorCode(error)) }),
+    onSettled: () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["git-integration", "webhook-events"] }),
+      queryClient.invalidateQueries({ queryKey: ["git-integration", "activity"] }),
+    ]),
   });
 }
 

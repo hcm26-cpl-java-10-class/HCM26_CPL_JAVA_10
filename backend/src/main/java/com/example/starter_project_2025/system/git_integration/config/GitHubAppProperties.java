@@ -87,8 +87,24 @@ public class GitHubAppProperties {
     /** GI-04: background poller for due/abandoned jobs (tests turn this off). */
     private boolean syncPollerEnabled = true;
 
-    /** SY-03: processing attempts per webhook event before it is marked DEAD. */
-    private int webhookMaxAttempts = 5;
+    /**
+     * SY-04: retries of a webhook event after its first failed run (backoff 1m, 5m, 15m, 1h, 6h);
+     * once used up the event becomes FAILED. 5 retries = up to 6 runs.
+     */
+    private int webhookMaxRetries = 5;
+
+    /** SY-04: a RECEIVED event is left to the fast path for this long before the fallback scheduler takes it. */
+    private long webhookReceivedGraceSeconds = 10;
+
+    /** SY-04: threads and queue of the {@code gitWebhookTaskExecutor} (tasks beyond the queue are discarded). */
+    private int webhookWorkerCore = 2;
+
+    private int webhookWorkerMax = 4;
+
+    private int webhookQueueCapacity = 200;
+
+    /** SY-04: safety cap on GitHub pages (100 commits each) read to complete one truncated push. */
+    private int pushMaxApiPages = 50;
 
     /**
      * SY-03: days the raw payload of a finished webhook event is kept before it is purged
@@ -142,8 +158,14 @@ public class GitHubAppProperties {
         if (webhookPayloadRetentionDays < 1) {
             missing.add("app.github.webhook-payload-retention-days must be at least 1");
         }
-        if (webhookMaxAttempts < 1) {
-            missing.add("app.github.webhook-max-attempts must be at least 1");
+        if (webhookMaxRetries < 0) {
+            missing.add("app.github.webhook-max-retries must not be negative");
+        }
+        if (webhookWorkerCore < 1 || webhookWorkerMax < webhookWorkerCore || webhookQueueCapacity < 1) {
+            missing.add("app.github.webhook-worker-core/-max/queue-capacity must be positive and max >= core");
+        }
+        if (pushMaxApiPages < 1) {
+            missing.add("app.github.push-max-api-pages must be at least 1");
         }
         return missing;
     }

@@ -1,7 +1,10 @@
 package com.example.starter_project_2025.system.git_integration.exception;
 
 import com.example.starter_project_2025.system.git_integration.controller.GitInstallationController;
+import com.example.starter_project_2025.system.git_integration.controller.GitWebhookEventController;
 import com.example.starter_project_2025.system.git_integration.controller.ProjectRepositoryController;
+import com.example.starter_project_2025.system.git_integration.controller.RepositoryActivityController;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import com.example.starter_project_2025.system.git_integration.dto.GitIntegrationErrorResponse;
 import com.example.starter_project_2025.web.CorrelationIdFilter;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +31,8 @@ import java.util.Map;
  * from secrets can leak through an unexpected error.
  */
 @Slf4j
-@RestControllerAdvice(assignableTypes = {GitInstallationController.class, ProjectRepositoryController.class})
+@RestControllerAdvice(assignableTypes = {GitInstallationController.class, ProjectRepositoryController.class,
+        RepositoryActivityController.class, GitWebhookEventController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class GitIntegrationExceptionHandler {
 
@@ -77,6 +81,12 @@ public class GitIntegrationExceptionHandler {
                     CorrelationIdFilter.currentId(), null, null, null, errors.isEmpty() ? null : errors));
         }
         return error(HttpStatus.BAD_REQUEST, "GIT_CALLBACK_INVALID", "Dữ liệu callback không hợp lệ");
+    }
+
+    /** SY-04: a query parameter of the wrong type, e.g. an unknown status. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<GitIntegrationErrorResponse> badParameter(MethodArgumentTypeMismatchException ex) {
+        return error(HttpStatus.BAD_REQUEST, "GIT_REQUEST_INVALID", "Tham số không hợp lệ: " + ex.getName());
     }
 
     @ExceptionHandler(Exception.class)

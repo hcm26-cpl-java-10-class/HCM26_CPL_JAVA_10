@@ -44,6 +44,26 @@ public class GitIntegrationException extends RuntimeException {
 
     // ---- GI-04: link a repository to a master project -------------------------------------------
 
+    public static GitIntegrationException webhookEventNotFound() {
+        return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_WEBHOOK_EVENT_NOT_FOUND",
+                "Không tìm thấy webhook event");
+    }
+
+    public static GitIntegrationException webhookEventNotReplayable() {
+        return new GitIntegrationException(HttpStatus.CONFLICT, "GIT_WEBHOOK_EVENT_NOT_REPLAYABLE",
+                "Chỉ xử lý lại được event FAILED, hoặc event push / pull request / review đã bị IGNORED");
+    }
+
+    public static GitIntegrationException webhookPayloadPurged() {
+        return new GitIntegrationException(HttpStatus.CONFLICT, "GIT_WEBHOOK_PAYLOAD_PURGED",
+                "Payload của event đã bị xoá theo thời hạn lưu trữ nên không thể xử lý lại");
+    }
+
+    public static GitIntegrationException pullRequestNotFound() {
+        return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_PULL_REQUEST_NOT_FOUND",
+                "Không tìm thấy pull request");
+    }
+
     public static GitIntegrationException projectNotFound() {
         return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_PROJECT_NOT_FOUND",
                 "Không tìm thấy project");

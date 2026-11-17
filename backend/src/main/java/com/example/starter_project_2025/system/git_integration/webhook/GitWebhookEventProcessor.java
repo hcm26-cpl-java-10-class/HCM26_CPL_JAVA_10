@@ -4,32 +4,53 @@ import com.example.starter_project_2025.system.git_integration.domain.GitInstall
 import com.example.starter_project_2025.system.git_integration.domain.GitProvider;
 import com.example.starter_project_2025.system.git_integration.domain.GitRepository;
 import com.example.starter_project_2025.system.git_integration.domain.GitRepositoryStatus;
+import com.example.starter_project_2025.system.git_integration.github.GitHubApiException;
 import com.example.starter_project_2025.system.git_integration.repository.GitInstallationRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
+import com.example.starter_project_2025.system.git_integration.service.GitHubFailures;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
- * SY-03: processes one stored event: claim → read payload → resolve installation
- * and repository → run the handler → record the outcome. A handler exception
- * marks the event FAILED (retried with backoff) and never loses it (AC06).
+ * SY-03 / SY-04: processes one stored event: claim (SKIP LOCKED) → read payload →
+ * resolve installation and ACTIVE repository connection → run the handler →
+ * record the outcome. Failures are classified for the retry policy (AC04): GitHub
+ * network/5xx/rate-limit errors and unexpected errors are retried with backoff;
+ * a missing permission or a removed installation fails the event at once.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class GitWebhookEventProcessor {
 
     private final GitWebhookEventStore store;
     private final GitWebhookHandlerRegistry registry;
     private final GitInstallationRepository installations;
     private final GitRepositoryRepository connections;
+    private final GitHubFailures gitHubFailures;
     private final ObjectMapper json;
+    private final Clock clock;
+
+    public GitWebhookEventProcessor(GitWebhookEventStore store, GitWebhookHandlerRegistry registry,
+                                    GitInstallationRepository installations, GitRepositoryRepository connections,
+                                    GitHubFailures gitHubFailures, ObjectMapper json,
+                                    @Qualifier("gitIntegrationClock") Clock clock) {
+        this.store = store;
+        this.registry = registry;
+        this.installations = installations;
+        this.connections = connections;
+        this.gitHubFailures = gitHubFailures;
+        this.json = json;
+        this.clock = clock;
+    }
 
     public void process(Long eventId) {
         Optional<GitWebhookEventStore.Claimed> claimed;
@@ -44,24 +65,26 @@ public class GitWebhookEventProcessor {
     private void run(GitWebhookEventStore.Claimed event) {
         GitWebhookEventHandler handler = registry.find(event.eventType()).orElse(null);
         if (handler == null) {
-            store.fail(event.id(), "No handler for " + event.eventType(), GitWebhookEventStore.Resolution.NONE);
+            store.fail(event.id(), GitWebhookFailure.retryable("No handler for " + event.eventType(), null),
+                    GitWebhookEventStore.Resolution.NONE);
             return;
         }
         if (event.payload() == null) {
-            store.dead(event.id(), "The payload was purged before the event could be processed");
+            store.failPermanently(event.id(), "The payload was purged before the event could be processed");
             return;
         }
         JsonNode payload;
         try {
             payload = json.readTree(event.payload());
         } catch (Exception e) {
-            store.dead(event.id(), "The stored payload is not valid JSON");
+            store.failPermanently(event.id(), "The stored payload is not valid JSON");
             return;
         }
 
         GitWebhookEventStore.Resolution resolution = GitWebhookEventStore.Resolution.NONE;
+        GitInstallation installation = null;
         try {
-            GitInstallation installation = event.installationId() == null ? null
+            installation = event.installationId() == null ? null
                     : installations.findByProviderAndInstallationId(GitProvider.GITHUB, event.installationId()).orElse(null);
             GitRepository repository = event.repoExternalId() == null ? null
                     : connections.findFirstByProviderAndExternalIdAndStatus(GitProvider.GITHUB, event.repoExternalId(),
@@ -73,13 +96,43 @@ public class GitWebhookEventProcessor {
             GitWebhookHandlerResult result = handler.handle(new GitWebhookContext(event.id(), event.deliveryId(),
                     event.eventType(), event.action(), event.attempts(), payload, installation, repository));
             store.finish(event.id(), result, resolution);
-            log.info("Webhook event {}: id={}, deliveryId={}, type={}, action={}, note={}",
+            log.info("Webhook event {}: id={}, deliveryId={}, type={}, action={}, attempt={}, latencyMs={}, note={}",
                     result.handled() ? "processed" : "ignored", event.id(), event.deliveryId(), event.eventType(),
-                    event.action(), result.note());
+                    event.action(), event.attempts(), latencyMillis(event.receivedAt()), result.note());
         } catch (RuntimeException e) {
-            log.warn("Webhook event failed: id={}, deliveryId={}, type={}, attempt={}, error={}",
-                    event.id(), event.deliveryId(), event.eventType(), event.attempts(), e.toString());
-            store.fail(event.id(), e.getClass().getSimpleName() + ": " + e.getMessage(), resolution);
+            GitWebhookFailure failure = classify(e, installation);
+            log.warn("Webhook event attempt failed: id={}, deliveryId={}, type={}, attempt={}, retryable={}, error={}",
+                    event.id(), event.deliveryId(), event.eventType(), event.attempts(), failure.isRetryable(),
+                    failure.getMessage());
+            store.fail(event.id(), failure, resolution);
         }
+    }
+
+    private GitWebhookFailure classify(RuntimeException e, GitInstallation installation) {
+        if (e instanceof GitWebhookFailure failure) {
+            return failure;
+        }
+        if (e instanceof GitHubApiException api) {
+            if (installation != null) {
+                // GONE / SUSPENDED update the installation; a 401 drops the cached token.
+                gitHubFailures.toBusinessError(installation, api, "webhook");
+            }
+            return switch (api.getKind()) {
+                case UNAVAILABLE -> GitWebhookFailure.retryable(api.getMessage(), null, api);
+                case RATE_LIMITED -> GitWebhookFailure.retryable(api.getMessage(), api.getRetryAfterSeconds(), api);
+                case GONE -> GitWebhookFailure.permanent("The GitHub App was uninstalled: " + api.getMessage(), api);
+                case SUSPENDED -> GitWebhookFailure.permanent("The GitHub App installation is suspended: " + api.getMessage(), api);
+                case REJECTED -> api.getHttpStatus() == 401
+                        ? GitWebhookFailure.retryable(api.getMessage(), null, api)
+                        : GitWebhookFailure.permanent(api.getMessage()
+                        + " (check that the GitHub App has read access to Contents and Pull requests)", api);
+            };
+        }
+        // Database hiccups and unexpected errors: retry; a fixed bug is picked up by the next attempt.
+        return GitWebhookFailure.retryable(e.getClass().getSimpleName() + ": " + e.getMessage(), null, e);
+    }
+
+    private long latencyMillis(LocalDateTime receivedAt) {
+        return receivedAt == null ? -1 : Duration.between(receivedAt, LocalDateTime.now(clock)).toMillis();
     }
 }

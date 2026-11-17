@@ -17,6 +17,7 @@ import { GitInstallationCard } from "./components/GitInstallationCard";
 import { GitIntegrationHeader } from "./components/GitIntegrationHeader";
 import { GitIntegrationStateCard } from "./components/GitIntegrationPageState";
 import { RepositoryBrowserSheet } from "./components/RepositoryBrowserSheet";
+import { WebhookDeliveryLog } from "./components/WebhookDeliveryLog";
 import { clearPendingConnect, readPendingConnect } from "./git-integration.storage";
 import { useGitInstallations } from "./useGitIntegration";
 
@@ -171,6 +172,9 @@ export default function GitIntegrationIndexPage() {
                 onBrowse={() => openRepositories(installation.id)} />} />)}
           </div>
         </section>}
+
+        {/* US-SY-04: how GitHub activity is being synchronized; managers can replay failed events. */}
+        {data.canManage && data.installations.length > 0 && <WebhookDeliveryLog />}
 
         {data.canManage && (data.installations.length === 0
           ? <ConnectStepsInfo />

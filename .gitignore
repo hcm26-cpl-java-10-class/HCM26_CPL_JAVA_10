@@ -39,6 +39,7 @@ frontend/.env.*.local
 
 # === Docker .env (secrets) ===
 docker/.env
+docker/git-integration/.env
 
 # === Logs ===
 *.log

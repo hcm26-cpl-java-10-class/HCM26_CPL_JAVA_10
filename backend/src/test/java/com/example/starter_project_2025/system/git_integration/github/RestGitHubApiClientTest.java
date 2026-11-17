@@ -287,4 +287,58 @@ class RestGitHubApiClientTest {
         assertThat(branches).extracting("name").containsExactly("main", "develop");
         assertThat(branches.get(0).protectedBranch()).isTrue();
     }
+
+    // ---- SY-04 ----------------------------------------------------------------------------------
+
+    @Test
+    void contentsTokenAsksForReadOnlyMetadataAndContents() {
+        server.expect(requestTo("https://api.github.com/app/installations/42/access_tokens"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("{\"permissions\":{\"metadata\":\"read\",\"contents\":\"read\"}}", true))
+                .andRespond(withSuccess("{\"token\":\"ghs_c\",\"expires_at\":\"2030-01-01T00:00:00Z\"}", MediaType.APPLICATION_JSON));
+
+        assertThat(client.createContentsToken(42).token()).isEqualTo("ghs_c");
+        server.verify();
+    }
+
+    @Test
+    void comparesCommitsPageByPage() {
+        server.expect(requestTo("https://api.github.com/repos/hcm26/shop/compare/aaa...bbb?per_page=100&page=2"))
+                .andExpect(header("Authorization", "Bearer ghs_c"))
+                .andRespond(withSuccess("""
+                        {"status":"ahead","ahead_by":101,"total_commits":101,"commits":[
+                          {"sha":"c101","html_url":"https://github.com/hcm26/shop/commit/c101",
+                           "commit":{"message":"feat: x","author":{"name":"A","email":"a@x.io","date":"2026-11-17T03:00:00Z"},
+                                     "committer":{"name":"A","email":"a@x.io","date":"2026-11-17T03:00:00Z"}},
+                           "author":{"login":"dev-a","id":7},"committer":null,"parents":[{"sha":"c100"}]}]}""",
+                        MediaType.APPLICATION_JSON));
+
+        var result = client.compareCommits("ghs_c", "hcm26", "shop", "aaa", "bbb", 2);
+
+        assertThat(result.totalCommits()).isEqualTo(101);
+        assertThat(result.commits()).singleElement().satisfies(commit -> {
+            assertThat(commit.sha()).isEqualTo("c101");
+            assertThat(commit.author().login()).isEqualTo("dev-a");
+            assertThat(commit.commit().committer().date()).isEqualTo("2026-11-17T03:00:00Z");
+            assertThat(commit.parents()).hasSize(1);
+        });
+        server.verify();
+    }
+
+    @Test
+    void listsCommitsAndReportsRateLimits() {
+        server.expect(requestTo("https://api.github.com/repos/hcm26/shop/commits?sha=bbb&per_page=100&page=1"))
+                .andRespond(withSuccess("[{\"sha\":\"c1\"},{\"sha\":\"c2\"}]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("https://api.github.com/repos/hcm26/shop/commits?sha=bbb&per_page=100&page=2"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).header("x-ratelimit-remaining", "0")
+                        .header("x-ratelimit-reset", String.valueOf(Instant.now().getEpochSecond() + 600)));
+
+        assertThat(client.listCommits("ghs_c", "hcm26", "shop", "bbb", 1)).extracting("sha").containsExactly("c1", "c2");
+        assertThatThrownBy(() -> client.listCommits("ghs_c", "hcm26", "shop", "bbb", 2))
+                .isInstanceOfSatisfying(GitHubApiException.class, e -> {
+                    assertThat(e.getKind()).isEqualTo(GitHubApiException.Kind.RATE_LIMITED);
+                    assertThat(e.getRetryAfterSeconds()).isBetween(590L, 600L);
+                });
+        server.verify();
+    }
 }

@@ -203,3 +203,15 @@ const SYNC_ERRORS: Record<string, string> = {
 export function syncErrorMessage(code?: string | null) {
   return (code && SYNC_ERRORS[code]) || "The synchronization could not be completed.";
 }
+
+/** US-SY-04: why a webhook event could not be replayed, in words. */
+const REPLAY_ERRORS: Record<string, string> = {
+  GIT_WEBHOOK_EVENT_NOT_REPLAYABLE: "Only failed events, or ignored push / pull request / review events, can be processed again.",
+  GIT_WEBHOOK_PAYLOAD_PURGED: "The event's payload was removed after the retention period, so it can't be processed again.",
+  GIT_WEBHOOK_EVENT_NOT_FOUND: "This event no longer exists.",
+  GIT_INTEGRATION_FORBIDDEN: "Only people who manage Git Integration can replay events.",
+};
+
+export function replayErrorMessage(code?: string) {
+  return (code && REPLAY_ERRORS[code]) || "The event could not be queued again. Please try again.";
+}

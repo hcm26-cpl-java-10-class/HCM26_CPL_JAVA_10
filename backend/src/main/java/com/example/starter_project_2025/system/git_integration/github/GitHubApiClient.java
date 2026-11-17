@@ -1,6 +1,8 @@
 package com.example.starter_project_2025.system.git_integration.github;
 
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranch;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommit;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCompareResult;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallation;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationRepositoriesPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationToken;
@@ -35,6 +37,13 @@ public interface GitHubApiClient {
      */
     GitHubInstallationToken createInstallationToken(long installationId);
 
+    /**
+     * SY-04: like {@link #createInstallationToken} but also with read-only {@code contents}, needed to
+     * read commits. The GitHub App must hold "Contents: Read" (GitHub requires it for push webhooks);
+     * otherwise GitHub answers 422 ({@link GitHubApiException.Kind#REJECTED}).
+     */
+    GitHubInstallationToken createContentsToken(long installationId);
+
     /** One page (max 100) of the repositories the installation can access, public and private. */
     GitHubInstallationRepositoriesPage listInstallationRepositories(String installationToken, int page);
 
@@ -47,4 +56,14 @@ public interface GitHubApiClient {
 
     /** GI-04: one page (max 100) of a repository's branches. */
     List<GitHubBranch> listBranches(String installationToken, String owner, String repository, int page);
+
+    /**
+     * SY-04: one page (100 commits) of the commits of {@code head} that are not in {@code base},
+     * oldest first. Used when a push payload was truncated.
+     */
+    GitHubCompareResult compareCommits(String installationToken, String owner, String repository,
+                                       String base, String head, int page);
+
+    /** SY-04: one page (100 commits) of the history reachable from {@code sha}, newest first. */
+    List<GitHubCommit> listCommits(String installationToken, String owner, String repository, String sha, int page);
 }

@@ -21,6 +21,8 @@ public class InstallationTokenProvider {
     private final GitHubApiClient github;
     private final Clock clock;
     private final Map<Long, GitHubInstallationToken> tokens = new ConcurrentHashMap<>();
+    /** SY-04: tokens that can also read repository contents (commits), cached separately. */
+    private final Map<Long, GitHubInstallationToken> contentsTokens = new ConcurrentHashMap<>();
 
     public InstallationTokenProvider(GitHubApiClient github, @Qualifier("gitIntegrationClock") Clock clock) {
         this.github = github;
@@ -37,8 +39,20 @@ public class InstallationTokenProvider {
         return fresh.token();
     }
 
+    /** SY-04: a token that can also read commits (metadata + contents, read only). */
+    public String contentsToken(long installationId) {
+        GitHubInstallationToken cached = contentsTokens.get(installationId);
+        if (cached != null && cached.expiresAt().minus(REFRESH_MARGIN).isAfter(clock.instant())) {
+            return cached.token();
+        }
+        GitHubInstallationToken fresh = github.createContentsToken(installationId);
+        contentsTokens.put(installationId, fresh);
+        return fresh.token();
+    }
+
     /** Drops a token GitHub rejected, or one belonging to an installation that is gone or suspended. */
     public void invalidate(long installationId) {
         tokens.remove(installationId);
+        contentsTokens.remove(installationId);
     }
 }

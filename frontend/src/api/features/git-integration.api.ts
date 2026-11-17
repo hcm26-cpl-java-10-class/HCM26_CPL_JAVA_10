@@ -6,9 +6,18 @@ import type {
   GitHubConnectStartResponse,
   GitInstallationListResponse,
   GitIntegrationErrorBody,
+  GitCommitItem,
+  GitCommitQuery,
+  GitPage,
+  GitPullRequestDetail,
+  GitPullRequestItem,
+  GitPullRequestQuery,
+  GitRepositoryActivity,
   GitRepositoryPage,
   GitRepositoryQuery,
   GitSyncJob,
+  GitWebhookEventItem,
+  GitWebhookEventQuery,
   LinkRepositoryRequest,
   ProjectRepositoryView,
 } from "@/types/features/git-integration";
@@ -53,6 +62,45 @@ export const gitIntegrationApi = {
   /** US-GI-04: queue the synchronization again after it failed. */
   retrySync: async (projectId: number) =>
     (await axiosInstance.post<GitSyncJob>(`${PROJECTS}/${projectId}/repository/sync`)).data,
+
+  /** US-SY-04: counts, latest commit and webhook health of a project's repository. */
+  repositoryActivity: async (projectId: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitRepositoryActivity>(`${PROJECTS}/${projectId}/repository/activity`, { signal })).data,
+
+  /** US-SY-04: commits synchronized from push webhooks, newest first. */
+  repositoryCommits: async (projectId: number, query: GitCommitQuery, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitPage<GitCommitItem>>(`${PROJECTS}/${projectId}/repository/commits`, {
+      params: {
+        q: query.q?.trim() || undefined,
+        author: query.author?.trim() || undefined,
+        branch: query.branch?.trim() || undefined,
+        page: query.page ?? 0,
+        size: query.size ?? 20,
+      },
+      signal,
+    })).data,
+
+  /** US-SY-04: pull requests, most recently updated first, with each reviewer's current decision. */
+  repositoryPullRequests: async (projectId: number, query: GitPullRequestQuery, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitPage<GitPullRequestItem>>(`${PROJECTS}/${projectId}/repository/pull-requests`, {
+      params: { state: query.state, q: query.q?.trim() || undefined, page: query.page ?? 0, size: query.size ?? 20 },
+      signal,
+    })).data,
+
+  /** US-SY-04: one pull request with its reviews. */
+  pullRequestDetail: async (projectId: number, number: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitPullRequestDetail>(`${PROJECTS}/${projectId}/repository/pull-requests/${number}`, { signal })).data,
+
+  /** US-SY-04: webhook deliveries of the organization (Git Integration managers only). */
+  webhookEvents: async (query: GitWebhookEventQuery, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitPage<GitWebhookEventItem>>("/v1/git-integration/webhook-events", {
+      params: { status: query.status, eventType: query.eventType, projectId: query.projectId, page: query.page ?? 0, size: query.size ?? 20 },
+      signal,
+    })).data,
+
+  /** US-SY-04: process a FAILED (or IGNORED activity) event again; 202 when queued. */
+  replayWebhookEvent: async (id: number) =>
+    (await axiosInstance.post<{ id: number; status: string }>(`/v1/git-integration/webhook-events/${id}/replay`)).data,
 
   /** Completes the flow; HTTP 202 means the install waits for an organization owner's approval. */
   callback: async (body: GitHubCallbackRequest) => {

@@ -27,4 +27,7 @@ public interface GitRepositoryRepository extends JpaRepository<GitRepository, Lo
 
     /** GI-04: most recent connection of a project in any status (to show an UNAVAILABLE one). */
     Optional<GitRepository> findFirstByProjectIdOrderByIdDesc(Long projectId);
+
+    /** SY-04: every connection a project ever had (webhook log filter). */
+    List<GitRepository> findByProjectId(Long projectId);
 }

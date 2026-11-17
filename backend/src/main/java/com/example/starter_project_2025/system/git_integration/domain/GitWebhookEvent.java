@@ -18,6 +18,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -109,15 +111,18 @@ public class GitWebhookEvent extends BaseEntity {
     @Column(name = "payload_purged_at")
     LocalDateTime payloadPurgedAt;
 
+    /** VARCHAR, not a native ENUM, so new states never need a column change (SY-04). */
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", nullable = false, length = 20)
     GitWebhookEventStatus status;
 
+    /** Processing runs so far; {@code retry_count} in US-SY-04 terms is {@code attempts - 1}. */
     @Builder.Default
     @Column(name = "attempts", nullable = false)
     Integer attempts = 0;
 
-    /** When a RECEIVED/FAILED event may be (re)tried. */
+    /** When a RECEIVED/FAILED_RETRYABLE event may be (re)tried ({@code next_retry_at} in US-SY-04). */
     @Column(name = "next_attempt_at", nullable = false)
     LocalDateTime nextAttemptAt;
 

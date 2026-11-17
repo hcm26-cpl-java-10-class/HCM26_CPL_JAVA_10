@@ -11,6 +11,7 @@ import { syncErrorMessage } from "../git-integration.messages";
 import { useGitInstallations, useLinkRepository, useProjectRepository, useRetrySync } from "../useGitIntegration";
 import { GitHubTile } from "./GitIntegrationHeader";
 import { LinkRepositoryDialog } from "./LinkRepositoryDialog";
+import { RepositoryActivitySummary } from "./RepositoryActivitySummary";
 import { RepositoryBrowserSheet } from "./RepositoryBrowserSheet";
 import { RepositoryVisibilityBadge, RepositoryVisibilityIcon } from "./RepositoryVisibilityBadge";
 import { SyncStatusPill } from "./SyncStatusPill";
@@ -178,6 +179,8 @@ export function ProjectRepositoryCard({ projectId }: { projectId: number }) {
           <RefreshCw className={retry.isPending ? "animate-spin" : undefined} />Retry sync
         </Button>}
       </div>}
+      {/* US-SY-04: data synchronized from webhooks (also shown, read-only, while the repository is unavailable). */}
+      <RepositoryActivitySummary projectId={view.project.id} repositoryName={repository.fullName} />
       {active && !view.inherited && modules > 0 && <p className="text-[11px] text-muted-foreground">
         Shared with {modules} {modules === 1 ? "module" : "modules"} of this project.
       </p>}

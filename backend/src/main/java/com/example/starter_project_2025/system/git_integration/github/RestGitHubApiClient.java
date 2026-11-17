@@ -2,6 +2,8 @@ package com.example.starter_project_2025.system.git_integration.github;
 
 import com.example.starter_project_2025.system.git_integration.config.GitHubAppProperties;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranch;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommit;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCompareResult;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallation;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationRepositoriesPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationToken;
@@ -36,6 +38,10 @@ public class RestGitHubApiClient implements GitHubApiClient {
     private static final int PAGE_SIZE = 100;
     /** Safety cap: 1,000 installations is far beyond what a single user can see in practice. */
     private static final int MAX_PAGES = 10;
+    /** Least privilege: listing and reading repositories only needs read-only metadata. */
+    static final Map<String, String> METADATA_PERMISSIONS = Map.of("metadata", "read");
+    /** SY-04: reading commits (Compare / List Commits) also needs read-only contents. */
+    static final Map<String, String> CONTENTS_PERMISSIONS = Map.of("metadata", "read", "contents", "read");
 
     private final RestClient restClient;
     private final GitHubAppProperties properties;
@@ -130,15 +136,22 @@ public class RestGitHubApiClient implements GitHubApiClient {
 
     @Override
     public GitHubInstallationToken createInstallationToken(long installationId) {
-        String operation = "create installation token";
+        return createToken(installationId, METADATA_PERMISSIONS, "create installation token");
+    }
+
+    @Override
+    public GitHubInstallationToken createContentsToken(long installationId) {
+        return createToken(installationId, CONTENTS_PERMISSIONS, "create contents token");
+    }
+
+    private GitHubInstallationToken createToken(long installationId, Map<String, String> permissions, String operation) {
         GitHubInstallationToken token;
         try {
             token = restClient.post()
                     .uri("/app/installations/{id}/access_tokens", installationId)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtFactory.createAppJwt())
                     .contentType(MediaType.APPLICATION_JSON)
-                    // Least privilege: listing repositories only needs read-only metadata.
-                    .body(Map.of("permissions", Map.of("metadata", "read")))
+                    .body(Map.of("permissions", permissions))
                     .retrieve()
                     .body(GitHubInstallationToken.class);
         } catch (RestClientResponseException e) {
@@ -208,6 +221,37 @@ public class RestGitHubApiClient implements GitHubApiClient {
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<GitHubBranch>>() { }));
         return branches == null ? List.of() : branches;
+    }
+
+    @Override
+    public GitHubCompareResult compareCommits(String installationToken, String owner, String repository,
+                                              String base, String head, int page) {
+        GitHubCompareResult result = call("compare commits", () -> restClient.get()
+                .uri(uri -> uri.path("/repos/{owner}/{repo}/compare/{basehead}")
+                        .queryParam("per_page", PAGE_SIZE)
+                        .queryParam("page", page)
+                        .build(owner, repository, base + "..." + head))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationToken)
+                .retrieve()
+                .body(GitHubCompareResult.class));
+        if (result == null) {
+            throw new GitHubApiException(GitHubApiException.Kind.UNAVAILABLE, "compare commits", 200);
+        }
+        return result;
+    }
+
+    @Override
+    public List<GitHubCommit> listCommits(String installationToken, String owner, String repository, String sha, int page) {
+        List<GitHubCommit> commits = call("list commits", () -> restClient.get()
+                .uri(uri -> uri.path("/repos/{owner}/{repo}/commits")
+                        .queryParam("sha", sha)
+                        .queryParam("per_page", PAGE_SIZE)
+                        .queryParam("page", page)
+                        .build(owner, repository))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + installationToken)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<GitHubCommit>>() { }));
+        return commits == null ? List.of() : commits;
     }
 
     /**
