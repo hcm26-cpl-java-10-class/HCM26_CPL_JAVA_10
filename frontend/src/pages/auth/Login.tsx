@@ -10,7 +10,8 @@ import { setLogin } from "@/store/slices/auth/authSlice";
 import { authApi } from "@/api/features/auth.api";
 import axios from "axios";
 import { Eye, EyeOff } from "lucide-react";
-import { getHomePathByRole } from "@/utils/rbac.utils";
+import { getHomePathByRole, resolveEffectivePermissions } from "@/utils/rbac.utils";
+import { useRoleSwitch } from "@/contexts/RoleSwitchContext";
 
 const URL_LOGIN_WITH_GOOGLE =
     import.meta.env.VITE_API_URL_FOR_GOOGLE || "http://localhost:8080/oauth2/authorization/google";
@@ -40,6 +41,7 @@ export const Login: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const dispatch = useDispatch();
+    const { setViewRole } = useRoleSwitch();
 
     useEffect(() => {
         const oauthErrorMessage = getOAuthErrorMessage(searchParams.get("error"));
@@ -56,8 +58,9 @@ export const Login: React.FC = () => {
         const cleanPassword = password.trim();
         try {
             const res = await authApi.login({ email: cleanEmail, password: cleanPassword, isRememberedMe });
+            setViewRole(null);
             dispatch(setLogin(res));
-            navigate(getHomePathByRole(res.role), { replace: true });
+            navigate(getHomePathByRole(res.role, resolveEffectivePermissions(res.role, res.rolePermissions, res.permissions)), { replace: true });
         } catch (err) {
             if (axios.isAxiosError(err)) {
                 const backendMsg = err.response?.data?.message;

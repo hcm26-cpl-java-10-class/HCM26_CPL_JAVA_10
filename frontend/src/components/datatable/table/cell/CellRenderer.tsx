@@ -7,7 +7,6 @@ import type { FieldSchema } from "@/types";
 import { OverflowBadges } from "./OverflowBadges";
 import { formatDateValue } from "./dateFormat";
 
-// Re-export for backward compatibility
 export type { DateFormatKey } from "./dateFormat";
 export { DATE_FORMAT_CYCLE, DATE_FORMAT_LABELS, formatDateValue } from "./dateFormat";
 export { OverflowBadges } from "./OverflowBadges";
@@ -15,6 +14,7 @@ export { OverflowBadges } from "./OverflowBadges";
 interface CellRendererProps {
   field: FieldSchema;
   value: any;
+  row?: any;
   relationOptions?: Record<string, any[]>;
   onBooleanToggle?: (fieldName: string, newValue: boolean) => void;
   disableBooleanToggle?: boolean;
@@ -24,11 +24,16 @@ interface CellRendererProps {
 export function CellRenderer({
   field,
   value,
+  row,
   relationOptions = {},
   onBooleanToggle,
   disableBooleanToggle = false,
   dateFormat,
 }: CellRendererProps) {
+  if (field.renderCell) {
+    return <TableCell>{field.renderCell(value, row)}</TableCell>;
+  }
+
   if (field.type === "boolean") {
     const labels = field.booleanLabels || { true: "Yes", false: "No" };
     const label = value ? labels.true : labels.false;
@@ -124,7 +129,6 @@ export function CellRenderer({
     );
   }
 
-  // Handle arrays (like question options)
   if (Array.isArray(value)) {
     if (value.length === 0) {
       return (
@@ -134,10 +138,8 @@ export function CellRenderer({
       );
     }
 
-    // Check if it's an array of objects (like question options)
     const firstItem = value[0];
     if (typeof firstItem === "object" && firstItem !== null) {
-      // For question options, show count with tooltip of contents
       if ("content" in firstItem) {
         const optionsText = value
           .map((opt: any, idx: number) =>
@@ -157,7 +159,6 @@ export function CellRenderer({
       }
     }
 
-    // Array of primitives
     return (
       <TableCell>
         <TruncatedText content={value.join(", ")} bold={field.bold} />
@@ -165,9 +166,13 @@ export function CellRenderer({
     );
   }
 
-  const displayValue = value ?? "—";
+  const optionLabel =
+    field.type === "select"
+      ? field.options?.find((option) => option.value?.toString() === value?.toString())?.label
+      : undefined;
+  const displayValue = optionLabel ?? value ?? "—";
   const displayStr =
-    field.type === "date" && value
+    (field.type === "date" || field.type === "datetime") && value
       ? formatDateValue(value, dateFormat)
       : String(displayValue);
 

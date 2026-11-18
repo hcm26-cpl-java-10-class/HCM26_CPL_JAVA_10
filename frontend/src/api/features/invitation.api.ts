@@ -1,41 +1,165 @@
-import { createBaseApiService } from "@/api/base-service.api";
 import axiosInstance from "@/api/axios";
 import type {
-  InvitationDTO,
-  InvitationFilter,
-  BatchInvitationRequest,
-  BatchInvitationResponse,
-  RevokeInvitationRequest,
+    AnonymousAccessResponse,
+    AnonymousInvitationRequest,
+    AnonymousSessionRequest,
+    AnonymousSessionResponse,
+    BatchInvitationRequest,
+    BatchInvitationResponse,
+    CourseStudentDTO,
+    GroupInvitationRequest,
+    InvitationCreateRequest,
+    InvitationDTO,
+    InvitationStatus,
+    InvitationAuditLog,
+    ReminderDTO,
+    ReminderRequest,
 } from "@/types";
 
-const baseInvitationApi = createBaseApiService<InvitationDTO, InvitationFilter>({
-  path: "/invitations",
-});
+interface InvitationQuery {
+    status?: InvitationStatus;
+    anonymous?: boolean;
+}
+
+const toDataUrl = (blob: Blob) =>
+    new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+    });
 
 export const invitationApi = {
-  ...baseInvitationApi,
+    create: async (examId: number, request: InvitationCreateRequest): Promise<InvitationDTO> => {
+        const response = await axiosInstance.post<InvitationDTO>(`/exams/${examId}/invitations`, request);
+        return response.data;
+    },
 
-  delete: async (id: number | string): Promise<void> => {
-    return baseInvitationApi.delete(String(id));
-  },
+    createBatch: async (
+        examId: number,
+        request: BatchInvitationRequest,
+    ): Promise<BatchInvitationResponse> => {
+        const response = await axiosInstance.post<BatchInvitationResponse>(
+            `/exams/${examId}/invitations/batch`,
+            request,
+        );
+        return response.data;
+    },
 
-  inviteSingle: async (data: Partial<InvitationDTO>): Promise<InvitationDTO> => {
-    const response = await axiosInstance.post<InvitationDTO>("/invitations/actions/invite", data);
-    return response.data;
-  },
+    /** Mời dự thi hàng loạt theo lớp (course). */
+    createByCourse: async (
+        examId: number,
+        request: GroupInvitationRequest,
+    ): Promise<BatchInvitationResponse> => {
+        const response = await axiosInstance.post<BatchInvitationResponse>(
+            `/exams/${examId}/invitations/by-course`,
+            request,
+        );
+        return response.data;
+    },
 
-  inviteBatch: async (data: BatchInvitationRequest): Promise<BatchInvitationResponse> => {
-    const response = await axiosInstance.post<BatchInvitationResponse>("/invitations/actions/batch", data);
-    return response.data;
-  },
+    /** Danh sách học viên (active, role STUDENT) đã đăng ký một lớp. */
+    getCourseStudents: async (courseId: number): Promise<CourseStudentDTO[]> => {
+        const response = await axiosInstance.get<CourseStudentDTO[]>(
+            `/enrollments/courses/${courseId}/students`,
+        );
+        return response.data;
+    },
 
-  resend: async (id: number | string): Promise<InvitationDTO> => {
-    const response = await axiosInstance.post<InvitationDTO>(`/invitations/actions/${id}/resend`);
-    return response.data;
-  },
+    getByExam: async (examId: number, query?: InvitationQuery): Promise<InvitationDTO[]> => {
+        const response = await axiosInstance.get<InvitationDTO[]>(`/exams/${examId}/invitations`, {
+            params: query,
+        });
+        return response.data;
+    },
 
-  revoke: async (id: number | string, data?: RevokeInvitationRequest): Promise<InvitationDTO> => {
-    const response = await axiosInstance.post<InvitationDTO>(`/invitations/actions/${id}/revoke`, data ?? {});
-    return response.data;
-  },
+    getById: async (id: number): Promise<InvitationDTO> => {
+        const response = await axiosInstance.get<InvitationDTO>(`/invitations/${id}`);
+        return response.data;
+    },
+
+    revoke: async (id: number, reason?: string): Promise<InvitationDTO> => {
+        const response = await axiosInstance.patch<InvitationDTO>(`/invitations/${id}/revoke`, null, {
+            params: { reason },
+        });
+        return response.data;
+    },
+
+    resend: async (id: number): Promise<InvitationDTO> => {
+        const response = await axiosInstance.post<InvitationDTO>(`/invitations/${id}/resend`);
+        return response.data;
+    },
+
+    remove: async (id: number): Promise<void> => {
+        await axiosInstance.delete(`/invitations/${id}`);
+    },
+
+    getAuditLogs: async (examId: number): Promise<InvitationAuditLog[]> => {
+        const response = await axiosInstance.get<InvitationAuditLog[]>(
+            `/exams/${examId}/invitations/audit`,
+        );
+        return response.data;
+    },
+
+    getQrDataUrl: async (id: number): Promise<string> => {
+        const response = await axiosInstance.get(`/invitations/${id}/qr`, { responseType: "blob" });
+        return toDataUrl(response.data as Blob);
+    },
+
+    getMyInvitations: async (): Promise<InvitationDTO[]> => {
+        const response = await axiosInstance.get<InvitationDTO[]>("/invitations/my");
+        return response.data;
+    },
+
+    accept: async (id: number): Promise<InvitationDTO> => {
+        const response = await axiosInstance.patch<InvitationDTO>(`/invitations/${id}/accept`);
+        return response.data;
+    },
+
+    reject: async (id: number): Promise<InvitationDTO> => {
+        const response = await axiosInstance.patch<InvitationDTO>(`/invitations/${id}/reject`);
+        return response.data;
+    },
+
+    createAnonymous: async (
+        examId: number,
+        request: AnonymousInvitationRequest,
+    ): Promise<InvitationDTO> => {
+        const response = await axiosInstance.post<InvitationDTO>(
+            `/exams/${examId}/invitations/anonymous`,
+            request,
+        );
+        return response.data;
+    },
+
+    verifyAccessCode: async (accessCode: string): Promise<AnonymousAccessResponse> => {
+        const response = await axiosInstance.get<AnonymousAccessResponse>(
+            `/exams/verify-access/${encodeURIComponent(accessCode)}`,
+        );
+        return response.data;
+    },
+
+    createAnonymousSession: async (
+        request: AnonymousSessionRequest,
+    ): Promise<AnonymousSessionResponse> => {
+        const response = await axiosInstance.post<AnonymousSessionResponse>(
+            "/exams/anonymous-session",
+            request,
+        );
+        return response.data;
+    },
+
+    scheduleReminder: async (examId: number, request: ReminderRequest): Promise<ReminderDTO[]> => {
+        const response = await axiosInstance.post<ReminderDTO[]>(`/exams/${examId}/reminders`, request);
+        return response.data;
+    },
+
+    getReminders: async (examId: number): Promise<ReminderDTO[]> => {
+        const response = await axiosInstance.get<ReminderDTO[]>(`/exams/${examId}/reminders`);
+        return response.data;
+    },
+
+    cancelReminder: async (reminderId: number): Promise<void> => {
+        await axiosInstance.delete(`/reminders/${reminderId}`);
+    },
 };

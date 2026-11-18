@@ -54,7 +54,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_RE = /^[A-Za-z0-9._-]{3,50}$/;
 const PHONE_RE = /^(\+?\d{8,15})$/;
 
-/** Validate phía client; trả về lỗi theo từng trường (rỗng = hợp lệ). */
 export function validateUserForm(v: UserFormValues, mode: "create" | "edit"): FieldErrors {
   const e: FieldErrors = {};
   const add = (k: keyof UserFormValues, msg: string) => (e[k] = [...(e[k] ?? []), msg]);
@@ -92,12 +91,10 @@ export function toPayload(v: UserFormValues, mode: "create" | "edit"): UserDTO {
     roleIds: v.roleIds,
     departmentIds: v.departmentIds,
   };
-  // Sửa: để trống mật khẩu = giữ nguyên mật khẩu cũ.
   if (v.password || mode === "create") payload.password = v.password;
   return payload;
 }
 
-/** Lấy lỗi validate theo trường từ response BE ({ errors: { field: [msg] } }). */
 export function extractServerErrors(error: any): { fieldErrors: FieldErrors; message: string } {
   const data = error?.response?.data;
   return {

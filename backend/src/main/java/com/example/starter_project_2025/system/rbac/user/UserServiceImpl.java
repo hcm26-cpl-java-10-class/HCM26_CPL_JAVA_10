@@ -4,10 +4,11 @@ import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
-// import com.example.starter_project_2025.system.rbac.department.Department;
-// import com.example.starter_project_2025.system.rbac.department.DepartmentRepository;
+import com.example.starter_project_2025.system.demo.department.Department;
+import com.example.starter_project_2025.system.demo.department.DepartmentRepository;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.rbac.role.RoleRepository;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -31,7 +32,8 @@ public class UserServiceImpl
     UserMapper userMapper;
     UserRepository userRepository;
     RoleRepository roleRepository;
-    // DepartmentRepository departmentRepository;
+    TenantRepository tenantRepository;
+    DepartmentRepository departmentRepository;
     PasswordEncoder passwordEncoder;
 
     @Override
@@ -59,18 +61,20 @@ public class UserServiceImpl
         validateEmployeeCodeUnique(request.getEmployeeCode(), null, ctx);
         validatePhone(request.getPhone(), ctx);
         validateRoles(request.getRoleIds(), ctx);
-        // validateDepartments(request.getDepartmentIds(), ctx);
+        validateTenant(request.getTenantId(), ctx);
 
-        // Mapper đã map trước khi gọi hook, nên gán lại các giá trị đã chuẩn hóa.
         user.setUsername(request.getUsername());
         user.setEmployeeCode(request.getEmployeeCode());
         user.setPhone(request.getPhone());
         user.setDescription(request.getDescription());
 
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        user.setTenantId(request.getTenantId());
 
+        Set<Role> roles = getRoles(request.getRoleIds());
+        user.setRoles(roles);
+        assignDepartment(user, request, ctx);
         user.setRoles(getRoles(request.getRoleIds()));
-        // user.setDepartments(getDepartments(request.getDepartmentIds()));
     }
 
     @Override
@@ -96,12 +100,16 @@ public class UserServiceImpl
             validateRoles(request.getRoleIds(), ctx);
         }
 
-        // if (request.getDepartmentIds() != null) {
-        //     validateDepartments(request.getDepartmentIds(), ctx);
-        // }
+        if (request.getTenantId() != null) {
+            validateTenant(request.getTenantId(), ctx);
+        }
 
         if (ctx.hasErrors()) {
             return;
+        }
+
+        if (request.getTenantId() != null) {
+            user.setTenantId(request.getTenantId());
         }
 
         if (request.getPassword() != null) {
@@ -113,14 +121,9 @@ public class UserServiceImpl
             user.getRoles().addAll(getRoles(request.getRoleIds()));
         }
 
-        // null = giữ nguyên, [] = bỏ hết phòng ban.
-        // if (request.getDepartmentIds() != null) {
-        //     user.getDepartments().clear();
-        //     user.getDepartments().addAll(getDepartments(request.getDepartmentIds()));
-        // }
+        assignDepartment(user, request, ctx);
     }
 
-    /** Trim; username/mã NV rỗng coi như không gửi (null) để không vướng unique với chuỗi rỗng. */
     private void normalize(UserDTO request) {
         request.setUsername(trimToNull(request.getUsername()));
         request.setEmployeeCode(trimToNull(request.getEmployeeCode()));
@@ -132,7 +135,6 @@ public class UserServiceImpl
             request.setDescription(request.getDescription().trim());
         }
         if (request.getPhone() != null) {
-            // Chấp nhận "090 123 4567", "090.123.4567", "090-123-4567"; lưu dạng chỉ gồm số.
             request.setPhone(request.getPhone().replaceAll("[\\s.\\-]", ""));
         }
     }
@@ -149,6 +151,37 @@ public class UserServiceImpl
         if (phone != null && !phone.isEmpty() && !PHONE_PATTERN.matcher(phone).matches()) {
             ctx.add("phone", "Phone number is invalid");
         }
+    }
+
+    private void assignDepartment(User user, UserDTO request, ValidationContext ctx) {
+        if (request.isClearDepartment()) {
+            user.getDepartments().clear();
+            return;
+        }
+
+        if (request.getDepartmentIds() != null) {
+            Set<Department> departments = new HashSet<>(
+                    departmentRepository.findAllById(request.getDepartmentIds()));
+            if (departments.size() != request.getDepartmentIds().size()) {
+                ctx.add("departmentIds", "One or more departments do not exist");
+                return;
+            }
+            user.setDepartments(departments);
+            return;
+        }
+
+        if (request.getDepartmentId() == null) {
+            return;
+        }
+
+        Department department = departmentRepository.findById(request.getDepartmentId())
+                .orElse(null);
+        if (department == null) {
+            ctx.add("departmentId", "Department does not exist");
+            return;
+        }
+
+        user.setDepartments(new HashSet<>(Set.of(department)));
     }
 
     private void validateEmailUnique(String email, Long currentUserId, ValidationContext ctx) {
@@ -206,31 +239,15 @@ public class UserServiceImpl
         }
     }
 
+    private void validateTenant(Long tenantId, ValidationContext ctx) {
+        if (tenantId != null && !tenantRepository.existsByIdAndIsActiveTrue(tenantId)) {
+            ctx.add("tenantId", "Tenant does not exist or is inactive");
+        }
+    }
+
     private Set<Role> getRoles(Set<Long> roleIds) {
         return new HashSet<>(roleRepository.findAllById(roleIds));
     }
-
-    // private void validateDepartments(Set<Long> departmentIds, ValidationContext ctx) {
-    //
-    //     // Phòng ban không bắt buộc: null/rỗng là hợp lệ.
-    //     if (departmentIds == null || departmentIds.isEmpty()) {
-    //         return;
-    //     }
-    //
-    //     long found = departmentRepository.countByIdIn(departmentIds);
-    //
-    //     if (found != departmentIds.size()) {
-    //         ctx.add("departmentIds", "One or more departments are invalid");
-    //     }
-    // }
-    //
-    // private Set<Department> getDepartments(Set<Long> departmentIds) {
-    //     if (departmentIds == null || departmentIds.isEmpty()) {
-    //         return new HashSet<>();
-    //     }
-    //     return new HashSet<>(departmentRepository.findAllById(departmentIds));
-    // }
-
 
     @Override
     public void lockUser(Long userId) {
@@ -254,5 +271,17 @@ public class UserServiceImpl
 
         user.setLocked(false);
         userRepository.save(user);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StudentSummaryDTO> findStudents() {
+        return userRepository.findActiveUsersByRoleName("STUDENT").stream()
+                .map(user -> new StudentSummaryDTO(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getFullName()
+                ))
+                .toList();
     }
 }

@@ -31,7 +31,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
     const handleExport = () => {
         setIsExporting(true);
         setTimeout(() => {
-            // Generate simple CSV content for download
             const headers = ["ID", "Mã", "Tên", "URL", "Liên kết", "Trạng thái"];
             const rows = modules.map((m) => [
                 m.id,
@@ -66,7 +65,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
             return;
         }
 
-        // Simulate reading file and adding sample module
         const mockImportedModule: ModuleItem = {
             id: `mod-imported-${Date.now()}`,
             groupId: modules[0]?.groupId || "group-training",
@@ -97,7 +95,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                 </DialogHeader>
 
                 <div className="grid gap-6 py-4">
-                    {/* Export section */}
                     <div className="rounded-lg border border-gray-200 p-4 bg-gray-50/50 dark:bg-gray-900/50">
                         <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
@@ -124,7 +121,6 @@ export const ImportExportModal: React.FC<ImportExportModalProps> = ({
                         </div>
                     </div>
 
-                    {/* Import section */}
                     <div className="rounded-lg border border-gray-200 p-4 bg-gray-50/50 dark:bg-gray-900/50">
                         <div className="flex items-center gap-3 mb-3">
                             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600">

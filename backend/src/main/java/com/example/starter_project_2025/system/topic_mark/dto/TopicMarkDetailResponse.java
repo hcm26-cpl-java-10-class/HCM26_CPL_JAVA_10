@@ -10,10 +10,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Detailed view of a single student's topic marks,
- * including per-component slot scores, computed final score, and audit history.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -38,8 +34,6 @@ public class TopicMarkDetailResponse {
 
     @Schema(description = "Full score-change audit history for this student")
     private List<HistoryEntry> history;
-
-    // ── Inner types ──────────────────────────────────────────────────────────
 
     @Data
     @Builder

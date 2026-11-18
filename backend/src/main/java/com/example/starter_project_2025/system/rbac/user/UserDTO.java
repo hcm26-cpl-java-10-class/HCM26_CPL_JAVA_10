@@ -26,6 +26,8 @@ public class UserDTO extends BaseDTO {
     @Email(groups = {OnCreate.class, OnUpdate.class}, message = "Email should be valid")
     String email;
 
+    String userCode;
+
     @NotBlank(groups = OnCreate.class, message = "Username is required")
     @Pattern(regexp = "^[A-Za-z0-9._-]{3,50}$", groups = {OnCreate.class, OnUpdate.class},
             message = "Username must be 3-50 characters: letters, digits, '.', '_' or '-'")
@@ -51,13 +53,23 @@ public class UserDTO extends BaseDTO {
 
     String lastName;
 
+    Long tenantId;
+    Long departmentId;
+
+    String departmentName;
+
+    Set<Long> departmentIds;
+
+    Set<String> departmentNames;
+
+    boolean clearDepartment;
+
     @NotEmpty(groups = OnCreate.class, message = "At least one role is required")
     Set<Long> roleIds;
 
-    /** N-N user_departments; không bắt buộc. Gửi [] khi sửa = bỏ hết phòng ban, không gửi = giữ nguyên. */
-    Set<Long> departmentIds;
-
-    /** Chỉ đọc: ACTIVE / LOCKED / INACTIVE, suy ra từ isActive + locked. */
     @JsonProperty(access = READ_ONLY)
     String status;
+
+    @JsonProperty(access = READ_ONLY)
+    Boolean isGuest;
 }

@@ -46,6 +46,7 @@ export function QuestionDetailPage() {
                         <div className="grid gap-1">
                             <span className="font-medium text-muted-foreground">Content</span>
                             <p className="text-base font-semibold leading-6">{data?.content || "-"}</p>
+                            {data?.imageUrl && <img src={data.imageUrl} alt="" className="mt-2 max-h-48 rounded border object-contain" />}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -76,7 +77,28 @@ export function QuestionDetailPage() {
                             </div>
                         </div>
 
-                        <div className="grid gap-2">
+                        {data?.type === "CODING" && data.code && (
+                            <div className="grid gap-2">
+                                <span className="font-medium text-muted-foreground">Coding (Java)</span>
+                                <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">
+                                    {`public static ${data.code.returnType} ${data.code.functionName}(${data.code.params
+                                        .map((p) => `${p.type} ${p.name}`)
+                                        .join(", ")})`}
+                                </code>
+                                {data.code.tests.map((t, index) => (
+                                    <div key={index} className="rounded border p-3 text-xs">
+                                        <div className="mb-1 flex items-center gap-2">
+                                            <span className="font-medium">Test {index + 1}</span>
+                                            <Badge variant="outline">{t.visible ? "Hiển thị" : "Ẩn"}</Badge>
+                                        </div>
+                                        <div className="font-mono">
+                                            ({t.inputs.join(" | ")}) → {t.expected}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <div className={data?.type === "CODING" ? "hidden" : "grid gap-2"}>
                             <span className="font-medium text-muted-foreground">Options</span>
                             {(data?.options ?? []).map((option: any, index: number) => (
                                 <div key={option.id ?? index} className="flex items-center gap-2">
@@ -85,6 +107,28 @@ export function QuestionDetailPage() {
                                 </div>
                             ))}
                         </div>
+                        {data?.type === "ESSAY" && (
+                            <div className="grid gap-2">
+                                <span className="font-medium text-muted-foreground">Grading Criteria</span>
+                                {(data.gradingCriteria ?? []).length === 0 ? (
+                                    <span className="text-muted-foreground">No criteria defined.</span>
+                                ) : (
+                                    (data.gradingCriteria ?? []).map((criterion, index) => (
+                                        <div key={`${criterion.name}-${index}`} className="rounded border p-3">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span className="font-medium">{criterion.name}</span>
+                                                <Badge variant="outline">{criterion.weightPercentage}%</Badge>
+                                            </div>
+                                            {criterion.description && (
+                                                <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                                                    {criterion.description}
+                                                </p>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
                     </CardContent>
                 )}
 

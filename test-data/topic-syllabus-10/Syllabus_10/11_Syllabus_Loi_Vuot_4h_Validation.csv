@@ -1,0 +1,45 @@
+﻿,,,,,,,,
+,,,,,,,,
+,Fresher / OJT Training Program,,,,,,,
+,TEST VALIDATION SYLLABUS OVER 4H PER SESSION SYLLABUS,,,,,,,
+,,,,,,,,
+,,,,,Document Code,,,SYL-CPL10_SYL_ERR_5H
+,,,,,Version,,,1.0
+,,,,,Effective Date,,,11/11/2026
+Test Validation Syllabus Over 4h Per Session Syllabus,,,,,,,,
+1,Technical Group,Java,,,,,,
+2,Topic Name,Test Validation Syllabus Over 4h Per Session,,,,,,
+3,Topic Code,CPL10_SYL_ERR_5H,,,,,,
+4,Version,1.0,,,,,,
+5,Training Audience,Java Backend Developers & Freshers who completed Core Java OOP,,,,,,
+6,Course Objectives,"Deep dive into Java 21 Virtual Threads (Project Loom), CompletableFuture, ExecutorService, JVM GC tuning, and JMH microbenchmarking.",,,,,,
+7,Topic Outline,- Unit 1: Session Duration Validation Unit,,,,,,
+8,Time Allocation,Concept/Lecture,0.43,"Theory, architecture concepts",2 Sessions,,,
+,,Assignment/Lab,0.57,Hands-on coding & exercises,,,,
+,,Guides/Review,0.00,Code walkthrough & Q&A,,,,
+,,Seminar/Workshop,0.00,Interactive seminar & debugging,,,,
+,,Exam,0.00,Quizzes & practical defense exam,,,,
+9,Training Materials & Environments,Text book,Official Java Documentation & FAMS Guides,,,,,
+,,References,FAMS Internal LMS Knowledge Base,,,,,
+,,Technical requirements,"Modern IDE, Docker, Git, Browser DevTools",,,,,
+10,Assessment Scheme,Quizzes & Knowledge Tests,2,20,Short quizzes checking core theory (>= 6.0 / 10),,,
+,,Practical Lab Test,2,30,Hands-on lab assignments & Git code quality (>= 6.0 / 10),,,
+,,Final Practical Test,1,50,Capstone implementation & live defense (>= 6.0 / 10),,,
+,,Pass Criteria,6,Overall GPA >= 6.0 / 10; Complete 100% quizzes and final practical test,,,,
+11,Training Delivery Principles,Trainees,Completed prerequisite track; Active participation in daily labs,,,,,
+,Training Delivery Principles,Trainer,Senior Java Engineer / Technical Mentor,,,,,
+,Training Delivery Principles,Training,"- Concept lectures in morning or online
+- Hands-on lab exercises & reviews in afternoon
+- Max 4h (240 mins) per session",,,,,
+,Training Delivery Principles,Re-Test,2 - Allow up to 2 re-takes with different exam variants,,,,,
+,Training Delivery Principles,Marking,Evaluated by trainer against official FAMS rubric,,,,,
+,Training Delivery Principles,Waiver Criteria,Fast-track entry exam score >= 8.5 / 10,,,,,
+,,,,,,,,
+Test Validation Syllabus Over 4h Per Session - Training Schedule,,,,,,,,
+Training Unit/Chapter,,Session,Content,Learning Objectives,Delivery Type,Duration (mins),Training Format,Training Materials / Logistics & General Notes
+1,Session Duration Validation Unit,1,Valid Session (180 mins = 3h),Standard 3-hour lecture within 4h cap,Concept/Lecture,180,Offline - Sáng (Morning),Valid-3h.pdf
+,,2,INVALID Session (300 mins = 5h > 4h max),Intentionally exceeds max 4h (240 mins) rule for testing editor validation,Assignment/Lab,300,Offline - Chiều (Afternoon),Invalid-5h.pdf
+,,,,,,,,
+AUTHORSHIP,,,,,,,,
+,Role,Name,Account,Unit,Notes,,,
+,Course Lead,Le Minh Hoang,hoanglm26,Training Department,HCM26_CPL_JAVA_10,,,

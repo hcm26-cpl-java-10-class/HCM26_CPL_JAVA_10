@@ -109,7 +109,8 @@ export function DetailModal({
         return matched ? matched[rel.labelField] : String(value);
       }
 
-      case "date": {
+      case "date":
+      case "datetime": {
         try {
           const date = new Date(value);
           return date.toLocaleDateString("vi-VN", {
@@ -125,16 +126,13 @@ export function DetailModal({
       }
 
       default: {
-        // Handle arrays of objects (like question options)
         if (Array.isArray(value)) {
           if (value.length === 0) {
             return <span className="text-muted-foreground">—</span>;
           }
 
-          // Check if array items are objects with known structure
           const firstItem = value[0];
           if (typeof firstItem === "object" && firstItem !== null) {
-            // Special handling for question options
             if ("content" in firstItem && "correct" in firstItem) {
               return (
                 <div className="flex flex-col gap-2 w-full">
@@ -155,7 +153,6 @@ export function DetailModal({
                 </div>
               );
             }
-            // Generic object array
             return (
               <div className="flex flex-col gap-1">
                 {value.map((item: any, idx: number) => (
@@ -167,7 +164,6 @@ export function DetailModal({
             );
           }
 
-          // Array of primitives
           return (
             <div className="flex flex-wrap gap-1">
               {value.map((item: any, idx: number) => (

@@ -6,4 +6,4 @@ export interface BookDTO extends BaseDTO {
 }
 
 export interface BookFilter extends BaseFilter {
-} 
+}

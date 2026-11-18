@@ -11,14 +11,12 @@ export const Modal: React.FC<{
   const sizeClass =
     size === "sm" ? "max-w-md" : size === "lg" ? "max-w-3xl" : "max-w-2xl";
 
-  // variants for panel (fade + slide + scale)
   const panelVariants = {
     hidden: { opacity: 0, y: 16, scale: 0.98 },
     visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.22, ease: easeInOut } },
     exit: { opacity: 0, y: 8, scale: 0.99, transition: { duration: 0.15, ease: easeInOut } },
   };
 
-  // backdrop variants (fade)
   const backdropVariants = {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { duration: 0.22 } },
@@ -29,7 +27,6 @@ export const Modal: React.FC<{
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* backdrop */}
           <motion.div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             initial="hidden"
@@ -39,7 +36,6 @@ export const Modal: React.FC<{
             onClick={onClose}
           />
 
-          {/* panel */}
           <motion.div
             role="dialog"
             aria-modal="true"
@@ -51,7 +47,7 @@ export const Modal: React.FC<{
           >
             <motion.div
               className="bg-card text-foreground rounded-xl shadow-2xl overflow-hidden"
-              onClick={(e) => e.stopPropagation()} 
+              onClick={(e) => e.stopPropagation()}
               whileTap={{ scale: 0.999 }}
             >
               <header className="px-6 py-4 border-b bg-muted">

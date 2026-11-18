@@ -28,6 +28,12 @@ const userSchema: EntitySchema = {
       sortable: true,
     },
     {
+      name: "userCode",
+      label: "Mã sinh viên",
+      type: "text",
+      sortable: true,
+    },
+    {
       name: "email",
       label: "Email",
       type: "text",

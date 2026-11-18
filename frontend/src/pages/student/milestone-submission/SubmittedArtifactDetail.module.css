@@ -1,0 +1,13 @@
+﻿.page { width: 100%; max-width: 1200px; min-width: 0; margin: 0 auto; display: grid; gap: 20px; padding: 16px; border-radius: 12px; background: color-mix(in srgb, #2563eb 4%, var(--background)); }
+.header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, auto); gap: 20px; align-items: start; padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.columns { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); gap: 20px; align-items: start; }
+.content, .history { min-width: 0; display: grid; gap: 22px; padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.history { gap: 14px; padding: 16px; }
+.text { max-height: 260px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 8px; background: color-mix(in srgb, #2563eb 5%, var(--background)); padding: 12px; font-size: 14px; line-height: 1.65; }
+.link { min-width: 0; border-radius: 8px; padding: 12px; background: color-mix(in srgb, #2563eb 5%, var(--background)); }
+.version { width: 100%; display: grid; justify-items: start; gap: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: left; background: var(--card); cursor: pointer; }
+.version:hover { border-color: #93b4fc; }
+.version:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.selected { border-color: #93b4fc; background: color-mix(in srgb, #2563eb 7%, var(--card)); }
+@media (max-width: 800px) { .columns, .header { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .page { padding: 8px; gap: 14px; } .header, .content { padding: 16px; } }

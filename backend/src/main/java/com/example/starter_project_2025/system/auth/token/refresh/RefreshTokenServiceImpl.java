@@ -67,6 +67,15 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             Set<String> permissions = resolvePermissions(user);
             Map<String, Set<String>> rolePermissions = resolveRolePermissions(user, roles);
 
+            /*
+             * ADMIN owns every permission, so rolePermissions.ADMIN is an exact
+             * duplicate of the top-level permissions claim. Keeping both made
+             * the bearer token exceed Tomcat's request-header limit. The
+             * frontend reconstructs the primary role entry from permissions,
+             * while the STUDENT/TEACHER entries remain available for preview.
+             */
+            compactRolePermissionsForToken(roles, rolePermissions);
+
             claimsBuilder
                 .claim("email", user.getEmail())
                 .claim("firstName", user.getFirstName())
@@ -80,6 +89,15 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         JwtClaimsSet claims = claimsBuilder.build();
 
         return jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+    }
+
+    static void compactRolePermissionsForToken(
+            Set<String> roles,
+            Map<String, Set<String>> rolePermissions
+    ) {
+        if (roles.contains("ADMIN")) {
+            rolePermissions.remove("ADMIN");
+        }
     }
 
     @Override

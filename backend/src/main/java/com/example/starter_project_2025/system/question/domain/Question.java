@@ -16,7 +16,7 @@ import java.util.List;
 @ResourcePermission("QUESTION")
 @ResourceMenu(
         title = "Questions",
-        group = "Exam Management",
+        group = "Assessment Management",
         icon = "help-circle",
         url = "/questions",
         order = 2,
@@ -40,11 +40,37 @@ public class Question extends BaseEntity {
 
     private String topic;
 
+    @Column(length = 1000)
+    private String imageUrl;
+
     @Column(nullable = false)
     private int points = 1;
 
+    /** JSON mo ta bai lap trinh (ham + test case), chi dung khi type = CODING. */
+    @Column(name = "code_spec", columnDefinition = "TEXT")
+    private String codeSpec;
+
+    @Column(name = "source_question_id")
+    private Long sourceQuestionId;
+
+    /** Nguon goc cau hoi (e.g. AI_GENERATED hoac MANUAL/null). */
+    @Column(name = "source", length = 30)
+    private String source;
+
+    /** ID cua de thi so huu cau hoi nay neu la cau hoi thuoc pham vi rieng (exam-scoped AI). */
+    @Column(name = "exam_id")
+    private Long examId;
+
+    @Column(name = "is_ai_generated")
+    private Boolean isAiGenerated = false;
+
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<QuestionOption> options = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "question_essay_criterion", joinColumns = @JoinColumn(name = "question_id"))
+    @OrderColumn(name = "display_order")
+    private List<EssayGradingCriterion> gradingCriteria = new ArrayList<>();
 
     @PrePersist
     @PreUpdate

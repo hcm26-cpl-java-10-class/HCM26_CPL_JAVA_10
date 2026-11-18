@@ -1,0 +1,5 @@
+user_id,display_name,email,role,active
+1,Sample PM,sample.pm@example.test,PM,true
+2,Sample BA,sample.ba@example.test,BA,true
+3,Sample DEV,sample.dev@example.test,DEV,true
+4,Sample QA,sample.qa@example.test,QA,true

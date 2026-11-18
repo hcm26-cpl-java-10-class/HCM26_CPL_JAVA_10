@@ -108,7 +108,6 @@ export const ModuleModal: React.FC<ModuleModalProps> = ({
                     </DialogHeader>
 
                     <div className="grid gap-4 py-4">
-                        {/* Group Selection */}
                         <div className="grid gap-1.5">
                             <Label htmlFor="module-group" className="text-sm font-medium text-gray-700">
                                 Nhóm Module <span className="text-red-500">*</span>
@@ -133,7 +132,6 @@ export const ModuleModal: React.FC<ModuleModalProps> = ({
                             )}
                         </div>
 
-                        {/* Code & Name */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="grid gap-1.5">
                                 <Label htmlFor="module-code" className="text-sm font-medium text-gray-700">
@@ -170,7 +168,6 @@ export const ModuleModal: React.FC<ModuleModalProps> = ({
                             </div>
                         </div>
 
-                        {/* Name */}
                         <div className="grid gap-1.5">
                             <Label htmlFor="module-name" className="text-sm font-medium text-gray-700">
                                 Tên Module <span className="text-red-500">*</span>
@@ -190,7 +187,6 @@ export const ModuleModal: React.FC<ModuleModalProps> = ({
                             )}
                         </div>
 
-                        {/* URL & Link info */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="grid gap-1.5">
                                 <Label htmlFor="module-url" className="text-sm font-medium text-gray-700">

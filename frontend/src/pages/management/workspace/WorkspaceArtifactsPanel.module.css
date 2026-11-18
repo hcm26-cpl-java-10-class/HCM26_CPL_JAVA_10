@@ -1,0 +1,31 @@
+.cell {
+  display: flex;
+  align-items: center;
+  /* 96px row minus vertical cell padding and the collapsed table border. */
+  height: 79px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cell > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.actions {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+}
+
+.actionButtons {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}

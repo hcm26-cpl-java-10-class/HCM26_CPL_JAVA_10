@@ -138,7 +138,6 @@ export function CardFieldValue({
     }
   }
 
-  // Handle arrays (e.g. question options)
   if (Array.isArray(value)) {
     if (value.length === 0) {
       return <span className="text-xs text-muted-foreground">—</span>;
@@ -161,7 +160,6 @@ export function CardFieldValue({
       );
     }
 
-    // Array of primitives
     return (
       <TruncatedText
         content={value.join(", ")}
