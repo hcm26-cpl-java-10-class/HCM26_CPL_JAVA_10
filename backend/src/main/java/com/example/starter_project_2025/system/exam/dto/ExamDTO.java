@@ -8,6 +8,7 @@ import com.example.starter_project_2025.system.exam.domain.ExamCategory;
 import com.example.starter_project_2025.system.exam.domain.ExamType;
 import com.example.starter_project_2025.system.exam.domain.LatePolicy;
 import com.example.starter_project_2025.system.exam.domain.ResultVisibility;
+import com.example.starter_project_2025.system.question.domain.QuestionType;
 import com.example.starter_project_2025.system.question.dto.QuestionDTO;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -87,6 +88,9 @@ public class ExamDTO extends BaseDTO {
     private ResultVisibility resultVisibility;
 
     private ExamType examType;
+
+    @JsonProperty(access = READ_ONLY)
+    private List<QuestionType> allowedQuestionTypes;
 
     private ExamCategory category;
 

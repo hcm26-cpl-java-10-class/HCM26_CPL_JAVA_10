@@ -244,6 +244,16 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> handleConflictException(ConflictException ex) {
+        log.warn("[409] Conflict: {}", ex.getMessage());
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.CONFLICT.value(),
+                ex.getMessage(),
+                LocalDateTime.now());
+        return new ResponseEntity<>(error, HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(InvalidMentorForClassException.class)
     public ResponseEntity<TeamErrorResponse> handleInvalidMentorForClass(
             InvalidMentorForClassException ex
@@ -255,7 +265,7 @@ public class GlobalExceptionHandler {
                 null,
                 null,
                 LocalDateTime.now()));
-        }
+    }
 
     /** Giữ đúng status (401/404/...) thay vì bị handler RuntimeException đổi hết thành 400. */
     @ExceptionHandler(ResponseStatusException.class)
@@ -267,7 +277,6 @@ public class GlobalExceptionHandler {
                 LocalDateTime.now());
         return new ResponseEntity<>(error, ex.getStatusCode());
     }
-
 
     @ExceptionHandler(LockedException.class)
     public ResponseEntity<ErrorResponse> handleLockedException(
@@ -390,6 +399,10 @@ public class GlobalExceptionHandler {
         log.error("[ExternalAPI] {}", ex.getMessage());
 
         int status = ex.getStatusCode() > 0 ? ex.getStatusCode() : HttpStatus.SERVICE_UNAVAILABLE.value();
+        // An upstream auth failure is not the caller's own 401/403: forwarding it would make the SPA log the user out.
+        if (status == HttpStatus.UNAUTHORIZED.value() || status == HttpStatus.FORBIDDEN.value()) {
+            status = HttpStatus.BAD_GATEWAY.value();
+        }
         HttpStatus httpStatus = HttpStatus.resolve(status);
         if (httpStatus == null) {
             httpStatus = HttpStatus.SERVICE_UNAVAILABLE;

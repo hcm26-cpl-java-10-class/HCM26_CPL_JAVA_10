@@ -1,3 +1,5 @@
 package com.example.starter_project_2025.base.crud.dto;
 
-public interface OnCreate {}
+import jakarta.validation.groups.Default;
+
+public interface OnCreate extends Default {}

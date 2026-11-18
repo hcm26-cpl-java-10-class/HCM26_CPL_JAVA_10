@@ -51,8 +51,8 @@ public class CourseMyScoresService {
         return enrollments.stream()
                 .filter(enrollment -> enrollment.getCourse() != null)
                 .map(enrollment -> publishedScores(enrollment.getCourse(),
-                                publishedRepository.findByCourse_IdAndStudent_IdOrderByPositionAsc(
-                                        enrollment.getCourse().getId(), studentId))
+                                withTemplate(enrollment.getCourse().getId(), publishedRepository.findByCourse_IdAndStudent_IdOrderByPositionAsc(
+                                        enrollment.getCourse().getId(), studentId)))
                         .orElseGet(() -> buildCourseScores(enrollment.getCourse(), bestAttempts)))
                 .collect(Collectors.toMap(
                         CourseMyScoresDTO::courseId,
@@ -68,6 +68,10 @@ public class CourseMyScoresService {
      * Neu giang vien da bam "Save scores" o Score Management thi My Scores lay ban bang diem do:
      * moi cot diem la mot muc, diem tong = tong(diem x ti trong) / 100 (giong cot Final cua giang vien).
      */
+    private List<GradebookPublishedItem> withTemplate(Long courseId, List<GradebookPublishedItem> own) {
+        return own == null || own.isEmpty() ? publishedRepository.templateForCourse(courseId) : own;
+    }
+
     private java.util.Optional<CourseMyScoresDTO> publishedScores(Course course, List<GradebookPublishedItem> items) {
         if (items == null || items.isEmpty()) {
             return java.util.Optional.empty();
@@ -124,7 +128,7 @@ public class CourseMyScoresService {
         studentCourses.forEach((studentId, courses) -> {
             Map<Long, ExamAttempt> best = selectBestAttempts(attemptsByStudent.getOrDefault(studentId, List.of()));
             result.put(studentId, courses.stream().map(course -> publishedScores(course,
-                            published.getOrDefault(studentId * 1_000_000L + course.getId(), List.of()))
+                            withTemplate(course.getId(), published.getOrDefault(studentId * 1_000_000L + course.getId(), List.of())))
                     .orElseGet(() -> buildCourseScores(course, best,
                             examsByCourse.getOrDefault(course.getId(), List.of()),
                             exam -> publishedExamIds.contains(exam.getId())))).toList());

@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.submission;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
@@ -13,6 +15,7 @@ import java.util.List;
 @Component
 @Order(17)
 @RequiredArgsConstructor
+@StartupMutation
 public class ArtifactReleaseNotesColumnInitializer implements CommandLineRunner {
     private static final List<String> TABLES = List.of("milestone_artifact_drafts", "milestone_artifact_submissions");
     private final DataSource dataSource;

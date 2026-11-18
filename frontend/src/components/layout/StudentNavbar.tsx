@@ -17,8 +17,9 @@ import { authApi } from "@/api/features/auth.api";
 import { iconMap } from "@/components/datatable/iconMap";
 import { getHomePathByRole } from "@/utils/rbac.utils";
 import { usePermissions } from "@/hooks/usePermissions";
-import { ChevronDown, FileCheck2, LogOutIcon, Menu } from "lucide-react";
-import { useMemo } from "react";
+import { ChevronDown, FileCheck2, LogOutIcon, Menu, MoreHorizontal } from "lucide-react";
+import { fittingNavigationCount } from "./student-navigation-overflow";
+import { useLayoutEffect, useRef, useState, useMemo } from "react";
 import { useDispatch } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { setLogout } from "@/store/slices/auth/authSlice";
@@ -46,7 +47,7 @@ const SYLLABUS_PATH = "/student/syllabuses";
 const ADMIN_ONLY_STUDENT_PREVIEW_PATHS = new Set(["/course-report", "/enrollment-logs"]);
 
 const navButtonClass =
-    "h-9 rounded-[10px] border border-transparent px-3 text-sm " +
+    "h-9 shrink-0 rounded-[10px] border border-transparent px-3 text-sm " +
     "bg-transparent shadow-none " +
     "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
 
@@ -54,6 +55,9 @@ const activeNavClass =
     "border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100";
 
 export function StudentNavbar() {
+  const navRef = useRef<HTMLElement>(null);
+  const sizingRef = useRef<HTMLDivElement>(null);
+  const [inlineCount, setInlineCount] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -220,6 +224,27 @@ export function StudentNavbar() {
     });
   }
 
+  // Keep groups after System Management in More; move earlier groups there too
+  // when account controls, translations or browser zoom leave less room.
+  const systemIndex = navigation.findIndex(e => e.type === "group" && e.group.name.toLowerCase().trim() === "system management");
+  const inlineLimit = systemIndex >= 0 ? systemIndex + 1 : navigation.length;
+  const sizingKey = navigation.map(e => e.type === "group" ? e.group.name : "Syllabuses").join("|");
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (!navRef.current || !sizingRef.current) return;
+      const widths = Array.from(sizingRef.current.children, child => child.getBoundingClientRect().width);
+      setInlineCount(fittingNavigationCount(widths, navRef.current.clientWidth, inlineLimit));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (navRef.current) observer.observe(navRef.current);
+    if (sizingRef.current) observer.observe(sizingRef.current);
+    // Font loading can change button widths independently of viewport size.
+    void document.fonts?.ready.then(measure);
+    return () => observer.disconnect();
+  }, [sizingKey, inlineLimit]);
+  const overflow = navigation.slice(inlineCount);
+
   const handleLogout = async () => {
     try {
       await authApi.logout();
@@ -232,7 +257,7 @@ export function StudentNavbar() {
 
   return (
       <header className="border-b border-sidebar-border bg-sidebar text-sidebar-foreground">
-        <div className="flex h-16 items-center gap-3 px-4">
+        <div className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 lg:h-16 lg:flex-nowrap lg:py-0">
 
           {/* BRAND */}
           <Button
@@ -241,23 +266,32 @@ export function StudentNavbar() {
               onClick={() =>
                   navigate(getHomePathByRole(activeRole, effectivePermissions))
               }
-              className="flex h-auto min-w-0 items-center justify-start gap-3 px-0 hover:bg-transparent"
+              className="flex h-auto shrink-0 items-center justify-start gap-3 px-0 hover:bg-transparent"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-blue-800 text-sm font-semibold text-white">
               RB
             </div>
 
-            <span className="truncate text-lg font-bold text-blue-800">
+            <span className="hidden truncate text-lg font-bold text-blue-800 sm:inline">
             RBAC System
           </span>
           </Button>
 
-          {/* DESKTOP NAVIGATION */}
+          {/* Measure menus in a clipped sizing row so visible navigation stays on one line. */}
           <nav
+              ref={navRef}
               aria-label="Student navigation"
-              className="hidden min-w-0 flex-1 items-center gap-2 lg:flex"
+              className="relative hidden min-w-0 flex-1 items-center gap-2 lg:flex"
           >
-            {navigation.map((entry) => {
+            <div aria-hidden="true" className="pointer-events-none invisible absolute h-0 w-0 overflow-hidden">
+              <div ref={sizingRef} className="flex w-max gap-2">
+                {navigation.map((entry, i) => <Button key={i} tabIndex={-1} variant="ghost" size="sm" className={navButtonClass}>
+                  <span className="max-w-[180px] truncate">{entry.type === "group" ? entry.group.name : "Syllabuses"}</span>
+                  {entry.type === "group" && <ChevronDown className="h-4 w-4 opacity-70" />}
+                </Button>)}
+              </div>
+            </div>
+            {navigation.slice(0, inlineCount).map((entry) => {
               if (entry.type === "syllabuses") {
                 return (
                     <Button
@@ -343,10 +377,22 @@ export function StudentNavbar() {
                   </DropdownMenu>
               );
             })}
+            {overflow.length > 0 && <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" aria-label="More navigation" title="More navigation" className={cn(navButtonClass, "w-9 shrink-0 px-0", overflow.some(e => e.type === "group" ? e.group.items.some(item => item.isActive) : isSyllabusesActive) && activeNavClass)}><MoreHorizontal className="size-5" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72 max-w-[calc(100vw-2rem)]">
+                {overflow.map((entry, index) => entry.type === "syllabuses" ? <DropdownMenuItem key="more-syllabuses" onClick={() => navigate(SYLLABUS_PATH)} className={cn(isSyllabusesActive && "bg-accent text-accent-foreground")}>Syllabuses</DropdownMenuItem> : <div key={`more-${entry.group.id}`}>
+                  {index > 0 && <DropdownMenuSeparator />}
+                  <DropdownMenuLabel className="text-xs uppercase tracking-wide text-muted-foreground">{entry.group.name}</DropdownMenuLabel>
+                  {entry.group.items.map(item => <DropdownMenuItem key={item.url} onClick={() => navigate(item.url)} className={cn("gap-2", item.isActive && "bg-accent text-accent-foreground")}><item.icon className="size-4" /><span className="min-w-0 break-words">{item.title}</span>{renderPendingBadge(item.url)}</DropdownMenuItem>)}
+                </div>)}
+              </DropdownMenuContent>
+            </DropdownMenu>}
           </nav>
 
           {/* MOBILE NAVIGATION */}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -362,7 +408,7 @@ export function StudentNavbar() {
 
               <DropdownMenuContent
                   align="end"
-                  className="w-72"
+                  className="w-72 max-w-[calc(100vw-2rem)]"
               >
                 {navigation.map((entry, index) => {
                   if (entry.type === "syllabuses") {
@@ -420,7 +466,9 @@ export function StudentNavbar() {
             <InvitationBell />
 
             {/* EXISTING ROLE SWITCHER */}
-            <HeaderRight />
+            <div className="min-w-0 max-w-full [&>div]:flex-wrap">
+              <HeaderRight />
+            </div>
 
             {/* LOGOUT */}
             <TooltipWrapper content="Logout">

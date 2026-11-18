@@ -69,5 +69,25 @@ public interface ExamAttemptRepository extends BaseCrudRepository<ExamAttempt, L
             @Param("types") java.util.Collection<com.example.starter_project_2025.system.question.domain.QuestionType> types
     );
 
+    @Query("""
+    select a
+    from ExamAttempt a
+    join fetch a.exam e
+    join fetch a.student s
+    left join e.course c
+    left join c.instructorUser instructor
+    where a.status = :status
+      and (
+          :isAdmin = true
+          or instructor.id = :userId
+      )
+    order by a.startedAt desc
+    """)
+    List<ExamAttempt> findSupervisorAttempts(
+            @Param("status") ExamAttemptStatus status,
+            @Param("isAdmin") boolean isAdmin,
+            @Param("userId") Long userId
+    );
+
     boolean existsByPoolVersion_Id(Long poolVersionId);
 }

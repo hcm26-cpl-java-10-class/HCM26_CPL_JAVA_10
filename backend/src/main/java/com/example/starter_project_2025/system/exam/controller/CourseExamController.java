@@ -86,7 +86,7 @@ public class CourseExamController {
 
     /** Danh sach bai thi co the gan vao course nay */
     @GetMapping("/courses/{courseId}/exams/available")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     public List<CourseExamDTO> availableExams(
             @PathVariable Long courseId,
             @AuthenticationPrincipal UserPrincipal principal
@@ -95,19 +95,19 @@ public class CourseExamController {
     }
 
     @GetMapping("/exams/link-options/courses")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     public List<ExamLinkOptionDTO> courses() {
         return linkService.courseOptions();
     }
 
     @GetMapping("/exams/link-options/courses/{courseId}/sections")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     public List<ExamLinkOptionDTO> sections(@PathVariable Long courseId) {
         return linkService.sectionOptions(courseId);
     }
 
     @GetMapping("/exams/link-options/sections/{sectionId}/lessons")
-    @PreAuthorize("hasAuthority('EXAM_READ')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER') and hasAuthority('EXAM_READ')")
     public List<ExamLinkOptionDTO> lessons(@PathVariable Long sectionId) {
         return linkService.lessonOptions(sectionId);
     }

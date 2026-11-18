@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.milestone.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -11,6 +13,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(-100)
 @RequiredArgsConstructor
+@StartupMutation
 public class MilestoneDraftSchemaMigration implements ApplicationRunner {
     private final JdbcTemplate jdbc;
 

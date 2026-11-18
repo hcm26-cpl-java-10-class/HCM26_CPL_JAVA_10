@@ -25,14 +25,6 @@ import lombok.experimental.SuperBuilder;
 @ImportEntity("session")
 @ExportEntity(fileName = "class_sessions", sheetName = "Class Sessions")
 @ResourcePermission("SESSION")
-@ResourceMenu(
-        title = "Class Schedules",
-        group = "Training Operations",
-        icon = "calendar",
-        url = "/sessions",
-        order = 3,
-        permission = "SESSION_READ"
-)
 public class Session extends BaseEntity {
 
     @Column(name = "class_id", nullable = false)
@@ -82,6 +74,21 @@ public class Session extends BaseEntity {
     @Column(name = "cancel_reason", length = 255)
     @ExportField(name = "Cancel Reason")
     String cancelReason;
+
+    /**
+     * Last line of defence for writers that bypass the service layer (e.g. the generic file import):
+     * a row never reaches the database without a status or with an end before its start.
+     */
+    @PrePersist
+    @PreUpdate
+    void ensureValidState() {
+        if (status == null) {
+            status = SessionStatus.SCHEDULED;
+        }
+        if (startTime != null && endTime != null && !endTime.isAfter(startTime)) {
+            throw new IllegalStateException("End time must be after start time");
+        }
+    }
 
     public enum SessionStatus {
         SCHEDULED,

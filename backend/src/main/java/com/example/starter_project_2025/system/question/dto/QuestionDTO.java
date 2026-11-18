@@ -43,6 +43,10 @@ public class QuestionDTO extends BaseDTO {
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Long sourceQuestionId;
 
+    private String source;
+    private Long examId;
+    private Boolean isAiGenerated;
+
     @Valid
     private List<OptionDTO> options;
 

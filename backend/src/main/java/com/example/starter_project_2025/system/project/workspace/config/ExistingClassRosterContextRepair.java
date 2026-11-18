@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.workspace.config;
 
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +19,7 @@ import java.util.*;
 
 /** Repairs references in the existing class fixtures without generating or replacing any roster. */
 @Component @Order(4) @RequiredArgsConstructor @Slf4j
+@StartupMutation
 public class ExistingClassRosterContextRepair implements CommandLineRunner {
     private final JdbcTemplate jdbc;
     private final TenantRepository tenants;

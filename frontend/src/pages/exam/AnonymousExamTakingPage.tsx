@@ -95,10 +95,18 @@ export default function AnonymousExamTakingPage() {
     const integrity = useExamIntegrity({
         attemptId: attempt?.id,
         config: attempt?.integrity,
-        active: attempt?.status === 'IN_PROGRESS',
-        send: (id, payload) => sendAnonymousIntegrityEvents(id, sessionToken, payload),
-        sendEntryPhoto: (id, imageData) => sendAnonymousEntryPhoto(id, sessionToken, imageData),
+        active: attempt?.status === "IN_PROGRESS",
+
+        send: (id, payload) =>
+            sendAnonymousIntegrityEvents(id, sessionToken, payload),
+
+        sendEntryPhoto: (id, imageData) =>
+            sendAnonymousEntryPhoto(id, sessionToken, imageData),
+
         onEntryPhotoSaved: () => void attemptQuery.refetch(),
+
+        // Cho phép Student chia sẻ màn hình với Exam Supervisor.
+        supervisorStreaming: true,
     });
     const questionFont = useQuestionFontSize();
     const [confirmOpen, setConfirmOpen] = useState(false);

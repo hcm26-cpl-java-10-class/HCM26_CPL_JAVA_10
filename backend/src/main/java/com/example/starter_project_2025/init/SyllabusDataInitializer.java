@@ -1,12 +1,15 @@
 
 package com.example.starter_project_2025.init;
 
-import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusCloService;
-import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusMaterialService;
+import com.example.starter_project_2025.config.startup.StartupMutation;
+
 import com.example.starter_project_2025.system.demo.syllabus.dto.SyllabusModels;
 import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusCloService;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusMaterialService;
 import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusService;
 import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusWorkflowService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -25,6 +28,7 @@ import java.util.List;
         name = "app.seed.syllabuses.enabled",
         havingValue = "true"
 )
+@StartupMutation
 public class SyllabusDataInitializer implements CommandLineRunner {
 
     private final SyllabusRepository repository;
