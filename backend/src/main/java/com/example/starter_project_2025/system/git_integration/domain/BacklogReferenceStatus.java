@@ -12,5 +12,7 @@ public enum BacklogReferenceStatus {
     /** The task belongs to another project of the tenant (AC04). */
     OUTSIDE_PROJECT,
     /** The commit or pull request does not mention any Task ID. */
-    MISSING
+    MISSING,
+    /** TM-03: a valid Task ID, but a user unlinked the pull request from that task; not linked again automatically. */
+    EXCLUDED
 }

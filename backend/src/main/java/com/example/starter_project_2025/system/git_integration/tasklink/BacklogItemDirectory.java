@@ -34,6 +34,8 @@ public class BacklogItemDirectory {
 
     /** Same permission as reading a backlog item ({@code SprintBacklog} resource, READ). */
     static final String BACKLOG_READ = "SPRINT_BACKLOG_READ";
+    /** TM-03: linking / unlinking a pull request changes the task's metadata ({@code SprintBacklog}, UPDATE). */
+    static final String BACKLOG_UPDATE = "SPRINT_BACKLOG_UPDATE";
 
     private final GitBacklogLookupRepository backlog;
     private final WorkspaceRepository workspaces;
@@ -68,6 +70,12 @@ public class BacklogItemDirectory {
         return item;
     }
 
+    /** TM-03: the task when the caller may open and update it; 403 without the permission, 404 when not visible. */
+    public BacklogItemRow requireUpdatable(Long itemId) {
+        requireAuthority(BACKLOG_UPDATE, "Updating backlog items is not allowed");
+        return requireReadable(itemId);
+    }
+
     /** The subset of the given tasks the caller may open. */
     public Set<Long> readable(Collection<Long> itemIds) {
         requireBacklogRead();
@@ -81,10 +89,14 @@ public class BacklogItemDirectory {
     }
 
     private static void requireBacklogRead() {
+        requireAuthority(BACKLOG_READ, "Reading backlog items is not allowed");
+    }
+
+    private static void requireAuthority(String permission, String message) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getAuthorities().stream()
-                .noneMatch(authority -> BACKLOG_READ.equals(authority.getAuthority()))) {
-            throw new AccessDeniedException("Reading backlog items is not allowed");
+                .noneMatch(authority -> permission.equals(authority.getAuthority()))) {
+            throw new AccessDeniedException(message);
         }
     }
 

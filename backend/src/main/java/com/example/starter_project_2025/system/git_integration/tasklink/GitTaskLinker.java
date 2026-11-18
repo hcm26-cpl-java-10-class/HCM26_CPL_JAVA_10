@@ -9,7 +9,9 @@ import com.example.starter_project_2025.system.git_integration.domain.BacklogRef
 import com.example.starter_project_2025.system.git_integration.domain.GitArtifactType;
 import com.example.starter_project_2025.system.git_integration.domain.GitCommit;
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequest;
+import com.example.starter_project_2025.system.git_integration.domain.GitPullRequestState;
 import com.example.starter_project_2025.system.git_integration.ingestion.GitIngestionRetry;
+import com.example.starter_project_2025.system.git_integration.repository.BacklogGitLinkExclusionRepository;
 import com.example.starter_project_2025.system.git_integration.repository.BacklogGitLinkRepository;
 import com.example.starter_project_2025.system.git_integration.repository.BacklogReferenceRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitBacklogLookupRepository.BacklogItemRow;
@@ -54,6 +56,10 @@ import static com.example.starter_project_2025.system.git_integration.domain.Bac
  *     <li>{@code backlog_reference} keeps every verdict; {@code backlog_git_link} gets
  *     the LINKED ones.</li>
  * </ol>
+ * TM-03: a pull request is read from its title and description only. MANUAL links are
+ * never removed or changed here, and a pair a user unlinked ({@code backlog_git_link_exclusion})
+ * is judged EXCLUDED instead of LINKED. The commit a pull request was merged with takes the
+ * tasks the pull request is linked to ({@link #syncMergeCommit}), field MERGED_PR.
  * Never writes a task: its status follows the project workflow only (AC05).
  * Every run is its own transaction ({@code REQUIRES_NEW}, also correct when called from
  * an AFTER_COMMIT listener) and is idempotent; two runs on one source (listener and
@@ -69,6 +75,7 @@ public class GitTaskLinker {
     private final GitPullRequestRepository pullRequests;
     private final BacklogReferenceRepository references;
     private final BacklogGitLinkRepository links;
+    private final BacklogGitLinkExclusionRepository exclusions;
     private final BacklogItemDirectory directory;
     private final ProjectScopeResolver scopes;
     private final BacklogTaskKeyService taskKeys;
@@ -78,13 +85,14 @@ public class GitTaskLinker {
 
     public GitTaskLinker(GitCommitRepository commits, GitPullRequestRepository pullRequests,
                          BacklogReferenceRepository references, BacklogGitLinkRepository links,
-                         BacklogItemDirectory directory, ProjectScopeResolver scopes, BacklogTaskKeyService taskKeys,
+                         BacklogGitLinkExclusionRepository exclusions, BacklogItemDirectory directory, ProjectScopeResolver scopes, BacklogTaskKeyService taskKeys,
                          ApplicationEventPublisher publisher, @Qualifier("gitIntegrationClock") Clock clock,
                          PlatformTransactionManager transactionManager) {
         this.commits = commits;
         this.pullRequests = pullRequests;
         this.references = references;
         this.links = links;
+        this.exclusions = exclusions;
         this.directory = directory;
         this.scopes = scopes;
         this.taskKeys = taskKeys;
@@ -133,17 +141,92 @@ public class GitTaskLinker {
         run.loadItems(mentions.entrySet().stream().collect(Collectors.groupingBy(entry -> entry.getKey().getTenantId(),
                 Collectors.flatMapping(entry -> entry.getValue().stream().map(Mention::key), Collectors.toSet()))));
 
+        Map<String, List<GitPullRequest>> mergedBySha = pullRequests.findByStateAndMergeCommitShaIn(GitPullRequestState.MERGED,
+                        pending.stream().map(GitCommit::getSha).filter(Objects::nonNull).collect(Collectors.toSet())).stream()
+                .collect(Collectors.groupingBy(GitPullRequest::getMergeCommitSha));
+
         int linked = 0;
         for (Map.Entry<GitCommit, List<Mention>> entry : mentions.entrySet()) {
             GitCommit commit = entry.getKey();
-            Artifact artifact = new Artifact(GitArtifactType.COMMIT, commit.getId(), commit.getTenantId(),
-                    commit.getProjectId(), commit.getRepositoryId(), commit.getCommittedAt());
-            linked += apply(artifact, entry.getValue(), run, new HashMap<>());
+            linked += apply(artifactOf(commit), entry.getValue(), run, new HashMap<>(), Set.of());
+            for (GitPullRequest pr : mergedBySha.getOrDefault(commit.getSha(), List.of())) {
+                if (Objects.equals(pr.getRepositoryId(), commit.getRepositoryId())) linked += inherit(commit, pr);
+            }
         }
         return linked;
     }
 
-    // ---- pull requests (title / body / branch can change: recomputed on every update) -------------
+    /**
+     * TM-03: the commit a merged pull request was merged with (merge, squash or rebase) is
+     * linked to the tasks the pull request is linked to, AUTO or MANUAL: GitHub writes only
+     * the title into it, so a Task ID in the description would otherwise never reach it.
+     * Follows the pull request (a task unlinked from it goes from the commit too). Runs in the
+     * caller's transaction, which holds the pull request's lock; returns how many links are new.
+     */
+    public int syncMergeCommit(GitPullRequest pr) {
+        if (pr.getState() != GitPullRequestState.MERGED || pr.getMergeCommitSha() == null) return 0;
+        // Not stored yet: the push is processed later and inherits then.
+        return commits.findFirstByRepositoryIdAndSha(pr.getRepositoryId(), pr.getMergeCommitSha())
+                .map(commit -> inherit(commit, pr))
+                .orElse(0);
+    }
+
+    /**
+     * Merge commits missing the tasks of their pull request: data from before TM-03 (at start-up)
+     * or a re-check. {@code repositoryId} null = every repository. Returns how many links are new.
+     */
+    public int syncMergeCommits(Long repositoryId) {
+        int linked = 0;
+        for (Long id : pullRequests.findMergedWithoutInheritedLinks(repositoryId)) {
+            Integer created = GitIngestionRetry.onConflict(() -> requiresNew.execute(status ->
+                    pullRequests.lockById(id).map(this::syncMergeCommit).orElse(0)));
+            linked += created == null ? 0 : created;
+        }
+        return linked;
+    }
+
+    private int inherit(GitCommit commit, GitPullRequest pr) {
+        List<BacklogReference> refs = references.findBySourceTypeAndSourceId(GitArtifactType.COMMIT, commit.getId());
+        if (refs.isEmpty()) return 0; // not processed yet: linkCommits inherits when it processes it
+        Map<String, BacklogReference> inherited = new HashMap<>();
+        Set<String> named = new HashSet<>();
+        for (BacklogReference ref : refs) {
+            if (ref.getSourceField() == BacklogReferenceField.MERGED_PR) inherited.put(ref.getRefKey(), ref);
+            else named.add(ref.getRefKey());
+        }
+        List<Long> itemIds = links.findByArtifactTypeAndArtifactIdIn(GitArtifactType.PULL_REQUEST, List.of(pr.getId())).stream()
+                .map(BacklogGitLink::getBacklogItemId).distinct().toList();
+        Artifact artifact = artifactOf(commit);
+        LocalDateTime now = LocalDateTime.now(clock);
+        Set<String> wanted = new HashSet<>();
+        List<Long> newlyLinked = new ArrayList<>();
+        for (BacklogItemRow item : directory.byIds(itemIds).values().stream().sorted(Comparator.comparing(BacklogItemRow::getId)).toList()) {
+            String key = item.getTaskKey();
+            if (key == null || named.contains(key)) continue; // the message already names it
+            wanted.add(key);
+            BacklogReference ref = inherited.getOrDefault(key,
+                    newReference(artifact, key, "#" + pr.getNumber(), BacklogReferenceField.MERGED_PR));
+            Verdict verdict = new Verdict(BacklogReferenceStatus.LINKED, BacklogReferenceReason.OK, item.getId(),
+                    directory.projectOf(item));
+            fill(ref, verdict, now);
+            ref = references.save(ref);
+            if (reconcileLink(ref, artifact, verdict, now)) newlyLinked.add(item.getId());
+        }
+        for (BacklogReference stale : inherited.values()) {
+            if (wanted.contains(stale.getRefKey())) continue;
+            links.deleteByReference(stale.getId(), BacklogLinkSource.AUTO);
+            references.delete(stale);
+        }
+        if (!newlyLinked.isEmpty()) publishLinked(artifact, newlyLinked);
+        return newlyLinked.size();
+    }
+
+    private static Artifact artifactOf(GitCommit commit) {
+        return new Artifact(GitArtifactType.COMMIT, commit.getId(), commit.getTenantId(),
+                commit.getProjectId(), commit.getRepositoryId(), commit.getCommittedAt());
+    }
+
+    // ---- pull requests (title / description can change: recomputed on every update) ---------------
 
     public int linkPullRequest(Long pullRequestId) {
         if (pullRequestId == null) return 0;
@@ -152,12 +235,13 @@ public class GitTaskLinker {
     }
 
     private int doLinkPullRequest(Long id) {
-        GitPullRequest pr = pullRequests.findById(id).orElse(null);
+        // Locked: a manual link / unlink of this pull request waits for this run, or this run for it.
+        GitPullRequest pr = pullRequests.lockById(id).orElse(null);
         if (pr == null) return 0;
         Run run = new Run();
+        // TM-03 BR1: the title, then the description. The branch name is not a source.
         List<Mention> found = TaskKeyParser.parseAll(List.of(
                 new Source(BacklogReferenceField.TITLE, pr.getTitle()),
-                new Source(BacklogReferenceField.BRANCH, pr.getHeadRef()),
                 new Source(BacklogReferenceField.BODY, pr.getBody())), run.prefixesOf(pr.getTenantId()));
 
         Set<String> wanted = found.isEmpty() ? Set.of(NO_KEY)
@@ -177,14 +261,16 @@ public class GitTaskLinker {
         run.loadItems(Map.of(pr.getTenantId(), found.stream().map(Mention::key).collect(Collectors.toSet())));
         Artifact artifact = new Artifact(GitArtifactType.PULL_REQUEST, pr.getId(), pr.getTenantId(), pr.getProjectId(),
                 pr.getRepositoryId(), pr.getGithubCreatedAt());
-        return apply(artifact, found, run, existing);
+        int linked = apply(artifact, found, run, existing, exclusions.findExcludedItemIds(GitArtifactType.PULL_REQUEST, id));
+        return linked + syncMergeCommit(pr);
     }
 
     // ---- re-check (D11): INVALID / OUTSIDE_PROJECT references judged again on request ---------------
 
     public RecheckResult recheck(Long repositoryId) {
         RecheckResult result = GitIngestionRetry.onConflict(() -> requiresNew.execute(status -> doRecheck(repositoryId)));
-        return result == null ? new RecheckResult(0, 0) : result;
+        int merged = syncMergeCommits(repositoryId);
+        return result == null ? new RecheckResult(0, merged) : new RecheckResult(result.checked(), result.nowLinked() + merged);
     }
 
     private RecheckResult doRecheck(Long repositoryId) {
@@ -198,6 +284,7 @@ public class GitTaskLinker {
         Map<Long, LocalDateTime> prTimes = pullRequests.findAllById(idsOf(refs, GitArtifactType.PULL_REQUEST)).stream()
                 .collect(Collectors.toMap(GitPullRequest::getId, GitPullRequest::getGithubCreatedAt));
 
+        Map<Long, Set<Long>> excludedByPr = new HashMap<>();
         LocalDateTime now = LocalDateTime.now(clock);
         int nowLinked = 0;
         for (BacklogReference ref : refs) {
@@ -205,7 +292,12 @@ public class GitTaskLinker {
             if (at == null) continue; // the commit / pull request no longer exists
             Artifact artifact = new Artifact(ref.getSourceType(), ref.getSourceId(), ref.getTenantId(), ref.getProjectId(),
                     ref.getRepositoryId(), at);
-            Verdict verdict = decide(run.item(ref.getTenantId(), ref.getRefKey()), ref.getTenantId(), run.scopeOf(ref.getProjectId()));
+            Set<Long> excluded = ref.getSourceType() == GitArtifactType.PULL_REQUEST
+                    ? excludedByPr.computeIfAbsent(ref.getSourceId(),
+                    prId -> exclusions.findExcludedItemIds(GitArtifactType.PULL_REQUEST, prId))
+                    : Set.of();
+            Verdict verdict = decide(run.item(ref.getTenantId(), ref.getRefKey()), ref.getTenantId(),
+                    run.scopeOf(ref.getProjectId()), excluded);
             fill(ref, verdict, now);
             references.save(ref);
             if (reconcileLink(ref, artifact, verdict, now)) {
@@ -219,7 +311,8 @@ public class GitTaskLinker {
     // ---- shared -------------------------------------------------------------------------------------
 
     /** Writes the references of one source and the links of the LINKED ones; returns how many links are new. */
-    private int apply(Artifact artifact, List<Mention> found, Run run, Map<String, BacklogReference> existing) {
+    private int apply(Artifact artifact, List<Mention> found, Run run, Map<String, BacklogReference> existing,
+                      Set<Long> excluded) {
         LocalDateTime now = LocalDateTime.now(clock);
         if (found.isEmpty()) {
             BacklogReference ref = existing.getOrDefault(NO_KEY, newReference(artifact, NO_KEY, null, BacklogReferenceField.NONE));
@@ -237,7 +330,7 @@ public class GitTaskLinker {
                 ref.setRawText(mention.raw());
                 ref.setSourceField(mention.field());
             }
-            Verdict verdict = decide(run.item(artifact.tenantId(), mention.key()), artifact.tenantId(), scope);
+            Verdict verdict = decide(run.item(artifact.tenantId(), mention.key()), artifact.tenantId(), scope, excluded);
             fill(ref, verdict, now);
             ref = references.save(ref);
             if (reconcileLink(ref, artifact, verdict, now)) newlyLinked.add(verdict.itemId());
@@ -246,8 +339,11 @@ public class GitTaskLinker {
         return newlyLinked.size();
     }
 
-    /** D6: found and active in the tenant, then inside the master project's tree. */
-    Verdict decide(BacklogItemRow item, Long tenantId, Set<Long> scope) {
+    /**
+     * D6: found and active in the tenant, then inside the master project's tree; TM-03: then
+     * not unlinked by a user ({@code excluded} = task ids unlinked from this pull request).
+     */
+    Verdict decide(BacklogItemRow item, Long tenantId, Set<Long> scope, Set<Long> excluded) {
         if (item == null || !Objects.equals(item.getTenantId(), tenantId)) {
             return new Verdict(BacklogReferenceStatus.INVALID, BacklogReferenceReason.NOT_FOUND, null, null);
         }
@@ -258,17 +354,23 @@ public class GitTaskLinker {
         if (projectId == null || !scope.contains(projectId)) {
             return new Verdict(BacklogReferenceStatus.OUTSIDE_PROJECT, BacklogReferenceReason.OTHER_PROJECT, item.getId(), projectId);
         }
+        if (excluded.contains(item.getId())) {
+            return new Verdict(BacklogReferenceStatus.EXCLUDED, BacklogReferenceReason.UNLINKED_BY_USER, item.getId(), projectId);
+        }
         return new Verdict(BacklogReferenceStatus.LINKED, BacklogReferenceReason.OK, item.getId(), projectId);
     }
 
-    /** Makes the automatic link match the verdict; true when a link was created. */
+    /**
+     * Makes the automatic link match the verdict; true when a link was created. Only AUTO
+     * links are removed, and an existing link of the pair (AUTO or MANUAL) is left as it is.
+     */
     private boolean reconcileLink(BacklogReference ref, Artifact artifact, Verdict verdict, LocalDateTime now) {
         if (verdict.status() != BacklogReferenceStatus.LINKED) {
             if (ref.getId() != null) links.deleteByReference(ref.getId(), BacklogLinkSource.AUTO);
             return false;
         }
         if (links.findByBacklogItemIdAndArtifactTypeAndArtifactId(verdict.itemId(), artifact.type(), artifact.id()).isPresent()) {
-            return false;
+            return false; // already linked, possibly manually (TM-03 BR7: never overwritten)
         }
         links.save(BacklogGitLink.builder()
                 .tenantId(artifact.tenantId())

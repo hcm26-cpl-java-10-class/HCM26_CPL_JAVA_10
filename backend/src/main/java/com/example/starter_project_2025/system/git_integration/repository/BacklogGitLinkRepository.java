@@ -27,12 +27,20 @@ public interface BacklogGitLinkRepository extends JpaRepository<BacklogGitLink, 
 
     long countByBacklogItemIdAndArtifactType(Long backlogItemId, GitArtifactType type);
 
+    Optional<BacklogGitLink> findByIdAndBacklogItemId(Long id, Long backlogItemId);
+
+    List<BacklogGitLink> findByArtifactTypeAndArtifactIdIn(GitArtifactType type, Collection<Long> artifactIds);
+
     /** Rows: backlog item id, artifact type, number of links. */
     @Query("""
             select l.backlogItemId, l.artifactType, count(l) from BacklogGitLink l
              where l.backlogItemId in :itemIds
              group by l.backlogItemId, l.artifactType""")
     List<Object[]> countByItems(@Param("itemIds") Collection<Long> itemIds);
+
+    /** Commits / pull requests of a repository linked to at least one task, AUTO or MANUAL. */
+    @Query("select count(distinct l.artifactId) from BacklogGitLink l where l.repositoryId = :repositoryId and l.artifactType = :type")
+    long countLinkedArtifacts(@Param("repositoryId") Long repositoryId, @Param("type") GitArtifactType type);
 
     @Query("select count(distinct l.backlogItemId) from BacklogGitLink l where l.repositoryId = :repositoryId and l.artifactType = :type")
     long countLinkedItems(@Param("repositoryId") Long repositoryId, @Param("type") GitArtifactType type);

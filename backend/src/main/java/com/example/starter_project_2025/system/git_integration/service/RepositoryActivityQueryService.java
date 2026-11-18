@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.git_integration.service;
 
 import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.git_integration.domain.BacklogGitLink;
 import com.example.starter_project_2025.system.git_integration.domain.BacklogReference;
 import com.example.starter_project_2025.system.git_integration.domain.BacklogReferenceStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitArtifactType;
@@ -49,10 +50,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -228,21 +231,48 @@ public class RepositoryActivityQueryService {
             byStatus.put((BacklogReferenceStatus) row[0], (Long) row[1]);
         }
         return new TaskLinkStats.Counts(total, references.countProcessedSources(repositoryId, type),
-                byStatus.getOrDefault(BacklogReferenceStatus.LINKED, 0L),
-                byStatus.getOrDefault(BacklogReferenceStatus.MISSING, 0L),
+                links.countLinkedArtifacts(repositoryId, type),
+                references.countUnlinkedMissingSources(repositoryId, type),
                 byStatus.getOrDefault(BacklogReferenceStatus.INVALID, 0L),
                 byStatus.getOrDefault(BacklogReferenceStatus.OUTSIDE_PROJECT, 0L));
     }
 
-    /** The commit / pull request has a reference whose verdict is one of the filter's. */
+    /**
+     * The commit / pull request has a reference whose verdict is one of the filter's.
+     * LINKED reads the link table instead, so manual links (TM-03) count as linked too,
+     * and a linked source is never "No task ID".
+     */
     private static Predicate hasReference(Root<?> root, CriteriaQuery<?> query, CriteriaBuilder cb,
                                           GitArtifactType type, TaskLinkFilter filter) {
+        if (filter == TaskLinkFilter.LINKED) return isLinked(root, query, cb, type);
+        Set<BacklogReferenceStatus> others = EnumSet.copyOf(filter.statuses());
+        boolean missing = others.remove(BacklogReferenceStatus.MISSING);
+        List<Predicate> any = new ArrayList<>();
+        if (!others.isEmpty()) any.add(hasStatus(root, query, cb, type, others));
+        if (missing) {
+            any.add(cb.and(hasStatus(root, query, cb, type, Set.of(BacklogReferenceStatus.MISSING)),
+                    cb.not(isLinked(root, query, cb, type))));
+        }
+        return cb.or(any.toArray(Predicate[]::new));
+    }
+
+    private static Predicate isLinked(Root<?> root, CriteriaQuery<?> query, CriteriaBuilder cb, GitArtifactType type) {
+        Subquery<Long> linked = query.subquery(Long.class);
+        Root<BacklogGitLink> link = linked.from(BacklogGitLink.class);
+        linked.select(link.get("id")).where(
+                cb.equal(link.get("artifactType"), type),
+                cb.equal(link.get("artifactId"), root.get("id")));
+        return cb.exists(linked);
+    }
+
+    private static Predicate hasStatus(Root<?> root, CriteriaQuery<?> query, CriteriaBuilder cb,
+                                       GitArtifactType type, Set<BacklogReferenceStatus> statuses) {
         Subquery<Long> sub = query.subquery(Long.class);
         Root<BacklogReference> ref = sub.from(BacklogReference.class);
         sub.select(ref.get("id")).where(
                 cb.equal(ref.get("sourceType"), type),
                 cb.equal(ref.get("sourceId"), root.get("id")),
-                ref.get("status").in(filter.statuses()));
+                ref.get("status").in(statuses));
         return cb.exists(sub);
     }
 

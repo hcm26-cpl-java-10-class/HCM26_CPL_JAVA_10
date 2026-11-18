@@ -86,6 +86,11 @@ export type GitIntegrationErrorCode =
   | "GIT_WEBHOOK_EVENT_NOT_REPLAYABLE"
   | "GIT_WEBHOOK_PAYLOAD_PURGED"
   | "GIT_BACKLOG_ITEM_NOT_FOUND"
+  | "GIT_TASK_LINK_NOT_FOUND"
+  | "GIT_TASK_OUTSIDE_PROJECT"
+  | "GIT_TASK_INACTIVE"
+  | "GIT_TASK_LINK_TYPE_NOT_SUPPORTED"
+  | "GIT_TASK_LINK_SOURCE_INVALID"
   | "UNAUTHENTICATED";
 
 export interface GitIntegrationErrorBody {
@@ -253,11 +258,21 @@ export interface GitCommitItem {
 
 // ---- US-SY-05: commits / pull requests linked to tasks ------------------------------------------
 
-export type GitTaskRefStatus = "LINKED" | "INVALID" | "OUTSIDE_PROJECT" | "MISSING";
-export type GitTaskRefReason = "OK" | "NOT_FOUND" | "DELETED" | "OTHER_PROJECT" | "NO_TASK_ID";
-export type GitTaskRefField = "MESSAGE" | "TITLE" | "BRANCH" | "BODY" | "NONE";
+/** `EXCLUDED` (US-TM-03): a valid Task ID whose pull request a user unlinked from the task. */
+export type GitTaskRefStatus = "LINKED" | "INVALID" | "OUTSIDE_PROJECT" | "MISSING" | "EXCLUDED";
+export type GitTaskRefReason = "OK" | "NOT_FOUND" | "DELETED" | "OTHER_PROJECT" | "NO_TASK_ID" | "UNLINKED_BY_USER";
+/**
+ * `BRANCH` only on old pull request rows: since US-TM-03 a pull request is read from its title and description.
+ * `MERGED_PR`: a merge / squash commit takes the tasks of the pull request it merged (`rawText` is `#number`).
+ */
+export type GitTaskRefField = "MESSAGE" | "TITLE" | "BRANCH" | "BODY" | "MERGED_PR" | "NONE";
+/** US-TM-03: AUTO follows the Task IDs of the text; MANUAL is made or pinned by a user and never removed automatically. */
+export type GitLinkSource = "AUTO" | "MANUAL";
 
-/** A Task ID found in a commit or pull request. `key` is null for MISSING; title only for LINKED. */
+/**
+ * A Task ID found in a commit or pull request. `key` is null for MISSING; title only for LINKED.
+ * `source` is how it is linked (null when not linked); a MANUAL link the text does not name has `field` NONE.
+ */
 export interface GitTaskRef {
   key: string | null;
   rawText?: string | null;
@@ -267,6 +282,7 @@ export interface GitTaskRef {
   itemId?: number | null;
   itemTitle?: string | null;
   itemStatus?: string | null;
+  source?: GitLinkSource | null;
 }
 
 /** `NEEDS_ATTENTION` = no Task ID, an unknown one or one of another project. */
@@ -277,10 +293,38 @@ export interface BacklogGitLinks {
   itemId: number;
   taskKey: string | null;
   repository: { id: number; fullName: string; htmlUrl: string; status: GitRepositoryConnectionStatus } | null;
-  pullRequests: GitPullRequestItem[];
+  pullRequests: LinkedPullRequest[];
   commits: GitPage<GitCommitItem>;
   commitCount: number;
   pullRequestCount: number;
+}
+
+/** US-TM-03: why a pull request is on a task. `field` (TITLE / BODY) only for AUTO. */
+export interface BacklogGitLinkInfo {
+  id: number;
+  source: GitLinkSource;
+  field?: GitTaskRefField | null;
+  linkedByUserId?: number | null;
+  linkedByName?: string | null;
+  linkedAt: string;
+}
+
+export interface LinkedPullRequest {
+  pullRequest: GitPullRequestItem;
+  link: BacklogGitLinkInfo;
+}
+
+/** US-TM-03 link picker row. `linkedTaskKeys`: other tasks the pull request is on (up to 3). */
+export interface GitPullRequestCandidate {
+  id: number;
+  number: number;
+  title: string;
+  state: GitPullRequestState;
+  draft: boolean;
+  authorLogin?: string | null;
+  updatedAt?: string | null;
+  alreadyLinked: boolean;
+  linkedTaskKeys: string[];
 }
 
 /** Board badge data of one task. */

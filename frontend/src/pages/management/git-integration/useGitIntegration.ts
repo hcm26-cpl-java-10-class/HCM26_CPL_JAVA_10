@@ -8,6 +8,7 @@ import {
 } from "@/api/features/git-integration.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import type {
+  BacklogGitLinks,
   GitCommitQuery,
   GitPullRequestQuery,
   GitRepositoryQuery,
@@ -15,7 +16,7 @@ import type {
   LinkRepositoryRequest,
   ProjectRepositoryView,
 } from "@/types/features/git-integration";
-import { errorMessage, replayErrorMessage } from "./git-integration.messages";
+import { errorMessage, replayErrorMessage, taskLinkErrorMessage } from "./git-integration.messages";
 import { savePendingConnect } from "./git-integration.storage";
 
 export const gitIntegrationKeys = {
@@ -34,6 +35,7 @@ export const gitIntegrationKeys = {
   backlogLinks: (itemId: number, page: number) => ["git-integration", "backlog-links", itemId, page] as const,
   backlogLinkSummary: (itemIds: number[]) => ["git-integration", "backlog-link-summary", itemIds] as const,
   taskLinkStats: (projectId: number) => ["git-integration", "task-link-stats", projectId] as const,
+  pullRequestCandidates: (itemId: number, q: string) => ["git-integration", "pull-request-candidates", itemId, q] as const,
   webhookEvents: (query: GitWebhookEventQuery) =>
     ["git-integration", "webhook-events", query.status ?? "ALL", query.eventType ?? "", query.projectId ?? null, query.page ?? 0, query.size ?? 20] as const,
 };
@@ -185,6 +187,123 @@ export function useBacklogGitLinkSummary(itemIds: number[]) {
     staleTime: 30_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
+  });
+}
+
+/** US-TM-03: pull requests to pick from in the "Link PR" popover; only while it is open. */
+export function usePullRequestCandidates(itemId: number, q: string, enabled: boolean) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.pullRequestCandidates(itemId, q),
+    queryFn: ({ signal }) => gitIntegrationApi.pullRequestCandidates(itemId, q, signal),
+    enabled,
+    placeholderData: keepPreviousData,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+/** Everything that shows the links of a task: its Development section, board badges, pull request lists, picker. */
+function invalidateTaskLinks(queryClient: ReturnType<typeof useQueryClient>, itemId: number) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["git-integration", "backlog-links", itemId] }),
+    queryClient.invalidateQueries({ queryKey: ["git-integration", "backlog-link-summary"] }),
+    queryClient.invalidateQueries({ queryKey: ["git-integration", "pull-requests"] }),
+    queryClient.invalidateQueries({ queryKey: ["git-integration", "pull-request-candidates", itemId] }),
+  ]);
+}
+
+/** Applies a change to every cached page of a task's links; returns the previous pages for rollback. */
+function patchTaskLinks(queryClient: ReturnType<typeof useQueryClient>, itemId: number,
+  patch: (view: BacklogGitLinks) => BacklogGitLinks) {
+  const key = ["git-integration", "backlog-links", itemId];
+  const previous = queryClient.getQueriesData<BacklogGitLinks>({ queryKey: key });
+  queryClient.setQueriesData<BacklogGitLinks>({ queryKey: key }, view => view && patch(view));
+  return previous;
+}
+
+/** US-TM-03: link a pull request to a task by number (an automatic link of the pair becomes manual). */
+export function useLinkPullRequest(itemId: number, taskKey?: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (number: number) => gitIntegrationApi.linkPullRequest(itemId, number),
+    onSuccess: linked => toast.success(`Linked #${linked.pullRequest.number}${taskKey ? ` to ${taskKey}` : ""}`, {
+      description: "It stays linked even if the Task ID is removed from the pull request.",
+    }),
+    onError: error => toast.error("Could not link the pull request", {
+      description: taskLinkErrorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error)),
+    }),
+    onSettled: () => invalidateTaskLinks(queryClient, itemId),
+  });
+}
+
+/** US-TM-03: keep an automatic link even when the Task ID is edited out of the pull request. */
+export function usePinGitLink(itemId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (linkId: number) => gitIntegrationApi.pinGitLink(itemId, linkId),
+    onMutate: async linkId => {
+      await queryClient.cancelQueries({ queryKey: ["git-integration", "backlog-links", itemId] });
+      return patchTaskLinks(queryClient, itemId, view => ({
+        ...view,
+        pullRequests: view.pullRequests.map(row => row.link.id === linkId
+          ? { ...row, link: { ...row.link, source: "MANUAL", field: null } } : row),
+      }));
+    },
+    onSuccess: linked => toast.success(`#${linked.pullRequest.number} pinned`, {
+      description: "It stays linked even if the Task ID is removed from the pull request.",
+    }),
+    onError: (error, _linkId, previous) => {
+      previous?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      toast.error("Could not pin the link", {
+        description: taskLinkErrorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error)),
+      });
+    },
+    onSettled: () => invalidateTaskLinks(queryClient, itemId),
+  });
+}
+
+/**
+ * US-TM-03: unlink a pull request. Removed from the list at once; the toast offers Undo
+ * for 5 s instead of a confirmation dialog (Undo links it again, manually).
+ */
+export function useUnlinkGitLink(itemId: number, taskKey?: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ linkId }: { linkId: number; number: number }) => {
+      try {
+        await gitIntegrationApi.unlinkGitLink(itemId, linkId);
+      } catch (error) {
+        if (gitIntegrationErrorCode(error) !== "GIT_TASK_LINK_NOT_FOUND") throw error; // already removed
+      }
+    },
+    onMutate: async ({ linkId }) => {
+      await queryClient.cancelQueries({ queryKey: ["git-integration", "backlog-links", itemId] });
+      return patchTaskLinks(queryClient, itemId, view => {
+        const pullRequests = view.pullRequests.filter(row => row.link.id !== linkId);
+        return { ...view, pullRequests, pullRequestCount: pullRequests.length };
+      });
+    },
+    onSuccess: (_result, { number }) => toast.success(`Unlinked #${number}${taskKey ? ` from ${taskKey}` : ""}`, {
+      description: "It won't be linked again automatically.",
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          gitIntegrationApi.linkPullRequest(itemId, number)
+            .catch(error => toast.error("Could not undo", {
+              description: taskLinkErrorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error)),
+            }))
+            .finally(() => void invalidateTaskLinks(queryClient, itemId));
+        },
+      },
+    }),
+    onError: (error, _variables, previous) => {
+      previous?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      toast.error("Could not unlink the pull request", {
+        description: taskLinkErrorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error)),
+      });
+    },
+    onSettled: () => invalidateTaskLinks(queryClient, itemId),
   });
 }
 

@@ -18,5 +18,7 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long>, Jpa
 
     long countByRepositoryId(Long repositoryId);
 
+    Optional<GitCommit> findFirstByRepositoryIdAndSha(Long repositoryId, String sha);
+
     Optional<GitCommit> findFirstByRepositoryIdOrderByCommittedAtDescIdDesc(Long repositoryId);
 }

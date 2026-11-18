@@ -1,4 +1,4 @@
-import type { GitInstallationStatus, GitIntegrationSummaryStatus } from "@/types/features/git-integration";
+import type { GitInstallationStatus, GitIntegrationSummaryStatus, GitPullRequestState } from "@/types/features/git-integration";
 import type { GitIntegrationTone } from "../git-integration.messages";
 
 /**
@@ -61,3 +61,22 @@ export const STATUS_STYLES: Record<AnyStatus, { label: string; badge: string; do
     accent: "border-l-slate-300 dark:border-l-slate-600",
   },
 };
+
+/**
+ * US-TM-03: 2px left accent of a pull request row, the same hue as its state badge
+ * (GitHub colours). Lively without tinting the whole row; the badge still carries the text.
+ */
+export function pullRequestAccent(state: GitPullRequestState, draft?: boolean) {
+  if (state === "OPEN" && draft) return "border-l-2 border-l-slate-300 dark:border-l-slate-600";
+  if (state === "OPEN") return "border-l-2 border-l-emerald-500 dark:border-l-emerald-400";
+  if (state === "MERGED") return "border-l-2 border-l-violet-500 dark:border-l-violet-400";
+  return "border-l-2 border-l-red-400 dark:border-l-red-500";
+}
+
+/** US-TM-03: small state dot of a pull request in the link picker. */
+export function pullRequestDot(state: GitPullRequestState, draft?: boolean) {
+  if (state === "OPEN" && draft) return "bg-slate-400";
+  if (state === "OPEN") return "bg-emerald-500";
+  if (state === "MERGED") return "bg-violet-500";
+  return "bg-red-400";
+}

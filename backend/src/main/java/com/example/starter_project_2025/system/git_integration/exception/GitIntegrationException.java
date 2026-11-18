@@ -69,6 +69,28 @@ public class GitIntegrationException extends RuntimeException {
                 "Không tìm thấy task");
     }
 
+    // ---- TM-03: manual task links ------------------------------------------------------------------
+
+    public static GitIntegrationException taskLinkNotFound() {
+        return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_TASK_LINK_NOT_FOUND",
+                "Không tìm thấy liên kết của task");
+    }
+
+    public static GitIntegrationException taskOutsideProject() {
+        return new GitIntegrationException(HttpStatus.UNPROCESSABLE_ENTITY, "GIT_TASK_OUTSIDE_PROJECT",
+                "Task không thuộc master project của repository hoặc module của nó");
+    }
+
+    public static GitIntegrationException taskInactive() {
+        return new GitIntegrationException(HttpStatus.UNPROCESSABLE_ENTITY, "GIT_TASK_INACTIVE",
+                "Task đã bị xoá nên không thể liên kết");
+    }
+
+    public static GitIntegrationException taskLinkTypeNotSupported() {
+        return new GitIntegrationException(HttpStatus.UNPROCESSABLE_ENTITY, "GIT_TASK_LINK_TYPE_NOT_SUPPORTED",
+                "Hiện chỉ liên kết thủ công được pull request");
+    }
+
     public static GitIntegrationException projectNotFound() {
         return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_PROJECT_NOT_FOUND",
                 "Không tìm thấy project");

@@ -49,12 +49,23 @@ class TaskKeyParserTest {
     void theFirstFieldMentioningAKeyWins() {
         List<Mention> found = TaskKeyParser.parseAll(List.of(
                 new Source(BacklogReferenceField.TITLE, "Cart FA-2"),
-                new Source(BacklogReferenceField.BRANCH, "feature/FA-1-cart"),
                 new Source(BacklogReferenceField.BODY, "Closes FA-1 and FA-2")), PREFIXES);
 
         assertThat(found).extracting(Mention::key).containsExactly("FA-2", "FA-1");
         assertThat(found).extracting(Mention::field)
-                .containsExactly(BacklogReferenceField.TITLE, BacklogReferenceField.BRANCH);
+                .containsExactly(BacklogReferenceField.TITLE, BacklogReferenceField.BODY);
+    }
+
+    @Test
+    void findsTaskIdsInMarkdownDescriptions() {
+        assertThat(keys("Closes **FA-21**, see [FA-22](https://x.test/FA-22) and `FA-23`\n- [ ] FA-24")).containsExactly(
+                "FA-21", "FA-22", "FA-23", "FA-24");
+    }
+
+    @Test
+    void onlyTheStartOfALongDescriptionIsScanned() {
+        String body = "x".repeat(TaskKeyParser.MAX_SCAN_LENGTH) + " FA-99";
+        assertThat(keys("FA-1 " + body)).containsExactly("FA-1");
     }
 
     @Test

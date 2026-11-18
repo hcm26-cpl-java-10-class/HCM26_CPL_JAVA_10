@@ -1,6 +1,7 @@
 package com.example.starter_project_2025.system.git_integration.repository;
 
 import com.example.starter_project_2025.system.git_integration.domain.BacklogReference;
+import com.example.starter_project_2025.system.git_integration.domain.BacklogReferenceField;
 import com.example.starter_project_2025.system.git_integration.domain.BacklogReferenceStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitArtifactType;
 import org.springframework.data.domain.Pageable;
@@ -19,6 +20,10 @@ public interface BacklogReferenceRepository extends JpaRepository<BacklogReferen
     List<BacklogReference> findBySourceTypeAndSourceIdIn(GitArtifactType sourceType, Collection<Long> sourceIds);
 
     List<BacklogReference> findByRepositoryIdAndStatusIn(Long repositoryId, Collection<BacklogReferenceStatus> statuses);
+
+    /** TM-03 clean-up: sources with a reference found in the given field (e.g. BRANCH of old pull requests). */
+    @Query("select distinct r.sourceId from BacklogReference r where r.sourceType = :type and r.sourceField = :field")
+    List<Long> findSourceIdsByField(@Param("type") GitArtifactType type, @Param("field") BacklogReferenceField field);
 
     /** Sources already processed (they have at least one row). */
     @Query("select distinct r.sourceId from BacklogReference r where r.sourceType = :type and r.sourceId in :ids")
@@ -46,6 +51,14 @@ public interface BacklogReferenceRepository extends JpaRepository<BacklogReferen
              where r.repositoryId = :repositoryId and r.sourceType = :type
              group by r.status""")
     List<Object[]> countSourcesByStatus(@Param("repositoryId") Long repositoryId, @Param("type") GitArtifactType type);
+
+    /** Sources with no Task ID that are not linked to any task either (TM-03: a manual link). */
+    @Query("""
+            select count(distinct r.sourceId) from BacklogReference r
+             where r.repositoryId = :repositoryId and r.sourceType = :type
+               and r.status = com.example.starter_project_2025.system.git_integration.domain.BacklogReferenceStatus.MISSING
+               and not exists (select l.id from BacklogGitLink l where l.artifactType = :type and l.artifactId = r.sourceId)""")
+    long countUnlinkedMissingSources(@Param("repositoryId") Long repositoryId, @Param("type") GitArtifactType type);
 
     @Query("select count(distinct r.sourceId) from BacklogReference r where r.repositoryId = :repositoryId and r.sourceType = :type")
     long countProcessedSources(@Param("repositoryId") Long repositoryId, @Param("type") GitArtifactType type);

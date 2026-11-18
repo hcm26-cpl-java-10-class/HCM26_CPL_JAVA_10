@@ -3,6 +3,8 @@ import axiosInstance from "@/api/axios";
 import type {
   BacklogGitLinks,
   BacklogGitLinkSummary,
+  GitPullRequestCandidate,
+  LinkedPullRequest,
   GitHubCallbackRequest,
   GitHubCallbackResponse,
   GitHubConnectStartResponse,
@@ -100,6 +102,31 @@ export const gitIntegrationApi = {
   backlogItemGitLinks: async (itemId: number, page = 0, size = 20, signal?: AbortSignal) =>
     (await axiosInstance.get<BacklogGitLinks>(`/v1/git-integration/backlog-items/${itemId}/git-links`, {
       params: { page, size },
+      signal,
+    })).data,
+
+  /** US-TM-03: link a pull request of the task's repository by number (pins an automatic link). */
+  linkPullRequest: async (itemId: number, number: number) =>
+    (await axiosInstance.post<LinkedPullRequest>(`/v1/git-integration/backlog-items/${itemId}/git-links`, {
+      type: "PULL_REQUEST",
+      number,
+    })).data,
+
+  /** US-TM-03: pin an automatic link so editing the pull request no longer removes it. */
+  pinGitLink: async (itemId: number, linkId: number) =>
+    (await axiosInstance.patch<LinkedPullRequest>(`/v1/git-integration/backlog-items/${itemId}/git-links/${linkId}`, {
+      source: "MANUAL",
+    })).data,
+
+  /** US-TM-03: unlink a pull request; it is not linked again automatically. */
+  unlinkGitLink: async (itemId: number, linkId: number) => {
+    await axiosInstance.delete(`/v1/git-integration/backlog-items/${itemId}/git-links/${linkId}`);
+  },
+
+  /** US-TM-03: pull requests of the task's repository to pick from (#number or title). */
+  pullRequestCandidates: async (itemId: number, q: string, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitPullRequestCandidate[]>(`/v1/git-integration/backlog-items/${itemId}/git-links/candidates`, {
+      params: { q: q || undefined },
       signal,
     })).data,
 

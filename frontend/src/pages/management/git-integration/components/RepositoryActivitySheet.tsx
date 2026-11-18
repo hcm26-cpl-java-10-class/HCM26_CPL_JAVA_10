@@ -10,6 +10,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import type { GitCommitItem, GitPage, GitPullRequestItem, GitPullRequestState, GitTaskLinkFilter } from "@/types/features/git-integration";
 import { formatDateTime, formatRelative } from "../git-integration.format";
 import { usePullRequestDetail, useRecheckTaskLinks, useRepositoryCommits, useRepositoryPullRequests } from "../useGitIntegration";
+import { pullRequestAccent } from "./git-integration.styles";
 import { GitHubTile } from "./GitIntegrationHeader";
 import { PullRequestStateBadge, ReviewStateBadge } from "./SyncDataBadges";
 import { TaskRefChips } from "./TaskRefChips";
@@ -174,7 +175,8 @@ function PullRequestRow({ projectId, pr, expanded, onToggle }: {
   onToggle: () => void;
 }) {
   const summary = pr.reviewSummary;
-  return <li className="px-5 py-3">
+  // US-TM-03: 2px state accent (border replaces 2px of the left padding, so content stays aligned).
+  return <li className={cn("py-3 pl-[18px] pr-5", pullRequestAccent(pr.state, pr.draft))}>
     <div className="flex items-start gap-3">
       <button type="button" onClick={onToggle} aria-expanded={expanded} aria-label={`${expanded ? "Hide" : "Show"} reviews of #${pr.number}`}
         className="mt-0.5 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground">

@@ -6,5 +6,7 @@ public enum BacklogReferenceReason {
     NOT_FOUND,
     DELETED,
     OTHER_PROJECT,
-    NO_TASK_ID
+    NO_TASK_ID,
+    /** TM-03: see {@link BacklogReferenceStatus#EXCLUDED}. */
+    UNLINKED_BY_USER
 }

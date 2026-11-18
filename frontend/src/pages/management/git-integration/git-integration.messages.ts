@@ -215,3 +215,19 @@ const REPLAY_ERRORS: Record<string, string> = {
 export function replayErrorMessage(code?: string) {
   return (code && REPLAY_ERRORS[code]) || "The event could not be queued again. Please try again.";
 }
+
+/** US-TM-03: why a manual link / unlink failed, in words. */
+const TASK_LINK_ERRORS: Record<string, string> = {
+  GIT_PULL_REQUEST_NOT_FOUND: "No pull request with that number in this project's repository.",
+  GIT_REPOSITORY_NOT_LINKED: "This task's project has no linked repository yet.",
+  GIT_TASK_OUTSIDE_PROJECT: "This task is not in the repository's project or one of its modules.",
+  GIT_TASK_INACTIVE: "This task was deleted, so it can't be linked.",
+  GIT_TASK_LINK_NOT_FOUND: "This link was already removed.",
+  GIT_BACKLOG_ITEM_NOT_FOUND: "This task no longer exists or you can't open it.",
+};
+
+export function taskLinkErrorMessage(code?: string, httpStatus?: number) {
+  if (code && TASK_LINK_ERRORS[code]) return TASK_LINK_ERRORS[code];
+  if (httpStatus === 403) return "You need permission to update this task.";
+  return errorMessage(code, httpStatus).description;
+}
