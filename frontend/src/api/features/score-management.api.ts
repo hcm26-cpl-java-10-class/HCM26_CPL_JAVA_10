@@ -27,6 +27,21 @@ export interface SmColumn {
   published: boolean;
 }
 
+export type SmReleasePolicy =
+    | "MY_SCORES_ONLY"
+    | "MY_SCORES_AND_EMAIL"
+    | "HIDDEN";
+
+export interface SmPublicationStatus {
+  examId: number;
+  releasePolicy: SmReleasePolicy | null;
+  published: boolean;
+  publishedAt: string | null;
+  publishedBy: number | null;
+  unpublishedAt: string | null;
+  unpublishedBy: number | null;
+}
+
 export interface SmStudentRow {
   id: number;
   name: string;
@@ -158,4 +173,23 @@ export const scoreManagementApi = {
     (await axiosInstance.post<SmImportReport>(`${base}/columns/${columnId}/import`, { examId })).data,
   report: async (columnId: number): Promise<SmImportReport> =>
     (await axiosInstance.get<SmImportReport>(`${base}/columns/${columnId}/report`)).data,
+  publicationStatus: async (
+      examId: number
+  ): Promise<SmPublicationStatus> =>
+      (
+          await axiosInstance.get<SmPublicationStatus>(
+              `/exams/${examId}/result-publication`
+          )
+      ).data,
+
+  publishExam: async (
+      examId: number,
+      releasePolicy: SmReleasePolicy
+  ): Promise<SmPublicationStatus> =>
+      (
+          await axiosInstance.post<SmPublicationStatus>(
+              `/exams/${examId}/result-publication/publish`,
+              { releasePolicy }
+          )
+      ).data,
 };
