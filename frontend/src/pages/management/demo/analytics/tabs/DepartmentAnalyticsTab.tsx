@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TopLearnersPanel } from "@/pages/management/demo/analytics/components/TopLearnersPanel";
 import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
@@ -301,6 +302,8 @@ export function DepartmentAnalyticsTab({ courseId }: Props) {
           </Table>
         </div>
       </AnalyticsPanel>
+
+      <TopLearnersPanel courseId={courseId} />
     </div>
   );
 }

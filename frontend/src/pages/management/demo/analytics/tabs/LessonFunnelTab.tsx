@@ -36,6 +36,7 @@ import {
   truncateLabel,
 } from "@/pages/management/demo/analytics/lib/chart-helpers";
 import type { LessonFunnelItem } from "@/types";
+import { BottleneckPanel } from "@/pages/management/demo/analytics/components/BottleneckPanel";
 import { AnalyticsLoading } from "@/pages/management/demo/analytics/components/AnalyticsLoading";
 
 type Props = {
@@ -226,6 +227,8 @@ export function LessonFunnelTab({ courseId }: Props) {
           </Table>
         </div>
       </AnalyticsPanel>
+
+      <BottleneckPanel courseId={courseId} />
     </div>
   );
 }

@@ -445,4 +445,20 @@ public interface CourseAnalyticsRepository extends JpaRepository<CourseEnrollmen
             group by d.id
             """)
     List<Object[]> aggregateStudySecondsByDepartment(@Param("courseId") Long courseId);
+
+    // =================================================================
+    // 11. Bottlenecks / learner engagement
+    // =================================================================
+
+    /**
+     * [enrollmentId, lessonId, completed, studySeconds, lastAccessedAt] cho mọi bản ghi
+     * progress của khóa học (dùng để tìm bài học mà người học dừng lại / bị nghẽn).
+     */
+    @Query("""
+            select p.enrollment.id, p.lesson.id, p.completed, coalesce(p.studySeconds, 0L), p.lastAccessedAt
+            from LessonProgress p
+            where p.enrollment.course.id = :courseId
+              and p.enrollment.isActive = true
+            """)
+    List<Object[]> findLessonProgressDetail(@Param("courseId") Long courseId);
 }
