@@ -246,8 +246,10 @@ public class TeamAllocationSessionService {
         int requestedCapacity = request.maxMembers();
         int previousCapacity = session.getMaxMembers();
         List<ProjectTeam> draftTeams =
-                teamRepository.findAllByAllocationSession_IdAndStatus(
-                        sessionId, ProjectTeamStatus.DRAFT);
+                teamRepository.findAllByAllocationSession_IdAndIsActiveTrueOrderByIdAsc(sessionId)
+                        .stream()
+                        .filter(team -> team.getStatus() == ProjectTeamStatus.DRAFT)
+                        .toList();
         for (ProjectTeam team : draftTeams) {
             if (team.getProjectTemplateId() != null) {
                 continue;

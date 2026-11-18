@@ -2,11 +2,13 @@ package com.example.starter_project_2025.system.project.analytics;
 
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogWorkType;
+import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLog;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -102,5 +104,34 @@ public class ProjectAnalyticsWorkItemRepository {
                 """, Long.class)
                 .setParameter("projectId", projectId)
                 .getSingleResult();
+    }
+
+    /**
+     * US-ANL-003: status transitions of the given work items, oldest first.
+     *
+     * <p>Cycle time ("first move to In progress → Done") and lead time
+     * ("creation → Done") need the actual transition dates, which only the
+     * append-only backlog audit trail keeps. The query is bounded by
+     * {@code asOf} so a report window never counts a transition that happened
+     * later, and it is only executed for items that are Done (see
+     * {@link ProjectAnalyticsService}).</p>
+     *
+     * @param itemIds work items to read the history of; must not be empty
+     * @param asOf    latest timestamp to consider
+     */
+    public List<SprintBacklogAuditLog> findStatusEvents(List<Long> itemIds, LocalDateTime asOf) {
+        if (itemIds == null || itemIds.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery("""
+                select event
+                from BacklogItemAuditLog event
+                where event.sprintBacklogId in :itemIds
+                  and event.createdAt <= :asOf
+                order by event.createdAt asc, event.id asc
+                """, SprintBacklogAuditLog.class)
+                .setParameter("itemIds", itemIds)
+                .setParameter("asOf", asOf)
+                .getResultList();
     }
 }
