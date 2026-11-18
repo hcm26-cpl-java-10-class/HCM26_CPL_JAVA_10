@@ -6,7 +6,15 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 @Entity
-@Table(name = "program_subjects")
+@Table(
+    name = "program_subjects",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "uk_program_subject_unique",
+            columnNames = {"program_id", "subject_id"}
+        )
+    }
+)
 @Data
 @Builder
 @NoArgsConstructor
