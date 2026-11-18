@@ -13,6 +13,16 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import com.example.starter_project_2025.system.demo.syllabus.entity.Syllabus;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusCloRepository;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusCoverageService;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusRepository;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusSection;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusSectionRepository;
+import com.example.starter_project_2025.system.demo.syllabus.entity.SyllabusTopic;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusTopicCloLinkRepository;
+import com.example.starter_project_2025.system.demo.syllabus.repository.SyllabusTopicRepository;
+import com.example.starter_project_2025.system.demo.syllabus.service.SyllabusWorkflowService;
 
 @ExtendWith(MockitoExtension.class)
 class SyllabusCoverageServiceTest {
