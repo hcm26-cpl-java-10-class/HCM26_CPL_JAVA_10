@@ -43,12 +43,26 @@ export interface ProjectAnalyticsWindow {
   granularity: ProjectAnalyticsGranularity;
 }
 
+/** Measurement of a KPI value: item count, percentage or day average. */
+export type ProjectAnalyticsKpiUnit = "items" | "percent" | "days";
+
+/**
+ * One card of the US-ANL-003 summary strip.
+ *
+ * `value` is already formatted by the backend (`"20"`, `"75.0%"`,
+ * `"2.4 days"`, `"N/A"`) so the 1-decimal rule and the N/A fallback of AC02
+ * cannot drift between the API and the UI.
+ */
 export interface ProjectAnalyticsKpi {
   key: string;
   label: string;
-  value: number;
-  unit: "items" | "percent";
+  value: string;
+  unit: ProjectAnalyticsKpiUnit;
   hint: string;
+  /** Sub-label, e.g. `15 Done / 5 To do` on the Total Work Items card. */
+  caption: string | null;
+  /** Second sub-label, e.g. the `30.0h / 40.0h` estimate split (AC03). */
+  subCaption: string | null;
 }
 
 /** One X-axis bucket: activity counts plus the status snapshot at its end. */
@@ -67,6 +81,26 @@ export interface ProjectAnalyticsBucket {
 export interface ProjectAnalyticsSeries {
   key: Exclude<keyof ProjectAnalyticsBucket, "date">;
   label: string;
+}
+
+/**
+ * US-ANL-004: one creation-date bucket of the stacked bar chart.
+ *
+ * `done` is the blue bottom segment (items created that day that are now
+ * Done) and `todo` the green cap (items still open: To do, In progress,
+ * Review or Blocked). `done + todo` is the number of items created on `date`.
+ */
+export interface ProjectAnalyticsCreationBucket {
+  date: string;
+  done: number;
+  todo: number;
+}
+
+/** US-ANL-004: "Work item creation trend" chart, one bar per creation date. */
+export interface ProjectAnalyticsCreationTrend {
+  state: ProjectAnalyticsWidgetState;
+  series: ProjectAnalyticsSeries[];
+  buckets: ProjectAnalyticsCreationBucket[];
 }
 
 export interface ProjectAnalyticsWidget {
@@ -88,6 +122,7 @@ export interface ProjectAnalyticsShell {
   filters: ProjectAnalyticsFilters;
   window: ProjectAnalyticsWindow;
   kpis: ProjectAnalyticsKpi[];
+  creationTrend: ProjectAnalyticsCreationTrend;
   widgets: ProjectAnalyticsWidget[];
 }
 
