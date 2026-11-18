@@ -255,9 +255,9 @@ public class ProjectTeamPublishCoordinator {
         }
 
         List<Long> teamIds = teamRepository
-                .findAllByAllocationSession_IdAndStatusOrderByIdAsc(
-                        sessionId, ProjectTeamStatus.DRAFT)
+                .findAllByAllocationSession_IdAndIsActiveTrueOrderByIdAsc(sessionId)
                 .stream()
+                .filter(team -> team.getStatus() == ProjectTeamStatus.DRAFT)
                 .map(ProjectTeam::getId)
                 .toList();
         if (teamIds.isEmpty()) {

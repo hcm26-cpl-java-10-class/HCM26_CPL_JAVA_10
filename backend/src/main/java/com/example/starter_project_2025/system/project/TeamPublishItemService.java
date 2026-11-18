@@ -59,6 +59,7 @@ public class TeamPublishItemService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "TeamAllocationSession", "id", sessionId));
         ProjectTeam team = teamRepository.findByIdAndAllocationSession_Id(teamId, sessionId)
+                .filter(value -> Boolean.TRUE.equals(value.getIsActive()))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "ProjectTeam", "id", teamId));
 
