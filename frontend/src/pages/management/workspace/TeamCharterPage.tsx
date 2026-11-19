@@ -65,29 +65,35 @@ export function CharterContent({view, onRefresh}: {view: TeamCharterView; onRefr
   const [form, setForm] = useState(() => formOf(view));
   const [baseline, setBaseline] = useState(() => JSON.stringify(formOf(view)));
   const [preview, setPreview] = useState(false);
-  const [acknowledged, setAcknowledged] = useState(false);
+  const [acknowledgedFor, setAcknowledgedFor] = useState<string | null>(null);
+  const agreementId = `${view.revision}:${view.rosterToken}`;
+  const acknowledged = acknowledgedFor === agreementId;
   const [tab, setTab] = useState<"current" | "history">("current");
   const [page, setPage] = useState(0);
   const dirty = JSON.stringify(form) !== baseline;
   const stale = form.version !== view.charter.version;
   // Adopt newer server content only when clean; never overwrite unsaved edits or a just-saved newer token.
   if (!dirty && (view.charter.version ?? 0) > (form.version ?? 0)) {
-    const next = formOf(view); setForm(next); setBaseline(JSON.stringify(next)); setAcknowledged(false);
+    const next = formOf(view); setForm(next); setBaseline(JSON.stringify(next)); setAcknowledgedFor(null);
   }
-  const save = useMutation({mutationFn: () => projectHubApi.saveCharter(view.teamId, form), onError: async error => {
-    if (isAxiosError(error) && error.response?.status === 409) await onRefresh();
-  }, onSuccess: async response => {
-    const next = {...form, ...response.charter, responsibilities: form.responsibilities}; setForm(next); setBaseline(JSON.stringify(next)); setPreview(false); setAcknowledged(false);
+  const refreshAfterRejectedMutation = async (error: unknown) => {
+    if (isAxiosError(error) && [401, 403, 404, 409, 422].includes(error.response?.status ?? 0)) await onRefresh();
+  };
+  const save = useMutation({mutationFn: () => projectHubApi.saveCharter(view.teamId, form), onError: refreshAfterRejectedMutation, onSuccess: async response => {
+    const next = {...form, ...response.charter, responsibilities: form.responsibilities}; setForm(next); setBaseline(JSON.stringify(next)); setPreview(false); setAcknowledgedFor(null);
     toast.success("Team charter saved. Members must confirm the current revision."); await onRefresh();
+    await queryClient.invalidateQueries({queryKey: ["charter-history", view.teamId]});
   }});
-  const confirm = useMutation({mutationFn: () => projectHubApi.confirmCharter(view.teamId, {version: view.charter.version!, revision: view.revision, rosterToken: view.rosterToken}), onSuccess: async () => {
-    setAcknowledged(false); toast.success("Your role and charter confirmation was recorded."); await onRefresh();
+  const confirm = useMutation({mutationFn: () => projectHubApi.confirmCharter(view.teamId, {version: view.charter.version!, revision: view.revision, rosterToken: view.rosterToken}), onError: async error => {
+    setAcknowledgedFor(null); await refreshAfterRejectedMutation(error);
+  }, onSuccess: async () => {
+    setAcknowledgedFor(null); toast.success("Your role and charter confirmation was recorded."); await onRefresh();
     await queryClient.invalidateQueries({queryKey: ["charter-history", view.teamId]});
   }});
   const reload = useMutation({mutationFn: () => projectHubApi.getCharter(view.teamId), onSuccess: async latest => {
-    const next = formOf(latest); setForm(next); setBaseline(JSON.stringify(next)); setAcknowledged(false); save.reset(); confirm.reset(); await onRefresh();
+    const next = formOf(latest); setForm(next); setBaseline(JSON.stringify(next)); setAcknowledgedFor(null); save.reset(); confirm.reset(); await onRefresh();
   }});
-  const history = useQuery({queryKey: ["charter-history", view.teamId, page, user.email, activeRole], queryFn: () => projectHubApi.getCharterHistory(view.teamId, page), enabled: tab === "history", refetchOnWindowFocus: false});
+  const history = useQuery({queryKey: ["charter-history", view.teamId, view.revision, page, user.email, activeRole], queryFn: () => projectHubApi.getCharterHistory(view.teamId, page), enabled: tab === "history", refetchOnWindowFocus: false});
   const busy = save.isPending || confirm.isPending || reload.isPending;
   const confirmationDisabled = busy || !view.canConfirm || dirty || stale;
   const editable = view.canEdit && !busy;
@@ -123,7 +129,7 @@ export function CharterContent({view, onRefresh}: {view: TeamCharterView; onRefr
                 className="mt-1 cursor-pointer disabled:cursor-not-allowed"
                 checked={acknowledged}
                 disabled={confirmationDisabled}
-                onCheckedChange={checked => { if (!confirmationDisabled) setAcknowledged(checked === true); }}
+                onCheckedChange={checked => { if (!confirmationDisabled) setAcknowledgedFor(checked === true ? agreementId : null); }}
               />
               <Label htmlFor={confirmationId} className={`min-w-0 text-sm leading-6 font-normal ${confirmationDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
                 I have read this saved charter and agree to my assigned roles and responsibilities.
