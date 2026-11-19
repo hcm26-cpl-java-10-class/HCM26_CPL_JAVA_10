@@ -1,6 +1,7 @@
 import { GitCommitHorizontal, GitPullRequest, LayoutDashboard, RefreshCw, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { GitRepositoryActivity, GitTaskRef } from "@/types/features/git-integration";
@@ -44,7 +45,11 @@ function SyncHealth({ activity }: { activity: GitRepositoryActivity }) {
  * (link, sync state, alerts) followed by Insights, Commits and Pull requests of the
  * project's repository — a module reads its master's. All state lives in the URL.
  */
-export function WorkspaceGitHubPanel({ projectId }: { projectId: number }) {
+export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
+  projectId: number;
+  /** Projects of this workspace the viewer may open; a task of another project is not navigated to. */
+  assignedProjectIds: number[];
+}) {
   const [params, setParams] = useSearchParams();
   const state = parseGitHubTabParams(params);
   const repository = useProjectRepository(projectId);
@@ -54,12 +59,19 @@ export function WorkspaceGitHubPanel({ projectId }: { projectId: number }) {
   // Filters replace the history entry; opening a task pushes one so Back returns here.
   const update = (patch: GitHubTabPatch) => setParams(previous => patchGitHubTabParams(previous, patch), { replace: true });
   const navigate = (target: GitHubTabTarget) => setParams(previous => openGitHubTabParams(previous, target), { replace: true });
+  // WS-GH-02: a module's task opens in that module's Backlog (when the viewer is assigned to it).
   const openTask = (ref: GitTaskRef) => {
     if (ref.itemId == null) return;
+    const target = ref.itemProjectId ?? projectId;
+    if (target !== projectId && !assignedProjectIds.includes(target)) {
+      toast.info("This task belongs to a project you are not assigned to.");
+      return;
+    }
     setParams(previous => {
       const next = clearGitHubTabParams(previous);
       next.set("tab", "backlog");
       next.set("itemId", String(ref.itemId));
+      if (target !== projectId) next.set("project", String(target));
       return next;
     });
   };
@@ -88,18 +100,19 @@ export function WorkspaceGitHubPanel({ projectId }: { projectId: number }) {
       </div>;
     } else {
       content = <RepositoryInsights projectId={projectId} activity={data} repositoryName={repository.data!.repository!.fullName}
-        onNavigate={navigate} onOpenTask={openTask} />;
+        defaultBranch={repository.data!.repository!.defaultBranch} range={state.range}
+        onRange={range => update({ range })} onNavigate={navigate} onOpenTask={openTask} />;
     }
   }
 
   return <div className="min-w-0 space-y-4">
     <Card className={CARD}>
-      <ProjectRepositoryCard projectId={projectId} showActivity={false} />
+      <ProjectRepositoryCard projectId={projectId} showActivity={false} variant="strip" />
     </Card>
     {linked && <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Segmented label="GitHub views" value={state.view} options={views}
-          onChange={view => navigate({ view })} />
+          onChange={view => navigate({ view, range: state.range })} />
         {data && <SyncHealth activity={data} />}
       </div>
       {content}

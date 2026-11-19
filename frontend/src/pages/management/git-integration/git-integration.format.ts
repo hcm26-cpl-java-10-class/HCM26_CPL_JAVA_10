@@ -9,14 +9,36 @@ const UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
   ["minute", 60],
 ];
 
-/** "2 hours ago" style text; backend timestamps are local date-times without zone. */
+const DAY_MS = 24 * 3600 * 1000;
+
+/** Calendar days from today to `date` (negative in the past), ignoring the time of day. */
+function calendarDays(date: Date, now: Date) {
+  const day = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((day - today) / DAY_MS);
+}
+
+/**
+ * "2 hours ago" style text; backend timestamps are local date-times without zone.
+ * WS-GH-02: from one day on it counts calendar days, so it agrees with day headings
+ * ("Yesterday" shows "yesterday", not "2 days ago" for a commit 36 hours old).
+ */
 export function formatRelative(value?: string | null) {
   if (!value) return "";
-  const time = new Date(value).getTime();
+  const date = new Date(value);
+  const time = date.getTime();
   if (Number.isNaN(time)) return "";
-  const seconds = Math.round((time - Date.now()) / 1000);
+  const now = new Date();
+  const days = calendarDays(date, now);
+  if (days !== 0) {
+    for (const [unit, size] of UNITS) {
+      const unitDays = size / (24 * 3600);
+      if (unitDays >= 1 && Math.abs(days) >= unitDays) return RELATIVE.format(Math.round(days / unitDays), unit);
+    }
+  }
+  const seconds = Math.round((time - now.getTime()) / 1000);
   for (const [unit, size] of UNITS) {
-    if (Math.abs(seconds) >= size) return RELATIVE.format(Math.round(seconds / size), unit);
+    if (size < 24 * 3600 && Math.abs(seconds) >= size) return RELATIVE.format(Math.round(seconds / size), unit);
   }
   return "just now";
 }

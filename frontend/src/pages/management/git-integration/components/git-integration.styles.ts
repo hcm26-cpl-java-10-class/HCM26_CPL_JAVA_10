@@ -94,11 +94,45 @@ const CONTRIBUTOR_TONES = [
   "bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
 ];
 
-export function contributorTone(login?: string | null) {
+function toneIndex(login?: string | null) {
   let hash = 0;
   for (const char of (login ?? "").toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) | 0;
-  return CONTRIBUTOR_TONES[Math.abs(hash) % CONTRIBUTOR_TONES.length];
+  return Math.abs(hash) % CONTRIBUTOR_TONES.length;
 }
+
+export function contributorTone(login?: string | null) {
+  return CONTRIBUTOR_TONES[toneIndex(login)];
+}
+
+/** WS-GH-02: ratio bar of a contributor, in the same hue as their avatar (track = lighter step of that ramp). */
+const CONTRIBUTOR_BARS = [
+  { track: "bg-sky-100 dark:bg-sky-950", bar: "bg-sky-500 dark:bg-sky-500" },
+  { track: "bg-emerald-100 dark:bg-emerald-950", bar: "bg-emerald-500 dark:bg-emerald-500" },
+  { track: "bg-violet-100 dark:bg-violet-950", bar: "bg-violet-500 dark:bg-violet-500" },
+  { track: "bg-amber-100 dark:bg-amber-950", bar: "bg-amber-500 dark:bg-amber-500" },
+  { track: "bg-rose-100 dark:bg-rose-950", bar: "bg-rose-500 dark:bg-rose-500" },
+  { track: "bg-teal-100 dark:bg-teal-950", bar: "bg-teal-500 dark:bg-teal-500" },
+];
+
+export function contributorBar(login?: string | null) {
+  return CONTRIBUTOR_BARS[toneIndex(login)];
+}
+
+/** WS-GH-02: ratio bar of a branch (commit hue). */
+export const BRANCH_BAR = { track: "bg-sky-100 dark:bg-sky-950", bar: "bg-sky-600 dark:bg-sky-600" };
+
+/**
+ * WS-GH-02: colours of the commit activity chart, as CSS variables defined in `index.css`
+ * for light and dark (validated with the dataviz palette checks against the card surface:
+ * bars sky-600 in both modes, merged-PR dots violet-600 light / violet-500 dark).
+ */
+export const CHART_COLORS = {
+  bar: "var(--gh-chart-bar)",
+  barActive: "var(--gh-chart-bar-active)",
+  merged: "var(--gh-chart-merged)",
+  grid: "var(--gh-chart-grid)",
+  surface: "var(--card)",
+} as const;
 
 /** WS-GH-01: icon chip of a stat tile; only the chip is coloured, never the whole tile. */
 export const STAT_TONES = {

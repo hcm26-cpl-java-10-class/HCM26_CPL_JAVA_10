@@ -38,7 +38,9 @@ import java.time.LocalDateTime;
         uniqueConstraints = @UniqueConstraint(name = "uk_git_review_repo_external", columnNames = {"repository_id", "external_id"}),
         indexes = {
                 @Index(name = "idx_git_review_pr", columnList = "pull_request_id, submitted_at"),
-                @Index(name = "idx_git_review_project_reviewer", columnList = "project_id, reviewer_login, submitted_at")
+                @Index(name = "idx_git_review_project_reviewer", columnList = "project_id, reviewer_login, submitted_at"),
+                // WS-GH-02: reviews submitted in an insights period.
+                @Index(name = "idx_git_review_repo_time", columnList = "repository_id, submitted_at")
         })
 @Getter
 @Setter

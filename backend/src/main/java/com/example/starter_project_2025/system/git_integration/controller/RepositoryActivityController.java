@@ -6,8 +6,11 @@ import com.example.starter_project_2025.system.git_integration.dto.GitCommitItem
 import com.example.starter_project_2025.system.git_integration.dto.GitPage;
 import com.example.starter_project_2025.system.git_integration.dto.GitPullRequestDetail;
 import com.example.starter_project_2025.system.git_integration.dto.GitPullRequestItem;
+import com.example.starter_project_2025.system.git_integration.dto.GitBranchItem;
 import com.example.starter_project_2025.system.git_integration.dto.RepositoryActivityView;
+import com.example.starter_project_2025.system.git_integration.dto.RepositoryInsightsView;
 import com.example.starter_project_2025.system.git_integration.service.RepositoryActivityQueryService;
+import com.example.starter_project_2025.system.git_integration.service.RepositoryInsightsQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Tag(name = "Git Integration · Repository activity", description = "SY-04: commits, pull requests and reviews synchronized from GitHub webhooks")
 @RestController
@@ -27,6 +31,7 @@ import java.time.LocalDateTime;
 public class RepositoryActivityController {
 
     private final RepositoryActivityQueryService queryService;
+    private final RepositoryInsightsQueryService insightsService;
 
     @Operation(summary = "Counts, latest commit and webhook health of the project's repository (a module reads its master's)")
     @GetMapping("/activity")
@@ -63,5 +68,21 @@ public class RepositoryActivityController {
     @GetMapping("/pull-requests/{number}")
     public GitPullRequestDetail pullRequest(@PathVariable Long projectId, @PathVariable int number) {
         return queryService.pullRequest(projectId, number);
+    }
+
+    @Operation(summary = "WS-GH-02: activity of the period (7d, 30d, 90d; today included) — commits per day, contributors, "
+            + "branches — and the current state of the open pull requests")
+    @GetMapping("/insights")
+    public RepositoryInsightsView insights(@PathVariable Long projectId,
+                                           @RequestParam(required = false) String range) {
+        return insightsService.insights(projectId, range);
+    }
+
+    @Operation(summary = "WS-GH-02: branches the commits were first pushed to, latest activity first; q matches the name")
+    @GetMapping("/branches")
+    public List<GitBranchItem> branches(@PathVariable Long projectId,
+                                        @RequestParam(required = false) String q,
+                                        @RequestParam(required = false) Integer limit) {
+        return insightsService.branches(projectId, q, limit);
     }
 }

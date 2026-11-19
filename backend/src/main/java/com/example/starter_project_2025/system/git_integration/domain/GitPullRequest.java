@@ -33,7 +33,10 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_git_pr_project_state", columnList = "project_id, state, github_updated_at"),
                 @Index(name = "idx_git_pr_repo_state", columnList = "repository_id, state, github_updated_at"),
-                @Index(name = "idx_git_pr_repo_author", columnList = "repository_id, author_login")
+                @Index(name = "idx_git_pr_repo_author", columnList = "repository_id, author_login"),
+                // WS-GH-02: pull requests opened / merged in an insights period.
+                @Index(name = "idx_git_pr_repo_created", columnList = "repository_id, github_created_at"),
+                @Index(name = "idx_git_pr_repo_merged", columnList = "repository_id, merged_at")
         })
 @Getter
 @Setter

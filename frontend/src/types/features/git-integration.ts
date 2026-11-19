@@ -283,6 +283,8 @@ export interface GitTaskRef {
   itemTitle?: string | null;
   itemStatus?: string | null;
   source?: GitLinkSource | null;
+  /** WS-GH-02: project of the linked task (a module's id when the task lives in a module). */
+  itemProjectId?: number | null;
 }
 
 /** `NEEDS_ATTENTION` = no Task ID, an unknown one or one of another project. */
@@ -475,4 +477,68 @@ export interface GitWebhookEventQuery {
   projectId?: number;
   page?: number;
   size?: number;
+}
+
+// ---- WS-GH-02: repository activity insights ------------------------------------------------------
+
+export type GitInsightsRange = "7d" | "30d" | "90d";
+
+export interface GitDailyActivity {
+  /** Local date `2026-11-19`. */
+  date: string;
+  commits: number;
+  pullRequestsOpened: number;
+  pullRequestsMerged: number;
+}
+
+/** A person of the period; `matched` is false when the commits carry no GitHub login (grouped by name). */
+export interface GitContributorStat {
+  login: string | null;
+  name: string | null;
+  matched: boolean;
+  commits: number;
+  pullRequestsOpened: number;
+  reviews: number;
+  lastActiveAt: string | null;
+}
+
+/** A branch commits were first pushed to (without refs/heads/). */
+export interface GitBranchItem {
+  name: string;
+  commits: number;
+  lastCommitAt: string | null;
+}
+
+export type GitPullRequestAttention = "CHANGES_REQUESTED" | "AWAITING_REVIEW" | "STALE";
+
+export interface GitRepositoryInsights {
+  /** Null (counts 0, lists empty, `daily` still complete) when no repository is linked. */
+  repositoryId: number | null;
+  range: GitInsightsRange;
+  from: string;
+  to: string;
+  generatedAt: string;
+  summary: {
+    commits: number;
+    activeDays: number;
+    contributors: number;
+    pullRequestsOpened: number;
+    pullRequestsMerged: number;
+    medianHoursToMerge: number | null;
+  };
+  daily: GitDailyActivity[];
+  contributors: GitContributorStat[];
+  otherContributors: number;
+  branches: GitBranchItem[];
+  /** Current open pull requests; does not depend on the range. */
+  pullRequests: {
+    open: number;
+    awaitingReview: number;
+    changesRequested: number;
+    stale: number;
+    staleDays: number;
+    attention: Array<{ reason: GitPullRequestAttention; pullRequest: GitPullRequestItem }>;
+  };
+  /** True when the period had more commits than the server reads (counts are a lower bound). */
+  truncated: boolean;
 }

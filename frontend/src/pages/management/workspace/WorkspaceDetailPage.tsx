@@ -167,7 +167,7 @@ function WorkspaceContext({ workspaceId }: { workspaceId: number }) {
                   </EmbeddedLayoutContext.Provider>
                 ) : <WorkspaceSectionState denied retry={reloadAccess} />
               ) : isGitHubTab ? (
-                hasProject ? <WorkspaceGitHubPanel key={projectId} projectId={projectId!} />
+                hasProject ? <WorkspaceGitHubPanel key={projectId} projectId={projectId!} assignedProjectIds={projects.map(item => item.id)} />
                   : <WorkspaceSectionState denied retry={reloadAccess} />
               ) : denied || !current ? <WorkspaceSectionState denied retry={reloadAccess} />
                 : tab === "overview" ? <WorkspaceOverviewSection workspaceId={workspaceId} projectId={context.projectId} selectedProject={projectScoped ? project : undefined}

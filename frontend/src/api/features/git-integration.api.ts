@@ -22,6 +22,9 @@ import type {
   GitSyncJob,
   GitTaskLinkRecheckResult,
   GitTaskLinkStats,
+  GitBranchItem,
+  GitInsightsRange,
+  GitRepositoryInsights,
   GitWebhookEventItem,
   GitWebhookEventQuery,
   LinkRepositoryRequest,
@@ -93,6 +96,17 @@ export const gitIntegrationApi = {
   repositoryPullRequests: async (projectId: number, query: GitPullRequestQuery, signal?: AbortSignal) =>
     (await axiosInstance.get<GitPage<GitPullRequestItem>>(`${PROJECTS}/${projectId}/repository/pull-requests`, {
       params: { state: query.state, q: query.q?.trim() || undefined, link: query.link, page: query.page ?? 0, size: query.size ?? 20 },
+      signal,
+    })).data,
+
+  /** WS-GH-02: activity of the period (today included) and the current state of the open pull requests. */
+  repositoryInsights: async (projectId: number, range: GitInsightsRange, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitRepositoryInsights>(`${PROJECTS}/${projectId}/repository/insights`, { params: { range }, signal })).data,
+
+  /** WS-GH-02: branches commits were first pushed to, latest activity first. */
+  repositoryBranches: async (projectId: number, q: string, limit = 50, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitBranchItem[]>(`${PROJECTS}/${projectId}/repository/branches`, {
+      params: { q: q.trim() || undefined, limit },
       signal,
     })).data,
 

@@ -33,7 +33,9 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_git_commit_project_time", columnList = "project_id, committed_at"),
                 @Index(name = "idx_git_commit_repo_time", columnList = "repository_id, committed_at"),
-                @Index(name = "idx_git_commit_repo_author", columnList = "repository_id, author_login, committed_at")
+                @Index(name = "idx_git_commit_repo_author", columnList = "repository_id, author_login, committed_at"),
+                // WS-GH-02: branches of a repository (group by first_seen_ref, latest commit).
+                @Index(name = "idx_git_commit_repo_ref", columnList = "repository_id, first_seen_ref, committed_at")
         })
 @Getter
 @Setter

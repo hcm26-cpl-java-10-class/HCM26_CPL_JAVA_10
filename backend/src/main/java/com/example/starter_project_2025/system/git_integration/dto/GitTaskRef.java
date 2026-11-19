@@ -11,6 +11,8 @@ import com.example.starter_project_2025.system.git_integration.domain.BacklogRef
  * given for LINKED: a task of another project is never described. TM-03: {@code source}
  * is how the pull request / commit is linked to the task (AUTO, MANUAL), null when it is not.
  * A MANUAL link without any Task ID in the text is listed with {@code field} NONE.
+ * WS-GH-02: {@code itemProjectId} is the project of the linked task (a module's task when it
+ * lives in a module), so the workspace can open the task in the right project.
  */
 public record GitTaskRef(
         String key,
@@ -21,5 +23,6 @@ public record GitTaskRef(
         Long itemId,
         String itemTitle,
         String itemStatus,
-        BacklogLinkSource source) {
+        BacklogLinkSource source,
+        Long itemProjectId) {
 }

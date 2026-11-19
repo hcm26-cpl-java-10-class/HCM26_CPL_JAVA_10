@@ -70,12 +70,14 @@ function RepositoryLine({ repository }: { repository: LinkedRepository }) {
  * repository (picked from the GitHub App's repositories); its modules show the
  * master's repository read-only.
  * WS-GH-01: on Overview the activity summary opens the GitHub tab (`onOpenActivity`);
- * the GitHub tab itself shows the card without the summary (`showActivity={false}`).
+ * the GitHub tab itself shows it as a one-line strip (`variant="strip"`, `showActivity={false}`).
  */
-export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity = true }: {
+export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity = true, variant = "card" }: {
   projectId: number;
   onOpenActivity?: (target: GitHubTabTarget) => void;
   showActivity?: boolean;
+  /** "strip": one line (linked repository only; loading, errors and linking keep the card). */
+  variant?: "card" | "strip";
 }) {
   const query = useProjectRepository(projectId);
   const view = query.data;
@@ -144,6 +146,27 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
       ? <Button size="sm" variant="outline" asChild><Link to="/git-integration"><Unplug />Connect GitHub first</Link></Button>
       : <Button size="sm" onClick={() => setBrowsing(true)}><Link2 />{label}</Button>;
 
+  // Shown under the repository in both layouts (card on Overview, strip in the GitHub tab).
+  const alerts = repository ? <>
+      {!active && <div role="alert" className="flex flex-wrap items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
+        <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <p className="text-sm font-medium">Repository is no longer accessible</p>
+          <p className="text-xs text-amber-800/90 dark:text-amber-200/80">
+            {syncErrorMessage(sync?.errorCode)} {view.canLink ? "Link another repository, or grant access again on GitHub and link it again." : ""}
+          </p>
+        </div>
+        {view.canLink && linkButton("Link another repository")}
+      </div>}
+      {active && sync?.status === "FAILED" && <div role="alert" className="flex flex-wrap items-center gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-red-900 dark:border-red-900 dark:bg-red-950/50 dark:text-red-100">
+        <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
+        <p className="min-w-0 flex-1 text-xs">{syncErrorMessage(sync.errorCode)}</p>
+        {view.canSync && <Button size="sm" variant="outline" className="h-8" disabled={retry.isPending} onClick={() => retry.mutate()}>
+          <RefreshCw className={retry.isPending ? "animate-spin" : undefined} />Retry sync
+        </Button>}
+      </div>}
+  </> : null;
+
   let body: ReactNode;
   if (!repository) {
     body = <div className="flex flex-wrap items-center justify-between gap-4">
@@ -169,29 +192,56 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
   } else {
     body = <div className="space-y-3">
       <RepositoryLine repository={repository} />
-      {!active && <div role="alert" className="flex flex-wrap items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-100">
-        <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="text-sm font-medium">Repository is no longer accessible</p>
-          <p className="text-xs text-amber-800/90 dark:text-amber-200/80">
-            {syncErrorMessage(sync?.errorCode)} {view.canLink ? "Link another repository, or grant access again on GitHub and link it again." : ""}
-          </p>
-        </div>
-        {view.canLink && linkButton("Link another repository")}
-      </div>}
-      {active && sync?.status === "FAILED" && <div role="alert" className="flex flex-wrap items-center gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-red-900 dark:border-red-900 dark:bg-red-950/50 dark:text-red-100">
-        <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
-        <p className="min-w-0 flex-1 text-xs">{syncErrorMessage(sync.errorCode)}</p>
-        {view.canSync && <Button size="sm" variant="outline" className="h-8" disabled={retry.isPending} onClick={() => retry.mutate()}>
-          <RefreshCw className={retry.isPending ? "animate-spin" : undefined} />Retry sync
-        </Button>}
-      </div>}
+      {alerts}
       {/* US-SY-04: data synchronized from webhooks (also shown, read-only, while the repository is unavailable). */}
       {showActivity && <RepositoryActivitySummary projectId={view.project.id} repositoryName={repository.fullName} onOpen={onOpenActivity} />}
       {active && !view.inherited && modules > 0 && <p className="text-[11px] text-muted-foreground">
         Shared with {modules} {modules === 1 ? "module" : "modules"} of this project.
       </p>}
     </div>;
+  }
+
+  const dialogs = <>
+    {browsing && view.canLink && installationId !== undefined && <RepositoryBrowserSheet open onOpenChange={open => { if (!open) setBrowsing(false); }}
+      installations={connected} installationId={installationId} onInstallationChange={setChosenInstallationId}
+      projectId={view.masterProject.id} onSelect={choose} selectLabel="Select" />}
+    <LinkRepositoryDialog repository={selected} masterName={view.masterProject.name} moduleCount={modules}
+      pending={link.isPending} error={link.error} manageUrl={manageUrl}
+      onConfirm={confirmLink} onClose={() => { setSelected(null); link.reset(); }} />
+  </>;
+
+  // WS-GH-02: one line in the GitHub tab, where the repository is context rather than content.
+  if (variant === "strip" && repository) {
+    const hasAlert = !active || sync?.status === "FAILED";
+    return <section aria-label="GitHub repository" className="min-w-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:px-5">
+        <GitHubTile size="sm" />
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+          <p className="min-w-0 break-words text-sm">
+            <span className="text-muted-foreground">{repository.owner}/</span><span className="font-semibold">{repository.name}</span>
+          </p>
+          <RepositoryVisibilityBadge visibility={repository.visibility} />
+          {repository.defaultBranch && <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+            <GitBranch className="size-3" aria-hidden="true" />{repository.defaultBranch}
+          </span>}
+          {view.inherited && <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"
+            title={`Shared from master project ${view.masterProject.code} · ${view.masterProject.name}`}>
+            <CornerLeftUp className="size-3" aria-hidden="true" />Shared from {view.masterProject.code}
+          </span>}
+        </div>
+        {active ? <SyncStatusPill job={sync} lastSyncedAt={repository.lastSyncedAt} />
+          : <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
+            <TriangleAlert className="size-3.5" aria-hidden="true" />Unavailable
+          </span>}
+        <Button variant="outline" size="sm" className="h-8 shrink-0" asChild>
+          <a href={repository.htmlUrl} target="_blank" rel="noopener noreferrer" aria-label={`Open ${repository.fullName} on GitHub (new tab)`}>
+            <ExternalLink />Open
+          </a>
+        </Button>
+      </div>
+      {hasAlert && <div className="space-y-2 px-4 pb-3 sm:px-5">{alerts}</div>}
+      {dialogs}
+    </section>;
   }
 
   return <section aria-label="GitHub repository" className="min-w-0">
@@ -206,11 +256,6 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
       {body}
     </div>
 
-    {browsing && view.canLink && installationId !== undefined && <RepositoryBrowserSheet open onOpenChange={open => { if (!open) setBrowsing(false); }}
-      installations={connected} installationId={installationId} onInstallationChange={setChosenInstallationId}
-      projectId={view.masterProject.id} onSelect={choose} selectLabel="Select" />}
-    <LinkRepositoryDialog repository={selected} masterName={view.masterProject.name} moduleCount={modules}
-      pending={link.isPending} error={link.error} manageUrl={manageUrl}
-      onConfirm={confirmLink} onClose={() => { setSelected(null); link.reset(); }} />
+    {dialogs}
   </section>;
 }

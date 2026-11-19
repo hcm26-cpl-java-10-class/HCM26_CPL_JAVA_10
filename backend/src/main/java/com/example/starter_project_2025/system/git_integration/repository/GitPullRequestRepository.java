@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -64,4 +65,31 @@ public interface GitPullRequestRepository extends JpaRepository<GitPullRequest, 
     /** Rows of (state, count) for the repository connection. */
     @Query("select p.state, count(p) from GitPullRequest p where p.repositoryId = :repositoryId group by p.state")
     List<Object[]> countByState(@Param("repositoryId") Long repositoryId);
+
+    /** WS-GH-02: the columns insights need of one pull request. */
+    interface PullRequestStatRow {
+        String getAuthorLogin();
+        LocalDateTime getGithubCreatedAt();
+        LocalDateTime getMergedAt();
+    }
+
+    /** WS-GH-02: pull requests opened in {@code [from, to)}. */
+    @Query("""
+            select p.authorLogin as authorLogin, p.githubCreatedAt as githubCreatedAt, p.mergedAt as mergedAt
+              from GitPullRequest p
+             where p.repositoryId = :repositoryId and p.githubCreatedAt >= :from and p.githubCreatedAt < :to""")
+    List<PullRequestStatRow> openedBetween(@Param("repositoryId") Long repositoryId, @Param("from") LocalDateTime from,
+                                           @Param("to") LocalDateTime to);
+
+    /** WS-GH-02: pull requests merged in {@code [from, to)}. */
+    @Query("""
+            select p.authorLogin as authorLogin, p.githubCreatedAt as githubCreatedAt, p.mergedAt as mergedAt
+              from GitPullRequest p
+             where p.repositoryId = :repositoryId and p.mergedAt >= :from and p.mergedAt < :to""")
+    List<PullRequestStatRow> mergedBetween(@Param("repositoryId") Long repositoryId, @Param("from") LocalDateTime from,
+                                           @Param("to") LocalDateTime to);
+
+    /** WS-GH-02: pull requests in a state, the longest without update first. */
+    List<GitPullRequest> findByRepositoryIdAndStateOrderByGithubUpdatedAtAscIdAsc(Long repositoryId, GitPullRequestState state,
+                                                                                  Pageable page);
 }

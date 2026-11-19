@@ -10,6 +10,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import type {
   BacklogGitLinks,
   GitCommitQuery,
+  GitInsightsRange,
   GitPullRequestQuery,
   GitRepositoryQuery,
   GitWebhookEventQuery,
@@ -34,7 +35,9 @@ export const gitIntegrationKeys = {
     ["git-integration", "pull-requests", projectId, query.state ?? "ALL", query.q ?? "", query.link ?? "ALL",
       query.page ?? 0, query.size ?? 20] as const,
   pullRequest: (projectId: number, number: number) => ["git-integration", "pull-request", projectId, number] as const,
-  backlogLinks: (itemId: number, page: number) => ["git-integration", "backlog-links", itemId, page] as const,
+  insights: (projectId: number, range: GitInsightsRange) => ["git-integration", "insights", projectId, range] as const,
+  branches: (projectId: number, q: string) => ["git-integration", "branches", projectId, q] as const,
+  backlogLinks: (itemId: number, page: number, size: number) => ["git-integration", "backlog-links", itemId, page, size] as const,
   backlogLinkSummary: (itemIds: number[]) => ["git-integration", "backlog-link-summary", itemIds] as const,
   taskLinkStats: (projectId: number) => ["git-integration", "task-link-stats", projectId] as const,
   pullRequestCandidates: (itemId: number, q: string) => ["git-integration", "pull-request-candidates", itemId, q] as const,
@@ -137,6 +140,35 @@ export function useRepositoryPullRequests(projectId: number | undefined, query: 
   });
 }
 
+/** WS-GH-02: daily counts change slowly, so a minute between refreshes is enough. */
+const INSIGHTS_POLL_MS = 60_000;
+
+/** WS-GH-02: activity insights of the period; keeps the previous range on screen while the next loads. */
+export function useRepositoryInsights(projectId: number | undefined, range: GitInsightsRange, enabled = true) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.insights(projectId ?? 0, range),
+    queryFn: ({ signal }) => gitIntegrationApi.repositoryInsights(projectId!, range, signal),
+    enabled: enabled && projectId !== undefined,
+    placeholderData: keepPreviousData,
+    staleTime: INSIGHTS_POLL_MS,
+    retry: false,
+    refetchInterval: INSIGHTS_POLL_MS,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/** WS-GH-02: branches for the branch picker; only loaded while the picker is open. */
+export function useRepositoryBranches(projectId: number | undefined, q: string, enabled: boolean) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.branches(projectId ?? 0, q),
+    queryFn: ({ signal }) => gitIntegrationApi.repositoryBranches(projectId!, q, 50, signal),
+    enabled: enabled && projectId !== undefined,
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
 /** Loaded only when a pull request is expanded. */
 export function usePullRequestDetail(projectId: number, number: number | undefined) {
   return useQuery({
@@ -164,10 +196,11 @@ export function useWebhookEvents(query: GitWebhookEventQuery, enabled = true) {
 
 /** US-SY-04: process a failed (or ignored activity) webhook event again. */
 /** US-SY-05 Task Detail: refreshed every 30 s while shown, so a push appears without reloading. */
-export function useBacklogGitLinks(itemId: number | undefined, page = 0, enabled = true) {
+/** `size`: commits per page (the Development preview needs a few, its "View all" view a full page). */
+export function useBacklogGitLinks(itemId: number | undefined, page = 0, enabled = true, size = 5) {
   return useQuery({
-    queryKey: gitIntegrationKeys.backlogLinks(itemId ?? 0, page),
-    queryFn: ({ signal }) => gitIntegrationApi.backlogItemGitLinks(itemId!, page, 5, signal),
+    queryKey: gitIntegrationKeys.backlogLinks(itemId ?? 0, page, size),
+    queryFn: ({ signal }) => gitIntegrationApi.backlogItemGitLinks(itemId!, page, size, signal),
     enabled: enabled && itemId !== undefined,
     placeholderData: keepPreviousData,
     retry: false,

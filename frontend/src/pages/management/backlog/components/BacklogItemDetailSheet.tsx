@@ -40,7 +40,7 @@ import {
   X,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   SPRINT_BACKLOG_PRIORITY_OPTIONS,
@@ -56,6 +56,8 @@ import {
 } from "../backlog.constants";
 import { BacklogSubtasksPanel } from "./BacklogSubtasksPanel";
 import { BacklogDevelopmentSection } from "./BacklogDevelopmentSection";
+import { BacklogDevelopmentPanel } from "./BacklogDevelopmentPanel";
+import type { DevelopmentTab } from "./development.utils";
 
 const NO_SPRINT = "none";
 const NO_MILESTONE = "none";
@@ -176,9 +178,9 @@ const DetailRow = ({
   label: string;
   children: ReactNode;
 }) => (
-  <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-2 py-0.5">
-    <span className="text-xs font-medium text-muted-foreground">{label}</span>
-    <div className="min-w-0">{children}</div>
+  <div className="min-w-0">
+    <span className="block px-2 text-[11px] font-medium text-muted-foreground">{label}</span>
+    {children}
   </div>
 );
 
@@ -224,12 +226,17 @@ export function BacklogItemDetailSheet({
   const [draft, setDraft] = useState<Draft | null>(() => open && detail ? toDraft(detail) : null);
   const [saving, setSaving] = useState(false);
   const [editorSource, setEditorSource] = useState({ itemId: item?.id, detail, open });
+  // "View all" of the Development section replaces the panel body; the body stays mounted
+  // (hidden) so Back returns to the same scroll position, and focus goes back to the opener.
+  const [development, setDevelopment] = useState<{ itemId: number; tab: DevelopmentTab } | null>(null);
+  const developmentOpener = useRef<HTMLElement | null>(null);
 
   // Reset during the render that receives a new record, rather than painting
   // the previous item's editor first and resetting it in an effect afterwards.
   if (editorSource.itemId !== item?.id || editorSource.detail !== detail || editorSource.open !== open) {
     setEditorSource({ itemId: item?.id, detail, open });
     setDraft(open && detail ? toDraft(detail) : null);
+    if (editorSource.itemId !== item?.id || editorSource.open !== open) setDevelopment(null);
   }
 
   /**
@@ -671,7 +678,17 @@ export function BacklogItemDetailSheet({
             )}
           </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <>
+          {development?.itemId === item.id && (
+            <BacklogDevelopmentPanel key={item.id} itemId={item.id} taskKey={itemKey ?? item.taskKey}
+              title={draft.title || item.title} initialTab={development.tab}
+              onBack={() => {
+                setDevelopment(null);
+                const opener = developmentOpener.current;
+                requestAnimationFrame(() => opener?.focus());
+              }} />
+          )}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" hidden={development?.itemId === item.id}>
             <div className="px-5 py-4">
               <Input
                 value={draft.title}
@@ -763,6 +780,229 @@ export function BacklogItemDetailSheet({
             </div>
 
             <div className="px-5 pb-5">
+              <h3 className="text-sm font-semibold text-foreground">Details</h3>
+              <div className="mt-2 grid grid-cols-1 gap-x-2 gap-y-1.5 rounded-lg border bg-card p-2 min-[420px]:grid-cols-2">
+                <DetailRow label="Assignee">
+                  <Select
+                    value={draft.assignee || NO_ASSIGNEE}
+                    disabled={!canEdit || saving}
+                    onValueChange={(value) => commitAssignee(value)}
+                  >
+                    <SelectTrigger size="sm" className={inlineFieldClass}>
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_ASSIGNEE}>
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <User className="h-4 w-4" />
+                          Unassigned
+                        </span>
+                      </SelectItem>
+                      {assigneeOptions.map((member) => (
+                        <SelectItem
+                          key={member.id}
+                          value={String(member.id)}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[9px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                              {initialsOf(member.fullName)}
+                            </span>
+                            <span className="truncate">{member.fullName}</span>
+                            {member.role && (
+                              <span className="text-xs text-muted-foreground">
+                                {member.role}
+                              </span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      ))}
+                      {/* Legacy / out-of-scope id: keep it visible instead of
+                          silently dropping the stored assignee. */}
+                      {draft.assignee !== "" &&
+                        !assigneeOptions.some(
+                          (member) => String(member.id) === draft.assignee,
+                        ) && (
+                          <SelectItem value={draft.assignee}>
+                            <span className="flex items-center gap-2">
+                              <User className="h-4 w-4" />
+                              {item.assigneeDisplayName || `Member #${draft.assignee}`}
+                            </span>
+                          </SelectItem>
+                        )}
+                    </SelectContent>
+                  </Select>
+                </DetailRow>
+                <DetailRow label="Reporter">
+                  <Select
+                    value={draft.reporter || NO_ASSIGNEE}
+                    disabled={!canEdit || saving}
+                    onValueChange={(value) => commitReporter(value)}
+                  >
+                    <SelectTrigger size="sm" className={inlineFieldClass}>
+                      <SelectValue placeholder="No reporter" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_ASSIGNEE}>
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <User className="h-4 w-4" />
+                          No reporter
+                        </span>
+                      </SelectItem>
+                      {assigneeOptions.map((member) => (
+                        <SelectItem key={member.id} value={String(member.id)}>
+                          <span className="flex items-center gap-2">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[9px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                              {initialsOf(member.fullName)}
+                            </span>
+                            <span className="truncate">{member.fullName}</span>
+                            {member.role && (
+                              <span className="text-xs text-muted-foreground">
+                                {member.role}
+                              </span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      ))}
+                      {/* Legacy / out-of-scope id: keep it visible instead of
+                          silently dropping the stored reporter. */}
+                      {draft.reporter !== "" &&
+                        !assigneeOptions.some(
+                          (member) => String(member.id) === draft.reporter,
+                        ) && (
+                          <SelectItem value={draft.reporter}>
+                            <span className="flex items-center gap-2">
+                              <User className="h-4 w-4" />
+                              Member #{draft.reporter}
+                            </span>
+                          </SelectItem>
+                        )}
+                    </SelectContent>
+                  </Select>
+                </DetailRow>
+                <DetailRow label="Sprint">
+                  <Select
+                    value={
+                      currentSprintId != null ? String(currentSprintId) : NO_SPRINT
+                    }
+                    disabled={!canMove || saving}
+                    onValueChange={(value) => void changeSprint(value)}
+                  >
+                    <SelectTrigger size="sm" className={inlineFieldClass}>
+                      <SelectValue placeholder="Add sprint" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_SPRINT} disabled={draft.status !== "TODO"}>
+                        Backlog (no sprint)
+                      </SelectItem>
+                      {sprints
+                        .filter((sprint) => sprint.id != null)
+                        .map((sprint) => (
+                          <SelectItem key={sprint.id} value={String(sprint.id)}>
+                            {sprint.name ?? `Sprint ${sprint.id}`}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </DetailRow>
+                <DetailRow label="Milestone">
+                  <Select
+                    value={draft.milestoneId || NO_MILESTONE}
+                    disabled={!canEdit || saving}
+                    onValueChange={(value) => commitMilestone(value)}
+                  >
+                    <SelectTrigger size="sm" className={inlineFieldClass}>
+                      <SelectValue placeholder="Link a milestone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_MILESTONE}>
+                        No milestone
+                      </SelectItem>
+                      {milestones.map((milestone) => (
+                        <SelectItem key={milestone.id} value={milestone.id}>
+                          {milestone.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </DetailRow>
+                <DetailRow label="Start date">
+                  <Input
+                    type="date"
+                    value={draft.startDate}
+                    disabled={!canEdit || saving}
+                    className={inlineFieldClass}
+                    onChange={(event) =>
+                      commitDate("startDate", event.target.value)
+                    }
+                  />
+                </DetailRow>
+                <DetailRow label="Due date">
+                  <Input
+                    type="date"
+                    value={draft.endDate}
+                    disabled={!canEdit || saving}
+                    className={inlineFieldClass}
+                    onChange={(event) => commitDate("endDate", event.target.value)}
+                  />
+                </DetailRow>
+                <DetailRow label="Work type">
+                  <Select
+                    value={draft.workType}
+                    disabled={!canEdit || saving}
+                    onValueChange={(value) =>
+                      commitWorkType(value as SprintBacklogWorkType)
+                    }
+                  >
+                    <SelectTrigger size="sm" className={inlineFieldClass}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SPRINT_BACKLOG_WORK_TYPE_OPTIONS.map((option) => {
+                        const optionMeta = backlogWorkTypeMeta(option.value);
+                        const OptionIcon = optionMeta.icon;
+
+                        return (
+                          <SelectItem key={option.value} value={option.value}>
+                            <span className="flex items-center gap-2">
+                              <OptionIcon
+                                className={cn("h-4 w-4", optionMeta.iconClass)}
+                              />
+                              {optionMeta.label}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </DetailRow>
+                <DetailRow label="Estimate (hours)">
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.5"
+                    value={draft.estimatedHours}
+                    disabled={!canEdit || saving}
+                    placeholder="Add estimate"
+                    className={inlineFieldClass}
+                    onChange={(event) =>
+                      setDraft((previous) =>
+                        previous
+                          ? { ...previous, estimatedHours: event.target.value }
+                          : previous,
+                      )
+                    }
+                    onBlur={commitEstimate}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.currentTarget.blur();
+                      }
+                    }}
+                  />
+                </DetailRow>
+              </div>
+            </div>
+
+            <div className="px-5 pb-5">
               <h3 id="work-item-description-label" className="text-sm font-semibold text-foreground">
                 Description
               </h3>
@@ -829,258 +1069,18 @@ export function BacklogItemDetailSheet({
 
             <div className="px-5 pb-5">
               <BacklogDevelopmentSection key={item.id} itemId={item.id} taskKey={itemKey ?? item.taskKey}
-                title={draft.title || item.title} />
+                title={draft.title || item.title}
+                onViewAll={(tab) => {
+                  developmentOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                  setDevelopment({ itemId: item.id, tab });
+                }} />
             </div>
 
-            <div className="px-5 pb-8">
-              <h3 className="text-sm font-semibold text-foreground">Details</h3>
-
-              <div className="mt-2 rounded-lg border bg-card p-3">
-                <DetailRow label="Work type">
-                  <Select
-                    value={draft.workType}
-                    disabled={!canEdit || saving}
-                    onValueChange={(value) =>
-                      commitWorkType(value as SprintBacklogWorkType)
-                    }
-                  >
-                    <SelectTrigger size="sm" className={inlineFieldClass}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SPRINT_BACKLOG_WORK_TYPE_OPTIONS.map((option) => {
-                        const optionMeta = backlogWorkTypeMeta(option.value);
-                        const OptionIcon = optionMeta.icon;
-
-                        return (
-                          <SelectItem key={option.value} value={option.value}>
-                            <span className="flex items-center gap-2">
-                              <OptionIcon
-                                className={cn("h-4 w-4", optionMeta.iconClass)}
-                              />
-                              {optionMeta.label}
-                            </span>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </DetailRow>
-
-                <DetailRow label="Assignee">
-                  <Select
-                    value={draft.assignee || NO_ASSIGNEE}
-                    disabled={!canEdit || saving}
-                    onValueChange={(value) => commitAssignee(value)}
-                  >
-                    <SelectTrigger size="sm" className={inlineFieldClass}>
-                      <SelectValue placeholder="Unassigned" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_ASSIGNEE}>
-                        <span className="flex items-center gap-2 text-muted-foreground">
-                          <User className="h-4 w-4" />
-                          Unassigned
-                        </span>
-                      </SelectItem>
-                      {assigneeOptions.map((member) => (
-                        <SelectItem
-                          key={member.id}
-                          value={String(member.id)}
-                        >
-                          <span className="flex items-center gap-2">
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[9px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
-                              {initialsOf(member.fullName)}
-                            </span>
-                            <span className="truncate">{member.fullName}</span>
-                            {member.role && (
-                              <span className="text-xs text-muted-foreground">
-                                {member.role}
-                              </span>
-                            )}
-                          </span>
-                        </SelectItem>
-                      ))}
-                      {/* Legacy / out-of-scope id: keep it visible instead of
-                          silently dropping the stored assignee. */}
-                      {draft.assignee !== "" &&
-                        !assigneeOptions.some(
-                          (member) => String(member.id) === draft.assignee,
-                        ) && (
-                          <SelectItem value={draft.assignee}>
-                            <span className="flex items-center gap-2">
-                              <User className="h-4 w-4" />
-                              {item.assigneeDisplayName || `Member #${draft.assignee}`}
-                            </span>
-                          </SelectItem>
-                        )}
-                    </SelectContent>
-                  </Select>
-                </DetailRow>
-
-                <DetailRow label="Sprint">
-                  <Select
-                    value={
-                      currentSprintId != null ? String(currentSprintId) : NO_SPRINT
-                    }
-                    disabled={!canMove || saving}
-                    onValueChange={(value) => void changeSprint(value)}
-                  >
-                    <SelectTrigger size="sm" className={inlineFieldClass}>
-                      <SelectValue placeholder="Add sprint" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_SPRINT} disabled={draft.status !== "TODO"}>
-                        Backlog (no sprint)
-                      </SelectItem>
-                      {sprints
-                        .filter((sprint) => sprint.id != null)
-                        .map((sprint) => (
-                          <SelectItem key={sprint.id} value={String(sprint.id)}>
-                            {sprint.name ?? `Sprint ${sprint.id}`}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </DetailRow>
-
-                <DetailRow label="Milestone">
-                  <Select
-                    value={draft.milestoneId || NO_MILESTONE}
-                    disabled={!canEdit || saving}
-                    onValueChange={(value) => commitMilestone(value)}
-                  >
-                    <SelectTrigger size="sm" className={inlineFieldClass}>
-                      <SelectValue placeholder="Link a milestone" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_MILESTONE}>
-                        No milestone
-                      </SelectItem>
-                      {milestones.map((milestone) => (
-                        <SelectItem key={milestone.id} value={milestone.id}>
-                          {milestone.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </DetailRow>
-
-                <DetailRow label="Start date">
-                  <Input
-                    type="date"
-                    value={draft.startDate}
-                    disabled={!canEdit || saving}
-                    className={inlineFieldClass}
-                    onChange={(event) =>
-                      commitDate("startDate", event.target.value)
-                    }
-                  />
-                </DetailRow>
-
-                <DetailRow label="Due date">
-                  <Input
-                    type="date"
-                    value={draft.endDate}
-                    disabled={!canEdit || saving}
-                    className={inlineFieldClass}
-                    onChange={(event) => commitDate("endDate", event.target.value)}
-                  />
-                </DetailRow>
-
-                <DetailRow label="Estimate (hours)">
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.5"
-                    value={draft.estimatedHours}
-                    disabled={!canEdit || saving}
-                    placeholder="Add estimate"
-                    className={inlineFieldClass}
-                    onChange={(event) =>
-                      setDraft((previous) =>
-                        previous
-                          ? { ...previous, estimatedHours: event.target.value }
-                          : previous,
-                      )
-                    }
-                    onBlur={commitEstimate}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.currentTarget.blur();
-                      }
-                    }}
-                  />
-                </DetailRow>
-
-                <DetailRow label="Reporter">
-                  <Select
-                    value={draft.reporter || NO_ASSIGNEE}
-                    disabled={!canEdit || saving}
-                    onValueChange={(value) => commitReporter(value)}
-                  >
-                    <SelectTrigger size="sm" className={inlineFieldClass}>
-                      <SelectValue placeholder="No reporter" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_ASSIGNEE}>
-                        <span className="flex items-center gap-2 text-muted-foreground">
-                          <User className="h-4 w-4" />
-                          No reporter
-                        </span>
-                      </SelectItem>
-                      {assigneeOptions.map((member) => (
-                        <SelectItem key={member.id} value={String(member.id)}>
-                          <span className="flex items-center gap-2">
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[9px] font-semibold text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
-                              {initialsOf(member.fullName)}
-                            </span>
-                            <span className="truncate">{member.fullName}</span>
-                            {member.role && (
-                              <span className="text-xs text-muted-foreground">
-                                {member.role}
-                              </span>
-                            )}
-                          </span>
-                        </SelectItem>
-                      ))}
-                      {/* Legacy / out-of-scope id: keep it visible instead of
-                          silently dropping the stored reporter. */}
-                      {draft.reporter !== "" &&
-                        !assigneeOptions.some(
-                          (member) => String(member.id) === draft.reporter,
-                        ) && (
-                          <SelectItem value={draft.reporter}>
-                            <span className="flex items-center gap-2">
-                              <User className="h-4 w-4" />
-                              Member #{draft.reporter}
-                            </span>
-                          </SelectItem>
-                        )}
-                    </SelectContent>
-                  </Select>
-                </DetailRow>
-
-                <DetailRow label="Board">
-                  <span className="px-2 text-sm text-muted-foreground">
-                    {sprintName ?? "Product backlog"}
-                  </span>
-                </DetailRow>
-
-                <DetailRow label="Created">
-                  <span className="px-2 text-sm text-muted-foreground">
-                    {formatDateTime(detail?.createdAt)}
-                  </span>
-                </DetailRow>
-
-                <DetailRow label="Updated">
-                  <span className="px-2 text-sm text-muted-foreground">
-                    {formatDateTime(detail?.updatedAt)}
-                  </span>
-                </DetailRow>
-              </div>
-            </div>
+            <p className="px-5 pb-6 text-[11px] text-muted-foreground">
+              {sprintName ?? "Product backlog"} · Created {formatDateTime(detail?.createdAt)} · Updated {formatDateTime(detail?.updatedAt)}
+            </p>
           </div>
+          </>
         )}
       </SheetContent>
     </Sheet>

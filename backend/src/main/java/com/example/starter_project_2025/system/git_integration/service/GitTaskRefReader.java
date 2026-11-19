@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -53,12 +54,17 @@ class GitTaskRefReader {
                         linkOf.values().stream().flatMap(byItem -> byItem.keySet().stream()))
                 .filter(Objects::nonNull).distinct().toList());
 
+        // WS-GH-02: project of each linked task, resolved once per task (a team-only task reads its workspace).
+        Map<Long, Long> projectOfItem = new HashMap<>();
+        Function<BacklogItemRow, Long> projectOf = item -> item == null ? null
+                : projectOfItem.computeIfAbsent(item.getId(), id -> directory.projectOf(item));
+
         Map<Long, List<GitTaskRef>> result = new HashMap<>();
         Map<Long, Set<Long>> listed = new HashMap<>();
         rows.stream().sorted(Comparator.comparing(BacklogReference::getId)).forEach(row -> {
             BacklogGitLink link = row.getBacklogItemId() == null ? null
                     : linkOf.getOrDefault(row.getSourceId(), Map.of()).get(row.getBacklogItemId());
-            result.computeIfAbsent(row.getSourceId(), id -> new ArrayList<>()).add(toRef(row, items, link));
+            result.computeIfAbsent(row.getSourceId(), id -> new ArrayList<>()).add(toRef(row, items, link, projectOf));
             if (link != null) listed.computeIfAbsent(row.getSourceId(), id -> new HashSet<>()).add(row.getBacklogItemId());
         });
         // MANUAL links of tasks the text does not (or no longer) name.
@@ -72,7 +78,7 @@ class GitTaskRefReader {
                     result.computeIfAbsent(sourceId, id -> new ArrayList<>()).add(new GitTaskRef(item.getTaskKey(), null,
                             BacklogReferenceStatus.LINKED, BacklogReferenceReason.OK, BacklogReferenceField.NONE,
                             item.getId(), item.getTitle(), item.getStatus() == null ? null : item.getStatus().name(),
-                            BacklogLinkSource.MANUAL));
+                            BacklogLinkSource.MANUAL, projectOf.apply(item)));
                 }));
         // A source linked to a task (manually, its text naming none) is not "No task ID".
         return result.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, entry -> {
@@ -82,7 +88,8 @@ class GitTaskRefReader {
         }));
     }
 
-    private static GitTaskRef toRef(BacklogReference row, Map<Long, BacklogItemRow> items, BacklogGitLink link) {
+    private static GitTaskRef toRef(BacklogReference row, Map<Long, BacklogItemRow> items, BacklogGitLink link,
+                                    Function<BacklogItemRow, Long> projectOf) {
         BacklogItemRow item = row.getStatus() == BacklogReferenceStatus.LINKED ? items.get(row.getBacklogItemId()) : null;
         return new GitTaskRef(
                 BacklogReference.NO_KEY.equals(row.getRefKey()) ? null : row.getRefKey(),
@@ -93,6 +100,7 @@ class GitTaskRefReader {
                 item == null ? null : item.getId(),
                 item == null ? null : item.getTitle(),
                 item == null || item.getStatus() == null ? null : item.getStatus().name(),
-                link == null ? null : link.getLinkSource());
+                link == null ? null : link.getLinkSource(),
+                projectOf.apply(item));
     }
 }
