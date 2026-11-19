@@ -1,3 +1,4 @@
+
 package com.example.starter_project_2025.system.management.student;
 
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
@@ -9,8 +10,11 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
 
 @Service
 @Transactional
@@ -23,6 +27,8 @@ public class StudentServiceImpl
     StudentMapper studentMapper;
 
     StudentRepository studentRepository;
+
+    PasswordEncoder passwordEncoder;
 
     @Override
     protected BaseCrudRepository<Student, Long> getRepository() {
@@ -55,9 +61,16 @@ public class StudentServiceImpl
             ctx.add("studentCode", "Student code already exists");
         }
 
-        // Student không sử dụng mật khẩu
-        student.setPasswordHash(null);
-        student.setMustChangePassword(false);
+        // Tạo mật khẩu ngẫu nhiên
+        String randomPassword = UUID.randomUUID().toString();
+
+        // Mã hóa mật khẩu trước khi lưu
+        student.setPasswordHash(
+                passwordEncoder.encode(randomPassword)
+        );
+
+        // Yêu cầu sinh viên đổi mật khẩu
+        student.setMustChangePassword(true);
 
         // Mặc định kích hoạt sinh viên
         if (student.getIsActive() == null) {

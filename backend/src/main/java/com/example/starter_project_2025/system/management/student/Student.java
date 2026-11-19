@@ -14,7 +14,7 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 
 @Entity
-@Table(name = "students")
+
 @DiscriminatorValue("STUDENT")
 @Getter
 @Setter
@@ -35,7 +35,7 @@ import lombok.experimental.SuperBuilder;
 )
 public class Student extends User {
 
-    @Column(name = "student_code", unique = true, nullable = false, length = 30)
+    @Column(name = "student_code", unique = true, length = 30)
     @ImportField(name = "Student Code", required = true)
     @ExportField(name = "Student Code")
     String studentCode;
@@ -45,7 +45,12 @@ public class Student extends User {
     @ExportField(name = "Address")
     String address;
 
-    @Builder.Default
-    @Column(nullable = false, length = 20)
+   @Builder.Default
+   @Column(length = 20)
     String status = "ACTIVE";
+
+    
+    @Builder.Default
+    @Column(name = "must_change_password")
+    boolean mustChangePassword = false;
 }
