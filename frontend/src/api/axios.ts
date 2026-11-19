@@ -46,7 +46,7 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem("token");
+        const token = store.getState().auth.token;
         const requestUrl = config.url ?? "";
         const isAuthRequest = requestUrl.startsWith("/auth/") || requestUrl.includes("/auth/");
 
@@ -72,6 +72,7 @@ axiosInstance.interceptors.response.use(
 
         if (
             error?.response?.status === 401 &&
+            store.getState().auth.isAuthenticated &&
             !originalReq._retry &&
             !requestUrl.includes("/auth/login") &&
             !requestUrl.includes("/auth/logout") &&
