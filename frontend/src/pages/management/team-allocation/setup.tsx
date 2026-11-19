@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/usePermissions";
+import { cn } from "@/lib/utils";
 import type { TrainingClassDTO } from "@/types/features/training-class";
 import type {
   AllocationApiError,
@@ -48,8 +49,11 @@ import {
   ArrowRightLeft,
   ChevronDown,
   ChevronRight,
+  GraduationCap,
+  Hash,
   History,
   Info,
+  Layers,
   ListChecks,
   LoaderCircle,
   LockKeyhole,
@@ -111,6 +115,38 @@ interface ApiFailure {
 }
 
 const SESSION_STORAGE_KEY = "team-allocation-session";
+
+const CLASS_STATUS_LABEL: Record<TrainingClassDTO["status"], string> = {
+  PLANNING: "Đang lên kế hoạch",
+  ONGOING: "Đang diễn ra",
+  COMPLETED: "Đã hoàn thành",
+  CANCELLED: "Đã hủy",
+};
+
+const CLASS_STATUS_CLASS: Record<TrainingClassDTO["status"], string> = {
+  PLANNING: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  ONGOING: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  COMPLETED: "border-primary/40 bg-primary/10 text-primary",
+  CANCELLED: "border-destructive/40 bg-destructive/10 text-destructive",
+};
+
+const SESSION_STATUS_LABEL: Record<AllocationSession["status"], string> = {
+  OPEN: "Đang mở",
+  PUBLISHED: "Đã công bố",
+  CLOSED: "Đã đóng",
+  CANCELLED: "Đã hủy",
+};
+
+const SESSION_STATUS_CLASS: Record<AllocationSession["status"], string> = {
+  OPEN: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  PUBLISHED: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  CLOSED: "border-muted-foreground/30 bg-muted text-muted-foreground",
+  CANCELLED: "border-destructive/40 bg-destructive/10 text-destructive",
+};
+
+/** Meta chip used by the page header, mirroring the class overview page. */
+const META_CHIP =
+  "inline-flex items-center gap-1.5 rounded-md border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground";
 
 function getSavedSession(): AllocationSession | null {
   try {
@@ -1057,7 +1093,6 @@ export default function TeamAllocationSetupPage() {
   const memberPickerIsFull = Boolean(memberPickerTeam) &&
     memberPickerMaxMembers > 0 &&
     (memberPickerTeam?.memberIds.length ?? 0) >= memberPickerMaxMembers;
-  const draftMemberIds = new Set(draftTeams.flatMap((team) => team.memberIds));
   /** Học viên đã thuộc một nhóm khác trong phiên (DRAFT/ACTIVE) thì không được chọn nữa. */
   const otherSavedTeamMemberIds = new Set(
     savedTeams
@@ -1274,7 +1309,92 @@ export default function TeamAllocationSetupPage() {
           : "/team-allocation",
       }}
     >
-      <div className="mx-auto flex min-h-full w-full max-w-7xl flex-1 flex-col gap-2 pb-1">
+      <div className="mx-auto flex min-h-full w-full max-w-7xl flex-1 flex-col gap-5 pb-1">
+        <section className="shrink-0 rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-start gap-4">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                <UsersRound className="size-5" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                  Team allocation
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2.5">
+                  <h1 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl">
+                    {selectedClass?.name ?? `Lớp #${classId}`}
+                  </h1>
+                  {selectedClass && (
+                    <Badge
+                      variant="outline"
+                      className={cn("shrink-0", CLASS_STATUS_CLASS[selectedClass.status])}
+                    >
+                      {CLASS_STATUS_LABEL[selectedClass.status]}
+                    </Badge>
+                  )}
+                  {session && (
+                    <Badge variant="outline" className={SESSION_STATUS_CLASS[session.status]}>
+                      {`Phiên #${session.sessionNumber} · ${SESSION_STATUS_LABEL[session.status]}`}
+                    </Badge>
+                  )}
+                </div>
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  {selectedClass ? (
+                    <>
+                      <span className={META_CHIP}>
+                        <Hash className="size-3.5" />
+                        {selectedClass.code}
+                      </span>
+                      <span className={META_CHIP}>
+                        <Users className="size-3.5" />
+                        {selectedClass.memberCount} học viên
+                      </span>
+                      {selectedClass.programName && (
+                        <span className={META_CHIP}>
+                          <GraduationCap className="size-3.5" />
+                          {selectedClass.programName}
+                        </span>
+                      )}
+                      {selectedClass.cohortName && (
+                        <span className={META_CHIP}>
+                          <Layers className="size-3.5" />
+                          {selectedClass.cohortName}
+                        </span>
+                      )}
+                    </>
+                  ) : classQuery.isLoading ? (
+                    <span className={META_CHIP}>
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                      Đang tải thông tin lớp…
+                    </span>
+                  ) : (
+                    <span className={META_CHIP}>
+                      <Info className="size-3.5" />
+                      Chưa tải được thông tin lớp
+                    </span>
+                  )}
+                  {session && (
+                    <span className={META_CHIP}>
+                      <UsersRound className="size-3.5" />
+                      Sức chứa {session.maxMembers}/nhóm
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row lg:shrink-0">
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/team-allocation/classes/${classId}`)}
+                className="gap-2"
+              >
+                <ArrowLeft className="size-4" />
+                Quay lại phiên phân nhóm
+              </Button>
+            </div>
+          </div>
+        </section>
+
         {!hasPermission("PEO_TEAM_ALLOCATE") &&
           !hasPermission("PRJ_WORKSPACE_MANAGE") && (
           <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
@@ -1295,8 +1415,8 @@ export default function TeamAllocationSetupPage() {
         )}
 
         {session && session.status !== "OPEN" && (
-          <p className="flex items-start gap-2 rounded-lg border border-sky-300/60 bg-gradient-to-r from-sky-500/[0.08] to-transparent px-3 py-2 text-xs text-muted-foreground dark:border-sky-900/60">
-            <Info className="mt-0.5 size-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
+          <p className="flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            <Info className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
             <span>
               Phiên đã {session.status === "PUBLISHED" ? "công bố" : "đóng"} nên không thể thay đổi sức chứa.
             </span>
@@ -1316,13 +1436,6 @@ export default function TeamAllocationSetupPage() {
                   “Allocate Teams” để bắt đầu.
                 </p>
               </div>
-              <Button
-                onClick={() => navigate(`/team-allocation/classes/${classId}`)}
-                className="gap-2"
-              >
-                <ArrowLeft className="size-4" />
-                Quay lại phiên phân nhóm
-              </Button>
             </CardContent>
           </Card>
         )}
@@ -1330,41 +1443,36 @@ export default function TeamAllocationSetupPage() {
         {session && (
           <>
             <div className="sticky bottom-0 z-30 order-last mt-auto">
-            <div className="flex items-center justify-between gap-2 rounded-xl border border-indigo-200/70 bg-gradient-to-r from-sky-500/[0.08] via-background/95 to-violet-500/[0.10] p-1.5 shadow-lg shadow-indigo-500/10 backdrop-blur dark:border-indigo-900/60">
-              <div className="flex shrink-0 items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/team-allocation/classes/${classId}`)}
-                  className="gap-2 bg-background transition-colors hover:border-sky-400/60 hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-300"
-                >
-                  <ArrowLeft className="size-4" />
-                  Quay lại phiên phân nhóm
-                </Button>
+            <div className="flex items-center justify-between gap-2 rounded-xl border bg-card/95 p-1.5 shadow-sm backdrop-blur">
               <div className="flex gap-1" role="tablist" aria-label="Quy trình phân nhóm">
                 <button
                   type="button"
                   role="tab"
                   aria-selected={activeWorkspace === "build"}
                   onClick={() => setActiveWorkspace("build")}
-                  className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     activeWorkspace === "build"
-                      ? "bg-gradient-to-r from-sky-500 to-indigo-500 text-white shadow-sm shadow-sky-500/25"
-                      : "text-muted-foreground hover:bg-sky-500/10 hover:text-sky-700 dark:hover:text-sky-300"
-                  }`}
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
                 >
-                  <span className={`flex size-5 items-center justify-center rounded-full text-[11px] font-bold ${
-                    activeWorkspace === "build" ? "bg-white/25 text-white" : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-                  }`}>
+                  <span className={cn(
+                    "flex size-5 items-center justify-center rounded-full text-[11px] font-bold",
+                    activeWorkspace === "build"
+                      ? "bg-primary-foreground/20 text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}>
                     1
                   </span>
                   <UsersRound className="size-4" />
                   Allocate Teams
-                  <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                  <span className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
                     activeWorkspace === "build"
-                      ? "bg-white/20 text-white"
-                      : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-                  }`}>
+                      ? "bg-primary-foreground/20 text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}>
                     {draftTeams.length}
                   </span>
                 </button>
@@ -1373,24 +1481,29 @@ export default function TeamAllocationSetupPage() {
                   role="tab"
                   aria-selected={activeWorkspace === "review"}
                   onClick={() => setActiveWorkspace("review")}
-                  className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     activeWorkspace === "review"
-                      ? "bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-sm shadow-violet-500/25"
-                      : "text-muted-foreground hover:bg-violet-500/10 hover:text-violet-700 dark:hover:text-violet-300"
-                  }`}
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
                 >
-                  <span className={`flex size-5 items-center justify-center rounded-full text-[11px] font-bold ${
-                    activeWorkspace === "review" ? "bg-white/25 text-white" : "bg-violet-500/15 text-violet-700 dark:text-violet-300"
-                  }`}>
+                  <span className={cn(
+                    "flex size-5 items-center justify-center rounded-full text-[11px] font-bold",
+                    activeWorkspace === "review"
+                      ? "bg-primary-foreground/20 text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}>
                     2
                   </span>
                   <ClipboardList className="size-4" />
                   Set up Teams
-                  <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                  <span className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
                     activeWorkspace === "review"
-                      ? "bg-white/20 text-white"
-                      : "bg-violet-500/15 text-violet-700 dark:text-violet-300"
-                  }`}>
+                      ? "bg-primary-foreground/20 text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}>
                     {savedTeams.length}
                   </span>
                   {publishableTeams.length > 0 && (
@@ -1401,23 +1514,18 @@ export default function TeamAllocationSetupPage() {
                   )}
                 </button>
               </div>
-              </div>
               <div className="flex min-w-0 flex-1 items-center justify-end gap-2 px-1">
-                <p aria-live="polite" className="hidden min-w-0 flex-1 truncate text-right text-xs text-muted-foreground xl:block">
-                  {activeWorkspace === "build"
-                    ? "Tạo nhóm và phân bổ học viên vào từng nhóm."
-                    : "Gán đề bài dự án, vai trò thành viên và kiểm tra điều kiện công bố."}
-                </p>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   onClick={() => setHistoryDialogOpen(true)}
-                  className="shrink-0 gap-2 bg-background transition-colors hover:border-violet-400/60 hover:bg-violet-500/10 hover:text-violet-700 dark:hover:text-violet-300"
+                  className="shrink-0 gap-2"
                 >
                   <History className="size-4" />
-                  Lịch sử thành viên / Vai trò
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="hidden sm:inline">Lịch sử thành viên / Vai trò</span>
+                  <span className="sm:hidden">Lịch sử</span>
+                  <ChevronRight className="hidden size-4 shrink-0 text-muted-foreground sm:block" />
                 </Button>
                 {activeWorkspace === "build" && (
                   <WithHint
@@ -1433,7 +1541,7 @@ export default function TeamAllocationSetupPage() {
                   >
                     <Button
                       onClick={saveDraft}
-                      className="shrink-0 gap-1.5 bg-gradient-to-r from-sky-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/25 transition-transform active:scale-[0.99]"
+                      className="shrink-0 gap-1.5"
                       disabled={
                         !hasPermission("PEO_TEAM_ALLOCATE") ||
                         saveDraftMutation.isPending ||
@@ -1454,38 +1562,33 @@ export default function TeamAllocationSetupPage() {
             </div>
             </div>
 
-            <div className={activeWorkspace === "review" ? "flex min-h-0 flex-1 flex-col" : "grid items-start gap-6"}>
-              <div className={activeWorkspace === "build" ? "block" : "hidden"}>
-              <Card className={`gap-3 overflow-hidden border-sky-200/80 py-4 shadow-sm dark:border-sky-900/60 ${saveFailure?.status === 422 ? "border-destructive" : ""}`}>
-                <CardHeader className="flex flex-col gap-2 bg-gradient-to-r from-sky-500/[0.10] via-indigo-500/[0.05] to-transparent px-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className={activeWorkspace === "review" ? "flex min-h-0 flex-1 flex-col" : "block"}>
+              <div className={activeWorkspace === "build" ? "flex flex-col" : "hidden"}>
+              <Card className={cn(
+                "gap-0 overflow-hidden py-0 shadow-sm",
+                saveFailure?.status === 422 && "border-destructive",
+              )}>
+                <CardHeader className="flex shrink-0 flex-col gap-3 border-b px-5 py-3.5 [.border-b]:pb-3.5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <CardTitle className="flex items-center gap-2 text-base">
-                        <UsersRound className="size-4 text-sky-600 dark:text-sky-400" />
+                        <UsersRound className="size-4 text-muted-foreground" />
                         Tạo nhóm & phân bổ học viên
-                      </CardTitle>
-                      {hasUnsavedDrafts ? (
-                        <>
+                        <Badge variant="secondary" className="tabular-nums">
+                          {draftTeams.length}
+                        </Badge>
+                        {hasUnsavedDrafts && (
                           <Badge
                             variant="outline"
                             className="border-amber-500/40 bg-amber-500/10 text-[11px] text-amber-700 dark:text-amber-300"
                           >
                             Chưa lưu
                           </Badge>
-                          <span className="text-[11px] font-normal text-muted-foreground">
-                            {draftTeams.length} nhóm · {draftMemberIds.size} học viên đang chờ lưu.
-                            Nhóm vượt giới hạn sẽ được backend kiểm tra.
-                          </span>
-                        </>
-                      ) : (
-                        <span className="flex items-center gap-1.5 text-[11px] font-normal text-muted-foreground">
-                          <Info className="size-3.5 shrink-0" />
-                          Nhóm vượt giới hạn sẽ được backend kiểm tra; form không bị xóa nếu phát sinh lỗi.
-                        </span>
-                      )}
+                        )}
+                      </CardTitle>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-200/70 bg-gradient-to-r from-sky-500/[0.07] via-indigo-500/[0.04] to-transparent p-2 dark:border-sky-900/60">
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/30 p-2">
                     <Button
                       size="sm"
                       onClick={() => void addDraftTeamWithCapacity()}
@@ -1494,7 +1597,7 @@ export default function TeamAllocationSetupPage() {
                         session.status !== "OPEN" ||
                         saveDraftMutation.isPending
                       }
-                      className="gap-1.5 bg-gradient-to-r from-sky-600 to-indigo-600 text-white shadow-sm shadow-sky-500/25"
+                      className="gap-1.5"
                     >
                       <Plus className="size-4" />
                       Thêm nhóm
@@ -1537,23 +1640,16 @@ export default function TeamAllocationSetupPage() {
                       <Users className="size-4" />
                       Chọn Mentor cho tất cả nhóm
                     </Button>
-                    {session.status === "OPEN" && (
-                      <p className="w-full text-[11px] text-muted-foreground" aria-live="polite">
-                        {autoAvailableCount === null
-                          ? "Đang tính số học viên có thể chia trong phiên này…"
-                          : `Còn ${autoAvailableCount} học viên hợp lệ chưa có nhóm Draft/Active trong phiên này.`}
-                      </p>
-                    )}
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3 px-4 pb-4">
+                <CardContent className="space-y-3 px-5 pb-5 pt-4">
                   {autoPreviewError && (
                     <div role="alert" className="rounded-lg border border-destructive/30 p-2.5 text-xs text-destructive">
                       {autoPreviewError}
                     </div>
                   )}
                   {autoPreview && (
-                    <section className="space-y-2 rounded-xl border border-indigo-200/70 bg-gradient-to-br from-indigo-500/[0.06] via-sky-500/[0.03] to-transparent p-3 dark:border-indigo-900/60" aria-label="Bản xem trước chia nhóm tự động">
+                    <section className="space-y-2 rounded-xl border bg-muted/30 p-3" aria-label="Bản xem trước chia nhóm tự động">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
                           <h3 className="text-sm font-semibold">Xem trước chia tự động</h3>
@@ -1561,7 +1657,6 @@ export default function TeamAllocationSetupPage() {
                             {autoPreview.eligibleCount} học viên · {autoPreview.teams.length} nhóm ·
                             sĩ số mỗi nhóm {autoPreview.minMembers}–{autoPreview.standardMax} ·
                             {describeAutoTeamSizes(autoPreview)}.
-                            Các nhóm Draft đã lưu được giữ nguyên.
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -1590,9 +1685,9 @@ export default function TeamAllocationSetupPage() {
                           const panelId = `auto-preview-team-${sessionId}-${index}`;
                           return (
                             <article key={`${index}-${team.teamName}`}
-                              className="min-w-0 self-start overflow-hidden rounded-lg border border-indigo-200/60 bg-background dark:border-indigo-900/50">
+                              className="min-w-0 self-start overflow-hidden rounded-lg border bg-background">
                               <button type="button" aria-expanded={expanded} aria-controls={panelId}
-                                className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-xs font-medium hover:bg-indigo-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+                                className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-xs font-medium transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                                 onClick={() => setExpandedPreviewTeams((current) => {
                                   const next = new Set(current);
                                   if (next.has(index)) next.delete(index);
@@ -1654,12 +1749,12 @@ export default function TeamAllocationSetupPage() {
                       <div className="order-2 flex min-w-0 flex-col gap-3 lg:col-start-2 lg:row-start-1">
                       {memberPickerTeam ? (
                         <section
-                          className="space-y-2 rounded-xl border border-sky-300/70 bg-gradient-to-br from-sky-500/[0.06] to-transparent p-3 shadow-sm dark:border-sky-800/60"
+                          className="space-y-3 rounded-xl border bg-muted/30 p-3.5"
                           aria-label="Chỉnh sửa nhóm đang chọn"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div>
-                              <h3 className="text-xs font-semibold">Chỉnh sửa nhóm đang chọn</h3>
+                              <h3 className="text-sm font-semibold">Chỉnh sửa nhóm đang chọn</h3>
                             </div>
                             <span className={`flex items-center gap-1.5 text-xs ${
                               memberPickerTeam.memberIds.length >
@@ -1803,7 +1898,7 @@ export default function TeamAllocationSetupPage() {
                             <Button
                               type="button"
                               size="sm"
-                              className="w-full gap-1.5 bg-gradient-to-r from-sky-600 to-indigo-600 text-white shadow-sm shadow-sky-500/25"
+                              className="w-full gap-1.5"
                               onClick={() => void addDraftTeamWithCapacity()}
                               disabled={
                                 !hasPermission("PEO_TEAM_ALLOCATE") ||
@@ -1831,8 +1926,8 @@ export default function TeamAllocationSetupPage() {
                                     title={team.teamName || `Nhóm ${teamIndex + 1}`}
                                     className={`w-full truncate rounded-lg border px-2.5 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                                       isSelected
-                                        ? "border-transparent bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-sm shadow-indigo-500/25"
-                                        : "bg-background hover:border-sky-400/60 hover:bg-sky-500/[0.06]"
+                                        ? "border-primary/40 bg-primary/10 font-semibold text-primary"
+                                        : "bg-background hover:bg-muted/50"
                                     }`}
                                   >
                                     {team.teamName || `Nhóm ${teamIndex + 1}`}
@@ -1846,7 +1941,7 @@ export default function TeamAllocationSetupPage() {
                       </div>
 
                       {memberPickerTeam ? (
-                        <div className="order-1 min-w-0 space-y-3 rounded-xl border border-indigo-300/70 bg-gradient-to-br from-indigo-500/[0.06] via-sky-500/[0.03] to-transparent p-3 lg:col-start-1 lg:row-start-1 dark:border-indigo-800/60" id="draft-member-picker">
+                        <div className="order-1 min-w-0 space-y-3 rounded-xl border bg-muted/30 p-3.5 lg:col-start-1 lg:row-start-1" id="draft-member-picker">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                               <h3 className="text-sm font-semibold">
@@ -1854,7 +1949,6 @@ export default function TeamAllocationSetupPage() {
                               </h3>
                               <p className="text-xs text-muted-foreground">
                                 Đã chọn {memberPickerTeam.memberIds.length}/{memberPickerMaxMembers} học viên.
-                                Học viên đã thuộc nhóm khác trong phiên sẽ không chọn được.
                               </p>
                               {memberPickerIsFull && (
                                 <p
@@ -1971,25 +2065,16 @@ export default function TeamAllocationSetupPage() {
                     canAssign={session.status === "OPEN"} published={session.status === "PUBLISHED"} />
                 </div>
               )}
-              <Card className="flex min-h-0 flex-1 flex-col overflow-hidden border-violet-200/80 shadow-sm dark:border-violet-900/60">
-                <CardHeader className="shrink-0 bg-gradient-to-r from-violet-500/[0.10] via-fuchsia-500/[0.05] to-transparent">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="space-y-1.5">
-                      <CardTitle className="flex items-center gap-2">
-                        <LockKeyhole className="size-5 text-violet-600 dark:text-violet-400" />
-                        Nhóm đã lưu
-                        <Badge
-                          variant="outline"
-                          className="border-violet-500/30 bg-violet-500/10 tabular-nums text-violet-700 dark:text-violet-300"
-                        >
-                          {savedTeams.length}
-                        </Badge>
-                      </CardTitle>
-                      <CardDescription>
-                        Các nhóm DRAFT chưa giữ chỗ học viên. Mở một nhóm để gán đề bài dự án,
-                        vai trò thành viên và Mentor; công bố chính thức sẽ kiểm tra lại trạng thái thành viên.
-                      </CardDescription>
-                    </div>
+              <Card className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden py-0 shadow-sm">
+                <CardHeader className="grid shrink-0 grid-rows-1 gap-0 border-b px-5 py-3.5 [.border-b]:pb-3.5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <LockKeyhole className="size-4 text-muted-foreground" />
+                      Nhóm đã lưu
+                      <Badge variant="secondary" className="tabular-nums">
+                        {savedTeams.length}
+                      </Badge>
+                    </CardTitle>
                     {publishableTeams.length > 0 && (
                       <Badge
                         variant="outline"
@@ -2001,7 +2086,7 @@ export default function TeamAllocationSetupPage() {
                     )}
                   </div>
                 </CardHeader>
-                <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+                <CardContent className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-5 pt-4">
                   {lastWarnings.length > 0 && (
                     <WarningList warnings={lastWarnings} />
                   )}
@@ -2085,18 +2170,15 @@ export default function TeamAllocationSetupPage() {
                       Danh sách nhóm chưa tải được.
                     </p>
                   ) : savedTeams.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-violet-300/70 bg-gradient-to-br from-violet-500/[0.05] to-transparent p-6 text-center dark:border-violet-800/60">
-                      <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-lg shadow-violet-500/25">
-                        <ClipboardList className="size-6" />
+                    <div className="rounded-xl border border-dashed bg-muted/30 px-5 py-10 text-center">
+                      <span className="mx-auto flex size-11 items-center justify-center rounded-full border bg-background text-muted-foreground">
+                        <ClipboardList className="size-5" />
                       </span>
-                      <p className="mt-3 text-sm font-medium">Chưa có nhóm đã lưu</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Lưu nhóm nháp để chúng xuất hiện ở đây.
-                      </p>
+                      <p className="mt-3 font-medium">Chưa có nhóm đã lưu</p>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="mt-3 gap-1.5"
+                        className="mt-4 gap-1.5"
                         onClick={() => setActiveWorkspace("build")}
                       >
                         <ArrowLeft className="size-3.5" />
@@ -2243,7 +2325,7 @@ export default function TeamAllocationSetupPage() {
                     >
                       <button
                         type="button"
-                        className="flex w-full flex-col items-center justify-center gap-0.5 rounded-xl border border-emerald-300/70 bg-gradient-to-r from-emerald-500/[0.08] via-teal-500/[0.05] to-transparent px-4 py-3 text-sm font-medium text-emerald-800 transition-colors hover:bg-emerald-500/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800/60 dark:text-emerald-200"
+                        className="flex w-full flex-col items-center justify-center gap-0.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 dark:text-emerald-300"
                         disabled={
                           readinessMutation.isPending ||
                           !hasPermission("PEO_TEAM_ALLOCATE") ||
@@ -2277,7 +2359,7 @@ export default function TeamAllocationSetupPage() {
         <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-6xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-sm shadow-violet-500/30">
+              <span className="flex size-9 items-center justify-center rounded-xl border bg-muted text-muted-foreground">
                 <History className="size-5" />
               </span>
               Lịch sử thành viên / Vai trò
@@ -2372,7 +2454,7 @@ export default function TeamAllocationSetupPage() {
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl" showCloseButton={!publishSessionMutation.isPending}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm shadow-emerald-500/30">
+              <span className="flex size-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                 <ListChecks className="size-5" />
               </span>
               Kiểm tra điều kiện công bố
@@ -3029,8 +3111,8 @@ function MemberOption({
         highlighted
           ? "border-destructive bg-destructive/5"
           : checked
-            ? "border-sky-400/60 bg-sky-500/[0.10] shadow-sm"
-            : "bg-background hover:border-sky-300/60 hover:bg-sky-500/[0.05]"
+            ? "border-primary/40 bg-primary/[0.06]"
+            : "bg-background hover:bg-muted/50"
       } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
     >
       <Checkbox
@@ -3225,11 +3307,11 @@ function SavedTeamCard({
   return (
     <>
       <article
-        className={`relative overflow-hidden rounded-xl border bg-background p-4 shadow-sm transition-shadow duration-200 hover:shadow-md ${
+        className={`relative overflow-hidden rounded-xl border bg-card p-4 shadow-sm transition-shadow duration-200 hover:shadow-md ${
           isDraft
-            ? "border-amber-300/70 dark:border-amber-900/60"
+            ? "border-amber-500/30"
             : isActive
-              ? "border-emerald-300/70 dark:border-emerald-900/60"
+              ? "border-emerald-500/30"
               : "border-border"
         }`}
       >
@@ -3237,10 +3319,10 @@ function SavedTeamCard({
           aria-hidden
           className={`absolute inset-y-0 left-0 w-1 ${
             isDraft
-              ? "bg-gradient-to-b from-amber-400 via-amber-500 to-orange-500"
+              ? "bg-amber-500"
               : isActive
-                ? "bg-gradient-to-b from-emerald-400 via-emerald-500 to-teal-500"
-                : "bg-gradient-to-b from-slate-300 to-slate-400"
+                ? "bg-emerald-500"
+                : "bg-muted-foreground/40"
           }`}
         />
         <div className="grid items-stretch gap-4 md:grid-cols-[minmax(0,0.85fr)_minmax(0,1.3fr)]">
@@ -3254,7 +3336,7 @@ function SavedTeamCard({
                       ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
                       : isActive
                         ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                        : "border-muted-foreground/20 bg-muted/60 text-muted-foreground"
+                        : "border-muted-foreground/30 bg-muted text-muted-foreground"
                   }`}
                 >
                   {team.status}
@@ -3284,12 +3366,6 @@ function SavedTeamCard({
                 )}
               </div>
             </div>
-            {isDraft && team.projectId != null && (
-              <p className="text-xs text-muted-foreground">
-                Nhóm đã có Project/Workspace nên không thể xóa tại đây.
-              </p>
-            )}
-
             <div className="space-y-1.5">
               <p className="text-xs text-muted-foreground">Đề bài dự án:</p>
               {team.projectTemplateId ? (
@@ -3315,12 +3391,12 @@ function SavedTeamCard({
             <div className="mt-auto space-y-1.5">
               <p className="text-xs text-muted-foreground">Mentor phụ trách</p>
               {mentorName ? (
-                <div className="flex min-w-0 items-center gap-2 rounded-md border border-sky-200/70 bg-sky-500/[0.06] px-2.5 py-1.5 dark:border-sky-900/60">
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-indigo-500 text-[11px] font-semibold text-white shadow-sm">
+                <div className="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
                     {mentorInitials || "?"}
                   </span>
                   <span className="min-w-0 truncate text-sm font-medium">{mentorName}</span>
-                  <span className="ml-auto shrink-0 rounded-full border border-sky-300/60 bg-background px-2 py-0.5 text-[10px] text-sky-700 dark:border-sky-800/60 dark:text-sky-300">
+                  <span className="ml-auto shrink-0 rounded-full border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
                     Giảng viên
                   </span>
                 </div>
@@ -3339,7 +3415,7 @@ function SavedTeamCard({
                 type="button"
                 aria-label={`Chỉnh sửa ${team.teamName}`}
                 onClick={() => setDetailsOpen(true)}
-                className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-xs font-medium text-violet-600 transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-violet-400"
+                className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Chỉnh sửa
                 <ChevronRight className="size-3.5" />
@@ -3359,7 +3435,7 @@ function SavedTeamCard({
                       className="flex min-w-0 items-center justify-between gap-3 py-2 text-sm"
                     >
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500/15 to-violet-500/25 text-[10px] font-semibold uppercase text-indigo-700 dark:text-indigo-300">
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold uppercase text-muted-foreground">
                           {initialsOf(member.fullName)}
                         </span>
                         <span className="min-w-0 truncate">
@@ -3405,9 +3481,9 @@ function SavedTeamCard({
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.4fr)]">
-          <section className="min-w-0 space-y-4 rounded-xl border bg-muted/10 p-4">
-            <div className="flex items-center gap-3 rounded-lg border border-indigo-200/70 bg-gradient-to-r from-indigo-500/[0.07] to-transparent p-3 dark:border-indigo-900/60">
-              <span className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-indigo-500 text-sm font-semibold text-white shadow-sm">
+          <section className="min-w-0 space-y-4 rounded-xl border bg-muted/30 p-4">
+            <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
+              <span className="flex size-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                 {mentorInitials || "?"}
               </span>
               <div className="min-w-0">
@@ -3498,7 +3574,7 @@ function SavedTeamCard({
               </p>
             )}
           </section>
-          <section className="min-w-0 space-y-4 rounded-xl border bg-muted/10 p-4">
+          <section className="min-w-0 space-y-4 rounded-xl border bg-muted/30 p-4">
             <section className="min-w-0 space-y-2">
               <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
@@ -3552,7 +3628,7 @@ function SavedTeamCard({
                       <li key={member.memberId} className="min-w-0 rounded-lg border bg-background p-3">
                         <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,auto)] sm:items-center">
                           <div className="flex min-w-0 items-center gap-3">
-                            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500/15 to-violet-500/25 text-xs font-semibold uppercase text-indigo-700 dark:text-indigo-300">
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold uppercase text-muted-foreground">
                               {initialsOf(member.fullName)}
                             </span>
                             <div className="min-w-0">
@@ -3694,7 +3770,7 @@ function SavedTeamCard({
           </section>
           </div>
           </div>
-          <DialogFooter className="mx-0 mb-0 shrink-0 rounded-b-xl border-t bg-gradient-to-r from-violet-500/[0.07] via-fuchsia-500/[0.03] to-transparent px-6 py-4">
+          <DialogFooter className="mx-0 mb-0 shrink-0 rounded-b-xl border-t bg-muted/40 px-6 py-4">
             {isDraft && (
               <>
                 <Button
@@ -3753,28 +3829,28 @@ function ReadinessReport({ report }: { report: AllocationReadiness }) {
       label: "Học viên đã vào nhóm",
       value: `${report.assignedStudents}/${report.totalStudents}`,
       icon: <Users className="size-4" />,
-      surface: "border-sky-500/25 from-sky-500/[0.12]",
+      surface: "border-sky-500/25",
       iconTone: "border-sky-500/25 bg-sky-500/10 text-sky-600 dark:text-sky-300",
     },
     {
       label: "Tổng số nhóm",
       value: report.totalTeams,
       icon: <ClipboardList className="size-4" />,
-      surface: "border-indigo-500/25 from-indigo-500/[0.12]",
-      iconTone: "border-indigo-500/25 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300",
+      surface: "border-border",
+      iconTone: "border-border bg-muted text-muted-foreground",
     },
     {
       label: "Nhóm có đề bài hợp lệ",
       value: `${report.teamsWithTemplate}/${report.totalTeams}`,
       icon: <ListChecks className="size-4" />,
-      surface: "border-emerald-500/25 from-emerald-500/[0.12]",
+      surface: "border-emerald-500/25",
       iconTone: "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
     },
     {
       label: ready ? "Học viên tự do" : "Lỗi điều kiện nhóm",
       value: ready ? report.unassignedStudentCount : report.teamIssues.length,
       icon: <CircleAlert className="size-4" />,
-      surface: ready ? "border-teal-500/25 from-teal-500/[0.12]" : "border-amber-500/25 from-amber-500/[0.12]",
+      surface: ready ? "border-teal-500/25" : "border-amber-500/25",
       iconTone: ready
         ? "border-teal-500/25 bg-teal-500/10 text-teal-600 dark:text-teal-300"
         : "border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-300",
@@ -3812,7 +3888,7 @@ function ReadinessReport({ report }: { report: AllocationReadiness }) {
         {statistics.map((statistic) => (
           <div
             key={statistic.label}
-            className={`min-w-0 rounded-lg border bg-gradient-to-br to-transparent p-3 ${statistic.surface}`}
+            className={`min-w-0 rounded-lg border bg-background p-3 ${statistic.surface}`}
           >
             <div className="flex items-center gap-1.5 text-xs">
               <span className={`flex size-6 shrink-0 items-center justify-center rounded-md border ${statistic.iconTone}`}>

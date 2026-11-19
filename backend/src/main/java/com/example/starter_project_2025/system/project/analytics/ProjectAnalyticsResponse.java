@@ -13,6 +13,8 @@ import java.util.List;
  *     and the option lists the filter bar needs.</li>
  *     <li>{@link #kpis()} — the KPI cards, recalculated for the applied
  *     filter.</li>
+ *     <li>{@link #creationTrend()} — the US-ANL-004 stacked bar chart of the
+ *     work items created per creation date, split into Done and To do.</li>
  *     <li>{@link #widgets()} — the four trend charts, bucketed inside
  *     {@link #window()}.</li>
  * </ol>
@@ -26,6 +28,7 @@ public record ProjectAnalyticsResponse(
         Filters filters,
         Window window,
         List<Kpi> kpis,
+        CreationTrend creationTrend,
         List<Widget> widgets
 ) {
 
@@ -64,11 +67,54 @@ public record ProjectAnalyticsResponse(
     public record Window(LocalDate startDate, LocalDate endDate, String granularity) { }
 
     /**
-     * One KPI card.
+     * One KPI card of the US-ANL-003 summary strip.
      *
-     * @param unit {@code items} or {@code percent}
+     * <p>The value is preformatted by the backend so the card, the API and the
+     * acceptance criteria can never disagree about the number of decimals:</p>
+     * <ul>
+     *     <li>{@code total-work-items} — {@code "20"}</li>
+     *     <li>{@code completion-rate} — {@code "75.0%"}, or {@code "0.0%"} when
+     *     the scope is empty (AC02)</li>
+     *     <li>{@code avg-cycle-time} / {@code avg-lead-time} — {@code "2.4 days"},
+     *     or {@code "N/A"} when no item is Done (AC02)</li>
+     * </ul>
+     *
+     * @param unit     {@code items}, {@code percent} or {@code days}
+     * @param caption  sub-label of the card (Done vs. To do split for KPI 1)
+     * @param subCaption second sub-label, currently the estimated hours split
+     *                 (AC03); {@code null} when the card has only one caption
      */
-    public record Kpi(String key, String label, long value, String unit, String hint) { }
+    public record Kpi(
+            String key,
+            String label,
+            String value,
+            String unit,
+            String hint,
+            String caption,
+            String subCaption
+    ) { }
+
+    /**
+     * US-ANL-004: work item creation trend, one stacked bar per creation date.
+     *
+     * <p>The chart only reports the dates that actually received a work item
+     * (it is a trend, not a calendar), ordered oldest first. Every bar is a
+     * full stack: {@code done} forms the bottom segment and {@code todo} the
+     * cap, so the bar total is the number of work items created that day.</p>
+     *
+     * @param series {@code done} first (bottom segment), then {@code todo}
+     */
+    public record CreationTrend(String state, List<Series> series, List<CreationBucket> buckets) { }
+
+    /**
+     * One creation-date bucket of the US-ANL-004 chart.
+     *
+     * <p>{@link #done} counts the work items created on {@link #date} that are
+     * Done as of the end of the chart window; {@link #todo} counts the ones
+     * still open (To do, In progress, Review or Blocked). An item is never in
+     * both segments, so {@code done + todo} is the daily creation count.</p>
+     */
+    public record CreationBucket(LocalDate date, long done, long todo) { }
 
     /**
      * One trend chart.

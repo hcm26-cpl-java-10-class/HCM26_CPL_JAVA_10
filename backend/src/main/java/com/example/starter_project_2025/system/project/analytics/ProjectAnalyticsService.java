@@ -8,7 +8,11 @@ import com.example.starter_project_2025.system.project.sprint.SprintStatus;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogWorkType;
+import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLog;
 import com.example.starter_project_2025.system.rbac.user.User;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,10 +22,12 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 /**
  * US-ANL-002: Sprint &amp; Backlog data collection and scope filtering.
@@ -47,6 +53,10 @@ public class ProjectAnalyticsService {
     private static final String STATE_EMPTY = "EMPTY";
     private static final String UNIT_ITEMS = "items";
     private static final String UNIT_PERCENT = "percent";
+    private static final String UNIT_DAYS = "days";
+
+    /** US-ANL-003 AC02: shown instead of a numeric average when nothing is Done. */
+    private static final String NOT_AVAILABLE = "N/A";
 
     /** Window used when a project has no work item activity at all. */
     private static final int DEFAULT_WINDOW_DAYS = 30;
@@ -61,6 +71,7 @@ public class ProjectAnalyticsService {
     private final ProjectRepository projects;
     private final SprintRepository sprints;
     private final ProjectAnalyticsWorkItemRepository workItems;
+    private final ObjectMapper objectMapper;
 
     /** US-ANL-001 compatibility: the shell without any filter. */
     public ProjectAnalyticsResponse shell(String rawProjectId) {
@@ -140,10 +151,11 @@ public class ProjectAnalyticsService {
         String granularity = granularityOf(windowStart, windowEnd);
         List<ProjectAnalyticsResponse.Bucket> buckets =
                 buckets(items, windowStart, windowEnd, granularity, population);
-        ProjectAnalyticsResponse.Bucket last = buckets.get(buckets.size() - 1);
 
         List<ProjectAnalyticsResponse.Kpi> kpis =
-                kpis(scope, selected, last, buckets, windowStart, windowEnd);
+                kpis(scope, selected, items, windowStart, windowEnd);
+        ProjectAnalyticsResponse.CreationTrend creationTrend =
+                creationTrend(items, windowStart, windowEnd);
         List<ProjectAnalyticsResponse.Widget> widgets =
                 widgets(items.isEmpty() ? STATE_EMPTY : STATE_READY, granularity, buckets);
 
@@ -165,6 +177,7 @@ public class ProjectAnalyticsService {
                         ITEM_TYPES),
                 new ProjectAnalyticsResponse.Window(windowStart, windowEnd, granularity),
                 kpis,
+                creationTrend,
                 widgets);
     }
 
@@ -357,14 +370,55 @@ public class ProjectAnalyticsService {
     // KPI cards and trend charts
     // ---------------------------------------------------------------------
 
-    private static List<ProjectAnalyticsResponse.Kpi> kpis(ProjectAnalyticsScope scope, Sprint sprint,
-                                                           ProjectAnalyticsResponse.Bucket last,
-                                                           List<ProjectAnalyticsResponse.Bucket> buckets,
-                                                           LocalDate windowStart, LocalDate windowEnd) {
-        long open = last.todo() + last.inProgress() + last.review();
-        long total = open + last.done();
-        long createdInWindow = buckets.stream().mapToLong(ProjectAnalyticsResponse.Bucket::created).sum();
-        long completionRate = total == 0 ? 0 : Math.round(last.done() * 100.0 / total);
+    /**
+     * US-ANL-003: the summary strip above the trend charts.
+     *
+     * <p>The four cards are computed from the work items that match the applied
+     * scope, work item type and the end of the chart window ("as of" the last
+     * bucket), so the strip and the burndown agree on how many items are Done:</p>
+     * <ol>
+     *     <li>Total work items, with the Done / To do split and the estimated
+     *     hours split as sub-captions (AC01, AC03).</li>
+     *     <li>Completion rate in percent with one decimal (AC01), {@code 0.0%}
+     *     when the scope is empty (AC02).</li>
+     *     <li>Average cycle time and average lead time in days (AC01),
+     *     {@code N/A} when nothing is Done (AC02).</li>
+     * </ol>
+     */
+    private List<ProjectAnalyticsResponse.Kpi> kpis(ProjectAnalyticsScope scope, Sprint sprint,
+                                                    List<SprintBacklog> items,
+                                                    LocalDate windowStart, LocalDate windowEnd) {
+        long done = 0;
+        long todo = 0;
+        double doneHours = 0;
+        double totalHours = 0;
+        List<SprintBacklog> doneItems = new ArrayList<>();
+
+        for (SprintBacklog item : items) {
+            LocalDate createdOn = createdOn(item);
+            // AC01: an item created after the end of the window did not exist
+            // yet, so it cannot be part of "as of <windowEnd>" totals.
+            if (createdOn != null && createdOn.isAfter(windowEnd)) {
+                continue;
+            }
+            double hours = item.getEstimatedHours() == null ? 0 : Math.max(0, item.getEstimatedHours());
+            totalHours += hours;
+            if (isDoneAsOf(item, windowEnd)) {
+                done++;
+                doneHours += hours;
+                doneItems.add(item);
+            } else {
+                todo++;
+            }
+        }
+
+        long total = done + todo;
+        // AC02: 0/0 must render as 0.0%, never as NaN.
+        double completionRate = total == 0 ? 0.0 : done * 100.0 / total;
+
+        Map<Long, LocalDate[]> timeline = completionTimeline(doneItems, windowEnd);
+        Double averageCycle = averageDays(doneItems, timeline, true);
+        Double averageLead = averageDays(doneItems, timeline, false);
 
         String scopeHint = switch (scope) {
             case BACKLOG -> "Product backlog items without a sprint";
@@ -376,18 +430,185 @@ public class ProjectAnalyticsService {
         String windowHint = windowStart.equals(windowEnd)
                 ? "as of " + windowStart
                 : "as of " + windowEnd + " · " + windowStart + " → " + windowEnd;
+        String hoursCaption = totalHours > 0
+                ? oneDecimal(doneHours) + "h / " + oneDecimal(totalHours) + "h"
+                : null;
+        String doneCaption = done + " Done / " + todo + " To do";
+
+        // AC02: without a single Done item the averages have no sample at all.
+        String measuredCaption = doneItems.isEmpty()
+                ? "No Done items in scope yet"
+                : doneItems.size() + (doneItems.size() == 1 ? " Done item measured" : " Done items measured");
 
         return List.of(
-                new ProjectAnalyticsResponse.Kpi("work-items", "Work items", total, UNIT_ITEMS,
-                        scopeHint + " · " + windowHint),
-                new ProjectAnalyticsResponse.Kpi("completed", "Completed", last.done(), UNIT_ITEMS,
-                        "Work items in status Done at the end of the window"),
-                new ProjectAnalyticsResponse.Kpi("open", "Open", open, UNIT_ITEMS,
-                        "To do, in progress or in review at the end of the window"),
-                new ProjectAnalyticsResponse.Kpi("completion-rate", "Completion rate", completionRate,
-                        UNIT_PERCENT, "Completed ÷ work items"),
-                new ProjectAnalyticsResponse.Kpi("created-in-window", "Created in window", createdInWindow,
-                        UNIT_ITEMS, "Work items created inside the chart window"));
+                new ProjectAnalyticsResponse.Kpi("total-work-items", "Total work items",
+                        Long.toString(total), UNIT_ITEMS, scopeHint + " · " + windowHint,
+                        doneCaption, hoursCaption),
+                new ProjectAnalyticsResponse.Kpi("completion-rate", "Completion rate",
+                        oneDecimal(completionRate) + "%", UNIT_PERCENT,
+                        "Done ÷ total work items in scope",
+                        done + " of " + total + " items done", hoursCaption),
+                new ProjectAnalyticsResponse.Kpi("avg-cycle-time", "Avg cycle time",
+                        averageCycle == null ? NOT_AVAILABLE : oneDecimal(averageCycle) + " days",
+                        UNIT_DAYS,
+                        "Mean days from the first move to In progress until Done",
+                        measuredCaption, null),
+                new ProjectAnalyticsResponse.Kpi("avg-lead-time", "Avg lead time",
+                        averageLead == null ? NOT_AVAILABLE : oneDecimal(averageLead) + " days",
+                        UNIT_DAYS,
+                        "Mean days from creation until Done",
+                        measuredCaption, null));
+    }
+
+    /**
+     * AC01: an item counts as Done when it is in status Done and its last
+     * update happened on or before the end of the window (same rule as the
+     * status snapshot of {@link #bucket}).
+     */
+    private static boolean isDoneAsOf(SprintBacklog item, LocalDate windowEnd) {
+        if (statusOf(item) != SprintBacklogStatus.DONE) {
+            return false;
+        }
+        LocalDate updatedOn = updatedOn(item);
+        return updatedOn == null || !updatedOn.isAfter(windowEnd);
+    }
+
+    /**
+     * US-ANL-003: the transition dates of every Done item.
+     *
+     * <p>Slot {@code [0]} is the first move to In progress (cycle time start),
+     * slot {@code [1]} is the first move to Done (both cycle and lead time
+     * end). The append-only backlog audit trail is the only place that keeps
+     * those dates; items without any history simply fall back to
+     * {@code created_at} / {@code updated_at} in {@link #averageDays}.</p>
+     */
+    private Map<Long, LocalDate[]> completionTimeline(List<SprintBacklog> doneItems, LocalDate windowEnd) {
+        Map<Long, LocalDate[]> timeline = new LinkedHashMap<>();
+        if (doneItems.isEmpty()) {
+            return timeline;
+        }
+        List<Long> ids = doneItems.stream()
+                .map(SprintBacklog::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (ids.isEmpty()) {
+            return timeline;
+        }
+        String inProgress = SprintBacklogStatus.IN_PROGRESS.name();
+        String doneState = SprintBacklogStatus.DONE.name();
+        for (SprintBacklogAuditLog event : workItems.findStatusEvents(ids, windowEnd.atTime(23, 59, 59))) {
+            LocalDate on = event.getCreatedAt() == null ? null : event.getCreatedAt().toLocalDate();
+            if (on == null || event.getSprintBacklogId() == null) {
+                continue;
+            }
+            String before = statusIn(event.getBeforeState());
+            String after = statusIn(event.getAfterState());
+            LocalDate[] slot = timeline.computeIfAbsent(event.getSprintBacklogId(), key -> new LocalDate[2]);
+            if (inProgress.equals(after) && !inProgress.equals(before)
+                    && (slot[0] == null || on.isBefore(slot[0]))) {
+                slot[0] = on;
+            }
+            // Events arrive oldest first, so the first Done transition wins
+            // even when a reopened item is completed a second time.
+            if (doneState.equals(after) && !doneState.equals(before) && slot[1] == null) {
+                slot[1] = on;
+            }
+        }
+        return timeline;
+    }
+
+    /**
+     * Mean number of whole days spent on the Done items.
+     *
+     * @param cycle {@code true} measures first In progress → Done, {@code false}
+     *              measures creation → Done (lead time)
+     * @return {@code null} when no item provides a usable pair of dates
+     */
+    private static Double averageDays(List<SprintBacklog> doneItems, Map<Long, LocalDate[]> timeline,
+                                      boolean cycle) {
+        long days = 0;
+        int samples = 0;
+        for (SprintBacklog item : doneItems) {
+            LocalDate createdOn = createdOn(item);
+            LocalDate[] slot = item.getId() == null ? null : timeline.get(item.getId());
+            LocalDate completedOn = slot != null && slot[1] != null ? slot[1] : updatedOn(item);
+            LocalDate startedOn = cycle ? (slot == null ? null : slot[0]) : createdOn;
+            // AC02: without a start date the item cannot contribute a sample.
+            if (cycle && startedOn == null) {
+                startedOn = createdOn;
+            }
+            if (startedOn == null || completedOn == null) {
+                continue;
+            }
+            days += Math.max(0L, ChronoUnit.DAYS.between(startedOn, completedOn));
+            samples++;
+        }
+        return samples == 0 ? null : (double) days / samples;
+    }
+
+    /** Reads the {@code status} field of an audit before/after state snapshot. */
+    private String statusIn(String state) {
+        if (state == null || state.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(state);
+            if (node != null && node.isObject()) {
+                JsonNode status = node.get("status");
+                return status == null || status.isNull() ? null : status.asText();
+            }
+            if (node != null && node.isTextual()) {
+                return node.asText();
+            }
+        } catch (JsonProcessingException legacy) {
+            // Legacy rows stored the bare status value instead of a snapshot.
+        }
+        String value = state.trim().toUpperCase(Locale.ROOT);
+        return value.matches("[A-Z_]{1,20}") ? value : null;
+    }
+
+    /** US-ANL-003: one decimal place, independent of the JVM default locale. */
+    private static String oneDecimal(double value) {
+        return String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    /**
+     * US-ANL-004: work items grouped by their creation date, split into Done
+     * and To do (AC01 / AC02).
+     *
+     * <p>The chart is a creation trend, so only the dates inside the effective
+     * window that actually received a work item produce a bar; there is no
+     * empty bar for a day without creation. The Done / To do split uses the
+     * current status with the same "as of the end of the window" rule as the
+     * KPI strip, which keeps the two readings consistent and makes a newly
+     * completed task move from the green cap to the blue segment on the next
+     * refresh (AC03).</p>
+     */
+    private static ProjectAnalyticsResponse.CreationTrend creationTrend(
+            List<SprintBacklog> items, LocalDate windowStart, LocalDate windowEnd) {
+        Map<LocalDate, long[]> grouped = new TreeMap<>();
+        for (SprintBacklog item : items) {
+            LocalDate createdOn = createdOn(item);
+            if (createdOn == null || createdOn.isBefore(windowStart) || createdOn.isAfter(windowEnd)) {
+                continue;
+            }
+            long[] split = grouped.computeIfAbsent(createdOn, key -> new long[2]);
+            if (isDoneAsOf(item, windowEnd)) {
+                split[0]++;
+            } else {
+                split[1]++;
+            }
+        }
+        List<ProjectAnalyticsResponse.CreationBucket> buckets = grouped.entrySet().stream()
+                .map(entry -> new ProjectAnalyticsResponse.CreationBucket(
+                        entry.getKey(), entry.getValue()[0], entry.getValue()[1]))
+                .toList();
+        return new ProjectAnalyticsResponse.CreationTrend(
+                buckets.isEmpty() ? STATE_EMPTY : STATE_READY,
+                List.of(
+                        new ProjectAnalyticsResponse.Series("done", "Done"),
+                        new ProjectAnalyticsResponse.Series("todo", "To Do")),
+                buckets);
     }
 
     private static List<ProjectAnalyticsResponse.Widget> widgets(String state, String granularity,
