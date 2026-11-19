@@ -1,3 +1,6 @@
+import { AlertCircle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 /**
@@ -162,6 +165,94 @@ export function MetricLineTooltip({
       <p className="mt-1.5 border-t pt-1 text-[10px] text-muted-foreground">
         Click a node marker to inspect work items
       </p>
+    </div>
+  );
+}
+
+/**
+ * US-ANL-009 AC01: smooth animated skeleton loader rendered inside chart
+ * containers while analytics data is loading so '0' or empty states never flash.
+ */
+export function ChartSkeleton({
+  variant = "bar",
+  className,
+}: {
+  variant?: "bar" | "line";
+  className?: string;
+}) {
+  const heights = variant === "bar"
+    ? ["h-16", "h-24", "h-12", "h-28", "h-20", "h-24", "h-14"]
+    : ["h-10", "h-16", "h-14", "h-24", "h-18", "h-20", "h-12"];
+
+  return (
+    <div
+      role="status"
+      aria-label="Loading chart"
+      className={cn("flex h-[220px] w-full flex-col justify-between px-4 pb-4 pt-3", className)}
+    >
+      <div className="flex flex-1 items-end gap-3 border-b border-l border-border/60 px-4 pb-3 pt-4">
+        {heights.map((height, idx) => (
+          <div key={idx} className="flex flex-1 flex-col items-center justify-end gap-1.5">
+            {variant === "line" ? (
+              <>
+                <Skeleton className="size-2.5 rounded-full" />
+                <Skeleton className={cn("w-full max-w-[28px] rounded-t opacity-45", height)} />
+              </>
+            ) : (
+              <Skeleton className={cn("w-full max-w-[32px] rounded-t", height)} />
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2.5 flex items-center justify-between gap-2 px-4">
+        {[0, 1, 2, 3, 4].map(idx => (
+          <Skeleton key={idx} className="h-2.5 w-12 rounded" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * US-ANL-009 AC03: user-friendly inline error banner inside an affected widget
+ * with a scoped 'Retry' button and no raw stack traces.
+ */
+export function WidgetInlineError({
+  message = "Unable to load this widget right now. Please try again.",
+  onRetry,
+  retrying = false,
+  className,
+}: {
+  message?: string;
+  onRetry?: () => void;
+  retrying?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      role="alert"
+      className={cn(
+        "flex h-full min-h-[160px] flex-col items-center justify-center gap-2.5 rounded-lg border border-destructive/30 bg-destructive/5 px-5 py-6 text-center",
+        className,
+      )}
+    >
+      <span className="flex size-8 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+        <AlertCircle className="size-4" aria-hidden="true" />
+      </span>
+      <p className="max-w-sm text-xs leading-5 text-foreground">{message}</p>
+      {onRetry && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={retrying}
+          className="h-7 gap-1.5 text-[11px]"
+          onClick={onRetry}
+        >
+          <RefreshCw className={cn("size-3", retrying && "animate-spin")} />
+          Retry
+        </Button>
+      )}
     </div>
   );
 }

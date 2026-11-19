@@ -36,11 +36,12 @@ export interface ProjectAnalyticsFilters {
   itemTypes: ProjectAnalyticsItemType[];
 }
 
-/** Effective chart window (may differ from the requested dates). */
+/** Effective chart window (may differ from the requested dates) and tenant timezone. */
 export interface ProjectAnalyticsWindow {
   startDate: string;
   endDate: string;
   granularity: ProjectAnalyticsGranularity;
+  timeZone?: string;
 }
 
 /** Measurement of a KPI value: item count, percentage or day average. */
@@ -99,6 +100,7 @@ export interface ProjectAnalyticsCreationBucket {
 /** US-ANL-004: "Work item creation trend" chart, one bar per creation date. */
 export interface ProjectAnalyticsCreationTrend {
   state: ProjectAnalyticsWidgetState;
+  timeZone?: string;
   series: ProjectAnalyticsSeries[];
   buckets: ProjectAnalyticsCreationBucket[];
 }

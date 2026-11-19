@@ -1,11 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertCircle,
   CalendarDays,
   Clock,
   ExternalLink,
   Gauge,
-  RefreshCw,
   UserRound,
 } from "lucide-react";
 import { projectAnalyticsApi } from "@/api/features/project-analytics.api";
@@ -31,6 +29,7 @@ import type {
   ProjectAnalyticsDrillDownTarget,
   ProjectAnalyticsRequestFilters,
 } from "@/types/features/project-analytics";
+import { WidgetInlineError } from "./analytics-chart-ui";
 
 const CHART_META: Record<ProjectAnalyticsDrillDownChart, {
   title: string;
@@ -204,19 +203,11 @@ export function AnalyticsDrillDownDrawer({
               ))}
             </div>
           ) : query.isError ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed p-8 text-center">
-              <AlertCircle className="size-6 text-destructive" aria-hidden="true" />
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-foreground">Could not load work items</p>
-                <p className="text-[11px] text-muted-foreground">
-                  The drill-down details for this date could not be retrieved.
-                </p>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => void query.refetch()}>
-                <RefreshCw className={cn("size-3.5", query.isFetching && "animate-spin")} />
-                Try again
-              </Button>
-            </div>
+            <WidgetInlineError
+              message="Could not load the work items for this date. Please try again."
+              onRetry={() => void query.refetch()}
+              retrying={query.isFetching}
+            />
           ) : items.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed p-8 text-center">
               <p className="text-xs font-medium text-foreground">No matching work items</p>

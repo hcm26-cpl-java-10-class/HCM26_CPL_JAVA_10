@@ -73,8 +73,8 @@ public record ProjectAnalyticsResponse(
             long workItemCount
     ) { }
 
-    /** Effective chart window and bucket size. */
-    public record Window(LocalDate startDate, LocalDate endDate, String granularity) { }
+    /** Effective chart window, bucket size and tenant timezone (US-ANL-009 AC04). */
+    public record Window(LocalDate startDate, LocalDate endDate, String granularity, String timeZone) { }
 
     /**
      * One KPI card of the US-ANL-003 summary strip.
@@ -112,9 +112,10 @@ public record ProjectAnalyticsResponse(
      * full stack: {@code done} forms the bottom segment and {@code todo} the
      * cap, so the bar total is the number of work items created that day.</p>
      *
-     * @param series {@code done} first (bottom segment), then {@code todo}
+     * @param timeZone tenant timezone used to derive creation dates (US-ANL-009 AC04)
+     * @param series   {@code done} first (bottom segment), then {@code todo}
      */
-    public record CreationTrend(String state, List<Series> series, List<CreationBucket> buckets) { }
+    public record CreationTrend(String state, String timeZone, List<Series> series, List<CreationBucket> buckets) { }
 
     /**
      * One creation-date bucket of the US-ANL-004 chart.

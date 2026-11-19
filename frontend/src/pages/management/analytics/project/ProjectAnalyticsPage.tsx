@@ -5,8 +5,11 @@ import {
   ArrowLeft,
   BarChart3,
   Filter,
+  FolderOpen,
+  Inbox,
   LockKeyhole,
   RefreshCw,
+  RotateCcw,
   SearchX,
   Share2,
   ShieldAlert,
@@ -42,9 +45,11 @@ import { WorkItemLeadTimeCard } from "./WorkItemLeadTimeCard";
 import {
   analyticsFilterKeys,
   clearAnalyticsFilters,
+  hasAnalyticsFilters,
   readAnalyticsFilters,
   writeAnalyticsFilters,
 } from "./analytics-filters";
+import { ChartSkeleton } from "./analytics-chart-ui";
 
 function statusCode(error: unknown) {
   return isAxiosError(error) ? error.response?.status : undefined;
@@ -63,13 +68,21 @@ function filterFieldErrors(error: unknown): Record<string, string> {
   return errors;
 }
 
-function formatUtcTime(value: number) {
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "UTC",
-  }).format(new Date(value));
+function formatLocalTime(value: number, timeZone: string) {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone,
+    }).format(new Date(value));
+  } catch {
+    return new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(value));
+  }
 }
 
 function PageState({ icon: Icon, title, description, ignorePaths, children }: {
@@ -120,13 +133,74 @@ function ShellLoading() {
         <div className="flex gap-2"><Skeleton className="h-8 w-20" /><Skeleton className="h-8 w-20" /></div>
       </div>
       <Skeleton className="h-12 w-full rounded-xl" />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[0, 1, 2, 3].map(key =>
-        <Skeleton key={key} className="h-[112px] rounded-xl" />)}</div>
-      <div className="grid gap-4 xl:grid-cols-2">{[0, 1, 2, 3].map(key =>
-        <Skeleton key={key} className="h-64 rounded-xl" />)}</div>
+      <AnalyticsKpiCards kpis={[]} isLoading />
+      <div className="grid gap-4 xl:grid-cols-2">
+        {(["bar", "line", "line", "bar"] as const).map((variant, key) => (
+          <Card key={key} className="gap-0 rounded-xl py-0 shadow-xs">
+            <div className="flex items-center justify-between gap-2 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Skeleton className="size-6 rounded-md" />
+                <Skeleton className="h-3.5 w-36" />
+              </div>
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <ChartSkeleton variant={variant} />
+          </Card>
+        ))}
+      </div>
       <Skeleton className="h-28 w-full rounded-xl" />
     </div>
   </div>;
+}
+
+/**
+ * US-ANL-009 AC02 & Empty State: centered illustrated state distinguishing a
+ * brand-new project (0 Sprints and 0 Backlog items) from an empty filtered scope.
+ */
+function AnalyticsEmptyState({
+  uninitializedProject,
+  hasActiveFilters,
+  backlogHref,
+  onReset,
+}: {
+  uninitializedProject: boolean;
+  hasActiveFilters: boolean;
+  backlogHref: string;
+  onReset: () => void;
+}) {
+  const Icon = uninitializedProject ? FolderOpen : Inbox;
+  const title = uninitializedProject
+    ? "No work item data available yet"
+    : "No Sprint or Backlog items found";
+  const message = uninitializedProject
+    ? "No work item data available yet. Create items in Backlog or Sprint Board to see analytics."
+    : "No Sprint or Backlog items found for the selected filter";
+
+  return (
+    <section
+      aria-label="Empty analytics state"
+      className="flex flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 px-6 py-12 text-center"
+    >
+      <span className="flex size-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+        <Icon className="size-7" strokeWidth={1.75} aria-hidden="true" />
+      </span>
+      <h2 className="mt-4 text-sm font-semibold tracking-tight text-foreground">{title}</h2>
+      <p className="mt-1.5 max-w-md text-xs leading-5 text-muted-foreground">{message}</p>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        {(!uninitializedProject || hasActiveFilters) && (
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={onReset}>
+            <RotateCcw className="size-3.5" />
+            Reset Filters
+          </Button>
+        )}
+        {uninitializedProject && (
+          <Button asChild size="sm" className="h-8 gap-1.5 bg-blue-600 text-xs text-white hover:bg-blue-700">
+            <Link to={backlogHref}>Go to Backlog</Link>
+          </Button>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function AnalyticsHeader({ sprintLabel, updatedLabel, projectName }: {
@@ -248,13 +322,11 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
         <Button asChild size="sm"><Link to="/login">Sign in</Link></Button>
       </PageState>;
     }
-    return <PageState icon={AlertCircle} title="Unable to load analytics" ignorePaths={projectSegment}
-      description="The analytics workspace could not be loaded. Check your connection and try again.">
-      <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
-        <RefreshCw className={query.isFetching ? "animate-spin" : undefined} />Try again
-      </Button>
-    </PageState>;
   }
+
+  const transientError = query.isError && !rejected;
+  const transientErrorMessage = "Unable to load analytics data right now. Please try again.";
+  const retryAnalytics = () => { void query.refetch(); };
 
   const shell = query.data;
   const fieldErrors = filterFieldErrors(query.error);
@@ -267,8 +339,12 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
       item.sprintId === (shell.filters.sprintId ?? shell.filters.defaultSprintId))
     : undefined;
   const sprintLabel = selectedSprint?.name ?? (shell?.filters.scope === "SPRINT" ? "Sprint scope" : "All work items");
+  const tenantTimeZone = shell?.window.timeZone
+    ?? shell?.completionTrend?.timeZone
+    ?? shell?.cycleTimeTrend?.timeZone
+    ?? "Asia/Ho_Chi_Minh";
   const updatedLabel = query.dataUpdatedAt
-    ? `Updated today at ${formatUtcTime(query.dataUpdatedAt)} UTC`
+    ? `Updated today at ${formatLocalTime(query.dataUpdatedAt, tenantTimeZone)} (${tenantTimeZone})`
     : "Updated just now";
 
   const backlogParams = new URLSearchParams(location.search);
@@ -276,15 +352,84 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
   backlogParams.set("tab", "backlog");
   const backlogHref = workspaceId ? `${location.pathname}?${backlogParams.toString()}` : "/backlogs";
 
+  const hasActiveFilters = hasAnalyticsFilters(applied);
+  const uninitializedProject = shell != null
+    && shell.filters.sprints.length === 0
+    && shell.filters.backlogItemCount === 0;
+  const totalWorkItemsKpi = shell?.kpis.find(item => item.key === "total-work-items")?.value;
+  const scopeIsEmpty = shell != null
+    && !query.isFetching
+    && !transientError
+    && (totalWorkItemsKpi === "0" || shell.creationTrend.state === "EMPTY")
+    && shell.creationTrend.state === "EMPTY"
+    && shell.cycleTimeTrend.state === "EMPTY"
+    && shell.leadTimeTrend.state === "EMPTY"
+    && shell.completionTrend.state === "EMPTY"
+    && shell.widgets.every(widget => widget.state === "EMPTY");
+
   return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background"
     pathName={{ projects: "Project Management", [String(projectId)]: shell?.projectName ?? "Project analytics", analytics: "Analytics" }}>
-    {query.isPending || !shell ? (
+    {query.isPending && !shell ? (
+      <ShellLoading />
+    ) : !shell ? (
       rejected ? (
         <PageState icon={Filter} title="422 · Filters not accepted" ignorePaths={projectSegment}
           description={rejectedMessage}>
           <Button variant="outline" size="sm" onClick={reset}><X />Clear filters</Button>
         </PageState>
-      ) : <ShellLoading />
+      ) : (
+        <div className="rounded-2xl border bg-card p-4 shadow-xs sm:p-5">
+          <div className="space-y-4">
+            <AnalyticsHeader sprintLabel={sprintLabel} updatedLabel={updatedLabel} />
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-xs text-destructive"
+            >
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                <span>{transientErrorMessage}</span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={query.isFetching}
+                className="h-7 gap-1.5 bg-background text-xs text-foreground"
+                onClick={retryAnalytics}
+              >
+                <RefreshCw className={query.isFetching ? "size-3.5 animate-spin" : "size-3.5"} />
+                Retry
+              </Button>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <WorkItemCreationTrendCard
+                isLoading={query.isFetching}
+                errorMessage={transientErrorMessage}
+                onRetry={retryAnalytics}
+                retrying={query.isFetching}
+              />
+              <WorkItemCycleTimeCard
+                isLoading={query.isFetching}
+                errorMessage={transientErrorMessage}
+                onRetry={retryAnalytics}
+                retrying={query.isFetching}
+              />
+              <WorkItemLeadTimeCard
+                isLoading={query.isFetching}
+                errorMessage={transientErrorMessage}
+                onRetry={retryAnalytics}
+                retrying={query.isFetching}
+              />
+              <WorkItemCompletionTrendCard
+                isLoading={query.isFetching}
+                errorMessage={transientErrorMessage}
+                onRetry={retryAnalytics}
+                retrying={query.isFetching}
+              />
+            </div>
+          </div>
+        </div>
+      )
     ) : (
       <div className="rounded-2xl border bg-card p-4 shadow-xs sm:p-5">
         <div className="space-y-4">
@@ -309,24 +454,93 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
             </p>
           )}
 
-          <AnalyticsKpiCards kpis={shell.kpis} />
-          <div className="grid gap-4 xl:grid-cols-2">
-            <WorkItemCreationTrendCard trend={shell.creationTrend} onDrillDown={setDrillDownTarget} />
-            <WorkItemCycleTimeCard trend={shell.cycleTimeTrend} onDrillDown={setDrillDownTarget} />
-            <WorkItemLeadTimeCard trend={shell.leadTimeTrend} onDrillDown={setDrillDownTarget} />
-            <WorkItemCompletionTrendCard trend={shell.completionTrend} onDrillDown={setDrillDownTarget} />
-          </div>
-          <AnalyticsTrendCharts widgets={shell.widgets} granularity={shell.window.granularity} />
-          <CurrentWindowWorkItems
-            projectId={projectId}
-            projectCode={shell.projectCode}
-            projectName={shell.projectName}
-            scope={shell.filters.scope}
-            sprintId={shell.filters.sprintId}
-            itemType={shell.filters.itemType}
-            dateWindow={shell.window}
-            backlogHref={backlogHref}
-          />
+          {transientError && !query.isFetching && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-xs text-destructive"
+            >
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                <span>{transientErrorMessage}</span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={query.isFetching}
+                className="h-7 gap-1.5 bg-background text-xs text-foreground"
+                onClick={retryAnalytics}
+              >
+                <RefreshCw className={query.isFetching ? "size-3.5 animate-spin" : "size-3.5"} />
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {scopeIsEmpty ? (
+            <AnalyticsEmptyState
+              uninitializedProject={uninitializedProject}
+              hasActiveFilters={hasActiveFilters}
+              backlogHref={backlogHref}
+              onReset={reset}
+            />
+          ) : (
+            <>
+              <AnalyticsKpiCards kpis={shell.kpis} isLoading={query.isFetching} />
+              <div className="grid gap-4 xl:grid-cols-2">
+                <WorkItemCreationTrendCard
+                  trend={shell.creationTrend}
+                  onDrillDown={setDrillDownTarget}
+                  isLoading={query.isFetching}
+                  errorMessage={transientError ? transientErrorMessage : null}
+                  onRetry={retryAnalytics}
+                  retrying={query.isFetching}
+                />
+                <WorkItemCycleTimeCard
+                  trend={shell.cycleTimeTrend}
+                  onDrillDown={setDrillDownTarget}
+                  isLoading={query.isFetching}
+                  errorMessage={transientError ? transientErrorMessage : null}
+                  onRetry={retryAnalytics}
+                  retrying={query.isFetching}
+                />
+                <WorkItemLeadTimeCard
+                  trend={shell.leadTimeTrend}
+                  onDrillDown={setDrillDownTarget}
+                  isLoading={query.isFetching}
+                  errorMessage={transientError ? transientErrorMessage : null}
+                  onRetry={retryAnalytics}
+                  retrying={query.isFetching}
+                />
+                <WorkItemCompletionTrendCard
+                  trend={shell.completionTrend}
+                  onDrillDown={setDrillDownTarget}
+                  isLoading={query.isFetching}
+                  errorMessage={transientError ? transientErrorMessage : null}
+                  onRetry={retryAnalytics}
+                  retrying={query.isFetching}
+                />
+              </div>
+              <AnalyticsTrendCharts
+                widgets={shell.widgets}
+                granularity={shell.window.granularity}
+                isLoading={query.isFetching}
+                errorMessage={transientError ? transientErrorMessage : null}
+                onRetry={retryAnalytics}
+                retrying={query.isFetching}
+              />
+              <CurrentWindowWorkItems
+                projectId={projectId}
+                projectCode={shell.projectCode}
+                projectName={shell.projectName}
+                scope={shell.filters.scope}
+                sprintId={shell.filters.sprintId}
+                itemType={shell.filters.itemType}
+                dateWindow={shell.window}
+                backlogHref={backlogHref}
+              />
+            </>
+          )}
           <AnalyticsDrillDownDrawer
             projectId={projectId}
             appliedFilters={applied}

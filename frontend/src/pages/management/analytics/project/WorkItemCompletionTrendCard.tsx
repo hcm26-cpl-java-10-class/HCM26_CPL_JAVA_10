@@ -16,7 +16,12 @@ import type {
   ProjectAnalyticsCompletionTrend,
   ProjectAnalyticsDrillDownTarget,
 } from "@/types/features/project-analytics";
-import { LegendToggleButton, StackedBarTooltip } from "./analytics-chart-ui";
+import {
+  ChartSkeleton,
+  LegendToggleButton,
+  StackedBarTooltip,
+  WidgetInlineError,
+} from "./analytics-chart-ui";
 
 const AXIS_COLOR = "#94a3b8";
 const GRID_COLOR = "#e8edf3";
@@ -34,9 +39,17 @@ const TASK_COLOR = "#A855F7";
 export function WorkItemCompletionTrendCard({
   trend,
   onDrillDown,
+  isLoading = false,
+  errorMessage,
+  onRetry,
+  retrying = false,
 }: {
-  trend: ProjectAnalyticsCompletionTrend;
+  trend?: ProjectAnalyticsCompletionTrend;
   onDrillDown?: (target: ProjectAnalyticsDrillDownTarget) => void;
+  isLoading?: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
+  retrying?: boolean;
 }) {
   const [visible, setVisible] = useState<Record<ProjectAnalyticsCompletionSeriesKey, boolean>>({
     subtask: true,
@@ -121,6 +134,13 @@ export function WorkItemCompletionTrendCard({
         </div>
       </CardHeader>
       <CardContent className="px-2 pb-2 pt-0">
+        {isLoading ? (
+          <ChartSkeleton variant="bar" />
+        ) : errorMessage ? (
+          <div className="p-2">
+            <WidgetInlineError message={errorMessage} onRetry={onRetry} retrying={retrying} className="h-[204px]" />
+          </div>
+        ) : (
         <div className="relative h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows} margin={{ top: 8, right: 16, bottom: 24, left: 0 }} barCategoryGap="24%">
@@ -210,6 +230,7 @@ export function WorkItemCompletionTrendCard({
             </div>
           )}
         </div>
+        )}
       </CardContent>
     </Card>
   );

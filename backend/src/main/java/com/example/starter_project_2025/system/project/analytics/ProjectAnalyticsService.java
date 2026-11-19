@@ -12,6 +12,8 @@ import com.example.starter_project_2025.system.project.sprint_backlog.audit.Spri
 import com.example.starter_project_2025.system.project.task.Task;
 import com.example.starter_project_2025.system.project.task.TaskStatus;
 import com.example.starter_project_2025.system.project.task.audit.TaskAuditLog;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -82,14 +84,23 @@ public class ProjectAnalyticsService {
     private final ProjectRepository projects;
     private final SprintRepository sprints;
     private final ProjectAnalyticsWorkItemRepository workItems;
+    private final TenantRepository tenants;
     private final ObjectMapper objectMapper;
 
     /**
-     * US-ANL-005: tenant time zone used to group completions by calendar day.
-     * Falls back to the backlog notification zone shared by the project module.
+     * US-ANL-005 / US-ANL-009: fallback tenant time zone used when
+     * {@code Tenant.timezone} is not set on the tenant record.
      */
     @Value("${app.analytics.tenant-time-zone:${app.notification.backlog-time-zone:Asia/Ho_Chi_Minh}}")
     private String tenantTimeZone;
+
+    /**
+     * US-ANL-009 AC04: time zone in which database {@code LocalDateTime} audit
+     * columns are stored (empty defaults to the JVM server zone; set to
+     * {@code UTC} when timestamps are stored in UTC).
+     */
+    @Value("${app.analytics.storage-time-zone:${app.member-reminder.audit-time-zone:}}")
+    private String storageTimeZone;
 
     /** US-ANL-001 compatibility: the shell without any filter. */
     public ProjectAnalyticsResponse shell(String rawProjectId) {
@@ -104,16 +115,18 @@ public class ProjectAnalyticsService {
                 : ctx.windowStart();
         LocalDate resolvedEnd = ctx.windowEnd();
         long population = ctx.items().stream()
-                .map(ProjectAnalyticsService::createdOn)
+                .map(item -> createdOn(item, ctx.serverZone(), ctx.tenantZone()))
                 .filter(Objects::nonNull)
                 .filter(date -> !date.isAfter(resolvedEnd))
                 .count();
         String granularity = granularityOf(bucketStart, ctx.windowEnd());
-        List<ProjectAnalyticsResponse.Bucket> buckets =
-                buckets(ctx.items(), bucketStart, ctx.windowEnd(), granularity, population);
+        List<ProjectAnalyticsResponse.Bucket> buckets = buckets(
+                ctx.items(), bucketStart, ctx.windowEnd(), granularity, population,
+                ctx.serverZone(), ctx.tenantZone());
 
-        List<ProjectAnalyticsResponse.Kpi> kpis =
-                kpis(ctx.scope(), ctx.selected(), ctx.items(), ctx.windowStart(), ctx.windowEnd());
+        List<ProjectAnalyticsResponse.Kpi> kpis = kpis(
+                ctx.scope(), ctx.selected(), ctx.items(), ctx.windowStart(), ctx.windowEnd(),
+                ctx.serverZone(), ctx.tenantZone(), ctx.completionCutoff());
         ProjectAnalyticsResponse.CreationTrend creationTrend = creationTrend(
                 ctx.items(), ctx.subtasks(), ctx.backlogHistory(), ctx.subtaskHistory(),
                 ctx.windowStart(), ctx.windowEnd(), ctx.tenantZone(), ctx.serverZone(), ctx.completionCutoff());
@@ -145,7 +158,8 @@ public class ProjectAnalyticsService {
                         ctx.activeSprint() == null ? null : ctx.activeSprint().getId(),
                         workItems.countProductBacklog(ctx.project().getId()),
                         ITEM_TYPES),
-                new ProjectAnalyticsResponse.Window(ctx.windowStart(), ctx.windowEnd(), granularity),
+                new ProjectAnalyticsResponse.Window(
+                        ctx.windowStart(), ctx.windowEnd(), granularity, ctx.tenantZone().getId()),
                 kpis,
                 creationTrend,
                 cycleTimeTrend,
@@ -189,7 +203,7 @@ public class ProjectAnalyticsService {
         switch (chart) {
             case "creation" -> {
                 for (SprintBacklog item : ctx.items()) {
-                    LocalDate created = createdOn(item);
+                    LocalDate created = createdOn(item, ctx.serverZone(), ctx.tenantZone());
                     if (!date.equals(created)) {
                         continue;
                     }
@@ -214,7 +228,7 @@ public class ProjectAnalyticsService {
                     }
                 }
                 for (Task subtask : ctx.subtasks()) {
-                    LocalDate created = subtask.getCreatedAt() == null ? null : subtask.getCreatedAt().toLocalDate();
+                    LocalDate created = subtaskCreatedOn(subtask, ctx.serverZone(), ctx.tenantZone());
                     if (!date.equals(created)) {
                         continue;
                     }
@@ -389,7 +403,7 @@ public class ProjectAnalyticsService {
                             ? null : backlogAssignees.get(item.getAssigneeProjectMemberId()),
                     sprintId,
                     sprintId == null ? null : sprintNames.get(sprintId),
-                    createdOn(item),
+                    createdOn(item, ctx.serverZone(), ctx.tenantZone()),
                     id == null ? null : backlogCompletedDates.get(id),
                     cycle == null ? null : roundOneDecimal(cycle.days()),
                     lead == null ? null : roundOneDecimal(lead.days())));
@@ -416,7 +430,7 @@ public class ProjectAnalyticsService {
                             ? null : subtaskAssignees.get(subtask.getAssigneeProjectMemberId()),
                     sprintId,
                     sprintId == null ? null : sprintNames.get(sprintId),
-                    subtask.getCreatedAt() == null ? null : subtask.getCreatedAt().toLocalDate(),
+                    subtaskCreatedOn(subtask, ctx.serverZone(), ctx.tenantZone()),
                     id == null ? null : subtaskCompletedDates.get(id),
                     cycle == null ? null : roundOneDecimal(cycle.days()),
                     lead == null ? null : roundOneDecimal(lead.days())));
@@ -508,8 +522,8 @@ public class ProjectAnalyticsService {
                 ? workItems.findSubtasks(scopeBacklogIds)
                 : List.of();
 
-        ZoneId tenantZone = tenantZone();
-        ZoneId serverZone = ZoneId.systemDefault();
+        ZoneId tenantZone = tenantZone(user, project);
+        ZoneId serverZone = storageZone();
 
         LocalDate windowStart = resolveWindowStart(requestedStart, items, subtasks, serverZone, tenantZone);
         LocalDate windowEnd = resolveWindowEnd(requestedEnd, items, subtasks, serverZone, tenantZone);
@@ -674,16 +688,10 @@ public class ProjectAnalyticsService {
         }
         LocalDate earliest = null;
         for (SprintBacklog item : items) {
-            earliest = earlierOf(earliest, createdOn(item));
-            if (item.getCreatedAt() != null) {
-                earliest = earlierOf(earliest, toTenantDate(item.getCreatedAt(), serverZone, tenantZone));
-            }
+            earliest = earlierOf(earliest, createdOn(item, serverZone, tenantZone));
         }
         for (Task subtask : subtasks) {
-            if (subtask.getCreatedAt() != null) {
-                earliest = earlierOf(earliest, subtask.getCreatedAt().toLocalDate());
-                earliest = earlierOf(earliest, toTenantDate(subtask.getCreatedAt(), serverZone, tenantZone));
-            }
+            earliest = earlierOf(earliest, subtaskCreatedOn(subtask, serverZone, tenantZone));
         }
         return earliest != null ? earliest : LocalDate.now(tenantZone).minusDays(DEFAULT_WINDOW_DAYS - 1L);
     }
@@ -693,31 +701,16 @@ public class ProjectAnalyticsService {
         if (requested != null) {
             return requested;
         }
-        LocalDate latest = earlierDateOrToday(tenantZone);
+        LocalDate latest = LocalDate.now(tenantZone);
         for (SprintBacklog item : items) {
-            latest = laterOf(latest, updatedOn(item));
-            latest = laterOf(latest, createdOn(item));
-            if (item.getUpdatedAt() != null) {
-                latest = laterOf(latest, toTenantDate(item.getUpdatedAt(), serverZone, tenantZone));
-            }
+            latest = laterOf(latest, updatedOn(item, serverZone, tenantZone));
+            latest = laterOf(latest, createdOn(item, serverZone, tenantZone));
         }
         for (Task subtask : subtasks) {
-            if (subtask.getUpdatedAt() != null) {
-                latest = laterOf(latest, subtask.getUpdatedAt().toLocalDate());
-                latest = laterOf(latest, toTenantDate(subtask.getUpdatedAt(), serverZone, tenantZone));
-            }
-            if (subtask.getCreatedAt() != null) {
-                latest = laterOf(latest, subtask.getCreatedAt().toLocalDate());
-                latest = laterOf(latest, toTenantDate(subtask.getCreatedAt(), serverZone, tenantZone));
-            }
+            latest = laterOf(latest, subtaskUpdatedOn(subtask, serverZone, tenantZone));
+            latest = laterOf(latest, subtaskCreatedOn(subtask, serverZone, tenantZone));
         }
         return latest;
-    }
-
-    private static LocalDate earlierDateOrToday(ZoneId tenantZone) {
-        LocalDate serverToday = LocalDate.now();
-        LocalDate tenantToday = LocalDate.now(tenantZone);
-        return tenantToday.isAfter(serverToday) ? tenantToday : serverToday;
     }
 
     private static LocalDate earlierOf(LocalDate current, LocalDate candidate) {
@@ -743,7 +736,8 @@ public class ProjectAnalyticsService {
     }
 
     private List<ProjectAnalyticsResponse.Bucket> buckets(List<SprintBacklog> items, LocalDate start,
-                                                          LocalDate end, String granularity, long population) {
+                                                          LocalDate end, String granularity, long population,
+                                                          ZoneId serverZone, ZoneId tenantZone) {
         long totalDays = ChronoUnit.DAYS.between(start, end) + 1;
         List<ProjectAnalyticsResponse.Bucket> buckets = new ArrayList<>();
         LocalDate cursor = "MONTH".equals(granularity) ? start.withDayOfMonth(1) : start;
@@ -758,7 +752,7 @@ public class ProjectAnalyticsService {
             if (bucketEnd.isAfter(end)) {
                 bucketEnd = end;
             }
-            buckets.add(bucket(items, bucketStart, bucketEnd, start, totalDays, population));
+            buckets.add(bucket(items, bucketStart, bucketEnd, start, totalDays, population, serverZone, tenantZone));
             cursor = next;
         }
         return buckets;
@@ -766,7 +760,8 @@ public class ProjectAnalyticsService {
 
     private static ProjectAnalyticsResponse.Bucket bucket(List<SprintBacklog> items, LocalDate start,
                                                           LocalDate end, LocalDate windowStart,
-                                                          long totalDays, long population) {
+                                                          long totalDays, long population,
+                                                          ZoneId serverZone, ZoneId tenantZone) {
         long created = 0;
         long completed = 0;
         long todo = 0;
@@ -775,8 +770,8 @@ public class ProjectAnalyticsService {
         long done = 0;
 
         for (SprintBacklog item : items) {
-            LocalDate createdOn = createdOn(item);
-            LocalDate updatedOn = updatedOn(item);
+            LocalDate createdOn = createdOn(item, serverZone, tenantZone);
+            LocalDate updatedOn = updatedOn(item, serverZone, tenantZone);
             SprintBacklogStatus status = statusOf(item);
 
             if (createdOn != null && !createdOn.isBefore(start) && !createdOn.isAfter(end)) {
@@ -814,12 +809,20 @@ public class ProjectAnalyticsService {
                 done, remaining, Math.max(0L, ideal));
     }
 
-    private static LocalDate createdOn(SprintBacklog item) {
-        return item.getCreatedAt() == null ? null : item.getCreatedAt().toLocalDate();
+    private static LocalDate createdOn(SprintBacklog item, ZoneId serverZone, ZoneId tenantZone) {
+        return item.getCreatedAt() == null ? null : toTenantDate(item.getCreatedAt(), serverZone, tenantZone);
     }
 
-    private static LocalDate updatedOn(SprintBacklog item) {
-        return item.getUpdatedAt() == null ? null : item.getUpdatedAt().toLocalDate();
+    private static LocalDate updatedOn(SprintBacklog item, ZoneId serverZone, ZoneId tenantZone) {
+        return item.getUpdatedAt() == null ? null : toTenantDate(item.getUpdatedAt(), serverZone, tenantZone);
+    }
+
+    private static LocalDate subtaskCreatedOn(Task subtask, ZoneId serverZone, ZoneId tenantZone) {
+        return subtask.getCreatedAt() == null ? null : toTenantDate(subtask.getCreatedAt(), serverZone, tenantZone);
+    }
+
+    private static LocalDate subtaskUpdatedOn(Task subtask, ZoneId serverZone, ZoneId tenantZone) {
+        return subtask.getUpdatedAt() == null ? null : toTenantDate(subtask.getUpdatedAt(), serverZone, tenantZone);
     }
 
     private static SprintBacklogStatus statusOf(SprintBacklog item) {
@@ -847,7 +850,9 @@ public class ProjectAnalyticsService {
      */
     private List<ProjectAnalyticsResponse.Kpi> kpis(ProjectAnalyticsScope scope, Sprint sprint,
                                                     List<SprintBacklog> items,
-                                                    LocalDate windowStart, LocalDate windowEnd) {
+                                                    LocalDate windowStart, LocalDate windowEnd,
+                                                    ZoneId serverZone, ZoneId tenantZone,
+                                                    LocalDateTime completionCutoff) {
         long done = 0;
         long todo = 0;
         double doneHours = 0;
@@ -855,7 +860,7 @@ public class ProjectAnalyticsService {
         List<SprintBacklog> doneItems = new ArrayList<>();
 
         for (SprintBacklog item : items) {
-            LocalDate createdOn = createdOn(item);
+            LocalDate createdOn = createdOn(item, serverZone, tenantZone);
             // AC01: an item created after the end of the window did not exist
             // yet, so it cannot be part of "as of <windowEnd>" totals.
             if (createdOn != null && createdOn.isAfter(windowEnd)) {
@@ -863,7 +868,7 @@ public class ProjectAnalyticsService {
             }
             double hours = item.getEstimatedHours() == null ? 0 : Math.max(0, item.getEstimatedHours());
             totalHours += hours;
-            if (isDoneAsOf(item, windowEnd)) {
+            if (isDoneAsOf(item, windowEnd, serverZone, tenantZone)) {
                 done++;
                 doneHours += hours;
                 doneItems.add(item);
@@ -876,9 +881,9 @@ public class ProjectAnalyticsService {
         // AC02: 0/0 must render as 0.0%, never as NaN.
         double completionRate = total == 0 ? 0.0 : done * 100.0 / total;
 
-        Map<Long, LocalDate[]> timeline = completionTimeline(doneItems, windowEnd);
-        Double averageCycle = averageDays(doneItems, timeline, true);
-        Double averageLead = averageDays(doneItems, timeline, false);
+        Map<Long, LocalDate[]> timeline = completionTimeline(doneItems, completionCutoff, serverZone, tenantZone);
+        Double averageCycle = averageDays(doneItems, timeline, true, serverZone, tenantZone);
+        Double averageLead = averageDays(doneItems, timeline, false, serverZone, tenantZone);
 
         String scopeHint = switch (scope) {
             case BACKLOG -> "Product backlog items without a sprint";
@@ -925,11 +930,12 @@ public class ProjectAnalyticsService {
      * update happened on or before the end of the window (same rule as the
      * status snapshot of {@link #bucket}).
      */
-    private static boolean isDoneAsOf(SprintBacklog item, LocalDate windowEnd) {
+    private static boolean isDoneAsOf(SprintBacklog item, LocalDate windowEnd,
+                                      ZoneId serverZone, ZoneId tenantZone) {
         if (statusOf(item) != SprintBacklogStatus.DONE) {
             return false;
         }
-        LocalDate updatedOn = updatedOn(item);
+        LocalDate updatedOn = updatedOn(item, serverZone, tenantZone);
         return updatedOn == null || !updatedOn.isAfter(windowEnd);
     }
 
@@ -942,7 +948,9 @@ public class ProjectAnalyticsService {
      * those dates; items without any history simply fall back to
      * {@code created_at} / {@code updated_at} in {@link #averageDays}.</p>
      */
-    private Map<Long, LocalDate[]> completionTimeline(List<SprintBacklog> doneItems, LocalDate windowEnd) {
+    private Map<Long, LocalDate[]> completionTimeline(List<SprintBacklog> doneItems,
+                                                      LocalDateTime completionCutoff,
+                                                      ZoneId serverZone, ZoneId tenantZone) {
         Map<Long, LocalDate[]> timeline = new LinkedHashMap<>();
         if (doneItems.isEmpty()) {
             return timeline;
@@ -956,8 +964,9 @@ public class ProjectAnalyticsService {
         }
         String inProgress = SprintBacklogStatus.IN_PROGRESS.name();
         String doneState = SprintBacklogStatus.DONE.name();
-        for (SprintBacklogAuditLog event : workItems.findStatusEvents(ids, windowEnd.atTime(23, 59, 59))) {
-            LocalDate on = event.getCreatedAt() == null ? null : event.getCreatedAt().toLocalDate();
+        for (SprintBacklogAuditLog event : workItems.findStatusEvents(ids, completionCutoff)) {
+            LocalDate on = event.getCreatedAt() == null
+                    ? null : toTenantDate(event.getCreatedAt(), serverZone, tenantZone);
             if (on == null || event.getSprintBacklogId() == null) {
                 continue;
             }
@@ -985,13 +994,14 @@ public class ProjectAnalyticsService {
      * @return {@code null} when no item provides a usable pair of dates
      */
     private static Double averageDays(List<SprintBacklog> doneItems, Map<Long, LocalDate[]> timeline,
-                                      boolean cycle) {
+                                      boolean cycle, ZoneId serverZone, ZoneId tenantZone) {
         long days = 0;
         int samples = 0;
         for (SprintBacklog item : doneItems) {
-            LocalDate createdOn = createdOn(item);
+            LocalDate createdOn = createdOn(item, serverZone, tenantZone);
             LocalDate[] slot = item.getId() == null ? null : timeline.get(item.getId());
-            LocalDate completedOn = slot != null && slot[1] != null ? slot[1] : updatedOn(item);
+            LocalDate completedOn = slot != null && slot[1] != null
+                    ? slot[1] : updatedOn(item, serverZone, tenantZone);
             LocalDate startedOn = cycle ? (slot == null ? null : slot[0]) : createdOn;
             // AC02: without a start date the item cannot contribute a sample.
             if (cycle && startedOn == null) {
@@ -1055,7 +1065,7 @@ public class ProjectAnalyticsService {
             LocalDateTime asOf) {
         Map<LocalDate, long[]> grouped = new TreeMap<>();
         for (SprintBacklog item : items) {
-            LocalDate createdOn = createdOn(item);
+            LocalDate createdOn = createdOn(item, serverZone, tenantZone);
             if (createdOn == null || createdOn.isBefore(windowStart) || createdOn.isAfter(windowEnd)) {
                 continue;
             }
@@ -1071,7 +1081,7 @@ public class ProjectAnalyticsService {
             }
         }
         for (Task subtask : subtasks) {
-            LocalDate createdOn = subtask.getCreatedAt() == null ? null : subtask.getCreatedAt().toLocalDate();
+            LocalDate createdOn = subtaskCreatedOn(subtask, serverZone, tenantZone);
             if (createdOn == null || createdOn.isBefore(windowStart) || createdOn.isAfter(windowEnd)) {
                 continue;
             }
@@ -1092,6 +1102,7 @@ public class ProjectAnalyticsService {
                 .toList();
         return new ProjectAnalyticsResponse.CreationTrend(
                 buckets.isEmpty() ? STATE_EMPTY : STATE_READY,
+                tenantZone.getId(),
                 List.of(
                         new ProjectAnalyticsResponse.Series("done", "Done"),
                         new ProjectAnalyticsResponse.Series("todo", "To Do")),
@@ -1614,15 +1625,48 @@ public class ProjectAnalyticsService {
         return new TimeSample(completedAt, seconds / SECONDS_PER_DAY);
     }
 
-    private ZoneId tenantZone() {
-        if (tenantTimeZone != null && !tenantTimeZone.isBlank()) {
-            try {
-                return ZoneId.of(tenantTimeZone.trim());
-            } catch (DateTimeException invalid) {
-                // Misconfigured zone: fall back to the server zone below.
+    /**
+     * US-ANL-009 AC04: resolves the effective tenant time zone strictly from
+     * {@code Tenant.timezone} first, falling back to the configured analytics
+     * tenant zone (default {@code Asia/Ho_Chi_Minh}).
+     */
+    private ZoneId tenantZone(User user, Project project) {
+        if (user != null && user.getTenant() != null) {
+            ZoneId fromUserTenant = parseZoneOrNull(user.getTenant().getTimezone());
+            if (fromUserTenant != null) {
+                return fromUserTenant;
             }
         }
-        return ZoneId.systemDefault();
+        Long tenantId = project != null && project.getTenantId() != null
+                ? project.getTenantId()
+                : (user == null ? null : user.getTenantId());
+        if (tenantId != null) {
+            ZoneId fromPersistedTenant = tenants.findById(tenantId)
+                    .map(Tenant::getTimezone)
+                    .map(ProjectAnalyticsService::parseZoneOrNull)
+                    .orElse(null);
+            if (fromPersistedTenant != null) {
+                return fromPersistedTenant;
+            }
+        }
+        ZoneId configured = parseZoneOrNull(tenantTimeZone);
+        return configured != null ? configured : ZoneId.of("Asia/Ho_Chi_Minh");
+    }
+
+    private ZoneId storageZone() {
+        ZoneId configured = parseZoneOrNull(storageTimeZone);
+        return configured != null ? configured : ZoneId.systemDefault();
+    }
+
+    private static ZoneId parseZoneOrNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return ZoneId.of(raw.trim());
+        } catch (DateTimeException invalid) {
+            return null;
+        }
     }
 
     private record TimeSample(LocalDateTime completedAt, double days) { }

@@ -40,4 +40,8 @@ public class Tenant extends BaseEntity {
     @Builder.Default
     @Column(nullable = false)
     Boolean active = true;
+
+    /** Optional IANA timezone identifier (e.g. {@code Asia/Ho_Chi_Minh}) for tenant-local analytics dates. */
+    @Column(length = 64)
+    String timezone;
 }

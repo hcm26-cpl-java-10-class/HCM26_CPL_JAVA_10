@@ -15,7 +15,12 @@ import type {
   ProjectAnalyticsCycleTimeTrend,
   ProjectAnalyticsDrillDownTarget,
 } from "@/types/features/project-analytics";
-import { LegendToggleButton, MetricLineTooltip } from "./analytics-chart-ui";
+import {
+  ChartSkeleton,
+  LegendToggleButton,
+  MetricLineTooltip,
+  WidgetInlineError,
+} from "./analytics-chart-ui";
 
 const AXIS_COLOR = "#94a3b8";
 const GRID_COLOR = "#e8edf3";
@@ -31,9 +36,17 @@ const LINE_COLOR = "#2563EB";
 export function WorkItemCycleTimeCard({
   trend,
   onDrillDown,
+  isLoading = false,
+  errorMessage,
+  onRetry,
+  retrying = false,
 }: {
-  trend: ProjectAnalyticsCycleTimeTrend;
+  trend?: ProjectAnalyticsCycleTimeTrend;
   onDrillDown?: (target: ProjectAnalyticsDrillDownTarget) => void;
+  isLoading?: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
+  retrying?: boolean;
 }) {
   const [visible, setVisible] = useState(true);
   const rows = trend?.points ?? [];
@@ -73,6 +86,13 @@ export function WorkItemCycleTimeCard({
         />
       </CardHeader>
       <CardContent className="px-2 pb-2 pt-0">
+        {isLoading ? (
+          <ChartSkeleton variant="line" />
+        ) : errorMessage ? (
+          <div className="p-2">
+            <WidgetInlineError message={errorMessage} onRetry={onRetry} retrying={retrying} className="h-[204px]" />
+          </div>
+        ) : (
         <div className="relative h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
@@ -170,6 +190,7 @@ export function WorkItemCycleTimeCard({
             </div>
           )}
         </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -17,7 +17,12 @@ import type {
   ProjectAnalyticsLeadTimeSeriesKey,
   ProjectAnalyticsLeadTimeTrend,
 } from "@/types/features/project-analytics";
-import { LegendToggleButton, MetricLineTooltip } from "./analytics-chart-ui";
+import {
+  ChartSkeleton,
+  LegendToggleButton,
+  MetricLineTooltip,
+  WidgetInlineError,
+} from "./analytics-chart-ui";
 
 const AXIS_COLOR = "#94a3b8";
 const GRID_COLOR = "#e8edf3";
@@ -46,9 +51,17 @@ const SERIES_BY_KEY = Object.fromEntries(
 export function WorkItemLeadTimeCard({
   trend,
   onDrillDown,
+  isLoading = false,
+  errorMessage,
+  onRetry,
+  retrying = false,
 }: {
-  trend: ProjectAnalyticsLeadTimeTrend;
+  trend?: ProjectAnalyticsLeadTimeTrend;
   onDrillDown?: (target: ProjectAnalyticsDrillDownTarget) => void;
+  isLoading?: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
+  retrying?: boolean;
 }) {
   const [visible, setVisible] = useState<Record<ProjectAnalyticsLeadTimeSeriesKey, boolean>>({
     story: true,
@@ -111,6 +124,13 @@ export function WorkItemLeadTimeCard({
         </div>
       </CardHeader>
       <CardContent className="px-2 pb-2 pt-0">
+        {isLoading ? (
+          <ChartSkeleton variant="line" />
+        ) : errorMessage ? (
+          <div className="p-2">
+            <WidgetInlineError message={errorMessage} onRetry={onRetry} retrying={retrying} className="h-[204px]" />
+          </div>
+        ) : (
         <div className="relative h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
@@ -217,6 +237,7 @@ export function WorkItemLeadTimeCard({
             </div>
           )}
         </div>
+        )}
       </CardContent>
     </Card>
   );

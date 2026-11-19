@@ -15,7 +15,12 @@ import type {
   ProjectAnalyticsCreationTrend,
   ProjectAnalyticsDrillDownTarget,
 } from "@/types/features/project-analytics";
-import { LegendToggleButton, StackedBarTooltip } from "./analytics-chart-ui";
+import {
+  ChartSkeleton,
+  LegendToggleButton,
+  StackedBarTooltip,
+  WidgetInlineError,
+} from "./analytics-chart-ui";
 
 const AXIS_COLOR = "#94a3b8";
 const GRID_COLOR = "#e8edf3";
@@ -32,13 +37,21 @@ const TODO_COLOR = "#7CB342";
 export function WorkItemCreationTrendCard({
   trend,
   onDrillDown,
+  isLoading = false,
+  errorMessage,
+  onRetry,
+  retrying = false,
 }: {
-  trend: ProjectAnalyticsCreationTrend;
+  trend?: ProjectAnalyticsCreationTrend;
   onDrillDown?: (target: ProjectAnalyticsDrillDownTarget) => void;
+  isLoading?: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
+  retrying?: boolean;
 }) {
   const [visible, setVisible] = useState({ done: true, todo: true });
-  const rows = trend.buckets;
-  const empty = rows.length === 0 || trend.state === "EMPTY";
+  const rows = trend?.buckets ?? [];
+  const empty = rows.length === 0 || trend?.state === "EMPTY";
   const allHidden = !visible.done && !visible.todo;
 
   const toggle = (key: "done" | "todo") => {
@@ -91,6 +104,13 @@ export function WorkItemCreationTrendCard({
         </div>
       </CardHeader>
       <CardContent className="px-2 pb-2 pt-0">
+        {isLoading ? (
+          <ChartSkeleton variant="bar" />
+        ) : errorMessage ? (
+          <div className="p-2">
+            <WidgetInlineError message={errorMessage} onRetry={onRetry} retrying={retrying} className="h-[204px]" />
+          </div>
+        ) : (
         <div className="relative h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows} margin={{ top: 8, right: 16, bottom: 24, left: 0 }} barCategoryGap="24%">
@@ -169,6 +189,7 @@ export function WorkItemCreationTrendCard({
             </div>
           )}
         </div>
+        )}
       </CardContent>
     </Card>
   );
