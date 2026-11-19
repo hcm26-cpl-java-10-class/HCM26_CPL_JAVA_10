@@ -62,7 +62,7 @@ public class TeamCharterService {
         var self = members.stream().filter(m -> m.userId().equals(principal().getUser().getId()) && m.eligible()).findFirst();
         if (block == null && self.isEmpty()) block = "Only an active member may confirm their own role and charter.";
         if (block == null && self.orElseThrow().confirmed()) block = "You have already confirmed this revision.";
-        String progress = team.getCharterRevision() == 0 ? "NOT_SAVED" : !current || members.isEmpty() || members.stream().anyMatch(m -> m.issue() != null)
+        String progress = team.getCharterRevision() == 0 ? "NOT_SAVED" : !current || !complete(content(Charter.from(team))) || members.isEmpty() || members.stream().anyMatch(m -> m.issue() != null)
                 ? "NEEDS_REVIEW" : !members.isEmpty() && count == members.size() ? "FULLY_CONFIRMED" : "PENDING";
         return new CharterView(team.getId(), team.getTeamName(), team.getStatus().name(), team.getCharterRevision(),
                 canEdit(team, roster), Charter.from(team), roster.token(), members, count, members.size(), progress, block == null, block);
@@ -142,7 +142,7 @@ public class TeamCharterService {
         if (team.getCharterRevision() == 0) return "Save the charter before confirming.";
         if (!current) return "The roster changed. A team editor must save the updated charter before confirmation.";
         Content c = content(Charter.from(team));
-        if (c.mission().isBlank() || c.definitionOfDone().isBlank() || c.primaryChannel().isBlank() || c.coreHours().isBlank() || c.conflictResolution().isBlank()) return "Complete all five charter fields before confirmation.";
+        if (!complete(c)) return "Complete all five charter fields before confirmation.";
         if (roster.members().isEmpty()) return "The team has no active assignments to confirm.";
         if (roster.members().stream().anyMatch(m -> m.issue() != null)) return "Resolve the roster issues, roles and responsibilities shown below before confirmation.";
         return null;
@@ -186,6 +186,7 @@ public class TeamCharterService {
     private boolean hasRead() { return hasAuthority("TEAM_READ") || hasAuthority("WORKSPACE_READ") || hasAuthority("VIEW_PROJECT_WORKSPACE"); }
     private void requireRead() { principal(); if (!hasRead()) throw new AccessDeniedException("Missing charter read permission"); }
     private Content content(Charter c) { return new Content(normalize(c.mission(), 2000), normalize(c.definitionOfDone(), 2000), channel(c.primaryChannel()), normalize(c.coreHours(), 255), normalize(c.conflictResolution(), 2000)); }
+    private boolean complete(Content c) { return !c.mission().isBlank() && !c.definitionOfDone().isBlank() && !c.primaryChannel().isBlank() && !c.coreHours().isBlank() && !c.conflictResolution().isBlank(); }
     private String channel(String value) { String result = normalize(value, 255); return "Teams".equals(result) ? "Microsoft Teams" : result; }
     private String normalize(String value, int max) { if (value != null && value.length() > max) throw invalid("Charter field exceeds its character limit."); return value == null ? "" : value.replace("\r\n", "\n").replace('\r', '\n').strip(); }
     private ResponseStatusException invalid(String message) { return new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, message); }

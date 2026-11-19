@@ -180,6 +180,65 @@ class ProjectHubIntegrationTest {
     }
 
     @Test
+    void incompleteSavedContentNeedsReviewEvenWhenRolesAndResponsibilitiesAreValid() throws Exception {
+        saveCompleteCharter();
+        JsonNode current = readCharter(adminToken);
+        saveCharter(adminToken, current.path("charter").path("version").asLong(), "").andExpect(status().isOk());
+        JsonNode incomplete = readCharter(studentToken);
+        assertThat(incomplete.path("progress").asText()).isEqualTo("NEEDS_REVIEW");
+        assertThat(incomplete.path("canConfirm").asBoolean()).isFalse();
+        assertThat(incomplete.path("confirmationBlockReason").asText()).contains("five charter fields");
+        confirmCharter(studentToken, consentRequest(incomplete)).andExpect(status().isUnprocessableEntity());
+        saveCharter(adminToken, incomplete.path("charter").path("version").asLong(), "Complete mission").andExpect(status().isOk());
+        assertThat(readCharter(studentToken).path("progress").asText()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void historyKeepsNewestFirstAndServerPaginationTotals() throws Exception {
+        saveCompleteCharter();
+        for (int revision = 2; revision <= 3; revision++) {
+            JsonNode current = readCharter(adminToken);
+            saveCharter(adminToken, current.path("charter").path("version").asLong(), "Snapshot " + revision).andExpect(status().isOk());
+        }
+        mvc.perform(get("/api/project-hub/teams/{id}/charter/history", team.getId())
+                .header("Authorization", "Bearer " + studentToken).param("page", "0").param("size", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(3)).andExpect(jsonPath("$.content[0].revision").value(3))
+                .andExpect(jsonPath("$.content[0].charter.mission").value("Snapshot 3"));
+        mvc.perform(get("/api/project-hub/teams/{id}/charter/history", team.getId())
+                .header("Authorization", "Bearer " + studentToken).param("page", "1").param("size", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].revision").value(2))
+                .andExpect(jsonPath("$.content[0].charter.mission").value("Snapshot 2"));
+        mvc.perform(get("/api/project-hub/teams/{id}/charter/history", team.getId())
+                .header("Authorization", "Bearer " + studentToken).param("page", "9").param("size", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content").isEmpty()).andExpect(jsonPath("$.totalElements").value(3));
+        mvc.perform(get("/api/project-hub/teams/{id}/charter/history", team.getId())
+                .header("Authorization", "Bearer " + studentToken).param("page", "-1"))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void softDeletedTeamIsHiddenWhileItsCharterEvidenceRemainsIntact() throws Exception {
+        saveCompleteCharter();
+        JsonNode current = readCharter(studentToken);
+        confirmCharter(studentToken, consentRequest(current)).andExpect(status().isOk());
+        transaction.executeWithoutResult(status -> {
+            ProjectTeam deleted = teams.findById(team.getId()).orElseThrow();
+            deleted.setIsActive(false);
+            teams.saveAndFlush(deleted);
+        });
+        mvc.perform(get("/api/project-hub/charter-teams").header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.teamId == " + team.getId() + ")]").isEmpty());
+        mvc.perform(get("/api/project-hub/teams/{id}/charter", team.getId()).header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/project-hub/teams/{id}/charter/history", team.getId()).header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isNotFound());
+        confirmCharter(studentToken, consentRequest(current)).andExpect(status().isNotFound());
+        assertThat(charterRevisions.countByTeam_Id(team.getId())).isEqualTo(1);
+        assertThat(charterConfirmations.findByTeamIdAndRevisionNumber(team.getId(), 1L)).hasSize(1);
+    }
+
+    @Test
     void selfConfirmationIsImmutableIdempotentAndCannotImpersonateAnotherUser() throws Exception {
         saveCompleteCharter();
         JsonNode current = readCharter(studentToken);
