@@ -15,6 +15,13 @@ import java.util.List;
  *     filter.</li>
  *     <li>{@link #creationTrend()} — the US-ANL-004 stacked bar chart of the
  *     work items created per creation date, split into Done and To do.</li>
+ *     <li>{@link #cycleTimeTrend()} — the US-ANL-005 single-series line chart of
+ *     average cycle time per completion date.</li>
+ *     <li>{@link #leadTimeTrend()} — the US-ANL-006 multi-series line chart of
+ *     average lead time across Story, Subtask and Task per completion date.</li>
+ *     <li>{@link #completionTrend()} — the US-ANL-007 stacked bar chart of
+ *     completed work items broken down by type (Subtask, Story, Task) per
+ *     completion date.</li>
  *     <li>{@link #widgets()} — the four trend charts, bucketed inside
  *     {@link #window()}.</li>
  * </ol>
@@ -29,6 +36,9 @@ public record ProjectAnalyticsResponse(
         Window window,
         List<Kpi> kpis,
         CreationTrend creationTrend,
+        CycleTimeTrend cycleTimeTrend,
+        LeadTimeTrend leadTimeTrend,
+        CompletionTrend completionTrend,
         List<Widget> widgets
 ) {
 
@@ -115,6 +125,93 @@ public record ProjectAnalyticsResponse(
      * both segments, so {@code done + todo} is the daily creation count.</p>
      */
     public record CreationBucket(LocalDate date, long done, long todo) { }
+
+    /**
+     * US-ANL-005: "Work item cycle time" line chart.
+     *
+     * <p>One point per completion date (tenant time zone, oldest first) that
+     * has at least one completed work item inside the chart window. Items that
+     * are not Done as of the end of the window are excluded (AC03).</p>
+     *
+     * @param timeZone tenant time zone used to derive the completion dates
+     */
+    public record CycleTimeTrend(String state, String timeZone, List<CycleTimePoint> points) { }
+
+    /**
+     * One point of the US-ANL-005 chart.
+     *
+     * @param date        completion date ({@code YYYY-MM-DD})
+     * @param averageDays mean cycle time of the items completed that day,
+     *                    rounded to one decimal (AC01)
+     * @param itemCount   number of completed items averaged into the point
+     */
+    public record CycleTimePoint(LocalDate date, double averageDays, int itemCount) { }
+
+    /**
+     * US-ANL-006: "Work item lead time" multi-series line chart comparing
+     * Story, Subtask and Task average end-to-end lead times by completion date.
+     *
+     * <p>One point per completion date (tenant time zone, oldest first) that
+     * has at least one completed Story, Subtask or Task inside the chart
+     * window. Series averages are {@code null} on dates with zero completions
+     * of that type so sparse series never plot false zero values (AC02).</p>
+     *
+     * @param timeZone tenant time zone used to derive the completion dates
+     * @param series   ordered legend metadata: Story, Subtask, Task
+     */
+    public record LeadTimeTrend(
+            String state,
+            String timeZone,
+            List<Series> series,
+            List<LeadTimePoint> points
+    ) { }
+
+    /**
+     * One completion-date point of the US-ANL-006 chart.
+     *
+     * <p>Each series average is rounded to one decimal when at least one item
+     * of that type completed on {@link #date}, or {@code null} when none did
+     * (AC01 / AC02).</p>
+     */
+    public record LeadTimePoint(
+            LocalDate date,
+            Double story,
+            int storyCount,
+            Double subtask,
+            int subtaskCount,
+            Double task,
+            int taskCount
+    ) { }
+
+    /**
+     * US-ANL-007: "Work item completion trend" stacked bar chart.
+     *
+     * <p>One stacked bar per completion date (tenant time zone, oldest first)
+     * that has at least one completed work item inside the chart window, broken
+     * down by {@code subtask}, {@code story} and {@code task}. Reopened items
+     * are excluded until they return to Done (AC03), and with no date
+     * restriction the total across all bars reconciles with the Done total of
+     * {@link CreationTrend} (AC02).</p>
+     *
+     * @param timeZone tenant time zone used to derive the completion dates
+     * @param series   ordered legend metadata: Subtask, Story (and Task when present)
+     */
+    public record CompletionTrend(
+            String state,
+            String timeZone,
+            List<Series> series,
+            List<CompletionBucket> buckets
+    ) { }
+
+    /**
+     * One completion-date bucket of the US-ANL-007 stacked bar chart.
+     */
+    public record CompletionBucket(
+            LocalDate date,
+            long subtask,
+            long story,
+            long task
+    ) { }
 
     /**
      * One trend chart.
