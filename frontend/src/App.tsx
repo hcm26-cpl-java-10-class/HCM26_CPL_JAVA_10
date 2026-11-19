@@ -14,9 +14,9 @@ import { resolveMenuPermission } from "./router/menu-permission.utils";
 import { SystemChatbotWidget } from '@/components/chatbot/SystemChatbotWidget';
 
 function AppRoutes() {
-    const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+    const { isAuthenticated, isAuthInitialized } = useSelector((state: RootState) => state.auth);
     const { activeRole, effectivePermissions } = usePermissions();
-    const { data: moduleGroups = [] } = useActiveModuleGroups(isAuthenticated);
+    const { data: moduleGroups = [] } = useActiveModuleGroups(isAuthenticated && isAuthInitialized);
 
     const homePath = isAuthenticated ? getHomePathByRole(activeRole, effectivePermissions) : "/login";
 
@@ -29,6 +29,14 @@ function AppRoutes() {
     // Get non-module routes (frontend-controlled)
     const menuPaths = new Set(moduleGroups.flatMap(group => group.modules.map(module => module.url)));
     const staticRoutes = routes.filter((r) => !r.isModuleDriven && !menuPaths.has(r.path));
+
+    if (!isAuthInitialized) {
+        return (
+            <div className="flex min-h-screen items-center justify-center" role="status">
+                Checking sign-in session...
+            </div>
+        );
+    }
 
     return (
         <Routes>
@@ -92,6 +100,8 @@ function AppRoutes() {
 }
 
 function App() {
+    const { email, isAuthenticated } = useSelector((state: RootState) => state.auth);
+
     return (
         <BrowserRouter>
             <Toaster
@@ -103,7 +113,7 @@ function App() {
                 }}
             />
             <AuthProvider>
-                <RoleSwitchProvider>
+                <RoleSwitchProvider key={isAuthenticated ? email : "anonymous"}>
                     <AppRoutes />
                     <SystemChatbotWidget />
                 </RoleSwitchProvider>

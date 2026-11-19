@@ -60,4 +60,5 @@ export interface AuthState {
   permissions: string[];
   rolePermissions: Record<string, string[]>;
   isAuthenticated: boolean;
+  isAuthInitialized: boolean;
 }

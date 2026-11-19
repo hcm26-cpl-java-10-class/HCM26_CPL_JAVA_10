@@ -6,6 +6,7 @@ import { examApi } from "@/api";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 type Plan = { totalWeight: number; ready: boolean; issues: string[] };
+const formatWeight = (weight: number) => Number(weight.toFixed(2)).toString();
 export function CourseAssessmentPanel({ courseId }: { courseId: number }) {
   const { hasPermission, activeRole } = usePermissions();
   const location = useLocation();
@@ -26,8 +27,11 @@ export function CourseAssessmentPanel({ courseId }: { courseId: number }) {
         <Button variant="outline" onClick={() => { void plan.refetch(); void exams.refetch(); }}>Refresh</Button></div>
     </div>
     {plan.isPending ? <p role="status">Loading assessment plan…</p> : plan.isError ? <p role="alert">Could not load the assessment plan.</p> : <>
-      <p>Assessment weights: <strong>{plan.data.totalWeight}% / 100%</strong> · {plan.data.ready ? "Ready" : "Plan incomplete"}</p>
-      <p className="text-sm text-muted-foreground">Final grade = sum of each assessment's normalized score × its weight. Pass threshold: 5/10. Results must be fully graded and published. A 0% assessment is practice.</p>
+      <p>Assessment weights: <strong>{formatWeight(plan.data.totalWeight)}% / 100%</strong> · {plan.data.ready ? "Ready" : "Plan incomplete"}
+        {" · "}{plan.data.totalWeight <= 100
+          ? `${formatWeight(100 - plan.data.totalWeight)}% remaining`
+          : `${formatWeight(plan.data.totalWeight - 100)}% over target`}</p>
+      <p className="text-sm text-muted-foreground">An incomplete course plan does not block an otherwise available Quiz or Exam. The course needs a complete 100% plan to calculate final grades and award course completion or certificates. Final grade = sum of each assessment's normalized score × its weight. Pass threshold: 5/10. Results must be fully graded and published. A 0% assessment is practice.</p>
       {plan.data.issues.length > 0 && <ul className="list-disc space-y-1 pl-5 text-sm text-destructive">{plan.data.issues.map((issue, i) => <li key={i}>{issue}</li>)}</ul>}
     </>}
     {exams.isError && <p role="alert">Could not load linked assessments.</p>}
