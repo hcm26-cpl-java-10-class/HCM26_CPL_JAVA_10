@@ -140,6 +140,27 @@ public class ProjectAnalyticsWorkItemRepository {
     }
 
     /**
+     * US-ANL-006 / US-ANL-007: active subtasks belonging to the in-scope backlog items.
+     *
+     * <p>Subtasks live in {@code task} ({@code ProjectTask}) and inherit their
+     * project / sprint / backlog scope from {@code backlogItem}.</p>
+     */
+    public List<Task> findSubtasks(List<Long> backlogItemIds) {
+        if (backlogItemIds == null || backlogItemIds.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery("""
+                select subtask
+                from ProjectTask subtask
+                where subtask.isActive = true
+                  and subtask.backlogItem.id in :backlogItemIds
+                order by subtask.createdAt asc, subtask.id asc
+                """, Task.class)
+                .setParameter("backlogItemIds", backlogItemIds)
+                .getResultList();
+    }
+
+    /**
      * US-ANL-006: active Done subtasks belonging to the in-scope backlog items.
      *
      * <p>Subtasks live in {@code task} ({@code ProjectTask}) and inherit their

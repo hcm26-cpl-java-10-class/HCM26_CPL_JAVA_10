@@ -19,6 +19,9 @@ import java.util.List;
  *     average cycle time per completion date.</li>
  *     <li>{@link #leadTimeTrend()} — the US-ANL-006 multi-series line chart of
  *     average lead time across Story, Subtask and Task per completion date.</li>
+ *     <li>{@link #completionTrend()} — the US-ANL-007 stacked bar chart of
+ *     completed work items broken down by type (Subtask, Story, Task) per
+ *     completion date.</li>
  *     <li>{@link #widgets()} — the four trend charts, bucketed inside
  *     {@link #window()}.</li>
  * </ol>
@@ -35,6 +38,7 @@ public record ProjectAnalyticsResponse(
         CreationTrend creationTrend,
         CycleTimeTrend cycleTimeTrend,
         LeadTimeTrend leadTimeTrend,
+        CompletionTrend completionTrend,
         List<Widget> widgets
 ) {
 
@@ -177,6 +181,36 @@ public record ProjectAnalyticsResponse(
             int subtaskCount,
             Double task,
             int taskCount
+    ) { }
+
+    /**
+     * US-ANL-007: "Work item completion trend" stacked bar chart.
+     *
+     * <p>One stacked bar per completion date (tenant time zone, oldest first)
+     * that has at least one completed work item inside the chart window, broken
+     * down by {@code subtask}, {@code story} and {@code task}. Reopened items
+     * are excluded until they return to Done (AC03), and with no date
+     * restriction the total across all bars reconciles with the Done total of
+     * {@link CreationTrend} (AC02).</p>
+     *
+     * @param timeZone tenant time zone used to derive the completion dates
+     * @param series   ordered legend metadata: Subtask, Story (and Task when present)
+     */
+    public record CompletionTrend(
+            String state,
+            String timeZone,
+            List<Series> series,
+            List<CompletionBucket> buckets
+    ) { }
+
+    /**
+     * One completion-date bucket of the US-ANL-007 stacked bar chart.
+     */
+    public record CompletionBucket(
+            LocalDate date,
+            long subtask,
+            long story,
+            long task
     ) { }
 
     /**

@@ -154,6 +154,35 @@ export interface ProjectAnalyticsLeadTimeTrend {
   points: ProjectAnalyticsLeadTimePoint[];
 }
 
+/** US-ANL-007: work item types stacked in the completion trend bar chart. */
+export type ProjectAnalyticsCompletionSeriesKey = "subtask" | "story" | "task";
+
+export interface ProjectAnalyticsCompletionSeries {
+  key: ProjectAnalyticsCompletionSeriesKey;
+  label: string;
+}
+
+/**
+ * US-ANL-007: one completion-date bucket of the "Work item completion trend" chart.
+ *
+ * `subtask` is the blue bottom segment (`#2563EB`), `story` the green segment
+ * (`#7CB342`), and `task` the purple segment (`#A855F7` when Task items exist).
+ */
+export interface ProjectAnalyticsCompletionBucket {
+  date: string;
+  subtask: number;
+  story: number;
+  task: number;
+}
+
+/** US-ANL-007: "Work item completion trend" stacked bar chart. */
+export interface ProjectAnalyticsCompletionTrend {
+  state: ProjectAnalyticsWidgetState;
+  timeZone: string;
+  series: ProjectAnalyticsCompletionSeries[];
+  buckets: ProjectAnalyticsCompletionBucket[];
+}
+
 export interface ProjectAnalyticsWidget {
   key: string;
   title: string;
@@ -176,6 +205,7 @@ export interface ProjectAnalyticsShell {
   creationTrend: ProjectAnalyticsCreationTrend;
   cycleTimeTrend: ProjectAnalyticsCycleTimeTrend;
   leadTimeTrend: ProjectAnalyticsLeadTimeTrend;
+  completionTrend: ProjectAnalyticsCompletionTrend;
   widgets: ProjectAnalyticsWidget[];
 }
 

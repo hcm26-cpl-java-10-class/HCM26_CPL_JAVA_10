@@ -28,6 +28,7 @@ import { AnalyticsFilterBar } from "./AnalyticsFilterBar";
 import { AnalyticsKpiCards } from "./AnalyticsKpiCards";
 import { AnalyticsTrendCharts } from "./AnalyticsTrendCharts";
 import { CurrentWindowWorkItems } from "./CurrentWindowWorkItems";
+import { WorkItemCompletionTrendCard } from "./WorkItemCompletionTrendCard";
 import { WorkItemCreationTrendCard } from "./WorkItemCreationTrendCard";
 import { WorkItemCycleTimeCard } from "./WorkItemCycleTimeCard";
 import { WorkItemLeadTimeCard } from "./WorkItemLeadTimeCard";
@@ -279,8 +280,9 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
           <div className="grid gap-4 xl:grid-cols-2">
             <WorkItemCreationTrendCard trend={shell.creationTrend} />
             <WorkItemCycleTimeCard trend={shell.cycleTimeTrend} />
+            <WorkItemLeadTimeCard trend={shell.leadTimeTrend} />
+            <WorkItemCompletionTrendCard trend={shell.completionTrend} />
           </div>
-          <WorkItemLeadTimeCard trend={shell.leadTimeTrend} />
           <AnalyticsTrendCharts widgets={shell.widgets} granularity={shell.window.granularity} />
           <CurrentWindowWorkItems
             projectId={projectId}
