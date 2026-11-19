@@ -36,11 +36,12 @@ export interface ProjectAnalyticsFilters {
   itemTypes: ProjectAnalyticsItemType[];
 }
 
-/** Effective chart window (may differ from the requested dates). */
+/** Effective chart window (may differ from the requested dates) and tenant timezone. */
 export interface ProjectAnalyticsWindow {
   startDate: string;
   endDate: string;
   granularity: ProjectAnalyticsGranularity;
+  timeZone?: string;
 }
 
 /** Measurement of a KPI value: item count, percentage or day average. */
@@ -99,6 +100,7 @@ export interface ProjectAnalyticsCreationBucket {
 /** US-ANL-004: "Work item creation trend" chart, one bar per creation date. */
 export interface ProjectAnalyticsCreationTrend {
   state: ProjectAnalyticsWidgetState;
+  timeZone?: string;
   series: ProjectAnalyticsSeries[];
   buckets: ProjectAnalyticsCreationBucket[];
 }
@@ -199,6 +201,7 @@ export interface ProjectAnalyticsShell {
   projectName: string | null;
   projectStatus: string | null;
   readOnly: boolean;
+  canExport: boolean;
   filters: ProjectAnalyticsFilters;
   window: ProjectAnalyticsWindow;
   kpis: ProjectAnalyticsKpi[];
@@ -228,3 +231,44 @@ export interface ProjectAnalyticsProjectOption {
   name: string | null;
   status: string | null;
 }
+
+/** US-ANL-008: chart identifiers supported by the click-to-drill-down drawer. */
+export type ProjectAnalyticsDrillDownChart = "creation" | "cycle-time" | "lead-time" | "completion";
+
+/** US-ANL-008: clicked data point / bar segment passed to the drill-down drawer. */
+export interface ProjectAnalyticsDrillDownTarget {
+  chart: ProjectAnalyticsDrillDownChart;
+  date: string;
+  series?: string;
+}
+
+/** US-ANL-008: one underlying work item row inside the drill-down drawer. */
+export interface ProjectAnalyticsDrillDownItem {
+  id: string;
+  backlogItemId: number | null;
+  taskCode: string;
+  title: string | null;
+  workType: "STORY" | "SUBTASK" | "TASK" | "BUG" | string;
+  status: string;
+  assigneeName: string | null;
+  sprintId: number | null;
+  sprintName: string | null;
+  createdDate: string | null;
+  completedDate: string | null;
+  cycleDays: number | null;
+  leadDays: number | null;
+}
+
+/** US-ANL-008: response payload of `GET /v1/projects/{projectId}/analytics/drill-down`. */
+export interface ProjectAnalyticsDrillDownResponse {
+  projectId: number;
+  projectCode: string | null;
+  chart: ProjectAnalyticsDrillDownChart;
+  date: string;
+  series: string | null;
+  totalCount: number;
+  items: ProjectAnalyticsDrillDownItem[];
+}
+
+/** US-ANL-010: supported report export formats. */
+export type ProjectAnalyticsExportFormat = "CSV" | "PDF";

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Timer } from "lucide-react";
 import {
   CartesianGrid,
@@ -10,7 +11,16 @@ import {
   YAxis,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { ProjectAnalyticsCycleTimeTrend } from "@/types/features/project-analytics";
+import type {
+  ProjectAnalyticsCycleTimeTrend,
+  ProjectAnalyticsDrillDownTarget,
+} from "@/types/features/project-analytics";
+import {
+  ChartSkeleton,
+  LegendToggleButton,
+  MetricLineTooltip,
+  WidgetInlineError,
+} from "./analytics-chart-ui";
 
 const AXIS_COLOR = "#94a3b8";
 const GRID_COLOR = "#e8edf3";
@@ -18,27 +28,44 @@ const GRID_COLOR = "#e8edf3";
 /** US-ANL-005: single blue line with circular node markers. */
 const LINE_COLOR = "#2563EB";
 
-const TOOLTIP_STYLE = {
-  contentStyle: { fontSize: 11, borderRadius: 8, borderColor: GRID_COLOR },
-  labelStyle: { fontSize: 11, fontWeight: 600 },
-} as const;
-
 /**
- * US-ANL-005: "Work item cycle time" line chart.
- *
- * Each point is one completion date (X axis, `YYYY-MM-DD`, tenant time zone)
- * and the average active execution time in days of the items completed that
- * day (first In progress → final Done). Open items are never plotted, and the
- * backend sends the points oldest first so the line connects them
- * chronologically (AC01 / AC03).
+ * US-ANL-005 / US-ANL-008: "Work item cycle time" line chart with hover
+ * tooltip, toggleable legend, and click-to-drill-down on any completion-date
+ * node (AC03).
  */
-export function WorkItemCycleTimeCard({ trend }: { trend: ProjectAnalyticsCycleTimeTrend }) {
+export function WorkItemCycleTimeCard({
+  trend,
+  onDrillDown,
+  isLoading = false,
+  errorMessage,
+  onRetry,
+  retrying = false,
+}: {
+  trend?: ProjectAnalyticsCycleTimeTrend;
+  onDrillDown?: (target: ProjectAnalyticsDrillDownTarget) => void;
+  isLoading?: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
+  retrying?: boolean;
+}) {
+  const [visible, setVisible] = useState(true);
   const rows = trend?.points ?? [];
   const empty = rows.length === 0 || trend?.state === "EMPTY";
 
+  const maxVisibleDays = visible
+    ? rows.reduce((max, row) => (row.averageDays > max ? row.averageDays : max), 0)
+    : 0;
+  const yDomainMax = maxVisibleDays <= 0 ? 1 : Math.ceil(maxVisibleDays);
+
+  const openDate = (date?: string) => {
+    if (date && onDrillDown) {
+      onDrillDown({ chart: "cycle-time", date });
+    }
+  };
+
   return (
     <Card className="gap-0 rounded-xl py-0 shadow-xs">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 px-4 py-3">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
           <span
             aria-hidden="true"
@@ -50,15 +77,33 @@ export function WorkItemCycleTimeCard({ trend }: { trend: ProjectAnalyticsCycleT
             Work item cycle time
           </CardTitle>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: LINE_COLOR }} />
-          Avg cycle time
-        </span>
+        <LegendToggleButton
+          color={LINE_COLOR}
+          label="Avg cycle time"
+          shape="dot"
+          visible={visible}
+          onToggle={() => setVisible(current => !current)}
+        />
       </CardHeader>
       <CardContent className="px-2 pb-2 pt-0">
+        {isLoading ? (
+          <ChartSkeleton variant="line" />
+        ) : errorMessage ? (
+          <div className="p-2">
+            <WidgetInlineError message={errorMessage} onRetry={onRetry} retrying={retrying} className="h-[204px]" />
+          </div>
+        ) : (
         <div className="relative h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 24, left: 0 }}>
+            <LineChart
+              data={rows}
+              margin={{ top: 8, right: 16, bottom: 24, left: 0 }}
+              onClick={state => {
+                if (visible && state?.activeLabel != null) {
+                  openDate(String(state.activeLabel));
+                }
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
               <XAxis
                 dataKey="date"
@@ -77,7 +122,7 @@ export function WorkItemCycleTimeCard({ trend }: { trend: ProjectAnalyticsCycleT
                 />
               </XAxis>
               <YAxis
-                domain={[0, (dataMax: number) => (dataMax <= 0 ? 1 : Math.ceil(dataMax))]}
+                domain={[0, yDomainMax]}
                 width={58}
                 tick={{ fontSize: 10, fill: AXIS_COLOR }}
                 stroke={AXIS_COLOR}
@@ -93,35 +138,59 @@ export function WorkItemCycleTimeCard({ trend }: { trend: ProjectAnalyticsCycleT
                 />
               </YAxis>
               <Tooltip
-                {...TOOLTIP_STYLE}
                 cursor={{ stroke: AXIS_COLOR, strokeDasharray: "3 3" }}
-                labelFormatter={value => String(value)}
-                formatter={(value, _name, item) => {
-                  const count = (item?.payload as { itemCount?: number } | undefined)?.itemCount ?? 0;
-                  return [
-                    `${Number(value).toFixed(1)} days (${count} item${count === 1 ? "" : "s"})`,
-                    "Avg cycle time",
-                  ];
-                }}
+                content={({ active, label, payload }) => (
+                  <MetricLineTooltip
+                    active={active}
+                    label={label}
+                    payload={payload}
+                    countResolver={entry => (entry.payload as { itemCount?: number } | undefined)?.itemCount}
+                  />
+                )}
               />
-              <Line
-                type="linear"
-                dataKey="averageDays"
-                name="Avg cycle time"
-                stroke={LINE_COLOR}
-                strokeWidth={2}
-                dot={{ r: 3.5, fill: LINE_COLOR, stroke: "#ffffff", strokeWidth: 1.5 }}
-                activeDot={{ r: 5, fill: LINE_COLOR, stroke: "#ffffff", strokeWidth: 2 }}
-                isAnimationActive={false}
-              />
+              {visible && (
+                <Line
+                  type="linear"
+                  dataKey="averageDays"
+                  name="Avg cycle time"
+                  stroke={LINE_COLOR}
+                  strokeWidth={2}
+                  dot={{ r: 3.5, fill: LINE_COLOR, stroke: "#ffffff", strokeWidth: 1.5 }}
+                  activeDot={props => {
+                    if (typeof props.cx !== "number" || typeof props.cy !== "number") {
+                      return null;
+                    }
+                    const pointDate = (props.payload as { date?: string } | undefined)?.date;
+                    return (
+                      <circle
+                        cx={props.cx}
+                        cy={props.cy}
+                        r={5.5}
+                        fill={LINE_COLOR}
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                        className={onDrillDown ? "cursor-pointer" : undefined}
+                        onClick={event => {
+                          event.stopPropagation();
+                          openDate(pointDate);
+                        }}
+                      />
+                    );
+                  }}
+                  isAnimationActive={false}
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
-          {empty && (
+          {(empty || !visible) && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center">
-              <p className="text-[10px] text-muted-foreground">No work items completed in this window</p>
+              <p className="text-[10px] text-muted-foreground">
+                {empty ? "No work items completed in this window" : "Series hidden — click the legend item to show"}
+              </p>
             </div>
           )}
         </div>
+        )}
       </CardContent>
     </Card>
   );

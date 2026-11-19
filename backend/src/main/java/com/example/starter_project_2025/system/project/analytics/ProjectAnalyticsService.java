@@ -12,6 +12,8 @@ import com.example.starter_project_2025.system.project.sprint_backlog.audit.Spri
 import com.example.starter_project_2025.system.project.task.Task;
 import com.example.starter_project_2025.system.project.task.TaskStatus;
 import com.example.starter_project_2025.system.project.task.audit.TaskAuditLog;
+import com.example.starter_project_2025.system.project.tenant.Tenant;
+import com.example.starter_project_2025.system.project.tenant.TenantRepository;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -35,8 +37,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * US-ANL-002: Sprint &amp; Backlog data collection and scope filtering.
@@ -80,14 +84,23 @@ public class ProjectAnalyticsService {
     private final ProjectRepository projects;
     private final SprintRepository sprints;
     private final ProjectAnalyticsWorkItemRepository workItems;
+    private final TenantRepository tenants;
     private final ObjectMapper objectMapper;
 
     /**
-     * US-ANL-005: tenant time zone used to group completions by calendar day.
-     * Falls back to the backlog notification zone shared by the project module.
+     * US-ANL-005 / US-ANL-009: fallback tenant time zone used when
+     * {@code Tenant.timezone} is not set on the tenant record.
      */
     @Value("${app.analytics.tenant-time-zone:${app.notification.backlog-time-zone:Asia/Ho_Chi_Minh}}")
     private String tenantTimeZone;
+
+    /**
+     * US-ANL-009 AC04: time zone in which database {@code LocalDateTime} audit
+     * columns are stored (empty defaults to the JVM server zone; set to
+     * {@code UTC} when timestamps are stored in UTC).
+     */
+    @Value("${app.analytics.storage-time-zone:${app.member-reminder.audit-time-zone:}}")
+    private String storageTimeZone;
 
     /** US-ANL-001 compatibility: the shell without any filter. */
     public ProjectAnalyticsResponse shell(String rawProjectId) {
@@ -95,8 +108,495 @@ public class ProjectAnalyticsService {
     }
 
     public ProjectAnalyticsResponse shell(String rawProjectId, ProjectAnalyticsFilter requested) {
+        return buildResponse(resolveScope(rawProjectId, requested));
+    }
+
+    /**
+     * US-ANL-010: collects the authorized analytics response and item-level
+     * cycle/lead metrics for CSV/PDF export. Rejects unauthorized callers with
+     * HTTP 403 before touching any work item data (AC02).
+     */
+    ExportSnapshot exportSnapshot(String rawProjectId, ProjectAnalyticsFilter requested) {
         User user = access.requireUser();
         Project project = access.requireProject(user, rawProjectId);
+        access.requireExportAccess(user, project);
+
+        ResolvedScope ctx = resolveScopeFor(user, project, requested);
+        ProjectAnalyticsResponse analytics = buildResponse(ctx);
+        List<ExportWorkItemRow> itemRows = buildExportItemRows(ctx);
+        return new ExportSnapshot(
+                user,
+                project,
+                ctx.selected() == null ? null : ctx.selected().getName(),
+                analytics,
+                itemRows,
+                ctx.tenantZone());
+    }
+
+    private ProjectAnalyticsResponse buildResponse(ResolvedScope ctx) {
+        LocalDate bucketStart = ChronoUnit.DAYS.between(ctx.windowStart(), ctx.windowEnd()) >= MAX_WINDOW_DAYS
+                ? ctx.windowEnd().minusDays(MAX_WINDOW_DAYS - 1L)
+                : ctx.windowStart();
+        LocalDate resolvedEnd = ctx.windowEnd();
+        long population = ctx.items().stream()
+                .map(item -> createdOn(item, ctx.serverZone(), ctx.tenantZone()))
+                .filter(Objects::nonNull)
+                .filter(date -> !date.isAfter(resolvedEnd))
+                .count();
+        String granularity = granularityOf(bucketStart, ctx.windowEnd());
+        List<ProjectAnalyticsResponse.Bucket> buckets = buckets(
+                ctx.items(), bucketStart, ctx.windowEnd(), granularity, population,
+                ctx.serverZone(), ctx.tenantZone());
+
+        List<ProjectAnalyticsResponse.Kpi> kpis = kpis(
+                ctx.scope(), ctx.selected(), ctx.items(), ctx.windowStart(), ctx.windowEnd(),
+                ctx.serverZone(), ctx.tenantZone(), ctx.completionCutoff());
+        ProjectAnalyticsResponse.CreationTrend creationTrend = creationTrend(
+                ctx.items(), ctx.subtasks(), ctx.backlogHistory(), ctx.subtaskHistory(),
+                ctx.windowStart(), ctx.windowEnd(), ctx.tenantZone(), ctx.serverZone(), ctx.completionCutoff());
+        ProjectAnalyticsResponse.CycleTimeTrend cycleTimeTrend = cycleTimeTrend(
+                ctx.doneBacklogItems(), ctx.backlogHistory(),
+                ctx.windowStart(), ctx.windowEnd(), ctx.tenantZone(), ctx.serverZone(), ctx.completionCutoff());
+        ProjectAnalyticsResponse.LeadTimeTrend leadTimeTrend = leadTimeTrend(
+                ctx.doneBacklogItems(), ctx.doneSubtasks(), ctx.backlogHistory(), ctx.subtaskHistory(),
+                ctx.windowStart(), ctx.windowEnd(), ctx.tenantZone(), ctx.serverZone(), ctx.completionCutoff());
+        ProjectAnalyticsResponse.CompletionTrend completionTrend = completionTrend(
+                ctx.doneBacklogItems(), ctx.doneSubtasks(), ctx.backlogHistory(), ctx.subtaskHistory(),
+                ctx.windowStart(), ctx.windowEnd(), ctx.tenantZone(), ctx.serverZone(), ctx.completionCutoff());
+        List<ProjectAnalyticsResponse.Widget> widgets =
+                widgets(ctx.items().isEmpty() ? STATE_EMPTY : STATE_READY, granularity, buckets);
+
+        return new ProjectAnalyticsResponse(
+                ctx.project().getId(),
+                ctx.project().getCode(),
+                ctx.project().getName(),
+                ctx.project().getStatus() == null ? null : ctx.project().getStatus().name(),
+                true,
+                access.canExport(ctx.user(), ctx.project()),
+                new ProjectAnalyticsResponse.Filters(
+                        ctx.scope().name(),
+                        ctx.selected() == null ? null : ctx.selected().getId(),
+                        ctx.workType() == null ? ANY_ITEM_TYPE : ctx.workType().name(),
+                        ctx.requestedStart(),
+                        ctx.requestedEnd(),
+                        sprintOptions(ctx.projectSprints(), workItems.countWorkItemsBySprint(ctx.project().getId())),
+                        ctx.activeSprint() == null ? null : ctx.activeSprint().getId(),
+                        workItems.countProductBacklog(ctx.project().getId()),
+                        ITEM_TYPES),
+                new ProjectAnalyticsResponse.Window(
+                        ctx.windowStart(), ctx.windowEnd(), granularity, ctx.tenantZone().getId()),
+                kpis,
+                creationTrend,
+                cycleTimeTrend,
+                leadTimeTrend,
+                completionTrend,
+                widgets);
+    }
+
+    private List<ExportWorkItemRow> buildExportItemRows(ResolvedScope ctx) {
+        String codePrefix = projectPrefix(ctx.project().getCode(), ctx.project().getName());
+        Map<Long, String> sprintNames = ctx.projectSprints().stream()
+                .filter(sprint -> sprint.getId() != null)
+                .collect(Collectors.toMap(Sprint::getId, Sprint::getName, (first, ignored) -> first));
+
+        Set<Long> memberIds = ctx.items().stream()
+                .map(SprintBacklog::getAssigneeProjectMemberId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> backlogAssignees = workItems.findAssigneeNames(memberIds);
+
+        Set<UUID> subtaskAssigneeIds = ctx.subtasks().stream()
+                .map(Task::getAssigneeProjectMemberId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> subtaskAssignees = workItems.findSubtaskAssigneeNames(subtaskAssigneeIds);
+
+        List<ExportWorkItemRow> rows = new ArrayList<>(ctx.items().size() + ctx.subtasks().size());
+        for (SprintBacklog item : ctx.items()) {
+            LocalDate created = createdOn(item, ctx.serverZone(), ctx.tenantZone());
+            if (created != null && created.isAfter(ctx.windowEnd())) {
+                continue;
+            }
+            Long id = item.getId();
+            Long sprintId = item.getSprint() == null ? null : item.getSprint().getId();
+            SprintBacklogWorkType type = item.getWorkType() == null
+                    ? SprintBacklogWorkType.DEFAULT : item.getWorkType();
+            List<SprintBacklogAuditLog> events = id == null
+                    ? List.of() : ctx.backlogHistory().getOrDefault(id, List.of());
+            LocalDate completedOn = backlogCompletedOn(
+                    item, events, ctx.completionCutoff(), ctx.serverZone(), ctx.tenantZone());
+            TimeSample cycle = completedOn != null ? cycleSample(item, events, ctx.completionCutoff()) : null;
+            TimeSample lead = completedOn != null ? backlogLeadSample(item, events, ctx.completionCutoff()) : null;
+            rows.add(new ExportWorkItemRow(
+                    codePrefix + "-" + (id == null ? "?" : id),
+                    item.getTitle(),
+                    type.name(),
+                    statusOf(item).name(),
+                    sprintId == null ? "Product backlog" : sprintNames.getOrDefault(sprintId, "Sprint #" + sprintId),
+                    item.getAssigneeProjectMemberId() == null ? null : backlogAssignees.get(item.getAssigneeProjectMemberId()),
+                    created,
+                    completedOn,
+                    cycle == null ? null : roundOneDecimal(cycle.days()),
+                    lead == null ? null : roundOneDecimal(lead.days()),
+                    item.getEstimatedHours()));
+        }
+        for (Task subtask : ctx.subtasks()) {
+            LocalDate created = subtaskCreatedOn(subtask, ctx.serverZone(), ctx.tenantZone());
+            if (created != null && created.isAfter(ctx.windowEnd())) {
+                continue;
+            }
+            UUID id = subtask.getId();
+            SprintBacklog parent = subtask.getBacklogItem();
+            Long parentId = parent == null ? null : parent.getId();
+            Long sprintId = parent == null || parent.getSprint() == null ? null : parent.getSprint().getId();
+            String shortId = id == null ? "?" : id.toString().substring(0, 4).toUpperCase(Locale.ROOT);
+            String taskCode = parentId != null
+                    ? codePrefix + "-" + parentId + " / SUB-" + shortId
+                    : "SUB-" + shortId;
+            List<TaskAuditLog> events = id == null
+                    ? List.of() : ctx.subtaskHistory().getOrDefault(id, List.of());
+            LocalDate completedOn = subtaskCompletedOn(
+                    subtask, events, ctx.completionCutoff(), ctx.serverZone(), ctx.tenantZone());
+            TimeSample cycle = completedOn != null ? subtaskCycleSample(subtask, events, ctx.completionCutoff()) : null;
+            TimeSample lead = completedOn != null ? subtaskLeadSample(subtask, events, ctx.completionCutoff()) : null;
+            rows.add(new ExportWorkItemRow(
+                    taskCode,
+                    subtask.getTitle(),
+                    "SUBTASK",
+                    subtask.getStatus() == null ? TaskStatus.TODO.name() : subtask.getStatus().name(),
+                    sprintId == null ? "Product backlog" : sprintNames.getOrDefault(sprintId, "Sprint #" + sprintId),
+                    subtask.getAssigneeProjectMemberId() == null ? null : subtaskAssignees.get(subtask.getAssigneeProjectMemberId()),
+                    created,
+                    completedOn,
+                    cycle == null ? null : roundOneDecimal(cycle.days()),
+                    lead == null ? null : roundOneDecimal(lead.days()),
+                    subtask.getEstimatedHours()));
+        }
+        return rows;
+    }
+
+    record ExportSnapshot(
+            User user,
+            Project project,
+            String selectedSprintName,
+            ProjectAnalyticsResponse analytics,
+            List<ExportWorkItemRow> items,
+            ZoneId tenantZone
+    ) { }
+
+    record ExportWorkItemRow(
+            String taskCode,
+            String title,
+            String workType,
+            String status,
+            String sprintName,
+            String assigneeName,
+            LocalDate createdDate,
+            LocalDate completedDate,
+            Double cycleDays,
+            Double leadDays,
+            Double estimatedHours
+    ) { }
+
+    /**
+     * US-ANL-008: click-to-drill-down work item list for one date bucket /
+     * marker of any of the four analytics charts, honouring the caller's
+     * project authorization and active filter scope.
+     */
+    public ProjectAnalyticsDrillDownResponse drillDown(
+            String rawProjectId,
+            ProjectAnalyticsFilter requested,
+            String rawChart,
+            LocalDate date,
+            String rawSeries) {
+        String chart = parseDrillDownChart(rawChart);
+        if (date == null) {
+            throw new ProjectAnalyticsValidationException("date", "A date is required to inspect work items");
+        }
+        String series = normalizeSeries(rawSeries);
+        ResolvedScope ctx = resolveScope(rawProjectId, requested);
+
+        String codePrefix = projectPrefix(ctx.project().getCode(), ctx.project().getName());
+        Map<Long, String> sprintNames = ctx.projectSprints().stream()
+                .filter(sprint -> sprint.getId() != null)
+                .collect(Collectors.toMap(Sprint::getId, Sprint::getName, (first, ignored) -> first));
+
+        List<SprintBacklog> matchedBacklogs = new ArrayList<>();
+        List<Task> matchedSubtasks = new ArrayList<>();
+        Map<Long, TimeSample> backlogCycleSamples = new HashMap<>();
+        Map<Long, TimeSample> backlogLeadSamples = new HashMap<>();
+        Map<Long, LocalDate> backlogCompletedDates = new HashMap<>();
+        Map<UUID, TimeSample> subtaskCycleSamples = new HashMap<>();
+        Map<UUID, TimeSample> subtaskLeadSamples = new HashMap<>();
+        Map<UUID, LocalDate> subtaskCompletedDates = new HashMap<>();
+
+        switch (chart) {
+            case "creation" -> {
+                for (SprintBacklog item : ctx.items()) {
+                    LocalDate created = createdOn(item, ctx.serverZone(), ctx.tenantZone());
+                    if (!date.equals(created)) {
+                        continue;
+                    }
+                    List<SprintBacklogAuditLog> events = item.getId() == null
+                            ? List.of() : ctx.backlogHistory().getOrDefault(item.getId(), List.of());
+                    LocalDate completedOn = backlogCompletedOn(
+                            item, events, ctx.completionCutoff(), ctx.serverZone(), ctx.tenantZone());
+                    boolean isDone = completedOn != null && !completedOn.isAfter(ctx.windowEnd());
+                    if ("done".equals(series) && !isDone) {
+                        continue;
+                    }
+                    if ("todo".equals(series) && isDone) {
+                        continue;
+                    }
+                    matchedBacklogs.add(item);
+                    if (isDone && item.getId() != null) {
+                        backlogCompletedDates.put(item.getId(), completedOn);
+                        TimeSample cycle = cycleSample(item, events, ctx.completionCutoff());
+                        TimeSample lead = backlogLeadSample(item, events, ctx.completionCutoff());
+                        if (cycle != null) backlogCycleSamples.put(item.getId(), cycle);
+                        if (lead != null) backlogLeadSamples.put(item.getId(), lead);
+                    }
+                }
+                for (Task subtask : ctx.subtasks()) {
+                    LocalDate created = subtaskCreatedOn(subtask, ctx.serverZone(), ctx.tenantZone());
+                    if (!date.equals(created)) {
+                        continue;
+                    }
+                    List<TaskAuditLog> events = subtask.getId() == null
+                            ? List.of() : ctx.subtaskHistory().getOrDefault(subtask.getId(), List.of());
+                    LocalDate completedOn = subtaskCompletedOn(
+                            subtask, events, ctx.completionCutoff(), ctx.serverZone(), ctx.tenantZone());
+                    boolean isDone = completedOn != null && !completedOn.isAfter(ctx.windowEnd());
+                    if ("done".equals(series) && !isDone) {
+                        continue;
+                    }
+                    if ("todo".equals(series) && isDone) {
+                        continue;
+                    }
+                    matchedSubtasks.add(subtask);
+                    if (isDone && subtask.getId() != null) {
+                        subtaskCompletedDates.put(subtask.getId(), completedOn);
+                        TimeSample cycle = subtaskCycleSample(subtask, events, ctx.completionCutoff());
+                        TimeSample lead = subtaskLeadSample(subtask, events, ctx.completionCutoff());
+                        if (cycle != null) subtaskCycleSamples.put(subtask.getId(), cycle);
+                        if (lead != null) subtaskLeadSamples.put(subtask.getId(), lead);
+                    }
+                }
+            }
+            case "cycle-time" -> {
+                for (SprintBacklog item : ctx.doneBacklogItems()) {
+                    List<SprintBacklogAuditLog> events = ctx.backlogHistory().getOrDefault(item.getId(), List.of());
+                    TimeSample cycle = cycleSample(item, events, ctx.completionCutoff());
+                    if (cycle == null) {
+                        continue;
+                    }
+                    LocalDate completedOn = toTenantDate(cycle.completedAt(), ctx.serverZone(), ctx.tenantZone());
+                    if (!date.equals(completedOn)) {
+                        continue;
+                    }
+                    matchedBacklogs.add(item);
+                    backlogCompletedDates.put(item.getId(), completedOn);
+                    backlogCycleSamples.put(item.getId(), cycle);
+                    TimeSample lead = backlogLeadSample(item, events, ctx.completionCutoff());
+                    if (lead != null) {
+                        backlogLeadSamples.put(item.getId(), lead);
+                    }
+                }
+            }
+            case "lead-time" -> {
+                if (series == null || "story".equals(series) || "task".equals(series)) {
+                    for (SprintBacklog item : ctx.doneBacklogItems()) {
+                        SprintBacklogWorkType type = item.getWorkType() == null
+                                ? SprintBacklogWorkType.DEFAULT : item.getWorkType();
+                        if (type != SprintBacklogWorkType.STORY && type != SprintBacklogWorkType.TASK) {
+                            continue;
+                        }
+                        if ("story".equals(series) && type != SprintBacklogWorkType.STORY) {
+                            continue;
+                        }
+                        if ("task".equals(series) && type != SprintBacklogWorkType.TASK) {
+                            continue;
+                        }
+                        List<SprintBacklogAuditLog> events = ctx.backlogHistory().getOrDefault(item.getId(), List.of());
+                        TimeSample lead = backlogLeadSample(item, events, ctx.completionCutoff());
+                        if (lead == null) {
+                            continue;
+                        }
+                        LocalDate completedOn = toTenantDate(lead.completedAt(), ctx.serverZone(), ctx.tenantZone());
+                        if (!date.equals(completedOn)) {
+                            continue;
+                        }
+                        matchedBacklogs.add(item);
+                        backlogCompletedDates.put(item.getId(), completedOn);
+                        backlogLeadSamples.put(item.getId(), lead);
+                        TimeSample cycle = cycleSample(item, events, ctx.completionCutoff());
+                        if (cycle != null) {
+                            backlogCycleSamples.put(item.getId(), cycle);
+                        }
+                    }
+                }
+                if (series == null || "subtask".equals(series)) {
+                    for (Task subtask : ctx.doneSubtasks()) {
+                        List<TaskAuditLog> events = ctx.subtaskHistory().getOrDefault(subtask.getId(), List.of());
+                        TimeSample lead = subtaskLeadSample(subtask, events, ctx.completionCutoff());
+                        if (lead == null) {
+                            continue;
+                        }
+                        LocalDate completedOn = toTenantDate(lead.completedAt(), ctx.serverZone(), ctx.tenantZone());
+                        if (!date.equals(completedOn)) {
+                            continue;
+                        }
+                        matchedSubtasks.add(subtask);
+                        subtaskCompletedDates.put(subtask.getId(), completedOn);
+                        subtaskLeadSamples.put(subtask.getId(), lead);
+                        TimeSample cycle = subtaskCycleSample(subtask, events, ctx.completionCutoff());
+                        if (cycle != null) {
+                            subtaskCycleSamples.put(subtask.getId(), cycle);
+                        }
+                    }
+                }
+            }
+            case "completion" -> {
+                if (series == null || "story".equals(series) || "task".equals(series)) {
+                    for (SprintBacklog item : ctx.doneBacklogItems()) {
+                        boolean isStory = item.getWorkType() == SprintBacklogWorkType.STORY;
+                        if ("story".equals(series) && !isStory) {
+                            continue;
+                        }
+                        if ("task".equals(series) && isStory) {
+                            continue;
+                        }
+                        List<SprintBacklogAuditLog> events = ctx.backlogHistory().getOrDefault(item.getId(), List.of());
+                        LocalDate completedOn = backlogCompletedOn(
+                                item, events, ctx.completionCutoff(), ctx.serverZone(), ctx.tenantZone());
+                        if (!date.equals(completedOn)) {
+                            continue;
+                        }
+                        matchedBacklogs.add(item);
+                        backlogCompletedDates.put(item.getId(), completedOn);
+                        TimeSample cycle = cycleSample(item, events, ctx.completionCutoff());
+                        TimeSample lead = backlogLeadSample(item, events, ctx.completionCutoff());
+                        if (cycle != null) backlogCycleSamples.put(item.getId(), cycle);
+                        if (lead != null) backlogLeadSamples.put(item.getId(), lead);
+                    }
+                }
+                if (series == null || "subtask".equals(series)) {
+                    for (Task subtask : ctx.doneSubtasks()) {
+                        List<TaskAuditLog> events = ctx.subtaskHistory().getOrDefault(subtask.getId(), List.of());
+                        LocalDate completedOn = subtaskCompletedOn(
+                                subtask, events, ctx.completionCutoff(), ctx.serverZone(), ctx.tenantZone());
+                        if (!date.equals(completedOn)) {
+                            continue;
+                        }
+                        matchedSubtasks.add(subtask);
+                        subtaskCompletedDates.put(subtask.getId(), completedOn);
+                        TimeSample cycle = subtaskCycleSample(subtask, events, ctx.completionCutoff());
+                        TimeSample lead = subtaskLeadSample(subtask, events, ctx.completionCutoff());
+                        if (cycle != null) subtaskCycleSamples.put(subtask.getId(), cycle);
+                        if (lead != null) subtaskLeadSamples.put(subtask.getId(), lead);
+                    }
+                }
+            }
+            default -> throw new ProjectAnalyticsValidationException("chart",
+                    "Chart must be one of creation, cycle-time, lead-time or completion");
+        }
+
+        Set<Long> memberIds = matchedBacklogs.stream()
+                .map(SprintBacklog::getAssigneeProjectMemberId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> backlogAssignees = workItems.findAssigneeNames(memberIds);
+
+        Set<UUID> subtaskAssigneeIds = matchedSubtasks.stream()
+                .map(Task::getAssigneeProjectMemberId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> subtaskAssignees = workItems.findSubtaskAssigneeNames(subtaskAssigneeIds);
+
+        List<ProjectAnalyticsDrillDownResponse.WorkItem> rows = new ArrayList<>(
+                matchedBacklogs.size() + matchedSubtasks.size());
+        for (SprintBacklog item : matchedBacklogs) {
+            Long id = item.getId();
+            Long sprintId = item.getSprint() == null ? null : item.getSprint().getId();
+            SprintBacklogWorkType type = item.getWorkType() == null
+                    ? SprintBacklogWorkType.DEFAULT : item.getWorkType();
+            TimeSample cycle = id == null ? null : backlogCycleSamples.get(id);
+            TimeSample lead = id == null ? null : backlogLeadSamples.get(id);
+            rows.add(new ProjectAnalyticsDrillDownResponse.WorkItem(
+                    id == null ? "" : id.toString(),
+                    id,
+                    codePrefix + "-" + (id == null ? "?" : id),
+                    item.getTitle(),
+                    type.name(),
+                    statusOf(item).name(),
+                    item.getAssigneeProjectMemberId() == null
+                            ? null : backlogAssignees.get(item.getAssigneeProjectMemberId()),
+                    sprintId,
+                    sprintId == null ? null : sprintNames.get(sprintId),
+                    createdOn(item, ctx.serverZone(), ctx.tenantZone()),
+                    id == null ? null : backlogCompletedDates.get(id),
+                    cycle == null ? null : roundOneDecimal(cycle.days()),
+                    lead == null ? null : roundOneDecimal(lead.days())));
+        }
+        for (Task subtask : matchedSubtasks) {
+            UUID id = subtask.getId();
+            SprintBacklog parent = subtask.getBacklogItem();
+            Long parentId = parent == null ? null : parent.getId();
+            Long sprintId = parent == null || parent.getSprint() == null ? null : parent.getSprint().getId();
+            String shortId = id == null ? "?" : id.toString().substring(0, 4).toUpperCase(Locale.ROOT);
+            String taskCode = parentId != null
+                    ? codePrefix + "-" + parentId + " · SUB-" + shortId
+                    : "SUB-" + shortId;
+            TimeSample cycle = id == null ? null : subtaskCycleSamples.get(id);
+            TimeSample lead = id == null ? null : subtaskLeadSamples.get(id);
+            rows.add(new ProjectAnalyticsDrillDownResponse.WorkItem(
+                    id == null ? "" : id.toString(),
+                    parentId,
+                    taskCode,
+                    subtask.getTitle(),
+                    "SUBTASK",
+                    subtask.getStatus() == null ? TaskStatus.TODO.name() : subtask.getStatus().name(),
+                    subtask.getAssigneeProjectMemberId() == null
+                            ? null : subtaskAssignees.get(subtask.getAssigneeProjectMemberId()),
+                    sprintId,
+                    sprintId == null ? null : sprintNames.get(sprintId),
+                    subtaskCreatedOn(subtask, ctx.serverZone(), ctx.tenantZone()),
+                    id == null ? null : subtaskCompletedDates.get(id),
+                    cycle == null ? null : roundOneDecimal(cycle.days()),
+                    lead == null ? null : roundOneDecimal(lead.days())));
+        }
+
+        if ("cycle-time".equals(chart)) {
+            rows.sort(Comparator.comparing(
+                    ProjectAnalyticsDrillDownResponse.WorkItem::cycleDays,
+                    Comparator.nullsLast(Comparator.reverseOrder()))
+                    .thenComparing(ProjectAnalyticsDrillDownResponse.WorkItem::taskCode));
+        } else if ("lead-time".equals(chart)) {
+            rows.sort(Comparator.comparing(
+                    ProjectAnalyticsDrillDownResponse.WorkItem::leadDays,
+                    Comparator.nullsLast(Comparator.reverseOrder()))
+                    .thenComparing(ProjectAnalyticsDrillDownResponse.WorkItem::taskCode));
+        } else {
+            rows.sort(Comparator.comparing(ProjectAnalyticsDrillDownResponse.WorkItem::taskCode));
+        }
+
+        return new ProjectAnalyticsDrillDownResponse(
+                ctx.project().getId(),
+                ctx.project().getCode(),
+                chart,
+                date,
+                series,
+                rows.size(),
+                rows);
+    }
+
+    private ResolvedScope resolveScope(String rawProjectId, ProjectAnalyticsFilter requested) {
+        User user = access.requireUser();
+        Project project = access.requireProject(user, rawProjectId);
+        return resolveScopeFor(user, project, requested);
+    }
+
+    private ResolvedScope resolveScopeFor(User user, Project project, ProjectAnalyticsFilter requested) {
         ProjectAnalyticsFilter filter = requested == null ? ProjectAnalyticsFilter.empty() : requested;
 
         ProjectAnalyticsScope scope = ProjectAnalyticsScope.parse(filter.scope(), filter.sprintId());
@@ -156,8 +656,8 @@ public class ProjectAnalyticsService {
                 ? workItems.findSubtasks(scopeBacklogIds)
                 : List.of();
 
-        ZoneId tenantZone = tenantZone();
-        ZoneId serverZone = ZoneId.systemDefault();
+        ZoneId tenantZone = tenantZone(user, project);
+        ZoneId serverZone = storageZone();
 
         LocalDate windowStart = resolveWindowStart(requestedStart, items, subtasks, serverZone, tenantZone);
         LocalDate windowEnd = resolveWindowEnd(requestedEnd, items, subtasks, serverZone, tenantZone);
@@ -168,19 +668,6 @@ public class ProjectAnalyticsService {
                 && ChronoUnit.DAYS.between(windowStart, windowEnd) >= MAX_WINDOW_DAYS) {
             windowStart = windowEnd.minusDays(MAX_WINDOW_DAYS - 1L);
         }
-
-        LocalDate bucketStart = ChronoUnit.DAYS.between(windowStart, windowEnd) >= MAX_WINDOW_DAYS
-                ? windowEnd.minusDays(MAX_WINDOW_DAYS - 1L)
-                : windowStart;
-        LocalDate resolvedEnd = windowEnd;
-        long population = items.stream()
-                .map(ProjectAnalyticsService::createdOn)
-                .filter(Objects::nonNull)
-                .filter(date -> !date.isAfter(resolvedEnd))
-                .count();
-        String granularity = granularityOf(bucketStart, windowEnd);
-        List<ProjectAnalyticsResponse.Bucket> buckets =
-                buckets(items, bucketStart, windowEnd, granularity, population);
 
         LocalDateTime completionCutoff = completionCutoff(windowEnd, tenantZone, serverZone);
         List<SprintBacklog> doneBacklogItems = items.stream()
@@ -196,46 +683,69 @@ public class ProjectAnalyticsService {
         Map<UUID, List<TaskAuditLog>> subtaskHistory =
                 subtaskStatusHistory(doneSubtasks, completionCutoff);
 
-        List<ProjectAnalyticsResponse.Kpi> kpis =
-                kpis(scope, selected, items, windowStart, windowEnd);
-        ProjectAnalyticsResponse.CreationTrend creationTrend = creationTrend(
-                items, subtasks, backlogHistory, subtaskHistory,
-                windowStart, windowEnd, tenantZone, serverZone, completionCutoff);
-        ProjectAnalyticsResponse.CycleTimeTrend cycleTimeTrend = cycleTimeTrend(
-                doneBacklogItems, backlogHistory, windowStart, windowEnd, tenantZone, serverZone, completionCutoff);
-        ProjectAnalyticsResponse.LeadTimeTrend leadTimeTrend = leadTimeTrend(
+        return new ResolvedScope(
+                user, project, scope, selected, workType, requestedStart, requestedEnd,
+                projectSprints, activeSprint, items, subtasks,
                 doneBacklogItems, doneSubtasks, backlogHistory, subtaskHistory,
                 windowStart, windowEnd, tenantZone, serverZone, completionCutoff);
-        ProjectAnalyticsResponse.CompletionTrend completionTrend = completionTrend(
-                doneBacklogItems, doneSubtasks, backlogHistory, subtaskHistory,
-                windowStart, windowEnd, tenantZone, serverZone, completionCutoff);
-        List<ProjectAnalyticsResponse.Widget> widgets =
-                widgets(items.isEmpty() ? STATE_EMPTY : STATE_READY, granularity, buckets);
-
-        return new ProjectAnalyticsResponse(
-                project.getId(),
-                project.getCode(),
-                project.getName(),
-                project.getStatus() == null ? null : project.getStatus().name(),
-                true,
-                new ProjectAnalyticsResponse.Filters(
-                        scope.name(),
-                        selected == null ? null : selected.getId(),
-                        workType == null ? ANY_ITEM_TYPE : workType.name(),
-                        requestedStart,
-                        requestedEnd,
-                        sprintOptions(projectSprints, workItems.countWorkItemsBySprint(project.getId())),
-                        activeSprint == null ? null : activeSprint.getId(),
-                        workItems.countProductBacklog(project.getId()),
-                        ITEM_TYPES),
-                new ProjectAnalyticsResponse.Window(windowStart, windowEnd, granularity),
-                kpis,
-                creationTrend,
-                cycleTimeTrend,
-                leadTimeTrend,
-                completionTrend,
-                widgets);
     }
+
+    private static String parseDrillDownChart(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new ProjectAnalyticsValidationException("chart",
+                    "Chart must be one of creation, cycle-time, lead-time or completion");
+        }
+        String value = raw.trim().toLowerCase(Locale.ROOT);
+        if (Set.of("creation", "cycle-time", "lead-time", "completion").contains(value)) {
+            return value;
+        }
+        throw new ProjectAnalyticsValidationException("chart",
+                "Chart must be one of creation, cycle-time, lead-time or completion");
+    }
+
+    private static String normalizeSeries(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String value = raw.trim().toLowerCase(Locale.ROOT);
+        return "all".equals(value) ? null : value;
+    }
+
+    private static String projectPrefix(String code, String name) {
+        if (code != null && !code.isBlank()) {
+            return code.trim().toUpperCase(Locale.ROOT);
+        }
+        if (name != null && !name.isBlank()) {
+            String letters = name.replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT);
+            if (!letters.isEmpty()) {
+                return letters.substring(0, Math.min(3, letters.length()));
+            }
+        }
+        return "PRJ";
+    }
+
+    private record ResolvedScope(
+            User user,
+            Project project,
+            ProjectAnalyticsScope scope,
+            Sprint selected,
+            SprintBacklogWorkType workType,
+            LocalDate requestedStart,
+            LocalDate requestedEnd,
+            List<Sprint> projectSprints,
+            Sprint activeSprint,
+            List<SprintBacklog> items,
+            List<Task> subtasks,
+            List<SprintBacklog> doneBacklogItems,
+            List<Task> doneSubtasks,
+            Map<Long, List<SprintBacklogAuditLog>> backlogHistory,
+            Map<UUID, List<TaskAuditLog>> subtaskHistory,
+            LocalDate windowStart,
+            LocalDate windowEnd,
+            ZoneId tenantZone,
+            ZoneId serverZone,
+            LocalDateTime completionCutoff
+    ) { }
 
     /**
      * US-ANL-001: projects the caller may open Analytics for. Used by the
@@ -313,16 +823,10 @@ public class ProjectAnalyticsService {
         }
         LocalDate earliest = null;
         for (SprintBacklog item : items) {
-            earliest = earlierOf(earliest, createdOn(item));
-            if (item.getCreatedAt() != null) {
-                earliest = earlierOf(earliest, toTenantDate(item.getCreatedAt(), serverZone, tenantZone));
-            }
+            earliest = earlierOf(earliest, createdOn(item, serverZone, tenantZone));
         }
         for (Task subtask : subtasks) {
-            if (subtask.getCreatedAt() != null) {
-                earliest = earlierOf(earliest, subtask.getCreatedAt().toLocalDate());
-                earliest = earlierOf(earliest, toTenantDate(subtask.getCreatedAt(), serverZone, tenantZone));
-            }
+            earliest = earlierOf(earliest, subtaskCreatedOn(subtask, serverZone, tenantZone));
         }
         return earliest != null ? earliest : LocalDate.now(tenantZone).minusDays(DEFAULT_WINDOW_DAYS - 1L);
     }
@@ -332,31 +836,16 @@ public class ProjectAnalyticsService {
         if (requested != null) {
             return requested;
         }
-        LocalDate latest = earlierDateOrToday(tenantZone);
+        LocalDate latest = LocalDate.now(tenantZone);
         for (SprintBacklog item : items) {
-            latest = laterOf(latest, updatedOn(item));
-            latest = laterOf(latest, createdOn(item));
-            if (item.getUpdatedAt() != null) {
-                latest = laterOf(latest, toTenantDate(item.getUpdatedAt(), serverZone, tenantZone));
-            }
+            latest = laterOf(latest, updatedOn(item, serverZone, tenantZone));
+            latest = laterOf(latest, createdOn(item, serverZone, tenantZone));
         }
         for (Task subtask : subtasks) {
-            if (subtask.getUpdatedAt() != null) {
-                latest = laterOf(latest, subtask.getUpdatedAt().toLocalDate());
-                latest = laterOf(latest, toTenantDate(subtask.getUpdatedAt(), serverZone, tenantZone));
-            }
-            if (subtask.getCreatedAt() != null) {
-                latest = laterOf(latest, subtask.getCreatedAt().toLocalDate());
-                latest = laterOf(latest, toTenantDate(subtask.getCreatedAt(), serverZone, tenantZone));
-            }
+            latest = laterOf(latest, subtaskUpdatedOn(subtask, serverZone, tenantZone));
+            latest = laterOf(latest, subtaskCreatedOn(subtask, serverZone, tenantZone));
         }
         return latest;
-    }
-
-    private static LocalDate earlierDateOrToday(ZoneId tenantZone) {
-        LocalDate serverToday = LocalDate.now();
-        LocalDate tenantToday = LocalDate.now(tenantZone);
-        return tenantToday.isAfter(serverToday) ? tenantToday : serverToday;
     }
 
     private static LocalDate earlierOf(LocalDate current, LocalDate candidate) {
@@ -382,7 +871,8 @@ public class ProjectAnalyticsService {
     }
 
     private List<ProjectAnalyticsResponse.Bucket> buckets(List<SprintBacklog> items, LocalDate start,
-                                                          LocalDate end, String granularity, long population) {
+                                                          LocalDate end, String granularity, long population,
+                                                          ZoneId serverZone, ZoneId tenantZone) {
         long totalDays = ChronoUnit.DAYS.between(start, end) + 1;
         List<ProjectAnalyticsResponse.Bucket> buckets = new ArrayList<>();
         LocalDate cursor = "MONTH".equals(granularity) ? start.withDayOfMonth(1) : start;
@@ -397,7 +887,7 @@ public class ProjectAnalyticsService {
             if (bucketEnd.isAfter(end)) {
                 bucketEnd = end;
             }
-            buckets.add(bucket(items, bucketStart, bucketEnd, start, totalDays, population));
+            buckets.add(bucket(items, bucketStart, bucketEnd, start, totalDays, population, serverZone, tenantZone));
             cursor = next;
         }
         return buckets;
@@ -405,7 +895,8 @@ public class ProjectAnalyticsService {
 
     private static ProjectAnalyticsResponse.Bucket bucket(List<SprintBacklog> items, LocalDate start,
                                                           LocalDate end, LocalDate windowStart,
-                                                          long totalDays, long population) {
+                                                          long totalDays, long population,
+                                                          ZoneId serverZone, ZoneId tenantZone) {
         long created = 0;
         long completed = 0;
         long todo = 0;
@@ -414,8 +905,8 @@ public class ProjectAnalyticsService {
         long done = 0;
 
         for (SprintBacklog item : items) {
-            LocalDate createdOn = createdOn(item);
-            LocalDate updatedOn = updatedOn(item);
+            LocalDate createdOn = createdOn(item, serverZone, tenantZone);
+            LocalDate updatedOn = updatedOn(item, serverZone, tenantZone);
             SprintBacklogStatus status = statusOf(item);
 
             if (createdOn != null && !createdOn.isBefore(start) && !createdOn.isAfter(end)) {
@@ -453,12 +944,20 @@ public class ProjectAnalyticsService {
                 done, remaining, Math.max(0L, ideal));
     }
 
-    private static LocalDate createdOn(SprintBacklog item) {
-        return item.getCreatedAt() == null ? null : item.getCreatedAt().toLocalDate();
+    private static LocalDate createdOn(SprintBacklog item, ZoneId serverZone, ZoneId tenantZone) {
+        return item.getCreatedAt() == null ? null : toTenantDate(item.getCreatedAt(), serverZone, tenantZone);
     }
 
-    private static LocalDate updatedOn(SprintBacklog item) {
-        return item.getUpdatedAt() == null ? null : item.getUpdatedAt().toLocalDate();
+    private static LocalDate updatedOn(SprintBacklog item, ZoneId serverZone, ZoneId tenantZone) {
+        return item.getUpdatedAt() == null ? null : toTenantDate(item.getUpdatedAt(), serverZone, tenantZone);
+    }
+
+    private static LocalDate subtaskCreatedOn(Task subtask, ZoneId serverZone, ZoneId tenantZone) {
+        return subtask.getCreatedAt() == null ? null : toTenantDate(subtask.getCreatedAt(), serverZone, tenantZone);
+    }
+
+    private static LocalDate subtaskUpdatedOn(Task subtask, ZoneId serverZone, ZoneId tenantZone) {
+        return subtask.getUpdatedAt() == null ? null : toTenantDate(subtask.getUpdatedAt(), serverZone, tenantZone);
     }
 
     private static SprintBacklogStatus statusOf(SprintBacklog item) {
@@ -486,7 +985,9 @@ public class ProjectAnalyticsService {
      */
     private List<ProjectAnalyticsResponse.Kpi> kpis(ProjectAnalyticsScope scope, Sprint sprint,
                                                     List<SprintBacklog> items,
-                                                    LocalDate windowStart, LocalDate windowEnd) {
+                                                    LocalDate windowStart, LocalDate windowEnd,
+                                                    ZoneId serverZone, ZoneId tenantZone,
+                                                    LocalDateTime completionCutoff) {
         long done = 0;
         long todo = 0;
         double doneHours = 0;
@@ -494,7 +995,7 @@ public class ProjectAnalyticsService {
         List<SprintBacklog> doneItems = new ArrayList<>();
 
         for (SprintBacklog item : items) {
-            LocalDate createdOn = createdOn(item);
+            LocalDate createdOn = createdOn(item, serverZone, tenantZone);
             // AC01: an item created after the end of the window did not exist
             // yet, so it cannot be part of "as of <windowEnd>" totals.
             if (createdOn != null && createdOn.isAfter(windowEnd)) {
@@ -502,7 +1003,7 @@ public class ProjectAnalyticsService {
             }
             double hours = item.getEstimatedHours() == null ? 0 : Math.max(0, item.getEstimatedHours());
             totalHours += hours;
-            if (isDoneAsOf(item, windowEnd)) {
+            if (isDoneAsOf(item, windowEnd, serverZone, tenantZone)) {
                 done++;
                 doneHours += hours;
                 doneItems.add(item);
@@ -515,9 +1016,9 @@ public class ProjectAnalyticsService {
         // AC02: 0/0 must render as 0.0%, never as NaN.
         double completionRate = total == 0 ? 0.0 : done * 100.0 / total;
 
-        Map<Long, LocalDate[]> timeline = completionTimeline(doneItems, windowEnd);
-        Double averageCycle = averageDays(doneItems, timeline, true);
-        Double averageLead = averageDays(doneItems, timeline, false);
+        Map<Long, LocalDate[]> timeline = completionTimeline(doneItems, completionCutoff, serverZone, tenantZone);
+        Double averageCycle = averageDays(doneItems, timeline, true, serverZone, tenantZone);
+        Double averageLead = averageDays(doneItems, timeline, false, serverZone, tenantZone);
 
         String scopeHint = switch (scope) {
             case BACKLOG -> "Product backlog items without a sprint";
@@ -564,11 +1065,12 @@ public class ProjectAnalyticsService {
      * update happened on or before the end of the window (same rule as the
      * status snapshot of {@link #bucket}).
      */
-    private static boolean isDoneAsOf(SprintBacklog item, LocalDate windowEnd) {
+    private static boolean isDoneAsOf(SprintBacklog item, LocalDate windowEnd,
+                                      ZoneId serverZone, ZoneId tenantZone) {
         if (statusOf(item) != SprintBacklogStatus.DONE) {
             return false;
         }
-        LocalDate updatedOn = updatedOn(item);
+        LocalDate updatedOn = updatedOn(item, serverZone, tenantZone);
         return updatedOn == null || !updatedOn.isAfter(windowEnd);
     }
 
@@ -581,7 +1083,9 @@ public class ProjectAnalyticsService {
      * those dates; items without any history simply fall back to
      * {@code created_at} / {@code updated_at} in {@link #averageDays}.</p>
      */
-    private Map<Long, LocalDate[]> completionTimeline(List<SprintBacklog> doneItems, LocalDate windowEnd) {
+    private Map<Long, LocalDate[]> completionTimeline(List<SprintBacklog> doneItems,
+                                                      LocalDateTime completionCutoff,
+                                                      ZoneId serverZone, ZoneId tenantZone) {
         Map<Long, LocalDate[]> timeline = new LinkedHashMap<>();
         if (doneItems.isEmpty()) {
             return timeline;
@@ -595,8 +1099,9 @@ public class ProjectAnalyticsService {
         }
         String inProgress = SprintBacklogStatus.IN_PROGRESS.name();
         String doneState = SprintBacklogStatus.DONE.name();
-        for (SprintBacklogAuditLog event : workItems.findStatusEvents(ids, windowEnd.atTime(23, 59, 59))) {
-            LocalDate on = event.getCreatedAt() == null ? null : event.getCreatedAt().toLocalDate();
+        for (SprintBacklogAuditLog event : workItems.findStatusEvents(ids, completionCutoff)) {
+            LocalDate on = event.getCreatedAt() == null
+                    ? null : toTenantDate(event.getCreatedAt(), serverZone, tenantZone);
             if (on == null || event.getSprintBacklogId() == null) {
                 continue;
             }
@@ -624,13 +1129,14 @@ public class ProjectAnalyticsService {
      * @return {@code null} when no item provides a usable pair of dates
      */
     private static Double averageDays(List<SprintBacklog> doneItems, Map<Long, LocalDate[]> timeline,
-                                      boolean cycle) {
+                                      boolean cycle, ZoneId serverZone, ZoneId tenantZone) {
         long days = 0;
         int samples = 0;
         for (SprintBacklog item : doneItems) {
-            LocalDate createdOn = createdOn(item);
+            LocalDate createdOn = createdOn(item, serverZone, tenantZone);
             LocalDate[] slot = item.getId() == null ? null : timeline.get(item.getId());
-            LocalDate completedOn = slot != null && slot[1] != null ? slot[1] : updatedOn(item);
+            LocalDate completedOn = slot != null && slot[1] != null
+                    ? slot[1] : updatedOn(item, serverZone, tenantZone);
             LocalDate startedOn = cycle ? (slot == null ? null : slot[0]) : createdOn;
             // AC02: without a start date the item cannot contribute a sample.
             if (cycle && startedOn == null) {
@@ -694,7 +1200,7 @@ public class ProjectAnalyticsService {
             LocalDateTime asOf) {
         Map<LocalDate, long[]> grouped = new TreeMap<>();
         for (SprintBacklog item : items) {
-            LocalDate createdOn = createdOn(item);
+            LocalDate createdOn = createdOn(item, serverZone, tenantZone);
             if (createdOn == null || createdOn.isBefore(windowStart) || createdOn.isAfter(windowEnd)) {
                 continue;
             }
@@ -710,7 +1216,7 @@ public class ProjectAnalyticsService {
             }
         }
         for (Task subtask : subtasks) {
-            LocalDate createdOn = subtask.getCreatedAt() == null ? null : subtask.getCreatedAt().toLocalDate();
+            LocalDate createdOn = subtaskCreatedOn(subtask, serverZone, tenantZone);
             if (createdOn == null || createdOn.isBefore(windowStart) || createdOn.isAfter(windowEnd)) {
                 continue;
             }
@@ -731,6 +1237,7 @@ public class ProjectAnalyticsService {
                 .toList();
         return new ProjectAnalyticsResponse.CreationTrend(
                 buckets.isEmpty() ? STATE_EMPTY : STATE_READY,
+                tenantZone.getId(),
                 List.of(
                         new ProjectAnalyticsResponse.Series("done", "Done"),
                         new ProjectAnalyticsResponse.Series("todo", "To Do")),
@@ -1200,15 +1707,101 @@ public class ProjectAnalyticsService {
         return new TimeSample(completedAt, seconds / SECONDS_PER_DAY);
     }
 
-    private ZoneId tenantZone() {
-        if (tenantTimeZone != null && !tenantTimeZone.isBlank()) {
-            try {
-                return ZoneId.of(tenantTimeZone.trim());
-            } catch (DateTimeException invalid) {
-                // Misconfigured zone: fall back to the server zone below.
+    /**
+     * Cycle time sample of one Done subtask ({@code ProjectTask}), used in the
+     * US-ANL-008 drill-down drawer so subtasks also display individual cycle time.
+     */
+    private TimeSample subtaskCycleSample(Task subtask, List<TaskAuditLog> events, LocalDateTime asOf) {
+        String todo = TaskStatus.TODO.name();
+        String inProgress = TaskStatus.IN_PROGRESS.name();
+        String done = TaskStatus.DONE.name();
+
+        LocalDateTime firstInProgress = null;
+        LocalDateTime firstLeftTodo = null;
+        LocalDateTime finalDone = null;
+        String lastStatus = null;
+
+        for (TaskAuditLog event : events) {
+            LocalDateTime at = event.getOccurredAt();
+            String before = statusIn(event.getBeforeState());
+            String after = statusIn(event.getAfterState());
+            if (at == null || after == null || after.equals(before)) {
+                continue;
+            }
+            if (inProgress.equals(after) && firstInProgress == null) {
+                firstInProgress = at;
+            }
+            if (todo.equals(before) && !done.equals(after) && firstLeftTodo == null) {
+                firstLeftTodo = at;
+            }
+            if (done.equals(after)) {
+                finalDone = at;
+            }
+            lastStatus = after;
+        }
+
+        if (lastStatus != null && !done.equals(lastStatus)) {
+            return null;
+        }
+        LocalDateTime completedAt = finalDone != null ? finalDone : subtask.getUpdatedAt();
+        if (completedAt == null || completedAt.isAfter(asOf)) {
+            return null;
+        }
+        LocalDateTime startedAt = firstInProgress != null
+                ? firstInProgress
+                : (firstLeftTodo != null ? firstLeftTodo : subtask.getCreatedAt());
+        if (startedAt == null) {
+            return null;
+        }
+        if (subtask.getCreatedAt() != null && startedAt.isBefore(subtask.getCreatedAt())) {
+            startedAt = subtask.getCreatedAt();
+        }
+        long seconds = Math.max(0L, Duration.between(startedAt, completedAt).getSeconds());
+        return new TimeSample(completedAt, seconds / SECONDS_PER_DAY);
+    }
+
+    /**
+     * US-ANL-009 AC04: resolves the effective tenant time zone strictly from
+     * {@code Tenant.timezone} first, falling back to the configured analytics
+     * tenant zone (default {@code Asia/Ho_Chi_Minh}).
+     */
+    private ZoneId tenantZone(User user, Project project) {
+        if (user != null && user.getTenant() != null) {
+            ZoneId fromUserTenant = parseZoneOrNull(user.getTenant().getTimezone());
+            if (fromUserTenant != null) {
+                return fromUserTenant;
             }
         }
-        return ZoneId.systemDefault();
+        Long tenantId = project != null && project.getTenantId() != null
+                ? project.getTenantId()
+                : (user == null ? null : user.getTenantId());
+        if (tenantId != null) {
+            ZoneId fromPersistedTenant = tenants.findById(tenantId)
+                    .map(Tenant::getTimezone)
+                    .map(ProjectAnalyticsService::parseZoneOrNull)
+                    .orElse(null);
+            if (fromPersistedTenant != null) {
+                return fromPersistedTenant;
+            }
+        }
+        ZoneId configured = parseZoneOrNull(tenantTimeZone);
+        return configured != null ? configured : ZoneId.of("Asia/Ho_Chi_Minh");
+    }
+
+    private ZoneId storageZone() {
+        ZoneId configured = parseZoneOrNull(storageTimeZone);
+        return configured != null ? configured : ZoneId.systemDefault();
+    }
+
+    private static ZoneId parseZoneOrNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return ZoneId.of(raw.trim());
+        } catch (DateTimeException invalid) {
+            return null;
+        }
     }
 
     private record TimeSample(LocalDateTime completedAt, double days) { }

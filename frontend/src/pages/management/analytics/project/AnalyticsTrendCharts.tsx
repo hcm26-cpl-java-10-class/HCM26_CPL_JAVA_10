@@ -20,6 +20,7 @@ import type {
   ProjectAnalyticsSeries,
   ProjectAnalyticsWidget,
 } from "@/types/features/project-analytics";
+import { ChartSkeleton, WidgetInlineError } from "./analytics-chart-ui";
 
 const AXIS_COLOR = "#94a3b8";
 const GRID_COLOR = "#e8edf3";
@@ -220,9 +221,20 @@ function TrendChart({ widget, rows }: { widget: ProjectAnalyticsWidget; rows: Ch
   );
 }
 
-function TrendChartCard({ widget, granularity }: {
+function TrendChartCard({
+  widget,
+  granularity,
+  isLoading = false,
+  errorMessage,
+  onRetry,
+  retrying = false,
+}: {
   widget: ProjectAnalyticsWidget;
   granularity: ProjectAnalyticsGranularity;
+  isLoading?: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
+  retrying?: boolean;
 }) {
   const [selected, setSelected] = useState<ProjectAnalyticsGranularity>(granularity);
   const effective = selected === "DAY" && granularity !== "DAY" ? granularity : selected;
@@ -252,6 +264,14 @@ function TrendChartCard({ widget, granularity }: {
         <GranularitySwitch value={selected} onChange={setSelected} />
       </CardHeader>
       <CardContent className="px-2 pb-2 pt-0">
+        {isLoading ? (
+          <ChartSkeleton variant={widget.kind === "BAR" ? "bar" : "line"} className="h-[176px]" />
+        ) : errorMessage ? (
+          <div className="p-2">
+            <WidgetInlineError message={errorMessage} onRetry={onRetry} retrying={retrying} className="min-h-[160px]" />
+          </div>
+        ) : (
+        <>
         <div className="relative h-[176px] w-full">
           <TrendChart widget={widget} rows={rows} />
           {empty && (
@@ -266,6 +286,8 @@ function TrendChartCard({ widget, granularity }: {
             {footer && <span className="text-[10px] text-muted-foreground">{footer}</span>}
           </div>
         )}
+        </>
+        )}
       </CardContent>
     </Card>
   );
@@ -277,14 +299,33 @@ function TrendChartCard({ widget, granularity }: {
  * The charts share the buckets of one payload, so they always agree with the
  * KPI cards and with each other after a scope change (AC01 / AC02 / AC03).
  */
-export function AnalyticsTrendCharts({ widgets, granularity }: {
+export function AnalyticsTrendCharts({
+  widgets,
+  granularity,
+  isLoading = false,
+  errorMessage,
+  onRetry,
+  retrying = false,
+}: {
   widgets: ProjectAnalyticsWidget[];
   granularity: ProjectAnalyticsGranularity;
+  isLoading?: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
+  retrying?: boolean;
 }) {
   return (
     <section aria-label="Analytics trend charts" className="grid gap-4 sm:grid-cols-2">
       {widgets.map(widget => (
-        <TrendChartCard key={widget.key} widget={widget} granularity={granularity} />
+        <TrendChartCard
+          key={widget.key}
+          widget={widget}
+          granularity={granularity}
+          isLoading={isLoading}
+          errorMessage={errorMessage}
+          onRetry={onRetry}
+          retrying={retrying}
+        />
       ))}
     </section>
   );
