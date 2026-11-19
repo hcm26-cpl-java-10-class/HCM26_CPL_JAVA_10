@@ -108,8 +108,32 @@ public class ProjectAnalyticsService {
     }
 
     public ProjectAnalyticsResponse shell(String rawProjectId, ProjectAnalyticsFilter requested) {
-        ResolvedScope ctx = resolveScope(rawProjectId, requested);
+        return buildResponse(resolveScope(rawProjectId, requested));
+    }
 
+    /**
+     * US-ANL-010: collects the authorized analytics response and item-level
+     * cycle/lead metrics for CSV/PDF export. Rejects unauthorized callers with
+     * HTTP 403 before touching any work item data (AC02).
+     */
+    ExportSnapshot exportSnapshot(String rawProjectId, ProjectAnalyticsFilter requested) {
+        User user = access.requireUser();
+        Project project = access.requireProject(user, rawProjectId);
+        access.requireExportAccess(user, project);
+
+        ResolvedScope ctx = resolveScopeFor(user, project, requested);
+        ProjectAnalyticsResponse analytics = buildResponse(ctx);
+        List<ExportWorkItemRow> itemRows = buildExportItemRows(ctx);
+        return new ExportSnapshot(
+                user,
+                project,
+                ctx.selected() == null ? null : ctx.selected().getName(),
+                analytics,
+                itemRows,
+                ctx.tenantZone());
+    }
+
+    private ProjectAnalyticsResponse buildResponse(ResolvedScope ctx) {
         LocalDate bucketStart = ChronoUnit.DAYS.between(ctx.windowStart(), ctx.windowEnd()) >= MAX_WINDOW_DAYS
                 ? ctx.windowEnd().minusDays(MAX_WINDOW_DAYS - 1L)
                 : ctx.windowStart();
@@ -148,6 +172,7 @@ public class ProjectAnalyticsService {
                 ctx.project().getName(),
                 ctx.project().getStatus() == null ? null : ctx.project().getStatus().name(),
                 true,
+                access.canExport(ctx.user(), ctx.project()),
                 new ProjectAnalyticsResponse.Filters(
                         ctx.scope().name(),
                         ctx.selected() == null ? null : ctx.selected().getId(),
@@ -167,6 +192,111 @@ public class ProjectAnalyticsService {
                 completionTrend,
                 widgets);
     }
+
+    private List<ExportWorkItemRow> buildExportItemRows(ResolvedScope ctx) {
+        String codePrefix = projectPrefix(ctx.project().getCode(), ctx.project().getName());
+        Map<Long, String> sprintNames = ctx.projectSprints().stream()
+                .filter(sprint -> sprint.getId() != null)
+                .collect(Collectors.toMap(Sprint::getId, Sprint::getName, (first, ignored) -> first));
+
+        Set<Long> memberIds = ctx.items().stream()
+                .map(SprintBacklog::getAssigneeProjectMemberId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> backlogAssignees = workItems.findAssigneeNames(memberIds);
+
+        Set<UUID> subtaskAssigneeIds = ctx.subtasks().stream()
+                .map(Task::getAssigneeProjectMemberId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> subtaskAssignees = workItems.findSubtaskAssigneeNames(subtaskAssigneeIds);
+
+        List<ExportWorkItemRow> rows = new ArrayList<>(ctx.items().size() + ctx.subtasks().size());
+        for (SprintBacklog item : ctx.items()) {
+            LocalDate created = createdOn(item, ctx.serverZone(), ctx.tenantZone());
+            if (created != null && created.isAfter(ctx.windowEnd())) {
+                continue;
+            }
+            Long id = item.getId();
+            Long sprintId = item.getSprint() == null ? null : item.getSprint().getId();
+            SprintBacklogWorkType type = item.getWorkType() == null
+                    ? SprintBacklogWorkType.DEFAULT : item.getWorkType();
+            List<SprintBacklogAuditLog> events = id == null
+                    ? List.of() : ctx.backlogHistory().getOrDefault(id, List.of());
+            LocalDate completedOn = backlogCompletedOn(
+                    item, events, ctx.completionCutoff(), ctx.serverZone(), ctx.tenantZone());
+            TimeSample cycle = completedOn != null ? cycleSample(item, events, ctx.completionCutoff()) : null;
+            TimeSample lead = completedOn != null ? backlogLeadSample(item, events, ctx.completionCutoff()) : null;
+            rows.add(new ExportWorkItemRow(
+                    codePrefix + "-" + (id == null ? "?" : id),
+                    item.getTitle(),
+                    type.name(),
+                    statusOf(item).name(),
+                    sprintId == null ? "Product backlog" : sprintNames.getOrDefault(sprintId, "Sprint #" + sprintId),
+                    item.getAssigneeProjectMemberId() == null ? null : backlogAssignees.get(item.getAssigneeProjectMemberId()),
+                    created,
+                    completedOn,
+                    cycle == null ? null : roundOneDecimal(cycle.days()),
+                    lead == null ? null : roundOneDecimal(lead.days()),
+                    item.getEstimatedHours()));
+        }
+        for (Task subtask : ctx.subtasks()) {
+            LocalDate created = subtaskCreatedOn(subtask, ctx.serverZone(), ctx.tenantZone());
+            if (created != null && created.isAfter(ctx.windowEnd())) {
+                continue;
+            }
+            UUID id = subtask.getId();
+            SprintBacklog parent = subtask.getBacklogItem();
+            Long parentId = parent == null ? null : parent.getId();
+            Long sprintId = parent == null || parent.getSprint() == null ? null : parent.getSprint().getId();
+            String shortId = id == null ? "?" : id.toString().substring(0, 4).toUpperCase(Locale.ROOT);
+            String taskCode = parentId != null
+                    ? codePrefix + "-" + parentId + " / SUB-" + shortId
+                    : "SUB-" + shortId;
+            List<TaskAuditLog> events = id == null
+                    ? List.of() : ctx.subtaskHistory().getOrDefault(id, List.of());
+            LocalDate completedOn = subtaskCompletedOn(
+                    subtask, events, ctx.completionCutoff(), ctx.serverZone(), ctx.tenantZone());
+            TimeSample cycle = completedOn != null ? subtaskCycleSample(subtask, events, ctx.completionCutoff()) : null;
+            TimeSample lead = completedOn != null ? subtaskLeadSample(subtask, events, ctx.completionCutoff()) : null;
+            rows.add(new ExportWorkItemRow(
+                    taskCode,
+                    subtask.getTitle(),
+                    "SUBTASK",
+                    subtask.getStatus() == null ? TaskStatus.TODO.name() : subtask.getStatus().name(),
+                    sprintId == null ? "Product backlog" : sprintNames.getOrDefault(sprintId, "Sprint #" + sprintId),
+                    subtask.getAssigneeProjectMemberId() == null ? null : subtaskAssignees.get(subtask.getAssigneeProjectMemberId()),
+                    created,
+                    completedOn,
+                    cycle == null ? null : roundOneDecimal(cycle.days()),
+                    lead == null ? null : roundOneDecimal(lead.days()),
+                    subtask.getEstimatedHours()));
+        }
+        return rows;
+    }
+
+    record ExportSnapshot(
+            User user,
+            Project project,
+            String selectedSprintName,
+            ProjectAnalyticsResponse analytics,
+            List<ExportWorkItemRow> items,
+            ZoneId tenantZone
+    ) { }
+
+    record ExportWorkItemRow(
+            String taskCode,
+            String title,
+            String workType,
+            String status,
+            String sprintName,
+            String assigneeName,
+            LocalDate createdDate,
+            LocalDate completedDate,
+            Double cycleDays,
+            Double leadDays,
+            Double estimatedHours
+    ) { }
 
     /**
      * US-ANL-008: click-to-drill-down work item list for one date bucket /
@@ -463,6 +593,10 @@ public class ProjectAnalyticsService {
     private ResolvedScope resolveScope(String rawProjectId, ProjectAnalyticsFilter requested) {
         User user = access.requireUser();
         Project project = access.requireProject(user, rawProjectId);
+        return resolveScopeFor(user, project, requested);
+    }
+
+    private ResolvedScope resolveScopeFor(User user, Project project, ProjectAnalyticsFilter requested) {
         ProjectAnalyticsFilter filter = requested == null ? ProjectAnalyticsFilter.empty() : requested;
 
         ProjectAnalyticsScope scope = ProjectAnalyticsScope.parse(filter.scope(), filter.sprintId());
@@ -550,7 +684,7 @@ public class ProjectAnalyticsService {
                 subtaskStatusHistory(doneSubtasks, completionCutoff);
 
         return new ResolvedScope(
-                project, scope, selected, workType, requestedStart, requestedEnd,
+                user, project, scope, selected, workType, requestedStart, requestedEnd,
                 projectSprints, activeSprint, items, subtasks,
                 doneBacklogItems, doneSubtasks, backlogHistory, subtaskHistory,
                 windowStart, windowEnd, tenantZone, serverZone, completionCutoff);
@@ -591,6 +725,7 @@ public class ProjectAnalyticsService {
     }
 
     private record ResolvedScope(
+            User user,
             Project project,
             ProjectAnalyticsScope scope,
             Sprint selected,

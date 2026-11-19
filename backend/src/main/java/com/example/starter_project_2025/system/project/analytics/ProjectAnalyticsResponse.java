@@ -32,6 +32,7 @@ public record ProjectAnalyticsResponse(
         String projectName,
         String projectStatus,
         boolean readOnly,
+        boolean canExport,
         Filters filters,
         Window window,
         List<Kpi> kpis,

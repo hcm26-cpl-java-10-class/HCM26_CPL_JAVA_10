@@ -1,5 +1,7 @@
 package com.example.starter_project_2025.system.project.analytics;
 
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
+import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogWorkType;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLog;
@@ -7,6 +9,9 @@ import com.example.starter_project_2025.system.project.task.Task;
 import com.example.starter_project_2025.system.project.task.TaskStatus;
 import com.example.starter_project_2025.system.project.task.alert.TaskAlertData;
 import com.example.starter_project_2025.system.project.task.audit.TaskAuditLog;
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
+import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
@@ -292,5 +297,65 @@ public class ProjectAnalyticsWorkItemRepository {
             return full;
         }
         return email == null || email.isBlank() ? null : email.trim();
+    }
+
+    /**
+     * US-ANL-010: checks whether the user is an active Team Leader on a team
+     * working on the given project (covering both {@code ProjectTeam}/{@code ProjectMember}
+     * and legacy {@code Team}/{@code TeamMember} models).
+     */
+    public boolean isProjectTeamLeader(Long userId, Project project) {
+        if (userId == null || project == null || project.getId() == null) {
+            return false;
+        }
+        Long projectLeaderMatches = entityManager.createQuery("""
+                select count(pm)
+                from ProjectMember pm
+                join pm.team team
+                join pm.classMember cm
+                where pm.isActive = true
+                  and team.isActive = true
+                  and team.status = :teamStatus
+                  and cm.isActive = true
+                  and cm.status = :memberStatus
+                  and cm.user.id = :userId
+                  and (team.leaderMemberId = cm.id
+                       or upper(coalesce(pm.role, '')) in ('TEAM_LEADER', 'TEAM_LEAD', 'LEADER', 'PM'))
+                  and (team.project.id = :projectId
+                       or (:projectTeamId is not null and team.id = :projectTeamId)
+                       or exists (
+                           select 1 from TeamSubprojectAssignment tsa
+                           where tsa.isActive = true
+                             and tsa.team.id = team.id
+                             and tsa.project.id = :projectId
+                       ))
+                """, Long.class)
+                .setParameter("teamStatus", ProjectTeamStatus.ACTIVE)
+                .setParameter("memberStatus", ClassMemberStatus.ACTIVE)
+                .setParameter("userId", userId)
+                .setParameter("projectId", project.getId())
+                .setParameter("projectTeamId", project.getTeamId())
+                .getSingleResult();
+        if (projectLeaderMatches != null && projectLeaderMatches > 0) {
+            return true;
+        }
+
+        Long legacyLeaderMatches = entityManager.createQuery("""
+                select count(tm)
+                from TeamMember tm
+                join tm.team team
+                where tm.isActive = true
+                  and team.isActive = true
+                  and tm.participationStatus = :status
+                  and tm.user.id = :userId
+                  and tm.projectRole in :leaderRoles
+                  and team.project.id = :projectId
+                """, Long.class)
+                .setParameter("status", ParticipationStatus.ACTIVE)
+                .setParameter("userId", userId)
+                .setParameter("leaderRoles", List.of(ProjectRole.TEAM_LEADER, ProjectRole.TEAM_LEAD))
+                .setParameter("projectId", project.getId())
+                .getSingleResult();
+        return legacyLeaderMatches != null && legacyLeaderMatches > 0;
     }
 }

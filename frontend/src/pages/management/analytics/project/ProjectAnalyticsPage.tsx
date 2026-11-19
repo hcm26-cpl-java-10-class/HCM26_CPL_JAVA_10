@@ -4,9 +4,14 @@ import {
   AlertCircle,
   ArrowLeft,
   BarChart3,
+  ChevronDown,
+  Download,
+  FileSpreadsheet,
+  FileText,
   Filter,
   FolderOpen,
   Inbox,
+  Loader2,
   LockKeyhole,
   RefreshCw,
   RotateCcw,
@@ -23,13 +28,26 @@ import { projectAnalyticsApi } from "@/api/features/project-analytics.api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { usePermissions } from "@/hooks/usePermissions";
 import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
 import type { SprintPlanningItem } from "@/types";
 import type {
   ProjectAnalyticsDrillDownItem,
   ProjectAnalyticsDrillDownTarget,
+  ProjectAnalyticsExportFormat,
   ProjectAnalyticsRequestFilters,
 } from "@/types/features/project-analytics";
 import { getHomePathByRole } from "@/utils/rbac.utils";
@@ -203,10 +221,24 @@ function AnalyticsEmptyState({
   );
 }
 
-function AnalyticsHeader({ sprintLabel, updatedLabel, projectName }: {
+function AnalyticsHeader({
+  sprintLabel,
+  updatedLabel,
+  projectName,
+  canExport = false,
+  hasData = false,
+  isBusy = false,
+  exportingFormat = null,
+  onExport,
+}: {
   sprintLabel: string;
   updatedLabel: string;
   projectName?: string | null;
+  canExport?: boolean;
+  hasData?: boolean;
+  isBusy?: boolean;
+  exportingFormat?: ProjectAnalyticsExportFormat | null;
+  onExport?: (format: ProjectAnalyticsExportFormat) => void;
 }) {
   async function share() {
     try {
@@ -216,6 +248,40 @@ function AnalyticsHeader({ sprintLabel, updatedLabel, projectName }: {
       toast.error("Could not copy the analytics link.");
     }
   }
+
+  const isExporting = exportingFormat !== null;
+  const exportDisabled = isExporting || isBusy || !hasData || !canExport || !onExport;
+  const disabledTooltip = !hasData
+    ? "No data available to export"
+    : !canExport
+      ? "Only Mentors, Program Managers, and Team Leaders can export reports"
+      : isBusy
+        ? "Please wait for analytics to finish loading"
+        : null;
+
+  const exportButton = (
+    <Button
+      type="button"
+      size="sm"
+      disabled={exportDisabled}
+      aria-label="Export report"
+      title={disabledTooltip ?? undefined}
+      className="h-8 gap-1.5 bg-slate-900 text-xs text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+    >
+      {isExporting ? (
+        <>
+          <Loader2 className="size-3.5 animate-spin" />
+          Exporting {exportingFormat}...
+        </>
+      ) : (
+        <>
+          <Download className="size-3.5" />
+          Export report
+          <ChevronDown className="size-3 opacity-80" />
+        </>
+      )}
+    </Button>
+  );
 
   return <header className="flex flex-wrap items-start justify-between gap-3">
     <div className="flex min-w-0 items-start gap-3">
@@ -236,10 +302,42 @@ function AnalyticsHeader({ sprintLabel, updatedLabel, projectName }: {
       <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => void share()}>
         <Share2 className="size-3.5" />Share
       </Button>
-      <Button type="button" size="sm" className="h-8 gap-1.5 bg-slate-900 text-xs text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
-        onClick={() => window.print()}>
-        Export
-      </Button>
+      {exportDisabled ? (
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex" tabIndex={disabledTooltip ? 0 : undefined}>
+                {exportButton}
+              </span>
+            </TooltipTrigger>
+            {disabledTooltip && (
+              <TooltipContent side="bottom" className="text-xs">
+                {disabledTooltip}
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
+      ) : (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>{exportButton}</DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem onClick={() => onExport("CSV")} className="cursor-pointer gap-2 text-xs">
+              <FileSpreadsheet className="size-3.5 text-emerald-600" />
+              <div className="flex flex-col">
+                <span className="font-medium">Export as CSV</span>
+                <span className="text-[10px] text-muted-foreground">Daily trends &amp; item metrics</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onExport("PDF")} className="cursor-pointer gap-2 text-xs">
+              <FileText className="size-3.5 text-blue-600" />
+              <div className="flex flex-col">
+                <span className="font-medium">Export as PDF</span>
+                <span className="text-[10px] text-muted-foreground">Executive KPI &amp; chart summary</span>
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   </header>;
 }
@@ -270,6 +368,9 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
     itemKey: string;
     sprintName: string | null;
   } | null>(null);
+
+  // US-ANL-010: export state (anti double-submit while CSV/PDF generates).
+  const [exportingFormat, setExportingFormat] = useState<ProjectAnalyticsExportFormat | null>(null);
 
   const openDrillDownItem = useCallback((row: ProjectAnalyticsDrillDownItem) => {
     if (row.backlogItemId == null) return;
@@ -367,6 +468,47 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
     && shell.completionTrend.state === "EMPTY"
     && shell.widgets.every(widget => widget.state === "EMPTY");
 
+  const handleExport = async (format: ProjectAnalyticsExportFormat) => {
+    if (!shell || exportingFormat !== null || scopeIsEmpty || !shell.canExport) {
+      return;
+    }
+    setExportingFormat(format);
+    try {
+      const { blob, filename } = await projectAnalyticsApi.exportReport(
+        projectId,
+        format,
+        {
+          scope: shell.filters.scope,
+          sprintId: shell.filters.sprintId ?? undefined,
+          itemType: shell.filters.itemType,
+          startDate: shell.filters.startDate ?? undefined,
+          endDate: shell.filters.endDate ?? undefined,
+        },
+        shell.projectCode ?? shell.projectName,
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Analytics ${format} report downloaded.`);
+    } catch (error) {
+      const code = statusCode(error);
+      if (code === 403) {
+        toast.error("You do not have permission to export analytics for this project.");
+      } else if (code === 422) {
+        toast.error("No data available to export for the selected filters.");
+      } else {
+        toast.error(`Unable to generate the ${format} report right now. Please try again.`);
+      }
+    } finally {
+      setExportingFormat(null);
+    }
+  };
+
   return <MainLayout contentClassName="bg-slate-50/70 dark:bg-background"
     pathName={{ projects: "Project Management", [String(projectId)]: shell?.projectName ?? "Project analytics", analytics: "Analytics" }}>
     {query.isPending && !shell ? (
@@ -433,7 +575,16 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
     ) : (
       <div className="rounded-2xl border bg-card p-4 shadow-xs sm:p-5">
         <div className="space-y-4">
-          <AnalyticsHeader sprintLabel={sprintLabel} updatedLabel={updatedLabel} projectName={shell.projectName} />
+          <AnalyticsHeader
+            sprintLabel={sprintLabel}
+            updatedLabel={updatedLabel}
+            projectName={shell.projectName}
+            canExport={shell.canExport}
+            hasData={!scopeIsEmpty && !transientError}
+            isBusy={query.isFetching}
+            exportingFormat={exportingFormat}
+            onExport={format => void handleExport(format)}
+          />
 
           <AnalyticsFilterBar
             filters={shell.filters}

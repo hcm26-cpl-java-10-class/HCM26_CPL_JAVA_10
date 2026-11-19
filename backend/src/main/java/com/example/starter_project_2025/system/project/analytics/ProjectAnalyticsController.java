@@ -5,15 +5,21 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -37,6 +43,7 @@ import java.util.List;
 public class ProjectAnalyticsController {
 
     private final ProjectAnalyticsService service;
+    private final ProjectAnalyticsExportService exportService;
 
     @GetMapping("/analytics/options")
     @PreAuthorize("hasAuthority('PROJECT_ANALYTICS_READ')")
@@ -70,5 +77,37 @@ public class ProjectAnalyticsController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(service.drillDown(projectId, filter, chart, date, series));
+    }
+
+    @PostMapping("/{projectId}/analytics/export")
+    @PreAuthorize("hasAuthority('PROJECT_ANALYTICS_EXPORT')")
+    @Operation(summary = "US-ANL-010: Export filtered Sprint & Backlog analytics report as CSV or PDF")
+    public ResponseEntity<byte[]> export(
+            @PathVariable String projectId,
+            @RequestBody(required = false) ProjectAnalyticsExportRequest body,
+            @RequestParam(required = false) String format,
+            @ModelAttribute ProjectAnalyticsFilter queryFilter,
+            @RequestHeader(value = "X-Correlation-Id", required = false) String correlationId) {
+        ProjectAnalyticsExportRequest effective = body != null
+                ? body
+                : new ProjectAnalyticsExportRequest(
+                        format,
+                        queryFilter.scope(),
+                        queryFilter.sprintId(),
+                        queryFilter.startDate(),
+                        queryFilter.endDate(),
+                        queryFilter.itemType());
+        ProjectAnalyticsExportService.ExportFile file =
+                exportService.export(projectId, effective, correlationId);
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(file.filename(), StandardCharsets.UTF_8)
+                .build();
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(file.contentType())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .header("X-Correlation-Id", file.correlationId())
+                .body(file.content());
     }
 }

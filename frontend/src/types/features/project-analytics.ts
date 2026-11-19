@@ -201,6 +201,7 @@ export interface ProjectAnalyticsShell {
   projectName: string | null;
   projectStatus: string | null;
   readOnly: boolean;
+  canExport: boolean;
   filters: ProjectAnalyticsFilters;
   window: ProjectAnalyticsWindow;
   kpis: ProjectAnalyticsKpi[];
@@ -268,3 +269,6 @@ export interface ProjectAnalyticsDrillDownResponse {
   totalCount: number;
   items: ProjectAnalyticsDrillDownItem[];
 }
+
+/** US-ANL-010: supported report export formats. */
+export type ProjectAnalyticsExportFormat = "CSV" | "PDF";
