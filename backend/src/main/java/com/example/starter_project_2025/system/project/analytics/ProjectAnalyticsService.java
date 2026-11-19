@@ -14,14 +14,19 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DateTimeException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -72,6 +77,13 @@ public class ProjectAnalyticsService {
     private final SprintRepository sprints;
     private final ProjectAnalyticsWorkItemRepository workItems;
     private final ObjectMapper objectMapper;
+
+    /**
+     * US-ANL-005: tenant time zone used to group completions by calendar day.
+     * Falls back to the backlog notification zone shared by the project module.
+     */
+    @Value("${app.analytics.tenant-time-zone:${app.notification.backlog-time-zone:Asia/Ho_Chi_Minh}}")
+    private String tenantTimeZone;
 
     /** US-ANL-001 compatibility: the shell without any filter. */
     public ProjectAnalyticsResponse shell(String rawProjectId) {
@@ -156,6 +168,8 @@ public class ProjectAnalyticsService {
                 kpis(scope, selected, items, windowStart, windowEnd);
         ProjectAnalyticsResponse.CreationTrend creationTrend =
                 creationTrend(items, windowStart, windowEnd);
+        ProjectAnalyticsResponse.CycleTimeTrend cycleTimeTrend =
+                cycleTimeTrend(items, windowStart, windowEnd);
         List<ProjectAnalyticsResponse.Widget> widgets =
                 widgets(items.isEmpty() ? STATE_EMPTY : STATE_READY, granularity, buckets);
 
@@ -178,6 +192,7 @@ public class ProjectAnalyticsService {
                 new ProjectAnalyticsResponse.Window(windowStart, windowEnd, granularity),
                 kpis,
                 creationTrend,
+                cycleTimeTrend,
                 widgets);
     }
 
@@ -610,6 +625,159 @@ public class ProjectAnalyticsService {
                         new ProjectAnalyticsResponse.Series("todo", "To Do")),
                 buckets);
     }
+
+    // ---------------------------------------------------------------------
+    // US-ANL-005: work item cycle time trend
+    // ---------------------------------------------------------------------
+
+    /** Seconds per day used to express cycle time in (fractional) days. */
+    private static final double SECONDS_PER_DAY = 86_400d;
+
+    /**
+     * US-ANL-005: average active execution time per completion date.
+     *
+     * <p>For every work item that is Done (AC03: open items never produce a
+     * sample) the status history of the work item activity trail gives:</p>
+     * <ul>
+     *     <li>start = first transition to In progress; when the item never
+     *     entered In progress, the first transition out of To do into another
+     *     active state, otherwise {@code created_at} (AC02);</li>
+     *     <li>end = the <em>final</em> transition to Done, so a reopened and
+     *     re-completed item measures final Done − initial In progress.</li>
+     * </ul>
+     * <p>Cycle time = (end − start) / 86400 seconds. Samples are grouped by
+     * the completion date in the tenant time zone and averaged per day
+     * (one decimal, AC01). Only completion dates inside the chart window
+     * produce a point; the backend returns them oldest first.</p>
+     */
+    private ProjectAnalyticsResponse.CycleTimeTrend cycleTimeTrend(
+            List<SprintBacklog> items, LocalDate windowStart, LocalDate windowEnd) {
+        ZoneId tenantZone = tenantZone();
+        ZoneId serverZone = ZoneId.systemDefault();
+
+        // AC03: only items currently in Done can carry a completed cycle.
+        List<SprintBacklog> doneItems = items.stream()
+                .filter(item -> item.getId() != null)
+                .filter(item -> statusOf(item) == SprintBacklogStatus.DONE)
+                .toList();
+
+        Map<LocalDate, double[]> grouped = new TreeMap<>();
+        if (!doneItems.isEmpty()) {
+            // Last instant of windowEnd in the tenant zone, expressed in the
+            // server zone the audit timestamps are stored in.
+            LocalDateTime asOf = windowEnd.plusDays(1)
+                    .atStartOfDay(tenantZone)
+                    .withZoneSameInstant(serverZone)
+                    .toLocalDateTime()
+                    .minusNanos(1);
+
+            Map<Long, List<SprintBacklogAuditLog>> history = new HashMap<>();
+            List<Long> ids = doneItems.stream().map(SprintBacklog::getId).toList();
+            for (SprintBacklogAuditLog event : workItems.findStatusEvents(ids, asOf)) {
+                if (event.getSprintBacklogId() != null) {
+                    history.computeIfAbsent(event.getSprintBacklogId(), key -> new ArrayList<>()).add(event);
+                }
+            }
+
+            for (SprintBacklog item : doneItems) {
+                CycleSample sample = cycleSample(item, history.getOrDefault(item.getId(), List.of()), asOf);
+                if (sample == null) {
+                    continue;
+                }
+                LocalDate completedOn = sample.completedAt()
+                        .atZone(serverZone)
+                        .withZoneSameInstant(tenantZone)
+                        .toLocalDate();
+                if (completedOn.isBefore(windowStart) || completedOn.isAfter(windowEnd)) {
+                    continue;
+                }
+                double[] accumulator = grouped.computeIfAbsent(completedOn, key -> new double[2]);
+                accumulator[0] += sample.days();
+                accumulator[1]++;
+            }
+        }
+
+        List<ProjectAnalyticsResponse.CycleTimePoint> points = grouped.entrySet().stream()
+                .map(entry -> new ProjectAnalyticsResponse.CycleTimePoint(
+                        entry.getKey(),
+                        Math.round(entry.getValue()[0] / entry.getValue()[1] * 10.0) / 10.0,
+                        (int) entry.getValue()[1]))
+                .toList();
+        return new ProjectAnalyticsResponse.CycleTimeTrend(
+                points.isEmpty() ? STATE_EMPTY : STATE_READY,
+                tenantZone.getId(),
+                points);
+    }
+
+    /**
+     * Cycle time sample of one Done item, or {@code null} when the item was not
+     * Done as of the end of the window (reopened, or completed later).
+     *
+     * @param events status history of the item, oldest first, bounded by {@code asOf}
+     */
+    private CycleSample cycleSample(SprintBacklog item, List<SprintBacklogAuditLog> events, LocalDateTime asOf) {
+        String todo = SprintBacklogStatus.TODO.name();
+        String inProgress = SprintBacklogStatus.IN_PROGRESS.name();
+        String done = SprintBacklogStatus.DONE.name();
+
+        LocalDateTime firstInProgress = null;
+        LocalDateTime firstLeftTodo = null;
+        LocalDateTime finalDone = null;
+        String lastStatus = null;
+
+        for (SprintBacklogAuditLog event : events) {
+            LocalDateTime at = event.getCreatedAt();
+            String before = statusIn(event.getBeforeState());
+            String after = statusIn(event.getAfterState());
+            if (at == null || after == null || after.equals(before)) {
+                continue;
+            }
+            if (inProgress.equals(after) && firstInProgress == null) {
+                firstInProgress = at;
+            }
+            // AC02 fallback: first move out of To do into an active state
+            // (moving straight to Done is the completion, not the start).
+            if (todo.equals(before) && !done.equals(after) && firstLeftTodo == null) {
+                firstLeftTodo = at;
+            }
+            if (done.equals(after)) {
+                // Reopened rule: the final Done transition wins.
+                finalDone = at;
+            }
+            lastStatus = after;
+        }
+
+        // AC03: reopened (or not yet completed) as of the end of the window.
+        if (lastStatus != null && !done.equals(lastStatus)) {
+            return null;
+        }
+
+        LocalDateTime completedAt = finalDone != null ? finalDone : item.getUpdatedAt();
+        if (completedAt == null || completedAt.isAfter(asOf)) {
+            return null;
+        }
+        LocalDateTime startedAt = firstInProgress != null
+                ? firstInProgress
+                : (firstLeftTodo != null ? firstLeftTodo : item.getCreatedAt());
+        if (startedAt == null) {
+            return null;
+        }
+        long seconds = Math.max(0L, Duration.between(startedAt, completedAt).getSeconds());
+        return new CycleSample(completedAt, seconds / SECONDS_PER_DAY);
+    }
+
+    private ZoneId tenantZone() {
+        if (tenantTimeZone != null && !tenantTimeZone.isBlank()) {
+            try {
+                return ZoneId.of(tenantTimeZone.trim());
+            } catch (DateTimeException invalid) {
+                // Misconfigured zone: fall back to the server zone below.
+            }
+        }
+        return ZoneId.systemDefault();
+    }
+
+    private record CycleSample(LocalDateTime completedAt, double days) { }
 
     private static List<ProjectAnalyticsResponse.Widget> widgets(String state, String granularity,
                                                                  List<ProjectAnalyticsResponse.Bucket> buckets) {

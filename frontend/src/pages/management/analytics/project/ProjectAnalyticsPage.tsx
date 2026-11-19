@@ -29,6 +29,7 @@ import { AnalyticsKpiCards } from "./AnalyticsKpiCards";
 import { AnalyticsTrendCharts } from "./AnalyticsTrendCharts";
 import { CurrentWindowWorkItems } from "./CurrentWindowWorkItems";
 import { WorkItemCreationTrendCard } from "./WorkItemCreationTrendCard";
+import { WorkItemCycleTimeCard } from "./WorkItemCycleTimeCard";
 import {
   analyticsFilterKeys,
   clearAnalyticsFilters,
@@ -274,7 +275,10 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
           )}
 
           <AnalyticsKpiCards kpis={shell.kpis} />
-          <WorkItemCreationTrendCard trend={shell.creationTrend} />
+          <div className="grid gap-4 xl:grid-cols-2">
+            <WorkItemCreationTrendCard trend={shell.creationTrend} />
+            <WorkItemCycleTimeCard trend={shell.cycleTimeTrend} />
+          </div>
           <AnalyticsTrendCharts widgets={shell.widgets} granularity={shell.window.granularity} />
           <CurrentWindowWorkItems
             projectId={projectId}

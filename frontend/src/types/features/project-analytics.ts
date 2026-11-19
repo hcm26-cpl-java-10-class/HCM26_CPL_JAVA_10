@@ -103,6 +103,25 @@ export interface ProjectAnalyticsCreationTrend {
   buckets: ProjectAnalyticsCreationBucket[];
 }
 
+/**
+ * US-ANL-005: one point of the "Work item cycle time" line chart.
+ *
+ * `averageDays` is the mean active execution time (first In progress → final
+ * Done) of the items completed on `date` (tenant time zone), one decimal.
+ */
+export interface ProjectAnalyticsCycleTimePoint {
+  date: string;
+  averageDays: number;
+  itemCount: number;
+}
+
+/** US-ANL-005: "Work item cycle time" chart, one point per completion date. */
+export interface ProjectAnalyticsCycleTimeTrend {
+  state: ProjectAnalyticsWidgetState;
+  timeZone: string;
+  points: ProjectAnalyticsCycleTimePoint[];
+}
+
 export interface ProjectAnalyticsWidget {
   key: string;
   title: string;
@@ -123,6 +142,7 @@ export interface ProjectAnalyticsShell {
   window: ProjectAnalyticsWindow;
   kpis: ProjectAnalyticsKpi[];
   creationTrend: ProjectAnalyticsCreationTrend;
+  cycleTimeTrend: ProjectAnalyticsCycleTimeTrend;
   widgets: ProjectAnalyticsWidget[];
 }
 

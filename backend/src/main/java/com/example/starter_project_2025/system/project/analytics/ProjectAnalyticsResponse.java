@@ -29,6 +29,7 @@ public record ProjectAnalyticsResponse(
         Window window,
         List<Kpi> kpis,
         CreationTrend creationTrend,
+        CycleTimeTrend cycleTimeTrend,
         List<Widget> widgets
 ) {
 
@@ -115,6 +116,27 @@ public record ProjectAnalyticsResponse(
      * both segments, so {@code done + todo} is the daily creation count.</p>
      */
     public record CreationBucket(LocalDate date, long done, long todo) { }
+
+    /**
+     * US-ANL-005: "Work item cycle time" line chart.
+     *
+     * <p>One point per completion date (tenant time zone, oldest first) that
+     * has at least one completed work item inside the chart window. Items that
+     * are not Done as of the end of the window are excluded (AC03).</p>
+     *
+     * @param timeZone tenant time zone used to derive the completion dates
+     */
+    public record CycleTimeTrend(String state, String timeZone, List<CycleTimePoint> points) { }
+
+    /**
+     * One point of the US-ANL-005 chart.
+     *
+     * @param date        completion date ({@code YYYY-MM-DD})
+     * @param averageDays mean cycle time of the items completed that day,
+     *                    rounded to one decimal (AC01)
+     * @param itemCount   number of completed items averaged into the point
+     */
+    public record CycleTimePoint(LocalDate date, double averageDays, int itemCount) { }
 
     /**
      * One trend chart.
