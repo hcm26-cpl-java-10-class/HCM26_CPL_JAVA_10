@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, BookOpen, CheckCircle2, Eye, History, Loader2, RefreshCw, Save, Users } from "lucide-react";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -57,6 +58,8 @@ export default function TeamCharterPage() {
 }
 
 export function CharterContent({view, onRefresh}: {view: TeamCharterView; onRefresh: () => Promise<void>}) {
+  const confirmationId = useId();
+  const confirmationHintId = `${confirmationId}-hint`;
   const queryClient = useQueryClient();
   const {user, activeRole} = usePermissions();
   const [form, setForm] = useState(() => formOf(view));
@@ -86,6 +89,7 @@ export function CharterContent({view, onRefresh}: {view: TeamCharterView; onRefr
   }});
   const history = useQuery({queryKey: ["charter-history", view.teamId, page, user.email, activeRole], queryFn: () => projectHubApi.getCharterHistory(view.teamId, page), enabled: tab === "history", refetchOnWindowFocus: false});
   const busy = save.isPending || confirm.isPending || reload.isPending;
+  const confirmationDisabled = busy || !view.canConfirm || dirty || stale;
   const editable = view.canEdit && !busy;
   const percentage = view.memberCount > 0 ? Math.round(view.confirmedCount / view.memberCount * 100) : 0;
   return <>
@@ -111,7 +115,23 @@ export function CharterContent({view, onRefresh}: {view: TeamCharterView; onRefr
             <Label htmlFor={`duty-${member.membershipId}`}>Responsibility</Label><Textarea id={`duty-${member.membershipId}`} disabled={!editable} rows={2} maxLength={1000} className="max-h-36 resize-y overflow-y-auto [field-sizing:fixed]" value={form.responsibilities?.find(r => r.membershipId === member.membershipId)?.responsibility ?? ""} onChange={e => setForm({...form, responsibilities: form.responsibilities?.map(r => r.membershipId === member.membershipId ? {...r, responsibility: e.target.value} : r)})} /><p className="text-xs text-muted-foreground">{(form.responsibilities?.find(r => r.membershipId === member.membershipId)?.responsibility ?? "").length}/1,000 characters</p>
             {member.issue && <p className="text-xs text-amber-700 dark:text-amber-400">{member.issue}</p>}{member.confirmedAt && <p className="text-xs text-muted-foreground">Confirmed {formatDate(member.confirmedAt)}</p>}
           </section>)}
-          <div className="space-y-3 border-t pt-4"><label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={acknowledged} disabled={busy || !view.canConfirm || dirty || stale} onChange={e => setAcknowledged(e.target.checked)} />I have read this saved charter and agree to my assigned roles and responsibilities.</label><Button className="w-full" disabled={busy || !view.canConfirm || dirty || stale || !acknowledged} onClick={() => { if (!busy && view.canConfirm && !dirty && !stale && acknowledged) confirm.mutate(); }}>{confirm.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Confirm my role & charter</Button><p className="text-xs text-muted-foreground">{dirty ? "Save or discard local edits before confirming." : view.confirmationBlockReason ?? "Your confirmation applies only to the saved revision shown above."}</p>{confirm.isError && <ErrorBox error={confirm.error} />}</div>
+          <div className="space-y-3 border-t pt-4">
+            <div className={`flex items-start gap-3 rounded-lg bg-muted/30 p-3 select-none ${confirmationDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+              <Checkbox
+                id={confirmationId}
+                aria-describedby={confirmationHintId}
+                className="mt-1 cursor-pointer disabled:cursor-not-allowed"
+                checked={acknowledged}
+                disabled={confirmationDisabled}
+                onCheckedChange={checked => { if (!confirmationDisabled) setAcknowledged(checked === true); }}
+              />
+              <Label htmlFor={confirmationId} className={`min-w-0 text-sm leading-6 font-normal ${confirmationDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                I have read this saved charter and agree to my assigned roles and responsibilities.
+              </Label>
+            </div>
+            <Button className="w-full" disabled={confirmationDisabled || !acknowledged} onClick={() => { if (!confirmationDisabled && acknowledged) confirm.mutate(); }}>{confirm.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Confirm my role & charter</Button>
+            <p id={confirmationHintId} className="text-xs text-muted-foreground">{dirty ? "Save or discard local edits before confirming." : stale ? "Reload the saved charter before confirming." : view.confirmationBlockReason ?? "Your confirmation applies only to the saved revision shown above."}</p>{confirm.isError && <ErrorBox error={confirm.error} />}
+          </div>
         </CardContent></Card>
       </div>
     </section>
