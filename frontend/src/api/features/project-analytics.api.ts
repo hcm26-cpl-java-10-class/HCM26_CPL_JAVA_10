@@ -1,5 +1,7 @@
 import axiosInstance from "@/api/axios";
 import type {
+  ProjectAnalyticsDrillDownResponse,
+  ProjectAnalyticsDrillDownTarget,
   ProjectAnalyticsProjectOption,
   ProjectAnalyticsRequestFilters,
   ProjectAnalyticsShell,
@@ -37,4 +39,24 @@ export const projectAnalyticsApi = {
   /** Lists the projects the signed-in mentor / PM / member may open Analytics for. */
   projects: async (signal?: AbortSignal) =>
     (await axiosInstance.get<ProjectAnalyticsProjectOption[]>("/v1/projects/analytics/options", { signal })).data,
+
+  /**
+   * US-ANL-008: reads the underlying work items behind one clicked bar segment
+   * or line marker, preserving the applied scope/date/type filter.
+   */
+  drillDown: async (
+    projectId: number,
+    target: ProjectAnalyticsDrillDownTarget,
+    filters?: ProjectAnalyticsRequestFilters,
+    signal?: AbortSignal,
+  ) =>
+    (await axiosInstance.get<ProjectAnalyticsDrillDownResponse>(`/v1/projects/${projectId}/analytics/drill-down`, {
+      params: {
+        ...toParams(filters),
+        chart: target.chart,
+        date: target.date,
+        ...(target.series ? { series: target.series } : {}),
+      },
+      signal,
+    })).data,
 };

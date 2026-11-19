@@ -5,6 +5,7 @@ import com.example.starter_project_2025.system.project.sprint_backlog.SprintBack
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLog;
 import com.example.starter_project_2025.system.project.task.Task;
 import com.example.starter_project_2025.system.project.task.TaskStatus;
+import com.example.starter_project_2025.system.project.task.alert.TaskAlertData;
 import com.example.starter_project_2025.system.project.task.audit.TaskAuditLog;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
@@ -12,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -201,5 +203,94 @@ public class ProjectAnalyticsWorkItemRepository {
                 .setParameter("subtaskIds", subtaskIds)
                 .setParameter("asOf", asOf)
                 .getResultList();
+    }
+
+    /**
+     * US-ANL-008: resolves display names for {@code SprintBacklog#assigneeProjectMemberId}.
+     */
+    public Map<Long, String> findAssigneeNames(Collection<Long> projectMemberIds) {
+        if (projectMemberIds == null || projectMemberIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Object[]> rows = entityManager.createQuery("""
+                select member.id, user.firstName, user.lastName, user.email
+                from ProjectMember member
+                join member.classMember classMember
+                join classMember.user user
+                where member.id in :ids
+                """, Object[].class)
+                .setParameter("ids", projectMemberIds)
+                .getResultList();
+        Map<Long, String> names = new HashMap<>();
+        for (Object[] row : rows) {
+            if (row[0] instanceof Long id) {
+                String label = formatUserName((String) row[1], (String) row[2], (String) row[3]);
+                if (label != null) {
+                    names.put(id, label);
+                }
+            }
+        }
+        return names;
+    }
+
+    /**
+     * US-ANL-008: resolves display names for {@code ProjectTask#assigneeProjectMemberId}
+     * via the bridge table {@code TaskAlertMemberLink} (both project and team members).
+     */
+    public Map<UUID, String> findSubtaskAssigneeNames(Collection<UUID> memberAliasIds) {
+        if (memberAliasIds == null || memberAliasIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> names = new HashMap<>();
+        List<Object[]> projectRows = entityManager.createQuery("""
+                select link.id, user.firstName, user.lastName, user.email
+                from TaskAlertMemberLink link, ProjectMember member
+                join member.classMember classMember
+                join classMember.user user
+                where link.id in :ids
+                  and link.source = :source
+                  and link.sourceMemberId = member.id
+                """, Object[].class)
+                .setParameter("ids", memberAliasIds)
+                .setParameter("source", TaskAlertData.MemberSource.PROJECT_MEMBER)
+                .getResultList();
+        for (Object[] row : projectRows) {
+            if (row[0] instanceof UUID id) {
+                String label = formatUserName((String) row[1], (String) row[2], (String) row[3]);
+                if (label != null) {
+                    names.put(id, label);
+                }
+            }
+        }
+
+        List<Object[]> teamRows = entityManager.createQuery("""
+                select link.id, user.firstName, user.lastName, user.email
+                from TaskAlertMemberLink link, TeamMember member
+                join member.user user
+                where link.id in :ids
+                  and link.source = :source
+                  and link.sourceMemberId = member.id
+                """, Object[].class)
+                .setParameter("ids", memberAliasIds)
+                .setParameter("source", TaskAlertData.MemberSource.TEAM_MEMBER)
+                .getResultList();
+        for (Object[] row : teamRows) {
+            if (row[0] instanceof UUID id) {
+                String label = formatUserName((String) row[1], (String) row[2], (String) row[3]);
+                if (label != null) {
+                    names.putIfAbsent(id, label);
+                }
+            }
+        }
+        return names;
+    }
+
+    private static String formatUserName(String firstName, String lastName, String email) {
+        String full = ((firstName == null ? "" : firstName.trim()) + " "
+                + (lastName == null ? "" : lastName.trim())).trim();
+        if (!full.isEmpty()) {
+            return full;
+        }
+        return email == null || email.isBlank() ? null : email.trim();
     }
 }

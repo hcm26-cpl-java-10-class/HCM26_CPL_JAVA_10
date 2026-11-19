@@ -228,3 +228,41 @@ export interface ProjectAnalyticsProjectOption {
   name: string | null;
   status: string | null;
 }
+
+/** US-ANL-008: chart identifiers supported by the click-to-drill-down drawer. */
+export type ProjectAnalyticsDrillDownChart = "creation" | "cycle-time" | "lead-time" | "completion";
+
+/** US-ANL-008: clicked data point / bar segment passed to the drill-down drawer. */
+export interface ProjectAnalyticsDrillDownTarget {
+  chart: ProjectAnalyticsDrillDownChart;
+  date: string;
+  series?: string;
+}
+
+/** US-ANL-008: one underlying work item row inside the drill-down drawer. */
+export interface ProjectAnalyticsDrillDownItem {
+  id: string;
+  backlogItemId: number | null;
+  taskCode: string;
+  title: string | null;
+  workType: "STORY" | "SUBTASK" | "TASK" | "BUG" | string;
+  status: string;
+  assigneeName: string | null;
+  sprintId: number | null;
+  sprintName: string | null;
+  createdDate: string | null;
+  completedDate: string | null;
+  cycleDays: number | null;
+  leadDays: number | null;
+}
+
+/** US-ANL-008: response payload of `GET /v1/projects/{projectId}/analytics/drill-down`. */
+export interface ProjectAnalyticsDrillDownResponse {
+  projectId: number;
+  projectCode: string | null;
+  chart: ProjectAnalyticsDrillDownChart;
+  date: string;
+  series: string | null;
+  totalCount: number;
+  items: ProjectAnalyticsDrillDownItem[];
+}

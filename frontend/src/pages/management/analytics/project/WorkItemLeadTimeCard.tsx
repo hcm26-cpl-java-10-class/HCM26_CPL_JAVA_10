@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Hourglass } from "lucide-react";
 import {
   CartesianGrid,
@@ -11,10 +12,12 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
+  ProjectAnalyticsDrillDownTarget,
   ProjectAnalyticsLeadTimePoint,
   ProjectAnalyticsLeadTimeSeriesKey,
   ProjectAnalyticsLeadTimeTrend,
 } from "@/types/features/project-analytics";
+import { LegendToggleButton, MetricLineTooltip } from "./analytics-chart-ui";
 
 const AXIS_COLOR = "#94a3b8";
 const GRID_COLOR = "#e8edf3";
@@ -35,22 +38,50 @@ const SERIES_BY_KEY = Object.fromEntries(
   SERIES_CONFIG.map(series => [series.key, series]),
 ) as Record<ProjectAnalyticsLeadTimeSeriesKey, (typeof SERIES_CONFIG)[number]>;
 
-const TOOLTIP_STYLE = {
-  contentStyle: { fontSize: 11, borderRadius: 8, borderColor: GRID_COLOR },
-  labelStyle: { fontSize: 11, fontWeight: 600 },
-} as const;
-
 /**
- * US-ANL-006: "Work item lead time" multi-series line chart (Story / Subtask / Task).
- *
- * Each point is one completion date (X axis, `YYYY-MM-DD`, tenant time zone)
- * with the mean end-to-end lead time `(t_DONE - created_at) / 86400` in days
- * per work item type. Types with zero completions on a date carry `null` and
- * render with `connectNulls={false}` so gaps never plot false zeros (AC01 / AC02).
+ * US-ANL-006 / US-ANL-008: "Work item lead time" multi-series line chart
+ * (Story / Subtask / Task) with interactive hover tooltips, legend series
+ * toggling with Y-axis rescaling (AC02), and click-to-drill-down on node markers.
  */
-export function WorkItemLeadTimeCard({ trend }: { trend: ProjectAnalyticsLeadTimeTrend }) {
+export function WorkItemLeadTimeCard({
+  trend,
+  onDrillDown,
+}: {
+  trend: ProjectAnalyticsLeadTimeTrend;
+  onDrillDown?: (target: ProjectAnalyticsDrillDownTarget) => void;
+}) {
+  const [visible, setVisible] = useState<Record<ProjectAnalyticsLeadTimeSeriesKey, boolean>>({
+    story: true,
+    subtask: true,
+    task: true,
+  });
   const rows = trend?.points ?? [];
   const empty = rows.length === 0 || trend?.state === "EMPTY";
+  const allHidden = !visible.story && !visible.subtask && !visible.task;
+
+  const toggle = (key: ProjectAnalyticsLeadTimeSeriesKey) => {
+    setVisible(current => ({ ...current, [key]: !current[key] }));
+  };
+
+  // US-ANL-008 AC02: compute Y-axis upper bound strictly from currently visible series.
+  const maxVisibleDays = rows.reduce((max, row) => {
+    let next = max;
+    for (const series of SERIES_CONFIG) {
+      if (!visible[series.key]) continue;
+      const value = row[series.key];
+      if (typeof value === "number" && Number.isFinite(value) && value > next) {
+        next = value;
+      }
+    }
+    return next;
+  }, 0);
+  const yDomainMax = maxVisibleDays <= 0 ? 1 : Math.ceil(maxVisibleDays);
+
+  const openDrillDown = (date?: string, series?: ProjectAnalyticsLeadTimeSeriesKey) => {
+    if (date && onDrillDown) {
+      onDrillDown({ chart: "lead-time", date, series });
+    }
+  };
 
   return (
     <Card className="gap-0 rounded-xl py-0 shadow-xs">
@@ -66,26 +97,31 @@ export function WorkItemLeadTimeCard({ trend }: { trend: ProjectAnalyticsLeadTim
             Work item lead time
           </CardTitle>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {SERIES_CONFIG.map(series => (
-            <span
+            <LegendToggleButton
               key={series.key}
-              className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
-            >
-              <span
-                aria-hidden="true"
-                className="size-2 rounded-full"
-                style={{ backgroundColor: series.color }}
-              />
-              {series.label}
-            </span>
+              color={series.color}
+              label={series.label}
+              shape="dot"
+              visible={visible[series.key]}
+              onToggle={() => toggle(series.key)}
+            />
           ))}
         </div>
       </CardHeader>
       <CardContent className="px-2 pb-2 pt-0">
         <div className="relative h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 24, left: 0 }}>
+            <LineChart
+              data={rows}
+              margin={{ top: 8, right: 16, bottom: 24, left: 0 }}
+              onClick={state => {
+                if (!allHidden && state?.activeLabel != null) {
+                  openDrillDown(String(state.activeLabel));
+                }
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
               <XAxis
                 dataKey="date"
@@ -104,7 +140,7 @@ export function WorkItemLeadTimeCard({ trend }: { trend: ProjectAnalyticsLeadTim
                 />
               </XAxis>
               <YAxis
-                domain={[0, (dataMax: number) => (!Number.isFinite(dataMax) || dataMax <= 0 ? 1 : Math.ceil(dataMax))]}
+                domain={[0, yDomainMax]}
                 width={58}
                 tick={{ fontSize: 10, fill: AXIS_COLOR }}
                 stroke={AXIS_COLOR}
@@ -120,42 +156,64 @@ export function WorkItemLeadTimeCard({ trend }: { trend: ProjectAnalyticsLeadTim
                 />
               </YAxis>
               <Tooltip
-                {...TOOLTIP_STYLE}
                 cursor={{ stroke: AXIS_COLOR, strokeDasharray: "3 3" }}
-                labelFormatter={value => String(value)}
-                formatter={(value, name, item) => {
-                  if (value === null || value === undefined) {
-                    return ["—", String(name ?? "")];
-                  }
-                  const key = item?.dataKey as ProjectAnalyticsLeadTimeSeriesKey | undefined;
-                  const meta = key ? SERIES_BY_KEY[key] : undefined;
-                  const payload = item?.payload as ProjectAnalyticsLeadTimePoint | undefined;
-                  const count = meta && payload ? payload[meta.countKey] : 0;
-                  return [
-                    `${Number(value).toFixed(1)} days (${count} item${count === 1 ? "" : "s"})`,
-                    meta?.label ?? String(name ?? ""),
-                  ];
-                }}
+                content={({ active, label, payload }) => (
+                  <MetricLineTooltip
+                    active={active}
+                    label={label}
+                    payload={payload}
+                    countResolver={entry => {
+                      const key = entry.dataKey as ProjectAnalyticsLeadTimeSeriesKey | undefined;
+                      const meta = key ? SERIES_BY_KEY[key] : undefined;
+                      const point = entry.payload as ProjectAnalyticsLeadTimePoint | undefined;
+                      return meta && point ? point[meta.countKey] : undefined;
+                    }}
+                  />
+                )}
               />
-              {SERIES_CONFIG.map(series => (
-                <Line
-                  key={series.key}
-                  type="linear"
-                  dataKey={series.key}
-                  name={series.label}
-                  stroke={series.color}
-                  strokeWidth={2}
-                  connectNulls={false}
-                  dot={{ r: 3.5, fill: series.color, stroke: "#ffffff", strokeWidth: 1.5 }}
-                  activeDot={{ r: 5, fill: series.color, stroke: "#ffffff", strokeWidth: 2 }}
-                  isAnimationActive={false}
-                />
-              ))}
+              {SERIES_CONFIG.map(series =>
+                visible[series.key] ? (
+                  <Line
+                    key={series.key}
+                    type="linear"
+                    dataKey={series.key}
+                    name={series.label}
+                    stroke={series.color}
+                    strokeWidth={2}
+                    connectNulls={false}
+                    dot={{ r: 3.5, fill: series.color, stroke: "#ffffff", strokeWidth: 1.5 }}
+                    activeDot={props => {
+                      if (typeof props.cx !== "number" || typeof props.cy !== "number") {
+                        return null;
+                      }
+                      const pointDate = (props.payload as { date?: string } | undefined)?.date;
+                      return (
+                        <circle
+                          cx={props.cx}
+                          cy={props.cy}
+                          r={5.5}
+                          fill={series.color}
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                          className={onDrillDown ? "cursor-pointer" : undefined}
+                          onClick={event => {
+                            event.stopPropagation();
+                            openDrillDown(pointDate, series.key);
+                          }}
+                        />
+                      );
+                    }}
+                    isAnimationActive={false}
+                  />
+                ) : null,
+              )}
             </LineChart>
           </ResponsiveContainer>
-          {empty && (
+          {(empty || allHidden) && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center">
-              <p className="text-[10px] text-muted-foreground">No work items completed in this window</p>
+              <p className="text-[10px] text-muted-foreground">
+                {empty ? "No work items completed in this window" : "All series hidden — click a legend item to show"}
+              </p>
             </div>
           )}
         </div>

@@ -3,6 +3,7 @@ package com.example.starter_project_2025.system.project.analytics;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -10,8 +11,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -53,5 +56,19 @@ public class ProjectAnalyticsController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(service.shell(projectId, filter));
+    }
+
+    @GetMapping("/{projectId}/analytics/drill-down")
+    @PreAuthorize("hasAuthority('PROJECT_ANALYTICS_READ')")
+    @Operation(summary = "US-ANL-008: List underlying work items for one clicked chart date/series")
+    public ResponseEntity<ProjectAnalyticsDrillDownResponse> drillDown(
+            @PathVariable String projectId,
+            @ModelAttribute ProjectAnalyticsFilter filter,
+            @RequestParam String chart,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) String series) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(service.drillDown(projectId, filter, chart, date, series));
     }
 }

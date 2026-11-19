@@ -13,7 +13,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { projectAnalyticsApi } from "@/api/features/project-analytics.api";
@@ -22,8 +22,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { ProjectAnalyticsRequestFilters } from "@/types/features/project-analytics";
+import { BacklogItemDetailSheet } from "@/pages/management/backlog/components/BacklogItemDetailSheet";
+import type { SprintPlanningItem } from "@/types";
+import type {
+  ProjectAnalyticsDrillDownItem,
+  ProjectAnalyticsDrillDownTarget,
+  ProjectAnalyticsRequestFilters,
+} from "@/types/features/project-analytics";
 import { getHomePathByRole } from "@/utils/rbac.utils";
+import { AnalyticsDrillDownDrawer } from "./AnalyticsDrillDownDrawer";
 import { AnalyticsFilterBar } from "./AnalyticsFilterBar";
 import { AnalyticsKpiCards } from "./AnalyticsKpiCards";
 import { AnalyticsTrendCharts } from "./AnalyticsTrendCharts";
@@ -182,11 +189,37 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
   const [params, setParams] = useSearchParams();
   const applied = readAnalyticsFilters(params);
 
+  // US-ANL-008: click-to-drill-down drawer and UFR-PRJ-004 task detail modal.
+  const [drillDownTarget, setDrillDownTarget] = useState<ProjectAnalyticsDrillDownTarget | null>(null);
+  const [detailTarget, setDetailTarget] = useState<{
+    item: SprintPlanningItem;
+    itemKey: string;
+    sprintName: string | null;
+  } | null>(null);
+
+  const openDrillDownItem = useCallback((row: ProjectAnalyticsDrillDownItem) => {
+    if (row.backlogItemId == null) return;
+    const itemKey = row.taskCode.split(" · ")[0] || row.taskCode;
+    setDetailTarget({
+      item: {
+        id: row.backlogItemId,
+        title: row.title,
+        sprintId: row.sprintId,
+        projectId,
+        assigneeDisplayName: row.assigneeName,
+      },
+      itemKey,
+      sprintName: row.sprintName,
+    });
+  }, [projectId]);
+
   const apply = useCallback((next: ProjectAnalyticsRequestFilters) => {
+    setDrillDownTarget(null);
     setParams(current => writeAnalyticsFilters(current, next), { replace: true });
   }, [setParams]);
 
   const reset = useCallback(() => {
+    setDrillDownTarget(null);
     setParams(current => clearAnalyticsFilters(current), { replace: true });
   }, [setParams]);
 
@@ -278,10 +311,10 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
 
           <AnalyticsKpiCards kpis={shell.kpis} />
           <div className="grid gap-4 xl:grid-cols-2">
-            <WorkItemCreationTrendCard trend={shell.creationTrend} />
-            <WorkItemCycleTimeCard trend={shell.cycleTimeTrend} />
-            <WorkItemLeadTimeCard trend={shell.leadTimeTrend} />
-            <WorkItemCompletionTrendCard trend={shell.completionTrend} />
+            <WorkItemCreationTrendCard trend={shell.creationTrend} onDrillDown={setDrillDownTarget} />
+            <WorkItemCycleTimeCard trend={shell.cycleTimeTrend} onDrillDown={setDrillDownTarget} />
+            <WorkItemLeadTimeCard trend={shell.leadTimeTrend} onDrillDown={setDrillDownTarget} />
+            <WorkItemCompletionTrendCard trend={shell.completionTrend} onDrillDown={setDrillDownTarget} />
           </div>
           <AnalyticsTrendCharts widgets={shell.widgets} granularity={shell.window.granularity} />
           <CurrentWindowWorkItems
@@ -293,6 +326,25 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
             itemType={shell.filters.itemType}
             dateWindow={shell.window}
             backlogHref={backlogHref}
+          />
+          <AnalyticsDrillDownDrawer
+            projectId={projectId}
+            appliedFilters={applied}
+            target={drillDownTarget}
+            onChangeTarget={setDrillDownTarget}
+            onClose={() => setDrillDownTarget(null)}
+            onOpenWorkItem={openDrillDownItem}
+          />
+          <BacklogItemDetailSheet
+            open={detailTarget !== null}
+            onClose={open => { if (!open) setDetailTarget(null); }}
+            item={detailTarget?.item ?? null}
+            itemKey={detailTarget?.itemKey}
+            sprintName={detailTarget?.sprintName ?? null}
+            canEdit={false}
+            canMove={false}
+            canDelete={false}
+            readOnly
           />
         </div>
       </div>
