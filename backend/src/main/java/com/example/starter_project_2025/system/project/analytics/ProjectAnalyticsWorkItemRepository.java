@@ -3,6 +3,9 @@ package com.example.starter_project_2025.system.project.analytics;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogWorkType;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLog;
+import com.example.starter_project_2025.system.project.task.Task;
+import com.example.starter_project_2025.system.project.task.TaskStatus;
+import com.example.starter_project_2025.system.project.task.audit.TaskAuditLog;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +15,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * US-ANL-002: data collection query of the Analytics view.
@@ -131,6 +135,49 @@ public class ProjectAnalyticsWorkItemRepository {
                 order by event.createdAt asc, event.id asc
                 """, SprintBacklogAuditLog.class)
                 .setParameter("itemIds", itemIds)
+                .setParameter("asOf", asOf)
+                .getResultList();
+    }
+
+    /**
+     * US-ANL-006: active Done subtasks belonging to the in-scope backlog items.
+     *
+     * <p>Subtasks live in {@code task} ({@code ProjectTask}) and inherit their
+     * project / sprint / backlog scope from {@code backlogItem}.</p>
+     */
+    public List<Task> findDoneSubtasks(List<Long> backlogItemIds) {
+        if (backlogItemIds == null || backlogItemIds.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery("""
+                select subtask
+                from ProjectTask subtask
+                where subtask.isActive = true
+                  and subtask.backlogItem.id in :backlogItemIds
+                  and subtask.status = :done
+                order by subtask.createdAt asc, subtask.id asc
+                """, Task.class)
+                .setParameter("backlogItemIds", backlogItemIds)
+                .setParameter("done", TaskStatus.DONE)
+                .getResultList();
+    }
+
+    /**
+     * US-ANL-006: status audit history of the given subtasks, oldest first,
+     * bounded by {@code asOf}.
+     */
+    public List<TaskAuditLog> findSubtaskStatusEvents(List<UUID> subtaskIds, LocalDateTime asOf) {
+        if (subtaskIds == null || subtaskIds.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery("""
+                select event
+                from TaskAuditLog event
+                where event.taskId in :subtaskIds
+                  and event.occurredAt <= :asOf
+                order by event.occurredAt asc, event.id asc
+                """, TaskAuditLog.class)
+                .setParameter("subtaskIds", subtaskIds)
                 .setParameter("asOf", asOf)
                 .getResultList();
     }

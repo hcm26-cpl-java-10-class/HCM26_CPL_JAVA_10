@@ -30,6 +30,7 @@ import { AnalyticsTrendCharts } from "./AnalyticsTrendCharts";
 import { CurrentWindowWorkItems } from "./CurrentWindowWorkItems";
 import { WorkItemCreationTrendCard } from "./WorkItemCreationTrendCard";
 import { WorkItemCycleTimeCard } from "./WorkItemCycleTimeCard";
+import { WorkItemLeadTimeCard } from "./WorkItemLeadTimeCard";
 import {
   analyticsFilterKeys,
   clearAnalyticsFilters,
@@ -279,6 +280,7 @@ export default function ProjectAnalyticsPage({ projectId: projectIdProp }: { pro
             <WorkItemCreationTrendCard trend={shell.creationTrend} />
             <WorkItemCycleTimeCard trend={shell.cycleTimeTrend} />
           </div>
+          <WorkItemLeadTimeCard trend={shell.leadTimeTrend} />
           <AnalyticsTrendCharts widgets={shell.widgets} granularity={shell.window.granularity} />
           <CurrentWindowWorkItems
             projectId={projectId}

@@ -122,6 +122,38 @@ export interface ProjectAnalyticsCycleTimeTrend {
   points: ProjectAnalyticsCycleTimePoint[];
 }
 
+/** US-ANL-006: work item types compared in the multi-series lead time chart. */
+export type ProjectAnalyticsLeadTimeSeriesKey = "story" | "subtask" | "task";
+
+export interface ProjectAnalyticsLeadTimeSeries {
+  key: ProjectAnalyticsLeadTimeSeriesKey;
+  label: string;
+}
+
+/**
+ * US-ANL-006: one completion-date point of the "Work item lead time" chart.
+ *
+ * Each series average is `null` on dates with zero completions of that type
+ * so sparse series leave a clean gap instead of plotting false zero values (AC02).
+ */
+export interface ProjectAnalyticsLeadTimePoint {
+  date: string;
+  story: number | null;
+  storyCount: number;
+  subtask: number | null;
+  subtaskCount: number;
+  task: number | null;
+  taskCount: number;
+}
+
+/** US-ANL-006: "Work item lead time" multi-series line chart (Story / Subtask / Task). */
+export interface ProjectAnalyticsLeadTimeTrend {
+  state: ProjectAnalyticsWidgetState;
+  timeZone: string;
+  series: ProjectAnalyticsLeadTimeSeries[];
+  points: ProjectAnalyticsLeadTimePoint[];
+}
+
 export interface ProjectAnalyticsWidget {
   key: string;
   title: string;
@@ -143,6 +175,7 @@ export interface ProjectAnalyticsShell {
   kpis: ProjectAnalyticsKpi[];
   creationTrend: ProjectAnalyticsCreationTrend;
   cycleTimeTrend: ProjectAnalyticsCycleTimeTrend;
+  leadTimeTrend: ProjectAnalyticsLeadTimeTrend;
   widgets: ProjectAnalyticsWidget[];
 }
 

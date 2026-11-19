@@ -9,6 +9,9 @@ import com.example.starter_project_2025.system.project.sprint_backlog.SprintBack
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogStatus;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogWorkType;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLog;
+import com.example.starter_project_2025.system.project.task.Task;
+import com.example.starter_project_2025.system.project.task.TaskStatus;
+import com.example.starter_project_2025.system.project.task.audit.TaskAuditLog;
 import com.example.starter_project_2025.system.rbac.user.User;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -33,6 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.UUID;
 
 /**
  * US-ANL-002: Sprint &amp; Backlog data collection and scope filtering.
@@ -168,8 +172,22 @@ public class ProjectAnalyticsService {
                 kpis(scope, selected, items, windowStart, windowEnd);
         ProjectAnalyticsResponse.CreationTrend creationTrend =
                 creationTrend(items, windowStart, windowEnd);
-        ProjectAnalyticsResponse.CycleTimeTrend cycleTimeTrend =
-                cycleTimeTrend(items, windowStart, windowEnd);
+
+        ZoneId tenantZone = tenantZone();
+        ZoneId serverZone = ZoneId.systemDefault();
+        LocalDateTime completionCutoff = completionCutoff(windowEnd, tenantZone, serverZone);
+        List<SprintBacklog> doneBacklogItems = items.stream()
+                .filter(item -> item.getId() != null)
+                .filter(item -> statusOf(item) == SprintBacklogStatus.DONE)
+                .toList();
+        Map<Long, List<SprintBacklogAuditLog>> backlogHistory =
+                backlogStatusHistory(doneBacklogItems, completionCutoff);
+
+        ProjectAnalyticsResponse.CycleTimeTrend cycleTimeTrend = cycleTimeTrend(
+                doneBacklogItems, backlogHistory, windowStart, windowEnd, tenantZone, serverZone, completionCutoff);
+        ProjectAnalyticsResponse.LeadTimeTrend leadTimeTrend = leadTimeTrend(
+                items, doneBacklogItems, workType == null, backlogHistory,
+                windowStart, windowEnd, tenantZone, serverZone, completionCutoff);
         List<ProjectAnalyticsResponse.Widget> widgets =
                 widgets(items.isEmpty() ? STATE_EMPTY : STATE_READY, granularity, buckets);
 
@@ -193,6 +211,7 @@ public class ProjectAnalyticsService {
                 kpis,
                 creationTrend,
                 cycleTimeTrend,
+                leadTimeTrend,
                 widgets);
     }
 
@@ -627,11 +646,48 @@ public class ProjectAnalyticsService {
     }
 
     // ---------------------------------------------------------------------
-    // US-ANL-005: work item cycle time trend
+    // US-ANL-005 / US-ANL-006: cycle time & lead time trends
     // ---------------------------------------------------------------------
 
-    /** Seconds per day used to express cycle time in (fractional) days. */
+    /** Seconds per day used to express cycle and lead time in (fractional) days. */
     private static final double SECONDS_PER_DAY = 86_400d;
+
+    /** US-ANL-006: ordered legend metadata for the multi-series lead time chart. */
+    private static final List<ProjectAnalyticsResponse.Series> LEAD_TIME_SERIES = List.of(
+            new ProjectAnalyticsResponse.Series("story", "Story"),
+            new ProjectAnalyticsResponse.Series("subtask", "Subtask"),
+            new ProjectAnalyticsResponse.Series("task", "Task"));
+
+    private static LocalDateTime completionCutoff(LocalDate windowEnd, ZoneId tenantZone, ZoneId serverZone) {
+        return windowEnd.plusDays(1)
+                .atStartOfDay(tenantZone)
+                .withZoneSameInstant(serverZone)
+                .toLocalDateTime()
+                .minusNanos(1);
+    }
+
+    private static LocalDate toTenantDate(LocalDateTime timestamp, ZoneId serverZone, ZoneId tenantZone) {
+        return timestamp.atZone(serverZone).withZoneSameInstant(tenantZone).toLocalDate();
+    }
+
+    private static double roundOneDecimal(double value) {
+        return Math.round(value * 10.0) / 10.0;
+    }
+
+    private Map<Long, List<SprintBacklogAuditLog>> backlogStatusHistory(
+            List<SprintBacklog> doneItems, LocalDateTime asOf) {
+        Map<Long, List<SprintBacklogAuditLog>> history = new HashMap<>();
+        if (doneItems.isEmpty()) {
+            return history;
+        }
+        List<Long> ids = doneItems.stream().map(SprintBacklog::getId).toList();
+        for (SprintBacklogAuditLog event : workItems.findStatusEvents(ids, asOf)) {
+            if (event.getSprintBacklogId() != null) {
+                history.computeIfAbsent(event.getSprintBacklogId(), key -> new ArrayList<>()).add(event);
+            }
+        }
+        return history;
+    }
 
     /**
      * US-ANL-005: average active execution time per completion date.
@@ -651,56 +707,32 @@ public class ProjectAnalyticsService {
      * produce a point; the backend returns them oldest first.</p>
      */
     private ProjectAnalyticsResponse.CycleTimeTrend cycleTimeTrend(
-            List<SprintBacklog> items, LocalDate windowStart, LocalDate windowEnd) {
-        ZoneId tenantZone = tenantZone();
-        ZoneId serverZone = ZoneId.systemDefault();
-
-        // AC03: only items currently in Done can carry a completed cycle.
-        List<SprintBacklog> doneItems = items.stream()
-                .filter(item -> item.getId() != null)
-                .filter(item -> statusOf(item) == SprintBacklogStatus.DONE)
-                .toList();
-
+            List<SprintBacklog> doneItems,
+            Map<Long, List<SprintBacklogAuditLog>> history,
+            LocalDate windowStart,
+            LocalDate windowEnd,
+            ZoneId tenantZone,
+            ZoneId serverZone,
+            LocalDateTime asOf) {
         Map<LocalDate, double[]> grouped = new TreeMap<>();
-        if (!doneItems.isEmpty()) {
-            // Last instant of windowEnd in the tenant zone, expressed in the
-            // server zone the audit timestamps are stored in.
-            LocalDateTime asOf = windowEnd.plusDays(1)
-                    .atStartOfDay(tenantZone)
-                    .withZoneSameInstant(serverZone)
-                    .toLocalDateTime()
-                    .minusNanos(1);
-
-            Map<Long, List<SprintBacklogAuditLog>> history = new HashMap<>();
-            List<Long> ids = doneItems.stream().map(SprintBacklog::getId).toList();
-            for (SprintBacklogAuditLog event : workItems.findStatusEvents(ids, asOf)) {
-                if (event.getSprintBacklogId() != null) {
-                    history.computeIfAbsent(event.getSprintBacklogId(), key -> new ArrayList<>()).add(event);
-                }
+        for (SprintBacklog item : doneItems) {
+            TimeSample sample = cycleSample(item, history.getOrDefault(item.getId(), List.of()), asOf);
+            if (sample == null) {
+                continue;
             }
-
-            for (SprintBacklog item : doneItems) {
-                CycleSample sample = cycleSample(item, history.getOrDefault(item.getId(), List.of()), asOf);
-                if (sample == null) {
-                    continue;
-                }
-                LocalDate completedOn = sample.completedAt()
-                        .atZone(serverZone)
-                        .withZoneSameInstant(tenantZone)
-                        .toLocalDate();
-                if (completedOn.isBefore(windowStart) || completedOn.isAfter(windowEnd)) {
-                    continue;
-                }
-                double[] accumulator = grouped.computeIfAbsent(completedOn, key -> new double[2]);
-                accumulator[0] += sample.days();
-                accumulator[1]++;
+            LocalDate completedOn = toTenantDate(sample.completedAt(), serverZone, tenantZone);
+            if (completedOn.isBefore(windowStart) || completedOn.isAfter(windowEnd)) {
+                continue;
             }
+            double[] accumulator = grouped.computeIfAbsent(completedOn, key -> new double[2]);
+            accumulator[0] += sample.days();
+            accumulator[1]++;
         }
 
         List<ProjectAnalyticsResponse.CycleTimePoint> points = grouped.entrySet().stream()
                 .map(entry -> new ProjectAnalyticsResponse.CycleTimePoint(
                         entry.getKey(),
-                        Math.round(entry.getValue()[0] / entry.getValue()[1] * 10.0) / 10.0,
+                        roundOneDecimal(entry.getValue()[0] / entry.getValue()[1]),
                         (int) entry.getValue()[1]))
                 .toList();
         return new ProjectAnalyticsResponse.CycleTimeTrend(
@@ -715,7 +747,7 @@ public class ProjectAnalyticsService {
      *
      * @param events status history of the item, oldest first, bounded by {@code asOf}
      */
-    private CycleSample cycleSample(SprintBacklog item, List<SprintBacklogAuditLog> events, LocalDateTime asOf) {
+    private TimeSample cycleSample(SprintBacklog item, List<SprintBacklogAuditLog> events, LocalDateTime asOf) {
         String todo = SprintBacklogStatus.TODO.name();
         String inProgress = SprintBacklogStatus.IN_PROGRESS.name();
         String done = SprintBacklogStatus.DONE.name();
@@ -762,8 +794,178 @@ public class ProjectAnalyticsService {
         if (startedAt == null) {
             return null;
         }
+        // US-ANL-006 AC03: execution start cannot precede creation, preserving
+        // Lead Time >= Cycle Time even if an audit timestamp is backdated.
+        if (item.getCreatedAt() != null && startedAt.isBefore(item.getCreatedAt())) {
+            startedAt = item.getCreatedAt();
+        }
         long seconds = Math.max(0L, Duration.between(startedAt, completedAt).getSeconds());
-        return new CycleSample(completedAt, seconds / SECONDS_PER_DAY);
+        return new TimeSample(completedAt, seconds / SECONDS_PER_DAY);
+    }
+
+    /**
+     * US-ANL-006: average end-to-end lead time per {@code (completed_date, work_item_type)}
+     * across Story, Subtask and Task items.
+     *
+     * <p>Lead Time = {@code (t_DONE - created_at) / 86400} seconds. Story and
+     * Task samples come from completed {@code SprintBacklog} items; Subtask
+     * samples come from completed {@code ProjectTask} subtasks linked to any
+     * in-scope backlog item (when no specific backlog work type filter excludes
+     * subtasks). Dates with zero completions of a type leave that series
+     * {@code null} instead of plotting false zero values (AC02).</p>
+     */
+    private ProjectAnalyticsResponse.LeadTimeTrend leadTimeTrend(
+            List<SprintBacklog> allScopeItems,
+            List<SprintBacklog> doneBacklogItems,
+            boolean includeSubtasks,
+            Map<Long, List<SprintBacklogAuditLog>> backlogHistory,
+            LocalDate windowStart,
+            LocalDate windowEnd,
+            ZoneId tenantZone,
+            ZoneId serverZone,
+            LocalDateTime asOf) {
+        Map<LocalDate, LeadAccumulator> grouped = new TreeMap<>();
+
+        for (SprintBacklog item : doneBacklogItems) {
+            SprintBacklogWorkType type = item.getWorkType() == null
+                    ? SprintBacklogWorkType.DEFAULT
+                    : item.getWorkType();
+            if (type != SprintBacklogWorkType.STORY && type != SprintBacklogWorkType.TASK) {
+                continue;
+            }
+            TimeSample sample = backlogLeadSample(item, backlogHistory.getOrDefault(item.getId(), List.of()), asOf);
+            if (sample == null) {
+                continue;
+            }
+            LocalDate completedOn = toTenantDate(sample.completedAt(), serverZone, tenantZone);
+            if (completedOn.isBefore(windowStart) || completedOn.isAfter(windowEnd)) {
+                continue;
+            }
+            LeadAccumulator accumulator = grouped.computeIfAbsent(completedOn, key -> new LeadAccumulator());
+            if (type == SprintBacklogWorkType.STORY) {
+                accumulator.addStory(sample.days());
+            } else {
+                accumulator.addTask(sample.days());
+            }
+        }
+
+        if (includeSubtasks && !allScopeItems.isEmpty()) {
+            List<Long> scopeBacklogIds = allScopeItems.stream()
+                    .map(SprintBacklog::getId)
+                    .filter(Objects::nonNull)
+                    .toList();
+            List<Task> doneSubtasks = workItems.findDoneSubtasks(scopeBacklogIds);
+            if (!doneSubtasks.isEmpty()) {
+                List<UUID> subtaskIds = doneSubtasks.stream()
+                        .map(Task::getId)
+                        .filter(Objects::nonNull)
+                        .toList();
+                Map<UUID, List<TaskAuditLog>> subtaskHistory = new HashMap<>();
+                for (TaskAuditLog event : workItems.findSubtaskStatusEvents(subtaskIds, asOf)) {
+                    if (event.getTaskId() != null) {
+                        subtaskHistory.computeIfAbsent(event.getTaskId(), key -> new ArrayList<>()).add(event);
+                    }
+                }
+                for (Task subtask : doneSubtasks) {
+                    if (subtask.getId() == null) {
+                        continue;
+                    }
+                    TimeSample sample = subtaskLeadSample(
+                            subtask, subtaskHistory.getOrDefault(subtask.getId(), List.of()), asOf);
+                    if (sample == null) {
+                        continue;
+                    }
+                    LocalDate completedOn = toTenantDate(sample.completedAt(), serverZone, tenantZone);
+                    if (completedOn.isBefore(windowStart) || completedOn.isAfter(windowEnd)) {
+                        continue;
+                    }
+                    grouped.computeIfAbsent(completedOn, key -> new LeadAccumulator()).addSubtask(sample.days());
+                }
+            }
+        }
+
+        List<ProjectAnalyticsResponse.LeadTimePoint> points = grouped.entrySet().stream()
+                .map(entry -> entry.getValue().toPoint(entry.getKey()))
+                .toList();
+        return new ProjectAnalyticsResponse.LeadTimeTrend(
+                points.isEmpty() ? STATE_EMPTY : STATE_READY,
+                tenantZone.getId(),
+                LEAD_TIME_SERIES,
+                points);
+    }
+
+    /**
+     * Lead time sample of one Done backlog item (Story or Task):
+     * {@code (t_DONE - created_at) / 86400}, guaranteeing Lead Time >= Cycle Time (AC03).
+     */
+    private TimeSample backlogLeadSample(SprintBacklog item, List<SprintBacklogAuditLog> events, LocalDateTime asOf) {
+        String done = SprintBacklogStatus.DONE.name();
+        LocalDateTime finalDone = null;
+        String lastStatus = null;
+
+        for (SprintBacklogAuditLog event : events) {
+            LocalDateTime at = event.getCreatedAt();
+            String before = statusIn(event.getBeforeState());
+            String after = statusIn(event.getAfterState());
+            if (at == null || after == null || after.equals(before)) {
+                continue;
+            }
+            if (done.equals(after)) {
+                finalDone = at;
+            }
+            lastStatus = after;
+        }
+
+        if (lastStatus != null && !done.equals(lastStatus)) {
+            return null;
+        }
+        LocalDateTime completedAt = finalDone != null ? finalDone : item.getUpdatedAt();
+        if (completedAt == null || completedAt.isAfter(asOf)) {
+            return null;
+        }
+        LocalDateTime createdAt = item.getCreatedAt();
+        if (createdAt == null) {
+            return null;
+        }
+        long seconds = Math.max(0L, Duration.between(createdAt, completedAt).getSeconds());
+        return new TimeSample(completedAt, seconds / SECONDS_PER_DAY);
+    }
+
+    /**
+     * Lead time sample of one Done subtask ({@code ProjectTask}):
+     * {@code (t_DONE - Task.created_at) / 86400}.
+     */
+    private TimeSample subtaskLeadSample(Task subtask, List<TaskAuditLog> events, LocalDateTime asOf) {
+        String done = TaskStatus.DONE.name();
+        LocalDateTime finalDone = null;
+        String lastStatus = null;
+
+        for (TaskAuditLog event : events) {
+            LocalDateTime at = event.getOccurredAt();
+            String before = statusIn(event.getBeforeState());
+            String after = statusIn(event.getAfterState());
+            if (at == null || after == null || after.equals(before)) {
+                continue;
+            }
+            if (done.equals(after)) {
+                finalDone = at;
+            }
+            lastStatus = after;
+        }
+
+        if (lastStatus != null && !done.equals(lastStatus)) {
+            return null;
+        }
+        LocalDateTime completedAt = finalDone != null ? finalDone : subtask.getUpdatedAt();
+        if (completedAt == null || completedAt.isAfter(asOf)) {
+            return null;
+        }
+        LocalDateTime createdAt = subtask.getCreatedAt();
+        if (createdAt == null) {
+            return null;
+        }
+        long seconds = Math.max(0L, Duration.between(createdAt, completedAt).getSeconds());
+        return new TimeSample(completedAt, seconds / SECONDS_PER_DAY);
     }
 
     private ZoneId tenantZone() {
@@ -777,7 +979,42 @@ public class ProjectAnalyticsService {
         return ZoneId.systemDefault();
     }
 
-    private record CycleSample(LocalDateTime completedAt, double days) { }
+    private record TimeSample(LocalDateTime completedAt, double days) { }
+
+    private static final class LeadAccumulator {
+        private double storySum;
+        private int storyCount;
+        private double subtaskSum;
+        private int subtaskCount;
+        private double taskSum;
+        private int taskCount;
+
+        void addStory(double days) {
+            storySum += days;
+            storyCount++;
+        }
+
+        void addSubtask(double days) {
+            subtaskSum += days;
+            subtaskCount++;
+        }
+
+        void addTask(double days) {
+            taskSum += days;
+            taskCount++;
+        }
+
+        ProjectAnalyticsResponse.LeadTimePoint toPoint(LocalDate date) {
+            return new ProjectAnalyticsResponse.LeadTimePoint(
+                    date,
+                    storyCount == 0 ? null : roundOneDecimal(storySum / storyCount),
+                    storyCount,
+                    subtaskCount == 0 ? null : roundOneDecimal(subtaskSum / subtaskCount),
+                    subtaskCount,
+                    taskCount == 0 ? null : roundOneDecimal(taskSum / taskCount),
+                    taskCount);
+        }
+    }
 
     private static List<ProjectAnalyticsResponse.Widget> widgets(String state, String granularity,
                                                                  List<ProjectAnalyticsResponse.Bucket> buckets) {
