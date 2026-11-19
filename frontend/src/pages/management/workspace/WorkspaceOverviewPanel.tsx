@@ -8,6 +8,7 @@ import { formatWorkspaceDate, WorkspaceStatusBadge } from "./workspace.shared";
 import { WorkspaceGitRepositoryPanel } from "./WorkspaceGitRepositoryPanel";
 import { ProjectRepositoryCard } from "@/pages/management/git-integration/components/ProjectRepositoryCard";
 import type { WorkspaceProjectNode } from "@/types/features/project-assignment";
+import type { GitHubTabTarget } from "@/pages/management/git-integration/github-tab.params";
 
 function information(value?: string | null) {
   return value?.trim() || "No information available";
@@ -17,12 +18,13 @@ function initials(value: string) {
   return value.trim().split(/\s+/).slice(0, 2).map(word => word[0]).join("").toUpperCase();
 }
 
-export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMembers, onViewAccess, selectedProject }: {
+export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMembers, onViewAccess, selectedProject, onOpenGitHub }: {
   workspace: WorkspaceDetail;
   canViewMembers: boolean;
   onViewMembers: () => void;
   onViewAccess: () => void;
   selectedProject?: WorkspaceProjectNode;
+  onOpenGitHub?: (target: GitHubTabTarget) => void;
 }) {
   const projectCode = selectedProject?.code ?? workspace.projectCode;
   const projectName = selectedProject?.name ?? workspace.projectName;
@@ -122,7 +124,7 @@ export function WorkspaceOverviewPanel({ workspace, canViewMembers, onViewMember
       </Card>
     </section>
     {repositoryProjectId != null && <Card className={cardClass}>
-      <ProjectRepositoryCard key={repositoryProjectId} projectId={repositoryProjectId} />
+      <ProjectRepositoryCard key={repositoryProjectId} projectId={repositoryProjectId} onOpenActivity={onOpenGitHub} />
     </Card>}
     <Card className={cardClass}>
       <WorkspaceGitRepositoryPanel key={workspace.id} workspaceId={workspace.id} />

@@ -6,6 +6,7 @@ import { gitIntegrationHttpStatus } from "@/api/features/git-integration.api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { GitRepositoryItem, LinkedRepository, ProjectRepositoryView } from "@/types/features/git-integration";
+import type { GitHubTabTarget } from "../github-tab.params";
 import { formatDateTime, installationManageUrl } from "../git-integration.format";
 import { syncErrorMessage } from "../git-integration.messages";
 import { useGitInstallations, useLinkRepository, useProjectRepository, useRetrySync } from "../useGitIntegration";
@@ -68,8 +69,14 @@ function RepositoryLine({ repository }: { repository: LinkedRepository }) {
  * US-GI-04: the GitHub repository of a project. A master project links one
  * repository (picked from the GitHub App's repositories); its modules show the
  * master's repository read-only.
+ * WS-GH-01: on Overview the activity summary opens the GitHub tab (`onOpenActivity`);
+ * the GitHub tab itself shows the card without the summary (`showActivity={false}`).
  */
-export function ProjectRepositoryCard({ projectId }: { projectId: number }) {
+export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity = true }: {
+  projectId: number;
+  onOpenActivity?: (target: GitHubTabTarget) => void;
+  showActivity?: boolean;
+}) {
   const query = useProjectRepository(projectId);
   const view = query.data;
   const installationsQuery = useGitInstallations({ enabled: !!view?.canLink });
@@ -180,7 +187,7 @@ export function ProjectRepositoryCard({ projectId }: { projectId: number }) {
         </Button>}
       </div>}
       {/* US-SY-04: data synchronized from webhooks (also shown, read-only, while the repository is unavailable). */}
-      <RepositoryActivitySummary projectId={view.project.id} repositoryName={repository.fullName} />
+      {showActivity && <RepositoryActivitySummary projectId={view.project.id} repositoryName={repository.fullName} onOpen={onOpenActivity} />}
       {active && !view.inherited && modules > 0 && <p className="text-[11px] text-muted-foreground">
         Shared with {modules} {modules === 1 ? "module" : "modules"} of this project.
       </p>}

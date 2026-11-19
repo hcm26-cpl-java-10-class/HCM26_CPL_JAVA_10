@@ -81,6 +81,8 @@ export const gitIntegrationApi = {
         author: query.author?.trim() || undefined,
         branch: query.branch?.trim() || undefined,
         link: query.link,
+        from: query.from || undefined,
+        to: query.to || undefined,
         page: query.page ?? 0,
         size: query.size ?? 20,
       },

@@ -80,3 +80,32 @@ export function pullRequestDot(state: GitPullRequestState, draft?: boolean) {
   if (state === "MERGED") return "bg-violet-500";
   return "bg-red-400";
 }
+
+/**
+ * WS-GH-01: soft avatar tone of a contributor, stable per login. Six light hues so a
+ * list of authors reads lively without any of them shouting.
+ */
+const CONTRIBUTOR_TONES = [
+  "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
+  "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+  "bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
+];
+
+export function contributorTone(login?: string | null) {
+  let hash = 0;
+  for (const char of (login ?? "").toLowerCase()) hash = (hash * 31 + char.charCodeAt(0)) | 0;
+  return CONTRIBUTOR_TONES[Math.abs(hash) % CONTRIBUTOR_TONES.length];
+}
+
+/** WS-GH-01: icon chip of a stat tile; only the chip is coloured, never the whole tile. */
+export const STAT_TONES = {
+  commit: "bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-300",
+  linked: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300",
+  open: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300",
+  review: "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300",
+  merged: "bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300",
+  neutral: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+} as const;

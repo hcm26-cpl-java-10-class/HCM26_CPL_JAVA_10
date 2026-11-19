@@ -431,6 +431,10 @@ export interface GitCommitQuery {
   author?: string;
   branch?: string;
   link?: GitTaskLinkFilter;
+  /** Local date-time (`2026-11-16T00:00:00`), inclusive lower bound of `committedAt`. */
+  from?: string;
+  /** Local date-time, inclusive upper bound of `committedAt`. */
+  to?: string;
   page?: number;
   size?: number;
 }

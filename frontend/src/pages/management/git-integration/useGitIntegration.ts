@@ -28,9 +28,11 @@ export const gitIntegrationKeys = {
   projectRepository: (projectId: number) => ["git-integration", "project-repository", projectId] as const,
   activity: (projectId: number) => ["git-integration", "activity", projectId] as const,
   commits: (projectId: number, query: GitCommitQuery) =>
-    ["git-integration", "commits", projectId, query.q ?? "", query.author ?? "", query.branch ?? "", query.page ?? 0, query.size ?? 20] as const,
+    ["git-integration", "commits", projectId, query.q ?? "", query.author ?? "", query.branch ?? "", query.link ?? "ALL",
+      query.from ?? "", query.to ?? "", query.page ?? 0, query.size ?? 20] as const,
   pullRequests: (projectId: number, query: GitPullRequestQuery) =>
-    ["git-integration", "pull-requests", projectId, query.state ?? "ALL", query.q ?? "", query.page ?? 0, query.size ?? 20] as const,
+    ["git-integration", "pull-requests", projectId, query.state ?? "ALL", query.q ?? "", query.link ?? "ALL",
+      query.page ?? 0, query.size ?? 20] as const,
   pullRequest: (projectId: number, number: number) => ["git-integration", "pull-request", projectId, number] as const,
   backlogLinks: (itemId: number, page: number) => ["git-integration", "backlog-links", itemId, page] as const,
   backlogLinkSummary: (itemIds: number[]) => ["git-integration", "backlog-link-summary", itemIds] as const,
