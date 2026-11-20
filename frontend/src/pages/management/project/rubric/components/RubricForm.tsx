@@ -12,7 +12,7 @@ import { type FormEvent, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 const LIMITS = {
-  rubricName: 50,
+  rubricName: 250,
   rubricDescription: 500,
   criterionCode: 30,
   criterionName: 100,
