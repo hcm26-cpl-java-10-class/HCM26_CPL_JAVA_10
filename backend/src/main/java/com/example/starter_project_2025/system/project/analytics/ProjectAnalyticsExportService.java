@@ -16,6 +16,18 @@ import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
 import lombok.RequiredArgsConstructor;
+import org.apache.poi.ss.usermodel.BorderStyle;
+import org.apache.poi.ss.usermodel.DataFormat;
+import org.apache.poi.ss.usermodel.FillPatternType;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
+import org.apache.poi.xssf.usermodel.XSSFColor;
+import org.apache.poi.xssf.usermodel.XSSFFont;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.MDC;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -35,18 +47,23 @@ import java.util.UUID;
 
 /**
  * US-ANL-010: exports the filtered Sprint &amp; Backlog analytics dataset as
- * CSV (daily aggregated time-series + item-level cycle/lead metrics) or PDF
- * (executive snapshot of KPIs, active filters and the 4 trend charts), writing
- * an immutable export audit log entry on every successful export.
+ * CSV (daily aggregated time-series + item-level cycle/lead metrics), multi-sheet
+ * XLSX workbook (Summary, Creation Trend, Cycle Time, Lead Time, Completion Trend,
+ * Flow &amp; Burndown, and Work Items sheets), or PDF (executive snapshot of KPIs,
+ * active filters and the 4 trend charts), writing an immutable export audit log
+ * entry on every successful export.
  */
 @Service
 @RequiredArgsConstructor
 public class ProjectAnalyticsExportService {
 
     public static final String FORMAT_CSV = "CSV";
+    public static final String FORMAT_XLSX = "XLSX";
     public static final String FORMAT_PDF = "PDF";
 
     private static final MediaType MEDIA_TYPE_CSV = MediaType.parseMediaType("text/csv; charset=UTF-8");
+    private static final MediaType MEDIA_TYPE_XLSX = MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     private static final DateTimeFormatter FILE_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final DateTimeFormatter DISPLAY_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -57,7 +74,16 @@ public class ProjectAnalyticsExportService {
     private static final DeviceRgb COLOR_BORDER = new DeviceRgb(226, 232, 240);
     private static final DeviceRgb COLOR_WHITE = new DeviceRgb(255, 255, 255);
 
+    private static final byte[] XLSX_RGB_PRIMARY = new byte[]{(byte) 37, (byte) 99, (byte) 235};
+    private static final byte[] XLSX_RGB_SLATE_900 = new byte[]{(byte) 15, (byte) 23, (byte) 42};
+    private static final byte[] XLSX_RGB_SLATE_600 = new byte[]{(byte) 71, (byte) 85, (byte) 105};
+    private static final byte[] XLSX_RGB_SLATE_100 = new byte[]{(byte) 241, (byte) 245, (byte) 249};
+    private static final byte[] XLSX_RGB_BORDER = new byte[]{(byte) 226, (byte) 232, (byte) 240};
+    private static final byte[] XLSX_RGB_WHITE = new byte[]{(byte) 255, (byte) 255, (byte) 255};
+
     private static final int MAX_PDF_ITEM_ROWS = 120;
+    private static final int MIN_XLSX_COL_WIDTH = 12 * 256;
+    private static final int MAX_XLSX_COL_WIDTH = 48 * 256;
 
     private final ProjectAnalyticsService analyticsService;
     private final ProjectAnalyticsExportAuditRepository auditRepository;
@@ -70,8 +96,8 @@ public class ProjectAnalyticsExportService {
     ) { }
 
     /**
-     * Authorizes, validates, renders the CSV or PDF export file, and persists
-     * an immutable {@link ProjectAnalyticsExportAuditLog} row.
+     * Authorizes, validates, renders the CSV, multi-sheet XLSX, or PDF export file,
+     * and persists an immutable {@link ProjectAnalyticsExportAuditLog} row.
      */
     @Transactional
     public ExportFile export(String rawProjectId, ProjectAnalyticsExportRequest request, String headerCorrelationId) {
@@ -94,9 +120,11 @@ public class ProjectAnalyticsExportService {
         String correlationId = resolveCorrelationId(headerCorrelationId);
         String filterScope = serializeFilterScope(analytics, snapshot.selectedSprintName());
 
-        byte[] content = FORMAT_CSV.equals(format)
-                ? buildCsv(snapshot, exportedAt, correlationId)
-                : buildPdf(snapshot, exportedAt, correlationId);
+        byte[] content = switch (format) {
+            case FORMAT_CSV -> buildCsv(snapshot, exportedAt, correlationId);
+            case FORMAT_XLSX -> buildXlsx(snapshot, exportedAt, correlationId);
+            default -> buildPdf(snapshot, exportedAt, correlationId);
+        };
 
         // Mandatory immutable download audit log (only after auth & generation succeed).
         ProjectAnalyticsExportAuditLog audit = new ProjectAnalyticsExportAuditLog();
@@ -111,19 +139,26 @@ public class ProjectAnalyticsExportService {
         auditRepository.save(audit);
 
         String filename = buildFilename(snapshot, format, exportedAt);
-        MediaType mediaType = FORMAT_CSV.equals(format) ? MEDIA_TYPE_CSV : MediaType.APPLICATION_PDF;
+        MediaType mediaType = switch (format) {
+            case FORMAT_CSV -> MEDIA_TYPE_CSV;
+            case FORMAT_XLSX -> MEDIA_TYPE_XLSX;
+            default -> MediaType.APPLICATION_PDF;
+        };
         return new ExportFile(content, mediaType, filename, correlationId);
     }
 
     private static String parseFormat(String raw) {
         if (raw == null || raw.isBlank()) {
-            throw new ProjectAnalyticsValidationException("format", "Export format must be CSV or PDF");
+            throw new ProjectAnalyticsValidationException("format", "Export format must be CSV, XLSX or PDF");
         }
         String value = raw.trim().toUpperCase(Locale.ROOT);
-        if (FORMAT_CSV.equals(value) || FORMAT_PDF.equals(value)) {
+        if ("EXCEL".equals(value)) {
+            return FORMAT_XLSX;
+        }
+        if (FORMAT_CSV.equals(value) || FORMAT_XLSX.equals(value) || FORMAT_PDF.equals(value)) {
             return value;
         }
-        throw new ProjectAnalyticsValidationException("format", "Export format must be CSV or PDF");
+        throw new ProjectAnalyticsValidationException("format", "Export format must be CSV, XLSX or PDF");
     }
 
     private static boolean isEmptyDataset(
@@ -185,7 +220,11 @@ public class ProjectAnalyticsExportService {
             }
         }
         String dateStamp = ZonedDateTime.ofInstant(exportedAt, snapshot.tenantZone()).format(FILE_DATE);
-        String ext = FORMAT_CSV.equals(format) ? "csv" : "pdf";
+        String ext = switch (format) {
+            case FORMAT_CSV -> "csv";
+            case FORMAT_XLSX -> "xlsx";
+            default -> "pdf";
+        };
         return slugCode + "-analytics-" + scopeSlug + "-" + dateStamp + "." + ext;
     }
 
@@ -311,17 +350,459 @@ public class ProjectAnalyticsExportService {
 
     private static void appendCsvRow(StringBuilder csv, List<String> values) {
         for (int i = 0; i < values.size(); i++) {
-            String raw = values.get(i) == null ? "" : values.get(i);
-            // Guard against spreadsheet formula injection when opened in Excel/Sheets.
-            if (!raw.isEmpty() && ("=+-@\t\r".indexOf(raw.charAt(0)) >= 0)) {
-                raw = "'" + raw;
-            }
+            String raw = sanitizeSpreadsheetText(values.get(i));
             csv.append('"').append(raw.replace("\"", "\"\"")).append('"');
             if (i < values.size() - 1) {
                 csv.append(',');
             }
         }
         csv.append('\n');
+    }
+
+    // ---------------------------------------------------------------------
+    // Multi-sheet Excel (.xlsx) generation (Apache POI)
+    // ---------------------------------------------------------------------
+
+    private byte[] buildXlsx(ProjectAnalyticsService.ExportSnapshot snapshot, Instant exportedAt, String correlationId) {
+        try (XSSFWorkbook workbook = new XSSFWorkbook();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            XlsxStyles styles = new XlsxStyles(workbook);
+            ProjectAnalyticsResponse analytics = snapshot.analytics();
+
+            writeSummarySheet(workbook, styles, snapshot, exportedAt, correlationId);
+            writeCreationTrendSheet(workbook, styles, analytics);
+            writeCycleTimeSheet(workbook, styles, analytics);
+            writeLeadTimeSheet(workbook, styles, analytics);
+            writeCompletionTrendSheet(workbook, styles, analytics);
+            writeFlowBurndownSheet(workbook, styles, analytics);
+            writeWorkItemsSheet(workbook, styles, snapshot);
+
+            workbook.write(output);
+            return output.toByteArray();
+        } catch (IOException ex) {
+            throw new IllegalStateException("Could not generate analytics Excel workbook", ex);
+        }
+    }
+
+    private void writeSummarySheet(
+            XSSFWorkbook workbook,
+            XlsxStyles styles,
+            ProjectAnalyticsService.ExportSnapshot snapshot,
+            Instant exportedAt,
+            String correlationId) {
+        ProjectAnalyticsResponse analytics = snapshot.analytics();
+        Sheet sheet = workbook.createSheet("Summary");
+        String generatedAt = ZonedDateTime.ofInstant(exportedAt, snapshot.tenantZone()).format(DISPLAY_TIMESTAMP)
+                + " (" + snapshot.tenantZone().getId() + ")";
+        String heading = (analytics.projectCode() != null && !analytics.projectCode().isBlank()
+                ? analytics.projectCode() + " · " : "")
+                + (analytics.projectName() != null ? analytics.projectName() : "Project Analytics");
+
+        int rowIdx = 0;
+        Row titleRow = sheet.createRow(rowIdx++);
+        titleRow.setHeightInPoints(24f);
+        org.apache.poi.ss.usermodel.Cell titleCell = titleRow.createCell(0);
+        titleCell.setCellValue("Sprint & Backlog Analytics Report");
+        titleCell.setCellStyle(styles.title);
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 3));
+
+        Row subtitleRow = sheet.createRow(rowIdx++);
+        subtitleRow.setHeightInPoints(18f);
+        org.apache.poi.ss.usermodel.Cell subtitleCell = subtitleRow.createCell(0);
+        subtitleCell.setCellValue(sanitizeSpreadsheetText(heading));
+        subtitleCell.setCellStyle(styles.subtitle);
+        sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, 3));
+
+        rowIdx++; // blank spacer
+
+        // Report Metadata & Active Filters
+        int metaSectionRow = rowIdx++;
+        writeSectionBanner(sheet, metaSectionRow, 4, "Report Metadata & Active Filters", styles.section);
+        writeXlsxHeaderRow(sheet, rowIdx++, List.of("Field", "Value"), styles.header);
+        rowIdx = writeMetadataRow(sheet, rowIdx, styles, "Project Code", safe(analytics.projectCode()));
+        rowIdx = writeMetadataRow(sheet, rowIdx, styles, "Project Name", safe(analytics.projectName()));
+        rowIdx = writeMetadataRow(sheet, rowIdx, styles, "Scope", safe(analytics.filters().scope()));
+        rowIdx = writeMetadataRow(sheet, rowIdx, styles, "Sprint",
+                snapshot.selectedSprintName() == null ? "All" : snapshot.selectedSprintName());
+        rowIdx = writeMetadataRow(sheet, rowIdx, styles, "Work Item Type", safe(analytics.filters().itemType()));
+        rowIdx = writeMetadataRow(sheet, rowIdx, styles, "Date Window",
+                analytics.window().startDate() + " to " + analytics.window().endDate());
+        rowIdx = writeMetadataRow(sheet, rowIdx, styles, "Granularity", safe(analytics.window().granularity()));
+        rowIdx = writeMetadataRow(sheet, rowIdx, styles, "Tenant Timezone", safe(analytics.window().timeZone()));
+        rowIdx = writeMetadataRow(sheet, rowIdx, styles, "Generated At", generatedAt);
+        rowIdx = writeMetadataRow(sheet, rowIdx, styles, "Correlation ID", correlationId);
+
+        rowIdx++; // blank spacer
+
+        // KPI Summary
+        int kpiSectionRow = rowIdx++;
+        writeSectionBanner(sheet, kpiSectionRow, 4, "KPI Summary", styles.section);
+        writeXlsxHeaderRow(sheet, rowIdx++, List.of("Metric", "Value", "Caption", "Sub-Caption"), styles.header);
+        for (ProjectAnalyticsResponse.Kpi kpi : analytics.kpis()) {
+            Row row = sheet.createRow(rowIdx++);
+            setTextCell(row, 0, kpi.label(), styles.label);
+            setTextCell(row, 1, kpi.value(), styles.text);
+            setTextCell(row, 2, kpi.caption(), styles.text);
+            setTextCell(row, 3, kpi.subCaption(), styles.text);
+        }
+
+        autosizeColumns(sheet, 4);
+    }
+
+    private void writeCreationTrendSheet(
+            XSSFWorkbook workbook,
+            XlsxStyles styles,
+            ProjectAnalyticsResponse analytics) {
+        Sheet sheet = workbook.createSheet("Creation Trend");
+        List<String> headers = List.of("Creation Date", "Done", "To Do", "Total", "Done Share");
+        writeXlsxHeaderRow(sheet, 0, headers, styles.header);
+
+        int rowIdx = 1;
+        for (ProjectAnalyticsResponse.CreationBucket bucket : analytics.creationTrend().buckets()) {
+            long total = bucket.done() + bucket.todo();
+            double share = total == 0 ? 0.0 : bucket.done() / (double) total;
+            Row row = sheet.createRow(rowIdx++);
+            setTextCell(row, 0, formatDate(bucket.date()), styles.text);
+            setLongCell(row, 1, bucket.done(), styles.integer);
+            setLongCell(row, 2, bucket.todo(), styles.integer);
+            setLongCell(row, 3, total, styles.integer);
+            setDoubleCell(row, 4, share, styles.percent);
+        }
+
+        finalizeDataSheet(sheet, headers.size(), rowIdx - 1);
+    }
+
+    private void writeCycleTimeSheet(
+            XSSFWorkbook workbook,
+            XlsxStyles styles,
+            ProjectAnalyticsResponse analytics) {
+        Sheet sheet = workbook.createSheet("Cycle Time");
+        List<String> headers = List.of("Completed Date", "Average Cycle Time (days)", "Completed Items");
+        writeXlsxHeaderRow(sheet, 0, headers, styles.header);
+
+        int rowIdx = 1;
+        for (ProjectAnalyticsResponse.CycleTimePoint point : analytics.cycleTimeTrend().points()) {
+            Row row = sheet.createRow(rowIdx++);
+            setTextCell(row, 0, formatDate(point.date()), styles.text);
+            setDoubleCell(row, 1, point.averageDays(), styles.decimal);
+            setLongCell(row, 2, point.itemCount(), styles.integer);
+        }
+
+        finalizeDataSheet(sheet, headers.size(), rowIdx - 1);
+    }
+
+    private void writeLeadTimeSheet(
+            XSSFWorkbook workbook,
+            XlsxStyles styles,
+            ProjectAnalyticsResponse analytics) {
+        Sheet sheet = workbook.createSheet("Lead Time");
+        List<String> headers = List.of(
+                "Completed Date",
+                "Story Avg (days)", "Story Count",
+                "Subtask Avg (days)", "Subtask Count",
+                "Task Avg (days)", "Task Count");
+        writeXlsxHeaderRow(sheet, 0, headers, styles.header);
+
+        int rowIdx = 1;
+        for (ProjectAnalyticsResponse.LeadTimePoint point : analytics.leadTimeTrend().points()) {
+            Row row = sheet.createRow(rowIdx++);
+            setTextCell(row, 0, formatDate(point.date()), styles.text);
+            setNullableDoubleCell(row, 1, point.story(), styles.decimal);
+            setLongCell(row, 2, point.storyCount(), styles.integer);
+            setNullableDoubleCell(row, 3, point.subtask(), styles.decimal);
+            setLongCell(row, 4, point.subtaskCount(), styles.integer);
+            setNullableDoubleCell(row, 5, point.task(), styles.decimal);
+            setLongCell(row, 6, point.taskCount(), styles.integer);
+        }
+
+        finalizeDataSheet(sheet, headers.size(), rowIdx - 1);
+    }
+
+    private void writeCompletionTrendSheet(
+            XSSFWorkbook workbook,
+            XlsxStyles styles,
+            ProjectAnalyticsResponse analytics) {
+        Sheet sheet = workbook.createSheet("Completion Trend");
+        List<String> headers = List.of("Completed Date", "Subtask", "Story", "Task", "Total");
+        writeXlsxHeaderRow(sheet, 0, headers, styles.header);
+
+        int rowIdx = 1;
+        for (ProjectAnalyticsResponse.CompletionBucket bucket : analytics.completionTrend().buckets()) {
+            long total = bucket.subtask() + bucket.story() + bucket.task();
+            Row row = sheet.createRow(rowIdx++);
+            setTextCell(row, 0, formatDate(bucket.date()), styles.text);
+            setLongCell(row, 1, bucket.subtask(), styles.integer);
+            setLongCell(row, 2, bucket.story(), styles.integer);
+            setLongCell(row, 3, bucket.task(), styles.integer);
+            setLongCell(row, 4, total, styles.integer);
+        }
+
+        finalizeDataSheet(sheet, headers.size(), rowIdx - 1);
+    }
+
+    private void writeFlowBurndownSheet(
+            XSSFWorkbook workbook,
+            XlsxStyles styles,
+            ProjectAnalyticsResponse analytics) {
+        Sheet sheet = workbook.createSheet("Flow & Burndown");
+        List<String> headers = List.of(
+                "Date", "Created", "Completed",
+                "To Do", "In Progress", "Review", "Done",
+                "Remaining", "Ideal Burndown");
+        writeXlsxHeaderRow(sheet, 0, headers, styles.header);
+
+        List<ProjectAnalyticsResponse.Bucket> buckets = analytics.widgets() == null
+                ? List.of()
+                : analytics.widgets().stream()
+                        .filter(widget -> widget.buckets() != null && !widget.buckets().isEmpty())
+                        .findFirst()
+                        .map(ProjectAnalyticsResponse.Widget::buckets)
+                        .orElse(List.of());
+
+        int rowIdx = 1;
+        for (ProjectAnalyticsResponse.Bucket bucket : buckets) {
+            Row row = sheet.createRow(rowIdx++);
+            setTextCell(row, 0, formatDate(bucket.date()), styles.text);
+            setLongCell(row, 1, bucket.created(), styles.integer);
+            setLongCell(row, 2, bucket.completed(), styles.integer);
+            setLongCell(row, 3, bucket.todo(), styles.integer);
+            setLongCell(row, 4, bucket.inProgress(), styles.integer);
+            setLongCell(row, 5, bucket.review(), styles.integer);
+            setLongCell(row, 6, bucket.done(), styles.integer);
+            setLongCell(row, 7, bucket.remaining(), styles.integer);
+            setLongCell(row, 8, bucket.ideal(), styles.integer);
+        }
+
+        finalizeDataSheet(sheet, headers.size(), rowIdx - 1);
+    }
+
+    private void writeWorkItemsSheet(
+            XSSFWorkbook workbook,
+            XlsxStyles styles,
+            ProjectAnalyticsService.ExportSnapshot snapshot) {
+        Sheet sheet = workbook.createSheet("Work Items");
+        List<String> headers = List.of(
+                "Task Code", "Title", "Type", "Status", "Sprint", "Assignee",
+                "Created Date", "Completed Date", "Cycle Time (days)", "Lead Time (days)", "Estimated Hours");
+        writeXlsxHeaderRow(sheet, 0, headers, styles.header);
+
+        int rowIdx = 1;
+        for (ProjectAnalyticsService.ExportWorkItemRow item : snapshot.items()) {
+            Row row = sheet.createRow(rowIdx++);
+            setTextCell(row, 0, item.taskCode(), styles.text);
+            setTextCell(row, 1, item.title(), styles.text);
+            setTextCell(row, 2, item.workType(), styles.text);
+            setTextCell(row, 3, item.status(), styles.text);
+            setTextCell(row, 4, item.sprintName(), styles.text);
+            setTextCell(row, 5, item.assigneeName() == null ? "Unassigned" : item.assigneeName(), styles.text);
+            setTextCell(row, 6, formatDate(item.createdDate()), styles.text);
+            setTextCell(row, 7, formatDate(item.completedDate()), styles.text);
+            setNullableDoubleCell(row, 8, item.cycleDays(), styles.decimal);
+            setNullableDoubleCell(row, 9, item.leadDays(), styles.decimal);
+            setNullableDoubleCell(row, 10, item.estimatedHours(), styles.decimal);
+        }
+
+        finalizeDataSheet(sheet, headers.size(), rowIdx - 1);
+    }
+
+    private static int writeMetadataRow(Sheet sheet, int rowIdx, XlsxStyles styles, String field, String value) {
+        Row row = sheet.createRow(rowIdx);
+        setTextCell(row, 0, field, styles.label);
+        setTextCell(row, 1, value, styles.text);
+        return rowIdx + 1;
+    }
+
+    private static void writeSectionBanner(Sheet sheet, int rowIdx, int colSpan, String title, XSSFCellStyle style) {
+        Row row = sheet.createRow(rowIdx);
+        row.setHeightInPoints(20f);
+        for (int i = 0; i < colSpan; i++) {
+            org.apache.poi.ss.usermodel.Cell cell = row.createCell(i);
+            if (i == 0) {
+                cell.setCellValue(title);
+            }
+            cell.setCellStyle(style);
+        }
+        if (colSpan > 1) {
+            sheet.addMergedRegion(new CellRangeAddress(rowIdx, rowIdx, 0, colSpan - 1));
+        }
+    }
+
+    private static void writeXlsxHeaderRow(Sheet sheet, int rowIdx, List<String> headers, XSSFCellStyle style) {
+        Row row = sheet.createRow(rowIdx);
+        row.setHeightInPoints(20f);
+        for (int i = 0; i < headers.size(); i++) {
+            org.apache.poi.ss.usermodel.Cell cell = row.createCell(i);
+            cell.setCellValue(headers.get(i));
+            cell.setCellStyle(style);
+        }
+    }
+
+    private static void setTextCell(Row row, int col, String value, XSSFCellStyle style) {
+        org.apache.poi.ss.usermodel.Cell cell = row.createCell(col);
+        cell.setCellValue(sanitizeSpreadsheetText(value));
+        cell.setCellStyle(style);
+    }
+
+    private static void setLongCell(Row row, int col, long value, XSSFCellStyle style) {
+        org.apache.poi.ss.usermodel.Cell cell = row.createCell(col);
+        cell.setCellValue(value);
+        cell.setCellStyle(style);
+    }
+
+    private static void setDoubleCell(Row row, int col, double value, XSSFCellStyle style) {
+        org.apache.poi.ss.usermodel.Cell cell = row.createCell(col);
+        cell.setCellValue(value);
+        cell.setCellStyle(style);
+    }
+
+    private static void setNullableDoubleCell(Row row, int col, Double value, XSSFCellStyle style) {
+        org.apache.poi.ss.usermodel.Cell cell = row.createCell(col);
+        if (value != null) {
+            cell.setCellValue(value);
+        }
+        cell.setCellStyle(style);
+    }
+
+    private static void finalizeDataSheet(Sheet sheet, int columnCount, int lastRowIndex) {
+        sheet.createFreezePane(0, 1);
+        if (columnCount > 0) {
+            sheet.setAutoFilter(new CellRangeAddress(0, Math.max(0, lastRowIndex), 0, columnCount - 1));
+        }
+        autosizeColumns(sheet, columnCount);
+    }
+
+    private static void autosizeColumns(Sheet sheet, int columnCount) {
+        for (int i = 0; i < columnCount; i++) {
+            try {
+                sheet.autoSizeColumn(i);
+                int width = Math.max(MIN_XLSX_COL_WIDTH, sheet.getColumnWidth(i) + 512);
+                sheet.setColumnWidth(i, Math.min(width, MAX_XLSX_COL_WIDTH));
+            } catch (RuntimeException ignored) {
+                sheet.setColumnWidth(i, 20 * 256);
+            }
+        }
+    }
+
+    private static String sanitizeSpreadsheetText(String value) {
+        String raw = value == null ? "" : value;
+        // Guard against spreadsheet formula injection when opened in Excel/Sheets.
+        if (!raw.isEmpty() && ("=+-@\t\r".indexOf(raw.charAt(0)) >= 0)) {
+            return "'" + raw;
+        }
+        return raw;
+    }
+
+    private static final class XlsxStyles {
+        final XSSFCellStyle title;
+        final XSSFCellStyle subtitle;
+        final XSSFCellStyle section;
+        final XSSFCellStyle header;
+        final XSSFCellStyle label;
+        final XSSFCellStyle text;
+        final XSSFCellStyle integer;
+        final XSSFCellStyle decimal;
+        final XSSFCellStyle percent;
+
+        XlsxStyles(XSSFWorkbook workbook) {
+            XSSFColor primary = new XSSFColor(XLSX_RGB_PRIMARY, null);
+            XSSFColor slate900 = new XSSFColor(XLSX_RGB_SLATE_900, null);
+            XSSFColor slate600 = new XSSFColor(XLSX_RGB_SLATE_600, null);
+            XSSFColor slate100 = new XSSFColor(XLSX_RGB_SLATE_100, null);
+            XSSFColor border = new XSSFColor(XLSX_RGB_BORDER, null);
+            XSSFColor white = new XSSFColor(XLSX_RGB_WHITE, null);
+            DataFormat dataFormat = workbook.createDataFormat();
+
+            XSSFFont titleFont = workbook.createFont();
+            titleFont.setBold(true);
+            titleFont.setFontHeightInPoints((short) 14);
+            titleFont.setColor(slate900);
+            this.title = workbook.createCellStyle();
+            this.title.setFont(titleFont);
+            this.title.setVerticalAlignment(VerticalAlignment.CENTER);
+
+            XSSFFont subtitleFont = workbook.createFont();
+            subtitleFont.setBold(true);
+            subtitleFont.setFontHeightInPoints((short) 11);
+            subtitleFont.setColor(primary);
+            this.subtitle = workbook.createCellStyle();
+            this.subtitle.setFont(subtitleFont);
+            this.subtitle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+            XSSFFont sectionFont = workbook.createFont();
+            sectionFont.setBold(true);
+            sectionFont.setFontHeightInPoints((short) 10);
+            sectionFont.setColor(slate600);
+            this.section = workbook.createCellStyle();
+            this.section.setFont(sectionFont);
+            this.section.setFillForegroundColor(slate100);
+            this.section.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            this.section.setVerticalAlignment(VerticalAlignment.CENTER);
+            applyThinBorders(this.section, border);
+
+            XSSFFont headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerFont.setFontHeightInPoints((short) 10);
+            headerFont.setColor(white);
+            this.header = workbook.createCellStyle();
+            this.header.setFont(headerFont);
+            this.header.setFillForegroundColor(primary);
+            this.header.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            this.header.setAlignment(HorizontalAlignment.CENTER);
+            this.header.setVerticalAlignment(VerticalAlignment.CENTER);
+            applyThinBorders(this.header, primary);
+
+            XSSFFont labelFont = workbook.createFont();
+            labelFont.setBold(true);
+            labelFont.setFontHeightInPoints((short) 10);
+            labelFont.setColor(slate900);
+            this.label = workbook.createCellStyle();
+            this.label.setFont(labelFont);
+            this.label.setFillForegroundColor(slate100);
+            this.label.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            this.label.setVerticalAlignment(VerticalAlignment.CENTER);
+            applyThinBorders(this.label, border);
+
+            XSSFFont dataFont = workbook.createFont();
+            dataFont.setFontHeightInPoints((short) 10);
+            dataFont.setColor(slate900);
+
+            this.text = workbook.createCellStyle();
+            this.text.setFont(dataFont);
+            this.text.setVerticalAlignment(VerticalAlignment.CENTER);
+            applyThinBorders(this.text, border);
+
+            this.integer = workbook.createCellStyle();
+            this.integer.setFont(dataFont);
+            this.integer.setAlignment(HorizontalAlignment.RIGHT);
+            this.integer.setVerticalAlignment(VerticalAlignment.CENTER);
+            this.integer.setDataFormat(dataFormat.getFormat("#,##0"));
+            applyThinBorders(this.integer, border);
+
+            this.decimal = workbook.createCellStyle();
+            this.decimal.setFont(dataFont);
+            this.decimal.setAlignment(HorizontalAlignment.RIGHT);
+            this.decimal.setVerticalAlignment(VerticalAlignment.CENTER);
+            this.decimal.setDataFormat(dataFormat.getFormat("0.0"));
+            applyThinBorders(this.decimal, border);
+
+            this.percent = workbook.createCellStyle();
+            this.percent.setFont(dataFont);
+            this.percent.setAlignment(HorizontalAlignment.RIGHT);
+            this.percent.setVerticalAlignment(VerticalAlignment.CENTER);
+            this.percent.setDataFormat(dataFormat.getFormat("0.0%"));
+            applyThinBorders(this.percent, border);
+        }
+
+        private static void applyThinBorders(XSSFCellStyle style, XSSFColor color) {
+            style.setBorderTop(BorderStyle.THIN);
+            style.setBorderBottom(BorderStyle.THIN);
+            style.setBorderLeft(BorderStyle.THIN);
+            style.setBorderRight(BorderStyle.THIN);
+            style.setTopBorderColor(color);
+            style.setBottomBorderColor(color);
+            style.setLeftBorderColor(color);
+            style.setRightBorderColor(color);
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -491,7 +972,7 @@ public class ProjectAnalyticsExportService {
                     doc.add(table);
                     if (snapshot.items().size() > MAX_PDF_ITEM_ROWS) {
                         doc.add(new Paragraph("Showing first " + MAX_PDF_ITEM_ROWS + " of "
-                                + snapshot.items().size() + " items. Export CSV for the full item-level dataset.")
+                                + snapshot.items().size() + " items. Export Excel (XLSX) or CSV for the full item-level dataset.")
                                 .setFontSize(7.5f)
                                 .setFontColor(COLOR_SLATE_600)
                                 .setMarginTop(4));
