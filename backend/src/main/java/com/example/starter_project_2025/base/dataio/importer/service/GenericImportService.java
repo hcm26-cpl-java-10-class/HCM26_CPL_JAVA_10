@@ -1,3 +1,4 @@
+
 package com.example.starter_project_2025.base.dataio.importer.service;
 
 import com.example.starter_project_2025.base.dataio.importer.annotation.ImportHash;
@@ -6,7 +7,12 @@ import com.example.starter_project_2025.base.dataio.importer.parser.FileParser;
 import com.example.starter_project_2025.base.dataio.importer.parser.ParserFactory;
 import com.example.starter_project_2025.base.dataio.importer.result.ImportResult;
 import com.example.starter_project_2025.base.dataio.importer.result.RowError;
+import com.example.starter_project_2025.system.management.student.Student;
+import com.example.starter_project_2025.system.rbac.role.Role;
+import com.example.starter_project_2025.system.rbac.role.RoleRepository;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -23,7 +29,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GenericImportService implements ImportService {
 
-    /** First data row of the spreadsheet (row 1 is the header). */
+    /**
+     * First data row of the spreadsheet.
+     * Row 1 is the header.
+     */
     private static final int FIRST_DATA_ROW = 2;
 
     private static final int MAX_ERROR_MESSAGE_LENGTH = 500;
@@ -32,6 +41,7 @@ public class GenericImportService implements ImportService {
     private final GenericImportMapper mapper;
     private final PasswordEncoder passwordEncoder;
     private final PlatformTransactionManager transactionManager;
+    private final RoleRepository roleRepository;
 
     @Override
     public <T, ID> ImportResult importFile(
@@ -56,6 +66,9 @@ public class GenericImportService implements ImportService {
             try {
                 T entity = toEntity(row, entityClass);
 
+                // Automatically assign STUDENT role when importing Student
+                assignStudentRole(entity);
+
                 repository.save(entity);
 
                 result.setSuccessCount(result.getSuccessCount() + 1);
@@ -63,7 +76,8 @@ public class GenericImportService implements ImportService {
             } catch (Exception e) {
 
                 result.getErrors().add(
-                        new RowError(rowIndex, rootMessage(e)));
+                        new RowError(rowIndex, rootMessage(e))
+                );
 
                 result.setFailureCount(result.getFailureCount() + 1);
             }
@@ -78,8 +92,7 @@ public class GenericImportService implements ImportService {
     public <T, ID> ImportResult importFileAtomic(
             MultipartFile file,
             Class<T> entityClass,
-            JpaRepository<T, ID> repository
-    ) {
+            JpaRepository<T, ID> repository) {
 
         ImportResult result = new ImportResult();
 
@@ -91,8 +104,7 @@ public class GenericImportService implements ImportService {
             throw new RuntimeException("Import failed", e);
         }
 
-        // Phase 1: map / validate every row in memory. Nothing is written yet,
-        // so a validation error leaves the database untouched.
+        // Phase 1: Map and validate all rows in memory
         List<T> entities = new ArrayList<>(rows.size());
 
         int rowIndex = FIRST_DATA_ROW;
@@ -100,37 +112,60 @@ public class GenericImportService implements ImportService {
         for (Map<String, String> row : rows) {
 
             try {
-                entities.add(toEntity(row, entityClass));
+                T entity = toEntity(row, entityClass);
+
+                // Automatically assign STUDENT role when importing Student
+                assignStudentRole(entity);
+
+                entities.add(entity);
+
             } catch (Exception e) {
-                result.getErrors().add(new RowError(rowIndex, rootMessage(e)));
+                result.getErrors().add(
+                        new RowError(rowIndex, rootMessage(e))
+                );
             }
 
             rowIndex++;
         }
 
+        // If any row has an error, do not save anything
         if (!result.getErrors().isEmpty()) {
             result.setSuccessCount(0);
             result.setFailureCount(rows.size());
             return result;
         }
 
-        // Phase 2: persist every entity in one transaction. A failure on any
-        // row rolls the whole transaction back, so nothing of the file is kept.
+        // Phase 2: Save all entities in one transaction
         try {
-            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-                for (int i = 0; i < entities.size(); i++) {
-                    try {
-                        repository.saveAndFlush(entities.get(i));
-                    } catch (Exception e) {
-                        throw new RowPersistenceException(FIRST_DATA_ROW + i, e);
-                    }
-                }
-            });
+            new TransactionTemplate(transactionManager)
+                    .executeWithoutResult(status -> {
+
+                        for (int i = 0; i < entities.size(); i++) {
+
+                            try {
+                                repository.saveAndFlush(entities.get(i));
+
+                            } catch (Exception e) {
+                                throw new RowPersistenceException(
+                                        FIRST_DATA_ROW + i,
+                                        e
+                                );
+                            }
+                        }
+                    });
+
         } catch (RowPersistenceException e) {
+
             result.setSuccessCount(0);
             result.setFailureCount(rows.size());
+
             result.getErrors().add(
-                    new RowError(e.getRowNumber(), rootMessage(e.getCause())));
+                    new RowError(
+                            e.getRowNumber(),
+                            rootMessage(e.getCause())
+                    )
+            );
+
             return result;
         }
 
@@ -140,20 +175,101 @@ public class GenericImportService implements ImportService {
         return result;
     }
 
-    private List<Map<String, String>> parse(MultipartFile file) throws Exception {
-        FileParser parser = parserFactory.getParser(file.getOriginalFilename());
+    /**
+     * Parse uploaded file.
+     */
+    private List<Map<String, String>> parse(
+            MultipartFile file) throws Exception {
+
+        FileParser parser = parserFactory.getParser(
+                file.getOriginalFilename()
+        );
+
         return parser.parse(file.getInputStream());
     }
 
-    private <T> T toEntity(Map<String, String> row, Class<T> entityClass) throws IllegalAccessException {
+    /**
+     * Convert spreadsheet row to entity and hash password.
+     */
+    private <T> T toEntity(
+            Map<String, String> row,
+            Class<T> entityClass) throws IllegalAccessException {
+
         T entity = mapper.map(row, entityClass);
+
         applyHash(entity);
+
         return entity;
     }
 
     /**
-     * Message of the deepest cause, trimmed to a readable length for the
-     * per-row error list of the import result.
+     * Automatically assign STUDENT role to imported Student.
+     */
+    private void assignStudentRole(Object entity) {
+
+        if (!(entity instanceof Student student)) {
+            return;
+        }
+
+        Role studentRole = roleRepository.findByName("STUDENT")
+                .orElseThrow(() -> new IllegalStateException(
+                        "Role STUDENT does not exist"
+                ));
+
+        if (student.getRoles() == null) {
+            throw new IllegalStateException(
+                    "Student roles collection is null"
+            );
+        }
+
+        // Add role without deleting other imported roles
+        student.getRoles().add(studentRole);
+    }
+
+    /**
+     * Hash fields marked with @ImportHash.
+     * Scan both the entity class and its parent classes.
+     */
+    private void applyHash(Object entity)
+            throws IllegalAccessException {
+
+        Class<?> current = entity.getClass();
+
+        while (current != null && current != Object.class) {
+
+            for (Field field : current.getDeclaredFields()) {
+
+                ImportHash ann = field.getAnnotation(ImportHash.class);
+
+                if (ann == null) {
+                    continue;
+                }
+
+                field.setAccessible(true);
+
+                Object value = field.get(entity);
+
+                if (value instanceof String raw
+                        && !raw.isBlank()
+                        && !isHashed(raw)) {
+
+                    field.set(entity, passwordEncoder.encode(raw));
+                }
+            }
+
+            current = current.getSuperclass();
+        }
+    }
+
+    /**
+     * Check whether password is already BCrypt hashed.
+     */
+    private boolean isHashed(String value) {
+        return value.startsWith("$2");
+    }
+
+    /**
+     * Get the deepest cause message.
      */
     private String rootMessage(Throwable throwable) {
 
@@ -179,10 +295,10 @@ public class GenericImportService implements ImportService {
     }
 
     /**
-     * Carries the spreadsheet row number of the row that could not be stored,
-     * so the transaction can be rolled back and the failure reported.
+     * Carries spreadsheet row number when database saving fails.
      */
-    private static final class RowPersistenceException extends RuntimeException {
+    private static final class RowPersistenceException
+            extends RuntimeException {
 
         private final int rowNumber;
 
@@ -194,27 +310,5 @@ public class GenericImportService implements ImportService {
         int getRowNumber() {
             return rowNumber;
         }
-    }
-
-    private void applyHash(Object entity) throws IllegalAccessException {
-
-        for (Field field : entity.getClass().getDeclaredFields()) {
-
-            ImportHash ann = field.getAnnotation(ImportHash.class);
-            if (ann == null)
-                continue;
-
-            field.setAccessible(true);
-
-            Object val = field.get(entity);
-
-            if (val instanceof String raw && !isHashed(raw)) {
-                field.set(entity, passwordEncoder.encode(raw));
-            }
-        }
-    }
-
-    private boolean isHashed(String v) {
-        return v.startsWith("$2");
     }
 }

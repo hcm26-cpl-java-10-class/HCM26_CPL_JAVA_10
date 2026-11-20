@@ -45,7 +45,10 @@ type EffectiveFieldValidation = Omit<FieldValidation, "maxLength"> & {
   maxLength?: number;
 };
 
-export function getEffectiveRule(field: FieldSchema): EffectiveFieldValidation {
+export function getEffectiveRule(
+  field: FieldSchema,
+  isEdit = false,
+): EffectiveFieldValidation {
   const own = field.validation ?? {};
   const isUrl = own.url ?? looksLikeUrlField(field.name);
   const isEmail = own.email ?? looksLikeEmailField(field.name);
@@ -65,7 +68,10 @@ export function getEffectiveRule(field: FieldSchema): EffectiveFieldValidation {
   return {
     ...own,
     // Legacy flat FieldSchema flags are still supported by existing schemas.
-    required: own.required ?? field.required,
+    required:
+      (!isEdit && own.requiredOnCreate === true) ||
+      own.required === true ||
+      field.required === true,
     requiredMessage: own.requiredMessage ?? field.requiredMessage,
     minLength: own.minLength ?? field.minLength,
     url: isUrl,
@@ -85,7 +91,7 @@ export function validateForm(
   const errors: Record<string, string[]> = {};
 
   for (const field of fields) {
-    const rule = getEffectiveRule(field);
+    const rule = getEffectiveRule(field, ctx.isEdit);
     const value = form[field.name];
     const messages: string[] = [];
 
@@ -125,8 +131,16 @@ export function validateForm(
         if (rule.email && !EMAIL_REGEX.test(trimmed)) {
           messages.push("Invalid email address");
         }
-        if (rule.pattern && !rule.pattern.regex.test(trimmed)) {
-          messages.push(rule.pattern.message);
+        if (rule.pattern) {
+          const regex =
+            rule.pattern instanceof RegExp ? rule.pattern : rule.pattern.regex;
+          const message =
+            rule.pattern instanceof RegExp
+              ? rule.patternMessage
+              : rule.pattern.message;
+          if (!regex.test(trimmed)) {
+            messages.push(message ?? `${field.label} is invalid`);
+          }
         }
       }
     }

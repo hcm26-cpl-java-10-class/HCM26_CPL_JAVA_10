@@ -1,31 +1,40 @@
+
 package com.example.starter_project_2025.system.rbac.user;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.security.SecureRandom;
+import java.util.UUID;
 
 @Component
-@RequiredArgsConstructor
 public class StudentUserCodeGenerator {
-    private static final int MIN_SUFFIX = 100_000;
-    private static final int SUFFIX_RANGE = 900_000;
-    private static final int MAX_ATTEMPTS = 100;
-    private static final String PREFIX = "SE";
 
-    private final UserRepository users;
-    private final SecureRandom random = new SecureRandom();
-
+    /**
+     * Generate student employee code if it does not exist.
+     *
+     * @param user student user account
+     * @return true if a new code was assigned
+     */
     public boolean assignIfMissing(User user) {
-        if (user.getUserCode() != null && !user.getUserCode().isBlank()) return false;
 
-        for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-            String code = PREFIX + (MIN_SUFFIX + random.nextInt(SUFFIX_RANGE));
-            if (!users.existsByUserCode(code)) {
-                user.setUserCode(code);
-                return true;
-            }
+        if (user == null) {
+            return false;
         }
-        throw new IllegalStateException("Could not generate a unique student user code after 100 attempts");
+
+        // Keep existing employee code
+        if (user.getEmployeeCode() != null
+                && !user.getEmployeeCode().isBlank()) {
+            return false;
+        }
+
+        // Generate a new unique-looking student code
+        String code = "STU-" + UUID.randomUUID()
+                .toString()
+                .replace("-", "")
+                .substring(0, 10)
+                .toUpperCase();
+
+        user.setEmployeeCode(code);
+
+        return true;
     }
 }

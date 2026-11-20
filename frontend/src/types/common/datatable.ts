@@ -43,6 +43,7 @@ export type FilterType =
 
 export interface FieldValidation {
   required?: boolean;
+  requiredOnCreate?: boolean;
   requiredMessage?: string;
   minLength?: number;
   /** Overrides the default limit for the field type; `null` = no limit. */
@@ -55,7 +56,8 @@ export interface FieldValidation {
   /** Force email check (auto-enabled for fields named email). */
   email?: boolean;
   /** Custom regex + its error message. */
-  pattern?: { regex: RegExp; message: string };
+  pattern?: RegExp | { regex: RegExp; message: string };
+  patternMessage?: string;
   /** Custom validation: return an error message, or null/undefined if valid. */
   custom?: (
     value: any,

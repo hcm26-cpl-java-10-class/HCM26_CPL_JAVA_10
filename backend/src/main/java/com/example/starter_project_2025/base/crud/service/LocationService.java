@@ -1,3 +1,4 @@
+
 package com.example.starter_project_2025.base.crud.service;
 
 import com.example.starter_project_2025.base.crud.domain.Location;
@@ -6,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class LocationService {
@@ -21,10 +22,11 @@ public class LocationService {
         if (locationRepository.existsByCode(location.getCode())) {
             throw new IllegalArgumentException("Location code already exists!");
         }
+
         return locationRepository.save(location);
     }
 
-    public void deleteLocation(UUID id) {
+    public void deleteLocation(Long id) {
         locationRepository.deleteById(id);
     }
 }

@@ -7,7 +7,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.util.UUID;
 
-@Entity
+@Entity(name = "BaseLocation")
 @Table(name = "locations")
 @Getter
 @Setter

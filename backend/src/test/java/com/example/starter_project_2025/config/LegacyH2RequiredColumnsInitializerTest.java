@@ -15,8 +15,12 @@ class LegacyH2RequiredColumnsInitializerTest {
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
             statement.execute("CREATE TABLE roles (id BIGINT PRIMARY KEY, name VARCHAR(100) NOT NULL)");
             statement.execute("INSERT INTO roles VALUES (1, 'ADMIN')");
-            statement.execute("CREATE TABLE users (id BIGINT PRIMARY KEY, email VARCHAR(100) NOT NULL)");
-            statement.execute("INSERT INTO users VALUES (1, 'existing@example.com')");
+            statement.execute("CREATE TABLE users (id BIGINT PRIMARY KEY, email VARCHAR(100) NOT NULL, "
+                    + "DTYPE VARCHAR(30) NOT NULL)");
+            statement.execute("INSERT INTO users VALUES "
+                    + "(1, 'existing@example.com', 'USER'), (2, 'student@example.com', 'STUDENT')");
+            statement.execute("CREATE TABLE students (id BIGINT PRIMARY KEY)");
+            statement.execute("INSERT INTO students VALUES (2)");
             statement.execute("CREATE TABLE student_scores (id BIGINT PRIMARY KEY, released_at TIMESTAMP)");
             statement.execute("INSERT INTO student_scores VALUES (1, NULL), (2, TIMESTAMP '2025-01-01 10:00:00')");
             statement.execute("CREATE TABLE lessons (id BIGINT PRIMARY KEY, course_id BIGINT NOT NULL, "
@@ -31,10 +35,14 @@ class LegacyH2RequiredColumnsInitializerTest {
         try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
             var metadata = connection.getMetaData();
             for (String[] entry : new String[][]{{"ROLES", "IS_SYSTEM"}, {"USERS", "IS_GUEST"},
+                    {"USERS", "USER_TYPE"}, {"USERS", "DTYPE"},
                     {"STUDENT_SCORES", "STATUS"}}) {
                 try (var columns = metadata.getColumns(null, null, entry[0], entry[1])) {
                     assertThat(columns.next()).isTrue();
-                    assertThat(columns.getInt("NULLABLE")).isEqualTo(DatabaseMetaData.columnNoNulls);
+                    int expectedNullability = entry[1].equals("DTYPE")
+                            ? DatabaseMetaData.columnNullable
+                            : DatabaseMetaData.columnNoNulls;
+                    assertThat(columns.getInt("NULLABLE")).isEqualTo(expectedNullability);
                 }
             }
             try (var rows = statement.executeQuery("SELECT name, is_system FROM roles")) {
@@ -46,6 +54,20 @@ class LegacyH2RequiredColumnsInitializerTest {
                 assertThat(rows.next()).isTrue();
                 assertThat(rows.getString(1)).isEqualTo("existing@example.com");
                 assertThat(rows.getBoolean(2)).isFalse();
+            }
+            try (var rows = statement.executeQuery("SELECT id, user_type FROM users ORDER BY id")) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getLong(1)).isEqualTo(1);
+                assertThat(rows.getString(2)).isEqualTo("USER");
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getLong(1)).isEqualTo(2);
+                assertThat(rows.getString(2)).isEqualTo("STUDENT");
+            }
+            statement.execute("INSERT INTO users (id, email, is_guest, user_type) "
+                    + "VALUES (3, 'new@example.com', FALSE, 'STUDENT')");
+            try (var rows = statement.executeQuery("SELECT DTYPE FROM users WHERE id = 3")) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getObject(1)).isNull();
             }
             try (var rows = statement.executeQuery("SELECT status FROM student_scores ORDER BY id")) {
                 assertThat(rows.next()).isTrue();

@@ -14,26 +14,25 @@ import java.util.stream.Collectors;
 public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
 
     @Override
-    @Mapping(target = "tenantId", source = "tenantId")
     @IgnoreAuditFields
     @Mapping(target = "passwordHash", ignore = true)
-    @Mapping(target = "userCode", ignore = true)
+    @Mapping(target = "password", ignore = true)
+    @Mapping(target = "mustChangePassword", ignore = true)
+    @Mapping(target = "departments", ignore = true)
     User toEntity(UserDTO request);
 
     @Override
     @Mapping(target = "roleIds", expression = "java(mapRoleIds(user))")
-    @Mapping(target = "departmentId", expression = "java(mapPrimaryDepartmentId(user))")
-    @Mapping(target = "departmentName", expression = "java(mapPrimaryDepartmentName(user))")
     @Mapping(target = "departmentIds", expression = "java(mapDepartmentIds(user))")
-    @Mapping(target = "departmentNames", expression = "java(mapDepartmentNames(user))")
+    @Mapping(target = "status", expression = "java(mapStatus(user))")
     @Mapping(target = "password", ignore = true)
-    @Mapping(target = "userCode", source = "userCode")
-    @Mapping(target = "clearDepartment", ignore = true)
+    @Mapping(target = "fullName", expression = "java(user.getFullName())")
     UserDTO toResponse(User user);
 
     @Override
     @Mapping(target = "passwordHash", ignore = true)
-    @Mapping(target = "userCode", ignore = true)
+    @Mapping(target = "password", ignore = true)
+    @Mapping(target = "mustChangePassword", ignore = true)
     @Mapping(target = "departments", ignore = true)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     void update(@MappingTarget User user, UserDTO dto);
@@ -49,6 +48,17 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
                 .collect(Collectors.toSet());
     }
 
+    default Set<Long> mapDepartmentIds(User user) {
+        if (user.getDepartments() == null) {
+            return null;
+        }
+
+        return user.getDepartments()
+                .stream()
+                .map(Department::getId)
+                .collect(Collectors.toSet());
+    }
+
     default String mapStatus(User user) {
         if (Boolean.FALSE.equals(user.getIsActive())) {
             return "INACTIVE";
@@ -57,35 +67,5 @@ public interface UserMapper extends BaseCrudMapper<User, UserDTO> {
             return "LOCKED";
         }
         return "ACTIVE";
-    }
-
-    default Set<Long> mapDepartmentIds(User user) {
-        return user.getDepartments()
-                .stream()
-                .map(Department::getId)
-                .collect(Collectors.toSet());
-    }
-
-    default Set<String> mapDepartmentNames(User user) {
-        return user.getDepartments()
-                .stream()
-                .map(Department::getName)
-                .collect(Collectors.toSet());
-    }
-
-    default Long mapPrimaryDepartmentId(User user) {
-        return user.getDepartments()
-                .stream()
-                .map(Department::getId)
-                .min(Long::compareTo)
-                .orElse(null);
-    }
-
-    default String mapPrimaryDepartmentName(User user) {
-        return user.getDepartments()
-                .stream()
-                .min((left, right) -> left.getId().compareTo(right.getId()))
-                .map(Department::getName)
-                .orElse(null);
     }
 }

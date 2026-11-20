@@ -23,8 +23,44 @@ public class LegacyH2RequiredColumnsInitializer implements CommandLineRunner {
 
             ensureBooleanColumn(connection, "roles", "is_system");
             ensureBooleanColumn(connection, "users", "is_guest");
+            ensureUserType(connection);
+            relaxLegacyUserDiscriminator(connection);
             ensureScoreStatus(connection);
             relaxLegacyLessonCourseId(connection);
+        }
+    }
+
+    private void ensureUserType(Connection connection) throws Exception {
+        String table = "users";
+        if (!hasTable(connection, table)) return;
+
+        Boolean nullable = columnNullable(connection, table, "user_type");
+        try (var statement = connection.createStatement()) {
+            if (nullable == null) {
+                statement.execute("ALTER TABLE users ADD COLUMN user_type VARCHAR(30)");
+            }
+
+            statement.executeUpdate("UPDATE users SET user_type = 'USER' WHERE user_type IS NULL");
+
+            if (hasTable(connection, "students")) {
+                statement.executeUpdate("UPDATE users SET user_type = 'STUDENT' "
+                        + "WHERE id IN (SELECT id FROM students)");
+            }
+
+            if (nullable == null || nullable) {
+                statement.execute("ALTER TABLE users ALTER COLUMN user_type SET NOT NULL");
+            }
+        }
+    }
+
+    private void relaxLegacyUserDiscriminator(Connection connection) throws Exception {
+        if (!hasTable(connection, "users")
+                || !Boolean.FALSE.equals(columnNullable(connection, "users", "dtype"))) {
+            return;
+        }
+
+        try (var statement = connection.createStatement()) {
+            statement.execute("ALTER TABLE users ALTER COLUMN dtype DROP NOT NULL");
         }
     }
 

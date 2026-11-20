@@ -1,3 +1,4 @@
+
 package com.example.starter_project_2025.base.dataio.importer.result;
 
 import lombok.AccessLevel;
@@ -12,7 +13,18 @@ import java.util.List;
 public class ImportResult {
 
     int totalCount;
+
     int successCount;
+
     int failureCount;
+
+    int updatedCount;
+
+    int emailsSkipped;
+
+    int emailsSent;
+
+    int emailsFailed;
+
     List<RowError> errors = new ArrayList<>();
 }

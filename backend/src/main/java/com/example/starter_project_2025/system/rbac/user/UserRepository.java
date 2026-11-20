@@ -1,83 +1,160 @@
+
 package com.example.starter_project_2025.system.rbac.user;
 
 import com.example.starter_project_2025.base.crud.domain.BaseCrudRepository;
 import com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO;
+
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface UserRepository extends BaseCrudRepository<User, Long> {
-    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
-    @Query("select u from User u where u.id in :ids order by u.id")
-    List<User> lockForContribution(@Param("ids") java.util.Collection<Long> ids);
 
+    // Find user by email
     Optional<User> findByEmail(String email);
 
-    List<User> findByEmailEndingWithIgnoreCase(String emailSuffix);
-
-    List<User> findByTenantIdAndIsActiveTrue(Long tenantId);
-
-    Optional<User> findByIdAndIsActiveTrue(Long id);
+    Optional<User> findByEmailIgnoreCase(String email);
 
     boolean existsByEmail(String email);
 
-    boolean existsByUserCode(String userCode);
+    boolean existsByEmailIgnoreCase(String email);
 
-    Optional<User> findByUsernameIgnoreCase(String username);
+    // Find users by email domain
+    List<User> findByEmailEndingWithIgnoreCase(String email);
 
-    Optional<User> findByEmployeeCodeIgnoreCase(String employeeCode);
+    // Find active user by ID
+    Optional<User> findByIdAndIsActiveTrue(Long id);
 
+    // Find active users by tenant
+    List<User> findByTenantIdAndIsActiveTrue(Long tenantId);
+
+    // Lock users for contribution operations
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT u
+            FROM User u
+            WHERE u.id IN :ids
+            ORDER BY u.id
+            """)
+    List<User> lockForContribution(@Param("ids") List<Long> ids);
+
+    // Import: find accounts by multiple emails
+    @Query("""
+            SELECT u
+            FROM User u
+            WHERE LOWER(u.email) IN :emails
+            """)
+    List<User> findAllByEmailLowerIn(
+            @Param("emails") Collection<String> emails
+    );
+
+    // Check whether a department is being used
+    @Query("""
+            SELECT (COUNT(u) > 0)
+            FROM User u
+            WHERE LOWER(TRIM(u.department)) = LOWER(TRIM(:code))
+               OR LOWER(TRIM(u.department)) = LOWER(TRIM(:name))
+            """)
+    boolean existsByDepartmentCodeOrName(
+            @Param("code") String code,
+            @Param("name") String name
+    );
+
+    // Count users by active status
     Long countByIsActive(Boolean isActive);
 
+    Long countByIsActiveAndLocked(Boolean isActive, Boolean locked);
+
+    long countByRolesId(Long roleId);
+
+    // Find active users by role name
+    @Query("""
+            SELECT DISTINCT u
+            FROM User u
+            JOIN u.roles r
+            WHERE r.name = :roleName
+              AND u.isActive = true
+            """)
+    List<User> findActiveUsersByRoleName(
+            @Param("roleName") String roleName
+    );
+
+    // Find all users belonging to a department
     List<User> findAllByDepartments_Id(Long departmentId);
 
-    List<User> findAllByDepartments_IdAndIsActiveTrue(Long departmentId);
+    // Count active students in a department
+    @Query("""
+            SELECT COUNT(DISTINCT u.id)
+            FROM User u
+            JOIN u.roles r
+            JOIN u.departments d
+            WHERE r.name = 'STUDENT'
+              AND u.isActive = true
+              AND d.id = :departmentId
+            """)
+    Long countActiveStudentsByDepartmentId(
+            @Param("departmentId") Long departmentId
+    );
 
-    @Query("select distinct u from User u join u.roles role "
-            + "join u.departments department "
-            + "where department.id = :departmentId and u.isActive = true "
-            + "and role.name = 'STUDENT' order by u.firstName, u.lastName")
+    // Find active students in a department
+    @Query("""
+            SELECT DISTINCT u
+            FROM User u
+            JOIN u.roles r
+            JOIN u.departments d
+            WHERE r.name = 'STUDENT'
+              AND u.isActive = true
+              AND d.id = :departmentId
+            ORDER BY u.firstName, u.lastName
+            """)
     List<User> findActiveStudentsByDepartmentId(
             @Param("departmentId") Long departmentId
     );
 
-    @Query("select count(distinct u.id) from User u join u.roles role "
-            + "join u.departments department "
-            + "where department.id = :departmentId and u.isActive = true "
-            + "and role.name = 'STUDENT'")
-    long countActiveStudentsByDepartmentId(
-            @Param("departmentId") Long departmentId
-    );
-
+    // Search active students in a department
     @Query(
-            value = "select new com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO("
-                    + "u.id, u.email, u.firstName, u.lastName, department.id, department.name) "
-                    + "from User u join u.departments department "
-                    + "where department.id = :departmentId and u.isActive = true "
-                    + "and exists (select role.id from User member join member.roles role "
-                    + "where member.id = u.id and role.name = 'STUDENT') "
-                    + "and (:search is null or lower(u.email) like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.firstName, '')) "
-                    + "like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.lastName, '')) "
-                    + "like lower(concat('%', :search, '%')))",
-            countQuery = "select count(u) from User u where u.isActive = true "
-                    + "and exists (select department.id from User member "
-                    + "join member.departments department where member.id = u.id "
-                    + "and department.id = :departmentId) "
-                    + "and exists (select role.id from User member join member.roles role "
-                    + "where member.id = u.id and role.name = 'STUDENT') "
-                    + "and (:search is null or lower(u.email) like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.firstName, '')) "
-                    + "like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.lastName, '')) "
-                    + "like lower(concat('%', :search, '%')))"
+            value = """
+                    SELECT new com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO(
+                        u.id, u.email, u.firstName, u.lastName, d.id, d.name
+                    )
+                    FROM User u
+                    JOIN u.departments d
+                    JOIN u.roles r
+                    WHERE d.id = :departmentId
+                      AND u.isActive = true
+                      AND r.name = 'STUDENT'
+                      AND (
+                          :search IS NULL
+                          OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                    """,
+            countQuery = """
+                    SELECT COUNT(DISTINCT u.id)
+                    FROM User u
+                    JOIN u.departments d
+                    JOIN u.roles r
+                    WHERE d.id = :departmentId
+                      AND u.isActive = true
+                      AND r.name = 'STUDENT'
+                      AND (
+                          :search IS NULL
+                          OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                    """
     )
     Page<DepartmentMemberDTO> searchActiveStudentsByDepartmentId(
             @Param("departmentId") Long departmentId,
@@ -85,56 +162,51 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
             Pageable pageable
     );
 
+    // Search active students outside a department
     @Query(
-            value = "select new com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO("
-                    + "u.id, u.email, u.firstName, u.lastName, null, null) "
-                    + "from User u "
-                    + "where u.isActive = true and exists (select role.id from User member "
-                    + "join member.roles role where member.id = u.id and role.name = 'STUDENT') "
-                    + "and (:search is null or lower(u.email) like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.firstName, '')) "
-                    + "like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.lastName, '')) "
-                    + "like lower(concat('%', :search, '%')))",
-            countQuery = "select count(u) from User u "
-                    + "where u.isActive = true and exists (select role.id from User member "
-                    + "join member.roles role where member.id = u.id and role.name = 'STUDENT') "
-                    + "and (:search is null or lower(u.email) like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.firstName, '')) "
-                    + "like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.lastName, '')) "
-                    + "like lower(concat('%', :search, '%')))"
-    )
-    Page<DepartmentMemberDTO> searchActiveStudents(
-            @Param("search") String search,
-            Pageable pageable
-    );
-
-    @Query(
-            value = "select new com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO("
-                    + "u.id, u.email, u.firstName, u.lastName, null, null) "
-                    + "from User u "
-                    + "where not exists (select department.id from User member "
-                    + "join member.departments department where member.id = u.id "
-                    + "and department.id = :departmentId) "
-                    + "and u.isActive = true and exists (select role.id from User member "
-                    + "join member.roles role where member.id = u.id and role.name = 'STUDENT') "
-                    + "and (:search is null or lower(u.email) like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.firstName, '')) "
-                    + "like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.lastName, '')) "
-                    + "like lower(concat('%', :search, '%')))",
-            countQuery = "select count(u) from User u "
-                    + "where not exists (select department.id from User member "
-                    + "join member.departments department where member.id = u.id "
-                    + "and department.id = :departmentId) "
-                    + "and u.isActive = true and exists (select role.id from User member "
-                    + "join member.roles role where member.id = u.id and role.name = 'STUDENT') "
-                    + "and (:search is null or lower(u.email) like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.firstName, '')) "
-                    + "like lower(concat('%', :search, '%')) "
-                    + "or lower(coalesce(u.lastName, '')) "
-                    + "like lower(concat('%', :search, '%')))"
+            value = """
+                    SELECT new com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO(
+                        u.id, u.email, u.firstName, u.lastName, d.id, d.name
+                    )
+                    FROM User u
+                    LEFT JOIN u.departments d
+                    JOIN u.roles r
+                    WHERE u.isActive = true
+                      AND r.name = 'STUDENT'
+                      AND NOT EXISTS (
+                          SELECT d2.id
+                          FROM User otherUser
+                          JOIN otherUser.departments d2
+                          WHERE otherUser.id = u.id
+                            AND d2.id = :departmentId
+                      )
+                      AND (
+                          :search IS NULL
+                          OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                    """,
+            countQuery = """
+                    SELECT COUNT(DISTINCT u.id)
+                    FROM User u
+                    JOIN u.roles r
+                    WHERE u.isActive = true
+                      AND r.name = 'STUDENT'
+                      AND NOT EXISTS (
+                          SELECT d2.id
+                          FROM User otherUser
+                          JOIN otherUser.departments d2
+                          WHERE otherUser.id = u.id
+                            AND d2.id = :departmentId
+                      )
+                      AND (
+                          :search IS NULL
+                          OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                    """
     )
     Page<DepartmentMemberDTO> searchActiveStudentsOutsideDepartment(
             @Param("departmentId") Long departmentId,
@@ -142,19 +214,70 @@ public interface UserRepository extends BaseCrudRepository<User, Long> {
             Pageable pageable
     );
 
-    @Query("select department.id, count(distinct u.id) from User u join u.roles role "
-            + "join u.departments department "
-            + "where u.isActive = true and role.name = 'STUDENT' group by department.id")
-    List<Object[]> countActiveStudentsPerDepartment();
+    // Search all active students
+    @Query(
+            value = """
+                    SELECT new com.example.starter_project_2025.system.demo.department.DepartmentMemberDTO(
+                        u.id, u.email, u.firstName, u.lastName, d.id, d.name
+                    )
+                    FROM User u
+                    LEFT JOIN u.departments d
+                    JOIN u.roles r
+                    WHERE u.isActive = true
+                      AND r.name = 'STUDENT'
+                      AND (
+                          :search IS NULL
+                          OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                    """,
+            countQuery = """
+                    SELECT COUNT(DISTINCT u.id)
+                    FROM User u
+                    JOIN u.roles r
+                    WHERE u.isActive = true
+                      AND r.name = 'STUDENT'
+                      AND (
+                          :search IS NULL
+                          OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.lastName, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                          OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :search, '%'))
+                      )
+                    """
+    )
+    Page<DepartmentMemberDTO> searchActiveStudents(
+            @Param("search") String search,
+            Pageable pageable
+    );
 
-    long countByRolesId(Long roleId);
-
+    // Find user IDs by actor name, full name or email
     @Query("""
-            select distinct u from User u
-            join u.roles r
-            where r.name = :roleName
-              and u.isActive = true
-            order by u.email asc
+            SELECT u.id
+            FROM User u
+            WHERE LOWER(
+                CONCAT(
+                    COALESCE(u.firstName, ''),
+                    ' ',
+                    COALESCE(u.lastName, '')
+                )
+            ) LIKE LOWER(CONCAT('%', :actorName, '%'))
+            OR LOWER(COALESCE(u.email, ''))
+                LIKE LOWER(CONCAT('%', :actorName, '%'))
             """)
-    List<User> findActiveUsersByRoleName(@Param("roleName") String roleName);
+    List<Long> findIdsByActorName(
+            @Param("actorName") String actorName
+    );
+
+    // Count active students grouped by department
+    @Query("""
+            SELECT d.id, COUNT(DISTINCT u.id)
+            FROM User u
+            JOIN u.roles r
+            JOIN u.departments d
+            WHERE r.name = 'STUDENT'
+              AND u.isActive = true
+            GROUP BY d.id
+            """)
+    List<Object[]> countActiveStudentsPerDepartment();
 }

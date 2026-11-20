@@ -1,7 +1,9 @@
+
 package com.example.starter_project_2025.system.auth.authentication;
 
 import com.example.starter_project_2025.system.auth.authentication.dto.request.RegisterRequest;
 import com.example.starter_project_2025.system.rbac.user.User;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -9,6 +11,5 @@ import org.mapstruct.Mapping;
 public interface AuthMapper {
 
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "tenantId", ignore = true)
     User toEntity(RegisterRequest request);
 }

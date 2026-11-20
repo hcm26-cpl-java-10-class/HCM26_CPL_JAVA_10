@@ -86,6 +86,7 @@ import PeerReviewOverviewPage from "@/pages/management/exam/reviews/PeerReviewOv
 import AnonymousAccessPage from "@/pages/exam/AnonymousAccessPage";
 import AnonymousExamTakingPage from "@/pages/exam/AnonymousExamTakingPage";
 import { ModuleGroupModulePage } from "@/pages/management/fams/ModuleGroupModulePage";
+import AuditLogPage from "@/pages/management/audit-log";
 import type { ComponentType } from "react";
 import { buildEntityRoutes } from "./build-router";
 import TrainerManagementPage from "@/pages/management/training/trainer/TrainerManagementPage";
@@ -130,6 +131,7 @@ export const ROLE_HOME_PATHS = [
 
 export const routes: RouteConfig[] = [
   { path: "/trainers", component: TrainerManagementPage, requiredPermission: "TRAINER_READ" },
+  { path: "/admin/audit-log", component: AuditLogPage, requiredPermission: "USER_READ", isModuleDriven: true },
   // TRAINING OPERATIONS & LMS
   { path: "/training/audit", component: AuditPage, isModuleDriven: true },
   { path: "/training/trainee", component: TraineePage, isModuleDriven: true },

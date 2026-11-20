@@ -40,7 +40,7 @@ export function FormFieldRenderer({
   initial,
   onChange,
 }: FormFieldRendererProps) {
-  const rule = getEffectiveRule(field);
+  const rule = getEffectiveRule(field, Boolean(initial));
   const noNegative = rule.min !== undefined && rule.min >= 0;
   const requiredMark = rule.required ? (
     <span className="text-destructive"> *</span>

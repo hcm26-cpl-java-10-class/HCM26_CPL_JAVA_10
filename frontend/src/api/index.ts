@@ -1,4 +1,5 @@
 export * from "./features/auth.api";
+export * from "./features/audit/audit-log.api";
 export * from "./features/demo/book.api";
 export * from "./features/demo/category.api";
 export * from "./features/demo/course.api";
@@ -25,6 +26,7 @@ export * from "./features/backlog-item.api";
 export * from "./features/rbac/permission.api";
 export * from "./features/rbac/role.api";
 export * from "./features/rbac/user.api";
+export * from "./features/rbac/location.api";
 export * from "./features/cls.api";
 export * from "./features/calendar.api";
 export * from "./features/demo/schedule_version.api";

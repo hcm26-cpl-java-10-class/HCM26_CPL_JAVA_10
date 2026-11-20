@@ -15,6 +15,7 @@
     "@vladmandic/face-api": "^1.7.15",
     "axios": "^1.6.2",
     "cn": "^0.5.2",
+    "exceljs": "^4.4.0",
     "jspdf": "^4.2.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

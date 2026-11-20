@@ -6,15 +6,15 @@ import com.example.starter_project_2025.base.crud.mapper.BaseCrudMapper;
 import com.example.starter_project_2025.base.crud.service.BaseCrudServiceImpl;
 import com.example.starter_project_2025.base.crud.validation.ValidationContext;
 
+import com.example.starter_project_2025.system.rbac.role.Role;
+import com.example.starter_project_2025.system.rbac.role.RoleRepository;
+
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.UUID;
 
 @Service
 @Transactional
@@ -25,10 +25,8 @@ public class StudentServiceImpl
         implements StudentService {
 
     StudentMapper studentMapper;
-
     StudentRepository studentRepository;
-
-    PasswordEncoder passwordEncoder;
+    RoleRepository roleRepository;
 
     @Override
     protected BaseCrudRepository<Student, Long> getRepository() {
@@ -45,7 +43,8 @@ public class StudentServiceImpl
         return new String[]{
                 "studentCode",
                 "firstName",
-                "lastName"
+                "lastName",
+                "email"
         };
     }
 
@@ -55,33 +54,33 @@ public class StudentServiceImpl
             StudentDTO request,
             ValidationContext ctx
     ) {
-
         // Kiểm tra mã sinh viên trùng
         if (studentRepository.existsByStudentCode(request.getStudentCode())) {
             ctx.add("studentCode", "Student code already exists");
         }
 
-        // Tạo mật khẩu ngẫu nhiên
-        String randomPassword = UUID.randomUUID().toString();
-
-        // Mã hóa mật khẩu trước khi lưu
-        student.setPasswordHash(
-                passwordEncoder.encode(randomPassword)
-        );
-
-        // Yêu cầu sinh viên đổi mật khẩu
-        student.setMustChangePassword(true);
-
-        // Mặc định kích hoạt sinh viên
+        // Sinh viên mặc định được kích hoạt
         if (student.getIsActive() == null) {
             student.setIsActive(true);
         }
 
-        // Mặc định trạng thái
-        if (student.getStatus() == null
-                || student.getStatus().isBlank()) {
+        // Trạng thái sinh viên mặc định
+        if (student.getStatus() == null || student.getStatus().isBlank()) {
             student.setStatus("ACTIVE");
         }
+
+        // Không đặt mật khẩu mặc định cho Student
+        student.setPasswordHash(null);
+        student.setMustChangePassword(false);
+
+        // Tự động gán Role STUDENT
+        Role studentRole = roleRepository.findByName("STUDENT")
+                .orElseThrow(() -> new IllegalStateException(
+                        "Role STUDENT does not exist"
+                ));
+
+        student.getRoles().clear();
+        student.getRoles().add(studentRole);
     }
 
     @Override
@@ -90,7 +89,6 @@ public class StudentServiceImpl
             StudentDTO request,
             ValidationContext ctx
     ) {
-
         // Kiểm tra mã sinh viên trùng
         if (request.getStudentCode() != null
                 && !request.getStudentCode().equals(student.getStudentCode())
@@ -99,14 +97,11 @@ public class StudentServiceImpl
             ctx.add("studentCode", "Student code already exists");
         }
 
-        // Giữ trạng thái kích hoạt
         if (student.getIsActive() == null) {
             student.setIsActive(true);
         }
 
-        // Mặc định trạng thái
-        if (student.getStatus() == null
-                || student.getStatus().isBlank()) {
+        if (student.getStatus() == null || student.getStatus().isBlank()) {
             student.setStatus("ACTIVE");
         }
     }

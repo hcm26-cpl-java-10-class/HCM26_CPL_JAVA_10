@@ -1,3 +1,4 @@
+
 package com.example.starter_project_2025.system.rbac.user;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
@@ -12,16 +13,22 @@ import com.example.starter_project_2025.system.demo.department.Department;
 import com.example.starter_project_2025.system.rbac.role.Role;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.workspace.domain.MeetingNoteAttendee;
+
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 
 @Entity
+@Inheritance(strategy = InheritanceType.JOINED)
+@DiscriminatorColumn(name = "user_type", discriminatorType = DiscriminatorType.STRING, length = 30)
+@DiscriminatorValue("USER")
 @Getter
 @Setter
 @SuperBuilder
@@ -51,21 +58,15 @@ public class User extends BaseEntity {
     String userCode;
 
     /**
-     * Export-only column. It is deliberately transient and always null, so the exported file has an
-     * empty "Password" column that an administrator can fill in and import again. The password hash
-     * is never exported.
+     * Export-only column. Password hash is never exported.
      */
     @Transient
     @ExportField(name = "Password")
     String password;
 
-    /**
-     * Import: the "Password" column is optional. When it is empty the account is created with a random
-     * password and the user receives an email to set their own. Passwords are never exported.
-     */
-    @Column(nullable = false)
+    @Column(name = "password_hash", nullable = true)
     @ImportHash
-    @ImportField(name = "Password", required = true)
+    @ImportField(name = "Password")
     String passwordHash;
 
     @Column(nullable = false, length = 100)
@@ -74,6 +75,8 @@ public class User extends BaseEntity {
     String firstName;
 
     @Column(length = 100)
+    @ImportField(name = "Last Name")
+    @ExportField(name = "Last Name")
     String lastName;
 
     @Column(name = "tenant_id")
@@ -88,9 +91,7 @@ public class User extends BaseEntity {
     @ExportField(name = "Username")
     String username;
 
-    @Column(name = "employee_code", unique = true, length = 50)
-    @ImportField(name = "Employee Code")
-    @ExportField(name = "Employee Code")
+    @Column(name = "employee_code", length = 50)
     String employeeCode;
 
     @Column(length = 20)
@@ -98,10 +99,33 @@ public class User extends BaseEntity {
     @ExportField(name = "Phone")
     String phone;
 
+    @Column(length = 20)
+    String phoneNumber;
+
+    @Column(length = 100)
+    String department;
+
+    @Column(name = "last_login_at")
+    Instant lastLoginAt;
+
+    @Column(name = "last_login_device", length = 150)
+    String lastLoginDevice;
+
     @Column(length = 500)
     @ImportField(name = "Description")
     @ExportField(name = "Description")
     String description;
+
+    @Column(name = "date_of_birth")
+    @ImportField(name = "Date of Birth", required = true)
+    @ExportField(name = "Date of Birth")
+    LocalDate dateOfBirth;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    @ImportField(name = "Gender", required = true)
+    @ExportField(name = "Gender")
+    Gender gender;
 
     @Builder.Default
     @Column(nullable = false)
@@ -113,22 +137,30 @@ public class User extends BaseEntity {
     Boolean isGuest = false;
 
     @Builder.Default
+    @Column(name = "must_change_password")
+    Boolean mustChangePassword = false;
+
+    @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
+    @ExportField(name = "Roles", relation = true, path = "name")
+    @ImportField(name = "Roles", lookupEntity = Role.class, lookupField = "name", separator = ",")
+    @JoinTable(
+            name = "user_roles",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    Set<Role> roles = new HashSet<>();
+
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.LAZY)
+    @ExportField(name = "Departments", relation = true, path = "code")
+    @ImportField(name = "Departments", lookupEntity = Department.class, lookupField = "code", separator = ",")
     @JoinTable(
             name = "user_departments",
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "department_id")
     )
     Set<Department> departments = new HashSet<>();
-
-    @Builder.Default
-    @ManyToMany(fetch = FetchType.LAZY)
-    @ExportField(name = "Roles", relation = true, path = "name")
-    @ImportField(name = "Roles", lookupEntity = Role.class, lookupField = "name", separator = ",")
-    @JoinTable( name = "user_roles",
-                joinColumns = @JoinColumn(name = "user_id"),
-                inverseJoinColumns = @JoinColumn(name = "role_id"))
-    Set<Role> roles = new HashSet<>();
 
     @Builder.Default
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
@@ -142,10 +174,12 @@ public class User extends BaseEntity {
     @PrePersist
     @PreUpdate
     private void initializeTenantId() {
-        if (tenantId == null && tenant != null) tenantId = tenant.getId();
+        if (tenantId == null && tenant != null) {
+            tenantId = tenant.getId();
+        }
     }
 
     public String getFullName() {
-        return firstName + (lastName != null ? " " + lastName : "");
+        return firstName + (lastName != null && !lastName.isBlank() ? " " + lastName : "");
     }
 }
