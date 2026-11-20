@@ -24,6 +24,7 @@ import java.util.*;
 public class TeamCharterService {
     private final ProjectTeamRepository teams;
     private final TenantRepository tenants;
+    private final com.example.starter_project_2025.system.project.milestone.integration.port.TenantSettingsPort tenantSettings;
     private final TeamAllocationSessionRepository sessions;
     private final TeamCharterRevisionRepository revisions;
     private final TeamCharterConfirmationRepository confirmations;
@@ -65,7 +66,9 @@ public class TeamCharterService {
         String progress = team.getCharterRevision() == 0 ? "NOT_SAVED" : !current || !complete(content(Charter.from(team))) || members.isEmpty() || members.stream().anyMatch(m -> m.issue() != null)
                 ? "NEEDS_REVIEW" : !members.isEmpty() && count == members.size() ? "FULLY_CONFIRMED" : "PENDING";
         return new CharterView(team.getId(), team.getTeamName(), team.getStatus().name(), team.getCharterRevision(),
-                canEdit(team, roster), Charter.from(team), roster.token(), members, count, members.size(), progress, block == null, block);
+                canEdit(team, roster), Charter.from(team), roster.token(), members, count, members.size(), progress, block == null, block,
+                tenantSettings.requireTimeZone(principal().getTenantId()).getId(),
+                complete(content(Charter.from(team))) && members.stream().allMatch(m -> m.responsibility() != null && !m.responsibility().isBlank()));
     }
 
     @Transactional

@@ -25,6 +25,9 @@ export interface TeamCharterView {
   progress: "NOT_SAVED" | "NEEDS_REVIEW" | "PENDING" | "FULLY_CONFIRMED";
   canConfirm: boolean;
   confirmationBlockReason: string | null;
+  /** Additive response fields; optional while an older backend is being deployed. */
+  timeZone?: string;
+  contentComplete?: boolean;
 }
 
 export interface CharterMember {

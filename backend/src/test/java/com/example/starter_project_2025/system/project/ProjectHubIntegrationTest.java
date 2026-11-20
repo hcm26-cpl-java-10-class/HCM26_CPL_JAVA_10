@@ -44,6 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @org.springframework.test.context.ActiveProfiles("test")
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:project_hub_tests;DB_CLOSE_DELAY=-1",
+        "milestone.mock.tenant-time-zone=Asia/Tokyo",
         "GOOGLE_CLIENT_ID=local-test-client", "GOOGLE_CLIENT_SECRET=local-test-secret"
 })
 @AutoConfigureMockMvc
@@ -186,11 +187,31 @@ class ProjectHubIntegrationTest {
         saveCharter(adminToken, current.path("charter").path("version").asLong(), "").andExpect(status().isOk());
         JsonNode incomplete = readCharter(studentToken);
         assertThat(incomplete.path("progress").asText()).isEqualTo("NEEDS_REVIEW");
+        assertThat(incomplete.path("contentComplete").asBoolean()).isFalse();
         assertThat(incomplete.path("canConfirm").asBoolean()).isFalse();
         assertThat(incomplete.path("confirmationBlockReason").asText()).contains("five charter fields");
         confirmCharter(studentToken, consentRequest(incomplete)).andExpect(status().isUnprocessableEntity());
         saveCharter(adminToken, incomplete.path("charter").path("version").asLong(), "Complete mission").andExpect(status().isOk());
         assertThat(readCharter(studentToken).path("progress").asText()).isEqualTo("PENDING");
+        assertThat(readCharter(studentToken).path("contentComplete").asBoolean()).isTrue();
+    }
+
+    @Test
+    void charterReturnsConfiguredTenantZoneAndReadOnlyMetadataWithoutCreatingEvidence() throws Exception {
+        JsonNode initial = readCharter(adminToken);
+        assertThat(initial.path("timeZone").asText()).isEqualTo("Asia/Tokyo");
+        assertThat(initial.path("contentComplete").asBoolean()).isFalse();
+        assertThat(charterRevisions.countByTeam_Id(team.getId())).isZero();
+        saveCompleteCharter();
+        JsonNode saved = readCharter(studentToken);
+        assertThat(saved.path("contentComplete").asBoolean()).isTrue();
+        confirmCharter(studentToken, consentRequest(saved)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.timeZone").value("Asia/Tokyo"))
+                .andExpect(jsonPath("$.contentComplete").value(true));
+        mvc.perform(get("/api/project-hub/charter-teams").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].timeZone").value("Asia/Tokyo"));
+        assertThat(charterRevisions.countByTeam_Id(team.getId())).isEqualTo(1);
+        assertThat(charterConfirmations.findByTeamIdAndRevisionNumber(team.getId(), saved.path("revision").asLong())).hasSize(1);
     }
 
     @Test
