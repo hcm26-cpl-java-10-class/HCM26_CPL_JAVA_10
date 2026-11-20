@@ -8,9 +8,9 @@ import com.example.starter_project_2025.system.project.aiassistant.repository.Ai
 import com.example.starter_project_2025.system.project.aiassistant.service.apply.AIApplyService;
 import com.example.starter_project_2025.system.project.aiassistant.validator.TemplateOutputValidator;
 import com.example.starter_project_2025.system.project.rubric.integration.RubricTenantIdentity;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateRequest;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateResponse;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateService;
+import com.example.starter_project_2025.system.project.template.dto.ProjectTemplateRequest;
+import com.example.starter_project_2025.system.project.template.dto.ProjectTemplateResponse;
+import com.example.starter_project_2025.system.project.template.service.ProjectTemplateService;
 import com.example.starter_project_2025.system.project.tenant.Tenant;
 import com.example.starter_project_2025.system.project.trainingclass.UserDataScope;
 import com.example.starter_project_2025.system.project.trainingclass.UserDataScopeRepository;
@@ -46,7 +46,8 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 
-@SpringBootTest
+@org.springframework.test.context.ActiveProfiles("test")
+@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:ai_apply_rollback_tests;DB_CLOSE_DELAY=-1")
 class AIApplyRollbackIntegrationTest {
 
     @Autowired

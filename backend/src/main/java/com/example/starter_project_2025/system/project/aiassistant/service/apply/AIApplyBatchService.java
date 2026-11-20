@@ -1,14 +1,14 @@
 package com.example.starter_project_2025.system.project.aiassistant.service.apply;
 
-import com.example.starter_project_2025.system.project.ProjectTemplate;
-import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
 import com.example.starter_project_2025.system.project.aiassistant.entity.AIApplyBatch;
 import com.example.starter_project_2025.system.project.aiassistant.entity.AiSuggestion;
 import com.example.starter_project_2025.system.project.aiassistant.enums.SuggestionStatus;
 import com.example.starter_project_2025.system.project.aiassistant.repository.AIApplyBatchRepository;
 import com.example.starter_project_2025.system.project.aiassistant.repository.AiSuggestionRepository;
 
-import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
+import com.example.starter_project_2025.system.project.template.service.ProjectTemplateAccessService;
 import com.example.starter_project_2025.system.rbac.user.User;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;

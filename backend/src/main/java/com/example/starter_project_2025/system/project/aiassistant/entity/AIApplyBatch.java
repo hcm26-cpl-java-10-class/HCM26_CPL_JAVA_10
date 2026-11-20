@@ -2,7 +2,7 @@ package com.example.starter_project_2025.system.project.aiassistant.entity;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
 
-import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;

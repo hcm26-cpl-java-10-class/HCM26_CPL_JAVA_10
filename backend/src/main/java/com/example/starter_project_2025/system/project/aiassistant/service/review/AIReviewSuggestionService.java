@@ -22,10 +22,10 @@ import com.example.starter_project_2025.system.project.aiassistant.service.gener
 import com.example.starter_project_2025.system.project.aiassistant.service.review.ReviewFindingTargetResolver;
 import com.example.starter_project_2025.system.project.aiassistant.validator.ReviewSuggestionOutputValidator;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.system.project.rubric.domain.RubricVersion;
 import com.example.starter_project_2025.system.project.rubric.service.RubricCatalogService;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
+import com.example.starter_project_2025.system.project.template.service.ProjectTemplateAccessService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

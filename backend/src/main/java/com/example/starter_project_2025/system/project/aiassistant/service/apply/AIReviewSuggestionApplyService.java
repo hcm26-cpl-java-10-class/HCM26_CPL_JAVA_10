@@ -1,8 +1,8 @@
 package com.example.starter_project_2025.system.project.aiassistant.service.apply;
 
 import com.example.starter_project_2025.system.project.ProjectMemberRole;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
-import com.example.starter_project_2025.system.project.ProjectTemplateRepository;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.repository.ProjectTemplateRepository;
 import com.example.starter_project_2025.system.project.aiassistant.dto.ResolvedReviewFindingTarget;
 import com.example.starter_project_2025.system.project.aiassistant.dto.ReviewContext;
 import com.example.starter_project_2025.system.project.aiassistant.dto.ReviewContextBuilder;
@@ -38,16 +38,16 @@ import com.example.starter_project_2025.system.project.rubric.dto.SaveRubricDraf
 import com.example.starter_project_2025.system.project.rubric.repository.RubricVersionRepository;
 import com.example.starter_project_2025.system.project.rubric.service.RubricCatalogService;
 import com.example.starter_project_2025.system.project.rubric.service.RubricService;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateRequest;
-import com.example.starter_project_2025.system.project.template.TemplateTeamConstraints;
-import com.example.starter_project_2025.system.project.template.TemplateTeamConstraintsMapper;
-import com.example.starter_project_2025.system.project.template.TemplateTeamConstraintsRequest;
-import com.example.starter_project_2025.system.project.template.content.TemplateSampleContentRequest;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestonePlanRequest;
-import com.example.starter_project_2025.system.project.template.milestone.TemplateMilestoneTimeUnit;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
-import com.example.starter_project_2025.system.project.template.version.TemplateVersionConfigurationService;
+import com.example.starter_project_2025.system.project.template.service.ProjectTemplateAccessService;
+import com.example.starter_project_2025.system.project.template.dto.ProjectTemplateRequest;
+import com.example.starter_project_2025.system.project.template.dto.TemplateTeamConstraints;
+import com.example.starter_project_2025.system.project.template.mapper.TemplateTeamConstraintsMapper;
+import com.example.starter_project_2025.system.project.template.dto.TemplateTeamConstraintsRequest;
+import com.example.starter_project_2025.system.project.template.dto.content.TemplateSampleContentRequest;
+import com.example.starter_project_2025.system.project.template.dto.milestone.TemplateMilestonePlanRequest;
+import com.example.starter_project_2025.system.project.template.domain.milestone.TemplateMilestoneTimeUnit;
+import com.example.starter_project_2025.system.project.template.service.ProjectTemplateAccessService;
+import com.example.starter_project_2025.system.project.template.service.version.TemplateVersionConfigurationService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;

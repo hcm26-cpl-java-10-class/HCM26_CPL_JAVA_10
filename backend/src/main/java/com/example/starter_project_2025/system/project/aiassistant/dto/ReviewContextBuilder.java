@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.project.aiassistant.dto;
 
-import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.system.project.aiassistant.service.review.TemplateSnapshotRetrievalService;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
 import com.example.starter_project_2025.system.project.resources.template_resources.TemplateResourceRepository;

@@ -11,8 +11,8 @@ import com.example.starter_project_2025.system.project.aiassistant.entity.AiSugg
 import com.example.starter_project_2025.system.project.aiassistant.enums.SuggestionStatus;
 import com.example.starter_project_2025.system.project.aiassistant.repository.AiSuggestionRepository;
 import com.example.starter_project_2025.system.project.aiassistant.validator.TemplateOutputValidator;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateAccessService;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateCatalog;
+import com.example.starter_project_2025.system.project.template.service.ProjectTemplateAccessService;
+import com.example.starter_project_2025.system.project.template.service.ProjectTemplateCatalog;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
@@ -354,7 +354,7 @@ public class AiSuggestionService {
         var user = templateAccess.requireUser("CREATE");
         var categories = templateCatalog.domains(user.getTenantId());
         var levels = templateCatalog.levels(user.getTenantId()).stream()
-                .map(com.example.starter_project_2025.system.project.template.ProjectTemplateOptions.Option::value)
+                .map(com.example.starter_project_2025.system.project.template.dto.ProjectTemplateOptions.Option::value)
                 .toList();
         return new TemplateOptionValues(categories, levels);
     }

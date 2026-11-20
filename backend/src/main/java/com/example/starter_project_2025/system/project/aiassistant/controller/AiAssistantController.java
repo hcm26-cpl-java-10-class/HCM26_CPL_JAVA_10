@@ -13,7 +13,7 @@ import com.example.starter_project_2025.system.project.aiassistant.enums.Suggest
 import com.example.starter_project_2025.system.project.aiassistant.service.apply.AIApplyService;
 import com.example.starter_project_2025.system.project.aiassistant.service.generation.AiSuggestionService;
 import com.example.starter_project_2025.system.project.aiassistant.service.generation.GeneratedSuggestionResult;
-import com.example.starter_project_2025.system.project.template.ProjectTemplateResponse;
+import com.example.starter_project_2025.system.project.template.dto.ProjectTemplateResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
