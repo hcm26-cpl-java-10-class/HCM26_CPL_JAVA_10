@@ -1,17 +1,28 @@
 package com.example.starter_project_2025.system.project.analytics;
 
+import com.example.starter_project_2025.system.project.ProjectTeamStatus;
+import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklog;
 import com.example.starter_project_2025.system.project.sprint_backlog.SprintBacklogWorkType;
 import com.example.starter_project_2025.system.project.sprint_backlog.audit.SprintBacklogAuditLog;
+import com.example.starter_project_2025.system.project.task.Task;
+import com.example.starter_project_2025.system.project.task.TaskStatus;
+import com.example.starter_project_2025.system.project.task.alert.TaskAlertData;
+import com.example.starter_project_2025.system.project.task.audit.TaskAuditLog;
+import com.example.starter_project_2025.system.project.team.ParticipationStatus;
+import com.example.starter_project_2025.system.project.team.ProjectRole;
+import com.example.starter_project_2025.system.project.trainingclass.ClassMemberStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * US-ANL-002: data collection query of the Analytics view.
@@ -133,5 +144,218 @@ public class ProjectAnalyticsWorkItemRepository {
                 .setParameter("itemIds", itemIds)
                 .setParameter("asOf", asOf)
                 .getResultList();
+    }
+
+    /**
+     * US-ANL-006 / US-ANL-007: active subtasks belonging to the in-scope backlog items.
+     *
+     * <p>Subtasks live in {@code task} ({@code ProjectTask}) and inherit their
+     * project / sprint / backlog scope from {@code backlogItem}.</p>
+     */
+    public List<Task> findSubtasks(List<Long> backlogItemIds) {
+        if (backlogItemIds == null || backlogItemIds.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery("""
+                select subtask
+                from ProjectTask subtask
+                where subtask.isActive = true
+                  and subtask.backlogItem.id in :backlogItemIds
+                order by subtask.createdAt asc, subtask.id asc
+                """, Task.class)
+                .setParameter("backlogItemIds", backlogItemIds)
+                .getResultList();
+    }
+
+    /**
+     * US-ANL-006: active Done subtasks belonging to the in-scope backlog items.
+     *
+     * <p>Subtasks live in {@code task} ({@code ProjectTask}) and inherit their
+     * project / sprint / backlog scope from {@code backlogItem}.</p>
+     */
+    public List<Task> findDoneSubtasks(List<Long> backlogItemIds) {
+        if (backlogItemIds == null || backlogItemIds.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery("""
+                select subtask
+                from ProjectTask subtask
+                where subtask.isActive = true
+                  and subtask.backlogItem.id in :backlogItemIds
+                  and subtask.status = :done
+                order by subtask.createdAt asc, subtask.id asc
+                """, Task.class)
+                .setParameter("backlogItemIds", backlogItemIds)
+                .setParameter("done", TaskStatus.DONE)
+                .getResultList();
+    }
+
+    /**
+     * US-ANL-006: status audit history of the given subtasks, oldest first,
+     * bounded by {@code asOf}.
+     */
+    public List<TaskAuditLog> findSubtaskStatusEvents(List<UUID> subtaskIds, LocalDateTime asOf) {
+        if (subtaskIds == null || subtaskIds.isEmpty()) {
+            return List.of();
+        }
+        return entityManager.createQuery("""
+                select event
+                from TaskAuditLog event
+                where event.taskId in :subtaskIds
+                  and event.occurredAt <= :asOf
+                order by event.occurredAt asc, event.id asc
+                """, TaskAuditLog.class)
+                .setParameter("subtaskIds", subtaskIds)
+                .setParameter("asOf", asOf)
+                .getResultList();
+    }
+
+    /**
+     * US-ANL-008: resolves display names for {@code SprintBacklog#assigneeProjectMemberId}.
+     */
+    public Map<Long, String> findAssigneeNames(Collection<Long> projectMemberIds) {
+        if (projectMemberIds == null || projectMemberIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Object[]> rows = entityManager.createQuery("""
+                select member.id, user.firstName, user.lastName, user.email
+                from ProjectMember member
+                join member.classMember classMember
+                join classMember.user user
+                where member.id in :ids
+                """, Object[].class)
+                .setParameter("ids", projectMemberIds)
+                .getResultList();
+        Map<Long, String> names = new HashMap<>();
+        for (Object[] row : rows) {
+            if (row[0] instanceof Long id) {
+                String label = formatUserName((String) row[1], (String) row[2], (String) row[3]);
+                if (label != null) {
+                    names.put(id, label);
+                }
+            }
+        }
+        return names;
+    }
+
+    /**
+     * US-ANL-008: resolves display names for {@code ProjectTask#assigneeProjectMemberId}
+     * via the bridge table {@code TaskAlertMemberLink} (both project and team members).
+     */
+    public Map<UUID, String> findSubtaskAssigneeNames(Collection<UUID> memberAliasIds) {
+        if (memberAliasIds == null || memberAliasIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> names = new HashMap<>();
+        List<Object[]> projectRows = entityManager.createQuery("""
+                select link.id, user.firstName, user.lastName, user.email
+                from TaskAlertMemberLink link, ProjectMember member
+                join member.classMember classMember
+                join classMember.user user
+                where link.id in :ids
+                  and link.source = :source
+                  and link.sourceMemberId = member.id
+                """, Object[].class)
+                .setParameter("ids", memberAliasIds)
+                .setParameter("source", TaskAlertData.MemberSource.PROJECT_MEMBER)
+                .getResultList();
+        for (Object[] row : projectRows) {
+            if (row[0] instanceof UUID id) {
+                String label = formatUserName((String) row[1], (String) row[2], (String) row[3]);
+                if (label != null) {
+                    names.put(id, label);
+                }
+            }
+        }
+
+        List<Object[]> teamRows = entityManager.createQuery("""
+                select link.id, user.firstName, user.lastName, user.email
+                from TaskAlertMemberLink link, TeamMember member
+                join member.user user
+                where link.id in :ids
+                  and link.source = :source
+                  and link.sourceMemberId = member.id
+                """, Object[].class)
+                .setParameter("ids", memberAliasIds)
+                .setParameter("source", TaskAlertData.MemberSource.TEAM_MEMBER)
+                .getResultList();
+        for (Object[] row : teamRows) {
+            if (row[0] instanceof UUID id) {
+                String label = formatUserName((String) row[1], (String) row[2], (String) row[3]);
+                if (label != null) {
+                    names.putIfAbsent(id, label);
+                }
+            }
+        }
+        return names;
+    }
+
+    private static String formatUserName(String firstName, String lastName, String email) {
+        String full = ((firstName == null ? "" : firstName.trim()) + " "
+                + (lastName == null ? "" : lastName.trim())).trim();
+        if (!full.isEmpty()) {
+            return full;
+        }
+        return email == null || email.isBlank() ? null : email.trim();
+    }
+
+    /**
+     * US-ANL-010: checks whether the user is an active Team Leader on a team
+     * working on the given project (covering both {@code ProjectTeam}/{@code ProjectMember}
+     * and legacy {@code Team}/{@code TeamMember} models).
+     */
+    public boolean isProjectTeamLeader(Long userId, Project project) {
+        if (userId == null || project == null || project.getId() == null) {
+            return false;
+        }
+        Long projectLeaderMatches = entityManager.createQuery("""
+                select count(pm)
+                from ProjectMember pm
+                join pm.team team
+                join pm.classMember cm
+                where pm.isActive = true
+                  and team.isActive = true
+                  and team.status = :teamStatus
+                  and cm.isActive = true
+                  and cm.status = :memberStatus
+                  and cm.user.id = :userId
+                  and (team.leaderMemberId = cm.id
+                       or upper(coalesce(pm.role, '')) in ('TEAM_LEADER', 'TEAM_LEAD', 'LEADER', 'PM'))
+                  and (team.project.id = :projectId
+                       or (:projectTeamId is not null and team.id = :projectTeamId)
+                       or exists (
+                           select 1 from TeamSubprojectAssignment tsa
+                           where tsa.isActive = true
+                             and tsa.team.id = team.id
+                             and tsa.project.id = :projectId
+                       ))
+                """, Long.class)
+                .setParameter("teamStatus", ProjectTeamStatus.ACTIVE)
+                .setParameter("memberStatus", ClassMemberStatus.ACTIVE)
+                .setParameter("userId", userId)
+                .setParameter("projectId", project.getId())
+                .setParameter("projectTeamId", project.getTeamId())
+                .getSingleResult();
+        if (projectLeaderMatches != null && projectLeaderMatches > 0) {
+            return true;
+        }
+
+        Long legacyLeaderMatches = entityManager.createQuery("""
+                select count(tm)
+                from TeamMember tm
+                join tm.team team
+                where tm.isActive = true
+                  and team.isActive = true
+                  and tm.participationStatus = :status
+                  and tm.user.id = :userId
+                  and tm.projectRole in :leaderRoles
+                  and team.project.id = :projectId
+                """, Long.class)
+                .setParameter("status", ParticipationStatus.ACTIVE)
+                .setParameter("userId", userId)
+                .setParameter("leaderRoles", List.of(ProjectRole.TEAM_LEADER, ProjectRole.TEAM_LEAD))
+                .setParameter("projectId", project.getId())
+                .getSingleResult();
+        return legacyLeaderMatches != null && legacyLeaderMatches > 0;
     }
 }

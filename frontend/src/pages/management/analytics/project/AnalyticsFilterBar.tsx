@@ -110,7 +110,7 @@ export function AnalyticsFilterBar({
     <section aria-label="Analytics filters" className="rounded-xl border bg-muted/30 px-3 py-2.5 shadow-xs">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="font-medium text-foreground">Scope:</span>
-        <Select value={draft.scope} onValueChange={value => {
+        <Select disabled={isFetching} value={draft.scope} onValueChange={value => {
           const scope = value as ProjectAnalyticsScope;
           update({
             scope,
@@ -131,7 +131,7 @@ export function AnalyticsFilterBar({
           </SelectContent>
         </Select>
 
-        <Select value={sprintValue}
+        <Select disabled={isFetching} value={sprintValue}
           onValueChange={value => {
             const sprintId = value === "none" ? undefined : Number(value);
             update({ sprintId, scope: sprintId === undefined ? draft.scope : "SPRINT" });
@@ -153,7 +153,7 @@ export function AnalyticsFilterBar({
         <span className="ml-1 font-medium text-foreground">Date</span>
         <Popover>
           <PopoverTrigger asChild>
-            <Button type="button" variant="outline" size="sm" aria-label="Date range"
+            <Button type="button" variant="outline" size="sm" aria-label="Date range" disabled={isFetching}
               className={(dateError || invertedRange) ? "h-8 gap-1.5 border-destructive bg-background px-2.5 text-xs font-normal" : "h-8 gap-1.5 bg-background px-2.5 text-xs font-normal"}>
               <CalendarDays className="size-3.5 text-muted-foreground" />
               {rangeLabel(shownStart, shownEnd)}
@@ -165,14 +165,14 @@ export function AnalyticsFilterBar({
             <div className="grid grid-cols-2 gap-2">
               <div className="grid gap-1.5">
                 <Label htmlFor="analytics-from" className="text-[11px] text-muted-foreground">From</Label>
-                <Input id="analytics-from" type="date" value={draft.startDate}
+                <Input id="analytics-from" type="date" value={draft.startDate} disabled={isFetching}
                   aria-invalid={!!dateError || invertedRange}
                   className={dateError || invertedRange ? "border-destructive" : undefined}
                   onChange={event => update({ startDate: event.target.value })} />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="analytics-to" className="text-[11px] text-muted-foreground">To</Label>
-                <Input id="analytics-to" type="date" value={draft.endDate}
+                <Input id="analytics-to" type="date" value={draft.endDate} disabled={isFetching}
                   aria-invalid={!!dateError || invertedRange}
                   className={dateError || invertedRange ? "border-destructive" : undefined}
                   onChange={event => update({ endDate: event.target.value })} />
@@ -180,7 +180,7 @@ export function AnalyticsFilterBar({
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="analytics-type" className="text-[11px] text-muted-foreground">Work item type</Label>
-              <Select value={draft.itemType}
+              <Select disabled={isFetching} value={draft.itemType}
                 onValueChange={value => update({ itemType: value as ProjectAnalyticsItemType })}>
                 <SelectTrigger id="analytics-type" aria-label="Work item type" aria-invalid={!!fieldErrors.itemType}
                   className={fieldErrors.itemType ? "w-full border-destructive" : "w-full"}>
@@ -194,6 +194,7 @@ export function AnalyticsFilterBar({
             </div>
             {hasDateDraft && (
               <Button type="button" variant="ghost" size="sm" className="h-7 w-full text-[11px]"
+                disabled={isFetching}
                 onClick={() => update({ startDate: "", endDate: "" })}>
                 Use the default window
               </Button>
@@ -206,10 +207,12 @@ export function AnalyticsFilterBar({
 
         <div className="ml-auto flex items-center gap-1.5">
           <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs"
+            disabled={isFetching}
             onClick={onReset}>
             <RotateCcw className="size-3.5" />Reset
           </Button>
           <Button type="button" size="sm" className="h-8 gap-1.5 bg-blue-600 text-xs text-white hover:bg-blue-700"
+            disabled={isFetching}
             onClick={() => onApply({
               scope: draft.scope,
               sprintId: draft.scope === "SPRINT" ? draft.sprintId : undefined,

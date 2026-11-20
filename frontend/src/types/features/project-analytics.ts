@@ -36,11 +36,12 @@ export interface ProjectAnalyticsFilters {
   itemTypes: ProjectAnalyticsItemType[];
 }
 
-/** Effective chart window (may differ from the requested dates). */
+/** Effective chart window (may differ from the requested dates) and tenant timezone. */
 export interface ProjectAnalyticsWindow {
   startDate: string;
   endDate: string;
   granularity: ProjectAnalyticsGranularity;
+  timeZone?: string;
 }
 
 /** Measurement of a KPI value: item count, percentage or day average. */
@@ -99,8 +100,89 @@ export interface ProjectAnalyticsCreationBucket {
 /** US-ANL-004: "Work item creation trend" chart, one bar per creation date. */
 export interface ProjectAnalyticsCreationTrend {
   state: ProjectAnalyticsWidgetState;
+  timeZone?: string;
   series: ProjectAnalyticsSeries[];
   buckets: ProjectAnalyticsCreationBucket[];
+}
+
+/**
+ * US-ANL-005: one point of the "Work item cycle time" line chart.
+ *
+ * `averageDays` is the mean active execution time (first In progress → final
+ * Done) of the items completed on `date` (tenant time zone), one decimal.
+ */
+export interface ProjectAnalyticsCycleTimePoint {
+  date: string;
+  averageDays: number;
+  itemCount: number;
+}
+
+/** US-ANL-005: "Work item cycle time" chart, one point per completion date. */
+export interface ProjectAnalyticsCycleTimeTrend {
+  state: ProjectAnalyticsWidgetState;
+  timeZone: string;
+  points: ProjectAnalyticsCycleTimePoint[];
+}
+
+/** US-ANL-006: work item types compared in the multi-series lead time chart. */
+export type ProjectAnalyticsLeadTimeSeriesKey = "story" | "subtask" | "task";
+
+export interface ProjectAnalyticsLeadTimeSeries {
+  key: ProjectAnalyticsLeadTimeSeriesKey;
+  label: string;
+}
+
+/**
+ * US-ANL-006: one completion-date point of the "Work item lead time" chart.
+ *
+ * Each series average is `null` on dates with zero completions of that type
+ * so sparse series leave a clean gap instead of plotting false zero values (AC02).
+ */
+export interface ProjectAnalyticsLeadTimePoint {
+  date: string;
+  story: number | null;
+  storyCount: number;
+  subtask: number | null;
+  subtaskCount: number;
+  task: number | null;
+  taskCount: number;
+}
+
+/** US-ANL-006: "Work item lead time" multi-series line chart (Story / Subtask / Task). */
+export interface ProjectAnalyticsLeadTimeTrend {
+  state: ProjectAnalyticsWidgetState;
+  timeZone: string;
+  series: ProjectAnalyticsLeadTimeSeries[];
+  points: ProjectAnalyticsLeadTimePoint[];
+}
+
+/** US-ANL-007: work item types stacked in the completion trend bar chart. */
+export type ProjectAnalyticsCompletionSeriesKey = "subtask" | "story" | "task";
+
+export interface ProjectAnalyticsCompletionSeries {
+  key: ProjectAnalyticsCompletionSeriesKey;
+  label: string;
+}
+
+/**
+ * US-ANL-007: one completion-date bucket of the "Work item completion trend" chart.
+ *
+ * `subtask` is the blue bottom segment (`#2563EB`), `story` the green segment
+ * (`#7CB342`), and `task` the purple segment (`#A855F7` when Task items exist).
+ */
+export interface ProjectAnalyticsCompletionBucket {
+  date: string;
+  subtask: number;
+  story: number;
+  task: number;
+}
+
+/** US-ANL-007: "Work item completion trend" stacked bar chart. */
+export interface ProjectAnalyticsCompletionTrend {
+  state: ProjectAnalyticsWidgetState;
+  timeZone: string;
+  series: ProjectAnalyticsCompletionSeries[];
+  buckets: ProjectAnalyticsCompletionBucket[];
 }
 
 export interface ProjectAnalyticsWidget {
@@ -119,10 +201,14 @@ export interface ProjectAnalyticsShell {
   projectName: string | null;
   projectStatus: string | null;
   readOnly: boolean;
+  canExport: boolean;
   filters: ProjectAnalyticsFilters;
   window: ProjectAnalyticsWindow;
   kpis: ProjectAnalyticsKpi[];
   creationTrend: ProjectAnalyticsCreationTrend;
+  cycleTimeTrend: ProjectAnalyticsCycleTimeTrend;
+  leadTimeTrend: ProjectAnalyticsLeadTimeTrend;
+  completionTrend: ProjectAnalyticsCompletionTrend;
   widgets: ProjectAnalyticsWidget[];
 }
 
@@ -145,3 +231,44 @@ export interface ProjectAnalyticsProjectOption {
   name: string | null;
   status: string | null;
 }
+
+/** US-ANL-008: chart identifiers supported by the click-to-drill-down drawer. */
+export type ProjectAnalyticsDrillDownChart = "creation" | "cycle-time" | "lead-time" | "completion";
+
+/** US-ANL-008: clicked data point / bar segment passed to the drill-down drawer. */
+export interface ProjectAnalyticsDrillDownTarget {
+  chart: ProjectAnalyticsDrillDownChart;
+  date: string;
+  series?: string;
+}
+
+/** US-ANL-008: one underlying work item row inside the drill-down drawer. */
+export interface ProjectAnalyticsDrillDownItem {
+  id: string;
+  backlogItemId: number | null;
+  taskCode: string;
+  title: string | null;
+  workType: "STORY" | "SUBTASK" | "TASK" | "BUG" | string;
+  status: string;
+  assigneeName: string | null;
+  sprintId: number | null;
+  sprintName: string | null;
+  createdDate: string | null;
+  completedDate: string | null;
+  cycleDays: number | null;
+  leadDays: number | null;
+}
+
+/** US-ANL-008: response payload of `GET /v1/projects/{projectId}/analytics/drill-down`. */
+export interface ProjectAnalyticsDrillDownResponse {
+  projectId: number;
+  projectCode: string | null;
+  chart: ProjectAnalyticsDrillDownChart;
+  date: string;
+  series: string | null;
+  totalCount: number;
+  items: ProjectAnalyticsDrillDownItem[];
+}
+
+/** US-ANL-010: supported report export formats. */
+export type ProjectAnalyticsExportFormat = "CSV" | "PDF";

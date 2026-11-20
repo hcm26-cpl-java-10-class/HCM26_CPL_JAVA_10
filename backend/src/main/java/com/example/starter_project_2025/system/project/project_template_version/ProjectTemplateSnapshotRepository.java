@@ -45,4 +45,9 @@ public interface ProjectTemplateSnapshotRepository
     boolean existsByTemplateIdAndVersion(Long templateId, String version);
 
     boolean existsByTemplateIdAndVersionAndIdNot(Long templateId, String version, Long id);
+
+    Optional<ProjectTemplateSnapshot> findByIdAndTemplateIdAndIsActiveTrue(
+            Long snapshotId,
+            Long templateId
+    );
 }
