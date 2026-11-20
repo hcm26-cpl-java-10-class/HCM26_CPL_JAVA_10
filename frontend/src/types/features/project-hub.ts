@@ -28,6 +28,9 @@ export interface TeamCharterView {
   /** Additive response fields; optional while an older backend is being deployed. */
   timeZone?: string;
   contentComplete?: boolean;
+  /** ADMIN is a separate self-acknowledgement, not a team member's consent. */
+  confirmationKind?: "MEMBER" | "ADMIN" | null;
+  selfConfirmedAt?: string | null;
 }
 
 export interface CharterMember {

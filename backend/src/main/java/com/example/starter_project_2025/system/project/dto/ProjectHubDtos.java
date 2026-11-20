@@ -43,7 +43,8 @@ public final class ProjectHubDtos {
     public record CharterView(Long teamId, String teamName, String teamStatus, Long revision,
                               boolean canEdit, Charter charter, String rosterToken, List<CharterMember> members,
                               int confirmedCount, int memberCount, String progress, boolean canConfirm,
-                              String confirmationBlockReason, String timeZone, boolean contentComplete) { }
+                              String confirmationBlockReason, String timeZone, boolean contentComplete,
+                              String confirmationKind, java.time.Instant selfConfirmedAt) { }
     public record ConfirmCharter(@NotNull @PositiveOrZero Long version, @NotNull @Positive Long revision,
                                  @NotBlank @Size(max = 64) String rosterToken) { }
     public record CharterHistory(Long revision, Long actorId, java.time.Instant savedAt, Charter charter,

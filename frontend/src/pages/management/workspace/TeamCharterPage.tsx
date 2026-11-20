@@ -86,7 +86,7 @@ export function CharterContent({view, onRefresh}: {view: TeamCharterView; onRefr
   const confirm = useMutation({mutationFn: () => projectHubApi.confirmCharter(view.teamId, {version: view.charter.version!, revision: view.revision, rosterToken: view.rosterToken}), onError: async error => {
     setAcknowledgedFor(null); await refreshAfterRejectedMutation(error);
   }, onSuccess: async () => {
-    setAcknowledgedFor(null); toast.success("Your role and charter confirmation was recorded."); await onRefresh();
+    setAcknowledgedFor(null); toast.success(view.confirmationKind === "ADMIN" ? "Your Admin acknowledgement was recorded." : "Your role and charter confirmation was recorded."); await onRefresh();
     await queryClient.invalidateQueries({queryKey: ["charter-history", view.teamId]});
   }});
   const reload = useMutation({mutationFn: () => projectHubApi.getCharter(view.teamId), onSuccess: async latest => {
@@ -95,6 +95,7 @@ export function CharterContent({view, onRefresh}: {view: TeamCharterView; onRefr
   const history = useQuery({queryKey: ["charter-history", view.teamId, view.revision, page, user.email, activeRole], queryFn: () => projectHubApi.getCharterHistory(view.teamId, page), enabled: tab === "history", refetchOnWindowFocus: false});
   const busy = save.isPending || confirm.isPending || reload.isPending;
   const confirmationDisabled = busy || !view.canConfirm || dirty || stale;
+  const adminAcknowledgement = view.confirmationKind === "ADMIN";
   const editable = view.canEdit && !busy;
   const percentage = view.memberCount > 0 ? Math.round(view.confirmedCount / view.memberCount * 100) : 0;
   return <>
@@ -121,6 +122,8 @@ export function CharterContent({view, onRefresh}: {view: TeamCharterView; onRefr
             {member.issue && <p className="text-xs text-amber-700 dark:text-amber-400">{member.issue}</p>}{member.confirmedAt && <p className="text-xs text-muted-foreground">Confirmed {formatCharterDate(member.confirmedAt, view.timeZone)}</p>}
           </section>)}
           <div className="space-y-3 border-t pt-4">
+            {adminAcknowledgement && <Alert><AlertDescription>You are confirming as Admin using your own account. This acknowledgement does not replace any member's consent or increase the team's confirmation progress.</AlertDescription></Alert>}
+            {view.selfConfirmedAt && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">Your {adminAcknowledgement ? "Admin acknowledgement" : "confirmation"} was recorded: {formatCharterDate(view.selfConfirmedAt, view.timeZone)}.</p>}
             <div className={`flex items-start gap-3 rounded-lg bg-muted/30 p-3 select-none ${confirmationDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
               <Checkbox
                 id={confirmationId}
@@ -131,10 +134,10 @@ export function CharterContent({view, onRefresh}: {view: TeamCharterView; onRefr
                 onCheckedChange={checked => { if (!confirmationDisabled) setAcknowledgedFor(checked === true ? agreementId : null); }}
               />
               <Label htmlFor={confirmationId} className={`min-w-0 text-sm leading-6 font-normal ${confirmationDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
-                I have read this saved charter and agree to my assigned roles and responsibilities.
+                {adminAcknowledgement ? "I have read this saved charter and acknowledge it as Admin using my own account." : "I have read this saved charter and agree to my assigned roles and responsibilities."}
               </Label>
             </div>
-            <Button className="w-full" disabled={confirmationDisabled || !acknowledged} onClick={() => { if (!confirmationDisabled && acknowledged) confirm.mutate(); }}>{confirm.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}Confirm my role & charter</Button>
+            <Button className="w-full" disabled={confirmationDisabled || !acknowledged} onClick={() => { if (!confirmationDisabled && acknowledged) confirm.mutate(); }}>{confirm.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}{adminAcknowledgement ? "Confirm charter as Admin" : "Confirm my role & charter"}</Button>
             <p id={confirmationHintId} className="text-xs text-muted-foreground">{dirty ? "Save or discard local edits before confirming." : stale ? "Reload the saved charter before confirming." : view.confirmationBlockReason ?? "Your confirmation applies only to the saved revision shown above."}</p>{confirm.isError && <ErrorBox error={confirm.error} />}
           </div>
         </CardContent></Card>

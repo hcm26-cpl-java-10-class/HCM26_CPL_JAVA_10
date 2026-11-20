@@ -60,15 +60,19 @@ public class TeamCharterService {
         }).toList();
         int count = (int) members.stream().filter(CharterMember::confirmed).count();
         String block = blockReason(team, roster, current);
-        var self = members.stream().filter(m -> m.userId().equals(principal().getUser().getId()) && m.eligible()).findFirst();
-        if (block == null && self.isEmpty()) block = "Only an active member may confirm their own role and charter.";
-        if (block == null && self.orElseThrow().confirmed()) block = "You have already confirmed this revision.";
+        var self = confirmationActor(roster);
+        var ownConsent = current ? consents.stream().filter(c -> c.getUserId().equals(principal().getUser().getId())
+                && c.getRosterToken().equals(roster.token())).findFirst() : Optional.<TeamCharterConfirmation>empty();
+        if (block == null && self.isEmpty()) block = "Only an active team member or an authorized Admin may confirm for themselves.";
+        if (block == null && ownConsent.isPresent()) block = "You have already confirmed this revision.";
         String progress = team.getCharterRevision() == 0 ? "NOT_SAVED" : !current || !complete(content(Charter.from(team))) || members.isEmpty() || members.stream().anyMatch(m -> m.issue() != null)
                 ? "NEEDS_REVIEW" : !members.isEmpty() && count == members.size() ? "FULLY_CONFIRMED" : "PENDING";
         return new CharterView(team.getId(), team.getTeamName(), team.getStatus().name(), team.getCharterRevision(),
                 canEdit(team, roster), Charter.from(team), roster.token(), members, count, members.size(), progress, block == null, block,
                 tenantSettings.requireTimeZone(principal().getTenantId()).getId(),
-                complete(content(Charter.from(team))) && members.stream().allMatch(m -> m.responsibility() != null && !m.responsibility().isBlank()));
+                complete(content(Charter.from(team))) && members.stream().allMatch(m -> m.responsibility() != null && !m.responsibility().isBlank()),
+                self.map(m -> m.membershipId() == null ? "ADMIN" : "MEMBER").orElse(null),
+                ownConsent.map(TeamCharterConfirmation::getConfirmedAt).orElse(null));
     }
 
     @Transactional
@@ -95,8 +99,8 @@ public class TeamCharterService {
         var roster = integrity.roster(team);
         if (!Objects.equals(request.revision(), team.getCharterRevision()) || !Objects.equals(request.rosterToken(), roster.token())
                 || !Objects.equals(team.getCharterRosterToken(), roster.token())) throw conflict("The charter or roster has changed. Reload the saved revision before confirming.");
-        var self = roster.members().stream().filter(m -> m.userId().equals(principal().getUser().getId()) && m.eligible()).findFirst()
-                .orElseThrow(() -> new AccessDeniedException("You may confirm only your own active team membership."));
+        var self = confirmationActor(roster)
+                .orElseThrow(() -> new AccessDeniedException("Only an active team member or an authorized Admin may confirm for themselves."));
         if (confirmations.findByTeamIdAndRevisionNumber(teamId, team.getCharterRevision()).stream().anyMatch(c -> c.getUserId().equals(self.userId()))) return view(team);
         checkVersion(team, request.version());
         String block = blockReason(team, roster, true); if (block != null) throw invalid(block);
@@ -153,6 +157,16 @@ public class TeamCharterService {
     private boolean canEdit(ProjectTeam team, TeamCharterIntegrity.Roster roster) {
         return team.getStatus() == ProjectTeamStatus.ACTIVE && (hasAuthority("TEAM_UPDATE") || (hasRead() && roster.members().stream()
                 .anyMatch(m -> m.eligible() && m.userId().equals(principal().getUser().getId()) && team.isLedBy(m.classMemberId()))));
+    }
+    /** An Admin outside the roster signs as themselves; this is never member consent. */
+    private Optional<CharterMember> confirmationActor(TeamCharterIntegrity.Roster roster) {
+        var actor = principal();
+        var membership = roster.members().stream().filter(m -> m.userId().equals(actor.getUser().getId()) && m.eligible()).findFirst();
+        if (membership.isPresent()) return membership;
+        if (!hasAuthority("ROLE_ADMIN") && !hasAuthority("ROLE_SUPER_ADMIN")) return Optional.empty();
+        return Optional.of(new CharterMember(null, null, actor.getUser().getId(), actor.getUser().getFullName(),
+                actor.getUser().getEmail(), List.of("ADMIN"), "Admin acknowledgement; does not replace team member consent.",
+                true, null, false, null));
     }
     private ProjectTeam lockTeam(Long id) {
         ProjectTeam team = scopedTeam(id);

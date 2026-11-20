@@ -306,13 +306,61 @@ class ProjectHubIntegrationTest {
     }
 
     @Test
-    void adminAndAssignedMentorCannotConfirmOnBehalfOfStudents() throws Exception {
+    void adminAcknowledgesAsSelfWhileNonMemberMentorCannotConfirm() throws Exception {
         saveCompleteCharter(); var request = consentRequest(readCharter(studentToken));
-        confirmCharter(adminToken, request).andExpect(status().isForbidden());
+        JsonNode admin = readCharter(adminToken);
+        assertThat(admin.path("confirmationKind").asText()).isEqualTo("ADMIN");
+        assertThat(admin.path("canConfirm").asBoolean()).isTrue();
+        confirmCharter(adminToken, request).andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmedCount").value(0))
+                .andExpect(jsonPath("$.memberCount").value(1))
+                .andExpect(jsonPath("$.progress").value("PENDING"))
+                .andExpect(jsonPath("$.canConfirm").value(false))
+                .andExpect(jsonPath("$.selfConfirmedAt").isNotEmpty());
         transaction.executeWithoutResult(status -> teams.findById(team.getId()).orElseThrow().setAssignedMentorId(teacherId));
         String teacher = token("teacher@example.com");
         confirmCharter(teacher, consentRequest(readCharter(teacher))).andExpect(status().isForbidden());
-        assertThat(charterConfirmations.findByTeamIdAndRevisionNumber(team.getId(), 1L)).isEmpty();
+        var consents = charterConfirmations.findByTeamIdAndRevisionNumber(team.getId(), 1L);
+        assertThat(consents).hasSize(1);
+        assertThat(consents.getFirst().getUserId()).isEqualTo(transaction.execute(status -> users.findByEmail("admin@example.com").orElseThrow().getId()));
+        assertThat(json.readTree(consents.getFirst().getMemberSnapshot()).path("roles").get(0).asText()).isEqualTo("ADMIN");
+        assertThat(members.findAllByTeam_IdOrderByIdAsc(team.getId())).hasSize(1);
+    }
+
+    @Test
+    void adminAcknowledgementRetryDoesNotReplaceMemberConsentAndHistoryKeepsBothActors() throws Exception {
+        saveCompleteCharter();
+        JsonNode request = consentRequest(readCharter(adminToken));
+        confirmCharter(adminToken, request).andExpect(status().isOk());
+        confirmCharter(adminToken, request).andExpect(status().isOk());
+        assertThat(charterConfirmations.findByTeamIdAndRevisionNumber(team.getId(), 1L)).hasSize(1);
+        assertThat(charterOutbox.findAll().stream().filter(e -> e.getAggregateId().equals(team.getId()) && e.getEventType().equals("TEAM_CHARTER_CONFIRMED")).toList()).hasSize(1);
+        JsonNode student = readCharter(studentToken);
+        assertThat(student.path("canConfirm").asBoolean()).isTrue();
+        assertThat(student.path("confirmationKind").asText()).isEqualTo("MEMBER");
+        confirmCharter(studentToken, consentRequest(student)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.progress").value("FULLY_CONFIRMED"))
+                .andExpect(jsonPath("$.confirmedCount").value(1))
+                .andExpect(jsonPath("$.memberCount").value(1));
+        mvc.perform(get("/api/project-hub/teams/{id}/charter/history", team.getId()).header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].confirmations.length()").value(2));
+    }
+
+    @Test
+    void adminStillNeedsCompleteSavedCharterAndFreshRevision() throws Exception {
+        long version = readCharter(adminToken).path("charter").path("version").asLong();
+        saveCharter(adminToken, version, "Incomplete charter").andExpect(status().isOk());
+        JsonNode incomplete = readCharter(adminToken);
+        assertThat(incomplete.path("canConfirm").asBoolean()).isFalse();
+        confirmCharter(adminToken, consentRequest(incomplete)).andExpect(status().isUnprocessableEntity());
+        saveCompleteCharter();
+        JsonNode current = readCharter(adminToken);
+        confirmCharter(adminToken, consentRequest(current)).andExpect(status().isOk());
+        saveCharter(adminToken, current.path("charter").path("version").asLong(), "Updated agreement").andExpect(status().isOk());
+        assertThat(readCharter(adminToken).path("canConfirm").asBoolean()).isTrue();
+        assertThat(readCharter(adminToken).path("selfConfirmedAt").isNull()).isTrue();
+        confirmCharter(adminToken, consentRequest(current)).andExpect(status().isConflict());
+        confirmCharter(adminToken, consentRequest(readCharter(adminToken))).andExpect(status().isOk());
     }
 
     @Test
