@@ -247,7 +247,7 @@ export function StudentNavbar() {
               RB
             </div>
 
-            <span className="truncate text-lg font-bold text-blue-800">
+            <span className="hidden truncate text-lg font-bold text-blue-800 sm:inline">
             RBAC System
           </span>
           </Button>

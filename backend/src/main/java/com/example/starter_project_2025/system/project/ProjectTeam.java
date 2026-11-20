@@ -85,6 +85,14 @@ public class ProjectTeam extends BaseEntity {
     @Column(length = 2000)
     String conflictResolution;
 
+    /** Business revision of saved charter content; unrelated to the entity lock version. */
+    @lombok.Builder.Default
+    @Column(name = "charter_revision", nullable = false, columnDefinition = "bigint default 0")
+    Long charterRevision = 0L;
+
+    @Column(name = "charter_roster_token", length = 64)
+    String charterRosterToken;
+
     @Column(name = "team_name", nullable = false, length = 255)
     String teamName;
 

@@ -1,7 +1,7 @@
 package com.example.starter_project_2025.system.project.aiassistant.entity;
 
 import com.example.starter_project_2025.base.crud.domain.BaseEntity;
-import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.system.project.aiassistant.enums.AIReviewReportStatus;
 import com.example.starter_project_2025.system.project.project_template_version.ProjectTemplateSnapshot;
 import jakarta.persistence.*;

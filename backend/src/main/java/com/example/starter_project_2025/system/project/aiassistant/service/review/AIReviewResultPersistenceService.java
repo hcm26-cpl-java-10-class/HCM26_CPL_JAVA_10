@@ -1,6 +1,6 @@
 package com.example.starter_project_2025.system.project.aiassistant.service.review;
 
-import com.example.starter_project_2025.system.project.ProjectTemplate;
+import com.example.starter_project_2025.system.project.template.domain.ProjectTemplate;
 import com.example.starter_project_2025.system.project.aiassistant.dto.response.output.review.AIReviewOutput;
 import com.example.starter_project_2025.system.project.aiassistant.entity.AIReviewFinding;
 import com.example.starter_project_2025.system.project.aiassistant.entity.AIReviewReport;
