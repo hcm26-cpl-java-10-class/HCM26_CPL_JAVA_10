@@ -73,12 +73,18 @@ class GitAccountMappingWriter {
     private UserGitIdentity identity(Long tenantId, Long userId, VerifiedAccount account, LocalDateTime now) {
         UserGitIdentity byAccount = identities.findByProviderAndExternalUserId(GitProvider.GITHUB, account.githubUserId()).orElse(null);
         if (byAccount != null && !byAccount.getUserId().equals(userId)) {
-            throw GitIntegrationException.identityLinkedElsewhere(); // AC04
-        }
-        if (byAccount == null) {
-            identities.findByUserIdAndProvider(userId, GitProvider.GITHUB).ifPresent(other -> {
-                throw GitIntegrationException.identityMismatch(other.getLogin());
-            });
+            // AC04: the account still counts for someone else. Once it is unlinked everywhere (AC10),
+            // the owner who just proved it on GitHub may take it over; the old user keeps no claim.
+            if (!account.freshlyVerified() || contributors.existsByUserIdAndExternalUserId(byAccount.getUserId(), account.githubUserId())) {
+                throw GitIntegrationException.identityLinkedElsewhere();
+            }
+            requireNoOtherIdentity(userId);
+            byAccount.setUserId(userId);
+            byAccount.setTenantId(tenantId);
+            byAccount.setSource(account.source());
+            byAccount.setVerifiedAt(now);
+        } else if (byAccount == null) {
+            requireNoOtherIdentity(userId);
             byAccount = UserGitIdentity.builder()
                     .tenantId(tenantId).userId(userId).provider(GitProvider.GITHUB)
                     .externalUserId(account.githubUserId()).source(account.source()).verifiedAt(now)
@@ -90,6 +96,13 @@ class GitAccountMappingWriter {
         if (account.avatarUrl() != null) byAccount.setAvatarUrl(account.avatarUrl());
         if (byAccount.getLogin() == null) byAccount.setLogin(String.valueOf(account.githubUserId()));
         return identities.saveAndFlush(byAccount);
+    }
+
+    /** A user has one GitHub identity: linking a second account is a mismatch. */
+    private void requireNoOtherIdentity(Long userId) {
+        identities.findByUserIdAndProvider(userId, GitProvider.GITHUB).ifPresent(other -> {
+            throw GitIntegrationException.identityMismatch(other.getLogin());
+        });
     }
 
     /** AC10: the member's GitHub account no longer counts for them; Git data and e-mails stay. */

@@ -295,12 +295,13 @@ class GitAccountMappingIntegrationTest extends AbstractTaskLinkIntegrationTest {
     @Test
     void aGitHubAccountLinkedToAnotherUserIsRefused() throws Exception {
         identity(dave, 801L, "dave-gh");
+        connect(daveToken, masterId).andExpect(jsonPath("$.outcome").value("CONNECTED"));
         String state = startAuthorization(bobToken, moduleId);
         gitHubReturns("code-steal", 801L, "dave-gh");
         callback(bobToken, Map.of("state", state, "code", "code-steal"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("GIT_IDENTITY_LINKED_ELSEWHERE"));
-        assertThat(contributors.count()).isZero();
+        assertThat(contributor("gh:801").getUserId()).isEqualTo(dave.getId());
         assertThat(identities.findByUserIdAndProvider(bob.getId(), GitProvider.GITHUB)).isEmpty();
         assertThat(identities.findByProviderAndExternalUserId(GitProvider.GITHUB, 801L)).get()
                 .extracting(UserGitIdentity::getUserId).isEqualTo(dave.getId());
@@ -416,6 +417,29 @@ class GitAccountMappingIntegrationTest extends AbstractTaskLinkIntegrationTest {
         overview(pamToken, masterId).andExpect(jsonPath("$.unmapped[0].login").value("dave-gh"));
         // The identity stays: Dave reconnects in one click.
         connect(daveToken, masterId).andExpect(jsonPath("$.outcome").value("CONNECTED"));
+    }
+
+    @Test
+    void anAccountUnlinkedEverywhereCanBeConnectedByWhoeverProvesItOnGitHub() throws Exception {
+        identity(dave, 1301L, "shared-gh");
+        connect(daveToken, masterId).andExpect(jsonPath("$.outcome").value("CONNECTED"));
+        mvc.perform(delete(API + "/projects/{id}/github-accounts/{userId}", masterId, dave.getId())
+                .header("Authorization", "Bearer " + pamToken)).andExpect(status().isNoContent());
+
+        // Reusing the kept identity needs no GitHub round trip, so it does not take the account over.
+        String state = startAuthorization(bobToken, moduleId);
+        gitHubReturns("code-take", 1301L, "shared-gh");
+        callback(bobToken, Map.of("state", state, "code", "code-take"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.outcome").value("CONNECTED"))
+                .andExpect(jsonPath("$.account.login").value("shared-gh"));
+
+        assertThat(contributor("gh:1301").getUserId()).isEqualTo(bob.getId());
+        assertThat(identities.findByProviderAndExternalUserId(GitProvider.GITHUB, 1301L)).get()
+                .extracting(UserGitIdentity::getUserId).isEqualTo(bob.getId());
+        assertThat(identities.findByUserIdAndProvider(dave.getId(), GitProvider.GITHUB)).isEmpty();
+        // Dave lost the one-click reconnect: the account is Bob's now.
+        overview(daveToken, masterId).andExpect(jsonPath("$.viewer.identity").doesNotExist());
     }
 
     // ---- AC11 ----------------------------------------------------------------------------------------

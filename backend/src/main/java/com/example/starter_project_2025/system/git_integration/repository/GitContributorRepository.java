@@ -35,4 +35,7 @@ public interface GitContributorRepository extends JpaRepository<GitContributor, 
     List<GitContributor> lockGitHubMappings(@Param("masterId") Long masterId, @Param("userId") Long userId);
 
     boolean existsByMasterProjectIdAndUserIdAndExternalUserIdIsNotNull(Long masterProjectId, Long userId);
+
+    /** GI-06: whether a GitHub account still counts for a user in any master project. */
+    boolean existsByUserIdAndExternalUserId(Long userId, Long externalUserId);
 }
