@@ -1,7 +1,6 @@
-import { createBaseApiService } from "../../base-service.api";
-const path = "/students";
-const base = createBaseApiService<any, any>({ path: path });
+import { createBaseApiService } from "@/api/base-service.api";
+import type { StudentDTO, StudentFilter } from "@/types/features/student";
 
-export const studentApi = Object.assign({}, base, {
-  // Các hàm API riêng cho student nếu có
-});
+const base = createBaseApiService<StudentDTO, StudentFilter>({ path: "/students" });
+
+export const studentApi = Object.assign({}, base, {});

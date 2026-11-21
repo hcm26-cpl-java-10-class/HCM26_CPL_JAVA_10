@@ -9,6 +9,8 @@ export interface StudentDTO extends BaseDTO {
   phone?: string;
   dateOfBirth?: string;
   gender?: string;
+  trainingClassIds?: number[];
+  trainingClass?: string;
   className?: string;
   address?: string;
   status?: StudentStatus;
@@ -18,6 +20,7 @@ export interface StudentFilter extends BaseFilter {
   firstName?: string;
   lastName?: string;
   email?: string;
+  trainingClass?: string;
   className?: string;
   status?: StudentStatus;
 }

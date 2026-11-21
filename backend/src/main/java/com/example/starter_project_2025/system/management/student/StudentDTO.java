@@ -11,6 +11,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Getter
 @Setter
@@ -42,6 +43,12 @@ public class StudentDTO extends BaseDTO {
     LocalDate dateOfBirth;
 
     String gender;
+
+    // Các lớp đào tạo được chọn khi tạo/cập nhật sinh viên.
+    List<Long> trainingClassIds;
+
+    // Danh sách mã lớp dùng để hiển thị ở bảng Students.
+    String trainingClass;
 
     @Size(max = 1000)
     String address;

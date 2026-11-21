@@ -1,4 +1,5 @@
 import { studentApi } from "@/api/features/rbac/student.api";
+import { clsApi } from "@/api/features/cls.api";
 import { auditableFieldsSchema, type EntityConfig, type EntitySchema } from "@/types";
 
 const studentSchema: EntitySchema = {
@@ -15,6 +16,39 @@ const studentSchema: EntitySchema = {
       sortable: true,
       filterable: true,
       filterType: "text"
+    },
+    { name: "trainingClass", label: "Training Class", type: "text", sortable: false, editable: false, minWidth: 160 },
+    {
+      name: "trainingClassIds",
+      label: "Training Class",
+      type: "relation",
+      visible: false,
+      relation: {
+        api: {
+          getPage: async () => {
+            const classes = await clsApi.getAllClasses();
+            return {
+              content: classes.map((item) => ({
+                id: item.id,
+                label: `${item.code} - ${item.name}`,
+                status: item.status,
+              })),
+            };
+          },
+        },
+        valueField: "id",
+        labelField: "label",
+        multiple: true,
+        filterItems: (items, { initial }) => {
+          const currentIds = (initial?.trainingClassIds ?? []).map((id: number) => String(id));
+          return items.filter((item) =>
+            ["planning", "assigned", "active"].includes(String(item.status).toLowerCase()) ||
+            currentIds.includes(String(item.id))
+          );
+        },
+      },
+      defaultValue: [],
+      helpText: "Chọn một hoặc nhiều lớp. Lớp mới chỉ được chọn khi ở trạng thái Planning, Assigned hoặc Active.",
     },
     { name: "phone", label: "Số điện thoại", type: "text", sortable: true },
     { 

@@ -48,4 +48,7 @@ public class Student extends User {
     @Builder.Default
     @Column(nullable = false, length = 20)
     String status = "ACTIVE";
+
+    @Transient
+    String trainingClass;
 }

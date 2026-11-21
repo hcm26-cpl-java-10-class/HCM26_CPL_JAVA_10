@@ -32,6 +32,24 @@ public interface ClassMemberRepository
 
     boolean existsByTrainingClass_IdAndUser_Id(Long classId, Long userId);
 
+    /**
+     * Lấy mã Training Class theo User ID.
+     * Student kế thừa User nên Student ID chính là User ID.
+     */
+    @Query("""
+            select cm.user.id, cm.trainingClass.code
+            from ClassMember cm
+            where cm.user.id in :userIds
+              and cm.status = :status
+              and cm.isActive = true
+              and cm.trainingClass.isActive = true
+            order by cm.user.id, cm.trainingClass.code
+            """)
+    List<Object[]> findTrainingClassCodesByUserIds(
+            @Param("userIds") List<Long> userIds,
+            @Param("status") ClassMemberStatus status
+    );
+
     long countByTrainingClass_Id(Long classId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

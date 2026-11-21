@@ -8,6 +8,7 @@ import java.util.Optional;
 
 public interface ClassEnrollmentRepository extends JpaRepository<ClassEnrollment, Long> {
     List<ClassEnrollment> findByTrainingClass_IdAndIsActiveTrueOrderByIdAsc(Long classId);
+    List<ClassEnrollment> findByTraineeIdAndIsActiveTrue(Long traineeId);
     Optional<ClassEnrollment> findByTrainingClass_IdAndTraineeId(Long classId, Long traineeId);
     long countByTrainingClass_IdAndIsActiveTrueAndStatus(Long classId, ClassEnrollment.Status status);
     @Query("select count(e) from ClassEnrollment e where e.trainingClass.id = :classId and e.isActive = true and e.status <> com.example.starter_project_2025.system.training.ClassEnrollment.Status.DROPPED_OUT")
