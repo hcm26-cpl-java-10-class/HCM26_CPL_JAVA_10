@@ -18,6 +18,7 @@ class RepositoryInsightsQueryServiceTest {
     private static PullRequestStatRow merged(long minutes) {
         return new PullRequestStatRow() {
             public String getAuthorLogin() { return "dev"; }
+            public Long getAuthorGithubId() { return null; }
             public LocalDateTime getGithubCreatedAt() { return T0; }
             public LocalDateTime getMergedAt() { return T0.plusMinutes(minutes); }
         };

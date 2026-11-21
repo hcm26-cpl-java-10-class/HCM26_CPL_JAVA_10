@@ -130,6 +130,21 @@ public class GitHubAppProperties {
         return enabled && StringUtils.hasText(webhookSecret);
     }
 
+    /**
+     * GI-06: GitHub App user authorization (no {@code scope}: a GitHub App user token only
+     * holds the App's permissions, and GET /user needs none). Returns to {@link #callbackUrl}.
+     */
+    public String authorizeUrl(String state) {
+        return org.springframework.web.util.UriComponentsBuilder
+                .fromHttpUrl(trimTrailingSlash(webBaseUrl) + "/login/oauth/authorize")
+                .queryParam("client_id", clientId)
+                .queryParam("redirect_uri", callbackUrl)
+                .queryParam("state", state)
+                .encode()
+                .build()
+                .toUriString();
+    }
+
     public String installUrl() {
         return trimTrailingSlash(webBaseUrl) + "/apps/" + appSlug + "/installations/new";
     }

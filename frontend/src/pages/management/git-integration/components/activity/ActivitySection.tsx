@@ -35,12 +35,14 @@ function Figure({ value, label }: { value: ReactNode; label: string }) {
  * picker sits on this section's heading, so it is clear which numbers follow it (the tiles
  * and lists above are the current state and do not change with it).
  */
-export function ActivitySection({ query, range, onRange, defaultBranch, onNavigate }: {
+export function ActivitySection({ query, range, onRange, defaultBranch, onNavigate, canManageAccounts = false }: {
   query: { data?: GitRepositoryInsights; isPending: boolean; isError: boolean; isFetching: boolean; isPlaceholderData: boolean; refetch: () => unknown };
   range: GitInsightsRange;
   onRange: (range: GitInsightsRange) => void;
   defaultBranch?: string | null;
   onNavigate: (target: GitHubTabTarget) => void;
+  /** US-GI-06: an unmapped contributor opens in the Members view, where the PM can assign them. */
+  canManageAccounts?: boolean;
 }) {
   const data = query.data;
   const summary = data?.summary;
@@ -97,7 +99,8 @@ export function ActivitySection({ query, range, onRange, defaultBranch, onNaviga
         <section aria-label="Contributors" className={PANEL}>
           <PanelHeader title={<>Contributors <span className="font-normal text-muted-foreground">· {summary.contributors}</span></>} />
           <ContributorList contributors={data.contributors} others={data.otherContributors}
-            onSelect={author => onNavigate({ view: "commits", author, range })} />
+            onSelect={author => onNavigate({ view: "commits", author, range })}
+            onOpenContributor={canManageAccounts ? contributor => onNavigate({ view: "members", contributor, range }) : undefined} />
         </section>
         <section aria-label="Active branches" className={PANEL}>
           <PanelHeader title="Active branches" />

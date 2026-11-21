@@ -30,17 +30,39 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long>, Jpa
         String getAuthorLogin();
         String getAuthorName();
         String getFirstSeenRef();
+        /** GI-06: resolves the commit to a project member. */
+        Long getAuthorGithubId();
+        String getAuthorEmail();
     }
 
     /** WS-GH-02: commits of {@code [from, to)}, newest first (the page caps how many are read). */
     @Query("""
             select c.committedAt as committedAt, c.authorLogin as authorLogin, c.authorName as authorName,
-                   c.firstSeenRef as firstSeenRef
+                   c.firstSeenRef as firstSeenRef, c.authorGithubId as authorGithubId, c.authorEmail as authorEmail
               from GitCommit c
              where c.repositoryId = :repositoryId and c.committedAt >= :from and c.committedAt < :to
              order by c.committedAt desc, c.id desc""")
     List<CommitStatRow> statsBetween(@Param("repositoryId") Long repositoryId, @Param("from") LocalDateTime from,
                                      @Param("to") LocalDateTime to, Pageable page);
+
+    /** GI-06: all-time commits of a master project per author identity (several rows per person are merged in Java). */
+    interface AuthorActivityRow {
+        Long getGithubId();
+        String getEmail();
+        String getLogin();
+        String getName();
+        Long getCount();
+        LocalDateTime getFirstAt();
+        LocalDateTime getLastAt();
+    }
+
+    @Query("""
+            select c.authorGithubId as githubId, c.authorEmail as email, c.authorLogin as login, c.authorName as name,
+                   count(c) as count, min(c.committedAt) as firstAt, max(c.committedAt) as lastAt
+              from GitCommit c
+             where c.projectId = :masterId
+             group by c.authorGithubId, c.authorEmail, c.authorLogin, c.authorName""")
+    List<AuthorActivityRow> authorActivity(@Param("masterId") Long masterId);
 
     /** WS-GH-02: one branch (full ref) of a repository with its commit count and latest commit. */
     interface BranchRow {

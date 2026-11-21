@@ -56,4 +56,17 @@ public class GitOAuthState extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "outcome", length = 30)
     GitOAuthOutcome outcome;
+
+    /** GI-06: null on rows issued before the column existed, which were all {@link GitOAuthPurpose#INSTALL}. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "purpose", length = 20)
+    GitOAuthPurpose purpose;
+
+    /** GI-06: the master project an {@link GitOAuthPurpose#ACCOUNT_LINK} state maps the account into. */
+    @Column(name = "project_id")
+    Long projectId;
+
+    public GitOAuthPurpose effectivePurpose() {
+        return purpose == null ? GitOAuthPurpose.INSTALL : purpose;
+    }
 }

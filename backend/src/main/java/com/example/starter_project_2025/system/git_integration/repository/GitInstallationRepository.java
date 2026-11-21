@@ -12,4 +12,8 @@ public interface GitInstallationRepository extends JpaRepository<GitInstallation
     Optional<GitInstallation> findByProviderAndInstallationId(GitProvider provider, Long installationId);
 
     List<GitInstallation> findByTenantIdAndProviderAndIsActiveTrueOrderByConnectedAtDesc(Long tenantId, GitProvider provider);
+
+    /** GI-06: the latest installation a user connected; its GitHub user was verified with GET /user. */
+    Optional<GitInstallation> findFirstByConnectedByUserIdAndTenantIdAndProviderAndGithubUserIdIsNotNullOrderByConnectedAtDesc(
+            Long connectedByUserId, Long tenantId, GitProvider provider);
 }

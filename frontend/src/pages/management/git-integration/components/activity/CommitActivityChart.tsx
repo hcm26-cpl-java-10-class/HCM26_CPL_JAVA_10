@@ -82,7 +82,8 @@ export function CommitActivityChart({ daily, range, onSelect }: {
       </p>}
     </div>
 
-    <table className="sr-only">
+    {/* A table ignores the 1px box and overflow of `sr-only` and would stretch the page: the wrapper clips it. */}
+    <div className="sr-only"><table>
       <caption>Commits {range === "90d" ? "per week" : "per day"}</caption>
       <thead><tr><th scope="col">{range === "90d" ? "Week" : "Day"}</th><th scope="col">Commits</th><th scope="col">Pull requests merged</th><th scope="col">Open</th></tr></thead>
       <tbody>
@@ -93,6 +94,6 @@ export function CommitActivityChart({ daily, range, onSelect }: {
           <td>{point.commits > 0 && <button type="button" onClick={() => onSelect(point.from, point.to)}>Show commits of {spanLabel(point.from, point.to)}</button>}</td>
         </tr>)}
       </tbody>
-    </table>
+    </table></div>
   </div>;
 }

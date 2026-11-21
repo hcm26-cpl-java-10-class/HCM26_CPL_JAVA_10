@@ -69,13 +69,16 @@ public interface GitPullRequestRepository extends JpaRepository<GitPullRequest, 
     /** WS-GH-02: the columns insights need of one pull request. */
     interface PullRequestStatRow {
         String getAuthorLogin();
+        /** GI-06: resolves the pull request to a project member. */
+        Long getAuthorGithubId();
         LocalDateTime getGithubCreatedAt();
         LocalDateTime getMergedAt();
     }
 
     /** WS-GH-02: pull requests opened in {@code [from, to)}. */
     @Query("""
-            select p.authorLogin as authorLogin, p.githubCreatedAt as githubCreatedAt, p.mergedAt as mergedAt
+            select p.authorLogin as authorLogin, p.authorGithubId as authorGithubId,
+                   p.githubCreatedAt as githubCreatedAt, p.mergedAt as mergedAt
               from GitPullRequest p
              where p.repositoryId = :repositoryId and p.githubCreatedAt >= :from and p.githubCreatedAt < :to""")
     List<PullRequestStatRow> openedBetween(@Param("repositoryId") Long repositoryId, @Param("from") LocalDateTime from,
@@ -83,11 +86,29 @@ public interface GitPullRequestRepository extends JpaRepository<GitPullRequest, 
 
     /** WS-GH-02: pull requests merged in {@code [from, to)}. */
     @Query("""
-            select p.authorLogin as authorLogin, p.githubCreatedAt as githubCreatedAt, p.mergedAt as mergedAt
+            select p.authorLogin as authorLogin, p.authorGithubId as authorGithubId,
+                   p.githubCreatedAt as githubCreatedAt, p.mergedAt as mergedAt
               from GitPullRequest p
              where p.repositoryId = :repositoryId and p.mergedAt >= :from and p.mergedAt < :to""")
     List<PullRequestStatRow> mergedBetween(@Param("repositoryId") Long repositoryId, @Param("from") LocalDateTime from,
                                            @Param("to") LocalDateTime to);
+
+    /** GI-06: all-time pull requests of a master project per author. */
+    interface AuthorCountRow {
+        Long getGithubId();
+        String getLogin();
+        Long getCount();
+        LocalDateTime getFirstAt();
+        LocalDateTime getLastAt();
+    }
+
+    @Query("""
+            select p.authorGithubId as githubId, p.authorLogin as login, count(p) as count,
+                   min(p.githubCreatedAt) as firstAt, max(p.githubCreatedAt) as lastAt
+              from GitPullRequest p
+             where p.projectId = :masterId
+             group by p.authorGithubId, p.authorLogin""")
+    List<AuthorCountRow> authorActivity(@Param("masterId") Long masterId);
 
     /** WS-GH-02: pull requests in a state, the longest without update first. */
     List<GitPullRequest> findByRepositoryIdAndStateOrderByGithubUpdatedAtAscIdAsc(Long repositoryId, GitPullRequestState state,

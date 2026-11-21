@@ -8,6 +8,7 @@ import {
 } from "@/api/features/git-integration.api";
 import { usePermissions } from "@/hooks/usePermissions";
 import type {
+  GitAccountsOverview,
   BacklogGitLinks,
   GitCommitQuery,
   GitInsightsRange,
@@ -17,8 +18,8 @@ import type {
   LinkRepositoryRequest,
   ProjectRepositoryView,
 } from "@/types/features/git-integration";
-import { errorMessage, replayErrorMessage, taskLinkErrorMessage } from "./git-integration.messages";
-import { savePendingConnect } from "./git-integration.storage";
+import { accountErrorMessage, errorMessage, replayErrorMessage, taskLinkErrorMessage } from "./git-integration.messages";
+import { savePendingAccountConnect, savePendingConnect } from "./git-integration.storage";
 
 export const gitIntegrationKeys = {
   all: ["git-integration"] as const,
@@ -41,6 +42,7 @@ export const gitIntegrationKeys = {
   backlogLinkSummary: (itemIds: number[]) => ["git-integration", "backlog-link-summary", itemIds] as const,
   taskLinkStats: (projectId: number) => ["git-integration", "task-link-stats", projectId] as const,
   pullRequestCandidates: (itemId: number, q: string) => ["git-integration", "pull-request-candidates", itemId, q] as const,
+  githubAccounts: (projectId: number) => ["git-integration", "github-accounts", projectId] as const,
   webhookEvents: (query: GitWebhookEventQuery) =>
     ["git-integration", "webhook-events", query.status ?? "ALL", query.eventType ?? "", query.projectId ?? null, query.page ?? 0, query.size ?? 20] as const,
 };
@@ -449,4 +451,114 @@ export function useInstallationRepositories(installationId: number | undefined, 
   }, [installationId, queryClient, JSON.stringify(key)]);
 
   return { ...result, refresh, refreshing };
+}
+
+// ---- US-GI-06 · Connect GitHub account & map to project member ----------------------------------
+
+/** Everything a mapping change affects: the accounts of every project and the insights' contributors. */
+function invalidateMapping(queryClient: ReturnType<typeof useQueryClient>) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["git-integration", "github-accounts"] }),
+    queryClient.invalidateQueries({ queryKey: ["git-integration", "insights"] }),
+  ]);
+}
+
+function toastAccountError(error: unknown) {
+  const message = accountErrorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error));
+  toast.error(message.title, { description: message.description });
+}
+
+/** GitHub accounts of a project's master: the viewer's own state, members and unmapped contributors. */
+export function useGitHubAccounts(projectId: number | undefined, enabled = true) {
+  return useQuery({
+    queryKey: gitIntegrationKeys.githubAccounts(projectId ?? 0),
+    queryFn: ({ signal }) => gitIntegrationApi.githubAccounts(projectId!, signal),
+    enabled: enabled && projectId !== undefined,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * "Connect GitHub account": a verified account is mapped at once (toast, no redirect); otherwise the
+ * browser goes to GitHub and the callback page brings the user back to {@code returnTo}.
+ */
+export function useConnectAccount(projectId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => gitIntegrationApi.connectAccount(projectId),
+    onSuccess: result => {
+      if (result.outcome === "AUTHORIZE_REQUIRED" && result.authorizeUrl) {
+        savePendingAccountConnect(projectId, window.location.pathname + window.location.search);
+        window.location.assign(result.authorizeUrl);
+        return;
+      }
+      toast.success("GitHub connected", {
+        description: result.account ? `Activity of @${result.account.login} now counts for you in ${result.master.name ?? "this project"}.` : undefined,
+      });
+      void invalidateMapping(queryClient);
+    },
+    onError: toastAccountError,
+  });
+}
+
+/** AC10: unlink a member's GitHub account (PM, or the member). */
+export function useUnlinkAccount(projectId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: number) => gitIntegrationApi.unlinkAccount(projectId, userId),
+    onError: toastAccountError,
+    onSettled: () => invalidateMapping(queryClient),
+  });
+}
+
+/** Moves an e-mail contributor between "unmapped" and a member in the cached overview. */
+function moveEmail(view: GitAccountsOverview, contributorId: number, userId: number | null): GitAccountsOverview {
+  const fromUnmapped = view.unmapped.find(row => row.contributorId === contributorId);
+  const fromMember = view.members.flatMap(member => member.emails.map(email => ({ member, email })))
+    .find(entry => entry.email.contributorId === contributorId);
+  const email = fromUnmapped?.email ?? fromMember?.email.email ?? null;
+  const activity = fromUnmapped?.activity;
+  const members = view.members.map(member => {
+    let emails = member.emails.filter(row => row.contributorId !== contributorId);
+    let memberActivity = member.activity;
+    if (member.userId === userId) {
+      emails = [...emails, { contributorId, email, mappedByName: null, mappedAt: new Date().toISOString() }];
+      if (activity) {
+        memberActivity = {
+          commits: memberActivity.commits + activity.commits,
+          pullRequests: memberActivity.pullRequests + activity.pullRequests,
+          reviews: memberActivity.reviews + activity.reviews,
+          lastActiveAt: memberActivity.lastActiveAt ?? activity.lastActiveAt,
+        };
+      }
+    }
+    return { ...member, emails, activity: memberActivity };
+  });
+  const unmapped = userId === null || !fromUnmapped
+    ? view.unmapped
+    : view.unmapped.filter(row => row.contributorId !== contributorId);
+  return { ...view, members, unmapped, summary: { ...view.summary, unmappedContributors: unmapped.length } };
+}
+
+/** AC11: assign (userId) or unassign (null) an e-mail-only contributor, updated on screen at once. */
+export function useAssignContributor(projectId: number) {
+  const queryClient = useQueryClient();
+  const key = gitIntegrationKeys.githubAccounts(projectId);
+  return useMutation({
+    mutationFn: ({ contributorId, userId }: { contributorId: number; userId: number | null }) => userId === null
+      ? gitIntegrationApi.unassignContributor(projectId, contributorId)
+      : gitIntegrationApi.assignContributor(projectId, contributorId, userId),
+    onMutate: async ({ contributorId, userId }) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<GitAccountsOverview>(key);
+      if (previous) queryClient.setQueryData(key, moveEmail(previous, contributorId, userId));
+      return { previous };
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous);
+      toastAccountError(error);
+    },
+    onSettled: () => invalidateMapping(queryClient),
+  });
 }

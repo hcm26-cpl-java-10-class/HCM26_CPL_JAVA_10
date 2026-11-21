@@ -1,6 +1,10 @@
 import { isAxiosError } from "axios";
 import axiosInstance from "@/api/axios";
 import type {
+  GitAccountCallbackRequest,
+  GitAccountConnectResponse,
+  GitAccountsOverview,
+  GitContributorView,
   BacklogGitLinks,
   BacklogGitLinkSummary,
   GitPullRequestCandidate,
@@ -171,6 +175,28 @@ export const gitIntegrationApi = {
   /** US-SY-04: process a FAILED (or IGNORED activity) event again; 202 when queued. */
   replayWebhookEvent: async (id: number) =>
     (await axiosInstance.post<{ id: number; status: string }>(`/v1/git-integration/webhook-events/${id}/replay`)).data,
+
+  // ---- US-GI-06 · Connect GitHub account & map to project member ----
+
+  /** CONNECTED at once when the member's GitHub account is already verified, else AUTHORIZE_REQUIRED. */
+  connectAccount: async (projectId: number) =>
+    (await axiosInstance.post<GitAccountConnectResponse>(`${PROJECTS}/${projectId}/github-account/connect`)).data,
+
+  accountCallback: async (body: GitAccountCallbackRequest) =>
+    (await axiosInstance.post<GitAccountConnectResponse>(`${BASE}/account-callback`, body)).data,
+
+  githubAccounts: async (projectId: number, signal?: AbortSignal) =>
+    (await axiosInstance.get<GitAccountsOverview>(`${PROJECTS}/${projectId}/github-accounts`, { signal })).data,
+
+  unlinkAccount: async (projectId: number, userId: number) => {
+    await axiosInstance.delete(`${PROJECTS}/${projectId}/github-accounts/${userId}`);
+  },
+
+  assignContributor: async (projectId: number, contributorId: number, userId: number) =>
+    (await axiosInstance.post<GitContributorView>(`${PROJECTS}/${projectId}/contributors/${contributorId}/assign`, { userId })).data,
+
+  unassignContributor: async (projectId: number, contributorId: number) =>
+    (await axiosInstance.delete<GitContributorView>(`${PROJECTS}/${projectId}/contributors/${contributorId}/assign`)).data,
 
   /** Completes the flow; HTTP 202 means the install waits for an organization owner's approval. */
   callback: async (body: GitHubCallbackRequest) => {

@@ -1,5 +1,11 @@
 package com.example.starter_project_2025.system.git_integration.service;
 
+import com.example.starter_project_2025.system.git_integration.contributor.ContributorDirectory;
+import com.example.starter_project_2025.system.git_integration.contributor.ContributorIdentity;
+import com.example.starter_project_2025.system.git_integration.domain.GitContributor;
+import com.example.starter_project_2025.system.git_integration.repository.GitContributorRepository;
+import com.example.starter_project_2025.system.rbac.user.User;
+import com.example.starter_project_2025.system.rbac.user.UserRepository;
 import com.example.starter_project_2025.system.git_integration.domain.GitArtifactType;
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequest;
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequestReview;
@@ -36,6 +42,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
+import java.util.Collection;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -65,6 +73,8 @@ public class RepositoryInsightsQueryService {
     private final GitPullRequestRepository pullRequests;
     private final GitPullRequestReviewRepository reviews;
     private final GitTaskRefReader taskRefs;
+    private final GitContributorRepository contributorRows;
+    private final UserRepository users;
     private final Clock clock;
 
     /** Commits read per period; lowered by tests to exercise {@code truncated}. */
@@ -72,12 +82,15 @@ public class RepositoryInsightsQueryService {
 
     public RepositoryInsightsQueryService(RepositoryActivityQueryService activity, GitCommitRepository commits,
                                           GitPullRequestRepository pullRequests, GitPullRequestReviewRepository reviews,
-                                          GitTaskRefReader taskRefs, @Qualifier("gitIntegrationClock") Clock clock) {
+                                          GitTaskRefReader taskRefs, GitContributorRepository contributorRows,
+                                          UserRepository users, @Qualifier("gitIntegrationClock") Clock clock) {
         this.activity = activity;
         this.commits = commits;
         this.pullRequests = pullRequests;
         this.reviews = reviews;
         this.taskRefs = taskRefs;
+        this.contributorRows = contributorRows;
+        this.users = users;
         this.clock = clock;
     }
 
@@ -109,7 +122,9 @@ public class RepositoryInsightsQueryService {
         opened.forEach(row -> count(days, row.getGithubCreatedAt(), 1));
         merged.forEach(row -> count(days, row.getMergedAt(), 2));
 
-        Map<String, Tally> people = contributors(commitRows, opened, reviewRows);
+        ContributorDirectory directory = new ContributorDirectory(contributorRows.findByMasterProjectIdOrderByIdAsc(found.get().getProjectId()));
+        Map<String, Tally> people = contributors(commitRows, opened, reviewRows, directory);
+        nameMembers(people.values());
         List<ContributorStat> top = people.values().stream()
                 .sorted(Comparator.comparingLong((Tally t) -> t.commits).reversed()
                         .thenComparing(Comparator.comparingLong((Tally t) -> t.pullRequests).reversed())
@@ -177,10 +192,17 @@ public class RepositoryInsightsQueryService {
 
     // ---- contributors ---------------------------------------------------------------------------
 
-    /** A person of the period: grouped by GitHub login (any case), else by commit author name. */
+    /**
+     * A person of the period. GI-06: rows of a contributor mapped to a member are grouped by that
+     * member (GitHub account and assigned e-mails together); other rows by GitHub login (any
+     * case), else by commit author name.
+     */
     private static final class Tally {
         String login;
         String name;
+        Long userId;
+        String memberName;
+        Long contributorId;
         long commits;
         long pullRequests;
         long reviews;
@@ -191,16 +213,18 @@ public class RepositoryInsightsQueryService {
         }
 
         String display() {
+            if (memberName != null) return memberName;
             return login != null ? login : Objects.requireNonNullElse(name, "");
         }
 
         ContributorStat toStat() {
-            return new ContributorStat(login, name, login != null, commits, pullRequests, reviews, lastActiveAt);
+            return new ContributorStat(login, name, login != null, commits, pullRequests, reviews, lastActiveAt,
+                    userId, memberName, userId != null, contributorId);
         }
     }
 
     static boolean isBot(String login) {
-        return login != null && login.toLowerCase(Locale.ROOT).endsWith("[bot]");
+        return ContributorIdentity.isBot(login);
     }
 
     private static String keyOf(String login, String name) {
@@ -210,24 +234,25 @@ public class RepositoryInsightsQueryService {
     }
 
     private static Map<String, Tally> contributors(List<CommitStatRow> commitRows, List<PullRequestStatRow> opened,
-                                                   List<ReviewStatRow> reviewRows) {
+                                                   List<ReviewStatRow> reviewRows, ContributorDirectory directory) {
         Map<String, Tally> people = new HashMap<>();
         // Commits are newest first: the first one seen gives the display name and login spelling.
         for (CommitStatRow row : commitRows) {
-            Tally tally = tally(people, row.getAuthorLogin(), row.getAuthorName());
+            Tally tally = tally(people, row.getAuthorLogin(), row.getAuthorName(),
+                    directory.resolve(row.getAuthorGithubId(), row.getAuthorLogin(), row.getAuthorEmail()));
             if (tally == null) continue;
             if (tally.name == null && row.getAuthorName() != null && !row.getAuthorName().isBlank()) tally.name = row.getAuthorName().trim();
             tally.commits++;
             tally.touch(row.getCommittedAt());
         }
         for (PullRequestStatRow row : opened) {
-            Tally tally = tally(people, row.getAuthorLogin(), null);
+            Tally tally = tally(people, row.getAuthorLogin(), null, directory.resolve(row.getAuthorGithubId(), row.getAuthorLogin(), null));
             if (tally == null) continue;
             tally.pullRequests++;
             tally.touch(row.getGithubCreatedAt());
         }
         for (ReviewStatRow row : reviewRows) {
-            Tally tally = tally(people, row.getReviewerLogin(), null);
+            Tally tally = tally(people, row.getReviewerLogin(), null, directory.resolve(row.getReviewerGithubId(), row.getReviewerLogin(), null));
             if (tally == null) continue;
             tally.reviews++;
             tally.touch(row.getSubmittedAt());
@@ -236,15 +261,42 @@ public class RepositoryInsightsQueryService {
     }
 
     /** The tally of a person, created on first sight; null for bots and rows without any identity. */
-    private static Tally tally(Map<String, Tally> people, String login, String name) {
+    private static Tally tally(Map<String, Tally> people, String login, String name, GitContributor contributor) {
         if (isBot(login)) return null;
+        String cleanLogin = login == null || login.isBlank() ? null : login.trim();
+        if (contributor != null && contributor.getUserId() != null) {
+            Tally member = people.computeIfAbsent("u:" + contributor.getUserId(), ignored -> {
+                Tally created = new Tally();
+                created.userId = contributor.getUserId();
+                return created;
+            });
+            if (member.login == null && cleanLogin != null) member.login = cleanLogin;
+            if (member.login == null && contributor.isGitHub()) member.login = contributor.getLogin();
+            return member;
+        }
         String key = keyOf(login, name);
         if (key == null) return null;
-        return people.computeIfAbsent(key, ignored -> {
+        Tally tally = people.computeIfAbsent(key, ignored -> {
             Tally created = new Tally();
-            created.login = login == null || login.isBlank() ? null : login.trim();
-            created.name = login == null || login.isBlank() ? name.trim() : null;
+            created.login = cleanLogin;
+            created.name = cleanLogin == null ? name.trim() : null;
             return created;
+        });
+        if (tally.contributorId == null && contributor != null) tally.contributorId = contributor.getId();
+        return tally;
+    }
+
+    /** Member names of the mapped tallies. */
+    private void nameMembers(Collection<Tally> people) {
+        Set<Long> ids = people.stream().map(t -> t.userId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) return;
+        Map<Long, String> names = users.findAllById(ids).stream().collect(Collectors.toMap(User::getId, user -> {
+            String name = ((user.getFirstName() == null ? "" : user.getFirstName()) + " "
+                    + (user.getLastName() == null ? "" : user.getLastName())).trim();
+            return name.isEmpty() ? user.getEmail() : name;
+        }));
+        people.forEach(t -> {
+            if (t.userId != null) t.memberName = names.get(t.userId);
         });
     }
 

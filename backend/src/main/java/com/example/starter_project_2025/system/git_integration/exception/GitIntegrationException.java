@@ -69,6 +69,54 @@ public class GitIntegrationException extends RuntimeException {
                 "Không tìm thấy task");
     }
 
+    // ---- GI-06: connect GitHub account & map to project member ----------------------------------------
+
+    /** AC06: neither a member of the master project nor of one of its modules. */
+    public static GitIntegrationException notProjectMember() {
+        return new GitIntegrationException(HttpStatus.FORBIDDEN, "GIT_NOT_PROJECT_MEMBER",
+                "Bạn không phải thành viên của project hoặc module trực thuộc nên không thể kết nối GitHub");
+    }
+
+    /** AC04: the GitHub account is already linked to another internal account. */
+    public static GitIntegrationException identityLinkedElsewhere() {
+        return new GitIntegrationException(HttpStatus.CONFLICT, "GIT_IDENTITY_LINKED_ELSEWHERE",
+                "Tài khoản GitHub này đã được liên kết với một tài khoản khác trên hệ thống");
+    }
+
+    /** The user already proved another GitHub account. */
+    public static GitIntegrationException identityMismatch(String linkedLogin) {
+        return withDetails(HttpStatus.CONFLICT, "GIT_IDENTITY_MISMATCH",
+                "Tài khoản của bạn đang liên kết với một tài khoản GitHub khác",
+                linkedLogin == null ? null : Map.of("login", linkedLogin));
+    }
+
+    /** AC05: the GitHub account is mapped to another member of the master project. */
+    public static GitIntegrationException accountMappedToOtherMember() {
+        return new GitIntegrationException(HttpStatus.CONFLICT, "GIT_ACCOUNT_MAPPED_TO_OTHER_MEMBER",
+                "Tài khoản GitHub này đã được map cho một thành viên khác của project");
+    }
+
+    public static GitIntegrationException accountMappingNotFound() {
+        return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_ACCOUNT_MAPPING_NOT_FOUND",
+                "Thành viên chưa map tài khoản GitHub trong project này");
+    }
+
+    public static GitIntegrationException contributorNotFound() {
+        return new GitIntegrationException(HttpStatus.NOT_FOUND, "GIT_CONTRIBUTOR_NOT_FOUND",
+                "Không tìm thấy contributor");
+    }
+
+    /** BR4: a GitHub account is mapped only by its owner through Connect. */
+    public static GitIntegrationException contributorHasGitHubId() {
+        return new GitIntegrationException(HttpStatus.UNPROCESSABLE_ENTITY, "GIT_CONTRIBUTOR_HAS_GITHUB_ID",
+                "Contributor có tài khoản GitHub: chủ tài khoản cần tự kết nối GitHub");
+    }
+
+    public static GitIntegrationException assigneeNotMember() {
+        return new GitIntegrationException(HttpStatus.UNPROCESSABLE_ENTITY, "GIT_ASSIGNEE_NOT_MEMBER",
+                "Người được gán không phải thành viên của project hoặc module trực thuộc");
+    }
+
     // ---- TM-03: manual task links ------------------------------------------------------------------
 
     public static GitIntegrationException taskLinkNotFound() {

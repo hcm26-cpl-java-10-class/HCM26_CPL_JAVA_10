@@ -21,15 +21,27 @@ public interface GitPullRequestReviewRepository extends JpaRepository<GitPullReq
     /** WS-GH-02: the columns insights need of one review. */
     interface ReviewStatRow {
         String getReviewerLogin();
+        /** GI-06: resolves the review to a project member. */
+        Long getReviewerGithubId();
         LocalDateTime getSubmittedAt();
     }
 
     /** WS-GH-02: reviews submitted in {@code [from, to)}; a PENDING (unsent) review does not count. */
     @Query("""
-            select r.reviewerLogin as reviewerLogin, r.submittedAt as submittedAt
+            select r.reviewerLogin as reviewerLogin, r.reviewerGithubId as reviewerGithubId, r.submittedAt as submittedAt
               from GitPullRequestReview r
              where r.repositoryId = :repositoryId and r.submittedAt >= :from and r.submittedAt < :to
                and r.state <> com.example.starter_project_2025.system.git_integration.domain.GitReviewState.PENDING""")
     List<ReviewStatRow> submittedBetween(@Param("repositoryId") Long repositoryId, @Param("from") LocalDateTime from,
                                          @Param("to") LocalDateTime to);
+
+    /** GI-06: all-time submitted reviews of a master project per reviewer. */
+    @Query("""
+            select r.reviewerGithubId as githubId, r.reviewerLogin as login, count(r) as count,
+                   min(r.submittedAt) as firstAt, max(r.submittedAt) as lastAt
+              from GitPullRequestReview r
+             where r.projectId = :masterId
+               and r.state <> com.example.starter_project_2025.system.git_integration.domain.GitReviewState.PENDING
+             group by r.reviewerGithubId, r.reviewerLogin""")
+    List<GitPullRequestRepository.AuthorCountRow> reviewerActivity(@Param("masterId") Long masterId);
 }

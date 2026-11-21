@@ -1,5 +1,5 @@
-import { GitCommitHorizontal, GitPullRequest, LayoutDashboard, RefreshCw, TriangleAlert } from "lucide-react";
-import type { ReactNode } from "react";
+import { GitCommitHorizontal, GitPullRequest, LayoutDashboard, RefreshCw, TriangleAlert, Users } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -9,13 +9,17 @@ import {
   clearGitHubTabParams, openGitHubTabParams, parseGitHubTabParams, patchGitHubTabParams,
   type GitHubTabPatch, type GitHubTabTarget, type GitHubView,
 } from "@/pages/management/git-integration/github-tab.params";
-import { useProjectRepository, useRepositoryActivity } from "@/pages/management/git-integration/useGitIntegration";
+import { useGitHubAccounts, useProjectRepository, useRepositoryActivity } from "@/pages/management/git-integration/useGitIntegration";
+import { ConnectAccountBanner, ConnectAccountButton } from "@/pages/management/git-integration/components/members/ConnectAccountBanner";
+import { GitHubAccountChip } from "@/pages/management/git-integration/components/members/GitHubAccountChip";
+import { MembersView } from "@/pages/management/git-integration/components/members/MembersView";
 import { ProjectRepositoryCard } from "@/pages/management/git-integration/components/ProjectRepositoryCard";
 import { Segmented } from "@/pages/management/git-integration/components/activity/ActivityControls";
 import { CommitList } from "@/pages/management/git-integration/components/activity/CommitList";
 import { PullRequestsView } from "@/pages/management/git-integration/components/activity/PullRequestList";
 import { RepositoryInsights } from "@/pages/management/git-integration/components/activity/RepositoryInsights";
 import { Skeleton } from "@/components/ui/skeleton";
+import { isConnectBannerSnoozed, snoozeConnectBanner } from "@/pages/management/git-integration/git-integration.storage";
 
 const CARD = "min-w-0 gap-0 overflow-hidden border-slate-200/80 py-0 shadow-none dark:border-border";
 // `overflow-clip` keeps the rounded corners without becoming a scroll container, so sticky day headers still stick.
@@ -55,6 +59,15 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
   const repository = useProjectRepository(projectId);
   const linked = !!repository.data?.repository;
   const activity = useRepositoryActivity(projectId, linked);
+  // US-GI-06: one request feeds the Connect banner, the Members view and its count.
+  const accounts = useGitHubAccounts(projectId, linked);
+  const overview = accounts.data;
+  // "Not now" hides the banner for a week (per master); the strip then offers a compact button.
+  const [snoozedNow, setSnoozedNow] = useState(false);
+  const canConnect = !!overview && overview.viewer.canConnect && !overview.viewer.mapped;
+  // Members offers Connect on the viewer's own row, so neither the banner nor the strip button shows there.
+  const inMembers = state.view === "members";
+  const showBanner = linked && canConnect && !inMembers && !snoozedNow && !isConnectBannerSnoozed(overview!.master.id);
 
   // Filters replace the history entry; opening a task pushes one so Back returns here.
   const update = (patch: GitHubTabPatch) => setParams(previous => patchGitHubTabParams(previous, patch), { replace: true });
@@ -81,17 +94,25 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
     { id: "insights", label: <><LayoutDashboard className="size-3.5" aria-hidden="true" />Insights</> },
     { id: "commits", label: <><GitCommitHorizontal className="size-3.5" aria-hidden="true" />Commits<Count value={data?.commitCount} /></> },
     { id: "pulls", label: <><GitPullRequest className="size-3.5" aria-hidden="true" />Pull requests<Count value={data?.pullRequests.open} /></> },
+    { id: "members", label: <><Users className="size-3.5" aria-hidden="true" />Members
+      {overview && overview.summary.unmappedContributors > 0 && <span title={`${overview.summary.unmappedContributors} unmapped contributors`}
+        className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold tabular-nums leading-4 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+        <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />{overview.summary.unmappedContributors}
+      </span>}</> },
   ];
 
   let content: ReactNode = null;
   if (linked) {
     if (state.view === "commits") {
       content = <div className={LIST_CARD}><CommitList projectId={projectId} filters={state} onChange={update} onOpenTask={openTask} /></div>;
+    } else if (state.view === "members") {
+      content = <MembersView projectId={projectId} overview={overview} loading={accounts.isPending} error={accounts.isError}
+        onRetry={() => void accounts.refetch()} highlight={state.contributor} />;
     } else if (state.view === "pulls") {
       content = <div className={LIST_CARD}><PullRequestsView projectId={projectId} filters={state} onChange={update} onOpenTask={openTask} /></div>;
     } else if (activity.isPending) {
-      content = <div role="status" aria-label="Loading insights" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-        {[0, 1, 2, 3, 4].map(index => <Skeleton key={index} className="h-[78px] rounded-xl" />)}
+      content = <div role="status" aria-label="Loading insights" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map(index => <Skeleton key={index} className="h-[78px] rounded-xl" />)}
       </div>;
     } else if (activity.isError || !data) {
       content = <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
@@ -107,8 +128,15 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
 
   return <div className="min-w-0 space-y-4">
     <Card className={CARD}>
-      <ProjectRepositoryCard projectId={projectId} showActivity={false} variant="strip" />
+      <ProjectRepositoryCard projectId={projectId} showActivity={false} variant="strip"
+        extra={overview && (overview.viewer.mapped
+          ? <GitHubAccountChip login={overview.members.find(m => m.userId === overview.viewer.userId)?.github?.login ?? overview.viewer.identity?.login ?? null}
+            title={`You are connected · applies to ${overview.master.name ?? "the project"} and all its modules`} />
+          // US-GI-06: still one click away after "Not now" hid the banner.
+          : canConnect && !showBanner && !inMembers && <ConnectAccountButton projectId={projectId} login={overview.viewer.identity?.login} variant="outline" />)} />
     </Card>
+    {showBanner && <ConnectAccountBanner projectId={projectId} overview={overview!}
+      onSnooze={() => { snoozeConnectBanner(overview!.master.id); setSnoozedNow(true); }} />}
     {linked && <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Segmented label="GitHub views" value={state.view} options={views}

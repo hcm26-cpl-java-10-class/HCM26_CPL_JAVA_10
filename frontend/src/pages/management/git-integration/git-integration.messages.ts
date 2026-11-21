@@ -231,3 +231,73 @@ export function taskLinkErrorMessage(code?: string, httpStatus?: number) {
   if (httpStatus === 403) return "You need permission to update this task.";
   return errorMessage(code, httpStatus).description;
 }
+
+/** US-GI-06: why "Connect GitHub account" or a mapping change did not go through, in words. */
+const ACCOUNT_ERRORS: Record<string, Omit<GitIntegrationMessage, "action">> = {
+  GIT_AUTHORIZATION_DENIED: {
+    tone: "warning",
+    title: "GitHub access was not granted",
+    description: "Nothing changed. You can connect again any time.",
+  },
+  GIT_STATE_INVALID: {
+    tone: "error",
+    title: "This link has expired",
+    description: "Each attempt is valid for 10 minutes and works once. Start again from the GitHub tab.",
+  },
+  GIT_CALLBACK_INVALID: {
+    tone: "error",
+    title: "GitHub returned incomplete data",
+    description: "Your account could not be verified, so nothing was saved. Please try again.",
+  },
+  GIT_IDENTITY_LINKED_ELSEWHERE: {
+    tone: "error",
+    title: "This GitHub account belongs to another user",
+    description: "Sign in to GitHub with your own account, then connect again. Ask an admin if this is your account.",
+  },
+  GIT_IDENTITY_MISMATCH: {
+    tone: "warning",
+    title: "You are already linked to another GitHub account",
+    description: "Connect with that account, or ask an admin to unlink it first.",
+  },
+  GIT_ACCOUNT_MAPPED_TO_OTHER_MEMBER: {
+    tone: "error",
+    title: "Already used by another member of this project",
+    description: "Ask your PM to check the Members list of the GitHub tab.",
+  },
+  GIT_NOT_PROJECT_MEMBER: {
+    tone: "neutral",
+    title: "You are not a member of this project",
+    description: "Only members of the project or one of its modules can connect a GitHub account.",
+  },
+  GIT_ASSIGNEE_NOT_MEMBER: {
+    tone: "warning",
+    title: "Not a member of this project",
+    description: "Pick someone from the project or one of its modules.",
+  },
+  GIT_CONTRIBUTOR_HAS_GITHUB_ID: {
+    tone: "neutral",
+    title: "Only the account owner can connect it",
+    description: "This contributor has a GitHub account; ask them to connect it from the GitHub tab.",
+  },
+  GIT_CONTRIBUTOR_NOT_FOUND: {
+    tone: "neutral",
+    title: "Contributor not found",
+    description: "The list changed in the meantime. It has been refreshed.",
+  },
+  GIT_ACCOUNT_MAPPING_NOT_FOUND: {
+    tone: "neutral",
+    title: "Already unlinked",
+    description: "This member's GitHub account was not linked any more.",
+  },
+  GIT_PROVIDER_UNAVAILABLE: {
+    tone: "error",
+    title: "GitHub is not responding",
+    description: "Nothing was saved. Try again in a minute.",
+  },
+};
+
+export function accountErrorMessage(code?: string, httpStatus?: number): GitIntegrationMessage {
+  const known = code ? ACCOUNT_ERRORS[code] : undefined;
+  if (known) return { ...known, action: "retry" };
+  return errorMessage(code, httpStatus);
+}

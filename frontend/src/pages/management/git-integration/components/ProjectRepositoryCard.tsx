@@ -72,8 +72,10 @@ function RepositoryLine({ repository }: { repository: LinkedRepository }) {
  * WS-GH-01: on Overview the activity summary opens the GitHub tab (`onOpenActivity`);
  * the GitHub tab itself shows it as a one-line strip (`variant="strip"`, `showActivity={false}`).
  */
-export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity = true, variant = "card" }: {
+export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity = true, variant = "card", extra }: {
   projectId: number;
+  /** US-GI-06: shown in the strip next to the sync state (the viewer's GitHub account). */
+  extra?: ReactNode;
   onOpenActivity?: (target: GitHubTabTarget) => void;
   showActivity?: boolean;
   /** "strip": one line (linked repository only; loading, errors and linking keep the card). */
@@ -229,6 +231,7 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
             <CornerLeftUp className="size-3" aria-hidden="true" />Shared from {view.masterProject.code}
           </span>}
         </div>
+        {extra}
         {active ? <SyncStatusPill job={sync} lastSyncedAt={repository.lastSyncedAt} />
           : <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
             <TriangleAlert className="size-3.5" aria-hidden="true" />Unavailable

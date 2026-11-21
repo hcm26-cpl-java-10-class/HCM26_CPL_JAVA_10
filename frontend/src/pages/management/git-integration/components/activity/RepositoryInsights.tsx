@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import type { GitInsightsRange, GitPullRequestAttention, GitRepositoryActivity, GitTaskRef } from "@/types/features/git-integration";
 import type { GitHubTabTarget } from "../../github-tab.params";
 import { formatDateTime, formatRelative } from "../../git-integration.format";
-import { useRepositoryCommits, useRepositoryInsights, useRepositoryPullRequests } from "../../useGitIntegration";
+import { useGitHubAccounts, useRepositoryCommits, useRepositoryInsights, useRepositoryPullRequests } from "../../useGitIntegration";
 import { pullRequestAccent, STAT_TONES } from "../git-integration.styles";
 import { ActivitySection } from "./ActivitySection";
 import { CommitRow } from "./CommitList";
@@ -33,6 +33,8 @@ const PANEL = "flex min-w-0 flex-col overflow-hidden rounded-xl border border-sl
 const RECENT_MERGED = 3;
 /** "Recently merged" fills the panel while fewer pull requests than this need attention. */
 const RECENT_WHEN_FEWER_THAN = 3;
+/** Temporarily hidden; flip back to true to show the "Awaiting review" stat tile again. */
+const SHOW_AWAITING_REVIEW_TILE = false;
 
 function StatTile({ icon, tone, label, value, hint, onClick }: {
   icon: ReactNode;
@@ -85,6 +87,7 @@ export function RepositoryInsights({ projectId, activity, repositoryName, defaul
   onOpenTask: (ref: GitTaskRef) => void;
 }) {
   const insights = useRepositoryInsights(projectId, range);
+  const accounts = useGitHubAccounts(projectId);
   const commitsQuery = useRepositoryCommits(projectId, { page: 0, size: 5 });
   const health = insights.data?.pullRequests;
   // Nothing to act on: the panel shows the latest merges instead of an empty block.
@@ -96,7 +99,7 @@ export function RepositoryInsights({ projectId, activity, repositoryName, defaul
   const go = (target: GitHubTabTarget) => onNavigate({ ...target, range });
 
   return <div className="min-w-0 space-y-4">
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+    <div className={cn("grid grid-cols-2 gap-2.5 sm:grid-cols-3", SHOW_AWAITING_REVIEW_TILE ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
       <StatTile icon={<GitCommitHorizontal className="size-3.5" />} tone={STAT_TONES.commit} label="Commits" value={commitCount}
         onClick={() => go({ view: "commits" })} />
       <StatTile icon={<Link2 className="size-3.5" />} tone={STAT_TONES.linked} label="Linked to tasks"
@@ -105,11 +108,11 @@ export function RepositoryInsights({ projectId, activity, repositoryName, defaul
         onClick={() => go({ view: "commits", link: "LINKED" })} />
       <StatTile icon={<GitPullRequest className="size-3.5" />} tone={STAT_TONES.open} label="Open PRs" value={pullRequests.open}
         onClick={() => go({ view: "pulls", state: "OPEN" })} />
-      <StatTile icon={<Eye className="size-3.5" />} tone={STAT_TONES.review} label="Awaiting review"
+      {SHOW_AWAITING_REVIEW_TILE && <StatTile icon={<Eye className="size-3.5" />} tone={STAT_TONES.review} label="Awaiting review"
         value={insights.isPending ? <span role="status" aria-label="Loading" className="mt-1 inline-block h-5 w-8 animate-pulse rounded-md bg-accent" />
           : health ? health.awaitingReview : <span className="text-base text-muted-foreground">—</span>}
         hint="Open pull requests, not drafts, that nobody has approved or asked to change yet"
-        onClick={() => go({ view: "pulls", state: "OPEN" })} />
+        onClick={() => go({ view: "pulls", state: "OPEN" })} />}
       <StatTile icon={<GitMerge className="size-3.5" />} tone={STAT_TONES.merged} label="Merged PRs" value={pullRequests.merged}
         onClick={() => go({ view: "pulls", state: "MERGED" })} />
     </div>
@@ -189,7 +192,8 @@ export function RepositoryInsights({ projectId, activity, repositoryName, defaul
         </section>
       </div>
 
-      <ActivitySection query={insights} range={range} onRange={onRange} defaultBranch={defaultBranch} onNavigate={onNavigate} />
+      <ActivitySection query={insights} range={range} onRange={onRange} defaultBranch={defaultBranch} onNavigate={onNavigate}
+        canManageAccounts={accounts.data?.viewer.canManage ?? false} />
     </>}
   </div>;
 }

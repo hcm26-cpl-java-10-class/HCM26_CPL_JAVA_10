@@ -5,7 +5,7 @@ import type { GitInsightsRange, GitPullRequestState, GitTaskLinkFilter } from "@
  * (`?tab=github&view=pulls&state=OPEN&pr=12`), so reloads, the back button and
  * shared links land on the same screen even though the layout remounts.
  */
-export type GitHubView = "insights" | "commits" | "pulls";
+export type GitHubView = "insights" | "commits" | "pulls" | "members";
 export type GitHubLinkFilter = Extract<GitTaskLinkFilter, "LINKED" | "NEEDS_ATTENTION">;
 
 export interface GitHubTabState {
@@ -21,6 +21,8 @@ export interface GitHubTabState {
   to?: string;
   state?: GitPullRequestState;
   pr?: number;
+  /** US-GI-06: a contributor highlighted in the Members view. */
+  contributor?: number;
   page: number;
 }
 
@@ -30,10 +32,10 @@ export type GitHubTabTarget = Partial<Omit<GitHubTabState, "view">> & { view: Gi
 export type GitHubTabPatch = Partial<Omit<GitHubTabState, "view">> & { view?: GitHubView };
 
 export const GITHUB_TAB = "github";
-export const GITHUB_TAB_PARAMS = ["view", "range", "q", "author", "branch", "link", "from", "to", "state", "pr", "page"] as const;
+export const GITHUB_TAB_PARAMS = ["view", "range", "q", "author", "branch", "link", "from", "to", "state", "pr", "contributor", "page"] as const;
 export const DEFAULT_INSIGHTS_RANGE: GitInsightsRange = "30d";
 
-const VIEWS: readonly GitHubView[] = ["insights", "commits", "pulls"];
+const VIEWS: readonly GitHubView[] = ["insights", "commits", "pulls", "members"];
 const LINKS: readonly GitHubLinkFilter[] = ["LINKED", "NEEDS_ATTENTION"];
 const STATES: readonly GitPullRequestState[] = ["OPEN", "MERGED", "CLOSED"];
 const RANGES: readonly GitInsightsRange[] = ["7d", "30d", "90d"];
@@ -79,6 +81,7 @@ export function parseGitHubTabParams(params: URLSearchParams): GitHubTabState {
     to,
     state: oneOf(STATES, params.get("state")),
     pr: positiveInt(params.get("pr")),
+    contributor: positiveInt(params.get("contributor")),
     page: positiveInt(params.get("page")) ?? 0,
   };
 }
@@ -102,6 +105,7 @@ function write(next: URLSearchParams, state: GitHubTabState) {
   if (state.to) next.set("to", state.to);
   if (state.state) next.set("state", state.state);
   if (state.pr !== undefined) next.set("pr", String(state.pr));
+  if (state.contributor !== undefined) next.set("contributor", String(state.contributor));
   if (state.page > 0) next.set("page", String(state.page));
   return next;
 }

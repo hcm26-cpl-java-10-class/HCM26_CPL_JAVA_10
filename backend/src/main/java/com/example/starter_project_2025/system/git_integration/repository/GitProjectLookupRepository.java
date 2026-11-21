@@ -28,6 +28,10 @@ public interface GitProjectLookupRepository extends Repository<Project, Long> {
     @Query("select count(p) from Project p where p.parentProject.id = :masterId and p.isActive = true")
     long countModules(@Param("masterId") Long masterId);
 
+    /** GI-06: projects by id (code and name for the member list). */
+    @Query("select p from Project p where p.id in :ids")
+    List<Project> findAllByIds(@Param("ids") Collection<Long> ids);
+
     /** SY-05: direct children of the given projects (one level of the module tree). */
     @Query("select p.id from Project p where p.parentProject.id in :parentIds")
     List<Long> findChildIds(@Param("parentIds") Collection<Long> parentIds);

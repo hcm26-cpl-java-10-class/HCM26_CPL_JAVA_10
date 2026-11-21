@@ -500,6 +500,12 @@ export interface GitContributorStat {
   pullRequestsOpened: number;
   reviews: number;
   lastActiveAt: string | null;
+  /** US-GI-06: the project member this person counts for (GitHub account or assigned e-mail). */
+  userId?: number | null;
+  memberName?: string | null;
+  mapped?: boolean;
+  /** US-GI-06: an unmapped person the PM can open in the Members view. */
+  contributorId?: number | null;
 }
 
 /** A branch commits were first pushed to (without refs/heads/). */
@@ -541,4 +547,88 @@ export interface GitRepositoryInsights {
   };
   /** True when the period had more commits than the server reads (counts are a lower bound). */
   truncated: boolean;
+}
+
+// ---- US-GI-06 · Connect GitHub account & map to project member -------------------------------------
+
+/** A verified GitHub account; the id is the identity, the login is for display. */
+export interface GitAccountView {
+  githubUserId: number;
+  login: string;
+  avatarUrl?: string | null;
+}
+
+export interface GitAccountConnectResponse {
+  outcome: "CONNECTED" | "AUTHORIZE_REQUIRED";
+  authorizeUrl?: string | null;
+  expiresAt?: string | null;
+  account?: GitAccountView | null;
+  master: GitProjectSummary;
+  message?: string | null;
+}
+
+export interface GitAccountCallbackRequest {
+  state: string;
+  code?: string;
+  error?: string;
+  errorDescription?: string;
+}
+
+export type GitContributorMapSource = "OAUTH" | "IDENTITY" | "MANUAL";
+export type GitContributorKind = "GITHUB" | "EMAIL";
+
+export interface GitAccountActivity {
+  commits: number;
+  pullRequests: number;
+  reviews: number;
+  lastActiveAt: string | null;
+}
+
+export interface GitAccountMember {
+  userId: number;
+  name: string;
+  email: string | null;
+  roles: string[];
+  projects: GitProjectSummary[];
+  /** False for a mapped user who no longer belongs to the master or its modules. */
+  member: boolean;
+  github: { contributorId: number; login: string | null; source: GitContributorMapSource | null; mappedAt: string | null } | null;
+  emails: Array<{ contributorId: number; email: string | null; mappedByName: string | null; mappedAt: string | null }>;
+  activity: GitAccountActivity;
+}
+
+export interface GitUnmappedContributor {
+  contributorId: number;
+  kind: GitContributorKind;
+  login: string | null;
+  email: string | null;
+  displayName: string | null;
+  activity: GitAccountActivity;
+  /** Only orders the assign list; nothing is assigned without the PM. */
+  suggestedUserId: number | null;
+}
+
+export interface GitAccountsOverview {
+  master: GitProjectSummary;
+  viewer: {
+    userId: number;
+    identity: GitAccountView | null;
+    mapped: boolean;
+    canConnect: boolean;
+    canManage: boolean;
+  };
+  members: GitAccountMember[];
+  unmapped: GitUnmappedContributor[];
+  summary: { members: number; connected: number; unmappedContributors: number };
+}
+
+export interface GitContributorView {
+  contributorId: number;
+  kind: GitContributorKind;
+  login: string | null;
+  email: string | null;
+  displayName: string | null;
+  userId: number | null;
+  source: GitContributorMapSource | null;
+  mappedAt: string | null;
 }

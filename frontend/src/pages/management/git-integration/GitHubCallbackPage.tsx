@@ -26,8 +26,12 @@ import type { RootState } from "@/store/store";
 import type { GitHubCallbackRequest } from "@/types/features/git-integration";
 import { GitHubTile } from "./components/GitIntegrationHeader";
 import { GitIntegrationStateCard } from "./components/GitIntegrationPageState";
-import { errorMessage, outcomeMessage, type GitIntegrationMessage, type GitIntegrationTone } from "./git-integration.messages";
-import { clearPendingConnect } from "./git-integration.storage";
+import {
+  accountErrorMessage, errorMessage, outcomeMessage, type GitIntegrationMessage, type GitIntegrationTone,
+} from "./git-integration.messages";
+import {
+  clearPendingAccountConnect, clearPendingConnect, readPendingAccountConnect, readPendingConnect,
+} from "./git-integration.storage";
 import { gitIntegrationKeys } from "./useGitIntegration";
 
 const AUTO_REDIRECT_MS = 3000;
@@ -35,7 +39,18 @@ const INTEGRATION_PATH = "/git-integration";
 
 type CallbackView =
   | { kind: "verifying" }
-  | { kind: "result"; message: GitIntegrationMessage; account?: string };
+  | { kind: "result"; message: GitIntegrationMessage; account?: string; returnTo?: string };
+
+/**
+ * US-GI-06: GitHub sends both flows to this page. "Connect GitHub account" is recognised by the
+ * marker saved when it started; without any marker, a callback without installation parameters
+ * can only come from the account flow (an App install always carries installation_id or setup_action).
+ */
+function isAccountFlow(payload: GitHubCallbackRequest | undefined, account: ReturnType<typeof readPendingAccountConnect>) {
+  if (account) return true;
+  if (readPendingConnect()) return false;
+  return !!payload && payload.installationId === undefined && !payload.setupAction;
+}
 
 const TONE_ICONS: Record<GitIntegrationTone, LucideIcon> = {
   success: CheckCircle2,
@@ -81,6 +96,9 @@ export default function GitHubCallbackPage() {
   // Captured on first render, before the URL is cleaned.
   const payloadRef = useRef<GitHubCallbackRequest | undefined | null>(null);
   if (payloadRef.current === null) payloadRef.current = readCallback(location.search);
+  const accountRef = useRef<ReturnType<typeof readPendingAccountConnect> | null>(null);
+  if (accountRef.current === null) accountRef.current = readPendingAccountConnect();
+  const [accountFlow] = useState(() => isAccountFlow(payloadRef.current ?? undefined, accountRef.current ?? undefined));
   const startedRef = useRef(false);
   const [view, setView] = useState<CallbackView>({ kind: "verifying" });
 
@@ -97,6 +115,24 @@ export default function GitHubCallbackPage() {
     }
     if (!payload) {
       setView({ kind: "result", message: errorMessage("GIT_STATE_INVALID") });
+      return;
+    }
+
+    if (accountFlow) {
+      const returnTo = accountRef.current?.returnTo ?? "/";
+      clearPendingAccountConnect();
+      gitIntegrationApi.accountCallback({
+        state: payload.state, code: payload.code, error: payload.error, errorDescription: payload.errorDescription,
+      }).then(result => {
+        void queryClient.invalidateQueries({ queryKey: gitIntegrationKeys.all });
+        // Straight back to where Connect was clicked: the toast carries the result.
+        toast.success("GitHub connected", {
+          description: result.account ? `Activity of @${result.account.login} now counts for you in ${result.master.name ?? "this project"}.` : undefined,
+        });
+        navigate(returnTo, { replace: true });
+      }).catch(error => {
+        setView({ kind: "result", message: accountErrorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error)), returnTo });
+      });
       return;
     }
 
@@ -135,8 +171,9 @@ export default function GitHubCallbackPage() {
 
   const content = view.kind === "verifying"
     ? <GitIntegrationStateCard icon={Loader2} iconClassName="animate-spin motion-reduce:animate-none" tone="info" live
-      title="Verifying your GitHub installation…"
-      description="We're confirming the installation belongs to you. This only takes a moment." />
+      title={accountFlow ? "Verifying your GitHub account…" : "Verifying your GitHub installation…"}
+      description={accountFlow ? "We're confirming the account is yours. You'll be back in a moment."
+        : "We're confirming the installation belongs to you. This only takes a moment."} />
     : <ResultCard view={view} titleRef={titleRef} onContinue={goToIntegration} />;
 
   if (!isAuthenticated) {
@@ -158,9 +195,12 @@ function ResultCard({ view, titleRef, onContinue }: {
   titleRef: Ref<HTMLHeadingElement>;
   onContinue: (message?: GitIntegrationMessage, account?: string) => void;
 }) {
-  const { message, account } = view;
+  const { message, account, returnTo } = view;
   let actions: ReactNode;
-  switch (message.action) {
+  if (returnTo) {
+    // US-GI-06: back to the GitHub tab the user came from, where the banner lets them try again.
+    actions = <Button asChild><Link to={returnTo} replace><RotateCcw />Back to the GitHub tab</Link></Button>;
+  } else switch (message.action) {
     case "integration":
       actions = <Button onClick={() => onContinue(message, account)}>Back to Git Integration<ArrowRight /></Button>;
       break;

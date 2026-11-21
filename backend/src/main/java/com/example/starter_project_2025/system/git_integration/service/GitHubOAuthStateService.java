@@ -2,6 +2,7 @@ package com.example.starter_project_2025.system.git_integration.service;
 
 import com.example.starter_project_2025.system.git_integration.config.GitHubAppProperties;
 import com.example.starter_project_2025.system.git_integration.domain.GitOAuthOutcome;
+import com.example.starter_project_2025.system.git_integration.domain.GitOAuthPurpose;
 import com.example.starter_project_2025.system.git_integration.domain.GitOAuthState;
 import com.example.starter_project_2025.system.git_integration.domain.GitProvider;
 import com.example.starter_project_2025.system.git_integration.exception.GitIntegrationException;
@@ -52,11 +53,18 @@ public class GitHubOAuthStateService {
         }
     }
 
-    public record ConsumedState(Long id, Long userId, Long tenantId) {
+    public record ConsumedState(Long id, Long userId, Long tenantId, Long projectId) {
     }
 
+    /** GI-01: a state for installing the GitHub App. (Annotated too: the call below bypasses the proxy.) */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public IssuedState issue(Long userId, Long tenantId) {
+        return issue(userId, tenantId, GitOAuthPurpose.INSTALL, null);
+    }
+
+    /** A state for {@code purpose}; {@code projectId} is the master project of an account link. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public IssuedState issue(Long userId, Long tenantId, GitOAuthPurpose purpose, Long projectId) {
         byte[] bytes = new byte[STATE_BYTES];
         random.nextBytes(bytes);
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
@@ -67,16 +75,24 @@ public class GitHubOAuthStateService {
                 .tenantId(tenantId)
                 .provider(GitProvider.GITHUB)
                 .expiresAt(expiresAt)
+                .purpose(purpose)
+                .projectId(projectId)
                 .build());
         return new IssuedState(raw, expiresAt);
     }
 
-    /**
-     * Marks the state as used. Unknown, expired, already used, foreign-user or
-     * foreign-tenant states all get the same error so nothing leaks.
-     */
+    /** GI-01: consumes a state issued for installing the GitHub App. (Annotated too: the call below bypasses the proxy.) */
     @Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = GitIntegrationException.class)
     public ConsumedState consume(String rawState, Long userId, Long tenantId) {
+        return consume(rawState, userId, tenantId, GitOAuthPurpose.INSTALL);
+    }
+
+    /**
+     * Marks the state as used. Unknown, expired, already used, foreign-user,
+     * foreign-tenant and other-purpose states all get the same error so nothing leaks.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = GitIntegrationException.class)
+    public ConsumedState consume(String rawState, Long userId, Long tenantId, GitOAuthPurpose expectedPurpose) {
         if (!StringUtils.hasText(rawState) || rawState.length() > MAX_STATE_LENGTH) {
             throw GitIntegrationException.stateInvalid();
         }
@@ -85,11 +101,12 @@ public class GitHubOAuthStateService {
         LocalDateTime now = LocalDateTime.now(clock);
         // A foreign user must not be able to burn someone else's state, so check ownership first.
         if (!state.getUserId().equals(userId) || !state.getTenantId().equals(tenantId)
-                || state.getConsumedAt() != null || !state.getExpiresAt().isAfter(now)) {
+                || state.getConsumedAt() != null || !state.getExpiresAt().isAfter(now)
+                || state.effectivePurpose() != expectedPurpose) {
             throw GitIntegrationException.stateInvalid();
         }
         state.setConsumedAt(now);
-        return new ConsumedState(state.getId(), state.getUserId(), state.getTenantId());
+        return new ConsumedState(state.getId(), state.getUserId(), state.getTenantId(), state.getProjectId());
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

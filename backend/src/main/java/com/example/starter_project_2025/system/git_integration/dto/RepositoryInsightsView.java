@@ -36,9 +36,13 @@ public record RepositoryInsightsView(
     /**
      * A person who committed, opened a pull request or reviewed in the period. {@code matched} is
      * false when the commits carry no GitHub login (they are grouped by author name).
+     * GI-06: {@code mapped} (with {@code userId}, {@code memberName}) when the person is a project
+     * member through a mapped GitHub account or assigned e-mail; {@code contributorId} of an
+     * unmapped person lets the PM open them in the Members view.
      */
     public record ContributorStat(String login, String name, boolean matched, long commits, long pullRequestsOpened,
-                                  long reviews, LocalDateTime lastActiveAt) {
+                                  long reviews, LocalDateTime lastActiveAt, Long userId, String memberName,
+                                  boolean mapped, Long contributorId) {
     }
 
     /** A branch (without refs/heads/) commits of the period were first pushed to. */

@@ -50,6 +50,21 @@ class GitTaskLinkEnumCheckMigrationTest {
     }
 
     @Test
+    void outdatedNativeEnumColumnsBecomeVarchar() throws Exception {
+        // GI-06: Hibernate 6 declared the outcome as a native enum before ACCOUNT_LINKED existed.
+        jdbc.execute("""
+                create table git_oauth_states(id bigint primary key,
+                  outcome enum('CONNECTED','DENIED','LINKED_ELSEWHERE'),
+                  purpose enum('INSTALL','ACCOUNT_LINK'))""");
+
+        assertThat(migration.migrate()).containsExactly("git_oauth_states.OUTCOME");
+
+        jdbc.update("insert into git_oauth_states values (1, 'ACCOUNT_LINKED', 'ACCOUNT_LINK')");
+        assertThat(jdbc.queryForObject("select outcome from git_oauth_states", String.class)).isEqualTo("ACCOUNT_LINKED");
+        assertThat(migration.migrate()).isEmpty();
+    }
+
+    @Test
     void newDatabasesAreLeftAlone() throws Exception {
         assertThat(migration.migrate()).isEmpty(); // no table yet
     }
