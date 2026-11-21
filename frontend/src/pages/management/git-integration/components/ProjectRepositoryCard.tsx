@@ -9,7 +9,7 @@ import type { GitRepositoryItem, LinkedRepository, ProjectRepositoryView } from 
 import type { GitHubTabTarget } from "../github-tab.params";
 import { formatDateTime, installationManageUrl } from "../git-integration.format";
 import { syncErrorMessage } from "../git-integration.messages";
-import { useGitInstallations, useLinkRepository, useProjectRepository, useRetrySync } from "../useGitIntegration";
+import { syncInProgress, useGitInstallations, useLinkRepository, useProjectRepository, useRetrySync } from "../useGitIntegration";
 import { GitHubTile } from "./GitIntegrationHeader";
 import { LinkRepositoryDialog } from "./LinkRepositoryDialog";
 import { RepositoryActivitySummary } from "./RepositoryActivitySummary";
@@ -141,6 +141,16 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
   const active = repository?.status === "ACTIVE";
   const sync = view.latestSync;
   const modules = view.masterProject.moduleCount;
+  const syncing = syncInProgress(view);
+  const stopped = active && (sync?.status === "FAILED" || sync?.status === "PARTIAL");
+  const imported = sync?.progress?.inserted ?? 0;
+
+  // US-SY-01: one click, at any time; disabled while a sync is waiting or running.
+  const syncNowButton = active && view.canSync && <Button variant="outline" size="sm" className="h-8 shrink-0"
+    disabled={syncing || retry.isPending} onClick={() => retry.mutate()}
+    title={syncing ? "A synchronization is in progress" : "Import new commits from GitHub now"}>
+    <RefreshCw className={syncing || retry.isPending ? "animate-spin motion-reduce:animate-none" : undefined} />Sync now
+  </Button>;
 
   const linkButton = (label: string) => installationsQuery.isPending
     ? <Button size="sm" disabled><Loader2 className="animate-spin" />{label}</Button>
@@ -160,11 +170,17 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
         </div>
         {view.canLink && linkButton("Link another repository")}
       </div>}
-      {active && sync?.status === "FAILED" && <div role="alert" className="flex flex-wrap items-center gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-red-900 dark:border-red-900 dark:bg-red-950/50 dark:text-red-100">
-        <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
-        <p className="min-w-0 flex-1 text-xs">{syncErrorMessage(sync.errorCode)}</p>
+      {stopped && sync && <div role="alert" className={sync.status === "PARTIAL"
+        ? "flex flex-wrap items-center gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-100"
+        : "flex flex-wrap items-center gap-2.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-red-900 dark:border-red-900 dark:bg-red-950/50 dark:text-red-100"}>
+        {sync.status === "PARTIAL" ? <TriangleAlert className="size-4 shrink-0" aria-hidden="true" /> : <AlertCircle className="size-4 shrink-0" aria-hidden="true" />}
+        <p className="min-w-0 flex-1 text-xs">
+          {sync.status === "PARTIAL" && <span className="font-medium">Imported {imported.toLocaleString("en-US")} {imported === 1 ? "commit" : "commits"}, then it stopped. </span>}
+          {syncErrorMessage(sync.errorCode)}
+          {sync.resumable && view.canSync && " Resuming continues where it stopped."}
+        </p>
         {view.canSync && <Button size="sm" variant="outline" className="h-8" disabled={retry.isPending} onClick={() => retry.mutate()}>
-          <RefreshCw className={retry.isPending ? "animate-spin" : undefined} />Retry sync
+          <RefreshCw className={retry.isPending ? "animate-spin motion-reduce:animate-none" : undefined} />{sync.resumable ? "Resume sync" : "Retry sync"}
         </Button>}
       </div>}
   </> : null;
@@ -214,7 +230,7 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
 
   // WS-GH-02: one line in the GitHub tab, where the repository is context rather than content.
   if (variant === "strip" && repository) {
-    const hasAlert = !active || sync?.status === "FAILED";
+    const hasAlert = !active || stopped;
     return <section aria-label="GitHub repository" className="min-w-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:px-5">
         <GitHubTile size="sm" />
@@ -236,6 +252,7 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
           : <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
             <TriangleAlert className="size-3.5" aria-hidden="true" />Unavailable
           </span>}
+        {!stopped && syncNowButton}
         <Button variant="outline" size="sm" className="h-8 shrink-0" asChild>
           <a href={repository.htmlUrl} target="_blank" rel="noopener noreferrer" aria-label={`Open ${repository.fullName} on GitHub (new tab)`}>
             <ExternalLink />Open
@@ -250,6 +267,7 @@ export function ProjectRepositoryCard({ projectId, onOpenActivity, showActivity 
   return <section aria-label="GitHub repository" className="min-w-0">
     <Header>
       {active && <SyncStatusPill job={sync} lastSyncedAt={repository.lastSyncedAt} />}
+      {!stopped && syncNowButton}
       {repository && !active && <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
         <TriangleAlert className="size-3.5" aria-hidden="true" />Unavailable
       </span>}

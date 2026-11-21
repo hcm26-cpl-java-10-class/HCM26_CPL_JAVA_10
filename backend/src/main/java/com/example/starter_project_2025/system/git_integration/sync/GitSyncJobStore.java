@@ -7,6 +7,9 @@ import com.example.starter_project_2025.system.git_integration.domain.GitReposit
 import com.example.starter_project_2025.system.git_integration.domain.GitRepositoryStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncJob;
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncJobStatus;
+import com.example.starter_project_2025.system.git_integration.domain.GitSyncJobType;
+import com.example.starter_project_2025.system.git_integration.domain.GitSyncPhase;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommitHistoryPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitInstallationRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
@@ -24,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,9 +64,30 @@ public class GitSyncJobStore {
         this.clock = clock;
     }
 
-    /** What a worker needs to run a job it has claimed. */
+    /**
+     * What a worker needs to run a job it has claimed. SY-01: the step reached and, in the commit
+     * step, where to resume ({@code commitCursor}) within which window ({@code commitSince}).
+     */
     public record ClaimedJob(Long jobId, Long repositoryId, Long installationRowId, long githubInstallationId,
-                             long externalId, int attemptCount, int maxAttempts) {
+                             long externalId, int attemptCount, int maxAttempts, GitSyncPhase phase,
+                             String commitCursor, LocalDateTime commitSince, String commitBranch, int pagesDone) {
+
+        public ClaimedJob(Long jobId, Long repositoryId, Long installationRowId, long githubInstallationId,
+                          long externalId, int attemptCount, int maxAttempts) {
+            this(jobId, repositoryId, installationRowId, githubInstallationId, externalId, attemptCount, maxAttempts,
+                    GitSyncPhase.METADATA, null, null, null, 0);
+        }
+
+        /** The job after its metadata step: the commit step starts from the first page of {@code since}. */
+        public ClaimedJob startingCommits(LocalDateTime since, String branch) {
+            return new ClaimedJob(jobId, repositoryId, installationRowId, githubInstallationId, externalId, attemptCount,
+                    maxAttempts, GitSyncPhase.COMMITS, null, since, branch, pagesDone);
+        }
+    }
+
+    /** SY-01: totals of one stored commit page. */
+    public record CommitPage(String endCursor, int inserted, int existing, int enriched, boolean emptyRepository,
+                             GitHubCommitHistoryPage.RateLimit rateLimit) {
     }
 
     /** PENDING + due → RUNNING. Empty when the job is not runnable (or the connection/installation no longer is). */
@@ -89,27 +114,93 @@ public class GitSyncJobStore {
         job.setFinishedAt(null);
         jobs.saveAndFlush(job); // optimistic lock: a concurrent claim fails here
         return Optional.of(new ClaimedJob(job.getId(), connection.getId(), installation.getId(),
-                installation.getInstallationId(), connection.getExternalId(), job.getAttemptCount(), job.getMaxAttempts()));
+                installation.getInstallationId(), connection.getExternalId(), job.getAttemptCount(), job.getMaxAttempts(),
+                job.effectivePhase(), job.getCommitCursor(), job.getCommitSince(), job.getCommitBranch(), job.pages()));
     }
 
-    /** Refreshes the repository snapshot (it may have been renamed) and completes the job. */
+    /**
+     * SY-01: the metadata step is done: refreshes the repository snapshot (it may have been renamed),
+     * records the statistics and fixes the commit window. INITIAL, or a repository whose history was
+     * never imported to the end, reads the whole history; otherwise from the overlap before the last
+     * complete import. Returns the job ready for its commit step.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void succeed(ClaimedJob claimed, GitHubRepository repository, Map<String, Object> stats) {
+    public ClaimedJob startCommits(ClaimedJob claimed, GitHubRepository repository, Map<String, Object> stats) {
+        GitRepository connection = connections.findById(claimed.repositoryId()).orElse(null);
+        if (connection != null && connection.getStatus() == GitRepositoryStatus.ACTIVE) refreshSnapshot(connection, repository);
+        GitSyncJob job = jobs.findById(claimed.jobId()).orElseThrow();
+        LocalDateTime historySyncedAt = connection == null ? null : connection.getCommitHistorySyncedAt();
+        LocalDateTime since = job.getType() == GitSyncJobType.INITIAL || historySyncedAt == null
+                ? null : historySyncedAt.minus(properties.getSyncReconcileOverlap());
+        job.setStatsJson(toJson(stats));
+        job.setPhase(GitSyncPhase.COMMITS);
+        job.setCommitSince(since);
+        job.setCommitBranch(repository.defaultBranch());
+        job.setCommitCursor(null);
+        return claimed.startingCommits(since, repository.defaultBranch());
+    }
+
+    /** SY-01: a commit page is stored: remember where to resume and add up the statistics. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void checkpoint(ClaimedJob claimed, CommitPage page, String headOid) {
+        jobs.findById(claimed.jobId()).ifPresent(job -> {
+            if (page.endCursor() != null) job.setCommitCursor(page.endCursor());
+            if (headOid != null && job.getCommitHeadOid() == null) job.setCommitHeadOid(headOid);
+            job.setPagesDone(job.pages() + 1);
+            Map<String, Object> stats = new LinkedHashMap<>(readStats(job.getStatsJson()));
+            add(stats, "commitsInserted", page.inserted());
+            add(stats, "commitsExisting", page.existing());
+            add(stats, "commitsEnriched", page.enriched());
+            stats.put("commitPages", job.getPagesDone());
+            if (page.emptyRepository()) stats.put("emptyRepository", true);
+            if (page.rateLimit() != null) {
+                stats.put("rateLimitRemaining", page.rateLimit().remaining());
+                if (page.rateLimit().resetAt() != null) stats.put("rateLimitResetAt", page.rateLimit().resetAt().toString());
+            }
+            job.setStatsJson(toJson(stats));
+        });
+    }
+
+    /** SY-01: GitHub refused the cursor (history rewritten): read the window again from its first page. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void restartCommits(ClaimedJob claimed) {
+        jobs.findById(claimed.jobId()).ifPresent(job -> {
+            job.setCommitCursor(null);
+            job.setCommitHeadOid(null);
+        });
+    }
+
+    /**
+     * SY-01: the whole commit window was read: the job succeeds, and the history counts as
+     * imported up to the job's creation (never moved back by an older job finishing late).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void completeCommits(ClaimedJob claimed) {
+        GitSyncJob job = jobs.findById(claimed.jobId()).orElse(null);
+        if (job == null) return;
         LocalDateTime now = now();
         connections.findById(claimed.repositoryId())
                 .filter(row -> row.getStatus() == GitRepositoryStatus.ACTIVE)
                 .ifPresent(row -> {
-                    row.setOwnerLogin(repository.ownerLogin());
-                    row.setName(repository.name());
-                    row.setFullName(repository.fullName());
-                    row.setHtmlUrl(repository.htmlUrl());
-                    row.setVisibility(repository.resolvedVisibility());
-                    row.setDefaultBranch(repository.defaultBranch());
+                    LocalDateTime mark = job.getCreatedAt() == null ? now : job.getCreatedAt();
+                    if (row.getCommitHistorySyncedAt() == null || mark.isAfter(row.getCommitHistorySyncedAt())) {
+                        row.setCommitHistorySyncedAt(mark);
+                    }
                     row.setLastSyncedAt(now);
                 });
+        job.setPhase(GitSyncPhase.DONE);
+        finish(job, GitSyncJobStatus.SUCCEEDED, null, null);
+    }
+
+    /** SY-01: this run read its share of pages: back in the queue at once, keeping the cursor; no attempt is used. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void yieldRun(ClaimedJob claimed) {
         jobs.findById(claimed.jobId()).ifPresent(job -> {
-            job.setStatsJson(toJson(stats));
-            finish(job, GitSyncJobStatus.SUCCEEDED, null, null);
+            job.setAttemptCount(Math.max(0, job.getAttemptCount() - 1));
+            job.setStatus(GitSyncJobStatus.PENDING);
+            job.setNextRunAt(now());
+            job.setErrorCode(null);
+            job.setErrorMessage(null);
         });
     }
 
@@ -120,10 +211,10 @@ public class GitSyncJobStore {
         jobs.findById(claimed.jobId()).ifPresent(job -> finish(job, GitSyncJobStatus.FAILED, errorCode, message));
     }
 
-    /** A permanent failure: no further attempts. */
+    /** A permanent failure: no further attempts (PARTIAL when commit pages were already stored). */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void fail(ClaimedJob claimed, String errorCode, String message) {
-        jobs.findById(claimed.jobId()).ifPresent(job -> finish(job, GitSyncJobStatus.FAILED, errorCode, message));
+        jobs.findById(claimed.jobId()).ifPresent(job -> finish(job, givenUp(job), errorCode, message));
     }
 
     /** A transient failure: queue another attempt with backoff, or give up after the last one. */
@@ -131,7 +222,7 @@ public class GitSyncJobStore {
     public void retryOrFail(ClaimedJob claimed, String errorCode, String message) {
         jobs.findById(claimed.jobId()).ifPresent(job -> {
             if (job.getAttemptCount() >= job.getMaxAttempts()) {
-                finish(job, GitSyncJobStatus.FAILED, errorCode, message);
+                finish(job, givenUp(job), errorCode, message); // AC05: the cursor stays for a resume
                 return;
             }
             Duration wait = BACKOFF.get(Math.min(job.getAttemptCount(), BACKOFF.size()) - 1);
@@ -161,6 +252,35 @@ public class GitSyncJobStore {
     @Transactional(readOnly = true)
     public List<Long> dueJobIds(int limit) {
         return jobs.findDueIds(GitSyncJobStatus.PENDING, now(), PageRequest.of(0, limit));
+    }
+
+    /** SY-01 AC05: PARTIAL once some commit pages are stored, otherwise FAILED. Never SUCCEEDED. */
+    private static GitSyncJobStatus givenUp(GitSyncJob job) {
+        return job.pages() > 0 ? GitSyncJobStatus.PARTIAL : GitSyncJobStatus.FAILED;
+    }
+
+    private static void refreshSnapshot(GitRepository row, GitHubRepository repository) {
+        row.setOwnerLogin(repository.ownerLogin());
+        row.setName(repository.name());
+        row.setFullName(repository.fullName());
+        row.setHtmlUrl(repository.htmlUrl());
+        row.setVisibility(repository.resolvedVisibility());
+        row.setDefaultBranch(repository.defaultBranch());
+    }
+
+    private static void add(Map<String, Object> stats, String key, int value) {
+        Object current = stats.get(key);
+        long base = current instanceof Number number ? number.longValue() : 0;
+        stats.put(key, base + value);
+    }
+
+    private Map<String, Object> readStats(String statsJson) {
+        if (statsJson == null || statsJson.isBlank()) return Map.of();
+        try {
+            return json.readValue(statsJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+        } catch (JsonProcessingException e) {
+            return Map.of();
+        }
     }
 
     private void requeue(GitSyncJob job, LocalDateTime nextRunAt, String errorCode, String message) {

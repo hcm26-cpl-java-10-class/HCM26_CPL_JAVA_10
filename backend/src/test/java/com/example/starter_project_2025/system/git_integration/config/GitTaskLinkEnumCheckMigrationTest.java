@@ -65,6 +65,34 @@ class GitTaskLinkEnumCheckMigrationTest {
     }
 
     @Test
+    void syncJobsAcceptThePartialStatus() throws Exception {
+        // SY-01: GI-04 created git_sync_jobs with native enums before PARTIAL existed.
+        jdbc.execute("""
+                create table git_sync_jobs(id bigint primary key,
+                  type enum('INITIAL','MANUAL','SCHEDULED','WEBHOOK'),
+                  status enum('PENDING','RUNNING','SUCCEEDED','FAILED'))""");
+
+        assertThat(migration.migrate()).containsExactly("git_sync_jobs.STATUS");
+
+        jdbc.update("insert into git_sync_jobs values (1, 'INITIAL', 'PARTIAL')");
+        assertThat(migration.migrate()).isEmpty();
+    }
+
+    @Test
+    void commitsAcceptTheGraphQlHistorySource() throws Exception {
+        // SY-01: SY-04 created git_commits.source as VARCHAR, but Hibernate still wrote a CHECK of its values.
+        jdbc.execute("""
+                create table git_commits(id bigint primary key, sha varchar(64),
+                  source varchar(20) not null check (source in ('WEBHOOK_PAYLOAD','COMPARE_API','LIST_COMMITS_API')))""");
+
+        assertThat(migration.migrate()).hasSize(1);
+
+        jdbc.update("insert into git_commits values (1, 'abc', 'GRAPHQL_HISTORY')");
+        assertThat(checkCount("GIT_COMMITS")).isZero();
+        assertThat(migration.migrate()).isEmpty();
+    }
+
+    @Test
     void newDatabasesAreLeftAlone() throws Exception {
         assertThat(migration.migrate()).isEmpty(); // no table yet
     }

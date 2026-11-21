@@ -11,6 +11,8 @@ import com.example.starter_project_2025.system.git_integration.domain.GitSyncJob
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncJobType;
 import com.example.starter_project_2025.system.git_integration.github.GitHubApiClient;
 import com.example.starter_project_2025.system.git_integration.github.GitHubApiException;
+import com.example.starter_project_2025.system.git_integration.github.GitHubGraphQlClient;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommitHistoryPage;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubBranch;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubInstallationToken;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubRepository;
@@ -66,6 +68,7 @@ import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -128,6 +131,7 @@ class GitRepositoryLinkIntegrationTest {
     @Autowired GitRepositorySyncRunner runner;
 
     @MockBean GitHubApiClient github;
+    @MockBean GitHubGraphQlClient graphql;
 
     Long tenantId;
     Long installationRowId;
@@ -182,6 +186,11 @@ class GitRepositoryLinkIntegrationTest {
         when(github.getRepository(anyString(), eq(REPO_ARCHIVED))).thenReturn(Optional.of(repo(REPO_ARCHIVED, "old-demo", true)));
         when(github.listBranches(anyString(), anyString(), anyString(), eq(1)))
                 .thenReturn(List.of(new GitHubBranch("main", true), new GitHubBranch("develop", false)));
+        // SY-01: the commit step (covered by CommitHistorySyncIntegrationTest) finds an empty history.
+        when(github.createContentsToken(GITHUB_INSTALLATION_ID))
+                .thenReturn(new GitHubInstallationToken("ghs_contents", Instant.now().plusSeconds(3600)));
+        when(graphql.commitHistory(anyString(), anyString(), anyString(), any(), any(), anyInt()))
+                .thenReturn(new GitHubCommitHistoryPage(true, false, "main", "abc", List.of(), false, null, 0, null));
     }
 
     // ---- AC01 ----------------------------------------------------------------------------------------

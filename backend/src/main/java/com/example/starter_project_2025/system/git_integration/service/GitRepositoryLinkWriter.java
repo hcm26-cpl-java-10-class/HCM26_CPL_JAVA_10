@@ -136,7 +136,7 @@ public class GitRepositoryLinkWriter {
         return Optional.of(new Created(connection, job));
     }
 
-    static String initialDedupeKey(Long repositoryId) {
+    public static String initialDedupeKey(Long repositoryId) {
         return GitSyncJobType.INITIAL.name() + ":" + repositoryId;
     }
 

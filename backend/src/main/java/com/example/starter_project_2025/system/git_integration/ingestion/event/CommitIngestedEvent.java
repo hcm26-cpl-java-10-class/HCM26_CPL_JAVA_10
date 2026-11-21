@@ -14,5 +14,12 @@ public record CommitIngestedEvent(
         Long repositoryId,
         Long webhookEventId,
         String ref,
-        List<Long> commitIds) {
+        List<Long> commitIds,
+        /* SY-01: the sync job that imported the commits; NULL when a webhook did. */
+        Long syncJobId) {
+
+    public CommitIngestedEvent(Long tenantId, Long projectId, Long repositoryId, Long webhookEventId, String ref,
+                               List<Long> commitIds) {
+        this(tenantId, projectId, repositoryId, webhookEventId, ref, commitIds, null);
+    }
 }

@@ -5,8 +5,12 @@ import com.example.starter_project_2025.system.git_integration.domain.BacklogRef
 import com.example.starter_project_2025.system.git_integration.domain.BacklogReferenceReason;
 import com.example.starter_project_2025.system.git_integration.domain.BacklogReferenceStatus;
 import com.example.starter_project_2025.system.git_integration.domain.GitArtifactType;
+import com.example.starter_project_2025.system.git_integration.domain.GitCommitSource;
 import com.example.starter_project_2025.system.git_integration.domain.GitOAuthOutcome;
 import com.example.starter_project_2025.system.git_integration.domain.GitOAuthPurpose;
+import com.example.starter_project_2025.system.git_integration.domain.GitSyncJobStatus;
+import com.example.starter_project_2025.system.git_integration.domain.GitSyncJobType;
+import com.example.starter_project_2025.system.git_integration.domain.GitSyncPhase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -57,7 +61,15 @@ public class GitTaskLinkEnumCheckMigration implements CommandLineRunner {
             // GI-06: new outcomes of the Connect GitHub account flow.
             "git_oauth_states", columns(
                     "outcome", GitOAuthOutcome.values(),
-                    "purpose", GitOAuthPurpose.values()));
+                    "purpose", GitOAuthPurpose.values()),
+            // SY-01: PARTIAL.
+            "git_sync_jobs", columns(
+                    "status", GitSyncJobStatus.values(),
+                    "type", GitSyncJobType.values(),
+                    "phase", GitSyncPhase.values()),
+            // SY-01: GRAPHQL_HISTORY. A VARCHAR enum still gets a CHECK (source IN (...)) from Hibernate.
+            "git_commits", columns(
+                    "source", GitCommitSource.values()));
 
     private final DataSource dataSource;
 

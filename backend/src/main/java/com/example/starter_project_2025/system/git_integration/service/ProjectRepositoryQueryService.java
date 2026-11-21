@@ -6,6 +6,7 @@ import com.example.starter_project_2025.system.git_integration.domain.GitSyncJob
 import com.example.starter_project_2025.system.git_integration.domain.GitSyncJobStatus;
 import com.example.starter_project_2025.system.git_integration.dto.GitSyncJobView;
 import com.example.starter_project_2025.system.git_integration.dto.ProjectRepositoryView;
+import com.example.starter_project_2025.system.git_integration.repository.GitCommitRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitInstallationRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitRepositoryRepository;
 import com.example.starter_project_2025.system.git_integration.repository.GitSyncJobRepository;
@@ -35,6 +36,7 @@ public class ProjectRepositoryQueryService {
     private final GitRepositoryRepository connections;
     private final GitSyncJobRepository jobs;
     private final GitInstallationRepository installations;
+    private final GitCommitRepository commits;
     private final UserRepository users;
     private final ObjectMapper json;
 
@@ -61,8 +63,8 @@ public class ProjectRepositoryQueryService {
         boolean active = connection != null && connection.getStatus() == GitRepositoryStatus.ACTIVE;
         boolean manage = policy.canLink(user, master);
         boolean canLink = !inherited && !active && manage && projectResolver.isLinkable(master);
-        boolean canSync = !inherited && active && manage
-                && (latestSync == null || latestSync.getStatus() == GitSyncJobStatus.FAILED);
+        // SY-01: "Sync now" is offered at any time; a sync already waiting or running is returned as is.
+        boolean canSync = !inherited && active && policy.canSync(user, master);
 
         return new ProjectRepositoryView(
                 new ProjectRepositoryView.ProjectRef(project.getId(), project.getCode(), project.getName(), !inherited),
@@ -85,13 +87,25 @@ public class ProjectRepositoryQueryService {
                 .orElse(new ProjectRepositoryView.UserRef(row.getLinkedByUserId(), null));
         return new ProjectRepositoryView.RepositoryView(row.getId(), row.getExternalId(), row.getOwnerLogin(),
                 row.getName(), row.getFullName(), row.getHtmlUrl(), row.getVisibility(), row.getDefaultBranch(),
-                row.getStatus(), installation, linkedBy, row.getLinkedAt(), row.getLastSyncedAt());
+                row.getStatus(), installation, linkedBy, row.getLinkedAt(), row.getLastSyncedAt(),
+                commits.countByRepositoryId(row.getId()), row.getCommitHistorySyncedAt());
     }
 
     GitSyncJobView jobView(GitSyncJob job) {
+        Map<String, Object> stats = stats(job.getStatsJson());
+        boolean resumable = job.getCommitCursor() != null
+                && (job.getStatus() == GitSyncJobStatus.PARTIAL || job.getStatus() == GitSyncJobStatus.FAILED);
+        boolean paused = job.getStatus() == GitSyncJobStatus.PENDING && "RATE_LIMITED".equals(job.getErrorCode());
         return new GitSyncJobView(job.getId(), job.getType(), job.getStatus(), job.getAttemptCount(),
                 job.getMaxAttempts(), job.getNextRunAt(), job.getStartedAt(), job.getFinishedAt(),
-                job.getErrorCode(), stats(job.getStatsJson()));
+                job.getErrorCode(), stats, job.effectivePhase(),
+                new GitSyncJobView.Progress(job.pages(), number(stats, "commitsInserted"), number(stats, "commitsExisting"),
+                        number(stats, "commitsEnriched")),
+                resumable, paused ? job.getNextRunAt() : null);
+    }
+
+    private static long number(Map<String, Object> stats, String key) {
+        return stats.get(key) instanceof Number value ? value.longValue() : 0;
     }
 
     private Map<String, Object> stats(String statsJson) {

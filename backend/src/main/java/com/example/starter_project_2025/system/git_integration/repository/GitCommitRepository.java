@@ -20,6 +20,9 @@ public interface GitCommitRepository extends JpaRepository<GitCommit, Long>, Jpa
 
     long countByRepositoryId(Long repositoryId);
 
+    /** SY-01: stored commits among {@code shas}, to fill what a push payload lacked. */
+    List<GitCommit> findByRepositoryIdAndShaIn(Long repositoryId, Collection<String> shas);
+
     Optional<GitCommit> findFirstByRepositoryIdAndSha(Long repositoryId, String sha);
 
     Optional<GitCommit> findFirstByRepositoryIdOrderByCommittedAtDescIdDesc(Long repositoryId);

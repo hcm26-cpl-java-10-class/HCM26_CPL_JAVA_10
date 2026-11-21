@@ -121,6 +121,33 @@ public class GitHubAppProperties {
     /** SY-03: background poller for due/abandoned events (tests turn this off). */
     private boolean webhookPollerEnabled = true;
 
+    /** SY-01: GraphQL endpoint; NULL = {@code {api-base-url}/graphql} (GitHub Enterprise Server uses {@code /api/graphql}). */
+    private String graphqlUrl;
+
+    /** SY-01: commits per GraphQL history page (GitHub allows at most 100). */
+    private int syncCommitPageSize = 100;
+
+    /** SY-01: commit pages one run of a job imports before it yields the worker to other repositories. */
+    private int syncMaxPagesPerRun = 50;
+
+    /** SY-01: below this many GraphQL points left, a job stops after the current page and resumes at reset. */
+    private int syncRateLimitReserve = 100;
+
+    /** SY-01: "Sync now" right after a successful sync returns that sync instead of queuing another one. */
+    private long syncManualCooldownSeconds = 60;
+
+    /** SY-01: periodic reconcile of every active repository (tests turn this off). */
+    private boolean syncReconcileEnabled = true;
+
+    /** SY-01: a reconcile reads commits from this long before the last complete history import. */
+    private java.time.Duration syncReconcileOverlap = java.time.Duration.ofDays(1);
+
+    /** SY-01: repositories synchronized successfully this recently are skipped by the reconcile. */
+    private long syncReconcileSkipRecentMinutes = 60;
+
+    /** SY-01: reconcile jobs are spread over this many minutes so they do not all call GitHub at once. */
+    private int syncReconcileSpreadMinutes = 60;
+
     private int connectTimeoutMillis = 5000;
 
     private int readTimeoutMillis = 10000;
@@ -143,6 +170,10 @@ public class GitHubAppProperties {
                 .encode()
                 .build()
                 .toUriString();
+    }
+
+    public String resolvedGraphqlUrl() {
+        return StringUtils.hasText(graphqlUrl) ? graphqlUrl : trimTrailingSlash(apiBaseUrl) + "/graphql";
     }
 
     public String installUrl() {
@@ -178,6 +209,12 @@ public class GitHubAppProperties {
         }
         if (webhookWorkerCore < 1 || webhookWorkerMax < webhookWorkerCore || webhookQueueCapacity < 1) {
             missing.add("app.github.webhook-worker-core/-max/queue-capacity must be positive and max >= core");
+        }
+        if (syncCommitPageSize < 1 || syncCommitPageSize > 100) {
+            missing.add("app.github.sync-commit-page-size must be between 1 and 100");
+        }
+        if (syncMaxPagesPerRun < 1) {
+            missing.add("app.github.sync-max-pages-per-run must be at least 1");
         }
         if (pushMaxApiPages < 1) {
             missing.add("app.github.push-max-api-pages must be at least 1");

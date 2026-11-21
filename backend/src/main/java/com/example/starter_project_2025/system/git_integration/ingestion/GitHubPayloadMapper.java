@@ -4,6 +4,7 @@ import com.example.starter_project_2025.system.git_integration.domain.GitCommitS
 import com.example.starter_project_2025.system.git_integration.domain.GitPullRequestState;
 import com.example.starter_project_2025.system.git_integration.domain.GitReviewState;
 import com.example.starter_project_2025.system.git_integration.github.dto.GitHubCommit;
+import com.example.starter_project_2025.system.git_integration.github.dto.GitHubHistoryCommit;
 import com.example.starter_project_2025.system.git_integration.ingestion.model.IncomingCommit;
 import com.example.starter_project_2025.system.git_integration.ingestion.model.IncomingPullRequest;
 import com.example.starter_project_2025.system.git_integration.ingestion.model.IncomingReview;
@@ -82,6 +83,30 @@ public class GitHubPayloadMapper {
                 null,
                 commit.parents() == null ? null : commit.parents().size(),
                 source);
+    }
+
+    /** SY-01: a commit of the GraphQL history; the Git identity and the GitHub account stay separate. */
+    public IncomingCommit historyCommit(GitHubHistoryCommit commit) {
+        GitHubHistoryCommit.Person author = commit.author();
+        GitHubHistoryCommit.Person committer = commit.committer();
+        LocalDateTime authoredAt = time(commit.authoredDate());
+        LocalDateTime committedAt = time(commit.committedDate());
+        return new IncomingCommit(
+                commit.oid(),
+                limit(commit.message(), 4000),
+                limit(author == null ? null : author.name(), 255),
+                limit(author == null ? null : author.email(), 255),
+                limit(author == null ? null : author.login(), 100),
+                author == null ? null : author.databaseId(),
+                limit(committer == null ? null : committer.name(), 255),
+                limit(committer == null ? null : committer.email(), 255),
+                limit(committer == null ? null : committer.login(), 100),
+                authoredAt,
+                committedAt != null ? committedAt : authoredAt != null ? authoredAt : now(),
+                limit(commit.url(), 500),
+                null,
+                commit.parentCount(),
+                GitCommitSource.GRAPHQL_HISTORY);
     }
 
     /** The {@code pull_request} object of a pull_request or pull_request_review payload. */

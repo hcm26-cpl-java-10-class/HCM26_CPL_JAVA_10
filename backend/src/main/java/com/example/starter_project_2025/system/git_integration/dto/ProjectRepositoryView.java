@@ -37,7 +37,10 @@ public record ProjectRepositoryView(
             InstallationRef installation,
             UserRef linkedBy,
             LocalDateTime linkedAt,
-            LocalDateTime lastSyncedAt) {
+            LocalDateTime lastSyncedAt,
+            /* SY-01: commits stored for the connection, and when its whole history was last imported (NULL = never). */
+            long commitCount,
+            LocalDateTime historySyncedAt) {
     }
 
     public record InstallationRef(Long id, String accountLogin, String accountType, GitInstallationStatus status) {

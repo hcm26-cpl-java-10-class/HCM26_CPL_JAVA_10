@@ -21,9 +21,10 @@ import org.hibernate.type.SqlTypes;
 import java.time.LocalDateTime;
 
 /**
- * SY-04: a commit of a linked repository, ingested from a push webhook. Commits
- * are immutable: one row per (repository connection, SHA), never updated once
- * stored; {@code first_seen_ref} keeps the branch of the first push that brought it.
+ * SY-04: a commit of a linked repository, ingested from a push webhook or (SY-01) the
+ * synchronization of the default branch. One row per (repository connection, SHA): stored
+ * values are never overwritten; a sync only fills columns still NULL (data a push payload
+ * lacks). {@code first_seen_ref} keeps the branch the commit was first seen on.
  * Read by Analytics after {@code CommitIngestedEvent}.
  */
 @Entity
@@ -115,9 +116,21 @@ public class GitCommit extends BaseEntity {
     @Column(name = "source", nullable = false, length = 20)
     GitCommitSource source;
 
-    /** {@code git_webhook_events.id} that brought the commit. */
-    @Column(name = "ingested_event_id", nullable = false)
+    /** {@code git_webhook_events.id} that brought the commit; NULL when a sync job did (SY-01). */
+    @Column(name = "ingested_event_id")
     Long ingestedEventId;
+
+    /** SY-01: {@code git_sync_jobs.id} that brought the commit; NULL when a webhook did. */
+    @Column(name = "ingested_sync_job_id")
+    Long ingestedSyncJobId;
+
+    /** SY-01: two parents or more; NULL while unknown (a push payload has no parents). */
+    @Column(name = "is_merge")
+    Boolean mergeCommit;
+
+    /** SY-01: the GitHub author (else committer) login ends with {@code [bot]}; NULL = false. */
+    @Column(name = "is_bot")
+    Boolean bot;
 
     @Column(name = "ingested_at", nullable = false)
     LocalDateTime ingestedAt;

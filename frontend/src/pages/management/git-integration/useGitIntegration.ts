@@ -57,16 +57,31 @@ const WEBHOOK_LOG_POLL_MS = 15_000;
 /** Poll while a synchronization is waiting or running, so the card moves from "Pending" to "Synced" by itself. */
 const SYNC_POLL_MS = 3000;
 
-function syncInProgress(view?: ProjectRepositoryView) {
+export function syncInProgress(view?: ProjectRepositoryView) {
   const status = view?.latestSync?.status;
   return view?.repository?.status === "ACTIVE" && (status === "PENDING" || status === "RUNNING");
 }
 
-/** US-GI-04: repository of a project (a module shows its master's). */
+/**
+ * US-GI-04: repository of a project (a module shows its master's). US-SY-01: when a sync that was
+ * running finishes, every other Git view (activity, insights, commits, accounts) is refreshed so the
+ * imported commits show without a reload.
+ */
 export function useProjectRepository(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  const queryKey = gitIntegrationKeys.projectRepository(projectId ?? 0);
   return useQuery({
-    queryKey: gitIntegrationKeys.projectRepository(projectId ?? 0),
-    queryFn: ({ signal }) => gitIntegrationApi.projectRepository(projectId!, signal),
+    queryKey,
+    queryFn: async ({ signal }) => {
+      const previous = queryClient.getQueryData<ProjectRepositoryView>(queryKey);
+      const next = await gitIntegrationApi.projectRepository(projectId!, signal);
+      if (syncInProgress(previous) && !syncInProgress(next)) {
+        void queryClient.invalidateQueries({
+          predicate: query => query.queryKey[0] === "git-integration" && query.queryKey[1] !== "project-repository",
+        });
+      }
+      return next;
+    },
     enabled: projectId !== undefined,
     retry: false,
     staleTime: 0,
@@ -96,7 +111,16 @@ export function useRetrySync(projectId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => gitIntegrationApi.retrySync(projectId),
-    onSuccess: () => toast.success("Synchronization queued", { description: "The repository will be synchronized again shortly." }),
+    onSuccess: ({ job, queued }) => {
+      if (queued) {
+        toast.success(job.resumable || (job.progress?.pages ?? 0) > 0 ? "Sync resumed" : "Sync started",
+          { description: "New commits will appear here in a moment." });
+      } else if (job.status === "SUCCEEDED") {
+        toast.info("Already up to date", { description: "The repository was synchronized a moment ago." });
+      } else {
+        toast.info("Already syncing", { description: "A synchronization of this repository is in progress." });
+      }
+    },
     onError: error => {
       const message = errorMessage(gitIntegrationErrorCode(error), gitIntegrationHttpStatus(error));
       toast.error(message.title, { description: message.description });

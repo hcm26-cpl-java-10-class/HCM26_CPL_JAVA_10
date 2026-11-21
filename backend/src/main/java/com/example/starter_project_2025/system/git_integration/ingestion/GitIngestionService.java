@@ -67,7 +67,22 @@ public class GitIngestionService {
         this.clock = clock;
     }
 
-    public record CommitIngestResult(int inserted, int existing) {
+    /** @param enriched existing commits whose missing columns were filled (SY-01 sync only) */
+    public record CommitIngestResult(int inserted, int existing, int enriched) {
+        public CommitIngestResult(int inserted, int existing) {
+            this(inserted, existing, 0);
+        }
+    }
+
+    /** SY-01: what brought the commits: exactly one of the two is set. */
+    public record IngestOrigin(Long webhookEventId, Long syncJobId) {
+        public static IngestOrigin webhook(Long eventId) {
+            return new IngestOrigin(eventId, null);
+        }
+
+        public static IngestOrigin syncJob(Long jobId) {
+            return new IngestOrigin(null, jobId);
+        }
     }
 
     public record PullRequestUpsert(Long pullRequestId, boolean applied, boolean created, LocalDateTime storedUpdatedAt) {
@@ -79,14 +94,41 @@ public class GitIngestionService {
     @Transactional
     public CommitIngestResult ingestCommits(GitRepository repository, String ref, List<IncomingCommit> incoming,
                                             Long webhookEventId) {
+        return ingestCommits(repository, ref, incoming, IngestOrigin.webhook(webhookEventId), false);
+    }
+
+    /**
+     * Stores the commits not stored yet (one row per SHA). With {@code enrichExisting} (SY-01 sync),
+     * a commit already stored only gets the columns still NULL filled (data a push payload lacks:
+     * GitHub id, parents); nothing is overwritten, {@code first_seen_ref} never changes and no event
+     * is published for it, so statistics do not grow (AC04).
+     */
+    @Transactional
+    public CommitIngestResult ingestCommits(GitRepository repository, String ref, List<IncomingCommit> incoming,
+                                            IngestOrigin origin, boolean enrichExisting) {
+        Long webhookEventId = origin.webhookEventId();
         Map<String, IncomingCommit> bySha = new LinkedHashMap<>();
         for (IncomingCommit commit : incoming) {
             if (commit.sha() != null && !commit.sha().isBlank()) bySha.putIfAbsent(commit.sha(), commit);
         }
         Set<String> existing = new HashSet<>();
         List<String> shas = new ArrayList<>(bySha.keySet());
+        int enriched = 0;
         for (int from = 0; from < shas.size(); from += SHA_CHUNK) {
-            existing.addAll(commits.findExistingShas(repository.getId(), shas.subList(from, Math.min(from + SHA_CHUNK, shas.size()))));
+            List<String> chunk = shas.subList(from, Math.min(from + SHA_CHUNK, shas.size()));
+            if (!enrichExisting) {
+                existing.addAll(commits.findExistingShas(repository.getId(), chunk));
+                continue;
+            }
+            List<GitCommit> changed = new ArrayList<>();
+            for (GitCommit stored : commits.findByRepositoryIdAndShaIn(repository.getId(), chunk)) {
+                existing.add(stored.getSha());
+                if (fillMissing(stored, bySha.get(stored.getSha()))) changed.add(stored);
+            }
+            if (!changed.isEmpty()) {
+                commits.saveAllAndFlush(changed); // a concurrent writer fails on @Version: the caller retries
+                enriched += changed.size();
+            }
         }
         LocalDateTime now = LocalDateTime.now(clock);
         String firstSeenRef = GitWebhookJson.limit(ref, 255);
@@ -103,15 +145,47 @@ public class GitIngestionService {
                     .authoredAt(c.authoredAt()).committedAt(c.committedAt())
                     .htmlUrl(c.htmlUrl()).firstSeenRef(firstSeenRef == null ? "" : firstSeenRef)
                     .filesChanged(c.filesChanged()).parentCount(c.parentCount()).source(c.source())
-                    .ingestedEventId(webhookEventId).ingestedAt(now)
+                    .mergeCommit(isMerge(c.parentCount())).bot(isBot(c.authorLogin(), c.committerLogin()))
+                    .ingestedEventId(webhookEventId).ingestedSyncJobId(origin.syncJobId()).ingestedAt(now)
                     .build());
         }
         if (!fresh.isEmpty()) {
             commits.saveAllAndFlush(fresh);
             publisher.publishEvent(new CommitIngestedEvent(repository.getTenantId(), repository.getProjectId(),
-                    repository.getId(), webhookEventId, ref, fresh.stream().map(GitCommit::getId).toList()));
+                    repository.getId(), webhookEventId, ref, fresh.stream().map(GitCommit::getId).toList(),
+                    origin.syncJobId()));
         }
-        return new CommitIngestResult(fresh.size(), bySha.size() - fresh.size());
+        return new CommitIngestResult(fresh.size(), bySha.size() - fresh.size(), enriched);
+    }
+
+    /** SY-01: two parents or more; NULL while the parents are unknown (push payloads). */
+    static Boolean isMerge(Integer parentCount) {
+        return parentCount == null ? null : parentCount >= 2;
+    }
+
+    /** SY-01: the GitHub author login (else the committer's) ends with {@code [bot]}. */
+    static boolean isBot(String authorLogin, String committerLogin) {
+        String login = authorLogin != null ? authorLogin : committerLogin;
+        return login != null && login.toLowerCase(java.util.Locale.ROOT).endsWith("[bot]");
+    }
+
+    /** Fills the columns of a stored commit that are still NULL; returns true when one was. */
+    private static boolean fillMissing(GitCommit row, IncomingCommit c) {
+        boolean changed = false;
+        if (row.getAuthorLogin() == null && c.authorLogin() != null) { row.setAuthorLogin(c.authorLogin()); changed = true; }
+        if (row.getAuthorGithubId() == null && c.authorGithubId() != null) { row.setAuthorGithubId(c.authorGithubId()); changed = true; }
+        if (row.getCommitterLogin() == null && c.committerLogin() != null) { row.setCommitterLogin(c.committerLogin()); changed = true; }
+        if (row.getAuthoredAt() == null && c.authoredAt() != null) { row.setAuthoredAt(c.authoredAt()); changed = true; }
+        if (row.getHtmlUrl() == null && c.htmlUrl() != null) { row.setHtmlUrl(c.htmlUrl()); changed = true; }
+        if (row.getParentCount() == null && c.parentCount() != null) { row.setParentCount(c.parentCount()); changed = true; }
+        Boolean merge = isMerge(row.getParentCount());
+        if (row.getMergeCommit() == null && merge != null) { row.setMergeCommit(merge); changed = true; }
+        boolean bot = isBot(row.getAuthorLogin(), row.getCommitterLogin());
+        if (row.getBot() == null || (bot && !row.getBot())) {
+            if (!Boolean.valueOf(bot).equals(row.getBot())) changed = true;
+            row.setBot(bot);
+        }
+        return changed;
     }
 
     @Transactional

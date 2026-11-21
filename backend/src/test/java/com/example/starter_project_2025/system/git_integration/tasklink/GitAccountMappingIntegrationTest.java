@@ -442,6 +442,20 @@ class GitAccountMappingIntegrationTest extends AbstractTaskLinkIntegrationTest {
         overview(daveToken, masterId).andExpect(jsonPath("$.viewer.identity").doesNotExist());
     }
 
+    // ---- SY-01 Q2: who may "Sync now" ----------------------------------------------------------------
+
+    @Test
+    void aPmOfTheMasterMaySyncTheRepositoryButAMemberMayNot() throws Exception {
+        String url = "/api/v1/git-integration/projects/" + masterId + "/repository";
+        mvc.perform(get(url).header("Authorization", "Bearer " + pamToken)).andExpect(jsonPath("$.canSync").value(true));
+        mvc.perform(get(url).header("Authorization", "Bearer " + aliceToken)).andExpect(jsonPath("$.canSync").value(false));
+
+        mvc.perform(post(url + "/sync").header("Authorization", "Bearer " + aliceToken)).andExpect(status().isForbidden());
+        mvc.perform(post(url + "/sync").header("Authorization", "Bearer " + pamToken))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.type").value("MANUAL"));
+    }
+
     // ---- AC11 ----------------------------------------------------------------------------------------
 
     @Test

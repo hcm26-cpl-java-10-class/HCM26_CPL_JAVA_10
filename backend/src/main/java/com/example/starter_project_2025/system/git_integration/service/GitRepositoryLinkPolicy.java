@@ -1,11 +1,15 @@
 package com.example.starter_project_2025.system.git_integration.service;
 
+import com.example.starter_project_2025.system.git_integration.contributor.GitProjectMembership;
+import com.example.starter_project_2025.system.git_integration.tasklink.ProjectScopeResolver;
 import com.example.starter_project_2025.system.project.domain.Project;
 import com.example.starter_project_2025.system.project.workspace.service.WorkspaceAccessService;
 import com.example.starter_project_2025.system.rbac.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
+
+import java.util.Set;
 
 /**
  * GI-04: who may link a repository to a master project and who may see it.
@@ -21,6 +25,8 @@ public class GitRepositoryLinkPolicy {
 
     private final GitIntegrationAccessService access;
     private final WorkspaceAccessService workspaceAccess;
+    private final ProjectScopeResolver scopes;
+    private final GitProjectMembership membership;
 
     public boolean canLink(User user, Project master) {
         return access.canManage(user);
@@ -29,6 +35,23 @@ public class GitRepositoryLinkPolicy {
     public void requireCanLink(User user, Project master) {
         if (!canLink(user, master)) {
             throw new AccessDeniedException("Linking a repository to this project is not allowed");
+        }
+    }
+
+    /**
+     * SY-01: who may synchronize the repository of a master project ("Sync now", resume):
+     * Git Integration managers, a PM of the master or one of its modules, or their mentor.
+     */
+    public boolean canSync(User user, Project master) {
+        if (access.canManage(user)) return true;
+        Set<Long> scope = scopes.scope(master.getId());
+        return membership.isMentor(user.getId(), scope) || membership.members(scope).stream()
+                .anyMatch(member -> member.userId().equals(user.getId()) && member.isPm());
+    }
+
+    public void requireCanSync(User user, Project master) {
+        if (!canSync(user, master)) {
+            throw new AccessDeniedException("Synchronizing this project's repository is not allowed");
         }
     }
 

@@ -1,4 +1,4 @@
-import { GitCommitHorizontal, GitPullRequest, LayoutDashboard, RefreshCw, TriangleAlert, Users } from "lucide-react";
+import { GitCommitHorizontal, GitPullRequest, LayoutDashboard, Loader2, RefreshCw, TriangleAlert, Users } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import {
   clearGitHubTabParams, openGitHubTabParams, parseGitHubTabParams, patchGitHubTabParams,
   type GitHubTabPatch, type GitHubTabTarget, type GitHubView,
 } from "@/pages/management/git-integration/github-tab.params";
-import { useGitHubAccounts, useProjectRepository, useRepositoryActivity } from "@/pages/management/git-integration/useGitIntegration";
+import { syncInProgress, useGitHubAccounts, useProjectRepository, useRepositoryActivity } from "@/pages/management/git-integration/useGitIntegration";
 import { ConnectAccountBanner, ConnectAccountButton } from "@/pages/management/git-integration/components/members/ConnectAccountBanner";
 import { GitHubAccountChip } from "@/pages/management/git-integration/components/members/GitHubAccountChip";
 import { MembersView } from "@/pages/management/git-integration/components/members/MembersView";
@@ -42,6 +42,24 @@ function SyncHealth({ activity }: { activity: GitRepositoryActivity }) {
       {hasPermission("GIT_INTEGRATION_MANAGE") && <Link to="/git-integration#webhook-deliveries" className="font-medium underline underline-offset-2">Review</Link>}
     </span>}
   </p>;
+}
+
+/** US-SY-01 AC03: no commit yet, either because the history is still being imported or the repository is empty. */
+function EmptyHistory({ importing, branch }: { importing: boolean; branch?: string | null }) {
+  return <div role="status" className="flex items-start gap-3 rounded-xl border border-dashed border-slate-300 bg-card px-4 py-5 dark:border-border">
+    <span aria-hidden="true" className={importing
+      ? "flex size-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-300"
+      : "flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}>
+      {importing ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <GitCommitHorizontal className="size-4" />}
+    </span>
+    <div className="min-w-0 space-y-0.5">
+      <p className="text-sm font-medium">{importing ? "Importing the commit history…" : "This repository has no commits yet"}</p>
+      <p className="text-xs text-muted-foreground">
+        {importing ? "Commits appear here as soon as they are imported. You can keep working meanwhile."
+          : <>Commits pushed to <span className="font-mono text-foreground">{branch ?? "the default branch"}</span> will appear here automatically.</>}
+      </p>
+    </div>
+  </div>;
 }
 
 /**
@@ -119,6 +137,9 @@ export function WorkspaceGitHubPanel({ projectId, assignedProjectIds }: {
         Repository activity could not be loaded.
         <button type="button" className="font-medium text-foreground underline-offset-2 hover:underline" onClick={() => void activity.refetch()}>Try again</button>
       </div>;
+    } else if (data.commitCount === 0 && (syncInProgress(repository.data)
+      || (repository.data?.latestSync?.status === "SUCCEEDED" && repository.data.latestSync.stats.emptyRepository === true))) {
+      content = <EmptyHistory importing={syncInProgress(repository.data)} branch={repository.data?.repository?.defaultBranch} />;
     } else {
       content = <RepositoryInsights projectId={projectId} activity={data} repositoryName={repository.data!.repository!.fullName}
         defaultBranch={repository.data!.repository!.defaultBranch} range={state.range}

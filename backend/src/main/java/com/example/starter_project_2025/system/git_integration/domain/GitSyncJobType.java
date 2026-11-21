@@ -6,7 +6,7 @@ public enum GitSyncJobType {
     INITIAL,
     /** Requested by a user, e.g. "Retry sync". */
     MANUAL,
-    /** Periodic background synchronization (later US). */
+    /** SY-01: periodic reconcile that catches commits a failed webhook missed. */
     SCHEDULED,
     /** Triggered by a GitHub webhook delivery (later US). */
     WEBHOOK

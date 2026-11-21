@@ -268,7 +268,7 @@ public class RestGitHubApiClient implements GitHubApiClient {
         }
     }
 
-    private static GitHubApiException toApiException(String operation, RestClientResponseException e) {
+    static GitHubApiException toApiException(String operation, RestClientResponseException e) {
         HttpStatusCode status = e.getStatusCode();
         Long retryAfter = rateLimitRetryAfter(e);
         if (retryAfter != null) {

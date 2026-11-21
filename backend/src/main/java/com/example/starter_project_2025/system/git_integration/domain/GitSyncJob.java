@@ -18,6 +18,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -49,11 +51,14 @@ public class GitSyncJob extends BaseEntity {
     @Column(name = "repository_id", nullable = false)
     Long repositoryId;
 
+    // VARCHAR, not a native ENUM: new values (SY-01 PARTIAL) must not need a schema change.
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "type", nullable = false, length = 20)
     GitSyncJobType type;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", nullable = false, length = 20)
     GitSyncJobStatus status;
 
@@ -92,7 +97,41 @@ public class GitSyncJob extends BaseEntity {
     @Column(name = "stats_json")
     String statsJson;
 
+    /** SY-01: step reached; NULL = {@link GitSyncPhase#METADATA} (jobs created before SY-01). */
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "phase", length = 30)
+    GitSyncPhase phase;
+
+    /** SY-01: GraphQL {@code endCursor} of the last commit page stored; NULL before the first page. */
+    @Column(name = "commit_cursor", length = 255)
+    String commitCursor;
+
+    /** SY-01: {@code since} of the commit history, fixed when the commit phase starts (NULL = whole history). */
+    @Column(name = "commit_since")
+    LocalDateTime commitSince;
+
+    /** SY-01: default branch read when the commit phase started; stored as {@code refs/heads/{branch}}. */
+    @Column(name = "commit_branch", length = 255)
+    String commitBranch;
+
+    /** SY-01: head of the default branch when the commit phase started (the cursor follows that history). */
+    @Column(name = "commit_head_oid", length = 64)
+    String commitHeadOid;
+
+    /** SY-01: commit pages stored by this job; NULL = 0. */
+    @Column(name = "pages_done")
+    Integer pagesDone;
+
     @Version
     @Column(name = "version")
     Long version;
+
+    public GitSyncPhase effectivePhase() {
+        return phase == null ? GitSyncPhase.METADATA : phase;
+    }
+
+    public int pages() {
+        return pagesDone == null ? 0 : pagesDone;
+    }
 }

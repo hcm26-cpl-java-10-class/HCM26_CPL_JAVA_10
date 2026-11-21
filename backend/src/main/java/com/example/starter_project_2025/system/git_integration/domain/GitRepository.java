@@ -111,6 +111,14 @@ public class GitRepository extends BaseEntity {
     @Column(name = "last_synced_at")
     LocalDateTime lastSyncedAt;
 
+    /**
+     * SY-01: creation time of the last sync job that imported the commit history to the end; later
+     * syncs read from one day before it. NULL = the whole history was never imported (also every
+     * repository linked before SY-01), so the next sync reads it all.
+     */
+    @Column(name = "commit_history_synced_at")
+    LocalDateTime commitHistorySyncedAt;
+
     /** = {@code project_id} while ACTIVE, NULL otherwise. Maintained by {@link #syncActiveKeys()}. */
     @Column(name = "active_project_id")
     Long activeProjectId;

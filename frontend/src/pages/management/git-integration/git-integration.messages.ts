@@ -198,6 +198,9 @@ const SYNC_ERRORS: Record<string, string> = {
   RATE_LIMITED: "GitHub rate limit reached; it will retry automatically.",
   WORKER_LOST: "The previous attempt did not finish.",
   SYNC_ERROR: "An unexpected error occurred while synchronizing.",
+  // US-SY-01: commit history.
+  HISTORY_UNAVAILABLE: "GitHub stopped responding while the commit history was being imported.",
+  HISTORY_FORBIDDEN: "The GitHub App is not allowed to read this repository's contents. Grant it \"Contents: Read\" on GitHub, then sync again.",
 };
 
 export function syncErrorMessage(code?: string | null) {

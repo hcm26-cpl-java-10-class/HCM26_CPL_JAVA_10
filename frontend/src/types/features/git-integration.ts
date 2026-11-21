@@ -176,7 +176,10 @@ export type GitRepositoryConnectionStatus = "ACTIVE" | "INACTIVE" | "UNAVAILABLE
 
 export type GitSyncJobType = "INITIAL" | "MANUAL" | "SCHEDULED" | "WEBHOOK";
 
-export type GitSyncJobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
+/** US-SY-01: PARTIAL = gave up after some commit pages were stored; it can resume from where it stopped. */
+export type GitSyncJobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "PARTIAL" | "FAILED";
+
+export type GitSyncPhase = "METADATA" | "COMMITS" | "DONE";
 
 export interface GitSyncJob {
   id: number;
@@ -188,7 +191,20 @@ export interface GitSyncJob {
   startedAt?: string | null;
   finishedAt?: string | null;
   errorCode?: string | null;
-  stats: { branches?: number; branchesTruncated?: boolean; [key: string]: unknown };
+  stats: { branches?: number; branchesTruncated?: boolean; emptyRepository?: boolean; [key: string]: unknown };
+  /** US-SY-01: step reached, commit import progress (all runs of the job). */
+  phase?: GitSyncPhase;
+  progress?: { pages: number; inserted: number; existing: number; enriched: number };
+  /** A PARTIAL / FAILED job that "Sync now" resumes from where it stopped. */
+  resumable?: boolean;
+  /** Waiting for the GitHub rate limit until then. */
+  pausedUntil?: string | null;
+}
+
+/** US-SY-01: answer of "Sync now"; `queued = false` when a sync was already waiting, running or just done. */
+export interface GitSyncRequestResult {
+  job: GitSyncJob;
+  queued: boolean;
 }
 
 export interface LinkedRepository {
@@ -205,6 +221,9 @@ export interface LinkedRepository {
   linkedBy: { id: number; name?: string | null } | null;
   linkedAt: string;
   lastSyncedAt?: string | null;
+  /** US-SY-01: commits stored for the repository, and when its whole history was last imported. */
+  commitCount?: number;
+  historySyncedAt?: string | null;
 }
 
 /** Repository of a project; a module shows its master project's repository (`inherited`). */

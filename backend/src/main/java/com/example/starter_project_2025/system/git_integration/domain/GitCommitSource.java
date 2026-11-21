@@ -7,5 +7,7 @@ public enum GitCommitSource {
     /** GitHub Compare API, used when the push payload was truncated. */
     COMPARE_API,
     /** GitHub List Commits API, used when Compare could not return every commit. */
-    LIST_COMMITS_API
+    LIST_COMMITS_API,
+    /** SY-01: GraphQL history of the default branch (initial sync, "Sync now", reconcile). */
+    GRAPHQL_HISTORY
 }

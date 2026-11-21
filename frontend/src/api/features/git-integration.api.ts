@@ -1,6 +1,7 @@
 import { isAxiosError } from "axios";
 import axiosInstance from "@/api/axios";
 import type {
+  GitSyncRequestResult,
   GitAccountCallbackRequest,
   GitAccountConnectResponse,
   GitAccountsOverview,
@@ -73,8 +74,11 @@ export const gitIntegrationApi = {
     (await axiosInstance.post<ProjectRepositoryView>(`${PROJECTS}/${projectId}/repository`, body)).data,
 
   /** US-GI-04: queue the synchronization again after it failed. */
-  retrySync: async (projectId: number) =>
-    (await axiosInstance.post<GitSyncJob>(`${PROJECTS}/${projectId}/repository/sync`)).data,
+  /** US-SY-01 "Sync now": 202 = queued (or resumed), 200 = a sync was already waiting, running or just done. */
+  retrySync: async (projectId: number): Promise<GitSyncRequestResult> => {
+    const response = await axiosInstance.post<GitSyncJob>(`${PROJECTS}/${projectId}/repository/sync`);
+    return { job: response.data, queued: response.status === 202 };
+  },
 
   /** US-SY-04: counts, latest commit and webhook health of a project's repository. */
   repositoryActivity: async (projectId: number, signal?: AbortSignal) =>
